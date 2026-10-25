@@ -1,0 +1,1487 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 32L32 4A28 28 0 0 1 56.25 18Z' fill='%233550E8'/%3E%3Cpath d='M32 32L56.25 18A28 28 0 0 1 56.25 46Z' fill='%23EAA92C'/%3E%3Cpath d='M32 32L56.25 46A28 28 0 0 1 32 60Z' fill='%232EAD60'/%3E%3Cpath d='M32 32L32 60A28 28 0 0 1 7.75 46Z' fill='%23EC4899'/%3E%3Cpath d='M32 32L7.75 46A28 28 0 0 1 7.75 18Z' fill='%239333EA'/%3E%3Cpath d='M32 32L7.75 18A28 28 0 0 1 32 4Z' fill='%2306B6D4'/%3E%3Ccircle cx='32' cy='32' r='29' fill='none' stroke='%2314161C' stroke-width='5'/%3E%3Ccircle cx='32' cy='32' r='8' fill='%233550E8' stroke='%23fff' stroke-width='3'/%3E%3C/svg%3E">
+<style>
+:root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif}
+img{max-width:100%}
+[hidden]{display:none!important}
+</style>
+<title>Колесо Толямбуса</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Handjet:wght@400..800&family=Onest:wght@400..700&display=swap">
+<style>
+/* Layout: the rater's two-panel console. Wheel stage with a status bar on the left, participants board on the right; one section at a time on phones. */
+:root {
+  --bg: #ECEEF3; --dot: #D3D7E0; --panel: #FFFFFF; --panel-2: #F4F5F8;
+  --ink: #14161C; --ink-2: #565C6B; --ink-3: #8B90A0; --line: #DADDE5; --cell: #E1E4EB;
+  --accent: #3550E8; --accent-soft: #E7EBFF;
+  --good: #2EAD60; --mid: #EAA92C; --bad: #E4553F; --bad-ink: #B93222; --on-tier: #14161C;
+  --font-display: "Handjet", "Onest", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Onest", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --r: 18px; --r-sm: 10px; --pad: 24px;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0D0F14; --dot: #1C2029; --panel: #161920; --panel-2: #1D2129;
+    --ink: #E8EAF0; --ink-2: #A3A9B8; --ink-3: #6F7585; --line: #2A2F3A; --cell: #272C36;
+    --accent: #8C9BFF; --accent-soft: #232A4F;
+    --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #0D0F14;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0D0F14; --dot: #1C2029; --panel: #161920; --panel-2: #1D2129;
+  --ink: #E8EAF0; --ink-2: #A3A9B8; --ink-3: #6F7585; --line: #2A2F3A; --cell: #272C36;
+  --accent: #8C9BFF; --accent-soft: #232A4F;
+  --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #0D0F14;
+  color-scheme: dark;
+}
+@media (max-width: 560px) { :root { --pad: 16px; } }
+
+*, *::before, *::after { box-sizing: border-box; }
+body {
+  background-color: var(--bg);
+  background-image: radial-gradient(circle at 1px 1px, var(--dot) 1px, transparent 1.5px);
+  background-size: 18px 18px;
+  color: var(--ink);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+button, input, textarea, select { font: inherit; color: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+h1, h2, h3, h4, p { margin: 0; }
+svg { flex: none; }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+[hidden] { display: none !important; }
+[data-tier="good"] { --tier: var(--good); }
+[data-tier="bad"] { --tier: var(--bad); }
+[data-tier="idle"] { --tier: var(--cell); }
+
+.page {
+  max-width: 1180px;
+  margin: 0 auto;
+  padding-block: 28px 64px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+/* Masthead */
+.masthead { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 14px 32px; margin-bottom: 22px; }
+.title { font-family: var(--font-display); font-weight: 800; font-size: clamp(52px, 10vw, 86px); line-height: .82; letter-spacing: .005em; text-wrap: balance; }
+.lede { margin-top: 12px; max-width: 54ch; color: var(--ink-2); text-wrap: pretty; }
+.masthead-right { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
+.user-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+.theme-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 34px; padding: 0 11px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--panel); color: var(--ink-2); font-size: 13px; font-weight: 600; text-decoration: none; cursor: pointer;
+  transition: border-color .15s, color .15s, background-color .15s;
+}
+.theme-btn:hover { border-color: var(--accent); color: var(--ink); }
+.scale { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; font-size: 12.5px; color: var(--ink-2); }
+.scale span { display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px 5px 7px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; }
+.scale i { width: 16px; height: 10px; border-radius: 3px; }
+.scale .k-win i { background: var(--ink); }
+.scale .k-out i { background: var(--bad); }
+
+.layout { display: grid; gap: 20px; align-items: start; }
+@media (min-width: 980px) { .layout { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr); gap: 24px; } }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: var(--pad); min-width: 0; }
+.label { display: block; font-size: 12px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); }
+.field { margin-top: 20px; }
+.field > .label { margin-bottom: 8px; }
+.crit-tip { margin-top: 10px; font-size: 13px; color: var(--ink-2); text-wrap: pretty; }
+.crit-tip code {
+  display: inline-block; margin-top: 8px; padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--panel-2); color: var(--ink); font-family: var(--font-display); font-size: 18px; font-weight: 600; letter-spacing: .01em;
+}
+
+/* Buttons */
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; height: 44px; padding: 0 18px; border: 1px solid transparent; border-radius: 11px; font-size: 14.5px; font-weight: 600; line-height: 1; white-space: nowrap; cursor: pointer; background: transparent; transition: background-color .15s, border-color .15s, color .15s; }
+.btn.small { height: 36px; padding: 0 12px; font-size: 13.5px; border-radius: 9px; }
+.btn.primary { background: var(--ink); color: var(--panel); }
+.btn.ghost { background: var(--panel); border-color: var(--line); color: var(--ink); }
+.btn.text { height: 34px; padding: 0 10px; color: var(--accent); }
+.btn.danger { color: var(--bad-ink); }
+.btn.danger[data-armed] { background: var(--bad); border-color: var(--bad); color: var(--on-tier); }
+.btn:disabled { opacity: .45; cursor: default; }
+.mini-btn { flex: none; width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--ink-3); cursor: pointer; }
+.mini-btn:disabled { opacity: .3; cursor: default; }
+.link-btn { border: 0; background: none; padding: 0; color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
+.btn:focus-visible, .mini-btn:focus-visible, .link-btn:focus-visible, .seg button:focus-visible, .theme-btn:focus-visible, .th:focus-visible, details > summary:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+
+.card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.eyebrow { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
+.eyebrow .dot { width: 9px; height: 9px; border-radius: 2px; background: var(--accent); transition: background-color .15s; }
+.stage.is-spinning .eyebrow .dot { background: var(--mid); }
+
+/* Segmented controls and tabs */
+.seg { display: inline-flex; flex-wrap: wrap; gap: 2px; padding: 3px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 11px; }
+.seg button { height: 32px; padding: 0 11px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 18%, transparent); }
+.seg.cur button { min-width: 40px; font-size: 15px; font-weight: 700; }
+.views { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 22px; }
+.view-tab {
+  padding: 0; border: 0; background: none; cursor: pointer;
+  font-family: var(--font-display); font-weight: 800; font-size: clamp(32px, 9vw, 46px); line-height: .9;
+  color: var(--ink-3); transition: color .15s;
+}
+.view-tab[aria-selected="true"] { color: var(--ink); cursor: default; }
+.view-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 6px; }
+.board-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px 16px; margin-top: 16px; }
+.board-stat { font-size: 13.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.board-stat b { color: var(--ink); font-weight: 600; }
+.example-bar { margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 6px 6px 6px 12px; border: 1px dashed var(--line); border-radius: 10px; font-size: 13px; color: var(--ink-2); }
+
+/* Inputs */
+.inp { display: block; width: 100%; min-width: 0; height: 44px; padding: 0 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r-sm); font-size: 15px; }
+textarea.inp { height: auto; min-height: 104px; max-height: 360px; resize: vertical; padding: 11px 14px; line-height: 1.45; }
+.inp::placeholder { color: var(--ink-3); font-weight: 400; opacity: 1; }
+.inp:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.field-msg { margin-top: 8px; font-size: 13px; color: var(--ink-2); }
+.field-msg:empty { display: none; }
+.field-msg.err { color: var(--bad-ink); font-weight: 600; }
+.field-msg.ok { color: var(--ink); }
+.add { margin-top: 16px; }
+.add-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.add-row #name { flex: 1 1 170px; width: auto; }
+.money { flex: 1 1 190px; display: flex; gap: 8px; min-width: 0; }
+.money #amount { flex: 1 1 80px; width: 0; font-variant-numeric: tabular-nums; }
+.cur-sel { flex: none; width: auto; padding: 0 8px; cursor: pointer; }
+.add-row .btn { flex: none; }
+
+/* Collapsible tools: rates and bulk paste */
+details.tool { margin-top: 10px; }
+details.tool > summary {
+  display: inline-flex; align-items: center; gap: 6px; height: 34px; margin-left: -10px; padding: 0 10px;
+  border-radius: 11px; color: var(--accent); font-size: 14.5px; font-weight: 600; list-style: none; cursor: pointer;
+}
+details.tool > summary::-webkit-details-marker { display: none; }
+.chev { color: var(--ink-3); transition: transform .18s ease; }
+details[open] > summary .chev { transform: rotate(180deg); }
+.dbody {
+  margin-top: 8px; padding: 14px; display: grid; gap: 12px;
+  background: var(--panel-2); border: 1px dashed color-mix(in srgb, var(--accent) 50%, var(--line)); border-radius: 14px;
+}
+.dbody .inp { background: var(--panel); }
+.dfoot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; font-size: 12.5px; color: var(--ink-2); }
+.dfoot span { flex: 1 1 220px; }
+.rate-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 14px; }
+.rate { display: flex; align-items: center; gap: 6px; font-size: 13.5px; font-weight: 600; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.rate .inp { height: 34px; padding: 0 8px; border-radius: 8px; font-size: 14px; text-align: right; }
+
+/* Participants board */
+.board-list { list-style: none; margin: 14px 0 0; padding: 0; }
+.prow {
+  display: grid; grid-template-columns: 30px minmax(0, 1fr) auto auto 34px; grid-template-areas: "rk nm amt pc x";
+  align-items: center; gap: 6px 12px; padding: 10px 0;
+}
+.prow + .prow { border-top: 1px solid var(--line); }
+.board-list.simple .prow { grid-template-columns: minmax(0, 1fr) auto 34px; grid-template-areas: "nm pc x"; }
+.rank { grid-area: rk; text-align: center; font-family: var(--font-display); font-weight: 700; font-size: 26px; line-height: 1; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.pnm { grid-area: nm; display: flex; align-items: center; gap: 10px; min-width: 0; }
+.sw { flex: none; width: 16px; height: 10px; border-radius: 3px; background: var(--c); }
+.e-text { display: grid; gap: 2px; min-width: 0; }
+.e-name { font-size: 16px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.e-sub { font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.e-sub:empty { display: none; }
+.amt { grid-area: amt; position: relative; display: flex; align-items: center; }
+.amt .inp { width: 7.4em; height: 36px; padding: 0 26px 0 10px; border-radius: 9px; font-size: 14px; text-align: right; font-variant-numeric: tabular-nums; }
+.amt span { position: absolute; right: 10px; color: var(--ink-3); font-size: 13px; pointer-events: none; }
+.pc { grid-area: pc; display: flex; align-items: baseline; justify-content: flex-end; gap: 10px; min-width: 6.2em; font-family: var(--font-display); font-weight: 700; font-size: 22px; line-height: 1; font-variant-numeric: tabular-nums; }
+.pc b { font-weight: 700; color: var(--ink); }
+.pc i { font-style: normal; color: var(--bad); }
+.prow .mini-btn { grid-area: x; }
+@media (max-width: 520px) {
+  .prow { grid-template-columns: 24px minmax(0, 1fr) auto 34px; grid-template-areas: "rk nm pc x" "rk amt amt amt"; column-gap: 10px; }
+  .prow .amt { justify-self: start; }
+  .rank { font-size: 22px; }
+  .pc { min-width: 0; gap: 8px; font-size: 20px; }
+}
+.empty { margin-top: 4px; padding: 20px 18px; display: grid; gap: 16px; border: 1px dashed var(--line); border-radius: 14px; }
+.ghost-rows { display: grid; grid-template-columns: 18px minmax(0, 1fr) 44px; gap: 10px 12px; align-items: center; }
+.ghost-rows span { font-family: var(--font-display); font-weight: 700; font-size: 20px; line-height: 1; color: var(--ink-3); text-align: center; }
+.ghost-rows b { height: 10px; border-radius: 4px; background: var(--cell); }
+.ghost-rows b.w1 { width: 74%; } .ghost-rows b.w2 { width: 56%; } .ghost-rows b.w3 { width: 64%; }
+.ghost-rows i { height: 28px; border-radius: 8px; background: var(--cell); }
+.empty p { color: var(--ink-2); font-size: 14px; text-wrap: pretty; }
+.empty strong { color: var(--ink); }
+
+.out-box { margin-top: 22px; }
+.out-box .label { margin-bottom: 4px; }
+.out-list { list-style: none; margin: 0; padding: 0; }
+.orow { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto auto; align-items: center; gap: 4px 12px; padding: 8px 0; color: var(--ink-2); }
+.orow + .orow { border-top: 1px solid var(--line); }
+.onum { text-align: center; font-family: var(--font-display); font-weight: 700; font-size: 22px; line-height: 1; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.oname { min-width: 0; overflow-wrap: anywhere; text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--bad) 70%, transparent); }
+.oamt { font-size: 13px; font-variant-numeric: tabular-nums; }
+.orow .link-btn { font-size: 13px; }
+.actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+fieldset:disabled { opacity: .6; }
+
+/* Wheel stage */
+.readout { display: grid; justify-items: center; gap: 4px; margin: 10px 0 16px; min-width: 0; text-align: center; }
+#ticker { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-display); font-weight: 800; font-size: clamp(30px, 6vw, 44px); line-height: .95; }
+.wheel-wrap { position: relative; width: min(100%, 560px); max-width: 100%; aspect-ratio: 1; margin: 0 auto; container-type: inline-size; }
+#wheel { display: block; width: 100%; height: 100%; }
+.pointer { position: absolute; top: -10px; left: 50%; z-index: 2; width: 38px; height: 46px; transform: translateX(-50%); transform-origin: 50% 12%; overflow: visible; }
+.pointer path { fill: var(--accent); stroke: var(--panel); stroke-width: 3; stroke-linejoin: round; }
+.hub {
+  position: absolute; left: 50%; top: 50%; width: var(--hub, 24%); aspect-ratio: 1; transform: translate(-50%, -50%);
+  overflow: hidden; padding: 0; border-radius: 50%; border: 4px solid var(--panel);
+  background: var(--accent); color: var(--panel);
+  font-family: var(--font-display); font-weight: 800; font-size: clamp(16px, 5.4cqw, 30px); line-height: 1; letter-spacing: .01em;
+  cursor: pointer; transition: transform .1s, background-color .15s;
+  box-shadow: 0 0 0 2px var(--ink), 0 10px 24px -10px color-mix(in srgb, var(--ink) 70%, transparent);
+}
+.hub:active:not(:disabled) { transform: translate(-50%, -50%) scale(.96); }
+.hub:disabled { cursor: default; background: var(--cell); color: var(--ink-3); }
+.hub:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
+.hub img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; pointer-events: none; }
+.hub.has-gif, .hub.has-gif:disabled { background: var(--panel-2); }
+.hub.has-gif .hub-label {
+  position: absolute; left: 50%; bottom: 9%; transform: translateX(-50%); white-space: nowrap;
+  padding: .2em .7em .25em; border-radius: 999px; background: var(--accent); color: var(--panel);
+  font-size: clamp(13px, 3.2cqw, 19px); transition: opacity .2s;
+  box-shadow: 0 3px 8px -2px color-mix(in srgb, var(--ink) 55%, transparent);
+}
+.hub.has-gif:disabled:not(.spinning) .hub-label { background: var(--cell); color: var(--ink-3); }
+.hub.spinning .hub-label { opacity: 0; }
+.wheel-wrap.drop::after {
+  content: "Отпусти, чтобы поставить в центр"; position: absolute; inset: 0; z-index: 3;
+  display: grid; place-items: center; padding: 22%; border: 2px dashed var(--accent); border-radius: 50%;
+  background: color-mix(in srgb, var(--accent-soft) 85%, transparent); color: var(--accent);
+  font-weight: 700; font-size: clamp(14px, 3.4cqw, 19px); text-align: center;
+}
+.opts-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.opt {
+  display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 13px 0 10px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--panel);
+  font-size: 13.5px; font-weight: 600; color: var(--ink-2); cursor: pointer; user-select: none;
+}
+.opt input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.opt:has(input:checked) { border-color: transparent; background: var(--accent-soft); color: var(--ink); }
+.opt:has(input:focus-visible) { outline: 2px solid var(--accent); outline-offset: 2px; }
+.hp-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin-bottom: 10px; }
+.thumbs { display: flex; flex-wrap: wrap; gap: 10px; }
+.thw { position: relative; }
+.th {
+  width: 56px; height: 56px; display: grid; place-items: center; align-content: center; gap: 1px; padding: 0; overflow: hidden;
+  border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); color: var(--ink-2);
+  font-size: 11.5px; font-weight: 600; line-height: 1.15; text-align: center; cursor: pointer;
+}
+.th img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.th.add { border: 1.5px dashed var(--line); color: var(--accent); }
+.th[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent); }
+.th-x {
+  position: absolute; top: -7px; right: -7px; width: 22px; height: 22px; display: grid; place-items: center; padding: 0;
+  border: 2px solid var(--panel); border-radius: 50%; background: var(--ink); color: var(--panel); cursor: pointer;
+}
+.th-x:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Status strip right under the wheel, built from the rater's score badge */
+.scorebar {
+  display: flex; align-items: center; gap: 10px;
+  margin-top: 18px; padding: 10px 12px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 14px;
+}
+.total { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; }
+.total-meta { display: grid; min-width: 0; }
+.total-meta strong { font-size: 16px; font-weight: 600; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.total-meta strong b { font-weight: 800; }
+.total-meta span { font-size: 12.5px; line-height: 1.3; color: var(--ink-2); }
+.badge {
+  display: inline-grid; place-items: center; min-width: 54px; height: 42px; padding: 0 8px; border-radius: 10px;
+  background: var(--tier); color: var(--on-tier);
+  font-family: var(--font-display); font-weight: 800; font-size: 30px; line-height: 1; font-variant-numeric: tabular-nums;
+  transition: background-color .2s;
+}
+.badge.big { min-width: 76px; height: 58px; padding: 0 10px; border-radius: 13px; font-size: 42px; }
+.badge[data-tier="idle"] { color: var(--ink); }
+@media (max-width: 400px) {
+  .badge.big { min-width: 58px; height: 50px; padding: 0 8px; font-size: 34px; }
+  .scorebar, .total { gap: 8px; }
+  .total-meta strong { font-size: 15px; }
+  .total-meta span { font-size: 12px; }
+}
+
+/* Winner sheet */
+.sheet {
+  position: fixed; inset: 0; z-index: 60; display: grid; place-items: center;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  background: rgba(5, 6, 10, .55); overscroll-behavior: contain;
+}
+.sheet-card { width: min(520px, 100%); max-height: 100%; overflow: auto; display: grid; gap: 16px; padding: 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; }
+.win-eyebrow .dot { background: var(--good); }
+.w-name { font-family: var(--font-display); font-weight: 800; font-size: clamp(48px, 12vw, 76px); line-height: .85; overflow-wrap: anywhere; text-wrap: balance; }
+.w-stats { display: flex; align-items: center; gap: 12px; padding: 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; }
+.sheet-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.sheet-actions .btn { flex: 1 1 auto; }
+@keyframes pop { from { transform: translateY(12px) scale(.97); opacity: 0; } to { transform: none; opacity: 1; } }
+.sheet:not([hidden]) .sheet-card { animation: pop .35s cubic-bezier(.2, 1.2, .4, 1); }
+
+/* Phones and touch screens */
+.mnav { display: none; }
+button, label, summary, input, textarea, select, a { touch-action: manipulation; }
+@media (pointer: coarse) {
+  .mini-btn { width: 40px; height: 40px; }
+  .seg button { height: 38px; padding: 0 12px; }
+  .btn.small, .btn.text { height: 40px; }
+  .opt { height: 40px; }
+  .inp { font-size: 16px; }
+}
+@media (max-width: 979px) {
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+  .mnav {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 9;
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px;
+    margin-bottom: 16px; padding: 4px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 10px 24px -18px rgba(0, 0, 0, .45);
+  }
+  .mnav button {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; height: 42px; padding: 0 6px;
+    border: 0; border-radius: 10px; background: transparent; color: var(--ink-2);
+    font-size: 14.5px; font-weight: 600; white-space: nowrap; cursor: pointer;
+  }
+  .mnav button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+  .mnav button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .mnav b { font-weight: 600; opacity: .6; font-variant-numeric: tabular-nums; }
+  .layout[data-section="wheel"] .board, .layout[data-section="list"] .stage { display: none; }
+}
+@media (max-width: 560px) {
+  .page { padding-block: 18px 40px; }
+  .masthead { gap: 10px; margin-bottom: 14px; }
+  .title { font-size: clamp(44px, 13vw, 60px); }
+  .lede { display: none; }
+  .masthead-right { align-items: flex-start; }
+  .user-bar, .scale { justify-content: flex-start; }
+  .sheet { place-items: end stretch; padding: 0; }
+  .sheet-card {
+    width: 100%; max-height: 92vh; max-height: 92dvh; border-bottom: 0; border-radius: 18px 18px 0 0;
+    padding: 18px max(16px, env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  }
+  .sheet-actions .btn { flex: 1 1 100%; }
+}
+
+/* Hover effects only where there is a mouse, so taps do not leave buttons highlighted */
+@media (hover: hover) {
+  .btn.primary:hover { background: color-mix(in srgb, var(--ink) 84%, var(--accent)); }
+  .btn.ghost:hover { border-color: color-mix(in srgb, var(--ink) 32%, var(--line)); }
+  .btn.text:hover, details.tool > summary:hover { background: var(--accent-soft); }
+  .mini-btn:hover { background: var(--panel-2); color: var(--ink); }
+  .mini-btn.del:hover { color: var(--bad-ink); }
+  .view-tab:hover { color: var(--ink-2); }
+  .view-tab[aria-selected="true"]:hover { color: var(--ink); }
+  .hub:hover:not(:disabled) { background: color-mix(in srgb, var(--accent) 86%, var(--ink)); }
+  .hub.has-gif:hover:not(:disabled) { background: var(--panel-2); }
+  .th:hover { border-color: color-mix(in srgb, var(--ink) 32%, var(--line)); }
+  .th.add:hover { border-color: var(--accent); background: var(--accent-soft); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition: none !important; animation: none !important; }
+}
+</style>
+</head>
+<body>
+<div class="page">
+  <header class="masthead">
+    <div>
+      <h1 class="title">Колесо Толямбуса</h1>
+      <p class="lede">Колесо на выбывание. Каждый спин выпавший сектор вылетает, последний оставшийся забирает победу. С донатами шанс победить равен доле в банке: гривны, доллары, евро, шекели и рубли.</p>
+    </div>
+    <div class="masthead-right">
+      <div class="user-bar">
+        <a class="theme-btn" id="backLink" href="../" hidden>← Оценщик всего</a>
+        <button type="button" class="theme-btn" id="themeBtn" title="Переключить тему оформления">🌓 Тема: Авто</button>
+      </div>
+      <p class="scale"><span class="vh">Цифры у каждого участника:</span>
+        <span class="k-win"><i></i>шанс победы</span>
+        <span class="k-out"><i></i>шанс вылета на этом спине</span>
+      </p>
+    </div>
+  </header>
+
+  <nav class="mnav" id="mnav" aria-label="Разделы">
+    <button type="button" data-section="wheel" aria-pressed="true">Колесо</button>
+    <button type="button" data-section="list" aria-pressed="false">Участники<b id="mnavCount"></b></button>
+  </nav>
+
+  <main class="layout" id="layout" data-section="wheel">
+    <section class="card stage" id="stage" aria-labelledby="stageTitle">
+      <div class="card-head">
+        <h2 class="eyebrow"><span class="dot" aria-hidden="true"></span><span id="stageTitle">Колесо</span></h2>
+        <button type="button" class="btn text" id="restart">Вернуть всех</button>
+      </div>
+
+      <div class="readout">
+        <span class="label">Под стрелкой</span>
+        <strong id="ticker">—</strong>
+      </div>
+
+      <div class="wheel-wrap">
+        <svg class="pointer" id="pointer" viewBox="0 0 40 48" aria-hidden="true"><path d="M4 3h32L20 45z"/></svg>
+        <canvas id="wheel" aria-label="Колесо фортуны"></canvas>
+        <button type="button" class="hub" id="spin"><img id="hubImg" alt="" hidden><span class="hub-label">Крутить</span></button>
+      </div>
+
+      <div class="scorebar">
+        <div class="total">
+          <span class="badge big" id="aliveBadge" data-tier="idle">0</span>
+          <div class="total-meta" aria-live="polite">
+            <strong id="statusMain"></strong>
+            <span id="statusSub"></span>
+          </div>
+        </div>
+      </div>
+
+      <div class="field">
+        <p class="label" id="durLabel">Длительность спина</p>
+        <div class="seg" id="durSeg" role="group" aria-labelledby="durLabel"></div>
+        <div class="opts-row">
+          <label class="opt" for="auto"><input type="checkbox" id="auto"> Крутить до победителя</label>
+          <label class="opt" for="snd"><input type="checkbox" id="snd" checked> Звук</label>
+        </div>
+      </div>
+
+      <div class="field">
+        <div class="hp-head">
+          <p class="label" id="hubLabel">Центр колеса</p>
+          <div class="seg" id="hubSeg" role="group" aria-label="Размер центра"></div>
+        </div>
+        <input type="file" id="gifFile" accept="image/gif,image/png,image/jpeg,image/webp" multiple hidden>
+        <div class="thumbs" id="thumbs"></div>
+        <p class="field-msg" id="gifNote"></p>
+      </div>
+    </section>
+
+    <section class="card board" id="board" aria-label="Участники">
+      <fieldset id="deskSet">
+        <div class="views" role="tablist" aria-label="Режим">
+          <button type="button" class="view-tab" role="tab" data-mode="simple" id="tab-simple">Имена</button>
+          <button type="button" class="view-tab" role="tab" data-mode="donate" id="tab-donate">Донаты</button>
+        </div>
+        <p class="crit-tip" id="modeHint"></p>
+
+        <div class="board-head">
+          <p class="board-stat" id="boardStat"></p>
+          <div class="seg cur" id="curTabs" role="group" aria-label="Валюта банка"></div>
+        </div>
+        <details class="tool" id="ratesBox">
+          <summary>Курсы для пересчёта <svg class="chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
+          <div class="dbody">
+            <div class="rate-grid" id="rateGrid"></div>
+            <div class="dfoot">
+              <span>Курсы примерные. Впиши актуальные, шансы пересчитаются.</span>
+              <button type="button" class="btn text" id="ratesReset">Сбросить курсы</button>
+            </div>
+          </div>
+        </details>
+
+        <div class="example-bar" id="sampleNote" hidden>
+          <span>Сейчас на колесе пример. Он исчезнет, как только добавишь своё.</span>
+          <button type="button" class="btn text" id="sampleClear">Убрать пример</button>
+        </div>
+
+        <form class="add" id="addForm" autocomplete="off">
+          <div class="add-row">
+            <input class="inp" id="name" placeholder="Имя или название" maxlength="60" aria-label="Имя или название" enterkeyhint="done">
+            <div class="money" id="amountWrap">
+              <input class="inp" id="amount" inputmode="decimal" placeholder="Сумма" aria-label="Сумма доната">
+              <select class="inp cur-sel" id="cur" aria-label="Валюта доната"></select>
+            </div>
+            <button class="btn primary" type="submit">Добавить</button>
+          </div>
+        </form>
+        <p class="field-msg" id="formMsg" role="status"></p>
+
+        <details class="tool" id="bulkBox">
+          <summary>Вставить списком <svg class="chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
+          <div class="dbody">
+            <textarea class="inp" id="bulk" aria-label="Список участников"></textarea>
+            <div class="dfoot">
+              <span id="bulkHint"></span>
+              <button type="button" class="btn small primary" id="bulkAdd">Добавить всё</button>
+            </div>
+          </div>
+        </details>
+
+        <ol class="board-list" id="list"></ol>
+
+        <div class="out-box" id="outBox" hidden>
+          <h3 class="label">Выбыли по порядку</h3>
+          <ol class="out-list" id="outList"></ol>
+        </div>
+
+        <div class="actions">
+          <button type="button" class="btn small danger" id="clear">Очистить всё</button>
+        </div>
+      </fieldset>
+    </section>
+  </main>
+</div>
+
+<div class="sheet" id="winner" hidden role="dialog" aria-modal="true" aria-labelledby="wName">
+  <div class="sheet-card">
+    <h2 class="eyebrow win-eyebrow"><span class="dot" aria-hidden="true"></span>Победитель</h2>
+    <p class="w-name" id="wName"></p>
+    <div class="w-stats" id="wStats"></div>
+    <div class="sheet-actions">
+      <button type="button" class="btn primary" id="wAgain">Новый раунд с теми же</button>
+      <button type="button" class="btn ghost" id="wClose">Закрыть</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(() => {
+  const TAU = Math.PI * 2;
+  const KEY = 'koleso-vybyvanie-v1';
+  const PREFS_KEY = 'ocenshik.prefs.v1'; // общий с «Оценщиком всего»: тема одна на весь сайт
+  const $ = (s) => document.querySelector(s);
+  const canvas = $('#wheel');
+  const ctx = canvas.getContext('2d');
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const FONT = 'Onest, ui-sans-serif, system-ui, sans-serif';
+  const SAMPLE = [['Hollow Knight', 1500], ['Hades', 1200], ['Disco Elysium', 800], ['Outer Wilds', 500], ['Celeste', 300], ['Inscryption', 250]];
+
+  const CUR = {
+    UAH: { sym: '₴', in: 'гривнах' },
+    USD: { sym: '$', in: 'долларах' },
+    EUR: { sym: '€', in: 'евро' },
+    ILS: { sym: '₪', in: 'шекелях' },
+    RUB: { sym: '₽', in: 'рублях' },
+  };
+  const CODES = Object.keys(CUR);
+  // сколько единиц валюты дают за 1 доллар (примерно, правится на странице)
+  const DEF_RATES = { UAH: 41.5, USD: 1, EUR: 0.86, ILS: 3.3, RUB: 80 };
+  const DURS = [3, 5, 8, 12, 20];
+  const HUBS = [[24, 'Малый'], [34, 'Средний'], [44, 'Большой']];
+  const THEME_LABELS = { auto: '🌓 Тема: Авто', light: '☀️ Светлая', dark: '🌙 Тёмная' };
+
+  // сектора: цвета аватаров «Оценщика» плюс лайм и графит; подпись тёмная или белая, смотря что контрастнее
+  const PALETTE = ['#3550E8', '#EAA92C', '#2EAD60', '#EC4899', '#9333EA', '#F97316', '#06B6D4', '#E4553F', '#84CC16', '#64748B'];
+  const INK_ON = '#14161C';
+  const lum = (hex) => {
+    const n = parseInt(hex.slice(1), 16);
+    const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => {
+      v /= 255;
+      return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const SEG_COLORS = PALETTE.map((c) => {
+    const L = lum(c);
+    return { c, t: (L + 0.05) / (lum(INK_ON) + 0.05) >= 1.05 / (L + 0.05) ? INK_ON : '#FFFFFF' };
+  });
+  const colorOf = (i) => SEG_COLORS[(Math.max(1, i.id) - 1) % SEG_COLORS.length];
+
+  const HINT_SIMPLE = 'Все сектора равны. Выпавший сектор выбывает, последний оставшийся побеждает.';
+  const HINT_DON = 'Шанс победить равен доле доната в банке. Сектор вылета у каждого равен сумме донатов остальных, поэтому крупный донат вылетает реже, а пропорция держится на каждом шаге. Донаты в разных валютах пересчитываются в валюту банка, повтор имени добавляет сумму к уже вписанной.<br><code>вылет = (банк − донат) ÷ ((N − 1) × банк)</code>';
+
+  const svg = (inner, size, sw) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${inner}</svg>`;
+  const ICON = {
+    x: svg('<path d="M6 6l12 12M18 6L6 18"/>', 16, 2),
+    xs: svg('<path d="M6 6l12 12M18 6L6 18"/>', 11, 3),
+    plus: svg('<path d="M12 5v14M5 12h14"/>', 20, 2),
+  };
+  const EMPTY_HTML = `<li class="empty">
+    <div class="ghost-rows" aria-hidden="true"><span>1</span><b class="w1"></b><i></i><span>2</span><b class="w2"></b><i></i><span>3</span><b class="w3"></b><i></i></div>
+    <p><strong>Колесо пустое.</strong> Впиши первого участника выше или вставь сразу целый список.</p>
+  </li>`;
+
+  let S = null, T = {}, dpr = 1, size = 0, autoTimer = 0, clearTimer = 0, ac = null, lastTick = 0;
+  const fitCache = new Map();
+
+  // ---------- helpers ----------
+  const fmt = (n) => (Math.round((+n || 0) * 100) / 100).toLocaleString('ru-RU');
+  const pct = (x) => {
+    const v = x * 100;
+    return (v > 0 && v < 10 ? v.toFixed(1).replace('.', ',') : String(Math.round(v))) + '%';
+  };
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const mod = (a, m) => ((a % m) + m) % m;
+  const num = (s) => parseFloat(String(s).replace(/[\s ]/g, '').replace(',', '.'));
+  const nearest = (v, list) => list.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a));
+  const rnd = () => {
+    try { const u = new Uint32Array(1); crypto.getRandomValues(u); return u[0] / 4294967296; }
+    catch (e) { return Math.random(); }
+  };
+
+  // ---------- state ----------
+  function fresh() {
+    return {
+      v: 2, mode: 'donate', cur: 'UAH', rates: { ...DEF_RATES }, items: [], seq: 0, outSeq: 0, rot: 0,
+      duration: 8, auto: false, sound: true, sample: false, hub: 24, gif: '', section: 'wheel',
+    };
+  }
+  function makeItem(name, amount, cur) {
+    const id = ++S.seq;
+    return { id, name, amount: +amount || 0, cur: CUR[cur] ? cur : S.cur, out: false, outOrder: 0, startWin: null };
+  }
+  const alive = () => S.items.filter((i) => !i.out);
+  const rate = (c) => (S.rates && S.rates[c] > 0 ? S.rates[c] : DEF_RATES[c]);
+  const conv = (amount, from, to) => ((+amount || 0) / rate(from)) * rate(to);
+  const sym = (c) => (CUR[c] || CUR[S.cur]).sym;
+  const convText = (i) => (i.cur !== S.cur ? `≈ ${fmt(conv(i.amount, i.cur, S.cur))} ${sym(S.cur)}` : '');
+  // вес в донатном режиме = сумма, пересчитанная в валюту банка
+  const weight = (i) => (S.mode === 'donate' ? Math.max(0, conv(i.amount, i.cur, S.cur)) : 1);
+  const bankSum = () => alive().reduce((s, i) => s + weight(i), 0);
+
+  function curFrom(tok) {
+    if (!tok) return null;
+    const t = tok.toLowerCase();
+    if (t === '₴' || t === 'uah' || t.startsWith('гр')) return 'UAH';
+    if (t === '$' || t === 'usd' || t.startsWith('дол')) return 'USD';
+    if (t === '€' || t === 'eur' || t === 'евро') return 'EUR';
+    if (t === '₪' || t === 'ils' || t.startsWith('шек')) return 'ILS';
+    if (t === '₽' || t === 'rub' || t.startsWith('р')) return 'RUB';
+    return null;
+  }
+
+  // Шанс победы i = w_i / W. Чтобы это держалось после каждого вылета,
+  // вероятность вылета на этом спине q_i = (W − w_i) / ((N − 1) · W).
+  function chances() {
+    const a = alive(), n = a.length, res = new Map();
+    if (!n) return res;
+    if (n === 1) { res.set(a[0].id, { win: 1, drop: 0 }); return res; }
+    const W = a.reduce((s, i) => s + weight(i), 0);
+    const eq = W <= 0;
+    const Wt = eq ? n : W;
+    a.forEach((i) => {
+      const w = eq ? 1 : weight(i);
+      res.set(i.id, { win: w / Wt, drop: (Wt - w) / ((n - 1) * Wt) });
+    });
+    return res;
+  }
+
+  function segments() {
+    const a = alive(), ch = chances(), out = [];
+    let acc = 0;
+    a.forEach((i) => {
+      const p = a.length === 1 ? 1 : ch.get(i.id).drop;
+      if (p <= 0) return;
+      out.push({ item: i, p, start: acc * TAU, end: (acc + p) * TAU });
+      acc += p;
+    });
+    return out;
+  }
+
+  function segAt(rot, segs) {
+    const a = mod(-Math.PI / 2 - rot, TAU);
+    return segs.find((s) => a >= s.start && a < s.end) || segs[segs.length - 1];
+  }
+
+  function addItem(name, amount, cur) {
+    name = String(name).trim().slice(0, 60);
+    if (!name) return 'empty';
+    if (S.sample) { S.items = []; S.outSeq = 0; S.sample = false; }
+    const ex = alive().find((i) => i.name.toLowerCase() === name.toLowerCase());
+    if (ex) {
+      if (S.mode === 'donate') {
+        // докидка в другой валюте пересчитывается в валюту участника
+        ex.amount = Math.round(((+ex.amount || 0) + conv(amount, cur || ex.cur, ex.cur)) * 100) / 100;
+        return 'merged';
+      }
+      return 'dup';
+    }
+    S.items.push(makeItem(name, amount, cur));
+    return 'added';
+  }
+
+  function save() {
+    try { const { spinning, ...rest } = S; localStorage.setItem(KEY, JSON.stringify(rest)); } catch (e) {}
+  }
+
+  // ---------- theme, shared with the rater ----------
+  function readThemePref() {
+    try {
+      const p = JSON.parse(localStorage.getItem(PREFS_KEY) || 'null');
+      if (p && ['auto', 'light', 'dark'].includes(p.theme)) return p.theme;
+    } catch (e) {}
+    return 'auto';
+  }
+  function writeThemePref(t) {
+    try {
+      let p = JSON.parse(localStorage.getItem(PREFS_KEY) || 'null');
+      if (!p || typeof p !== 'object' || Array.isArray(p)) p = {};
+      p.theme = t;
+      localStorage.setItem(PREFS_KEY, JSON.stringify(p));
+    } catch (e) {}
+  }
+  let theme = 'auto';
+  function applyTheme(t, fromUser) {
+    theme = ['auto', 'light', 'dark'].includes(t) ? t : 'auto';
+    // «Авто» при загрузке не трогает атрибут, чтобы не перебить тему, выбранную снаружи
+    if (theme === 'auto') { if (fromUser) document.documentElement.removeAttribute('data-theme'); }
+    else document.documentElement.setAttribute('data-theme', theme);
+    $('#themeBtn').textContent = THEME_LABELS[theme];
+    if (fromUser) writeThemePref(theme);
+  }
+
+  // ---------- drawing ----------
+  function readTheme() {
+    const cs = getComputedStyle(document.documentElement);
+    const g = (n) => cs.getPropertyValue(n).trim();
+    T = { panel: g('--panel'), panel2: g('--panel-2'), ink: g('--ink'), ink3: g('--ink-3'), accent: g('--accent') };
+  }
+
+  function resize() {
+    const r = canvas.getBoundingClientRect();
+    dpr = Math.min(2.5, window.devicePixelRatio || 1);
+    size = Math.round(r.width * dpr);
+    if (!size) return;
+    canvas.width = size;
+    canvas.height = size;
+    fitCache.clear();
+    draw();
+  }
+
+  function fit(text, maxW, font) {
+    const k = font + '|' + maxW + '|' + text;
+    if (fitCache.has(k)) return fitCache.get(k);
+    let s = text;
+    if (ctx.measureText(s).width > maxW) {
+      while (s.length > 1 && ctx.measureText(s + '…').width > maxW) s = s.slice(0, -1);
+      s += '…';
+    }
+    fitCache.set(k, s);
+    return s;
+  }
+
+  function draw(segs, hl) {
+    if (!size) return;
+    segs = segs || segments();
+    const c = size / 2;
+    const ring = Math.max(8, size * 0.03);
+    const R = c - ring - 2 * dpr;
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.clearRect(0, 0, size, size);
+    ctx.translate(c, c);
+
+    if (!segs.length) {
+      ctx.beginPath(); ctx.arc(0, 0, R, 0, TAU); ctx.fillStyle = T.panel2; ctx.fill();
+    }
+
+    for (const s of segs) {
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, R, S.rot + s.start, S.rot + s.end);
+      ctx.closePath();
+      ctx.fillStyle = colorOf(s.item).c;
+      ctx.fill();
+      if (hl && hl.id === s.item.id) { ctx.fillStyle = `rgba(255,255,255,${hl.a})`; ctx.fill(); }
+    }
+
+    if (segs.length > 1) {
+      ctx.lineWidth = Math.max(1.5, 2 * dpr);
+      ctx.strokeStyle = T.panel;
+      for (const s of segs) {
+        const a = S.rot + s.start;
+        ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * R, Math.sin(a) * R); ctx.stroke();
+      }
+    }
+
+    // подписи вдоль радиуса, от обода к центру
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'right';
+    const inner = (S.hub / 100) * c + 6 * dpr, pad = 12 * dpr, maxW = Math.round(R - inner - pad);
+    for (const s of segs) {
+      const ang = s.end - s.start;
+      const fs = Math.round(Math.min(R * 0.072, R * 0.68 * Math.min(ang, 1.2) * 0.55));
+      if (fs < 9 * dpr) continue;
+      const font = `600 ${fs}px ${FONT}`;
+      ctx.save();
+      ctx.rotate(S.rot + (s.start + s.end) / 2);
+      ctx.font = font;
+      ctx.fillStyle = colorOf(s.item).t;
+      ctx.fillText(fit(s.item.name, maxW, font), R - pad, 0);
+      ctx.restore();
+    }
+
+    // обод: тёмное кольцо с ячейками, как шкала у «Оценщика»
+    ctx.beginPath(); ctx.arc(0, 0, R + ring / 2, 0, TAU);
+    ctx.lineWidth = ring; ctx.strokeStyle = T.ink; ctx.stroke();
+    const nb = 36, cs = ring * 0.36;
+    ctx.fillStyle = T.panel;
+    for (let k = 0; k < nb; k++) {
+      const a = (k / nb) * TAU;
+      ctx.save();
+      ctx.translate(Math.cos(a) * (R + ring / 2), Math.sin(a) * (R + ring / 2));
+      ctx.rotate(a);
+      ctx.globalAlpha = k % 2 ? 0.4 : 0.9;
+      ctx.beginPath();
+      if (ctx.roundRect) ctx.roundRect(-cs / 2, -cs / 2, cs, cs, cs * 0.3);
+      else ctx.rect(-cs / 2, -cs / 2, cs, cs);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    if (!segs.length) {
+      ctx.fillStyle = T.ink3; ctx.textAlign = 'center';
+      ctx.font = `600 ${Math.round(R * 0.07)}px ${FONT}`;
+      ctx.fillText('Колесо пустое', 0, R * 0.55);
+    }
+  }
+
+  // ---------- sound ----------
+  function ensureAudio() {
+    try {
+      if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+      if (ac.state === 'suspended') ac.resume();
+    } catch (e) { ac = null; }
+  }
+  function tone(freq, t, len, vol, type) {
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type || 'triangle';
+    o.frequency.setValueAtTime(freq, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + len);
+    o.connect(g); g.connect(ac.destination);
+    o.start(t); o.stop(t + len + 0.02);
+  }
+  function kick() {
+    if (reduced) return;
+    const p = $('#pointer');
+    if (p.animate) p.animate([{ transform: 'translateX(-50%) rotate(-16deg)' }, { transform: 'translateX(-50%) rotate(0deg)' }], { duration: 140, easing: 'ease-out' });
+  }
+  function tick() {
+    kick();
+    if (!S.sound || !ac) return;
+    const t = ac.currentTime;
+    if (t - lastTick < 0.035) return;
+    lastTick = t;
+    tone(1500, t, 0.03, 0.05, 'square');
+  }
+  function playOut() {
+    if (!S.sound || !ac) return;
+    const t = ac.currentTime;
+    tone(330, t, 0.18, 0.12); tone(220, t + 0.12, 0.3, 0.12);
+  }
+  function playWin() {
+    if (!S.sound || !ac) return;
+    const t = ac.currentTime;
+    [523, 659, 784, 1047].forEach((f, k) => tone(f, t + k * 0.11, 0.38, 0.1));
+  }
+
+  // ---------- spin ----------
+  function lock(on) {
+    $('#deskSet').disabled = on;
+    $('#spin').disabled = on || alive().length < 2;
+    $('#spin').classList.toggle('spinning', on);
+    $('#stage').classList.toggle('is-spinning', on);
+    $('#restart').disabled = on || !S.items.some((i) => i.out);
+  }
+
+  function spin() {
+    if (S.spinning) return;
+    const a = alive();
+    if (a.length < 2) { idleStatus(); return; }
+    if (a.length === S.items.length) {
+      const ch = chances();
+      a.forEach((i) => { i.startWin = ch.get(i.id).win; });
+    }
+    if (S.sound) ensureAudio();
+
+    const segs = segments();
+    const r = rnd();
+    let acc = 0, pick = segs[segs.length - 1];
+    for (const s of segs) { acc += s.p; if (r < acc) { pick = s; break; } }
+    const target = pick.start + (0.06 + rnd() * 0.88) * (pick.end - pick.start);
+
+    const dur = reduced ? 1200 : S.duration * 1000;
+    const turns = reduced ? 1 : Math.max(2, Math.round(S.duration * 0.8));
+    const from = S.rot;
+    const base = -Math.PI / 2 - target;
+    const to = base + TAU * Math.ceil((from + TAU * turns - base) / TAU);
+
+    S.spinning = true;
+    lock(true);
+    setStatus('Крутится…', baseSub());
+    const t0 = performance.now();
+    let last = segAt(from, segs);
+    $('#ticker').textContent = last.item.name;
+
+    const frame = (now) => {
+      const t = Math.min(1, (now - t0) / dur);
+      const e = 1 - Math.pow(1 - t, 4);
+      S.rot = from + (to - from) * e;
+      const cur = segAt(S.rot, segs);
+      if (cur !== last) { last = cur; tick(); $('#ticker').textContent = cur.item.name; }
+      draw(segs);
+      if (t < 1) requestAnimationFrame(frame);
+      else land(pick, segs);
+    };
+    requestAnimationFrame(frame);
+  }
+
+  function land(pick, segs) {
+    setStatus(`Вылетает: <b>${esc(pick.item.name)}</b>`, baseSub(), 'bad');
+    playOut();
+    const t0 = performance.now(), D = reduced ? 400 : 1100;
+    const pulse = (now) => {
+      const t = (now - t0) / D;
+      if (t < 1) {
+        draw(segs, { id: pick.item.id, a: 0.5 * Math.abs(Math.sin(t * Math.PI * 3)) });
+        requestAnimationFrame(pulse);
+        return;
+      }
+      pick.item.out = true;
+      pick.item.outOrder = ++S.outSeq;
+      S.rot = mod(S.rot, TAU);
+      S.spinning = false;
+      lock(false);
+      save();
+      render(true);
+      const left = alive();
+      if (left.length === 1) {
+        setStatus(`Победитель: <b>${esc(left[0].name)}</b>`, winSub(left[0]), 'good');
+        showWinner(left[0]);
+      } else {
+        setStatus(`<b>${esc(pick.item.name)}</b> выбывает`, baseSub(), 'bad');
+        if (S.auto) autoTimer = setTimeout(spin, reduced ? 600 : 1100);
+      }
+    };
+    requestAnimationFrame(pulse);
+  }
+
+  // ---------- UI ----------
+  function setStatus(main, sub, tier) {
+    $('#statusMain').innerHTML = main;
+    $('#statusSub').textContent = sub || '';
+    const b = $('#aliveBadge');
+    b.dataset.tier = tier || 'idle';
+    b.textContent = alive().length;
+  }
+  function baseSub() {
+    const n = alive().length, total = S.items.length;
+    const bank = S.mode === 'donate' && n ? ` · банк ${fmt(bankSum())} ${sym(S.cur)}` : '';
+    return (n < total ? `осталось из ${total}` : 'участников на колесе') + bank;
+  }
+  function winSub(w) {
+    return S.mode === 'donate' && w.startWin != null ? `шанс на старте был ${pct(w.startWin)}` : `последний из ${S.items.length}`;
+  }
+  function idleStatus() {
+    const a = alive(), n = a.length;
+    if (n >= 2) setStatus('Жми «Крутить»', baseSub());
+    else if (n === 1 && S.items.some((i) => i.out)) setStatus(`Победитель: <b>${esc(a[0].name)}</b>`, winSub(a[0]), 'good');
+    else if (n === 1) setStatus('Нужен ещё хотя бы один', 'добавь участника в список');
+    else setStatus('Колесо пустое', 'добавь участников в список');
+  }
+  function msg(text, kind) {
+    const el = $('#formMsg');
+    el.textContent = text || '';
+    el.className = 'field-msg' + (kind ? ' ' + kind : '');
+  }
+  function updateTicker() {
+    const segs = segments();
+    $('#ticker').textContent = segs.length ? segAt(S.rot, segs).item.name : '—';
+  }
+  function updateMeta() {
+    const n = alive().length;
+    $('#boardStat').innerHTML = `<b>${n}</b> на колесе` + (S.mode === 'donate' ? ` · банк <b>${fmt(bankSum())} ${sym(S.cur)}</b>` : '');
+    $('#mnavCount').textContent = n;
+    $('#aliveBadge').textContent = n;
+  }
+  function refreshNumbers() {
+    const ch = chances();
+    document.querySelectorAll('#list .prow').forEach((row) => {
+      const c = ch.get(+row.dataset.id);
+      if (!c) return;
+      const pc = row.querySelector('.pc');
+      pc.querySelector('b').textContent = pct(c.win);
+      pc.querySelector('i').textContent = pct(c.drop);
+      pc.title = `Шанс победы ${pct(c.win)} · шанс вылететь на этом спине ${pct(c.drop)}`;
+      const it = S.items.find((x) => x.id === +row.dataset.id);
+      const cv = row.querySelector('.e-sub');
+      if (cv && it) cv.textContent = convText(it);
+    });
+    updateMeta();
+    draw();
+    updateTicker();
+    if (!S.spinning) idleStatus();
+  }
+
+  function renderCur() {
+    $('#curTabs').innerHTML = CODES.map((c) =>
+      `<button type="button" data-cur="${c}" aria-pressed="${c === S.cur}" title="Банк в ${CUR[c].in}">${CUR[c].sym}</button>`
+    ).join('');
+    $('#rateGrid').innerHTML = CODES.filter((c) => c !== S.cur).map((c) => {
+      const v = rate(S.cur) / rate(c);
+      return `<label class="rate" for="rate-${c}">1 ${CUR[c].sym} =<input class="inp" id="rate-${c}" data-cur="${c}" inputmode="decimal" value="${+v.toPrecision(4)}">${sym(S.cur)}</label>`;
+    }).join('');
+  }
+  function renderSegs() {
+    $('#durSeg').innerHTML = DURS.map((d) => `<button type="button" data-dur="${d}" aria-pressed="${d === S.duration}">${d} с</button>`).join('');
+    $('#hubSeg').innerHTML = HUBS.map(([v, l]) => `<button type="button" data-hub="${v}" aria-pressed="${v === S.hub}">${l}</button>`).join('');
+  }
+  function markSeg(sel, attr, val) {
+    document.querySelectorAll(`${sel} [${attr}]`).forEach((b) => b.setAttribute('aria-pressed', String(+b.getAttribute(attr) === val)));
+  }
+  function applySection() {
+    $('#layout').dataset.section = S.section;
+    document.querySelectorAll('#mnav [data-section]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.section === S.section)));
+  }
+
+  function render(keep) {
+    const don = S.mode === 'donate';
+    document.querySelectorAll('.view-tab').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.mode === S.mode)));
+    $('#amountWrap').hidden = !don;
+    $('#curTabs').hidden = !don;
+    $('#ratesBox').hidden = !don;
+    renderCur();
+    $('#modeHint').innerHTML = don ? HINT_DON : HINT_SIMPLE;
+    $('#bulk').placeholder = don ? 'Hollow Knight 1500\nHades — 20 $\nCeleste, 300 грн' : 'Hollow Knight\nHades\nCeleste';
+    $('#bulkHint').textContent = don
+      ? 'Строка: имя, сумма и валюта, например «Hades $20» или «Celeste 1 500 грн». Без валюты берётся выбранная в форме.'
+      : 'Одно имя на строку.';
+    $('#sampleNote').hidden = !S.sample;
+
+    const a = alive(), ch = chances();
+    // в донатном режиме топ по сумме (в валюте банка), сверху самый крупный
+    const rows = don ? a.slice().sort((x, y) => weight(y) - weight(x) || x.id - y.id) : a;
+    const list = $('#list');
+    list.classList.toggle('simple', !don);
+    list.innerHTML = rows.length
+      ? rows.map((i, idx) => {
+          const c = ch.get(i.id), col = colorOf(i);
+          return `<li class="prow" data-id="${i.id}">
+            ${don ? `<span class="rank">${idx + 1}</span>` : ''}
+            <div class="pnm"><i class="sw" style="--c:${col.c}"></i><div class="e-text"><span class="e-name">${esc(i.name)}</span>${don ? `<span class="e-sub">${convText(i)}</span>` : ''}</div></div>
+            ${don ? `<label class="amt" for="amt-${i.id}"><input class="inp" id="amt-${i.id}" data-act="amt" inputmode="decimal" value="${i.amount}" aria-label="Донат: ${esc(i.name)}, ${i.cur}"><span>${sym(i.cur)}</span></label>` : ''}
+            <span class="pc" title="Шанс победы ${pct(c.win)} · шанс вылететь на этом спине ${pct(c.drop)}"><b>${pct(c.win)}</b><i>${pct(c.drop)}</i></span>
+            <button type="button" class="mini-btn del" data-act="del" aria-label="Убрать ${esc(i.name)}">${ICON.x}</button>
+          </li>`;
+        }).join('')
+      : EMPTY_HTML;
+
+    const outs = S.items.filter((i) => i.out).sort((x, y) => x.outOrder - y.outOrder);
+    $('#outBox').hidden = !outs.length;
+    $('#outList').innerHTML = outs.map((i, k) => `<li class="orow">
+        <span class="onum">${k + 1}</span>
+        <span class="oname">${esc(i.name)}</span>
+        ${don ? `<span class="oamt">${fmt(i.amount)} ${sym(i.cur)}</span>` : '<span></span>'}
+        <button type="button" class="link-btn" data-act="back" data-id="${i.id}">вернуть</button>
+      </li>`).join('');
+
+    $('#auto').checked = S.auto;
+    $('#snd').checked = S.sound;
+
+    updateMeta();
+    draw();
+    updateTicker();
+    $('#spin').disabled = S.spinning || a.length < 2;
+    $('#restart').disabled = S.spinning || !outs.length;
+    if (!keep) idleStatus();
+  }
+
+  function showWinner(it) {
+    $('#wName').textContent = it.name;
+    const total = S.items.length;
+    $('#wStats').innerHTML = S.mode === 'donate' && it.startWin != null
+      ? `<span class="badge" data-tier="good">${pct(it.startWin)}</span>
+         <div class="total-meta"><strong>шанс на старте</strong><span>донат ${fmt(it.amount)} ${sym(it.cur)}${it.cur !== S.cur ? ' ' + convText(it) : ''}</span></div>`
+      : `<span class="badge" data-tier="good">${total}</span>
+         <div class="total-meta"><strong>${S.mode === 'donate' ? `донат ${fmt(it.amount)} ${sym(it.cur)}` : 'участников было на колесе'}</strong><span>остался последним</span></div>`;
+    $('#winner').hidden = false;
+    $('#wAgain').focus();
+    playWin();
+  }
+  function hideWinner() {
+    if ($('#winner').hidden) return;
+    $('#winner').hidden = true;
+    $('#restart').focus();
+  }
+
+  function restoreAll() {
+    if (S.spinning) return;
+    clearTimeout(autoTimer);
+    S.items.forEach((i) => { i.out = false; i.outOrder = 0; });
+    S.outSeq = 0;
+    $('#winner').hidden = true;
+    save();
+    render();
+  }
+
+  // ---------- гифки в центре (хранятся в IndexedDB этого браузера) ----------
+  let dbP = null, persistOk = true, G = [];
+  function db() {
+    if (!dbP) dbP = new Promise((res, rej) => {
+      try {
+        const r = indexedDB.open('koleso-gifs', 1);
+        r.onupgradeneeded = () => r.result.createObjectStore('gifs', { keyPath: 'id' });
+        r.onsuccess = () => res(r.result);
+        r.onerror = () => rej(r.error);
+        r.onblocked = () => rej(new Error('blocked'));
+      } catch (e) { rej(e); }
+    });
+    return dbP;
+  }
+  function idbReq(mode, fn) {
+    return db().then((d) => new Promise((res, rej) => {
+      const tx = d.transaction('gifs', mode);
+      const q = fn(tx.objectStore('gifs'));
+      tx.oncomplete = () => res(q && q.result);
+      tx.onerror = () => rej(tx.error);
+      tx.onabort = () => rej(tx.error);
+    }));
+  }
+  const gifsAll = () => idbReq('readonly', (s) => s.getAll());
+  const gifPut = (rec) => idbReq('readwrite', (s) => s.put(rec));
+  const gifDel = (id) => idbReq('readwrite', (s) => s.delete(id));
+
+  function gifNote(text, kind) {
+    const el = $('#gifNote');
+    el.textContent = text || (persistOk
+      ? 'GIF, PNG, JPG или WebP. Файл можно перетащить прямо на колесо.'
+      : 'Браузер не даёт сохранить гифки: после перезагрузки их придётся загрузить заново.');
+    el.className = 'field-msg' + (kind ? ' ' + kind : '');
+  }
+
+  function applyHub() {
+    $('.wheel-wrap').style.setProperty('--hub', S.hub + '%');
+    draw();
+  }
+
+  function renderGifs() {
+    const cur = G.find((g) => g.id === S.gif);
+    const img = $('#hubImg');
+    if (cur) { img.src = cur.url; img.hidden = false; }
+    else { img.hidden = true; img.removeAttribute('src'); }
+    $('#spin').classList.toggle('has-gif', !!cur);
+    $('#thumbs').innerHTML =
+      `<button type="button" class="th add" id="gifPick" aria-label="Загрузить гифку">${ICON.plus}<span>Гифка</span></button>` +
+      `<button type="button" class="th" data-gif="" aria-pressed="${!cur}">Без гифки</button>` +
+      G.map((g) => `<span class="thw">
+        <button type="button" class="th" data-gif="${g.id}" aria-pressed="${g.id === S.gif}" title="${esc(g.name)}"><img src="${g.url}" alt="${esc(g.name)}"></button>
+        <button type="button" class="th-x" data-del="${g.id}" aria-label="Удалить ${esc(g.name)}">${ICON.xs}</button>
+      </span>`).join('');
+  }
+
+  async function addGifs(files) {
+    const list = [...files].filter((f) => /^image\/(gif|png|jpe?g|webp)$/.test(f.type));
+    if (!list.length) { gifNote('Это не картинка. Нужен файл GIF, PNG, JPG или WebP.', 'err'); return; }
+    let added = 0;
+    for (const f of list) {
+      if (f.size > 20 * 1024 * 1024) { gifNote(`«${f.name}» больше 20 МБ, возьми файл поменьше.`, 'err'); continue; }
+      const rec = { id: 'g' + Date.now().toString(36) + Math.floor(rnd() * 1e6).toString(36), name: f.name, blob: f, added: Date.now() };
+      try { await gifPut(rec); } catch (e) { persistOk = false; }
+      G.push({ ...rec, url: URL.createObjectURL(f) });
+      S.gif = rec.id;
+      added++;
+    }
+    if (!added) return;
+    if (S.hub === HUBS[0][0]) { S.hub = HUBS[1][0]; applyHub(); markSeg('#hubSeg', 'data-hub', S.hub); } // с гифкой центр крупнее
+    save();
+    renderGifs();
+    gifNote();
+  }
+
+  function removeGif(id) {
+    const g = G.find((x) => x.id === id);
+    if (!g) return;
+    gifDel(id).catch(() => {});
+    URL.revokeObjectURL(g.url);
+    G = G.filter((x) => x.id !== id);
+    if (S.gif === id) S.gif = '';
+    save();
+    renderGifs();
+  }
+
+  function bind() {
+    $('#spin').addEventListener('click', () => { clearTimeout(autoTimer); spin(); });
+    $('#restart').addEventListener('click', restoreAll);
+
+    $('#themeBtn').addEventListener('click', () => {
+      const order = ['auto', 'dark', 'light'];
+      applyTheme(order[(order.indexOf(theme) + 1) % order.length], true);
+    });
+
+    $('#mnav').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-section]');
+      if (!b || S.section === b.dataset.section) return;
+      S.section = b.dataset.section;
+      applySection();
+      save();
+      const y = $('#layout').getBoundingClientRect().top + window.scrollY - $('#mnav').offsetHeight - 24;
+      if (window.scrollY > y) window.scrollTo(0, Math.max(0, y));
+      resize();
+    });
+
+    document.querySelectorAll('.view-tab').forEach((b) => b.addEventListener('click', () => {
+      if (S.spinning || S.mode === b.dataset.mode) return;
+      S.mode = b.dataset.mode;
+      msg('');
+      save();
+      render();
+    }));
+
+    $('#durSeg').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-dur]');
+      if (!b) return;
+      S.duration = +b.dataset.dur;
+      markSeg('#durSeg', 'data-dur', S.duration);
+      save();
+    });
+    $('#hubSeg').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-hub]');
+      if (!b) return;
+      S.hub = +b.dataset.hub;
+      markSeg('#hubSeg', 'data-hub', S.hub);
+      applyHub();
+      save();
+    });
+    $('#auto').addEventListener('change', (e) => { S.auto = e.target.checked; if (!S.auto) clearTimeout(autoTimer); save(); });
+    $('#snd').addEventListener('change', (e) => { S.sound = e.target.checked; save(); });
+
+    $('#curTabs').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-cur]');
+      if (!b || S.spinning) return;
+      S.cur = b.dataset.cur;
+      $('#cur').value = S.cur;
+      save();
+      render();
+      const nb = $(`#curTabs [data-cur="${S.cur}"]`);
+      if (nb) nb.focus();
+    });
+
+    $('#rateGrid').addEventListener('input', (e) => {
+      const c = e.target.dataset.cur;
+      if (!c) return;
+      const v = num(e.target.value);
+      if (!(v > 0)) return;
+      S.rates[c] = rate(S.cur) / v;
+      save();
+      refreshNumbers();
+    });
+    $('#ratesReset').addEventListener('click', () => { S.rates = { ...DEF_RATES }; save(); render(); });
+
+    $('#sampleClear').addEventListener('click', () => {
+      S.items = [];
+      S.outSeq = 0;
+      S.sample = false;
+      save();
+      render();
+      $('#name').focus();
+    });
+
+    $('#addForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = $('#name').value.trim();
+      const amount = num($('#amount').value);
+      if (!name) return msg('Впиши имя или название.', 'err');
+      if (S.mode === 'donate' && !(amount > 0)) { $('#amount').focus(); return msg('Впиши сумму доната больше нуля.', 'err'); }
+      const cur = $('#cur').value;
+      const r = addItem(name, S.mode === 'donate' ? amount : 0, cur);
+      if (r === 'dup') return msg(`«${name}» уже на колесе.`, 'err');
+      msg(r === 'merged' ? `К «${name}» добавлено ${fmt(amount)} ${sym(cur)}` : `«${name}» на колесе.`, 'ok');
+      $('#name').value = '';
+      $('#amount').value = '';
+      $('#name').focus();
+      save();
+      render();
+    });
+
+    $('#bulkAdd').addEventListener('click', () => {
+      const lines = $('#bulk').value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
+      if (!lines.length) return msg('Вставь хотя бы одну строку.', 'err');
+      let added = 0, merged = 0, dup = 0, noSum = 0;
+      // имя, разделитель, [символ валюты] сумма [валюта]: «Hades $20», «Hades 1 500 грн», «Hades — 300 ₪»
+      const re = /^(.*?)[\s,;:=\-–—]+(₴|\$|€|₪|₽)?\s*(\d{1,3}(?:[  ]\d{3})+|\d+)(?:[.,](\d+))?\s*(₴|грн\.?|грив[а-яё]*|uah|\$|usd|дол[а-яё.]*|€|eur|евро|₪|ils|шек[а-яё.]*|₽|руб[а-яё.]*|rub|р\.?)?$/i;
+      const fallback = $('#cur').value;
+      lines.forEach((line) => {
+        let name = line, amount = 0, cur = fallback;
+        if (S.mode === 'donate') {
+          const m = line.match(re);
+          if (m && m[1].trim()) {
+            name = m[1].trim();
+            amount = parseFloat(m[3].replace(/[  ]/g, '') + (m[4] ? '.' + m[4] : ''));
+            cur = curFrom(m[2]) || curFrom(m[5]) || fallback;
+          } else noSum++;
+        }
+        const r = addItem(name, amount, cur);
+        if (r === 'added') added++;
+        else if (r === 'merged') merged++;
+        else if (r === 'dup') dup++;
+      });
+      $('#bulk').value = '';
+      let text = `Добавлено: ${added}`;
+      if (merged) text += `, суммировано: ${merged}`;
+      if (dup) text += `, повторов пропущено: ${dup}`;
+      if (noSum) text += `. Без суммы: ${noSum}, впиши её в списке.`;
+      msg(text, noSum ? 'err' : 'ok');
+      save();
+      render();
+    });
+
+    $('#list').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-act="del"]');
+      if (!b || S.spinning) return;
+      const id = +b.closest('.prow').dataset.id;
+      S.items = S.items.filter((i) => i.id !== id);
+      S.sample = false;
+      save();
+      render();
+    });
+
+    $('#list').addEventListener('input', (e) => {
+      const inp = e.target.closest('[data-act="amt"]');
+      if (!inp) return;
+      const it = S.items.find((i) => i.id === +inp.closest('.prow').dataset.id);
+      if (!it) return;
+      const v = num(inp.value);
+      it.amount = v > 0 ? v : 0;
+      S.sample = false;
+      $('#sampleNote').hidden = true;
+      save();
+      refreshNumbers();
+    });
+
+    // пересортировать топ, когда закончили править сумму (не во время ввода)
+    $('#list').addEventListener('focusout', (e) => {
+      if (!e.target.closest('[data-act="amt"]')) return;
+      setTimeout(() => {
+        if (S.spinning || $('#list').contains(document.activeElement)) return;
+        render(true);
+      }, 0);
+    });
+    $('#list').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.target.closest('[data-act="amt"]')) e.target.blur();
+    });
+
+    $('#outList').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-act="back"]');
+      if (!b || S.spinning) return;
+      const it = S.items.find((i) => i.id === +b.dataset.id);
+      if (it) { it.out = false; it.outOrder = 0; }
+      $('#winner').hidden = true;
+      save();
+      render();
+    });
+
+    $('#clear').addEventListener('click', () => {
+      const b = $('#clear');
+      if (!b.dataset.armed) {
+        b.dataset.armed = '1';
+        b.textContent = 'Точно? Нажми ещё раз';
+        clearTimeout(clearTimer);
+        clearTimer = setTimeout(() => { delete b.dataset.armed; b.textContent = 'Очистить всё'; }, 3000);
+        return;
+      }
+      clearTimeout(clearTimer);
+      delete b.dataset.armed;
+      b.textContent = 'Очистить всё';
+      clearTimeout(autoTimer);
+      S.items = [];
+      S.outSeq = 0;
+      S.sample = false;
+      msg('');
+      save();
+      render();
+      $('#name').focus();
+    });
+
+    $('#gifFile').addEventListener('change', (e) => { addGifs(e.target.files); e.target.value = ''; });
+    $('#thumbs').addEventListener('click', (e) => {
+      if (e.target.closest('#gifPick')) { $('#gifFile').click(); return; }
+      const del = e.target.closest('[data-del]');
+      if (del) { removeGif(del.dataset.del); return; }
+      const b = e.target.closest('[data-gif]');
+      if (!b) return;
+      S.gif = b.dataset.gif;
+      save();
+      renderGifs();
+    });
+
+    // перетаскивание файла: подсветка на колесе, принимается в любом месте страницы
+    const wrap = $('.wheel-wrap');
+    const hasFiles = (e) => e.dataTransfer && [...e.dataTransfer.types].includes('Files');
+    let dragDepth = 0;
+    document.addEventListener('dragenter', (e) => { if (!hasFiles(e)) return; dragDepth++; wrap.classList.add('drop'); });
+    document.addEventListener('dragleave', (e) => { if (!hasFiles(e)) return; dragDepth = Math.max(0, dragDepth - 1); if (!dragDepth) wrap.classList.remove('drop'); });
+    document.addEventListener('dragover', (e) => { if (hasFiles(e)) e.preventDefault(); });
+    document.addEventListener('drop', (e) => {
+      if (!hasFiles(e)) return;
+      e.preventDefault();
+      dragDepth = 0;
+      wrap.classList.remove('drop');
+      addGifs(e.dataTransfer.files);
+    });
+
+    $('#wAgain').addEventListener('click', restoreAll);
+    $('#wClose').addEventListener('click', hideWinner);
+    $('#winner').addEventListener('click', (e) => { if (e.target.id === 'winner') hideWinner(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideWinner(); });
+
+    matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { readTheme(); draw(); });
+    new MutationObserver(() => { readTheme(); draw(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    new ResizeObserver(resize).observe(canvas);
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { fitCache.clear(); draw(); });
+  }
+
+  function start(data) {
+    let d = data && Array.isArray(data.items) ? data : null;
+    if (!d) {
+      try {
+        const raw = localStorage.getItem(KEY);
+        if (raw) { const p = JSON.parse(raw); if (p && Array.isArray(p.items)) d = p; }
+      } catch (e) {}
+    }
+    S = Object.assign(fresh(), d || {});
+    S.spinning = false;
+    if (d && !d.v) {
+      // старые сохранения открывались в рублях; по умолчанию банк в гривнах
+      const wasRub = !d.cur || d.cur === 'RUB';
+      if (wasRub) S.cur = 'UAH';
+      S.items.forEach((i) => { if (!i.cur || (wasRub && i.cur === 'RUB')) i.cur = 'UAH'; });
+      save();
+    }
+    if (!CUR[S.cur]) S.cur = 'UAH';
+    S.rates = Object.assign({ ...DEF_RATES }, S.rates || {});
+    S.items.forEach((i) => { if (!CUR[i.cur]) i.cur = S.cur; });
+    S.duration = nearest(+S.duration || 8, DURS);
+    S.hub = nearest(+S.hub || HUBS[0][0], HUBS.map((h) => h[0]));
+    if (!['wheel', 'list'].includes(S.section)) S.section = 'wheel';
+    if (!d) { S.sample = true; SAMPLE.forEach(([n, a]) => S.items.push(makeItem(n, a, S.cur))); }
+    $('#cur').innerHTML = CODES.map((c) => `<option value="${c}">${CUR[c].sym} ${c}</option>`).join('');
+    $('#cur').value = S.cur;
+    if (/\/koleso(\/|\/index\.html)?$/.test(location.pathname)) $('#backLink').hidden = false;
+
+    applyTheme(readThemePref(), false);
+    readTheme();
+    bind();
+    renderSegs();
+    applySection();
+    render();
+    resize();
+    applyHub();
+    renderGifs();
+    gifNote();
+    gifsAll()
+      .then((recs) => {
+        G = (recs || []).sort((x, y) => x.added - y.added).map((r) => ({ ...r, url: URL.createObjectURL(r.blob) }));
+        renderGifs();
+      })
+      .catch(() => { persistOk = false; gifNote(); });
+  }
+
+  window.claude?.hot?.snapshot?.(() => { const { spinning, ...rest } = S || {}; return rest; });
+  window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+})();
+</script>
+</body>
+</html>
