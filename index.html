@@ -256,6 +256,7 @@ a.theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
   display: flex; flex-direction: column;
 }
 .board-list.grid-mode .entry summary { margin: 0; padding: 10px; border-radius: 0; height: 100%; }
+.board-list.grid-mode .entry details[open] > summary { height: auto; }
 .board-list.grid-mode .sum {
   display: flex; flex-direction: column; align-items: stretch; gap: 8px;
 }
@@ -1036,10 +1037,38 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
             <p><strong>Журнал пока пуст.</strong> Сюда по датам попадут новые оценки, правки и удаления, а ещё изменения категорий и критериев. К любой записи можно дописать своё описание.</p>
           </div>
         </div>
-        <div id="logApp" data-stat="5 версий, последняя 25 октября" hidden>
+        <div id="logApp" data-stat="10 версий, последняя 25 октября" hidden>
           <div class="log-days">
             <section class="log-day">
-              <h3 class="log-date">25 октября 2026<span>версии 4–6</span></h3>
+              <h3 class="log-date">25 октября 2026<span>версии 4–10</span></h3>
+              <article class="rel">
+                <span class="rel-v">v10</span>
+                <div>
+                  <h4>Друзья</h4>
+                  <p>В рейтинге во вкладке «👤 Мои» появился переключатель «Я / друзья». Через кнопку «👥 Друзья» можно завести онлайн-аккаунт, отправить заявку по нику, принять или отклонить входящие и смотреть оценки друзей с разбивкой по критериям. Твои оценки отправляются друзьям сами после каждого сохранения, фото остаются только у тебя. Ещё исправлена плитка: раскрытая карточка больше не пустая, подробности снова видны.</p>
+                </div>
+              </article>
+              <article class="rel">
+                <span class="rel-v">v9</span>
+                <div>
+                  <h4>Казуал Хаб</h4>
+                  <p>Сайт теперь называется «Казуал Хаб» и живёт по адресу casualhub.pages.dev. Колесо переименовано в «Колесо Казуала», в нём появилась своя музыка на спин, вылет и победу и шаблон «Плейлист Папича» с его победной Kurt Angle — Medal.</p>
+                </div>
+              </article>
+              <article class="rel">
+                <span class="rel-v">v8</span>
+                <div>
+                  <h4>Колесо на выбывание</h4>
+                  <p>Новая страница по кнопке «🎡 Колесо» в шапке. Каждый спин выпавший сектор вылетает, последний оставшийся побеждает. Два режима: просто имена или донаты, где шанс победить равен доле в банке. Валюты: гривны, доллары, евро, шекели и рубли с пересчётом по курсу. Топ участников по сумме, вставка списком, свои гифки в центре колеса, общая с сайтом тема.</p>
+                </div>
+              </article>
+              <article class="rel">
+                <span class="rel-v">v7</span>
+                <div>
+                  <h4>Профили и аватары</h4>
+                  <p>Регистрация с почтой, индикатор надёжности пароля и кнопка «показать пароль». Свой аватар: загрузка фото по кнопке с камерой или цвет на выбор. Профиль со статистикой и быстрое переключение между аккаунтами. Статусы «В процессе» и «В планах» убраны, остались «Завершено» и «Брошено».</p>
+                </div>
+              </article>
               <article class="rel">
                 <span class="rel-v">v6</span>
                 <div>
@@ -4897,5 +4926,6 @@ renderBoard();
 renderLog();
 ready = initStorage();
 </script>
+<script src="/friends.js"></script>
 
 </body></html>
