@@ -1693,7 +1693,7 @@ function renderAuthModal() {
     return;
   }
 
-  if (state.user) {
+  if (state.user && authActiveTab !== 'login' && authActiveTab !== 'reg') {
     const userRatings = state.ratings.filter(r => r.author && r.author.id === state.user.id);
     const userRatingsCount = userRatings.length;
     const userFavCount = userRatings.filter(r => r.fav).length;
@@ -1855,7 +1855,7 @@ function renderAuthModal() {
         </div>
         <button type="submit" class="btn primary" style="margin-top:4px;">Войти</button>
         <div class="auth-guest-row">
-          <button type="button" class="btn text small" id="btnGuestLogin">Продолжить как гость</button>
+          <button type="button" class="btn text small" id="btnGuestLogin">${state.user ? '← Назад к профилю' : 'Продолжить как гость'}</button>
         </div>
       </form>
 
@@ -1930,7 +1930,7 @@ function renderAuthModal() {
 
         <button type="submit" class="btn primary" style="margin-top:6px;">Создать аккаунт</button>
         <div class="auth-guest-row">
-          <button type="button" class="btn text small" id="btnGuestReg">Продолжить как гость</button>
+          <button type="button" class="btn text small" id="btnGuestReg">${state.user ? '← Назад к профилю' : 'Продолжить как гость'}</button>
         </div>
       </form>
     `}
@@ -1952,6 +1952,7 @@ function renderAuthModal() {
   const guestBtn = $('btnGuestLogin') || $('btnGuestReg');
   if (guestBtn) {
     guestBtn.addEventListener('click', () => {
+      if (state.user) { authActiveTab = 'profile'; renderAuthModal(); return; }
       closeAuthModal();
       toast('Режим гостя: оценки сохраняются на вашем устройстве');
     });
