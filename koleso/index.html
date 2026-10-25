@@ -291,6 +291,18 @@ fieldset:disabled { opacity: .6; }
 }
 .th-x:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
+/* Music slots and list templates */
+.mslots { display: grid; gap: 8px; }
+.mslot { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; }
+.ms-text { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.ms-text strong { font-size: 14px; font-weight: 600; }
+.ms-text span { font-size: 12.5px; color: var(--ink-2); overflow-wrap: anywhere; }
+.ms-text span.hint { color: var(--accent); font-weight: 600; }
+.mslot .btn.small { flex: none; }
+.tpl { display: grid; gap: 8px; }
+.tpl h4 { font-size: 15px; font-weight: 700; }
+.tpl p { font-size: 13px; color: var(--ink-2); text-wrap: pretty; }
+
 /* Status strip right under the wheel, built from the rater's score badge */
 .scorebar {
   display: flex; align-items: center; gap: 10px;
@@ -405,7 +417,7 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     </div>
     <div class="masthead-right">
       <div class="user-bar">
-        <a class="theme-btn" id="backLink" href="../" hidden>← Оценщик всего</a>
+        <a class="theme-btn" id="backLink" href="../" hidden>← Казуал Хаб</a>
         <button type="button" class="theme-btn" id="themeBtn" title="Переключить тему оформления">🌓 Тема: Авто</button>
       </div>
       <p class="scale"><span class="vh">Цифры у каждого участника:</span>
@@ -466,6 +478,13 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
         <div class="thumbs" id="thumbs"></div>
         <p class="field-msg" id="gifNote"></p>
       </div>
+
+      <div class="field">
+        <p class="label">Музыка</p>
+        <input type="file" id="audioFile" accept="audio/*,.mp3,.ogg,.wav,.m4a" hidden>
+        <div class="mslots" id="mslots"></div>
+        <p class="field-msg" id="musicNote"></p>
+      </div>
     </section>
 
     <section class="card board" id="board" aria-label="Участники">
@@ -517,6 +536,11 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
               <button type="button" class="btn small primary" id="bulkAdd">Добавить всё</button>
             </div>
           </div>
+        </details>
+
+        <details class="tool" id="tplBox">
+          <summary>Шаблоны <svg class="chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
+          <div class="dbody" id="tplList"></div>
         </details>
 
         <ol class="board-list" id="list"></ol>
@@ -597,7 +621,31 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     x: svg('<path d="M6 6l12 12M18 6L6 18"/>', 16, 2),
     xs: svg('<path d="M6 6l12 12M18 6L6 18"/>', 11, 3),
     plus: svg('<path d="M12 5v14M5 12h14"/>', 20, 2),
+    play: svg('<path d="M8 5l11 7-11 7z"/>', 16, 2),
+    stop: svg('<rect x="6" y="6" width="12" height="12" rx="1.5"/>', 16, 2),
   };
+
+  const MUSIC_SLOTS = [
+    ['spin', 'Спин', 'играет, пока колесо крутится'],
+    ['out', 'Вылет', 'когда сектор выбывает'],
+    ['win', 'Победа', 'когда остался последний'],
+  ];
+  // известно только про победную: после побед Папич включает тему Курта Энгла из WWE
+  const MUSIC_HINT = { win: 'Как у Папича: Kurt Angle — Medal (тема WWE)' };
+  const TEMPLATES = [{
+    id: 'papich',
+    title: 'Плейлист Папича',
+    note: 'Его победная, которую он включает после побед, и треки из плейлиста, который он выкладывал в 2015 году. Список собран по фанатскому треклисту на dota2.ru, точной статистики, что он ставит чаще, нет.',
+    items: [
+      'Kurt Angle — Medal', 'AC/DC — Highway to Hell', 'Ace of Base — All That She Wants', 'Aerosmith — Dream On',
+      'Basshunter — Dota', 'Aqua — Barbie Girl', 'Britney Spears — Toxic', 'Celine Dion — My Heart Will Go On',
+      'Crazy Frog — Axel F', 'Dschinghis Khan — Moskau', 'Eminem & Dido — Stan', 'Evanescence — Bring Me to Life',
+      'O-Zone — Dragostea Din Tei', 'Ray Parker Jr. — Ghostbusters', 'Robert Miles — Children', 'Nightwish — Nemo',
+      'Muse — Supermassive Black Hole', 'Агата Кристи — Как на войне', 'Алла Пугачёва — Миллион алых роз',
+      'Би-2 — Её глаза', 'Валерий Кипелов — Я свободен', 'Земфира — Хочешь', 'Ленинград — Никого не жалко',
+      'Мираж — Музыка нас связала', 'Океан Ельзи — Без бою', 'Руслана — Аркан', 'Ляпис Трубецкой — Яблони',
+    ],
+  }];
   const EMPTY_HTML = `<li class="empty">
     <div class="ghost-rows" aria-hidden="true"><span>1</span><b class="w1"></b><i></i><span>2</span><b class="w2"></b><i></i><span>3</span><b class="w3"></b><i></i></div>
     <p><strong>Колесо пустое.</strong> Впиши первого участника выше или вставь сразу целый список.</p>
@@ -626,6 +674,7 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     return {
       v: 2, mode: 'donate', cur: 'UAH', rates: { ...DEF_RATES }, items: [], seq: 0, outSeq: 0, rot: 0,
       duration: 8, auto: false, sound: true, sample: false, hub: 24, gif: '', section: 'wheel',
+      music: { spin: '', out: '', win: '' },
     };
   }
   function makeItem(name, amount, cur) {
@@ -861,7 +910,7 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
   }
   function tick() {
     kick();
-    if (!S.sound || !ac) return;
+    if (!S.sound || !ac || spinMusic) return;
     const t = ac.currentTime;
     if (t - lastTick < 0.035) return;
     lastTick = t;
@@ -896,6 +945,7 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
       a.forEach((i) => { i.startWin = ch.get(i.id).win; });
     }
     if (S.sound) ensureAudio();
+    spinMusic = playSlot('spin', true);
 
     const segs = segments();
     const r = rnd();
@@ -931,7 +981,10 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
 
   function land(pick, segs) {
     setStatus(`Вылетает: <b>${esc(pick.item.name)}</b>`, baseSub(), 'bad');
-    playOut();
+    stopMusic(true);
+    spinMusic = false;
+    // на последнем вылете звучит победная, её запускает showWinner
+    if (alive().length > 2 && !playSlot('out')) playOut();
     const t0 = performance.now(), D = reduced ? 400 : 1100;
     const pulse = (now) => {
       const t = (now - t0) / D;
@@ -1099,10 +1152,11 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
          <div class="total-meta"><strong>${S.mode === 'donate' ? `донат ${fmt(it.amount)} ${sym(it.cur)}` : 'участников было на колесе'}</strong><span>остался последним</span></div>`;
     $('#winner').hidden = false;
     $('#wAgain').focus();
-    playWin();
+    if (!playSlot('win')) playWin();
   }
   function hideWinner() {
     if ($('#winner').hidden) return;
+    stopMusic(true);
     $('#winner').hidden = true;
     $('#restart').focus();
   }
@@ -1110,6 +1164,7 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
   function restoreAll() {
     if (S.spinning) return;
     clearTimeout(autoTimer);
+    stopMusic(true);
     S.items.forEach((i) => { i.out = false; i.outOrder = 0; });
     S.outSeq = 0;
     $('#winner').hidden = true;
@@ -1202,8 +1257,140 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     renderGifs();
   }
 
+  // ---------- музыка: свои треки на спин, вылет и победу (в том же IndexedDB, kind: 'audio') ----------
+  let A = [], current = null, previewSlot = '', spinMusic = false, pendingSlot = '';
+  const slotTitle = (slot) => (MUSIC_SLOTS.find((m) => m[0] === slot) || [, slot])[1];
+
+  function stopMusic(fade) {
+    const el = current, wasPreview = previewSlot;
+    current = null;
+    previewSlot = '';
+    if (wasPreview) renderMusic();
+    if (!el) return;
+    if (!fade || reduced) { el.pause(); return; }
+    const v0 = el.volume, t0 = performance.now();
+    const step = () => {
+      const k = (performance.now() - t0) / 500;
+      if (k >= 1) { el.pause(); return; }
+      el.volume = v0 * (1 - k);
+      requestAnimationFrame(step);
+    };
+    requestAnimationFrame(step);
+  }
+  function playSlot(slot, loop, force) {
+    stopMusic();
+    if (!S.sound && !force) return false;
+    const rec = A.find((a) => a.id === S.music[slot]);
+    if (!rec) return false;
+    const el = new Audio(rec.url);
+    el.loop = !!loop;
+    el.volume = 0.85;
+    el.play().catch(() => {});
+    current = el;
+    return true;
+  }
+
+  function musicNote(text, kind) {
+    const el = $('#musicNote');
+    el.textContent = text || 'Загрузи свои аудиофайлы, они хранятся в этом браузере. Без трека играет стандартный звук колеса.';
+    el.className = 'field-msg' + (kind ? ' ' + kind : '');
+  }
+
+  function renderMusic() {
+    $('#mslots').innerHTML = MUSIC_SLOTS.map(([slot, title, when]) => {
+      const rec = A.find((a) => a.id === S.music[slot]);
+      const playing = previewSlot === slot;
+      const hint = !rec && MUSIC_HINT[slot] ? `<span class="hint">${MUSIC_HINT[slot]}</span>` : '';
+      return `<div class="mslot">
+        <div class="ms-text"><strong>${title}</strong><span>${rec ? esc(rec.name) : `стандартный звук · ${when}`}</span>${hint}</div>
+        ${rec ? `<button type="button" class="mini-btn" data-mplay="${slot}" aria-label="${playing ? 'Остановить' : 'Прослушать'}: ${title}">${playing ? ICON.stop : ICON.play}</button>
+        <button type="button" class="mini-btn del" data-mdel="${slot}" aria-label="Убрать трек: ${title}">${ICON.x}</button>` : ''}
+        <button type="button" class="btn small ghost" data-mup="${slot}">${rec ? 'Заменить' : 'Загрузить'}</button>
+      </div>`;
+    }).join('');
+  }
+
+  function dropAudio(id) {
+    const a = A.find((x) => x.id === id);
+    if (!a) return;
+    gifDel(id).catch(() => {});
+    URL.revokeObjectURL(a.url);
+    A = A.filter((x) => x.id !== id);
+  }
+
+  async function addAudio(file, slot) {
+    if (!file || !(/^audio\//.test(file.type) || /\.(mp3|ogg|oga|wav|m4a|aac|flac|opus|weba)$/i.test(file.name))) {
+      musicNote('Это не аудио. Нужен mp3, ogg, wav или m4a.', 'err');
+      return;
+    }
+    if (file.size > 30 * 1024 * 1024) { musicNote(`«${file.name}» больше 30 МБ, возьми файл поменьше.`, 'err'); return; }
+    stopMusic();
+    const old = S.music[slot];
+    const rec = { id: 'a' + Date.now().toString(36) + Math.floor(rnd() * 1e6).toString(36), kind: 'audio', slot, name: file.name, blob: file, added: Date.now() };
+    try { await gifPut(rec); } catch (e) { persistOk = false; }
+    A.push({ ...rec, url: URL.createObjectURL(file) });
+    S.music[slot] = rec.id;
+    if (old) dropAudio(old);
+    save();
+    renderMusic();
+    musicNote(persistOk ? `«${file.name}» стоит на «${slotTitle(slot)}».` : 'Браузер не даёт сохранить трек: после перезагрузки его придётся загрузить заново.', persistOk ? 'ok' : 'err');
+  }
+
+  function renderTemplates() {
+    $('#tplList').innerHTML = TEMPLATES.map((t) => `<div class="tpl">
+      <h4>${t.title} · ${t.items.length} треков</h4>
+      <p>${t.note}</p>
+      <p>${t.items.slice(0, 6).map(esc).join(' · ')} и ещё ${t.items.length - 6}.</p>
+      <div><button type="button" class="btn small primary" data-tpl="${t.id}">Добавить на колесо</button></div>
+    </div>`).join('');
+  }
+  function applyTemplate(id) {
+    const t = TEMPLATES.find((x) => x.id === id);
+    if (!t || S.spinning) return;
+    let added = 0, had = 0;
+    t.items.forEach((n) => { const r = addItem(n, 0, S.cur); if (r === 'added') added++; else if (r !== 'empty') had++; });
+    save();
+    render();
+    msg(`Шаблон «${t.title}»: добавлено ${added}` + (had ? `, уже были на колесе: ${had}` : '') +
+      (S.mode === 'donate' ? '. Суммы донатов впиши в списке: пока у всех ноль, шансы равные.' : '.'), 'ok');
+  }
+
   function bind() {
     $('#spin').addEventListener('click', () => { clearTimeout(autoTimer); spin(); });
+
+    $('#mslots').addEventListener('click', (e) => {
+      const up = e.target.closest('[data-mup]');
+      if (up) { pendingSlot = up.dataset.mup; $('#audioFile').click(); return; }
+      const del = e.target.closest('[data-mdel]');
+      if (del) {
+        stopMusic();
+        dropAudio(S.music[del.dataset.mdel]);
+        S.music[del.dataset.mdel] = '';
+        save();
+        renderMusic();
+        musicNote();
+        return;
+      }
+      const pl = e.target.closest('[data-mplay]');
+      if (!pl || S.spinning) return;
+      const slot = pl.dataset.mplay;
+      if (previewSlot === slot) { stopMusic(); return; }
+      if (playSlot(slot, false, true)) {
+        previewSlot = slot;
+        const el = current;
+        el.addEventListener('ended', () => { if (current === el) { current = null; previewSlot = ''; renderMusic(); } });
+        renderMusic();
+      }
+    });
+    $('#audioFile').addEventListener('change', (e) => {
+      const f = e.target.files && e.target.files[0];
+      if (f && pendingSlot) addAudio(f, pendingSlot);
+      e.target.value = '';
+    });
+    $('#tplList').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-tpl]');
+      if (b) applyTemplate(b.dataset.tpl);
+    });
     $('#restart').addEventListener('click', restoreAll);
 
     $('#themeBtn').addEventListener('click', () => {
@@ -1246,7 +1433,7 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
       save();
     });
     $('#auto').addEventListener('change', (e) => { S.auto = e.target.checked; if (!S.auto) clearTimeout(autoTimer); save(); });
-    $('#snd').addEventListener('change', (e) => { S.sound = e.target.checked; save(); });
+    $('#snd').addEventListener('change', (e) => { S.sound = e.target.checked; if (!S.sound) stopMusic(); save(); });
 
     $('#curTabs').addEventListener('click', (e) => {
       const b = e.target.closest('[data-cur]');
@@ -1456,6 +1643,7 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     S.duration = nearest(+S.duration || 8, DURS);
     S.hub = nearest(+S.hub || HUBS[0][0], HUBS.map((h) => h[0]));
     if (!['wheel', 'list'].includes(S.section)) S.section = 'wheel';
+    S.music = Object.assign({ spin: '', out: '', win: '' }, S.music || {});
     if (!d) { S.sample = true; SAMPLE.forEach(([n, a]) => S.items.push(makeItem(n, a, S.cur))); }
     $('#cur').innerHTML = CODES.map((c) => `<option value="${c}">${CUR[c].sym} ${c}</option>`).join('');
     $('#cur').value = S.cur;
@@ -1471,12 +1659,19 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     applyHub();
     renderGifs();
     gifNote();
+    renderMusic();
+    musicNote();
+    renderTemplates();
     gifsAll()
       .then((recs) => {
-        G = (recs || []).sort((x, y) => x.added - y.added).map((r) => ({ ...r, url: URL.createObjectURL(r.blob) }));
+        const all = recs || [];
+        G = all.filter((r) => r.kind !== 'audio').sort((x, y) => x.added - y.added).map((r) => ({ ...r, url: URL.createObjectURL(r.blob) }));
+        A = all.filter((r) => r.kind === 'audio').map((r) => ({ ...r, url: URL.createObjectURL(r.blob) }));
+        MUSIC_SLOTS.forEach(([s]) => { if (S.music[s] && !A.some((a) => a.id === S.music[s])) S.music[s] = ''; });
         renderGifs();
+        renderMusic();
       })
-      .catch(() => { persistOk = false; gifNote(); });
+      .catch(() => { persistOk = false; gifNote(); musicNote(); });
   }
 
   window.claude?.hot?.snapshot?.(() => { const { spinning, ...rest } = S || {}; return rest; });
