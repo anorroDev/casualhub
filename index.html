@@ -151,6 +151,8 @@
   transition: border-color .15s, color .15s, background-color .15s;
 }
 .theme-btn:hover { border-color: var(--accent); color: var(--ink); }
+a.theme-btn { text-decoration: none; }
+a.theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .name-row { display: flex; align-items: stretch; gap: 8px; }
 .name-row .name-input { flex: 1; min-width: 0; }
@@ -864,6 +866,7 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
     <div class="masthead-right">
       <div class="user-bar">
         <button type="button" class="cmp-tray" id="cmpTrayBtn" hidden>⚖️ Сравнить (<span id="cmpCount">0</span>/2)</button>
+        <a class="theme-btn" id="wheelLink" href="/koleso/" title="Колесо Толямбуса: колесо фортуны на выбывание">🎡 Колесо</a>
         <button type="button" class="theme-btn" id="themeBtn" title="Переключить тему оформления">🌓 Тема</button>
         <div id="userBar" class="user-bar"></div>
       </div>
