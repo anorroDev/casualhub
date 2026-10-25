@@ -14,6 +14,20 @@
   color: #fff; font-size: 12px; font-weight: 700; text-transform: uppercase; flex: none;
 }
 .author-tag { background: color-mix(in srgb, var(--accent) 14%, var(--panel)); color: var(--accent); font-weight: 600; }
+.user-avatar {
+  width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+  color: #fff; font-size: 12px; font-weight: 700; text-transform: uppercase; flex: none;
+  background-size: cover; background-position: center; overflow: hidden;
+}
+.author-tag {
+  background: color-mix(in srgb, var(--accent) 14%, var(--panel));
+  color: var(--accent); font-weight: 600;
+  display: inline-flex; align-items: center; gap: 5px;
+}
+.author-mini-avatar {
+  width: 15px; height: 15px; border-radius: 50%; display: inline-block;
+  background-size: cover; background-position: center; flex-shrink: 0;
+}
 .auth-card { max-width: 460px; }
 .auth-tabs { display: flex; gap: 6px; margin: 16px 0 12px; background: var(--panel-2); padding: 4px; border-radius: 10px; border: 1px solid var(--line); }
 .auth-tab { flex: 1; padding: 8px 12px; border: 0; background: transparent; font-size: 13.5px; font-weight: 600; border-radius: 7px; color: var(--ink-2); cursor: pointer; transition: all .15s; }
@@ -42,35 +56,48 @@
 .pwd-meter-fill { height: 100%; width: 0%; transition: width .25s ease, background-color .25s ease; border-radius: 2px; }
 .pwd-meter-info { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--ink-3); }
 
-/* Avatar Customizer / Picker */
-.avatar-customizer {
-  display: grid; gap: 10px; padding: 12px; background: var(--panel-2);
-  border-radius: 12px; border: 1px solid var(--line); margin-bottom: 4px;
+/* Avatar with Camera Upload Box */
+.avatar-upload-box {
+  display: flex; align-items: center; gap: 16px; padding: 14px;
+  background: var(--panel-2); border-radius: 12px; border: 1px solid var(--line);
+  margin-bottom: 6px;
 }
-.avatar-preview-wrap { display: flex; align-items: center; gap: 12px; }
+.avatar-upload-trigger {
+  position: relative; cursor: pointer; width: 66px; height: 66px; flex-shrink: 0;
+  border-radius: 50%; transition: transform .15s ease;
+}
+.avatar-upload-trigger:hover { transform: scale(1.04); }
 .avatar-preview-circle {
-  width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center;
-  font-size: 24px; font-weight: 800; color: #fff; box-shadow: 0 4px 14px rgba(0,0,0,.18);
-  transition: transform .2s ease, background-color .2s ease; flex-shrink: 0;
+  width: 66px; height: 66px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 26px; font-weight: 800; color: #fff; background-size: cover;
+  background-position: center; border: 2px solid var(--line);
+  box-shadow: 0 4px 14px rgba(0,0,0,.18); overflow: hidden;
+  transition: border-color .15s ease;
 }
-.avatar-preview-info h5 { margin: 0; font-size: 13.5px; font-weight: 700; color: var(--ink); }
-.avatar-preview-info p { margin: 2px 0 0 0; font-size: 11.5px; color: var(--ink-3); }
-.avatar-picker-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-2); }
-.avatar-icons-row { display: flex; flex-wrap: wrap; gap: 6px; }
-.avatar-icon-btn {
-  width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line);
-  background: var(--panel); font-size: 16px; cursor: pointer; display: grid; place-items: center;
-  transition: all .15s; line-height: 1; padding: 0; color: var(--ink);
+.avatar-upload-trigger:hover .avatar-preview-circle { border-color: var(--accent); }
+.avatar-camera-badge {
+  position: absolute; right: -2px; bottom: -2px; width: 26px; height: 26px;
+  border-radius: 50%; background: var(--accent); color: #fff; display: grid;
+  place-items: center; border: 2px solid var(--panel);
+  box-shadow: 0 2px 6px rgba(0,0,0,.25);
+  transition: transform .15s ease, background-color .15s ease;
 }
-.avatar-icon-btn:hover { border-color: var(--accent); transform: scale(1.08); }
-.avatar-icon-btn.selected { border-color: var(--accent); background: var(--accent-soft); outline: 2px solid var(--accent); }
-.avatar-colors-row { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 2px; }
-.avatar-color-btn {
-  width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent;
-  cursor: pointer; transition: transform .15s; padding: 0;
+.avatar-upload-trigger:hover .avatar-camera-badge,
+.profile-avatar-wrap:hover .avatar-camera-badge {
+  transform: scale(1.15); background: var(--ink); color: var(--bg);
 }
-.avatar-color-btn:hover { transform: scale(1.15); }
-.avatar-color-btn.selected { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); transform: scale(1.1); }
+.avatar-upload-info { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.avatar-upload-label {
+  display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600;
+  color: var(--accent); cursor: pointer; background: var(--panel); border: 1px solid var(--line);
+  padding: 6px 12px; border-radius: 8px; width: fit-content; transition: all .15s ease;
+}
+.avatar-upload-label:hover { border-color: var(--accent); background: var(--accent-soft); }
+.avatar-remove-btn {
+  font-size: 11.5px; color: var(--bad); background: transparent; border: 0;
+  cursor: pointer; padding: 0; margin-top: 2px; width: fit-content; text-decoration: underline;
+}
+.avatar-remove-btn:hover { color: var(--bad-ink, #ff6b6b); }
 
 /* Profile View */
 .profile-card {
@@ -78,10 +105,12 @@
   border: 1px solid var(--line); display: grid; gap: 14px; margin: 14px 0;
 }
 .profile-head { display: flex; align-items: center; gap: 14px; }
+.profile-avatar-wrap { position: relative; width: 62px; height: 62px; flex-shrink: 0; cursor: pointer; }
 .profile-avatar {
-  width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center;
-  font-size: 26px; font-weight: 800; color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,.2);
-  flex-shrink: 0;
+  width: 62px; height: 62px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 26px; font-weight: 800; color: #fff; background-size: cover;
+  background-position: center; border: 2px solid var(--line);
+  box-shadow: 0 4px 16px rgba(0,0,0,.2); overflow: hidden;
 }
 .profile-titles { min-width: 0; flex: 1; }
 .profile-name { font-size: 16px; font-weight: 700; margin: 0; color: var(--ink); word-break: break-word; }
@@ -1275,10 +1304,10 @@ function saveLocalLog() {
 
 const EYE_OPEN_SVG = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
 const EYE_CLOSED_SVG = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
-const AVATAR_ICONS = ['⚡', '🎮', '🎬', '🎧', '☕', '🚀', '👾', '🏆', '🔥', '🎯', '✨', '🐱'];
+const CAMERA_SVG = `<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>`;
 
 let authActiveTab = 'login';
-let regSelectedAvatar = '⚡';
+let regSelectedAvatar = '';
 let regSelectedColor = '#3550E8';
 let editSelectedAvatar = '';
 let editSelectedColor = '';
@@ -1295,6 +1324,51 @@ function calcPasswordStrength(pass) {
   if (score <= 1) return { score: 1, text: 'Слабый пароль', color: 'var(--bad)', width: '25%' };
   if (score <= 3) return { score: 2, text: 'Средний пароль (добавьте цифры/знаки)', color: 'var(--mid)', width: '65%' };
   return { score: 3, text: 'Отличный надёжный пароль! 👍', color: 'var(--good)', width: '100%' };
+}
+
+function processAvatarFile(file, callback) {
+  if (!file) return;
+  if (!file.type || !file.type.startsWith('image/')) {
+    toast('Пожалуйста, выберите файл изображения (JPG, PNG)');
+    return;
+  }
+  if (file.size > 8 * 1024 * 1024) {
+    toast('Файл слишком большой (макс. 8 МБ)');
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const img = new Image();
+    img.onload = () => {
+      const maxDim = 160;
+      let w = img.width, h = img.height;
+      if (w > h) {
+        if (w > maxDim) { h = Math.round((h * maxDim) / w); w = maxDim; }
+      } else {
+        if (h > maxDim) { w = Math.round((w * maxDim) / h); h = maxDim; }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      const dataUrl = canvas.toDataURL('image/jpeg', 0.86);
+      callback(dataUrl);
+    };
+    img.onerror = () => toast('Не удалось прочитать изображение');
+    img.src = e.target.result;
+  };
+  reader.onerror = () => toast('Ошибка чтения файла');
+  reader.readAsDataURL(file);
+}
+
+function renderAuthorMini(author) {
+  if (!author) return '👤';
+  const isImg = author.avatar && (author.avatar.startsWith('data:image/') || author.avatar.startsWith('http://') || author.avatar.startsWith('https://'));
+  if (isImg) {
+    return `<span class="author-mini-avatar" style="background-image:url('${esc(author.avatar)}');"></span>`;
+  }
+  return '👤';
 }
 
 function loadUsers() {
@@ -1350,7 +1424,7 @@ function registerUser(username, email, password, avatar, color) {
     name: username,
     email,
     pass: password,
-    avatar: avatar || '⚡',
+    avatar: avatar || username.charAt(0).toUpperCase(),
     color: color || '#3550E8',
     createdAt: new Date().toISOString()
   };
@@ -1411,7 +1485,7 @@ function updateUserProfile(username, email, password, avatar, color) {
   state.user.name = username;
   state.user.email = email;
   if (password) state.user.pass = password;
-  if (avatar) state.user.avatar = avatar;
+  if (avatar !== undefined) state.user.avatar = avatar;
   if (color) state.user.color = color;
 
   const idx = state.users.findIndex(u => u.id === state.user.id);
@@ -1461,9 +1535,14 @@ function switchUser(id) {
 function renderUserBar() {
   if (!el.userBar) return;
   if (state.user) {
+    const isImg = state.user.avatar && (state.user.avatar.startsWith('data:image/') || state.user.avatar.startsWith('http://') || state.user.avatar.startsWith('https://'));
+    const avStyle = isImg
+      ? `background-image: url('${esc(state.user.avatar)}');`
+      : `background-color: ${esc(state.user.color || '#3550E8')};`;
+    const avContent = isImg ? '' : esc(state.user.name.charAt(0).toUpperCase());
     el.userBar.innerHTML = `
       <div class="user-pill" id="userPill" role="button" tabindex="0" title="Открыть профиль">
-        <span class="user-avatar" style="background: ${esc(state.user.color || '#3550E8')}">${esc(state.user.avatar || state.user.name.charAt(0).toUpperCase())}</span>
+        <span class="user-avatar" style="${avStyle}">${avContent}</span>
         <span class="user-name">${esc(state.user.name)}</span>
       </div>`;
     const pill = $('userPill');
@@ -1496,37 +1575,30 @@ function renderAuthModal() {
   if (!el.authBody) return;
 
   if (state.user && authActiveTab === 'edit') {
-    editSelectedAvatar = editSelectedAvatar || state.user.avatar || '⚡';
+    editSelectedAvatar = (editSelectedAvatar !== undefined && editSelectedAvatar !== null) ? editSelectedAvatar : (state.user.avatar || '');
     editSelectedColor = editSelectedColor || state.user.color || '#3550E8';
+    const isImg = editSelectedAvatar && (editSelectedAvatar.startsWith('data:image/') || editSelectedAvatar.startsWith('http://') || editSelectedAvatar.startsWith('https://'));
+
     el.authTitle.textContent = 'Настройки профиля';
     el.authBody.innerHTML = `
       <form class="auth-form" id="formEditProfile">
-        <div class="avatar-customizer">
-          <div class="avatar-preview-wrap">
-            <div class="avatar-preview-circle" id="editAvatarCircle" style="background: ${esc(editSelectedColor)}">
-              ${esc(editSelectedAvatar)}
+        <div class="avatar-upload-box">
+          <div class="avatar-upload-trigger" id="editAvatarTrigger" role="button" tabindex="0" title="Нажмите на камеру, чтобы выбрать фото">
+            <div class="avatar-preview-circle" id="editAvatarCircle" style="${isImg ? `background-image:url('${esc(editSelectedAvatar)}');` : `background-color:${esc(editSelectedColor)};`}">
+              <span id="editAvatarInitial">${isImg ? '' : esc(state.user.name.charAt(0).toUpperCase())}</span>
             </div>
-            <div class="avatar-preview-info">
-              <h5>Аватар профиля</h5>
-              <p>Выберите значок и цвет настроения</p>
-            </div>
-          </div>
-          <div>
-            <div class="avatar-picker-label">Значок</div>
-            <div class="avatar-icons-row" id="editIconsRow">
-              ${AVATAR_ICONS.map(ic => `
-                <button type="button" class="avatar-icon-btn${ic === editSelectedAvatar ? ' selected' : ''}" data-icon="${esc(ic)}">${esc(ic)}</button>
-              `).join('')}
-              <button type="button" class="avatar-icon-btn" data-icon="__initial" title="Первая буква имени">🔤</button>
+            <div class="avatar-camera-badge" title="Сменить аватарку">
+              ${CAMERA_SVG}
             </div>
           </div>
-          <div>
-            <div class="avatar-picker-label">Цвет</div>
-            <div class="avatar-colors-row" id="editColorsRow">
-              ${AVATAR_COLORS.map(c => `
-                <button type="button" class="avatar-color-btn${c === editSelectedColor ? ' selected' : ''}" data-color="${esc(c)}" style="background:${esc(c)};"></button>
-              `).join('')}
-            </div>
+          <input type="file" id="editAvatarFile" accept="image/*" class="vh">
+          <div class="avatar-upload-info">
+            <label for="editAvatarFile" class="avatar-upload-label">
+              ${CAMERA_SVG}
+              Сменить аватарку
+            </label>
+            <span class="auth-help" id="editAvatarStatus">${isImg ? 'Своё фото установлено ✓' : 'Нажмите на камеру, чтобы поставить своё фото'}</span>
+            <button type="button" class="avatar-remove-btn" id="btnRemoveEditAvatar"${isImg ? '' : ' hidden'}>✕ Удалить фото</button>
           </div>
         </div>
 
@@ -1553,33 +1625,46 @@ function renderAuthModal() {
       </form>
     `;
 
+    const trigger = $('editAvatarTrigger');
+    const fileInput = $('editAvatarFile');
     const circle = $('editAvatarCircle');
-    const updatePreview = () => {
-      if (!circle) return;
-      circle.style.backgroundColor = editSelectedColor;
-      circle.textContent = editSelectedAvatar === '__initial' ? ($('inputEditName').value.trim().charAt(0).toUpperCase() || '👤') : editSelectedAvatar;
-    };
+    const initialSpan = $('editAvatarInitial');
+    const statusSpan = $('editAvatarStatus');
+    const removeBtn = $('btnRemoveEditAvatar');
 
-    $('editIconsRow').querySelectorAll('[data-icon]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        $('editIconsRow').querySelectorAll('.avatar-icon-btn').forEach(b => b.classList.remove('selected'));
-        btn.classList.add('selected');
-        editSelectedAvatar = btn.dataset.icon;
-        updatePreview();
+    if (trigger && fileInput) {
+      trigger.addEventListener('click', () => fileInput.click());
+      trigger.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
+      fileInput.addEventListener('change', e => {
+        const file = e.target.files && e.target.files[0];
+        if (file) {
+          processAvatarFile(file, dataUrl => {
+            editSelectedAvatar = dataUrl;
+            circle.style.backgroundImage = `url('${dataUrl}')`;
+            initialSpan.textContent = '';
+            statusSpan.textContent = 'Новое фото загружено ✓';
+            removeBtn.hidden = false;
+          });
+        }
+        e.target.value = '';
       });
-    });
+    }
 
-    $('editColorsRow').querySelectorAll('[data-color]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        $('editColorsRow').querySelectorAll('.avatar-color-btn').forEach(b => b.classList.remove('selected'));
-        btn.classList.add('selected');
-        editSelectedColor = btn.dataset.color;
-        updatePreview();
+    if (removeBtn) {
+      removeBtn.addEventListener('click', () => {
+        editSelectedAvatar = '';
+        circle.style.backgroundImage = 'none';
+        circle.style.backgroundColor = editSelectedColor;
+        initialSpan.textContent = $('inputEditName').value.trim().charAt(0).toUpperCase() || '👤';
+        statusSpan.textContent = 'Фото удалено (используется буква)';
+        removeBtn.hidden = true;
       });
-    });
+    }
 
     $('inputEditName').addEventListener('input', () => {
-      if (editSelectedAvatar === '__initial') updatePreview();
+      if (!editSelectedAvatar) {
+        initialSpan.textContent = $('inputEditName').value.trim().charAt(0).toUpperCase() || '👤';
+      }
     });
 
     const toggleBtn = $('btnToggleEditPass');
@@ -1599,7 +1684,7 @@ function renderAuthModal() {
 
     $('formEditProfile').addEventListener('submit', e => {
       e.preventDefault();
-      const finalAvatar = editSelectedAvatar === '__initial' ? ($('inputEditName').value.trim().charAt(0).toUpperCase() || '👤') : editSelectedAvatar;
+      const finalAvatar = editSelectedAvatar || $('inputEditName').value.trim().charAt(0).toUpperCase();
       updateUserProfile($('inputEditName').value, $('inputEditEmail').value, $('inputEditPass').value, finalAvatar, editSelectedColor);
     });
     return;
@@ -1614,13 +1699,25 @@ function renderAuthModal() {
     const dateStr = fmtDateLong(state.user.createdAt) || 'недавно';
     const otherUsers = state.users.filter(u => u.id !== state.user.id);
 
+    const isImg = state.user.avatar && (state.user.avatar.startsWith('data:image/') || state.user.avatar.startsWith('http://') || state.user.avatar.startsWith('https://'));
+    const avStyle = isImg
+      ? `background-image: url('${esc(state.user.avatar)}');`
+      : `background-color: ${esc(state.user.color || '#3550E8')};`;
+    const avContent = isImg ? '' : esc(state.user.name.charAt(0).toUpperCase());
+
     el.authTitle.textContent = 'Мой профиль';
     el.authBody.innerHTML = `
       <div class="profile-card">
         <div class="profile-head">
-          <div class="profile-avatar" style="background: ${esc(state.user.color || '#3550E8')}">
-            ${esc(state.user.avatar || state.user.name.charAt(0).toUpperCase())}
+          <div class="profile-avatar-wrap" id="profileAvatarTrigger" role="button" tabindex="0" title="Нажмите на камеру, чтобы сменить фото">
+            <div class="profile-avatar" style="${avStyle}">
+              ${avContent}
+            </div>
+            <div class="avatar-camera-badge" title="Сменить фото">
+              ${CAMERA_SVG}
+            </div>
           </div>
+          <input type="file" id="profileQuickAvatarFile" accept="image/*" class="vh">
           <div class="profile-titles">
             <h4 class="profile-name">${esc(state.user.name)}</h4>
             ${state.user.email ? `<div class="profile-email-tag">✉ ${esc(state.user.email)}</div>` : '<div class="profile-meta">Email не указан</div>'}
@@ -1652,18 +1749,25 @@ function renderAuthModal() {
       ${otherUsers.length ? `
         <div class="auth-switch-list">
           <p class="label">Другие профили на этом устройстве</p>
-          ${otherUsers.map(u => `
-            <div class="auth-switch-item" data-switch-id="${esc(u.id)}">
-              <div class="auth-switch-user">
-                <span class="user-avatar" style="background:${esc(u.color || '#3550E8')}">${esc(u.avatar || u.name.charAt(0).toUpperCase())}</span>
-                <div class="auth-switch-info">
-                  <span class="auth-switch-name">${esc(u.name)}</span>
-                  ${u.email ? `<span class="auth-switch-email">${esc(u.email)}</span>` : ''}
+          ${otherUsers.map(u => {
+            const uIsImg = u.avatar && (u.avatar.startsWith('data:image/') || u.avatar.startsWith('http://') || u.avatar.startsWith('https://'));
+            const uStyle = uIsImg
+              ? `background-image: url('${esc(u.avatar)}');`
+              : `background-color: ${esc(u.color || '#3550E8')};`;
+            const uContent = uIsImg ? '' : esc(u.name.charAt(0).toUpperCase());
+            return `
+              <div class="auth-switch-item" data-switch-id="${esc(u.id)}">
+                <div class="auth-switch-user">
+                  <span class="user-avatar" style="${uStyle}">${uContent}</span>
+                  <div class="auth-switch-info">
+                    <span class="auth-switch-name">${esc(u.name)}</span>
+                    ${u.email ? `<span class="auth-switch-email">${esc(u.email)}</span>` : ''}
+                  </div>
                 </div>
+                <span class="btn text small" style="pointer-events:none;">Переключить</span>
               </div>
-              <span class="btn text small" style="pointer-events:none;">Переключить</span>
-            </div>
-          `).join('')}
+            `;
+          }).join('')}
         </div>
       ` : ''}
 
@@ -1681,8 +1785,25 @@ function renderAuthModal() {
       </div>
     `;
 
+    const avatarTrigger = $('profileAvatarTrigger');
+    const quickFile = $('profileQuickAvatarFile');
+    if (avatarTrigger && quickFile) {
+      avatarTrigger.addEventListener('click', () => quickFile.click());
+      avatarTrigger.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); quickFile.click(); } });
+      quickFile.addEventListener('change', e => {
+        const file = e.target.files && e.target.files[0];
+        if (file) {
+          processAvatarFile(file, dataUrl => {
+            updateUserProfile(state.user.name, state.user.email, '', dataUrl, state.user.color);
+            toast('Аватарка успешно обновлена! 📷');
+          });
+        }
+        e.target.value = '';
+      });
+    }
+
     $('btnEditProfile').addEventListener('click', () => {
-      editSelectedAvatar = state.user.avatar || '⚡';
+      editSelectedAvatar = state.user.avatar || '';
       editSelectedColor = state.user.color || '#3550E8';
       authActiveTab = 'edit';
       renderAuthModal();
@@ -1708,6 +1829,8 @@ function renderAuthModal() {
 
   // Not logged in: Show Login / Registration
   el.authTitle.textContent = authActiveTab === 'login' ? 'Вход в аккаунт' : 'Создать аккаунт';
+  const regIsImg = regSelectedAvatar && (regSelectedAvatar.startsWith('data:image/') || regSelectedAvatar.startsWith('http://') || regSelectedAvatar.startsWith('https://'));
+
   el.authBody.innerHTML = `
     <div class="auth-tabs">
       <button type="button" class="auth-tab${authActiveTab === 'login' ? ' active' : ''}" data-tab="login">Вход</button>
@@ -1736,48 +1859,46 @@ function renderAuthModal() {
       ${state.users.length ? `
         <div class="auth-switch-list">
           <p class="label">Быстрый вход на этом устройстве</p>
-          ${state.users.map(u => `
-            <div class="auth-switch-item" data-switch-id="${esc(u.id)}">
-              <div class="auth-switch-user">
-                <span class="user-avatar" style="background:${esc(u.color || '#3550E8')}">${esc(u.avatar || u.name.charAt(0).toUpperCase())}</span>
-                <div class="auth-switch-info">
-                  <span class="auth-switch-name">${esc(u.name)}</span>
-                  ${u.email ? `<span class="auth-switch-email">${esc(u.email)}</span>` : ''}
+          ${state.users.map(u => {
+            const uIsImg = u.avatar && (u.avatar.startsWith('data:image/') || u.avatar.startsWith('http://') || u.avatar.startsWith('https://'));
+            const uStyle = uIsImg
+              ? `background-image: url('${esc(u.avatar)}');`
+              : `background-color: ${esc(u.color || '#3550E8')};`;
+            const uContent = uIsImg ? '' : esc(u.name.charAt(0).toUpperCase());
+            return `
+              <div class="auth-switch-item" data-switch-id="${esc(u.id)}">
+                <div class="auth-switch-user">
+                  <span class="user-avatar" style="${uStyle}">${uContent}</span>
+                  <div class="auth-switch-info">
+                    <span class="auth-switch-name">${esc(u.name)}</span>
+                    ${u.email ? `<span class="auth-switch-email">${esc(u.email)}</span>` : ''}
+                  </div>
                 </div>
+                <span class="btn text small" style="pointer-events:none;">Войти</span>
               </div>
-              <span class="btn text small" style="pointer-events:none;">Войти</span>
-            </div>
-          `).join('')}
+            `;
+          }).join('')}
         </div>
       ` : ''}
     ` : `
       <form class="auth-form" id="formReg">
-        <div class="avatar-customizer">
-          <div class="avatar-preview-wrap">
-            <div class="avatar-preview-circle" id="regAvatarCircle" style="background: ${esc(regSelectedColor)}">
-              ${esc(regSelectedAvatar)}
+        <div class="avatar-upload-box">
+          <div class="avatar-upload-trigger" id="regAvatarTrigger" role="button" tabindex="0" title="Нажмите на камеру, чтобы выбрать фото">
+            <div class="avatar-preview-circle" id="regAvatarCircle" style="${regIsImg ? `background-image:url('${esc(regSelectedAvatar)}');` : `background-color:${esc(regSelectedColor)};`}">
+              <span id="regAvatarInitial">${regIsImg ? '' : '👤'}</span>
             </div>
-            <div class="avatar-preview-info">
-              <h5>Крутой аватар</h5>
-              <p>Выберите значок и цвет для ваших оценок</p>
-            </div>
-          </div>
-          <div>
-            <div class="avatar-picker-label">Значок профиля</div>
-            <div class="avatar-icons-row" id="regIconsRow">
-              ${AVATAR_ICONS.map(ic => `
-                <button type="button" class="avatar-icon-btn${ic === regSelectedAvatar ? ' selected' : ''}" data-icon="${esc(ic)}">${esc(ic)}</button>
-              `).join('')}
-              <button type="button" class="avatar-icon-btn" data-icon="__initial" title="Первая буква имени">🔤</button>
+            <div class="avatar-camera-badge" title="Загрузить фото">
+              ${CAMERA_SVG}
             </div>
           </div>
-          <div>
-            <div class="avatar-picker-label">Цвет профиля</div>
-            <div class="avatar-colors-row" id="regColorsRow">
-              ${AVATAR_COLORS.map(c => `
-                <button type="button" class="avatar-color-btn${c === regSelectedColor ? ' selected' : ''}" data-color="${esc(c)}" style="background:${esc(c)};"></button>
-              `).join('')}
-            </div>
+          <input type="file" id="regAvatarFile" accept="image/*" class="vh">
+          <div class="avatar-upload-info">
+            <label for="regAvatarFile" class="avatar-upload-label">
+              ${CAMERA_SVG}
+              Выбрать аватарку
+            </label>
+            <span class="auth-help" id="regAvatarStatus">${regIsImg ? 'Фотография выбрана ✓' : 'Нажмите на камеру, чтобы поставить своё фото'}</span>
+            <button type="button" class="avatar-remove-btn" id="btnRemoveRegAvatar"${regIsImg ? '' : ' hidden'}>✕ Удалить фото</button>
           </div>
         </div>
 
@@ -1804,7 +1925,7 @@ function renderAuthModal() {
           </div>
         </div>
 
-        <button type="submit" class="btn primary" style="margin-top:6px;">Создать крутой аккаунт</button>
+        <button type="submit" class="btn primary" style="margin-top:6px;">Создать аккаунт</button>
         <div class="auth-guest-row">
           <button type="button" class="btn text small" id="btnGuestReg">Продолжить как гость</button>
         </div>
@@ -1854,33 +1975,46 @@ function renderAuthModal() {
   // Registration Form listeners
   const formReg = $('formReg');
   if (formReg) {
+    const trigger = $('regAvatarTrigger');
+    const fileInput = $('regAvatarFile');
     const circle = $('regAvatarCircle');
-    const updatePreview = () => {
-      if (!circle) return;
-      circle.style.backgroundColor = regSelectedColor;
-      circle.textContent = regSelectedAvatar === '__initial' ? ($('inputRegName').value.trim().charAt(0).toUpperCase() || '👤') : regSelectedAvatar;
-    };
+    const initialSpan = $('regAvatarInitial');
+    const statusSpan = $('regAvatarStatus');
+    const removeBtn = $('btnRemoveRegAvatar');
 
-    $('regIconsRow').querySelectorAll('[data-icon]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        $('regIconsRow').querySelectorAll('.avatar-icon-btn').forEach(b => b.classList.remove('selected'));
-        btn.classList.add('selected');
-        regSelectedAvatar = btn.dataset.icon;
-        updatePreview();
+    if (trigger && fileInput) {
+      trigger.addEventListener('click', () => fileInput.click());
+      trigger.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); } });
+      fileInput.addEventListener('change', e => {
+        const file = e.target.files && e.target.files[0];
+        if (file) {
+          processAvatarFile(file, dataUrl => {
+            regSelectedAvatar = dataUrl;
+            circle.style.backgroundImage = `url('${dataUrl}')`;
+            initialSpan.textContent = '';
+            statusSpan.textContent = 'Фотография выбрана ✓';
+            removeBtn.hidden = false;
+          });
+        }
+        e.target.value = '';
       });
-    });
+    }
 
-    $('regColorsRow').querySelectorAll('[data-color]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        $('regColorsRow').querySelectorAll('.avatar-color-btn').forEach(b => b.classList.remove('selected'));
-        btn.classList.add('selected');
-        regSelectedColor = btn.dataset.color;
-        updatePreview();
+    if (removeBtn) {
+      removeBtn.addEventListener('click', () => {
+        regSelectedAvatar = '';
+        circle.style.backgroundImage = 'none';
+        circle.style.backgroundColor = regSelectedColor;
+        initialSpan.textContent = $('inputRegName').value.trim().charAt(0).toUpperCase() || '👤';
+        statusSpan.textContent = 'Нажмите на камеру, чтобы поставить своё фото';
+        removeBtn.hidden = true;
       });
-    });
+    }
 
     $('inputRegName').addEventListener('input', () => {
-      if (regSelectedAvatar === '__initial') updatePreview();
+      if (!regSelectedAvatar) {
+        initialSpan.textContent = $('inputRegName').value.trim().charAt(0).toUpperCase() || '👤';
+      }
     });
 
     const passInput = $('inputRegPass');
@@ -1909,7 +2043,7 @@ function renderAuthModal() {
 
     formReg.addEventListener('submit', e => {
       e.preventDefault();
-      const finalAvatar = regSelectedAvatar === '__initial' ? ($('inputRegName').value.trim().charAt(0).toUpperCase() || '👤') : regSelectedAvatar;
+      const finalAvatar = regSelectedAvatar || $('inputRegName').value.trim().charAt(0).toUpperCase();
       registerUser($('inputRegName').value, $('inputRegEmail').value, $('inputRegPass').value, finalAvatar, regSelectedColor);
     });
   }
@@ -2396,7 +2530,7 @@ function entryHTML(r, rank, showCat) {
 <details${state.open.has(r.id) ? ' open' : ''}>
 <summary><span class="sum">
 <span class="rank">${rank == null ? '—' : rank}</span>
-<span class="e-main">${pUrl ? `<img class="e-thumb" data-photo="thumb" src="${esc(pUrl)}" alt="" loading="lazy" decoding="async">` : ''}<span class="e-text"><span class="e-name">${r.fav ? '<span class="fav-star-inline" title="В избранном">★</span>' : ''}${esc(r.name)}</span><span class="e-sub"><span>${esc(meta)}</span>${showCat ? `<span class="tag">${esc(catNameOf(r))}</span>` : ''}${r.status ? `<span class="tag status-tag">${esc(r.status)}</span>` : ''}${r.meta ? `<span class="tag meta-tag">${esc(r.meta)}</span>` : ''}${r.author && r.author.name ? `<span class="tag author-tag" title="Автор: ${esc(r.author.name)}">${esc(r.author.avatar || '👤')} ${esc(r.author.name)}</span>` : ''}${r.example ? '<span class="tag ex">пример</span>' : ''}${notes ? `<span class="has-note" title="Есть заметки">${ICON.noteSm}<span class="vh">есть заметки</span></span>` : ''}</span></span></span>
+<span class="e-main">${pUrl ? `<img class="e-thumb" data-photo="thumb" src="${esc(pUrl)}" alt="" loading="lazy" decoding="async">` : ''}<span class="e-text"><span class="e-name">${r.fav ? '<span class="fav-star-inline" title="В избранном">★</span>' : ''}${esc(r.name)}</span><span class="e-sub"><span>${esc(meta)}</span>${showCat ? `<span class="tag">${esc(catNameOf(r))}</span>` : ''}${r.status ? `<span class="tag status-tag">${esc(r.status)}</span>` : ''}${r.meta ? `<span class="tag meta-tag">${esc(r.meta)}</span>` : ''}${r.author && r.author.name ? `<span class="tag author-tag" title="Автор: ${esc(r.author.name)}">${renderAuthorMini(r.author)} ${esc(r.author.name)}</span>` : ''}${r.example ? '<span class="tag ex">пример</span>' : ''}${notes ? `<span class="has-note" title="Есть заметки">${ICON.noteSm}<span class="vh">есть заметки</span></span>` : ''}</span></span></span>
 <span class="spark" aria-hidden="true">${spark}</span>
 <span class="badge" data-tier="${tierT(t)}">${t != null ? fmt(t) : '—'}</span>
 ${ICON.chev}
