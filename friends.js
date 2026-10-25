@@ -190,6 +190,7 @@ ${ICON.chev}
   }
 
   function showFriendBoard() {
+    el.filters.hidden = true; // свои категории к чужим оценкам не относятся
     el.board.hidden = true;
     if (el.tierBoard) el.tierBoard.hidden = true;
     el.noMatch.hidden = true;

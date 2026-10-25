@@ -2763,7 +2763,7 @@ function renderBoard() {
       + gs.map(g => `<button type="button" class="chip-btn" data-filter="${esc(g.id)}" aria-pressed="${state.filter === g.id}">${esc(g.name)} <b>${g.n}</b></button>`).join('')
     : '';
   if (el.subFilters) {
-    el.subFilters.hidden = state.ratings.length < 1;
+    el.subFilters.hidden = false; // всегда видно: даже без своих оценок нужен вход к друзьям во «Мои»
     el.subFilters.querySelectorAll('button[data-sfilter]').forEach(b => {
       b.setAttribute('aria-pressed', String(b.dataset.sfilter === state.sfilter));
     });

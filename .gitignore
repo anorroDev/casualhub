@@ -17,3 +17,6 @@ Thumbs.db
 
 # Logs
 *.log
+
+# Wrangler local dev state (local D1 database)
+.wrangler/
