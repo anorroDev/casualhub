@@ -389,6 +389,8 @@ html:active-view-transition-type(back)::view-transition-new(root) { animation: v
 .enter { animation: enter-up .24s cubic-bezier(.2, .8, .2, 1) both; }
 .board-more[open] .board-more-body, .theme-pick[open] .theme-menu, details.tool[open] > .dbody { animation: enter-up .2s cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes enter-up { from { transform: translateY(8px); } }
+/* While ratings load, the main part waits hidden and then shows up ready (no intermediate layout) */
+html.booting .layout, html.booting .mnav, html.booting .offline-bar { visibility: hidden; }
 /* Windows (profile, friends, compare, export) pop up from below, no fading */
 .sheet:not([hidden]) > .sheet-card { animation: sheet-pop .34s cubic-bezier(.2, .9, .3, 1.12) both; }
 @keyframes sheet-pop { from { transform: translateY(22px) scale(.95); } }
@@ -405,6 +407,9 @@ html:active-view-transition-type(back)::view-transition-new(root) { animation: v
 <script>
 /* тема ставится до первой отрисовки, чтобы при обновлении страница не мелькала */
 try { var cp = JSON.parse(localStorage.getItem('ocenshik.prefs.v1') || 'null'); if (cp && cp.theme && cp.theme !== 'auto') document.documentElement.setAttribute('data-theme', cp.theme); } catch (e) {}
+/* пока грузятся оценки, основная часть скрыта и появляется сразу готовой, без промежуточного вида */
+document.documentElement.classList.add('booting');
+setTimeout(function () { document.documentElement.classList.remove('booting'); }, 2500);
 /* направление сдвига между страницами: главная → Мнение → Колесо */
 addEventListener('pagereveal', function (e) {
   if (!e.viewTransition) return;
@@ -418,7 +423,7 @@ addEventListener('pagereveal', function (e) {
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Handjet:wght@400..800&family=Onest:wght@400..700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Handjet:wght@400..800&family=Onest:wght@400..700&display=block">
 <style>
 /* Layout: two-panel console. Rater with a sticky score bar on the left, leaderboard on the right; one column on phones. */
 :root {
@@ -1196,10 +1201,17 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
             <p><strong>Журнал пока пуст.</strong> Сюда по датам попадут новые оценки, правки и удаления, а ещё изменения категорий и критериев. К любой записи можно дописать своё описание.</p>
           </div>
         </div>
-        <div id="logApp" data-stat="15 версий, последняя 25 октября" hidden>
+        <div id="logApp" data-stat="16 версий, последняя 25 октября" hidden>
           <div class="log-days">
             <section class="log-day">
-              <h3 class="log-date">25 октября 2026<span>версии 4–15</span></h3>
+              <h3 class="log-date">25 октября 2026<span>версии 4–16</span></h3>
+              <article class="rel">
+                <span class="rel-v">v16</span>
+                <div>
+                  <h4>Музыка из списка и спокойная загрузка</h4>
+                  <p>В Колесе Казуала музыку на спин, вылет и победу можно выбрать из списка: VI KA (Гимн Папича) стоит на победе по умолчанию, ещё есть Mortal Kombat, Serious Sam, Шопен и Evangelion. Стандартная победная фанфара стала громче. У Мнения Казуала своя иконка во вкладке, окна профиля и друзей выезжают, а страница при обновлении появляется сразу готовой, без перескоков.</p>
+                </div>
+              </article>
               <article class="rel">
                 <span class="rel-v">v15</span>
                 <div>
@@ -5218,6 +5230,11 @@ function openAuthFromHash() {
 }
 openAuthFromHash();
 addEventListener('hashchange', openAuthFromHash);
+
+/* оценки загружены и разложены: показываем основную часть разом */
+Promise.resolve(ready).catch(() => {}).then(() => {
+  requestAnimationFrame(() => requestAnimationFrame(() => document.documentElement.classList.remove('booting')));
+});
 </script>
 
 </body></html>
