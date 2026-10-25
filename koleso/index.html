@@ -338,7 +338,7 @@ fieldset:disabled { opacity: .6; }
 .hub:active:not(:disabled) { transform: translate(-50%, -50%) scale(.96); }
 .hub:disabled { cursor: default; background: var(--cell); color: var(--ink-3); }
 .hub:focus-visible { outline: 3px solid var(--accent); outline-offset: 4px; }
-.hub img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; pointer-events: none; }
+.hub img, .hub video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 50%; pointer-events: none; }
 .hub.has-gif, .hub.has-gif:disabled { background: var(--panel-2); }
 .hub.has-gif .hub-label {
   position: absolute; left: 50%; bottom: 9%; transform: translateX(-50%); white-space: nowrap;
@@ -376,6 +376,10 @@ fieldset:disabled { opacity: .6; }
   font-size: 11.5px; font-weight: 600; line-height: 1.15; text-align: center; cursor: pointer;
 }
 .th img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.th video { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; }
+.base-label { margin: 14px 0 8px; }
+.base-thumbs { gap: 8px; max-height: 232px; overflow: auto; padding: 4px; margin: -4px; }
+.th-base { width: 50px; height: 50px; border-radius: 10px; }
 .th.add { border: 1.5px dashed var(--line); color: var(--accent); }
 .th[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent); }
 .th-x {
@@ -551,7 +555,7 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
       <div class="wheel-wrap">
         <svg class="pointer" id="pointer" viewBox="0 0 40 48" aria-hidden="true"><path d="M4 3h32L20 45z"/></svg>
         <canvas id="wheel" aria-label="Колесо фортуны"></canvas>
-        <button type="button" class="hub" id="spin"><img id="hubImg" alt="" hidden><span class="hub-label">Крутить</span></button>
+        <button type="button" class="hub" id="spin"><img id="hubImg" alt="" hidden><video id="hubVid" muted loop playsinline hidden></video><span class="hub-label">Крутить</span></button>
       </div>
 
       <div class="scorebar">
@@ -585,6 +589,8 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
         </div>
         <input type="file" id="gifFile" accept="image/gif,image/png,image/jpeg,image/webp" multiple hidden>
         <div class="thumbs" id="thumbs"></div>
+        <p class="label base-label">Базовые</p>
+        <div class="thumbs base-thumbs" id="baseThumbs"></div>
         <p class="field-msg" id="gifNote"></p>
       </div>
 
@@ -751,7 +757,7 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
   // вылет и щелчки всегда стандартные; выбирать можно фон страницы и трек победы
   const MUSIC_SLOTS = [
     ['bg', 'Фоновая музыка', 'играет на странице по кругу, на время победы затихает'],
-    ['win', 'Победа', 'когда остался последний, по умолчанию VI KA'],
+    ['win', 'Победа', 'когда остался последний: VI KA или свой файл'],
   ];
   // треки на выбор: ровно те ссылки, что дал хозяин колеса; играют через встроенные плееры YouTube и Spotify
   const PRESETS = [
@@ -1338,15 +1344,41 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     draw();
   }
 
+  // базовые картинки для центра: стикеры «Папич by @St1ckyyy» (видео WebM с прозрачным фоном) и три картинки
+  const BASE_HUBS = [
+    { id: 'b:papich', src: 'hub/papich.gif', name: 'Папич' },
+    { id: 'b:hat', src: 'hub/smile-hat.png', name: 'Смайл в шляпе' },
+    { id: 'b:candle', src: 'hub/smile-candle.png', name: 'Смайл со свечкой' },
+  ].concat(Array.from({ length: 39 }, (_, i) => {
+    const n = String(i + 1).padStart(2, '0');
+    return { id: 'b:a' + n, src: 'hub/arthas-' + n + '.webm', name: 'Стикер Папича ' + (i + 1), video: true };
+  }));
+  function renderBaseHubs() {
+    $('#baseThumbs').innerHTML = BASE_HUBS.map((b) => `<button type="button" class="th th-base" data-gif="${b.id}" aria-pressed="${b.id === S.gif}" title="${esc(b.name)}" aria-label="${esc(b.name)}">${b.video
+      ? `<video src="${b.src}" muted loop autoplay playsinline preload="auto"></video>`
+      : `<img src="${b.src}" alt="" loading="lazy">`}</button>`).join('');
+  }
+
   function renderGifs() {
-    const cur = G.find((g) => g.id === S.gif);
-    const img = $('#hubImg');
-    if (cur) { img.src = cur.url; img.hidden = false; }
+    const base = BASE_HUBS.find((b) => b.id === S.gif);
+    const cur = base ? null : G.find((g) => g.id === S.gif);
+    const img = $('#hubImg'), vid = $('#hubVid');
+    const src = base ? base.src : cur ? cur.url : '';
+    const isVid = !!(base && base.video);
+    if (src && !isVid) { img.src = src; img.hidden = false; }
     else { img.hidden = true; img.removeAttribute('src'); }
-    $('#spin').classList.toggle('has-gif', !!cur);
+    if (isVid) {
+      if (vid.getAttribute('src') !== src) vid.src = src;
+      vid.hidden = false;
+      vid.play().catch(() => {});
+    } else if (!vid.hidden) {
+      vid.pause(); vid.hidden = true; vid.removeAttribute('src'); vid.load();
+    }
+    $('#spin').classList.toggle('has-gif', !!src);
+    document.querySelectorAll('#baseThumbs [data-gif]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.gif === S.gif)));
     $('#thumbs').innerHTML =
       `<button type="button" class="th add" id="gifPick" aria-label="Загрузить гифку">${ICON.plus}<span>Гифка</span></button>` +
-      `<button type="button" class="th" data-gif="" aria-pressed="${!cur}">Без гифки</button>` +
+      `<button type="button" class="th" data-gif="" aria-pressed="${!src}">Без гифки</button>` +
       G.map((g) => `<span class="thw">
         <button type="button" class="th" data-gif="${g.id}" aria-pressed="${g.id === S.gif}" title="${esc(g.name)}"><img src="${g.url}" alt="${esc(g.name)}"></button>
         <button type="button" class="th-x" data-del="${g.id}" aria-label="Удалить ${esc(g.name)}">${ICON.xs}</button>
@@ -1386,7 +1418,8 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
   // ---------- музыка: фон страницы и трек победы (свои файлы лежат в том же IndexedDB, kind: 'audio') ----------
   let A = [], pendingSlot = '', bgWasOn = false;
   const slotTitle = (slot) => (MUSIC_SLOTS.find((m) => m[0] === slot) || [, slot])[1];
-  const slotPresets = (slot) => (slot === 'bg' ? PRESETS.filter((p) => p.id !== DEFAULT_WIN) : PRESETS);
+  // фон: всё, кроме VI KA; победа: только VI KA (или свой файл)
+  const slotPresets = (slot) => (slot === 'bg' ? PRESETS.filter((p) => p.id !== DEFAULT_WIN) : PRESETS.filter((p) => p.id === DEFAULT_WIN));
   const CH = {
     bg: { active: false, type: null, el: null, loop: false, onFail: null },
     win: { active: false, type: null, el: null, loop: false, onFail: null },
@@ -1581,10 +1614,10 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
         <div class="ms-acts">
           ${rec || pre ? `<button type="button" class="mini-btn" data-mplay="${slot}" aria-label="${playLabel}: ${title}" title="${playLabel}">${playIcon}</button>` : ''}
           ${canReset ? `<button type="button" class="mini-btn del" data-mdel="${slot}" aria-label="${resetLabel}" title="${resetLabel}">${ICON.x}</button>` : ''}
-          <select class="inp mpick" data-mpick="${slot}" aria-label="Трек из списка: ${title}">
+          ${slot === 'bg' ? `<select class="inp mpick" data-mpick="${slot}" aria-label="Трек из списка: ${title}">
             <option value="">Из списка…</option>
             ${slotPresets(slot).map((p) => `<option value="${p.id}"${pre && pre.id === p.id ? ' selected' : ''}>${esc(p.title)}</option>`).join('')}
-          </select>
+          </select>` : ''}
           <button type="button" class="btn small ghost" data-mup="${slot}">${rec ? 'Заменить' : 'Свой файл'}</button>
         </div>
       </div>`;
@@ -1891,6 +1924,14 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
       save();
       renderGifs();
     });
+    $('#baseThumbs').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-gif]');
+      if (!b) return;
+      S.gif = b.dataset.gif;
+      if (S.hub === HUBS[0][0]) { S.hub = HUBS[1][0]; applyHub(); markSeg('#hubSeg', 'data-hub', S.hub); } // с картинкой центр крупнее
+      save();
+      renderGifs();
+    });
 
     // перетаскивание файла: подсветка на колесе, принимается в любом месте страницы
     const wrap = $('.wheel-wrap');
@@ -1950,6 +1991,8 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     if (S.bgOn == null) S.bgOn = true;
     // победа по умолчанию VI KA; пустой трек победы тоже означает VI KA
     if (!S.music.win) S.music.win = 'preset:' + DEFAULT_WIN;
+    // на победе из списка остался только VI KA: другие треки из списка заменяем на него
+    if (presetOf(S.music.win) && presetOf(S.music.win).id !== DEFAULT_WIN) S.music.win = 'preset:' + DEFAULT_WIN;
     if (!d) { S.sample = true; SAMPLE.forEach(([n, a]) => S.items.push(makeItem(n, a, S.cur))); }
     $('#cur').innerHTML = CODES.map((c) => `<option value="${c}">${CUR[c].sym} ${c}</option>`).join('');
     $('#cur').value = S.cur;
@@ -1963,6 +2006,7 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     render();
     resize();
     applyHub();
+    renderBaseHubs();
     renderGifs();
     gifNote();
     renderMusic();
