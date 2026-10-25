@@ -999,6 +999,18 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
 }
+
+/* Masthead: the legend sits under the intro, the nav stays one row; on phones GitHub is just an icon */
+.masthead .scale { justify-content: flex-start; margin-top: 14px; }
+@media (max-width: 560px) {
+  #githubLink { width: 34px; padding: 0; justify-content: center; gap: 0; font-size: 0; }
+  .masthead .scale { margin-top: 10px; font-size: 12px; }
+  .masthead .scale span { padding: 3px 8px 3px 6px; }
+}
+/* Section tabs scale with their card instead of wrapping onto a second line */
+.card:has(> .views) { container-type: inline-size; }
+.views { flex-wrap: nowrap; gap: 2px clamp(10px, 4cqi, 22px); }
+.view-tab { font-size: clamp(24px, 10cqi, 46px); white-space: nowrap; }
 </style>
 
 <div class="page">
@@ -1006,6 +1018,11 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
     <div>
       <h1 class="title">Мнение Казуала</h1>
       <p class="lede">Игры, фильмы, еда, места или что угодно своё. Создавай категории и критерии, двигай ползунки от 1 до 10, добавляй фото и заметки. Рейтинг соберётся сам, а журнал запомнит каждое изменение.</p>
+    <p class="scale"><span class="vh">Цвет итогового балла:</span>
+      <span data-tier="bad"><i></i>1–4,9</span>
+      <span data-tier="mid"><i></i>5–7,4</span>
+      <span data-tier="good"><i></i>7,5–10</span>
+    </p>
     </div>
     <div class="masthead-right">
       <div class="user-bar">
@@ -1019,11 +1036,6 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
         </details>
         <div id="userBar" class="user-bar"></div>
       </div>
-      <p class="scale"><span class="vh">Цвет итогового балла:</span>
-        <span data-tier="bad"><i></i>1–4,9</span>
-        <span data-tier="mid"><i></i>5–7,4</span>
-        <span data-tier="good"><i></i>7,5–10</span>
-      </p>
     </div>
   </header>
 
