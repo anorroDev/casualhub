@@ -462,7 +462,7 @@ ${ICON.chev}
         </div>
         ${F.incoming.length ? `<div class="fr-sec"><span class="label">Заявки тебе</span><div class="fr-list">${F.incoming.map((u) => row(u, btn('accept', u.id, 'Принять', 'primary') + btn('remove', u.id, 'Отклонить'))).join('')}</div></div>` : ''}
         <div class="fr-sec"><span class="label">Друзья</span>
-          ${F.friends.length ? `<div class="fr-list">${F.friends.map((u) => row(u, btn('show', u.id, 'Оценки') + (F.removeArmed === u.id ? btn('remove', u.id, 'Точно убрать?', 'danger-solid') : btn('arm', u.id, 'Убрать', 'ghost danger')), when(u.updatedAt))).join('')}</div>`
+          ${F.friends.length ? `<div class="fr-list">${F.friends.map((u) => row(u, `<a class="btn small ghost" href="/profile/?id=${encodeURIComponent(u.id)}" style="text-decoration:none">Профиль</a>` + btn('show', u.id, 'Оценки') + (F.removeArmed === u.id ? btn('remove', u.id, 'Точно убрать?', 'danger-solid') : btn('arm', u.id, 'Убрать', 'ghost danger')), when(u.updatedAt))).join('')}</div>`
             : '<p class="fr-muted">Пока никого. Отправь заявку по нику, друг увидит её у себя в этом окне.</p>'}
         </div>
         ${F.outgoing.length ? `<div class="fr-sec"><span class="label">Ты отправил</span><div class="fr-list">${F.outgoing.map((u) => row(u, btn('remove', u.id, 'Отменить'), 'ждёт ответа')).join('')}</div></div>` : ''}
