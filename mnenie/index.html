@@ -389,6 +389,13 @@ html:active-view-transition-type(back)::view-transition-new(root) { animation: v
 .enter { animation: enter-up .24s cubic-bezier(.2, .8, .2, 1) both; }
 .board-more[open] .board-more-body, .theme-pick[open] .theme-menu, details.tool[open] > .dbody { animation: enter-up .2s cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes enter-up { from { transform: translateY(8px); } }
+/* Windows (profile, friends, compare, export) pop up from below, no fading */
+.sheet:not([hidden]) > .sheet-card { animation: sheet-pop .34s cubic-bezier(.2, .9, .3, 1.12) both; }
+@keyframes sheet-pop { from { transform: translateY(22px) scale(.95); } }
+@media (max-width: 560px) {
+  .sheet:not([hidden]) > .sheet-card { animation: sheet-up .32s cubic-bezier(.2, .8, .2, 1) both; }
+  @keyframes sheet-up { from { transform: translateY(100%); } }
+}
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
   .enter { animation: none; }
