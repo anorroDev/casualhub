@@ -133,10 +133,11 @@
     }
     F.token = uid ? readTokens()[uid] || null : null;
     F.me = null;
-    // старый аккаунт сайта без онлайн-входа: подключаем сам, тем паролем, что уже стоит в профиле
-    if (F.online && !F.token && state.user && !state.user.serverId && !F.autoLinkTried
+    // нет онлайн-сессии (старый аккаунт или сессия потерялась): подключаем сам, паролем из профиля
+    F.autoLinkTried = F.autoLinkTried || new Set();
+    if (F.online && !F.token && state.user && !F.autoLinkTried.has(state.user.id)
         && String(state.user.pass || '').length >= 6) {
-      F.autoLinkTried = true;
+      F.autoLinkTried.add(state.user.id);
       if (await linkCurrent(state.user.pass)) return;
     }
     if (F.online && F.token) {
@@ -548,10 +549,9 @@ ${ICON.chev}
   }
 
   if (typeof orig.logout === 'function') {
+    // выход из аккаунта сайта не отключает от друзей: сессия профиля остаётся
+    // и снова подхватывается при входе или переключении на этот профиль
     window.logoutUser = function () {
-      const token = F.token;
-      if (state.user) setTokenFor(state.user.id, null);
-      if (token) api('/logout', 'POST', null, token).catch(() => {});
       const r = orig.logout.apply(this, arguments);
       syncSession();
       return r;
