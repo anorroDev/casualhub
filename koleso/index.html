@@ -377,8 +377,10 @@ fieldset:disabled { opacity: .6; }
 }
 .th img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .th video { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; }
-.base-label { margin: 14px 0 8px; }
-.base-thumbs { gap: 8px; max-height: 232px; overflow: auto; padding: 4px; margin: -4px; }
+.base-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 12px; margin: 16px 0 10px; }
+.base-head .label { margin: 0; }
+.base-tabs button b { font-weight: 600; opacity: .55; font-variant-numeric: tabular-nums; }
+.base-thumbs { gap: 8px; max-height: 292px; overflow: auto; padding: 4px; margin: -4px; }
 .th-base { width: 50px; height: 50px; border-radius: 10px; }
 .th.add { border: 1.5px dashed var(--line); color: var(--accent); }
 .th[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--panel), 0 0 0 4px var(--accent); }
@@ -589,7 +591,10 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
         </div>
         <input type="file" id="gifFile" accept="image/gif,image/png,image/jpeg,image/webp" multiple hidden>
         <div class="thumbs" id="thumbs"></div>
-        <p class="label base-label">Базовые</p>
+        <div class="base-head">
+          <p class="label">Базовые</p>
+          <div class="seg base-tabs" id="baseTabs" role="group" aria-label="Группа базовых картинок"></div>
+        </div>
         <div class="thumbs base-thumbs" id="baseThumbs"></div>
         <p class="field-msg" id="gifNote"></p>
       </div>
@@ -1344,19 +1349,33 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     draw();
   }
 
-  // базовые картинки для центра: стикеры «Папич by @St1ckyyy» (видео WebM с прозрачным фоном) и три картинки
-  const BASE_HUBS = [
-    { id: 'b:papich', src: 'hub/papich.gif', name: 'Папич' },
-    { id: 'b:hat', src: 'hub/smile-hat.png', name: 'Смайл в шляпе' },
-    { id: 'b:candle', src: 'hub/smile-candle.png', name: 'Смайл со свечкой' },
-  ].concat(Array.from({ length: 39 }, (_, i) => {
-    const n = String(i + 1).padStart(2, '0');
-    return { id: 'b:a' + n, src: 'hub/arthas-' + n + '.webm', name: 'Стикер Папича ' + (i + 1), video: true };
-  }));
+  // базовые картинки для центра лежат в hub/ и перечислены в hub/index.json по группам:
+  // стикеры «Папич by @St1ckyyy», roflan-эмоуты, эмоуты канала arthas
+  let BASE_GROUPS = [], BASE_HUBS = [];
+  function loadBaseHubs() {
+    return fetch('hub/index.json')
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
+      .then((d) => {
+        BASE_GROUPS = d.groups || [];
+        BASE_HUBS = BASE_GROUPS.flatMap((g) => g.items.map((it) => ({ ...it, video: /\.webm$/i.test(it.src) })));
+        if (!BASE_GROUPS.some((g) => g.id === S.baseGroup)) {
+          const own = BASE_GROUPS.find((g) => g.items.some((it) => it.id === S.gif));
+          S.baseGroup = own ? own.id : (BASE_GROUPS[0] && BASE_GROUPS[0].id);
+        }
+        renderBaseHubs();
+        renderGifs();
+      })
+      .catch(() => { $('#baseThumbs').innerHTML = '<p class="field-msg">Базовые картинки не загрузились, обнови страницу.</p>'; });
+  }
   function renderBaseHubs() {
-    $('#baseThumbs').innerHTML = BASE_HUBS.map((b) => `<button type="button" class="th th-base" data-gif="${b.id}" aria-pressed="${b.id === S.gif}" title="${esc(b.name)}" aria-label="${esc(b.name)}">${b.video
-      ? `<video src="${b.src}" muted loop autoplay playsinline preload="auto"></video>`
-      : `<img src="${b.src}" alt="" loading="lazy">`}</button>`).join('');
+    const g = BASE_GROUPS.find((x) => x.id === S.baseGroup) || BASE_GROUPS[0];
+    $('#baseTabs').innerHTML = BASE_GROUPS.map((x) => `<button type="button" data-bgroup="${x.id}" aria-pressed="${g && x.id === g.id}">${esc(x.title)} <b>${x.items.length}</b></button>`).join('');
+    $('#baseThumbs').innerHTML = g ? g.items.map((it) => {
+      const b = BASE_HUBS.find((x) => x.id === it.id);
+      return `<button type="button" class="th th-base" data-gif="${b.id}" aria-pressed="${b.id === S.gif}" title="${esc(b.name)}" aria-label="${esc(b.name)}">${b.video
+        ? `<video src="${b.src}" muted loop autoplay playsinline preload="auto"></video>`
+        : `<img src="${b.src}" alt="" loading="lazy" decoding="async">`}</button>`;
+    }).join('') : '';
   }
 
   function renderGifs() {
@@ -1924,6 +1943,14 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
       save();
       renderGifs();
     });
+    $('#baseTabs').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-bgroup]');
+      if (!b || b.dataset.bgroup === S.baseGroup) return;
+      S.baseGroup = b.dataset.bgroup;
+      save();
+      renderBaseHubs();
+      $('#baseThumbs').scrollTop = 0;
+    });
     $('#baseThumbs').addEventListener('click', (e) => {
       const b = e.target.closest('[data-gif]');
       if (!b) return;
@@ -2006,8 +2033,8 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     render();
     resize();
     applyHub();
-    renderBaseHubs();
     renderGifs();
+    loadBaseHubs();
     gifNote();
     renderMusic();
     musicNote();
