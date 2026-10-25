@@ -1,6 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <rect width="64" height="64" rx="14" fill="#14161C"/>
-  <rect x="11" y="36" width="11" height="17" rx="3" fill="#E4553F"/>
-  <rect x="26.5" y="25" width="11" height="28" rx="3" fill="#EAA92C"/>
-  <rect x="42" y="12" width="11" height="41" rx="3" fill="#2EAD60"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><title>Казуал Хаб</title><rect width="16" height="16" rx="3.5" fill="#14161C"/><g shape-rendering="crispEdges"><rect x="3" y="3" width="2" height="10" fill="#E8EAF0"/><rect x="5" y="7" width="4" height="2" fill="#F2BA44"/><rect x="9" y="5" width="2" height="2" fill="#43C97A"/><rect x="11" y="3" width="2" height="2" fill="#43C97A"/><rect x="9" y="9" width="2" height="2" fill="#F26A55"/><rect x="11" y="11" width="2" height="2" fill="#F26A55"/></g></svg>
