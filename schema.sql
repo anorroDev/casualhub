@@ -32,7 +32,15 @@ CREATE TABLE IF NOT EXISTS friendships (
 );
 CREATE INDEX IF NOT EXISTS friendships_b ON friendships(b);
 
--- Копия оценок пользователя, которую видят его друзья
+-- Фото оценок: ключ «id пользователя:id оценки», data URL картинки
+CREATE TABLE IF NOT EXISTS photos (
+  key TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  data TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+
+-- Копия оценок пользователя ({ratings, deleted}), которую видят его друзья и его же другие устройства
 CREATE TABLE IF NOT EXISTS shelves (
   user_id TEXT PRIMARY KEY,
   data TEXT NOT NULL,

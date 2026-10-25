@@ -161,25 +161,49 @@
     let r;
     try { r = await api('/shelf/' + encodeURIComponent(F.me.id)); } catch (e) { return; }
     const remote = r && Array.isArray(r.ratings) ? r.ratings : [];
-    if (!remote.length) return;
+    const remoteDeleted = r && Array.isArray(r.deleted) ? r.deleted : [];
     const stampOf = (x) => +new Date(x.updatedAt || x.createdAt || 0) || 0;
+    // удалённые на других устройствах: убираем и здесь
+    let removed = 0;
+    if (remoteDeleted.length) {
+      const del = new Map(remoteDeleted.map((d) => [d.id, +d.at || 0]));
+      const before = state.ratings.length;
+      state.ratings = state.ratings.filter((x) => !(del.has(x.id) && stampOf(x) <= del.get(x.id)));
+      removed = before - state.ratings.length;
+    }
     const byId = new Map(state.ratings.map((x) => [x.id, x]));
-    let added = 0, updated = 0;
+    let added = 0, updated = 0, photos = 0;
+    const sent = readJSON(PHOTOS_KEY, {});
     for (const rr of remote) {
       if (!rr || !rr.id) continue;
       const copy = { ...rr };
+      const remotePhoto = copy.photo && copy.photo.remote ? copy.photo : null;
+      delete copy.photo;
       if (!state.cats.some((c) => c.id === copy.cat) && copy.catLabel) copy.catName = copy.catName || copy.catLabel;
       delete copy.catLabel;
       copy.author = { ...(rr.author || {}), id: state.user.id, name: state.user.name, avatar: state.user.avatar, color: state.user.color };
-      const loc = byId.get(rr.id);
-      if (!loc) { delete copy.example; state.ratings.push(copy); added++; }
+      let loc = byId.get(rr.id);
+      if (!loc) { delete copy.example; state.ratings.push(copy); byId.set(copy.id, copy); loc = copy; added++; }
       else if (stampOf(rr) > stampOf(loc)) { const photo = loc.photo; Object.assign(loc, copy); if (photo) loc.photo = photo; updated++; }
+      // фото: качаем, если здесь его нет или на сервере другое и оценка там свежее
+      if (remotePhoto) {
+        const localData = photoData(loc.photo);
+        const needs = !localData || (fp(localData) !== remotePhoto.remote && stampOf(rr) >= stampOf(loc));
+        if (needs) {
+          try {
+            const ph = await api('/photo/' + encodeURIComponent(F.me.id) + '/' + encodeURIComponent(rr.id));
+            if (ph && ph.data) { loc.photo = { id: ph.data, data: ph.data, w: remotePhoto.w || 0, h: remotePhoto.h || 0 }; sent[rr.id] = fp(ph.data); photos++; }
+          } catch (e) {}
+        }
+      }
     }
-    if (!added && !updated) return;
+    if (photos) lsSet(PHOTOS_KEY, JSON.stringify(sent));
+    if (!added && !updated && !removed && !photos) return;
     if (added) state.ratings = state.ratings.filter((x) => !x.example); // примеры уступают место настоящим оценкам
-    saveLocalRatings();
+    saveLocalRatingsQuiet();
     renderBoard();
-    try { toast(`Оценки из аккаунта загружены: ${added ? '+' + added : ''}${added && updated ? ', ' : ''}${updated ? 'обновлено ' + updated : ''}`); } catch (e) {}
+    const parts = [added && '+' + added, updated && 'обновлено ' + updated, removed && 'удалено ' + removed, photos && 'фото ' + photos].filter(Boolean);
+    try { toast('Оценки из аккаунта: ' + parts.join(', ')); } catch (e) {}
   }
 
   // привязать текущий профиль сайта к онлайн-аккаунту с тем же ником
@@ -243,26 +267,64 @@
   }
 
   // свои оценки: те же, что показывает фильтр «Мои», без примеров и без фото
-  function myRatings() {
-    return state.ratings
-      .filter((r) => !r.example && (state.user ? r.author && r.author.id === state.user.id : r.author && r.author.name === 'Гость'))
-      .map((r) => {
-        const copy = { ...r };
-        delete copy.photo;
-        delete copy.hist;
-        delete copy.history;
-        try { copy.catLabel = catNameOf(r); } catch (e) {}
-        return copy;
-      });
+  // ---------- синхронизация: фото, удаления, старые оценки ----------
+  const PHOTOS_KEY = 'casualhub.photos.v1';   // { id оценки: отпечаток уже отправленного фото }
+  const DELETED_KEY = 'casualhub.deleted.v1'; // [{ id, at }] оценки, удалённые на этом устройстве
+  const readJSON = (k, d) => { try { return JSON.parse(lsGet(k) || 'null') || d; } catch (e) { return d; } };
+  const photoData = (p) => (p && typeof p.data === 'string' && p.data.startsWith('data:image/') ? p.data
+    : p && typeof p.id === 'string' && p.id.startsWith('data:image/') ? p.id : '');
+  // быстрый отпечаток строки (FNV-1a), чтобы не отправлять одно и то же фото дважды
+  function fp(s) {
+    let h = 0x811c9dc5;
+    for (let i = 0; i < s.length; i += 7) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+    return (h >>> 0).toString(36) + '.' + s.length.toString(36);
   }
-  // force: отправить даже пустой список (кнопка). Иначе пустой не шлём, чтобы вход
-  // с нового устройства, где оценок ещё нет, не стёр то, что видят друзья
-  async function pushShelf(force) {
+  let rawSave = null; // сохранение без отправки на сервер, ставится в хуках внизу
+  function saveLocalRatingsQuiet() { return (rawSave || saveLocalRatings)(); }
+  const ownsRating =(r) => !r.example && r.author && state.user && r.author.id === state.user.id;
+  // гостевые оценки этого устройства переходят в аккаунт
+  function claimGuestRatings() {
+    if (!state.user) return 0;
+    let n = 0;
+    state.ratings.forEach((r) => {
+      if (r.example || (r.author && r.author.id)) return;
+      r.author = { id: state.user.id, name: state.user.name, avatar: state.user.avatar || state.user.name.charAt(0).toUpperCase(), color: state.user.color || '#3550E8' };
+      n++;
+    });
+    return n;
+  }
+  function myRatings() {
+    return state.ratings.filter(ownsRating).map((r) => {
+      const copy = { ...r };
+      const d = photoData(r.photo);
+      copy.photo = d ? { remote: fp(d), w: r.photo.w || 0, h: r.photo.h || 0 } : undefined;
+      if (!copy.photo) delete copy.photo;
+      delete copy.hist;
+      delete copy.history;
+      try { copy.catLabel = catNameOf(r); } catch (e) {}
+      return copy;
+    });
+  }
+  async function uploadPhotos() {
+    const sent = readJSON(PHOTOS_KEY, {});
+    let changed = false;
+    for (const r of state.ratings.filter(ownsRating)) {
+      const d = photoData(r.photo);
+      if (!d) continue;
+      const f = fp(d);
+      if (sent[r.id] === f) continue;
+      try { await api('/photo/' + encodeURIComponent(r.id), 'PUT', { data: d }); sent[r.id] = f; changed = true; }
+      catch (e) { if (e.status === 413) { sent[r.id] = f; changed = true; } }
+    }
+    if (changed) lsSet(PHOTOS_KEY, JSON.stringify(sent));
+  }
+  // сервер сам объединяет оценки с разных устройств, поэтому отправка ничего не затирает
+  async function pushShelf() {
     if (!F.me) return;
-    const ratings = myRatings();
-    if (!ratings.length && !force) return;
+    if (claimGuestRatings()) { saveLocalRatingsQuiet(); renderBoard(); }
     try {
-      const r = await api('/shelf', 'PUT', { ratings });
+      await uploadPhotos();
+      const r = await api('/shelf', 'PUT', { ratings: myRatings(), deleted: readJSON(DELETED_KEY, []) });
       F.pushedAt = r.updatedAt;
       F.pushedCount = r.count;
     } catch (e) { say(e.message, true); }
@@ -626,7 +688,23 @@ ${ICON.chev}
   }
   if (typeof window.saveLocalRatings === 'function') {
     const o = window.saveLocalRatings;
+    rawSave = o;
     window.saveLocalRatings = function () { const r = o.apply(this, arguments); schedulePush(); return r; };
+  }
+  // удаление запоминаем, чтобы оценка пропала и на других устройствах
+  if (typeof window.removeRating === 'function') {
+    const o = window.removeRating;
+    window.removeRating = function (id) {
+      const r = state.ratings.find((x) => x.id === id);
+      if (r && !r.example) {
+        const list = readJSON(DELETED_KEY, []).filter((d) => d.id !== id);
+        list.push({ id, at: Date.now() });
+        lsSet(DELETED_KEY, JSON.stringify(list.slice(-2000)));
+        const sent = readJSON(PHOTOS_KEY, {});
+        if (sent[id]) { delete sent[id]; lsSet(PHOTOS_KEY, JSON.stringify(sent)); }
+      }
+      return o.apply(this, arguments);
+    };
   }
 
   // ---------- старт ----------

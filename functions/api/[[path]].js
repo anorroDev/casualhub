@@ -4,7 +4,7 @@
 const enc = new TextEncoder();
 const ITER = 10000; // PBKDF2: больше не даёт бесплатный тариф по времени CPU
 const SESSION_DAYS = 30;
-const MAX_SHELF = 800000; // байт JSON на одного человека
+const MAX_SHELF = 1800000; // символов JSON на одного человека (фото хранятся отдельно)
 const NAME_RE = /^[\p{L}\p{N}_.\- ]{2,24}$/u;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -20,6 +20,7 @@ async function ensureSchema(env) {
     env.DB.prepare('CREATE TABLE IF NOT EXISTS friendships (a TEXT NOT NULL, b TEXT NOT NULL, status TEXT NOT NULL, requested_by TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (a, b))'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS friendships_b ON friendships(b)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS shelves (user_id TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at INTEGER NOT NULL)'),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS photos (key TEXT PRIMARY KEY, user_id TEXT NOT NULL, data TEXT NOT NULL, updated_at INTEGER NOT NULL)'),
   ]);
   const { results } = await env.DB.prepare('PRAGMA table_info(users)').all();
   if (!results.some((c) => c.name === 'email')) await env.DB.prepare('ALTER TABLE users ADD COLUMN email TEXT').run();
@@ -192,29 +193,84 @@ const routes = {
     return json({ ok: true });
   },
 
+  // Оценки с разных устройств объединяются: по id остаётся более свежая версия,
+  // удалённые (deleted: [{id, at}]) запоминаются и больше не возвращаются, их фото стираются.
   async 'PUT /shelf'({ env, request, me }) {
-    const { ratings } = await readBody(request);
+    const { ratings, deleted } = await readBody(request);
     if (!Array.isArray(ratings)) return fail(400, 'Нужен список оценок.');
-    const data = JSON.stringify(ratings);
+    const row = await env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(me.id).first();
+    const old = readShelf(row);
+    const del = new Map(old.deleted.map((d) => [d.id, d.at]));
+    for (const d of Array.isArray(deleted) ? deleted : []) {
+      if (d && typeof d.id === 'string' && Number.isFinite(+d.at)) del.set(d.id, Math.max(del.get(d.id) || 0, +d.at));
+    }
+    const byId = new Map();
+    for (const r of [...old.ratings, ...ratings]) {
+      if (!r || typeof r.id !== 'string') continue;
+      const cur = byId.get(r.id);
+      if (!cur || stampOf(r) >= stampOf(cur)) byId.set(r.id, r);
+    }
+    const merged = [...byId.values()].filter((r) => !(del.has(r.id) && stampOf(r) <= del.get(r.id)));
+    const tomb = [...del.entries()].map(([id, at]) => ({ id, at }));
+    const data = JSON.stringify({ ratings: merged, deleted: tomb });
     if (data.length > MAX_SHELF) return fail(413, 'Слишком много данных, убери длинные заметки.');
     const now = Date.now();
     await env.DB.prepare(
       'INSERT INTO shelves (user_id, data, updated_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at'
     ).bind(me.id, data, now).run();
-    return json({ ok: true, updatedAt: now, count: ratings.length });
+    const gone = tomb.filter((d) => !merged.some((r) => r.id === d.id)).map((d) => d.id);
+    if (gone.length) {
+      await env.DB.batch(gone.map((id) => env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(`${me.id}:${id}`)));
+    }
+    return json({ ok: true, updatedAt: now, count: merged.length });
   },
 
   async 'GET /shelf/:id'({ env, me, arg }) {
-    if (arg !== me.id) {
-      const row = await link(env, me.id, arg);
-      if (!row || row.status !== 'accepted') return fail(403, 'Оценки видны только друзьям.');
-    }
+    if (!(await canSee(env, me, arg))) return fail(403, 'Оценки видны только друзьям.');
     const user = await env.DB.prepare('SELECT id, username FROM users WHERE id = ?').bind(arg).first();
     if (!user) return fail(404, 'Пользователь не найден.');
     const shelf = await env.DB.prepare('SELECT data, updated_at FROM shelves WHERE user_id = ?').bind(arg).first();
-    return json({ user, ratings: shelf ? JSON.parse(shelf.data) : [], updatedAt: shelf ? shelf.updated_at : null });
+    const s = readShelf(shelf);
+    return json({ user, ratings: s.ratings, deleted: s.deleted, updatedAt: shelf ? shelf.updated_at : null });
+  },
+
+  // фото оценки: кладёт и удаляет хозяин, смотрят хозяин и друзья
+  async 'PUT /photo/:rid'({ env, request, me, arg }) {
+    const { data } = await readBody(request);
+    if (typeof data !== 'string' || !/^data:image\/(jpeg|png|webp|gif);base64,/.test(data)) return fail(400, 'Нужна картинка.');
+    if (data.length > MAX_PHOTO) return fail(413, 'Фото слишком большое.');
+    await env.DB.prepare(
+      'INSERT INTO photos (key, user_id, data, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at'
+    ).bind(`${me.id}:${arg}`, me.id, data, Date.now()).run();
+    return json({ ok: true });
+  },
+  async 'DELETE /photo/:rid'({ env, me, arg }) {
+    await env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(`${me.id}:${arg}`).run();
+    return json({ ok: true });
+  },
+  async 'GET /photo/:uid/:rid'({ env, me, arg }) {
+    const [uid, rid] = arg;
+    if (!(await canSee(env, me, uid))) return fail(403, 'Фото видны только друзьям.');
+    const row = await env.DB.prepare('SELECT data FROM photos WHERE key = ?').bind(`${uid}:${rid}`).first();
+    if (!row) return fail(404, 'Фото нет.');
+    return json({ data: row.data });
   },
 };
+
+const MAX_PHOTO = 1900000; // символов в data URL, предел строки в D1 около 2 МБ
+const RID_RE = /^[\w.-]{1,80}$/;
+const stampOf = (r) => +new Date(r.updatedAt || r.createdAt || 0) || 0;
+function readShelf(row) {
+  if (!row) return { ratings: [], deleted: [] };
+  const d = JSON.parse(row.data);
+  if (Array.isArray(d)) return { ratings: d, deleted: [] }; // старый формат: просто список
+  return { ratings: Array.isArray(d.ratings) ? d.ratings : [], deleted: Array.isArray(d.deleted) ? d.deleted : [] };
+}
+async function canSee(env, me, uid) {
+  if (uid === me.id) return true;
+  const row = await link(env, me.id, uid);
+  return !!row && row.status === 'accepted';
+}
 
 const PUBLIC = new Set(['POST /register', 'POST /login', 'POST /logout']);
 
@@ -227,6 +283,8 @@ export async function onRequest({ request, env, params }) {
   let key = `${request.method} ${path}`;
   let arg = null;
   if (!routes[key] && segs.length === 2 && segs[0] === 'shelf') { key = `${request.method} /shelf/:id`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 2 && segs[0] === 'photo' && RID_RE.test(segs[1])) { key = `${request.method} /photo/:rid`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 3 && segs[0] === 'photo' && RID_RE.test(segs[2])) { key = `${request.method} /photo/:uid/:rid`; arg = [segs[1], segs[2]]; }
   const handler = routes[key];
   if (!handler) return fail(404, 'Нет такого адреса.');
 
