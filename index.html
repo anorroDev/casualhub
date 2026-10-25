@@ -226,6 +226,24 @@ a.theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
 /* Sub-filters & Board Toolbar */
 .board-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; }
 .sub-filters { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+/* Category chips with a delete cross */
+.cat-chip { position: relative; display: inline-flex; max-width: 100%; }
+.cat-chip .chip-btn { padding-right: 32px; }
+.cat-x {
+  position: absolute; right: 5px; top: 50%; transform: translateY(-50%);
+  width: 24px; height: 24px; display: grid; place-items: center; padding: 0;
+  border: 0; border-radius: 50%; background: transparent; color: var(--ink-3); cursor: pointer;
+}
+.chip-btn[aria-pressed="true"] + .cat-x { color: var(--panel); opacity: .7; }
+.cat-x:hover { opacity: 1; background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad-ink); }
+.cat-x:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.cat-ask {
+  display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; min-height: 34px; padding: 3px 4px 3px 13px;
+  border: 1px solid var(--bad); border-radius: 17px; background: var(--panel); font-size: 13.5px; font-weight: 600; color: var(--ink);
+}
+.cat-ask .btn { height: 28px; padding: 0 12px; font-size: 13px; border-radius: 999px; }
+@media (pointer: coarse) { .cat-x { width: 30px; height: 30px; right: 3px; } .cat-chip .chip-btn { padding-right: 36px; } }
+
 /* Board toolbar: main switch on view, the rest behind one button */
 .board-bar { position: relative; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; }
 .board-more > summary { list-style: none; gap: 6px; }
@@ -392,6 +410,60 @@ a.theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
   --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #0D0F14;
   color-scheme: dark;
 }
+/* Extra themes, shared with the wheel through ocenshik.prefs.v1 */
+:root[data-theme="neon"] {
+  --bg: #120B1F; --dot: #251A3A; --panel: #1B1230; --panel-2: #23183D;
+  --ink: #F3EAFF; --ink-2: #B9A8D6; --ink-3: #7F6E9E; --line: #33264F; --cell: #2C2047;
+  --accent: #FF4FD8; --accent-soft: #3D1A45;
+  --good: #3EE6A8; --mid: #FFC857; --bad: #FF5C7A; --bad-ink: #FF8FA3; --on-tier: #120B1F;
+  color-scheme: dark;
+}
+:root[data-theme="ocean"] {
+  --bg: #07131F; --dot: #13283C; --panel: #0C1B2B; --panel-2: #112335;
+  --ink: #E3F1FF; --ink-2: #9DB8D2; --ink-3: #66819C; --line: #1C3349; --cell: #172C42;
+  --accent: #38BDF8; --accent-soft: #0F3550;
+  --good: #34D399; --mid: #FBBF24; --bad: #F87171; --bad-ink: #FCA5A5; --on-tier: #07131F;
+  color-scheme: dark;
+}
+:root[data-theme="forest"] {
+  --bg: #0E1411; --dot: #1C2721; --panel: #141C17; --panel-2: #1A241E;
+  --ink: #E6F0E9; --ink-2: #9DB3A5; --ink-3: #688070; --line: #26342C; --cell: #223029;
+  --accent: #4CC9C0; --accent-soft: #173A38;
+  --good: #7BDC6A; --mid: #E8C15A; --bad: #EE7355; --bad-ink: #FF9A80; --on-tier: #0E1411;
+  color-scheme: dark;
+}
+:root[data-theme="sand"] {
+  --bg: #F3EDE3; --dot: #DDD3C3; --panel: #FFFCF7; --panel-2: #F7F1E8;
+  --ink: #2A2118; --ink-2: #6B5D4E; --ink-3: #9C8E7D; --line: #E2D8C9; --cell: #E9E0D2;
+  --accent: #C2571B; --accent-soft: #F8E3D5;
+  --good: #3F9B57; --mid: #D9A21E; --bad: #D0452F; --bad-ink: #A8321F; --on-tier: #2A2118;
+  color-scheme: light;
+}
+:root[data-theme="sakura"] {
+  --bg: #FBEFF3; --dot: #EED5DE; --panel: #FFFFFF; --panel-2: #FDF5F8;
+  --ink: #2B1A22; --ink-2: #6E5560; --ink-3: #A08A94; --line: #F0DCE4; --cell: #F3E3EA;
+  --accent: #D6336C; --accent-soft: #FCE1EB;
+  --good: #2F9E6B; --mid: #E0A21B; --bad: #E0533D; --bad-ink: #B23A27; --on-tier: #2B1A22;
+  color-scheme: light;
+}
+/* Theme picker */
+.theme-pick { position: relative; }
+.theme-pick > summary { list-style: none; }
+.theme-pick > summary::-webkit-details-marker { display: none; }
+.theme-menu {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; width: 200px;
+  display: grid; gap: 2px; padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 18px 40px -18px color-mix(in srgb, var(--ink) 55%, transparent);
+}
+.theme-opt {
+  display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border: 0; border-radius: 9px;
+  background: transparent; color: var(--ink); font-size: 14px; font-weight: 600; text-align: left; cursor: pointer;
+}
+.theme-opt i { flex: none; width: 18px; height: 18px; border-radius: 50%; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 20%, transparent); }
+.theme-opt[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.theme-opt:hover { background: var(--panel-2); }
+.theme-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+@media (max-width: 560px) { .theme-menu { right: auto; left: 0; } }
 @media (max-width: 560px) { :root { --pad: 16px; } }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -884,7 +956,10 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
       <div class="user-bar">
         <button type="button" class="cmp-tray" id="cmpTrayBtn" hidden>⚖️ Сравнить (<span id="cmpCount">0</span>/2)</button>
         <a class="theme-btn" id="wheelLink" href="/koleso/" title="Колесо Казуала: колесо фортуны на выбывание">🎡 Колесо</a>
-        <button type="button" class="theme-btn" id="themeBtn" title="Переключить тему оформления">🌓 Тема</button>
+        <details class="theme-pick" id="themePick">
+          <summary class="theme-btn" id="themeBtn" title="Тема оформления">🌓 Тема</summary>
+          <div class="theme-menu" id="themeMenu" role="group" aria-label="Тема оформления"></div>
+        </details>
         <div id="userBar" class="user-bar"></div>
       </div>
       <p class="scale"><span class="vh">Цвет итогового балла:</span>
@@ -1069,10 +1144,17 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
             <p><strong>Журнал пока пуст.</strong> Сюда по датам попадут новые оценки, правки и удаления, а ещё изменения категорий и критериев. К любой записи можно дописать своё описание.</p>
           </div>
         </div>
-        <div id="logApp" data-stat="11 версий, последняя 25 октября" hidden>
+        <div id="logApp" data-stat="12 версий, последняя 25 октября" hidden>
           <div class="log-days">
             <section class="log-day">
-              <h3 class="log-date">25 октября 2026<span>версии 4–11</span></h3>
+              <h3 class="log-date">25 октября 2026<span>версии 4–12</span></h3>
+              <article class="rel">
+                <span class="rel-v">v12</span>
+                <div>
+                  <h4>Новые темы и удаление категорий крестиком</h4>
+                  <p>Тема выбирается из меню с образцами цветов, и к светлой и тёмной добавились «Неон», «Океан», «Лес», «Песок» и «Сакура». Выбранная тема общая для сайта и колеса. Категорию теперь можно удалить крестиком прямо на её кнопке, с подтверждением, без листания вниз к настройкам.</p>
+                </div>
+              </article>
               <article class="rel">
                 <span class="rel-v">v11</span>
                 <div>
@@ -2290,7 +2372,7 @@ const state = {
   users: [], user: null,
   ratings: [],
   cats: clone(STARTERS),
-  editCat: false, catDelConfirm: false,
+  editCat: false, catDelConfirm: false, catAsk: null,
   sort: 'score', filter: 'all', sfilter: 'all', bmode: 'list', query: '',
   theme: 'auto', cmpIds: [],
   open: new Set(), confirmDel: null, flashId: null, saving: false,
@@ -2370,11 +2452,20 @@ function cellsHTML(v, cls, knob) {
   for (let i = 1; i <= 10; i++) s += `<span class="${cls}${i <= v ? ' on' : ''}${knob && i === v ? ' knob' : ''}"></span>`;
   return s;
 }
+const CAT_X = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 function renderCats() {
   const editing = !!form.editingId;
+  const canDel = !editing && state.cats.length > 1;
   let h = state.cats.map(c => {
+    const name = esc(c.name.trim() || 'Без названия');
+    if (state.catAsk === c.id) {
+      return `<span class="cat-ask" role="group" aria-label="Удаление категории">Удалить «${name}»? Оценки останутся.<button type="button" class="btn small danger-solid" data-act="catx-yes" data-id="${esc(c.id)}">Да</button><button type="button" class="btn small ghost" data-act="catx-no">Нет</button></span>`;
+    }
     const off = editing && c.id !== form.cat;
-    return `<button type="button" class="chip-btn" data-cat="${esc(c.id)}" aria-pressed="${c.id === form.cat}"${off ? ' disabled title="У сохранённой оценки категорию не поменять"' : ''}>${esc(c.name.trim() || 'Без названия')}</button>`;
+    const chip = `<button type="button" class="chip-btn" data-cat="${esc(c.id)}" aria-pressed="${c.id === form.cat}"${off ? ' disabled title="У сохранённой оценки категорию не поменять"' : ''}>${name}</button>`;
+    return canDel
+      ? `<span class="cat-chip">${chip}<button type="button" class="cat-x" data-act="catx" data-id="${esc(c.id)}" aria-label="Удалить категорию «${name}»" title="Удалить категорию">${CAT_X}</button></span>`
+      : chip;
   }).join('');
   if (state.cats.length < MAX_CATS) h += `<button type="button" class="chip-btn add" data-act="newcat"${editing ? ' disabled' : ''}>${ICON.plus}Категория</button>`;
   el.cats.innerHTML = h;
@@ -2863,8 +2954,11 @@ function deleteCategory(id) {
   state.cats = state.cats.filter(c => c.id !== id);
   state.editCat = false;
   state.catDelConfirm = false;
-  form.cat = state.cats[0].id;
-  form.extra = [];
+  // удалили выбранную категорию: переключаемся на первую, иначе выбор не трогаем
+  if (form.cat === id || !state.cats.some(c => c.id === form.cat)) {
+    form.cat = state.cats[0].id;
+    form.extra = [];
+  }
   renderForm();
   renderBoard();
   scheduleCatSave(0);
@@ -3207,7 +3301,7 @@ function loadPrefs() {
     const p = JSON.parse(localStorage.getItem(PREFS_KEY) || 'null');
     if (p && ['score', 'date', 'name'].includes(p.sort)) state.sort = p.sort;
     if (p && ['list', 'grid', 'tiers'].includes(p.bmode)) state.bmode = p.bmode;
-    if (p && ['auto', 'light', 'dark'].includes(p.theme)) state.theme = p.theme;
+    if (p && ['auto', 'light', 'dark', 'neon', 'ocean', 'forest', 'sand', 'sakura'].includes(p.theme)) state.theme = p.theme;
     if (p && typeof p.filter === 'string') state.filter = p.filter;
     if (p && p.exportOpts && typeof p.exportOpts === 'object') {
       for (const k of ['desc', 'pc', 'notes', 'photo']) if (typeof p.exportOpts[k] === 'boolean') state.exportOpts[k] = p.exportOpts[k];
@@ -3622,7 +3716,18 @@ function copyShareText() {
 el.cats.addEventListener('click', e => {
   const b = e.target.closest('button');
   if (!b || b.disabled) return;
-  if (b.dataset.act === 'newcat') newCategory();
+  const act = b.dataset.act;
+  if (act === 'catx') {
+    state.catAsk = b.dataset.id;
+    renderCats();
+    const y = el.cats.querySelector('[data-act="catx-yes"]');
+    if (y) y.focus();
+    return;
+  }
+  if (act === 'catx-no') { state.catAsk = null; renderCats(); return; }
+  if (act === 'catx-yes') { state.catAsk = null; deleteCategory(b.dataset.id); return; }
+  if (state.catAsk) { state.catAsk = null; renderCats(); }
+  if (act === 'newcat') newCategory();
   else if (b.dataset.cat) switchCat(b.dataset.cat);
 });
 el.name.addEventListener('input', () => { form.name = el.name.value; updateNameState(); scheduleDraft(); });
@@ -4722,22 +4827,43 @@ el.logList.addEventListener('keydown', e => {
 
 
 /* ---------- Statistics, Compare & Theme ---------- */
+// темы общие с колесом: список и id должны совпадать с koleso/index.html
+const THEMES = [
+  { id: 'auto', name: 'Авто', icon: '🌓', sw: ['#ECEEF3', '#0D0F14'] },
+  { id: 'light', name: 'Светлая', icon: '☀️', sw: ['#ECEEF3', '#3550E8'] },
+  { id: 'dark', name: 'Тёмная', icon: '🌙', sw: ['#0D0F14', '#8C9BFF'] },
+  { id: 'neon', name: 'Неон', icon: '🌆', sw: ['#120B1F', '#FF4FD8'] },
+  { id: 'ocean', name: 'Океан', icon: '🌊', sw: ['#07131F', '#38BDF8'] },
+  { id: 'forest', name: 'Лес', icon: '🌲', sw: ['#0E1411', '#4CC9C0'] },
+  { id: 'sand', name: 'Песок', icon: '🏜️', sw: ['#F3EDE3', '#C2571B'] },
+  { id: 'sakura', name: 'Сакура', icon: '🌸', sw: ['#FBEFF3', '#D6336C'] },
+];
 function applyTheme(t) {
-  state.theme = ['light', 'dark', 'auto'].includes(t) ? t : 'auto';
+  const th = THEMES.find(x => x.id === t) || THEMES[0];
+  state.theme = th.id;
   if (state.theme === 'auto') document.documentElement.removeAttribute('data-theme');
   else document.documentElement.setAttribute('data-theme', state.theme);
-  if (el.themeBtn) {
-    const labels = { auto: '🌓 Тема: Авто', light: '☀️ Светлая', dark: '🌙 Тёмная' };
-    el.themeBtn.textContent = labels[state.theme];
+  if (el.themeBtn) el.themeBtn.textContent = `${th.icon} Тема: ${th.name}`;
+  const menu = document.getElementById('themeMenu');
+  if (menu) {
+    menu.innerHTML = THEMES.map(x => `<button type="button" class="theme-opt" data-theme-id="${x.id}" aria-pressed="${x.id === state.theme}"><i style="background:linear-gradient(135deg, ${x.sw[0]} 50%, ${x.sw[1]} 50%)"></i>${x.icon} ${x.name}</button>`).join('');
   }
   savePrefs();
 }
-if (el.themeBtn) {
-  el.themeBtn.addEventListener('click', () => {
-    const order = ['auto', 'dark', 'light'];
-    const next = order[(order.indexOf(state.theme) + 1) % order.length];
-    applyTheme(next);
-  });
+{
+  const pick = document.getElementById('themePick');
+  const menu = document.getElementById('themeMenu');
+  if (pick && menu) {
+    menu.addEventListener('click', e => {
+      const b = e.target.closest('[data-theme-id]');
+      if (!b) return;
+      applyTheme(b.dataset.themeId);
+      pick.open = false;
+      el.themeBtn.focus();
+    });
+    document.addEventListener('click', e => { if (pick.open && !pick.contains(e.target)) pick.open = false; });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && pick.open) { pick.open = false; el.themeBtn.focus(); } });
+  }
 }
 
 function renderStats() {
