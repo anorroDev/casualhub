@@ -14,27 +14,105 @@
   color: #fff; font-size: 12px; font-weight: 700; text-transform: uppercase; flex: none;
 }
 .author-tag { background: color-mix(in srgb, var(--accent) 14%, var(--panel)); color: var(--accent); font-weight: 600; }
-.auth-card { max-width: 440px; }
-.auth-tabs { display: flex; gap: 6px; margin: 16px 0; background: var(--panel-2); padding: 4px; border-radius: 10px; border: 1px solid var(--line); }
+.auth-card { max-width: 460px; }
+.auth-tabs { display: flex; gap: 6px; margin: 16px 0 12px; background: var(--panel-2); padding: 4px; border-radius: 10px; border: 1px solid var(--line); }
 .auth-tab { flex: 1; padding: 8px 12px; border: 0; background: transparent; font-size: 13.5px; font-weight: 600; border-radius: 7px; color: var(--ink-2); cursor: pointer; transition: all .15s; }
-.auth-tab.active { background: var(--panel); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
-.auth-form { display: grid; gap: 14px; margin-top: 12px; }
-.auth-field { display: grid; gap: 6px; }
+.auth-tab.active { background: var(--panel); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+.auth-form { display: grid; gap: 12px; margin-top: 10px; }
+.auth-field { display: grid; gap: 5px; }
 .auth-field label { font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
-.auth-field input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); font-size: 14px; color: var(--ink); }
+.auth-field input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); font-size: 14px; color: var(--ink); box-sizing: border-box; }
 .auth-field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
-.auth-help { font-size: 12px; color: var(--ink-3); line-height: 1.4; }
-.auth-user-info { display: flex; align-items: center; gap: 14px; padding: 14px; background: var(--panel-2); border-radius: 12px; border: 1px solid var(--line); margin: 16px 0; }
-.auth-user-info .big-avatar { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 20px; font-weight: 700; }
-.auth-user-text h4 { font-size: 16px; font-weight: 700; margin: 0; }
-.auth-user-text p { font-size: 12.5px; color: var(--ink-2); margin: 2px 0 0 0; }
+.auth-help { font-size: 11.5px; color: var(--ink-3); line-height: 1.35; }
+
+/* Password eye toggle */
+.pwd-wrap { position: relative; display: flex; align-items: center; width: 100%; }
+.pwd-wrap input { padding-right: 40px; }
+.pwd-toggle {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  background: transparent; border: 0; padding: 6px; cursor: pointer; color: var(--ink-3);
+  display: flex; align-items: center; justify-content: center; border-radius: 6px;
+  transition: color .15s;
+}
+.pwd-toggle:hover { color: var(--ink); }
+
+/* Password strength meter */
+.pwd-meter { margin-top: 4px; display: grid; gap: 4px; }
+.pwd-meter-bar { height: 4px; width: 100%; background: var(--line); border-radius: 2px; overflow: hidden; display: flex; }
+.pwd-meter-fill { height: 100%; width: 0%; transition: width .25s ease, background-color .25s ease; border-radius: 2px; }
+.pwd-meter-info { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--ink-3); }
+
+/* Avatar Customizer / Picker */
+.avatar-customizer {
+  display: grid; gap: 10px; padding: 12px; background: var(--panel-2);
+  border-radius: 12px; border: 1px solid var(--line); margin-bottom: 4px;
+}
+.avatar-preview-wrap { display: flex; align-items: center; gap: 12px; }
+.avatar-preview-circle {
+  width: 52px; height: 52px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 24px; font-weight: 800; color: #fff; box-shadow: 0 4px 14px rgba(0,0,0,.18);
+  transition: transform .2s ease, background-color .2s ease; flex-shrink: 0;
+}
+.avatar-preview-info h5 { margin: 0; font-size: 13.5px; font-weight: 700; color: var(--ink); }
+.avatar-preview-info p { margin: 2px 0 0 0; font-size: 11.5px; color: var(--ink-3); }
+.avatar-picker-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--ink-2); }
+.avatar-icons-row { display: flex; flex-wrap: wrap; gap: 6px; }
+.avatar-icon-btn {
+  width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--panel); font-size: 16px; cursor: pointer; display: grid; place-items: center;
+  transition: all .15s; line-height: 1; padding: 0; color: var(--ink);
+}
+.avatar-icon-btn:hover { border-color: var(--accent); transform: scale(1.08); }
+.avatar-icon-btn.selected { border-color: var(--accent); background: var(--accent-soft); outline: 2px solid var(--accent); }
+.avatar-colors-row { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 2px; }
+.avatar-color-btn {
+  width: 24px; height: 24px; border-radius: 50%; border: 2px solid transparent;
+  cursor: pointer; transition: transform .15s; padding: 0;
+}
+.avatar-color-btn:hover { transform: scale(1.15); }
+.avatar-color-btn.selected { border-color: #fff; box-shadow: 0 0 0 2px var(--accent); transform: scale(1.1); }
+
+/* Profile View */
+.profile-card {
+  padding: 16px; background: var(--panel-2); border-radius: 12px;
+  border: 1px solid var(--line); display: grid; gap: 14px; margin: 14px 0;
+}
+.profile-head { display: flex; align-items: center; gap: 14px; }
+.profile-avatar {
+  width: 56px; height: 56px; border-radius: 50%; display: grid; place-items: center;
+  font-size: 26px; font-weight: 800; color: #fff; box-shadow: 0 4px 16px rgba(0,0,0,.2);
+  flex-shrink: 0;
+}
+.profile-titles { min-width: 0; flex: 1; }
+.profile-name { font-size: 16px; font-weight: 700; margin: 0; color: var(--ink); word-break: break-word; }
+.profile-email-tag {
+  display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px;
+  color: var(--ink-2); background: var(--panel); padding: 3px 8px; border-radius: 6px;
+  border: 1px solid var(--line); margin-top: 4px; word-break: break-all;
+}
+.profile-meta { font-size: 11.5px; color: var(--ink-3); margin-top: 4px; }
+.profile-stats-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
+  background: var(--panel); padding: 10px 8px; border-radius: 10px; border: 1px solid var(--line);
+}
+.profile-stat-item { text-align: center; }
+.profile-stat-val { font-family: 'Handjet', monospace; font-size: 22px; font-weight: 800; line-height: 1; color: var(--accent); }
+.profile-stat-lbl { font-size: 11px; color: var(--ink-3); margin-top: 2px; }
+
+/* Switch accounts list */
 .auth-switch-list { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 14px; display: grid; gap: 8px; }
-.auth-switch-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line); cursor: pointer; }
-.auth-switch-item:hover { border-color: var(--accent); }
+.auth-switch-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line); cursor: pointer; transition: all .15s; }
+.auth-switch-item:hover { border-color: var(--accent); background: var(--accent-soft); }
+.auth-switch-user { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.auth-switch-info { display: flex; flex-direction: column; min-width: 0; }
+.auth-switch-name { font-weight: 600; font-size: 13.5px; color: var(--ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.auth-switch-email { font-size: 11px; color: var(--ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Guest button & backup */
+.auth-guest-row { display: flex; align-items: center; justify-content: center; gap: 8px; margin-top: 8px; }
 .backup-section { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); display: grid; gap: 10px; }
 .backup-title { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-2); margin: 0; }
 .backup-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-
 
 /* --- Upgraded Functional Styles (Console Theme & Handjet/Onest preserved) --- */
 .theme-btn {
@@ -1195,13 +1273,48 @@ function saveLocalLog() {
   catch (e) { console.error('Save log error:', e); }
 }
 
+const EYE_OPEN_SVG = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>`;
+const EYE_CLOSED_SVG = `<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>`;
+const AVATAR_ICONS = ['⚡', '🎮', '🎬', '🎧', '☕', '🚀', '👾', '🏆', '🔥', '🎯', '✨', '🐱'];
+
+let authActiveTab = 'login';
+let regSelectedAvatar = '⚡';
+let regSelectedColor = '#3550E8';
+let editSelectedAvatar = '';
+let editSelectedColor = '';
+
+function calcPasswordStrength(pass) {
+  if (!pass) return { score: 0, text: 'Введите пароль', color: 'transparent', width: '0%' };
+  let score = 0;
+  if (pass.length >= 4) score += 1;
+  if (pass.length >= 8) score += 1;
+  if (/[0-9]/.test(pass)) score += 1;
+  if (/[a-z]/.test(pass) && /[A-Z]/.test(pass)) score += 1;
+  if (/[^A-Za-z0-9]/.test(pass)) score += 1;
+
+  if (score <= 1) return { score: 1, text: 'Слабый пароль', color: 'var(--bad)', width: '25%' };
+  if (score <= 3) return { score: 2, text: 'Средний пароль (добавьте цифры/знаки)', color: 'var(--mid)', width: '65%' };
+  return { score: 3, text: 'Отличный надёжный пароль! 👍', color: 'var(--good)', width: '100%' };
+}
+
 function loadUsers() {
   try {
     state.users = JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]');
+    state.users.forEach(u => {
+      if (!u.avatar) u.avatar = (u.name ? u.name.charAt(0).toUpperCase() : '👤');
+      if (!u.color) u.color = randomAvatarColor(u.name || 'user');
+      if (!u.email) u.email = '';
+    });
     const cur = JSON.parse(localStorage.getItem(STORAGE_KEYS.USER) || 'null');
-    if (cur && cur.id) state.user = state.users.find(u => u.id === cur.id) || cur;
+    if (cur && cur.id) {
+      state.user = state.users.find(u => u.id === cur.id) || cur;
+      if (!state.user.avatar) state.user.avatar = (state.user.name ? state.user.name.charAt(0).toUpperCase() : '👤');
+      if (!state.user.color) state.user.color = randomAvatarColor(state.user.name || 'user');
+      if (!state.user.email) state.user.email = '';
+    }
   } catch (_) { state.users = []; state.user = null; }
 }
+
 function saveUsers() {
   try {
     localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(state.users));
@@ -1209,35 +1322,64 @@ function saveUsers() {
     else localStorage.removeItem(STORAGE_KEYS.USER);
   } catch (_) {}
 }
-function registerUser(username, password) {
+
+function registerUser(username, email, password, avatar, color) {
   username = (username || '').trim();
+  email = (email || '').trim().toLowerCase();
+  password = (password || '').trim();
+
   if (username.length < 2) { toast('Имя должно быть не менее 2 символов'); return false; }
   if (state.users.some(u => u.name.toLowerCase() === username.toLowerCase())) {
     toast('Пользователь с таким именем уже существует'); return false;
   }
+
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!email || !emailRegex.test(email)) {
+    toast('Введите корректный email (например, name@mail.com)'); return false;
+  }
+  if (state.users.some(u => u.email && u.email.toLowerCase() === email)) {
+    toast('Этот email уже привязан к другому аккаунту'); return false;
+  }
+
+  if (password && password.length < 4) {
+    toast('Пароль должен содержать минимум 4 символа'); return false;
+  }
+
   const u = {
     id: 'u_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     name: username,
-    pass: (password || '').trim(),
-    color: randomAvatarColor(username),
+    email,
+    pass: password,
+    avatar: avatar || '⚡',
+    color: color || '#3550E8',
     createdAt: new Date().toISOString()
   };
+
   state.users.push(u);
   state.user = u;
   saveUsers();
   renderUserBar();
   renderBoard();
-  toast(`Добро пожаловать, ${username}!`);
+  toast(`Добро пожаловать в клуб, ${username}! 🎉`);
   closeAuthModal();
   return true;
 }
-function loginUser(username, password) {
-  username = (username || '').trim();
-  const u = state.users.find(x => x.name.toLowerCase() === username.toLowerCase());
+
+function loginUser(identifier, password) {
+  identifier = (identifier || '').trim().toLowerCase();
+  password = (password || '').trim();
+  if (!identifier) { toast('Введите имя пользователя или email'); return false; }
+
+  const u = state.users.find(x => 
+    (x.name && x.name.toLowerCase() === identifier) || 
+    (x.email && x.email.toLowerCase() === identifier)
+  );
+
   if (!u) { toast('Пользователь не найден. Зарегистрируйтесь'); return false; }
-  if (u.pass && u.pass !== (password || '').trim()) {
-    toast('Неверный пароль'); return false;
+  if (u.pass && u.pass !== password) {
+    toast('Неверный пароль. Попробуйте еще раз'); return false;
   }
+
   state.user = u;
   saveUsers();
   renderUserBar();
@@ -1246,14 +1388,64 @@ function loginUser(username, password) {
   closeAuthModal();
   return true;
 }
+
+function updateUserProfile(username, email, password, avatar, color) {
+  if (!state.user) return false;
+  username = (username || '').trim();
+  email = (email || '').trim().toLowerCase();
+  password = (password || '').trim();
+
+  if (username.length < 2) { toast('Имя должно содержать не менее 2 символов'); return false; }
+  if (state.users.some(u => u.id !== state.user.id && u.name.toLowerCase() === username.toLowerCase())) {
+    toast('Имя уже занято другим аккаунтом'); return false;
+  }
+
+  if (email) {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) { toast('Введите корректный email'); return false; }
+    if (state.users.some(u => u.id !== state.user.id && u.email && u.email.toLowerCase() === email)) {
+      toast('Этот email уже привязан к другому аккаунту'); return false;
+    }
+  }
+
+  state.user.name = username;
+  state.user.email = email;
+  if (password) state.user.pass = password;
+  if (avatar) state.user.avatar = avatar;
+  if (color) state.user.color = color;
+
+  const idx = state.users.findIndex(u => u.id === state.user.id);
+  if (idx >= 0) state.users[idx] = state.user;
+
+  // Sync ratings created by user
+  state.ratings.forEach(r => {
+    if (r.author && r.author.id === state.user.id) {
+      r.author.name = state.user.name;
+      r.author.avatar = state.user.avatar;
+      r.author.color = state.user.color;
+    }
+  });
+  saveLocalRatings();
+
+  saveUsers();
+  renderUserBar();
+  renderBoard();
+  toast('Профиль успешно обновлен! ✨');
+  authActiveTab = 'profile';
+  renderAuthModal();
+  return true;
+}
+
 function logoutUser() {
   state.user = null;
   saveUsers();
   renderUserBar();
   renderBoard();
   toast('Вы вышли из профиля');
+  authActiveTab = 'login';
   renderAuthModal();
 }
+
 function switchUser(id) {
   const u = state.users.find(x => x.id === id);
   if (u) {
@@ -1266,19 +1458,18 @@ function switchUser(id) {
   }
 }
 
-let authActiveTab = 'login';
 function renderUserBar() {
   if (!el.userBar) return;
   if (state.user) {
     el.userBar.innerHTML = `
       <div class="user-pill" id="userPill" role="button" tabindex="0" title="Открыть профиль">
-        <span class="user-avatar" style="background: ${esc(state.user.color || '#3550E8')}">${esc(state.user.name.charAt(0).toUpperCase())}</span>
+        <span class="user-avatar" style="background: ${esc(state.user.color || '#3550E8')}">${esc(state.user.avatar || state.user.name.charAt(0).toUpperCase())}</span>
         <span class="user-name">${esc(state.user.name)}</span>
       </div>`;
     const pill = $('userPill');
     if (pill) {
-      pill.addEventListener('click', () => openAuthModal());
-      pill.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAuthModal(); } });
+      pill.addEventListener('click', () => openAuthModal('profile'));
+      pill.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAuthModal('profile'); } });
     }
   } else {
     el.userBar.innerHTML = `<button type="button" class="btn ghost small" id="authBtn">👤 Войти / Профиль</button>`;
@@ -1286,48 +1477,200 @@ function renderUserBar() {
     if (btn) btn.addEventListener('click', () => openAuthModal('login'));
   }
 }
+
 function openAuthModal(tab) {
   if (tab) authActiveTab = tab;
+  else if (state.user) authActiveTab = 'profile';
+  else authActiveTab = 'login';
   renderAuthModal();
   el.authModal.hidden = false;
   document.documentElement.classList.add('locked');
 }
+
 function closeAuthModal() {
   el.authModal.hidden = true;
   document.documentElement.classList.remove('locked');
 }
+
 function renderAuthModal() {
   if (!el.authBody) return;
+
+  if (state.user && authActiveTab === 'edit') {
+    editSelectedAvatar = editSelectedAvatar || state.user.avatar || '⚡';
+    editSelectedColor = editSelectedColor || state.user.color || '#3550E8';
+    el.authTitle.textContent = 'Настройки профиля';
+    el.authBody.innerHTML = `
+      <form class="auth-form" id="formEditProfile">
+        <div class="avatar-customizer">
+          <div class="avatar-preview-wrap">
+            <div class="avatar-preview-circle" id="editAvatarCircle" style="background: ${esc(editSelectedColor)}">
+              ${esc(editSelectedAvatar)}
+            </div>
+            <div class="avatar-preview-info">
+              <h5>Аватар профиля</h5>
+              <p>Выберите значок и цвет настроения</p>
+            </div>
+          </div>
+          <div>
+            <div class="avatar-picker-label">Значок</div>
+            <div class="avatar-icons-row" id="editIconsRow">
+              ${AVATAR_ICONS.map(ic => `
+                <button type="button" class="avatar-icon-btn${ic === editSelectedAvatar ? ' selected' : ''}" data-icon="${esc(ic)}">${esc(ic)}</button>
+              `).join('')}
+              <button type="button" class="avatar-icon-btn" data-icon="__initial" title="Первая буква имени">🔤</button>
+            </div>
+          </div>
+          <div>
+            <div class="avatar-picker-label">Цвет</div>
+            <div class="avatar-colors-row" id="editColorsRow">
+              ${AVATAR_COLORS.map(c => `
+                <button type="button" class="avatar-color-btn${c === editSelectedColor ? ' selected' : ''}" data-color="${esc(c)}" style="background:${esc(c)};"></button>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+
+        <div class="auth-field">
+          <label for="inputEditName">Имя или никнейм</label>
+          <input type="text" id="inputEditName" value="${esc(state.user.name)}" required minlength="2" maxlength="30">
+        </div>
+        <div class="auth-field">
+          <label for="inputEditEmail">Электронная почта (Email)</label>
+          <input type="email" id="inputEditEmail" value="${esc(state.user.email || '')}" placeholder="name@domain.com">
+        </div>
+        <div class="auth-field">
+          <label for="inputEditPass">Новый пароль (оставьте пустым, если не меняете)</label>
+          <div class="pwd-wrap">
+            <input type="password" id="inputEditPass" autocomplete="new-password" placeholder="Новый пароль">
+            <button type="button" class="pwd-toggle" id="btnToggleEditPass" aria-label="Показать/скрыть пароль">${EYE_OPEN_SVG}</button>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;margin-top:6px;">
+          <button type="button" class="btn ghost" id="btnCancelEdit" style="flex:1;">Отмена</button>
+          <button type="submit" class="btn primary" style="flex:1;">Сохранить</button>
+        </div>
+      </form>
+    `;
+
+    const circle = $('editAvatarCircle');
+    const updatePreview = () => {
+      if (!circle) return;
+      circle.style.backgroundColor = editSelectedColor;
+      circle.textContent = editSelectedAvatar === '__initial' ? ($('inputEditName').value.trim().charAt(0).toUpperCase() || '👤') : editSelectedAvatar;
+    };
+
+    $('editIconsRow').querySelectorAll('[data-icon]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        $('editIconsRow').querySelectorAll('.avatar-icon-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        editSelectedAvatar = btn.dataset.icon;
+        updatePreview();
+      });
+    });
+
+    $('editColorsRow').querySelectorAll('[data-color]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        $('editColorsRow').querySelectorAll('.avatar-color-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        editSelectedColor = btn.dataset.color;
+        updatePreview();
+      });
+    });
+
+    $('inputEditName').addEventListener('input', () => {
+      if (editSelectedAvatar === '__initial') updatePreview();
+    });
+
+    const toggleBtn = $('btnToggleEditPass');
+    const passInput = $('inputEditPass');
+    if (toggleBtn && passInput) {
+      toggleBtn.addEventListener('click', () => {
+        const isPwd = passInput.type === 'password';
+        passInput.type = isPwd ? 'text' : 'password';
+        toggleBtn.innerHTML = isPwd ? EYE_CLOSED_SVG : EYE_OPEN_SVG;
+      });
+    }
+
+    $('btnCancelEdit').addEventListener('click', () => {
+      authActiveTab = 'profile';
+      renderAuthModal();
+    });
+
+    $('formEditProfile').addEventListener('submit', e => {
+      e.preventDefault();
+      const finalAvatar = editSelectedAvatar === '__initial' ? ($('inputEditName').value.trim().charAt(0).toUpperCase() || '👤') : editSelectedAvatar;
+      updateUserProfile($('inputEditName').value, $('inputEditEmail').value, $('inputEditPass').value, finalAvatar, editSelectedColor);
+    });
+    return;
+  }
+
   if (state.user) {
-    const userRatingsCount = state.ratings.filter(r => r.author && r.author.id === state.user.id).length;
-    const dateStr = fmtDateLong(state.user.createdAt) || 'сегодня';
+    const userRatings = state.ratings.filter(r => r.author && r.author.id === state.user.id);
+    const userRatingsCount = userRatings.length;
+    const userFavCount = userRatings.filter(r => r.fav).length;
+    const ratedWithScore = userRatings.filter(r => typeof r.total === 'number' && !isNaN(r.total));
+    const userAvg = ratedWithScore.length ? (ratedWithScore.reduce((acc, r) => acc + r.total, 0) / ratedWithScore.length).toFixed(1) : '—';
+    const dateStr = fmtDateLong(state.user.createdAt) || 'недавно';
     const otherUsers = state.users.filter(u => u.id !== state.user.id);
+
     el.authTitle.textContent = 'Мой профиль';
     el.authBody.innerHTML = `
-      <div class="auth-user-info">
-        <div class="big-avatar" style="background: ${esc(state.user.color || '#3550E8')}">${esc(state.user.name.charAt(0).toUpperCase())}</div>
-        <div class="auth-user-text">
-          <h4>${esc(state.user.name)}</h4>
-          <p>В клубе с ${esc(dateStr)} · Оценок: ${userRatingsCount}</p>
+      <div class="profile-card">
+        <div class="profile-head">
+          <div class="profile-avatar" style="background: ${esc(state.user.color || '#3550E8')}">
+            ${esc(state.user.avatar || state.user.name.charAt(0).toUpperCase())}
+          </div>
+          <div class="profile-titles">
+            <h4 class="profile-name">${esc(state.user.name)}</h4>
+            ${state.user.email ? `<div class="profile-email-tag">✉ ${esc(state.user.email)}</div>` : '<div class="profile-meta">Email не указан</div>'}
+            <div class="profile-meta">В клубе с ${esc(dateStr)}</div>
+          </div>
+        </div>
+
+        <div class="profile-stats-grid">
+          <div class="profile-stat-item">
+            <div class="profile-stat-val">${userRatingsCount}</div>
+            <div class="profile-stat-lbl">Оценок</div>
+          </div>
+          <div class="profile-stat-item">
+            <div class="profile-stat-val">${userFavCount}</div>
+            <div class="profile-stat-lbl">В избранном</div>
+          </div>
+          <div class="profile-stat-item">
+            <div class="profile-stat-val">${userAvg}</div>
+            <div class="profile-stat-lbl">Средний балл</div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="btn ghost small" id="btnEditProfile" style="flex:1;">✏️ Настроить профиль</button>
+          <button type="button" class="btn ghost danger small" id="btnLogoutUser" style="flex:1;">🚪 Выйти</button>
         </div>
       </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;">
-        <button type="button" class="btn ghost danger" id="btnLogoutUser" style="flex:1;">Выйти из профиля</button>
-      </div>
+
       ${otherUsers.length ? `
         <div class="auth-switch-list">
           <p class="label">Другие профили на этом устройстве</p>
           ${otherUsers.map(u => `
             <div class="auth-switch-item" data-switch-id="${esc(u.id)}">
-              <span style="display:flex;align-items:center;gap:8px;font-weight:600;">
-                <span class="user-avatar" style="background:${esc(u.color || '#3550E8')}">${esc(u.name.charAt(0).toUpperCase())}</span>
-                ${esc(u.name)}
-              </span>
-              <span class="btn text small" style="pointer-events:none;">Войти</span>
+              <div class="auth-switch-user">
+                <span class="user-avatar" style="background:${esc(u.color || '#3550E8')}">${esc(u.avatar || u.name.charAt(0).toUpperCase())}</span>
+                <div class="auth-switch-info">
+                  <span class="auth-switch-name">${esc(u.name)}</span>
+                  ${u.email ? `<span class="auth-switch-email">${esc(u.email)}</span>` : ''}
+                </div>
+              </div>
+              <span class="btn text small" style="pointer-events:none;">Переключить</span>
             </div>
           `).join('')}
         </div>
       ` : ''}
+
+      <div style="margin-top:10px;">
+        <button type="button" class="btn ghost small" id="btnAddAccount" style="width:100%;">➕ Войти в другой аккаунт</button>
+      </div>
+
       <div class="backup-section">
         <h4 class="backup-title">Резервная копия данных</h4>
         <div class="backup-actions">
@@ -1337,97 +1680,250 @@ function renderAuthModal() {
         </div>
       </div>
     `;
-    const btnLogout = $('btnLogoutUser');
-    if (btnLogout) btnLogout.addEventListener('click', logoutUser);
+
+    $('btnEditProfile').addEventListener('click', () => {
+      editSelectedAvatar = state.user.avatar || '⚡';
+      editSelectedColor = state.user.color || '#3550E8';
+      authActiveTab = 'edit';
+      renderAuthModal();
+    });
+
+    $('btnLogoutUser').addEventListener('click', logoutUser);
+
+    $('btnAddAccount').addEventListener('click', () => {
+      authActiveTab = 'login';
+      renderAuthModal();
+    });
+
     const btnExport = $('btnExportBackup');
     if (btnExport) btnExport.addEventListener('click', exportBackup);
     const fileImport = $('fileImportBackup');
     if (fileImport) fileImport.addEventListener('change', handleBackupImport);
+
     el.authBody.querySelectorAll('[data-switch-id]').forEach(item => {
       item.addEventListener('click', () => switchUser(item.dataset.switchId));
     });
-  } else {
-    el.authTitle.textContent = authActiveTab === 'login' ? 'Вход в аккаунт' : 'Регистрация';
-    el.authBody.innerHTML = `
-      <div class="auth-tabs">
-        <button type="button" class="auth-tab${authActiveTab === 'login' ? ' active' : ''}" data-tab="login">Вход</button>
-        <button type="button" class="auth-tab${authActiveTab === 'reg' ? ' active' : ''}" data-tab="reg">Регистрация</button>
-      </div>
-      ${authActiveTab === 'login' ? `
-        <form class="auth-form" id="formLogin">
-          <div class="auth-field">
-            <label for="inputLoginName">Имя пользователя / Никнейм</label>
-            <input type="text" id="inputLoginName" autocomplete="username" required placeholder="Введите ваше имя">
-          </div>
-          <div class="auth-field">
-            <label for="inputLoginPass">Пароль (если задавали)</label>
-            <input type="password" id="inputLoginPass" autocomplete="current-password" placeholder="Пароль">
-          </div>
-          <button type="submit" class="btn primary">Войти</button>
-        </form>
-        ${state.users.length ? `
-          <div class="auth-switch-list">
-            <p class="label">Быстрый вход</p>
-            ${state.users.map(u => `
-              <div class="auth-switch-item" data-switch-id="${esc(u.id)}">
-                <span style="display:flex;align-items:center;gap:8px;font-weight:600;">
-                  <span class="user-avatar" style="background:${esc(u.color || '#3550E8')}">${esc(u.name.charAt(0).toUpperCase())}</span>
-                  ${esc(u.name)}
-                </span>
-                <span class="btn text small" style="pointer-events:none;">Выбрать</span>
-              </div>
-            `).join('')}
-          </div>
-        ` : ''}
-      ` : `
-        <form class="auth-form" id="formReg">
-          <div class="auth-field">
-            <label for="inputRegName">Имя или никнейм</label>
-            <input type="text" id="inputRegName" autocomplete="username" required placeholder="Например, Алекс" minlength="2" maxlength="30">
-          </div>
-          <div class="auth-field">
-            <label for="inputRegPass">Пароль (необязательно)</label>
-            <input type="password" id="inputRegPass" autocomplete="new-password" placeholder="Можно оставить пустым">
-            <span class="auth-help">Если пароль не указан, войти в этот профиль можно в один клик.</span>
-          </div>
-          <button type="submit" class="btn primary">Создать аккаунт</button>
-        </form>
-      `}
-      <div class="backup-section">
-        <h4 class="backup-title">Резервная копия</h4>
-        <div class="backup-actions">
-          <button type="button" class="btn ghost small" id="btnExportBackup">💾 Скачать базу (JSON)</button>
-          <label class="btn ghost small" for="fileImportBackup" style="cursor:pointer;">📥 Загрузить базу</label>
-          <input type="file" id="fileImportBackup" accept=".json" class="vh">
+    return;
+  }
+
+  // Not logged in: Show Login / Registration
+  el.authTitle.textContent = authActiveTab === 'login' ? 'Вход в аккаунт' : 'Создать аккаунт';
+  el.authBody.innerHTML = `
+    <div class="auth-tabs">
+      <button type="button" class="auth-tab${authActiveTab === 'login' ? ' active' : ''}" data-tab="login">Вход</button>
+      <button type="button" class="auth-tab${authActiveTab === 'reg' ? ' active' : ''}" data-tab="reg">Регистрация</button>
+    </div>
+
+    ${authActiveTab === 'login' ? `
+      <form class="auth-form" id="formLogin">
+        <div class="auth-field">
+          <label for="inputLoginIdent">Имя пользователя или Email</label>
+          <input type="text" id="inputLoginIdent" autocomplete="username" required placeholder="username или name@domain.com">
         </div>
+        <div class="auth-field">
+          <label for="inputLoginPass">Пароль</label>
+          <div class="pwd-wrap">
+            <input type="password" id="inputLoginPass" autocomplete="current-password" placeholder="Пароль">
+            <button type="button" class="pwd-toggle" id="btnToggleLoginPass" aria-label="Показать/скрыть пароль">${EYE_OPEN_SVG}</button>
+          </div>
+        </div>
+        <button type="submit" class="btn primary" style="margin-top:4px;">Войти</button>
+        <div class="auth-guest-row">
+          <button type="button" class="btn text small" id="btnGuestLogin">Продолжить как гость</button>
+        </div>
+      </form>
+
+      ${state.users.length ? `
+        <div class="auth-switch-list">
+          <p class="label">Быстрый вход на этом устройстве</p>
+          ${state.users.map(u => `
+            <div class="auth-switch-item" data-switch-id="${esc(u.id)}">
+              <div class="auth-switch-user">
+                <span class="user-avatar" style="background:${esc(u.color || '#3550E8')}">${esc(u.avatar || u.name.charAt(0).toUpperCase())}</span>
+                <div class="auth-switch-info">
+                  <span class="auth-switch-name">${esc(u.name)}</span>
+                  ${u.email ? `<span class="auth-switch-email">${esc(u.email)}</span>` : ''}
+                </div>
+              </div>
+              <span class="btn text small" style="pointer-events:none;">Войти</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+    ` : `
+      <form class="auth-form" id="formReg">
+        <div class="avatar-customizer">
+          <div class="avatar-preview-wrap">
+            <div class="avatar-preview-circle" id="regAvatarCircle" style="background: ${esc(regSelectedColor)}">
+              ${esc(regSelectedAvatar)}
+            </div>
+            <div class="avatar-preview-info">
+              <h5>Крутой аватар</h5>
+              <p>Выберите значок и цвет для ваших оценок</p>
+            </div>
+          </div>
+          <div>
+            <div class="avatar-picker-label">Значок профиля</div>
+            <div class="avatar-icons-row" id="regIconsRow">
+              ${AVATAR_ICONS.map(ic => `
+                <button type="button" class="avatar-icon-btn${ic === regSelectedAvatar ? ' selected' : ''}" data-icon="${esc(ic)}">${esc(ic)}</button>
+              `).join('')}
+              <button type="button" class="avatar-icon-btn" data-icon="__initial" title="Первая буква имени">🔤</button>
+            </div>
+          </div>
+          <div>
+            <div class="avatar-picker-label">Цвет профиля</div>
+            <div class="avatar-colors-row" id="regColorsRow">
+              ${AVATAR_COLORS.map(c => `
+                <button type="button" class="avatar-color-btn${c === regSelectedColor ? ' selected' : ''}" data-color="${esc(c)}" style="background:${esc(c)};"></button>
+              `).join('')}
+            </div>
+          </div>
+        </div>
+
+        <div class="auth-field">
+          <label for="inputRegName">Имя или никнейм</label>
+          <input type="text" id="inputRegName" autocomplete="username" required placeholder="Например, Алекс" minlength="2" maxlength="30">
+        </div>
+
+        <div class="auth-field">
+          <label for="inputRegEmail">Электронная почта (Email)</label>
+          <input type="email" id="inputRegEmail" autocomplete="email" required placeholder="name@domain.com">
+          <span class="auth-help">Email нужен для входа и защиты вашего профиля.</span>
+        </div>
+
+        <div class="auth-field">
+          <label for="inputRegPass">Пароль</label>
+          <div class="pwd-wrap">
+            <input type="password" id="inputRegPass" autocomplete="new-password" placeholder="Минимум 4 символа">
+            <button type="button" class="pwd-toggle" id="btnToggleRegPass" aria-label="Показать/скрыть пароль">${EYE_OPEN_SVG}</button>
+          </div>
+          <div class="pwd-meter" id="regPwdMeter">
+            <div class="pwd-meter-bar"><div class="pwd-meter-fill" id="regPwdFill"></div></div>
+            <div class="pwd-meter-info"><span id="regPwdText">Введите пароль</span></div>
+          </div>
+        </div>
+
+        <button type="submit" class="btn primary" style="margin-top:6px;">Создать крутой аккаунт</button>
+        <div class="auth-guest-row">
+          <button type="button" class="btn text small" id="btnGuestReg">Продолжить как гость</button>
+        </div>
+      </form>
+    `}
+
+    <div class="backup-section">
+      <h4 class="backup-title">Резервная копия базы</h4>
+      <div class="backup-actions">
+        <button type="button" class="btn ghost small" id="btnExportBackup">💾 Скачать базу (JSON)</button>
+        <label class="btn ghost small" for="fileImportBackup" style="cursor:pointer;">📥 Загрузить базу</label>
+        <input type="file" id="fileImportBackup" accept=".json" class="vh">
       </div>
-    `;
-    el.authBody.querySelectorAll('.auth-tab').forEach(b => {
-      b.addEventListener('click', () => { authActiveTab = b.dataset.tab; renderAuthModal(); });
-    });
-    const formLogin = $('formLogin');
-    if (formLogin) {
-      formLogin.addEventListener('submit', e => {
-        e.preventDefault();
-        loginUser($('inputLoginName').value, $('inputLoginPass').value);
-      });
-    }
-    const formReg = $('formReg');
-    if (formReg) {
-      formReg.addEventListener('submit', e => {
-        e.preventDefault();
-        registerUser($('inputRegName').value, $('inputRegPass').value);
-      });
-    }
-    const btnExport = $('btnExportBackup');
-    if (btnExport) btnExport.addEventListener('click', exportBackup);
-    const fileImport = $('fileImportBackup');
-    if (fileImport) fileImport.addEventListener('change', handleBackupImport);
-    el.authBody.querySelectorAll('[data-switch-id]').forEach(item => {
-      item.addEventListener('click', () => switchUser(item.dataset.switchId));
+    </div>
+  `;
+
+  el.authBody.querySelectorAll('.auth-tab').forEach(b => {
+    b.addEventListener('click', () => { authActiveTab = b.dataset.tab; renderAuthModal(); });
+  });
+
+  const guestBtn = $('btnGuestLogin') || $('btnGuestReg');
+  if (guestBtn) {
+    guestBtn.addEventListener('click', () => {
+      closeAuthModal();
+      toast('Режим гостя: оценки сохраняются на вашем устройстве');
     });
   }
+
+  // Login Form listeners
+  const formLogin = $('formLogin');
+  if (formLogin) {
+    const toggleBtn = $('btnToggleLoginPass');
+    const passInput = $('inputLoginPass');
+    if (toggleBtn && passInput) {
+      toggleBtn.addEventListener('click', () => {
+        const isPwd = passInput.type === 'password';
+        passInput.type = isPwd ? 'text' : 'password';
+        toggleBtn.innerHTML = isPwd ? EYE_CLOSED_SVG : EYE_OPEN_SVG;
+      });
+    }
+    formLogin.addEventListener('submit', e => {
+      e.preventDefault();
+      loginUser($('inputLoginIdent').value, $('inputLoginPass').value);
+    });
+  }
+
+  // Registration Form listeners
+  const formReg = $('formReg');
+  if (formReg) {
+    const circle = $('regAvatarCircle');
+    const updatePreview = () => {
+      if (!circle) return;
+      circle.style.backgroundColor = regSelectedColor;
+      circle.textContent = regSelectedAvatar === '__initial' ? ($('inputRegName').value.trim().charAt(0).toUpperCase() || '👤') : regSelectedAvatar;
+    };
+
+    $('regIconsRow').querySelectorAll('[data-icon]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        $('regIconsRow').querySelectorAll('.avatar-icon-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        regSelectedAvatar = btn.dataset.icon;
+        updatePreview();
+      });
+    });
+
+    $('regColorsRow').querySelectorAll('[data-color]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        $('regColorsRow').querySelectorAll('.avatar-color-btn').forEach(b => b.classList.remove('selected'));
+        btn.classList.add('selected');
+        regSelectedColor = btn.dataset.color;
+        updatePreview();
+      });
+    });
+
+    $('inputRegName').addEventListener('input', () => {
+      if (regSelectedAvatar === '__initial') updatePreview();
+    });
+
+    const passInput = $('inputRegPass');
+    const toggleBtn = $('btnToggleRegPass');
+    const meterFill = $('regPwdFill');
+    const meterText = $('regPwdText');
+
+    if (passInput) {
+      passInput.addEventListener('input', () => {
+        const strInfo = calcPasswordStrength(passInput.value);
+        if (meterFill) {
+          meterFill.style.width = strInfo.width;
+          meterFill.style.backgroundColor = strInfo.color;
+        }
+        if (meterText) meterText.textContent = strInfo.text;
+      });
+    }
+
+    if (toggleBtn && passInput) {
+      toggleBtn.addEventListener('click', () => {
+        const isPwd = passInput.type === 'password';
+        passInput.type = isPwd ? 'text' : 'password';
+        toggleBtn.innerHTML = isPwd ? EYE_CLOSED_SVG : EYE_OPEN_SVG;
+      });
+    }
+
+    formReg.addEventListener('submit', e => {
+      e.preventDefault();
+      const finalAvatar = regSelectedAvatar === '__initial' ? ($('inputRegName').value.trim().charAt(0).toUpperCase() || '👤') : regSelectedAvatar;
+      registerUser($('inputRegName').value, $('inputRegEmail').value, $('inputRegPass').value, finalAvatar, regSelectedColor);
+    });
+  }
+
+  const btnExport = $('btnExportBackup');
+  if (btnExport) btnExport.addEventListener('click', exportBackup);
+  const fileImport = $('fileImportBackup');
+  if (fileImport) fileImport.addEventListener('change', handleBackupImport);
+
+  el.authBody.querySelectorAll('[data-switch-id]').forEach(item => {
+    item.addEventListener('click', () => switchUser(item.dataset.switchId));
+  });
 }
+
 
 function exportBackup() {
   const data = {
@@ -1900,7 +2396,7 @@ function entryHTML(r, rank, showCat) {
 <details${state.open.has(r.id) ? ' open' : ''}>
 <summary><span class="sum">
 <span class="rank">${rank == null ? '—' : rank}</span>
-<span class="e-main">${pUrl ? `<img class="e-thumb" data-photo="thumb" src="${esc(pUrl)}" alt="" loading="lazy" decoding="async">` : ''}<span class="e-text"><span class="e-name">${r.fav ? '<span class="fav-star-inline" title="В избранном">★</span>' : ''}${esc(r.name)}</span><span class="e-sub"><span>${esc(meta)}</span>${showCat ? `<span class="tag">${esc(catNameOf(r))}</span>` : ''}${r.status ? `<span class="tag status-tag">${esc(r.status)}</span>` : ''}${r.meta ? `<span class="tag meta-tag">${esc(r.meta)}</span>` : ''}${r.author && r.author.name ? `<span class="tag author-tag">👤 ${esc(r.author.name)}</span>` : ''}${r.example ? '<span class="tag ex">пример</span>' : ''}${notes ? `<span class="has-note" title="Есть заметки">${ICON.noteSm}<span class="vh">есть заметки</span></span>` : ''}</span></span></span>
+<span class="e-main">${pUrl ? `<img class="e-thumb" data-photo="thumb" src="${esc(pUrl)}" alt="" loading="lazy" decoding="async">` : ''}<span class="e-text"><span class="e-name">${r.fav ? '<span class="fav-star-inline" title="В избранном">★</span>' : ''}${esc(r.name)}</span><span class="e-sub"><span>${esc(meta)}</span>${showCat ? `<span class="tag">${esc(catNameOf(r))}</span>` : ''}${r.status ? `<span class="tag status-tag">${esc(r.status)}</span>` : ''}${r.meta ? `<span class="tag meta-tag">${esc(r.meta)}</span>` : ''}${r.author && r.author.name ? `<span class="tag author-tag" title="Автор: ${esc(r.author.name)}">${esc(r.author.avatar || '👤')} ${esc(r.author.name)}</span>` : ''}${r.example ? '<span class="tag ex">пример</span>' : ''}${notes ? `<span class="has-note" title="Есть заметки">${ICON.noteSm}<span class="vh">есть заметки</span></span>` : ''}</span></span></span>
 <span class="spark" aria-hidden="true">${spark}</span>
 <span class="badge" data-tier="${tierT(t)}">${t != null ? fmt(t) : '—'}</span>
 ${ICON.chev}
@@ -2243,7 +2739,7 @@ async function putRating(id, data) {
   if (state.mode === 'db') { await withRetry(() => state.db.collection('ratings').doc(id).set(data)); return; }
   const r = normalizeRating(id, data);
   if (!r.author) {
-    r.author = state.user ? { id: state.user.id, name: state.user.name } : { name: 'Гость' };
+    r.author = state.user ? { id: state.user.id, name: state.user.name, avatar: state.user.avatar || state.user.name.charAt(0).toUpperCase(), color: state.user.color || '#3550E8' } : { name: 'Гость' };
   }
   const i = state.ratings.findIndex(x => x.id === id);
   if (i >= 0) state.ratings[i] = r; else state.ratings.push(r);
@@ -2289,7 +2785,7 @@ function normalizeRating(id, d) {
     pros: str(d.pros).slice(0, 1000),
     cons: str(d.cons).slice(0, 1000),
     note: str(d.note).slice(0, 4000), example: d.example === true,
-    author: (d.author && typeof d.author === 'object') ? { id: str(d.author.id), name: str(d.author.name) } : null,
+    author: (d.author && typeof d.author === 'object') ? { id: str(d.author.id), name: str(d.author.name), avatar: str(d.author.avatar), color: str(d.author.color) } : null,
     photo: normPhoto(d.photo),
     createdAt: str(d.createdAt), updatedAt: str(d.updatedAt)
   };
