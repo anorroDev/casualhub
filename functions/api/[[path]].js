@@ -159,7 +159,7 @@ const routes = {
   async 'POST /friends/request'({ env, request, me }) {
     const { username } = await readBody(request);
     const other = await env.DB.prepare('SELECT id, username FROM users WHERE uname = ?').bind(cleanName(username).toLowerCase()).first();
-    if (!other) return fail(404, 'Нет пользователя с таким ником.');
+    if (!other) return fail(404, 'Такого ника нет среди подключённых к друзьям. Проверь ник; если друг зарегистрировался давно, пусть зайдёт на сайт в свой аккаунт или нажмёт «👥 Друзья» → «Подключить».');
     if (other.id === me.id) return fail(400, 'Себя в друзья добавить нельзя.');
     const row = await link(env, me.id, other.id);
     const [a, b] = pair(me.id, other.id);

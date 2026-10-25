@@ -133,6 +133,12 @@
     }
     F.token = uid ? readTokens()[uid] || null : null;
     F.me = null;
+    // старый аккаунт сайта без онлайн-входа: подключаем сам, тем паролем, что уже стоит в профиле
+    if (F.online && !F.token && state.user && !state.user.serverId && !F.autoLinkTried
+        && String(state.user.pass || '').length >= 6) {
+      F.autoLinkTried = true;
+      if (await linkCurrent(state.user.pass)) return;
+    }
     if (F.online && F.token) {
       try {
         F.me = (await api('/me')).user;
@@ -242,7 +248,8 @@
     const chips = [`<button type="button" class="sub-chip" data-fview="me" aria-pressed="${F.view === 'me'}">Я</button>`]
       .concat(F.friends.map((f) => `<button type="button" class="sub-chip" data-fview="${esc(f.id)}" aria-pressed="${F.view === f.id}">${esc(f.username)}</button>`));
     const n = F.incoming.length;
-    chips.push(`<button type="button" class="sub-chip" data-fopen="1">👥 Друзья${n ? ` <b>+${n}</b>` : ''}</button>`);
+    const needLink = F.online && state.user && !F.me;
+    chips.push(`<button type="button" class="sub-chip" data-fopen="1">👥 Друзья${n ? ` <b>+${n}</b>` : ''}${needLink ? ' <b>· подключить</b>' : ''}</button>`);
     bar.innerHTML = chips.join('');
   }
 
