@@ -1,0 +1,19 @@
+# Azure CLI local configurations
+.azure/
+
+# Node / package manager
+node_modules/
+package-lock.json
+
+# IDE & Editor
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
