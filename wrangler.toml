@@ -1,3 +1,8 @@
-name = "rategod"
+name = "casualhub"
 pages_build_output_dir = "."
 compatibility_date = "2024-01-01"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "casualhub"
+database_id = "b4b84c20-3c2a-499c-8e46-d82f9ba9daf5"
