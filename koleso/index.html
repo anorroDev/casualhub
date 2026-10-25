@@ -395,11 +395,12 @@ fieldset:disabled { opacity: .6; }
 .mslot { flex-wrap: wrap; }
 .ms-acts { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; flex: 1 1 260px; }
 .mpick { flex: 1 1 150px; width: auto; height: 36px; padding: 0 8px; font-size: 13px; cursor: pointer; }
-.mplayer { display: grid; gap: 8px; margin-top: 10px; padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; }
-.mplayer-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
-.mplayer-head .label { margin: 0; }
-#mplayerTitle { font-weight: 600; font-size: 14px; }
-.mplayer iframe { display: block; max-width: 100%; border: 0; border-radius: 8px; }
+.ms-text small { font-size: 12px; color: var(--ink-3); }
+.mplayer { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-top: 8px; padding: 8px 12px; background: var(--accent-soft); border-radius: 10px; }
+.mplayer .label { margin: 0; color: var(--accent); }
+.mp-title { font-weight: 600; font-size: 14px; }
+/* players stay alive but off screen: display:none would stop them */
+.mp-offscreen { position: fixed; left: -10000px; top: 0; width: 220px; height: 220px; overflow: hidden; pointer-events: none; }
 
 /* Status strip right under the wheel, built from the rater's score badge */
 .scorebar {
@@ -591,10 +592,12 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
         <p class="label">Музыка</p>
         <input type="file" id="audioFile" accept="audio/*,.mp3,.ogg,.wav,.m4a" hidden>
         <div class="mslots" id="mslots"></div>
-        <div class="mplayer" id="mplayer" hidden>
-          <div class="mplayer-head"><span class="label">Сейчас играет</span><span id="mplayerTitle"></span></div>
-          <div id="ytWrap"><div id="ytHost"></div></div>
-          <div id="spWrap" hidden><div id="spHost"></div></div>
+        <div class="mplayer" id="mplayer-bg" hidden><span class="label">Фоном играет</span><span class="mp-title"></span></div>
+        <div class="mplayer" id="mplayer-win" hidden><span class="label">Победа играет</span><span class="mp-title"></span></div>
+        <!-- сами плееры YouTube и Spotify работают за пределами экрана, их не видно -->
+        <div class="mp-offscreen" aria-hidden="true">
+          <div id="yt-bg"></div><div id="sp-bg"></div>
+          <div id="yt-win"></div><div id="sp-win"></div>
         </div>
         <p class="field-msg" id="musicNote"></p>
       </div>
@@ -741,13 +744,14 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     xs: svg('<path d="M6 6l12 12M18 6L6 18"/>', 11, 3),
     plus: svg('<path d="M12 5v14M5 12h14"/>', 20, 2),
     play: svg('<path d="M8 5l11 7-11 7z"/>', 16, 2),
+    pause: svg('<path d="M8 5v14M16 5v14"/>', 16, 2.6),
     stop: svg('<rect x="6" y="6" width="12" height="12" rx="1.5"/>', 16, 2),
   };
 
+  // вылет и щелчки всегда стандартные; выбирать можно фон страницы и трек победы
   const MUSIC_SLOTS = [
-    ['spin', 'Спин', 'играет, пока колесо крутится'],
-    ['out', 'Вылет', 'когда сектор выбывает'],
-    ['win', 'Победа', 'когда остался последний'],
+    ['bg', 'Фоновая музыка', 'играет на странице по кругу, на время победы затихает'],
+    ['win', 'Победа', 'когда остался последний, по умолчанию VI KA'],
   ];
   // треки на выбор: ровно те ссылки, что дал хозяин колеса; играют через встроенные плееры YouTube и Spotify
   const PRESETS = [
@@ -787,7 +791,7 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     return {
       v: 2, mode: 'donate', cur: 'UAH', rates: { ...DEF_RATES }, items: [], seq: 0, outSeq: 0, rot: 0,
       duration: 8, auto: false, sound: true, sample: false, hub: 24, gif: '', section: 'wheel',
-      music: { spin: '', out: '', win: '' },
+      music: { bg: '', win: 'preset:vika' }, bgOn: true,
     };
   }
   function makeItem(name, amount, cur) {
@@ -1025,7 +1029,7 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
   }
   function tick() {
     kick();
-    if (!S.sound || !ac || spinMusic) return;
+    if (!S.sound || !ac) return;
     const t = ac.currentTime;
     if (t - lastTick < 0.035) return;
     lastTick = t;
@@ -1067,7 +1071,6 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
       a.forEach((i) => { i.startWin = ch.get(i.id).win; });
     }
     if (S.sound) ensureAudio();
-    spinMusic = playSlot('spin', true);
 
     const segs = segments();
     const r = rnd();
@@ -1103,10 +1106,8 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
 
   function land(pick, segs) {
     setStatus(`Вылетает: <b>${esc(pick.item.name)}</b>`, baseSub(), 'bad');
-    stopMusic(true);
-    spinMusic = false;
     // на последнем вылете звучит победная, её запускает showWinner
-    if (alive().length > 2 && !playSlot('out')) playOut();
+    if (alive().length > 2) playOut();
     const t0 = performance.now(), D = reduced ? 400 : 1100;
     const pulse = (now) => {
       const t = (now - t0) / D;
@@ -1275,11 +1276,12 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
          <div class="total-meta"><strong>${S.mode === 'donate' ? `донат ${fmt(it.amount)} ${sym(it.cur)}` : 'участников было на колесе'}</strong><span>остался последним</span></div>`;
     $('#winner').hidden = false;
     $('#wAgain').focus();
-    if (!playSlot('win')) playWin();
+    playWinMusic();
   }
   function hideWinner() {
     if ($('#winner').hidden) return;
-    stopMusic(true);
+    stopChannel('win');
+    resumeBg();
     $('#winner').hidden = true;
     $('#restart').focus();
   }
@@ -1287,7 +1289,8 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
   function restoreAll() {
     if (S.spinning) return;
     clearTimeout(autoTimer);
-    stopMusic(true);
+    stopChannel('win');
+    resumeBg();
     S.items.forEach((i) => { i.out = false; i.outOrder = 0; });
     S.outSeq = 0;
     $('#winner').hidden = true;
@@ -1380,12 +1383,17 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     renderGifs();
   }
 
-  // ---------- музыка: свои треки на спин, вылет и победу (в том же IndexedDB, kind: 'audio') ----------
-  let A = [], current = null, previewSlot = '', spinMusic = false, pendingSlot = '';
+  // ---------- музыка: фон страницы и трек победы (свои файлы лежат в том же IndexedDB, kind: 'audio') ----------
+  let A = [], pendingSlot = '', bgWasOn = false;
   const slotTitle = (slot) => (MUSIC_SLOTS.find((m) => m[0] === slot) || [, slot])[1];
+  const slotPresets = (slot) => (slot === 'bg' ? PRESETS.filter((p) => p.id !== DEFAULT_WIN) : PRESETS);
+  const CH = {
+    bg: { active: false, type: null, el: null, loop: false, onFail: null },
+    win: { active: false, type: null, el: null, loop: false, onFail: null },
+  };
 
-  // ---------- встроенные плееры YouTube и Spotify для треков из списка ----------
-  const EMB = { yt: null, ytReady: null, sp: null, spReady: null, spUri: '', active: null, loop: false, failed: false };
+  // ---------- встроенные плееры YouTube и Spotify, по одному на канал ----------
+  const EMB = { ytApi: null, spApi: null, yt: {}, ytReady: {}, sp: {}, spReady: {}, spUri: {}, failed: false };
   function loadScript(src) {
     return new Promise((res, rej) => {
       const s = document.createElement('script');
@@ -1394,141 +1402,188 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     });
   }
   const timeout = (ms) => new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms));
-  function ytPlayer() {
-    if (!EMB.ytReady) {
-      EMB.ytReady = Promise.race([new Promise((res, rej) => {
-        window.onYouTubeIframeAPIReady = () => {
-          EMB.yt = new YT.Player('ytHost', {
-            width: 192, height: 108,
-            playerVars: { playsinline: 1, rel: 0 },
-            events: {
-              onReady: () => res(EMB.yt),
-              onStateChange: (e) => { if (e.data === 0 && EMB.active === 'yt' && EMB.loop) { EMB.yt.seekTo(0); EMB.yt.playVideo(); } },
-              onError: (e) => {
-                musicNote(e.data === 150 || e.data === 101
-                  ? 'Автор этого ролика на YouTube запретил проигрывать его на других сайтах. Скачай трек и поставь через «Свой файл», пока играет стандартный звук.'
-                  : 'YouTube не дал проиграть этот трек, пока играет стандартный звук.', 'err');
-                $('#mplayer').hidden = true;
-                const f = EMB.onFail;
-                EMB.onFail = null;
-                if (f && EMB.active === 'yt') f();
-              },
-            },
-          });
-        };
+  function ytApi() {
+    if (!EMB.ytApi) {
+      EMB.ytApi = Promise.race([new Promise((res, rej) => {
+        if (window.YT && window.YT.Player) { res(); return; }
+        window.onYouTubeIframeAPIReady = () => res();
         loadScript('https://www.youtube.com/iframe_api').catch(rej);
       }), timeout(15000)]);
-      EMB.ytReady.catch(() => { EMB.failed = true; });
+      EMB.ytApi.catch(() => { EMB.failed = true; });
     }
-    return EMB.ytReady;
+    return EMB.ytApi;
   }
-  function spPlayer(uri) {
-    if (!EMB.spReady) {
-      EMB.spUri = uri;
-      EMB.spReady = Promise.race([new Promise((res, rej) => {
-        window.onSpotifyIframeApiReady = (api) => {
-          api.createController($('#spHost'), { uri, width: '100%', height: 80 }, (ctrl) => {
-            EMB.sp = ctrl;
-            ctrl.addListener('ready', () => res(ctrl));
-          });
-        };
+  function spApi() {
+    if (!EMB.spApi) {
+      EMB.spApi = Promise.race([new Promise((res, rej) => {
+        window.onSpotifyIframeApiReady = (api) => res(api);
         loadScript('https://open.spotify.com/embed/iframe-api/v1').catch(rej);
       }), timeout(15000)]);
-      EMB.spReady.catch(() => { EMB.failed = true; });
+      EMB.spApi.catch(() => { EMB.failed = true; });
     }
-    return EMB.spReady;
+    return EMB.spApi;
   }
-  async function playPreset(p, loop, onFail) {
-    $('#mplayer').hidden = false;
-    $('#mplayerTitle').textContent = p.title;
-    $('#ytWrap').hidden = p.src !== 'yt';
-    $('#spWrap').hidden = p.src !== 'sp';
-    EMB.active = p.src;
-    EMB.loop = !!loop;
-    EMB.onFail = onFail || null; // если ролик откажется играть, сыграет стандартный звук
+  function ytPlayer(ch) {
+    if (!EMB.ytReady[ch]) {
+      EMB.ytReady[ch] = ytApi().then(() => new Promise((res) => {
+        EMB.yt[ch] = new YT.Player('yt-' + ch, {
+          width: 192, height: 108,
+          playerVars: { playsinline: 1, rel: 0 },
+          events: {
+            onReady: () => res(EMB.yt[ch]),
+            onStateChange: (e) => { if (e.data === 0) channelEnded(ch); },
+            onError: (e) => embedFailed(ch, e.data === 150 || e.data === 101
+              ? 'Автор этого ролика на YouTube запретил проигрывать его на других сайтах. Поставь трек через «Свой файл».'
+              : 'YouTube не дал проиграть этот трек.'),
+          },
+        });
+      }));
+    }
+    return EMB.ytReady[ch];
+  }
+  function spPlayer(ch, uri) {
+    if (!EMB.spReady[ch]) {
+      EMB.spUri[ch] = uri;
+      EMB.spReady[ch] = spApi().then((api) => new Promise((res) => {
+        api.createController(document.getElementById('sp-' + ch), { uri, width: '100%', height: 80 }, (ctrl) => {
+          EMB.sp[ch] = ctrl;
+          ctrl.addListener('ready', () => res(ctrl));
+          ctrl.addListener('playback_update', (e) => {
+            const d = e && e.data;
+            if (d && d.duration && !d.isPaused && d.position >= d.duration - 400) channelEnded(ch);
+          });
+        });
+      }));
+    }
+    return EMB.spReady[ch];
+  }
+  // плееры живут за пределами экрана, на странице видна только строка «Сейчас играет»
+  function showFrame(ch, p) {
+    const box = $('#mplayer-' + ch);
+    box.hidden = false;
+    box.querySelector('.mp-title').textContent = p.title;
+  }
+  const hideFrame = (ch) => { $('#mplayer-' + ch).hidden = true; };
+
+  // ролик не играет: сообщаем, а на победе звучит стандартная фанфара
+  function embedFailed(ch, text) {
+    const c = CH[ch];
+    if (!c.active) return;
+    musicNote(text + (ch === 'win' ? ' Пока играет стандартная фанфара.' : ''), 'err');
+    hideFrame(ch);
+    const f = c.onFail;
+    Object.assign(c, { active: false, type: null, onFail: null });
+    renderMusic();
+    if (f) f();
+  }
+  async function startPreset(ch, p) {
+    const c = CH[ch];
+    showFrame(ch, p);
     try {
       if (p.src === 'yt') {
-        const y = await ytPlayer();
-        if (EMB.active !== 'yt') return;
+        const y = await ytPlayer(ch);
+        if (!c.active || c.type !== 'yt') return;
         y.loadVideoById({ videoId: p.key, startSeconds: 0 });
         y.playVideo();
       } else {
         const uri = 'spotify:track:' + p.key;
-        const s = await spPlayer(uri);
-        if (EMB.active !== 'sp') return;
-        if (EMB.spUri !== uri) { s.loadUri(uri); EMB.spUri = uri; setTimeout(() => { if (EMB.active === 'sp') s.play(); }, 500); }
+        const s = await spPlayer(ch, uri);
+        if (!c.active || c.type !== 'sp') return;
+        if (EMB.spUri[ch] !== uri) { s.loadUri(uri); EMB.spUri[ch] = uri; setTimeout(() => { if (c.active && c.type === 'sp') s.play(); }, 500); }
         else s.play();
       }
     } catch (e) {
-      $('#mplayer').hidden = true;
-      musicNote('Треки из списка играют на casualhub.pages.dev, здесь встроенные плееры недоступны. Пока играет стандартный звук.', 'err');
-      if (onFail) onFail();
+      embedFailed(ch, 'Треки из списка играют на casualhub.pages.dev, здесь встроенные плееры недоступны.');
     }
   }
-  function stopEmbeds() {
-    EMB.active = null;
-    try { if (EMB.yt && EMB.yt.pauseVideo) EMB.yt.pauseVideo(); } catch (e) {}
-    try { if (EMB.sp) EMB.sp.pause(); } catch (e) {}
-  }
-
-  function stopMusic(fade) {
-    const el = current, wasPreview = previewSlot;
-    current = null;
-    previewSlot = '';
-    if (wasPreview) renderMusic();
-    if (!el) return;
-    if (el.embed) { stopEmbeds(); return; }
-    if (!fade || reduced) { el.pause(); return; }
-    const v0 = el.volume, t0 = performance.now();
-    const step = () => {
-      const k = (performance.now() - t0) / 500;
-      if (k >= 1) { el.pause(); return; }
-      el.volume = v0 * (1 - k);
-      requestAnimationFrame(step);
-    };
-    requestAnimationFrame(step);
-  }
-  function playSlot(slot, loop, force) {
-    stopMusic();
-    if (!S.sound && !force) return false;
-    const p = presetOf(S.music[slot]);
+  // включить канал; false — играть нечего (тогда звучит стандартный звук)
+  function playChannel(ch, opts = {}) {
+    stopChannel(ch);
+    if (!S.sound && !opts.force) return false;
+    const c = CH[ch];
+    const v = S.music[ch];
+    const p = presetOf(v);
     if (p) {
-      if (EMB.failed) return false; // плееры недоступны: пусть играет стандартный звук
-      current = { embed: true };
-      playPreset(p, loop, slot === 'win' ? playWin : slot === 'out' ? playOut : null);
+      if (EMB.failed) return false;
+      Object.assign(c, { active: true, type: p.src, loop: !!opts.loop, onFail: opts.onFail || null });
+      startPreset(ch, p);
+      renderMusic();
       return true;
     }
-    const rec = A.find((a) => a.id === S.music[slot]);
+    const rec = A.find((a) => a.id === v);
     if (!rec) return false;
     const el = new Audio(rec.url);
-    el.loop = !!loop;
-    el.volume = 0.85;
+    el.loop = !!opts.loop;
+    el.volume = ch === 'bg' ? 0.55 : 0.9;
+    el.addEventListener('ended', () => channelEnded(ch));
     el.play().catch(() => {});
-    current = el;
+    Object.assign(c, { active: true, type: 'file', el, loop: !!opts.loop, onFail: null });
+    renderMusic();
     return true;
+  }
+  function stopChannel(ch) {
+    const c = CH[ch];
+    const was = c.active;
+    c.active = false;
+    if (c.el) { c.el.pause(); c.el = null; }
+    try { if (c.type === 'yt' && EMB.yt[ch] && EMB.yt[ch].pauseVideo) EMB.yt[ch].pauseVideo(); } catch (e) {}
+    try { if (c.type === 'sp' && EMB.sp[ch]) EMB.sp[ch].pause(); } catch (e) {}
+    c.type = null;
+    c.onFail = null;
+    hideFrame(ch);
+    if (was) renderMusic();
+  }
+  function channelEnded(ch) {
+    const c = CH[ch];
+    if (!c.active) return;
+    if (c.loop) {
+      try {
+        if (c.type === 'yt') { EMB.yt[ch].seekTo(0); EMB.yt[ch].playVideo(); }
+        else if (c.type === 'sp') { EMB.sp[ch].seek(0); EMB.sp[ch].resume(); }
+      } catch (e) {}
+      return;
+    }
+    stopChannel(ch);
+    if (ch === 'win') resumeBg();
+  }
+
+  // фон играет по кругу и стартует от первого действия на странице (так требуют браузеры)
+  function startBg(force) {
+    if (!S.music.bg || (!S.bgOn && !force) || CH.win.active || CH.bg.active) return;
+    playChannel('bg', { loop: true, force });
+  }
+  function pauseBgForWin() { bgWasOn = CH.bg.active; if (bgWasOn) stopChannel('bg'); }
+  function resumeBg() { if (bgWasOn) { bgWasOn = false; startBg(); } }
+  function playWinMusic() {
+    pauseBgForWin();
+    if (!playChannel('win', { onFail: playWin })) playWin();
   }
 
   function musicNote(text, kind) {
     const el = $('#musicNote');
-    el.textContent = text || 'Выбери трек из списка или загрузи свой аудиофайл, он сохранится в этом браузере. Без трека играет стандартный звук колеса.';
+    el.textContent = text || 'Трек можно выбрать из списка или поставить свой файл, он сохранится в этом браузере. Вылет и щелчки при вращении всегда стандартные.';
     el.className = 'field-msg' + (kind ? ' ' + kind : '');
   }
 
   function renderMusic() {
     $('#mslots').innerHTML = MUSIC_SLOTS.map(([slot, title, when]) => {
-      const rec = A.find((a) => a.id === S.music[slot]);
-      const pre = presetOf(S.music[slot]);
-      const has = rec || pre;
-      const playing = previewSlot === slot;
-      const name = rec ? esc(rec.name) : pre ? `${esc(pre.title)} · ${pre.src === 'yt' ? 'YouTube' : 'Spotify'}` : `стандартный звук · ${when}`;
+      const v = S.music[slot];
+      const rec = A.find((a) => a.id === v);
+      const pre = presetOf(v);
+      const on = CH[slot].active;
+      const name = rec ? esc(rec.name) : pre ? `${esc(pre.title)} · ${pre.src === 'yt' ? 'YouTube' : 'Spotify'}` : 'выключена';
+      const playLabel = slot === 'bg' ? (on ? 'Пауза' : 'Включить') : (on ? 'Остановить' : 'Прослушать');
+      const playIcon = on ? (slot === 'bg' ? ICON.pause : ICON.stop) : ICON.play;
+      const canReset = slot === 'bg' ? !!(rec || pre) : !(pre && pre.id === DEFAULT_WIN);
+      const resetLabel = slot === 'bg' ? 'Выключить фоновую музыку' : 'Вернуть VI KA';
       return `<div class="mslot">
-        <div class="ms-text"><strong>${title}</strong><span>${name}</span></div>
+        <div class="ms-text"><strong>${title}</strong><span>${name}</span><small>${when}</small></div>
         <div class="ms-acts">
-          ${has ? `<button type="button" class="mini-btn" data-mplay="${slot}" aria-label="${playing ? 'Остановить' : 'Прослушать'}: ${title}">${playing ? ICON.stop : ICON.play}</button>
-          <button type="button" class="mini-btn del" data-mdel="${slot}" aria-label="Убрать трек: ${title}">${ICON.x}</button>` : ''}
+          ${rec || pre ? `<button type="button" class="mini-btn" data-mplay="${slot}" aria-label="${playLabel}: ${title}" title="${playLabel}">${playIcon}</button>` : ''}
+          ${canReset ? `<button type="button" class="mini-btn del" data-mdel="${slot}" aria-label="${resetLabel}" title="${resetLabel}">${ICON.x}</button>` : ''}
           <select class="inp mpick" data-mpick="${slot}" aria-label="Трек из списка: ${title}">
             <option value="">Из списка…</option>
-            ${PRESETS.map((p) => `<option value="${p.id}"${pre && pre.id === p.id ? ' selected' : ''}>${esc(p.title)}</option>`).join('')}
+            ${slotPresets(slot).map((p) => `<option value="${p.id}"${pre && pre.id === p.id ? ' selected' : ''}>${esc(p.title)}</option>`).join('')}
           </select>
           <button type="button" class="btn small ghost" data-mup="${slot}">${rec ? 'Заменить' : 'Свой файл'}</button>
         </div>
@@ -1550,15 +1605,17 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
       return;
     }
     if (file.size > 30 * 1024 * 1024) { musicNote(`«${file.name}» больше 30 МБ, возьми файл поменьше.`, 'err'); return; }
-    stopMusic();
+    stopChannel(slot);
     const old = S.music[slot];
     const rec = { id: 'a' + Date.now().toString(36) + Math.floor(rnd() * 1e6).toString(36), kind: 'audio', slot, name: file.name, blob: file, added: Date.now() };
     try { await gifPut(rec); } catch (e) { persistOk = false; }
     A.push({ ...rec, url: URL.createObjectURL(file) });
     S.music[slot] = rec.id;
-    if (old) dropAudio(old);
+    if (old && !presetOf(old)) dropAudio(old);
+    if (slot === 'bg') S.bgOn = true;
     save();
     renderMusic();
+    if (slot === 'bg') startBg(true);
     musicNote(persistOk ? `«${file.name}» стоит на «${slotTitle(slot)}».` : 'Браузер не даёт сохранить трек: после перезагрузки его придётся загрузить заново.', persistOk ? 'ok' : 'err');
   }
 
@@ -1570,40 +1627,57 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
       if (up) { pendingSlot = up.dataset.mup; $('#audioFile').click(); return; }
       const del = e.target.closest('[data-mdel]');
       if (del) {
-        stopMusic();
-        dropAudio(S.music[del.dataset.mdel]);
-        S.music[del.dataset.mdel] = '';
+        const slot = del.dataset.mdel;
+        stopChannel(slot);
+        const old = S.music[slot];
+        if (old && !presetOf(old)) dropAudio(old);
+        S.music[slot] = slot === 'win' ? 'preset:' + DEFAULT_WIN : '';
+        if (slot === 'win') resumeBg();
         save();
         renderMusic();
-        musicNote();
+        musicNote(slot === 'win' ? 'На победе снова VI KA.' : 'Фоновая музыка выключена.', 'ok');
         return;
       }
       const pl = e.target.closest('[data-mplay]');
       if (!pl || S.spinning) return;
       const slot = pl.dataset.mplay;
-      if (previewSlot === slot) { stopMusic(); return; }
-      if (playSlot(slot, false, true)) {
-        previewSlot = slot;
-        const el = current;
-        if (el && el.addEventListener) el.addEventListener('ended', () => { if (current === el) { current = null; previewSlot = ''; renderMusic(); } });
-        renderMusic();
+      if (slot === 'bg') {
+        if (CH.bg.active) { stopChannel('bg'); S.bgOn = false; }
+        else { S.bgOn = true; startBg(true); }
+        save();
+        return;
       }
+      // прослушать трек победы: фон на это время затихает
+      if (CH.win.active) { stopChannel('win'); resumeBg(); return; }
+      pauseBgForWin();
+      if (!playChannel('win', { force: true })) resumeBg();
     });
     // трек из списка
     $('#mslots').addEventListener('change', (e) => {
       const sel = e.target.closest('[data-mpick]');
-      if (!sel) return;
+      if (!sel || !sel.value) return;
       const slot = sel.dataset.mpick;
-      stopMusic();
-      if (!sel.value) return;
+      stopChannel(slot);
       const old = S.music[slot];
       if (old && !presetOf(old)) dropAudio(old);
       S.music[slot] = 'preset:' + sel.value;
+      if (slot === 'bg') S.bgOn = true;
       save();
       renderMusic();
       const p = presetOf(S.music[slot]);
-      musicNote(`«${p.title}» стоит на «${slotTitle(slot)}». Нажми ▶, чтобы послушать.`, 'ok');
+      if (slot === 'bg') { startBg(true); musicNote(`«${p.title}» играет фоном.`, 'ok'); }
+      else musicNote(`«${p.title}» стоит на победе. Нажми ▶, чтобы послушать.`, 'ok');
     });
+    // фон включается от первого действия на странице: без него браузер звук не пустит
+    const kickBg = (e) => {
+      if (e.target && e.target.closest && e.target.closest('#mslots')) return;
+      document.removeEventListener('pointerdown', kickBg, true);
+      document.removeEventListener('keydown', kickBg, true);
+      if (S.sound) ensureAudio();
+      startBg();
+    };
+    document.addEventListener('pointerdown', kickBg, true);
+    document.addEventListener('keydown', kickBg, true);
     $('#audioFile').addEventListener('change', (e) => {
       const f = e.target.files && e.target.files[0];
       if (f && pendingSlot) addAudio(f, pendingSlot);
@@ -1653,7 +1727,11 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
       save();
     });
     $('#auto').addEventListener('change', (e) => { S.auto = e.target.checked; if (!S.auto) clearTimeout(autoTimer); save(); });
-    $('#snd').addEventListener('change', (e) => { S.sound = e.target.checked; if (!S.sound) stopMusic(); save(); });
+    $('#snd').addEventListener('change', (e) => {
+      S.sound = e.target.checked;
+      if (!S.sound) { stopChannel('bg'); stopChannel('win'); bgWasOn = false; } else startBg();
+      save();
+    });
 
     $('#curTabs').addEventListener('click', (e) => {
       const b = e.target.closest('[data-cur]');
@@ -1863,9 +1941,15 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     S.duration = Math.min(DUR_MAX, Math.max(DUR_MIN, Math.round(+S.duration) || 8));
     S.hub = nearest(+S.hub || HUBS[0][0], HUBS.map((h) => h[0]));
     if (!['wheel', 'list'].includes(S.section)) S.section = 'wheel';
-    S.music = Object.assign({ spin: '', out: '', win: '' }, S.music || {});
-    // один раз ставим победную по умолчанию, дальше выбор человека не трогаем
-    if (!S.musicDefaults) { if (!S.music.win) S.music.win = 'preset:' + DEFAULT_WIN; S.musicDefaults = 1; }
+    S.music = Object.assign({ bg: '', win: '' }, S.music || {});
+    // бывший «Спин» становится фоном (кроме VI KA, она только для победы), «Вылет» теперь всегда стандартный
+    if (S.music.spin && !S.music.bg) S.music.bg = S.music.spin;
+    if (S.music.bg === 'preset:' + DEFAULT_WIN) S.music.bg = '';
+    delete S.music.spin;
+    delete S.music.out;
+    if (S.bgOn == null) S.bgOn = true;
+    // победа по умолчанию VI KA; пустой трек победы тоже означает VI KA
+    if (!S.music.win) S.music.win = 'preset:' + DEFAULT_WIN;
     if (!d) { S.sample = true; SAMPLE.forEach(([n, a]) => S.items.push(makeItem(n, a, S.cur))); }
     $('#cur').innerHTML = CODES.map((c) => `<option value="${c}">${CUR[c].sym} ${c}</option>`).join('');
     $('#cur').value = S.cur;
@@ -1888,7 +1972,9 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
         const all = recs || [];
         G = all.filter((r) => r.kind !== 'audio').sort((x, y) => x.added - y.added).map((r) => ({ ...r, url: URL.createObjectURL(r.blob) }));
         A = all.filter((r) => r.kind === 'audio').map((r) => ({ ...r, url: URL.createObjectURL(r.blob) }));
-        MUSIC_SLOTS.forEach(([s]) => { if (S.music[s] && !presetOf(S.music[s]) && !A.some((a) => a.id === S.music[s])) S.music[s] = ''; });
+        MUSIC_SLOTS.forEach(([s]) => {
+          if (S.music[s] && !presetOf(S.music[s]) && !A.some((a) => a.id === S.music[s])) S.music[s] = s === 'win' ? 'preset:' + DEFAULT_WIN : '';
+        });
         renderGifs();
         renderMusic();
       })
