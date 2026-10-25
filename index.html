@@ -35,6 +35,190 @@
 .backup-title { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-2); margin: 0; }
 .backup-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 
+
+/* --- Upgraded Functional Styles (Console Theme & Handjet/Onest preserved) --- */
+.theme-btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 34px; padding: 0 11px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--panel); color: var(--ink-2); font-size: 13px; font-weight: 600; cursor: pointer;
+  transition: border-color .15s, color .15s, background-color .15s;
+}
+.theme-btn:hover { border-color: var(--accent); color: var(--ink); }
+
+.name-row { display: flex; align-items: stretch; gap: 8px; }
+.name-row .name-input { flex: 1; min-width: 0; }
+.fav-toggle {
+  flex: none; width: 48px; display: grid; place-items: center;
+  border: 1px solid var(--line); border-radius: var(--r-sm); background: var(--panel-2);
+  color: var(--ink-3); font-size: 22px; cursor: pointer; transition: all .15s;
+}
+.fav-toggle:hover { border-color: var(--mid); color: var(--mid); }
+.fav-toggle[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--mid) 18%, var(--panel));
+  border-color: var(--mid); color: var(--mid);
+}
+
+.meta-grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 12px; }
+@media (min-width: 520px) { .meta-grid { grid-template-columns: 1fr 1fr; } }
+.meta-box { display: grid; gap: 6px; }
+.meta-input {
+  width: 100%; height: 38px; padding: 0 11px; font-size: 13.5px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 9px; color: var(--ink);
+}
+.meta-input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.status-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.status-chip {
+  height: 30px; padding: 0 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: var(--panel-2); color: var(--ink-2); font-size: 12.5px; font-weight: 600; cursor: pointer;
+}
+.status-chip[aria-pressed="true"] {
+  background: var(--accent-soft); border-color: var(--accent); color: var(--accent);
+}
+
+/* Pros & Cons */
+.pc-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 16px; }
+@media (min-width: 520px) { .pc-grid { grid-template-columns: 1fr 1fr; } }
+.pc-col { display: grid; gap: 6px; align-content: start; }
+.pc-col textarea {
+  min-height: 76px; font-size: 13.5px; line-height: 1.45; padding: 9px 11px;
+  border-radius: 9px; background: var(--panel-2); border: 1px solid var(--line);
+}
+.pc-label-pro { color: var(--good) !important; display: flex; align-items: center; gap: 5px; }
+.pc-label-con { color: var(--bad) !important; display: flex; align-items: center; gap: 5px; }
+
+/* Criterion weights & quick actions */
+.crit-w-badge {
+  display: inline-block; margin-left: 6px; padding: 1px 5px; border-radius: 5px;
+  font-family: var(--font-display); font-size: 15px; font-weight: 700; line-height: 1;
+  background: var(--accent-soft); color: var(--accent); vertical-align: baseline;
+}
+.ed-w-btn {
+  height: 28px; padding: 0 7px; border: 1px solid var(--line); border-radius: 6px;
+  background: var(--panel-2); color: var(--ink-2); font-family: var(--font-display);
+  font-size: 16px; font-weight: 700; cursor: pointer;
+}
+.ed-w-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.tpl-box { display: grid; gap: 6px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
+.tpl-list { display: flex; flex-wrap: wrap; gap: 5px; }
+.tpl-btn {
+  height: 28px; padding: 0 9px; border: 1px solid var(--line); border-radius: 7px;
+  background: var(--panel); color: var(--ink-2); font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.tpl-btn:hover { border-color: var(--accent); color: var(--ink); }
+
+/* Photo URL bar */
+.photo-url-row { display: flex; gap: 6px; margin-top: 8px; }
+.photo-url-row input {
+  flex: 1; height: 34px; padding: 0 10px; font-size: 13px;
+  background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+}
+.photo-url-row input:focus { outline: none; border-color: var(--accent); }
+
+/* Sub-filters & Board Toolbar */
+.board-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; }
+.sub-filters { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+.sub-chip {
+  display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 10px;
+  border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2);
+  color: var(--ink-2); font-size: 12px; font-weight: 600; cursor: pointer;
+}
+.sub-chip[aria-pressed="true"] {
+  background: var(--accent-soft); border-color: var(--accent); color: var(--accent);
+}
+.fav-star-inline { color: var(--mid); margin-right: 4px; }
+.tag.status-tag { background: var(--panel-2); color: var(--ink-2); border-color: var(--line); }
+.tag.meta-tag { background: transparent; color: var(--ink-3); border-style: dashed; }
+
+/* Expanded entry Pros & Cons */
+.e-pc-grid { display: grid; grid-template-columns: 1fr; gap: 10px; margin-top: 12px; }
+@media (min-width: 480px) { .e-pc-grid { grid-template-columns: 1fr 1fr; } }
+.e-pc-box { padding: 10px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.e-pc-box ul { margin: 6px 0 0; padding-left: 16px; font-size: 13.5px; display: grid; gap: 3px; }
+.e-pc-box.pro { border-left: 3px solid var(--good); }
+.e-pc-box.con { border-left: 3px solid var(--bad); }
+
+/* Grid View for Board */
+.board-list.grid-mode {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px;
+}
+.board-list.grid-mode .entry + .entry { border-top: 0; }
+.board-list.grid-mode .entry {
+  border: 1px solid var(--line); border-radius: 14px; background: var(--panel-2); overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.board-list.grid-mode .entry summary { margin: 0; padding: 10px; border-radius: 0; height: 100%; }
+.board-list.grid-mode .sum {
+  display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+}
+.board-list.grid-mode .e-main { flex-direction: column; align-items: stretch; gap: 8px; }
+.board-list.grid-mode .e-thumb { width: 100%; height: 130px; border-radius: 8px; }
+.board-list.grid-mode .spark { align-self: flex-start; }
+.board-list.grid-mode .e-body { margin: 0; padding: 10px; border-top: 1px solid var(--line); }
+
+/* Tier List View */
+.tier-board { display: grid; gap: 8px; margin-top: 14px; }
+.tier-row {
+  display: grid; grid-template-columns: 56px minmax(0, 1fr); border: 1px solid var(--line);
+  border-radius: 12px; overflow: hidden; background: var(--panel-2); min-height: 64px;
+}
+.tier-head {
+  display: grid; place-items: center; font-family: var(--font-display); font-weight: 800;
+  font-size: 34px; color: var(--on-tier); background: var(--tier-bg, var(--cell));
+}
+.tier-items { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; }
+.tier-item {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 9px 4px 5px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  font-size: 13px; font-weight: 600; cursor: pointer; max-width: 220px;
+}
+.tier-item:hover { border-color: var(--accent); }
+.tier-item img { width: 24px; height: 24px; border-radius: 5px; object-fit: cover; flex: none; }
+.tier-item span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tier-item b { font-family: var(--font-display); font-size: 18px; color: var(--ink-2); margin-left: 2px; }
+
+/* Statistics Tab */
+.stats-wrap { display: grid; gap: 18px; margin-top: 14px; }
+.stats-kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+@media (min-width: 540px) { .stats-kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.kpi-card {
+  padding: 12px 14px; background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 12px; display: grid; gap: 2px;
+}
+.kpi-val { font-family: var(--font-display); font-weight: 800; font-size: 38px; line-height: 1; color: var(--ink); }
+.kpi-sub { font-size: 12px; color: var(--ink-2); font-weight: 600; }
+.stat-block { padding: 14px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 14px; display: grid; gap: 10px; }
+.stat-block h4 { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .08em; color: var(--ink-2); }
+.dist-list { display: grid; gap: 6px; }
+.dist-row { display: grid; grid-template-columns: 52px minmax(0, 1fr) 42px; align-items: center; gap: 8px; font-size: 13px; }
+.dist-label { font-family: var(--font-display); font-size: 20px; font-weight: 700; text-align: right; }
+.dist-track { height: 12px; background: var(--cell); border-radius: 4px; overflow: hidden; }
+.dist-fill { height: 100%; border-radius: 4px; transition: width .25s ease; }
+.dist-cnt { font-variant-numeric: tabular-nums; color: var(--ink-2); font-size: 12.5px; text-align: right; }
+.cat-stat-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+}
+
+/* Compare Modal & Tray */
+.cmp-tray {
+  display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px;
+  border-radius: 999px; background: var(--accent); color: #fff; font-size: 13px; font-weight: 600;
+  border: 0; cursor: pointer;
+}
+.cmp-card { width: min(680px, 100%); }
+.cmp-header-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 12px; background: var(--panel-2); border-radius: 12px; }
+.cmp-col-head { display: grid; gap: 4px; text-align: center; justify-items: center; }
+.cmp-col-head h4 { font-size: 15px; font-weight: 700; }
+.cmp-table { display: grid; gap: 8px; margin-top: 8px; }
+.cmp-row {
+  display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px;
+  padding: 8px 10px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; font-size: 13.5px;
+}
+.cmp-crit-name { font-weight: 600; color: var(--ink-2); text-align: center; font-size: 12.5px; }
+.cmp-val { font-family: var(--font-display); font-size: 26px; font-weight: 700; display: flex; align-items: center; gap: 6px; }
+.cmp-val.right { justify-content: flex-end; }
+.cmp-val.win { color: var(--good); }
+
 </style></head><body>
 <title>Оценщик всего</title>
 <meta name="claude:viewport-fit-sides" content="cover">
@@ -518,7 +702,7 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
   .mnav button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
   .mnav button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   .mnav b { font-weight: 600; opacity: .6; font-variant-numeric: tabular-nums; }
-  .layout[data-section="rate"] .board, .layout[data-section="board"] .rater, .layout[data-section="log"] .rater { display: none; }
+  .layout[data-section="rate"] .board, .layout[data-section="board"] .rater, .layout[data-section="stats"] .rater, .layout[data-section="log"] .rater { display: none; }
   .board .views { display: none; }
   .board .board-head { margin-top: 0; }
 }
@@ -571,7 +755,11 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
       <p class="lede">Игры, фильмы, еда, места или что угодно своё. Создавай категории и критерии, двигай ползунки от 1 до 10, добавляй фото и заметки. Рейтинг соберётся сам, а журнал запомнит каждое изменение.</p>
     </div>
     <div class="masthead-right">
-      <div id="userBar" class="user-bar"></div>
+      <div class="user-bar">
+        <button type="button" class="cmp-tray" id="cmpTrayBtn" hidden>⚖️ Сравнить (<span id="cmpCount">0</span>/2)</button>
+        <button type="button" class="theme-btn" id="themeBtn" title="Переключить тему оформления">🌓 Тема</button>
+        <div id="userBar" class="user-bar"></div>
+      </div>
       <p class="scale"><span class="vh">Цвет итогового балла:</span>
         <span data-tier="bad"><i></i>1–4,9</span>
         <span data-tier="mid"><i></i>5–7,4</span>
@@ -582,9 +770,10 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
 
   <p class="offline-bar" id="offlineBar" role="status" hidden><strong>Сохранение здесь не работает.</strong> Страница открылась без доступа к хранилищу Claude, так бывает во встроенном браузере Telegram. Оценки пропадут после закрытия, фото и скачивание недоступны. Открой ссылку в Safari или в приложении Claude.</p>
   <div id="navAnchor" aria-hidden="true"></div>
-  <nav class="mnav" id="mnav" aria-label="Разделы">
+  <nav class="mnav" id="mnav" aria-label="Разделы" style="grid-template-columns: repeat(4, minmax(0, 1fr));">
     <button type="button" data-section="rate" aria-pressed="true">Оценка</button>
     <button type="button" data-section="board" aria-pressed="false">Рейтинг<b id="mnavCount"></b></button>
+    <button type="button" data-section="stats" aria-pressed="false">Стат.</button>
     <button type="button" data-section="log" aria-pressed="false">Журнал</button>
   </nav>
 
@@ -602,8 +791,26 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
 
       <div class="field">
         <label class="label" for="itemName">Название</label>
-        <input id="itemName" class="name-input" type="text" placeholder="Что оцениваешь?" autocomplete="off" maxlength="140" enterkeyhint="done">
+        <div class="name-row">
+          <input id="itemName" class="name-input" type="text" placeholder="Что оцениваешь?" autocomplete="off" maxlength="140" enterkeyhint="done">
+          <button type="button" class="fav-toggle" id="favBtn" aria-pressed="false" title="Добавить в избранное ★" aria-label="В избранное">★</button>
+        </div>
         <p id="nameMsg" class="field-msg" hidden></p>
+        <div class="meta-grid">
+          <div class="meta-box">
+            <span class="label">Статус</span>
+            <div class="status-chips" id="statusChips" role="group" aria-label="Статус">
+              <button type="button" class="status-chip" data-status=" Завершено" aria-pressed="false">✓ Завершено</button>
+              <button type="button" class="status-chip" data-status="В процессе" aria-pressed="false">⏳ В процессе</button>
+              <button type="button" class="status-chip" data-status="В планах" aria-pressed="false">📌 В планах</button>
+              <button type="button" class="status-chip" data-status="Брошено" aria-pressed="false">✕ Брошено</button>
+            </div>
+          </div>
+          <div class="meta-box">
+            <label class="label" for="itemMeta">Год / Жанр / Теги</label>
+            <input id="itemMeta" class="meta-input" type="text" maxlength="80" placeholder="Напр.: 2026, RPG, Кооп" autocomplete="off">
+          </div>
+        </div>
       </div>
 
       <div class="field" id="photoField" hidden>
@@ -619,8 +826,19 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
       <p class="crit-tip" id="critTip"></p>
       <div id="critArea"></div>
 
+      <div class="pc-grid">
+        <div class="pc-col">
+          <label class="label pc-label-pro" for="itemPros">➕ Плюсы (каждый с новой строки)</label>
+          <textarea id="itemPros" rows="3" maxlength="1000" placeholder="+ Крутая атмосфера&#10;+ Отличный саундтрек"></textarea>
+        </div>
+        <div class="pc-col">
+          <label class="label pc-label-con" for="itemCons">➖ Минусы (каждый с новой строки)</label>
+          <textarea id="itemCons" rows="3" maxlength="1000" placeholder="- Затянутый финал&#10;- Мелкие баги"></textarea>
+        </div>
+      </div>
+
       <div class="field">
-        <label class="label" for="itemNote">Заметки</label>
+        <label class="label" for="itemNote">Заметки и вердикт</label>
         <textarea id="itemNote" rows="4" maxlength="4000" placeholder="Впечатления, детали, что запомнилось…"></textarea>
       </div>
 
@@ -639,21 +857,39 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
     <section class="card board" aria-label="Рейтинг и журнал">
       <div class="views" id="views" role="tablist" aria-label="Разделы">
         <button type="button" class="view-tab" role="tab" id="tabBoard" data-view="board" aria-controls="panelBoard" aria-selected="true">Рейтинг</button>
+        <button type="button" class="view-tab" role="tab" id="tabStats" data-view="stats" aria-controls="panelStats" aria-selected="false" tabindex="-1">Статистика</button>
         <button type="button" class="view-tab" role="tab" id="tabLog" data-view="log" aria-controls="panelLog" aria-selected="false" tabindex="-1">Журнал</button>
       </div>
 
       <div id="panelBoard" role="tabpanel" aria-labelledby="tabBoard">
         <div class="board-head">
           <p class="board-stat" id="boardStat">Загружаю рейтинг…</p>
-          <div class="seg" id="sortGroup" role="group" aria-label="Сортировка">
-            <button type="button" data-sort="score" aria-pressed="true">По баллу</button>
-            <button type="button" data-sort="date" aria-pressed="false">Новые</button>
-            <button type="button" data-sort="name" aria-pressed="false">А–Я</button>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+            <div class="seg" id="layoutGroup" role="group" aria-label="Вид списка">
+              <button type="button" data-bmode="list" aria-pressed="true" title="Список">Список</button>
+              <button type="button" data-bmode="grid" aria-pressed="false" title="Плитка">Плитка</button>
+              <button type="button" data-bmode="tiers" aria-pressed="false" title="Тир-лист S/A/B/C/D">Тиры</button>
+            </div>
+            <div class="seg" id="sortGroup" role="group" aria-label="Сортировка">
+              <button type="button" data-sort="score" aria-pressed="true">По баллу</button>
+              <button type="button" data-sort="date" aria-pressed="false">Новые</button>
+              <button type="button" data-sort="name" aria-pressed="false">А–Я</button>
+            </div>
+            <button type="button" class="btn small ghost" id="randomBtn" title="Случайная оценка из списка" style="height:32px;padding:0 9px;">🎲</button>
           </div>
         </div>
         <div class="filters" id="filters" role="group" aria-label="Категория в рейтинге" hidden></div>
+        <div class="sub-filters" id="subFilters" role="group" aria-label="Быстрый фильтр">
+          <button type="button" class="sub-chip" data-sfilter="all" aria-pressed="true">Все уровни</button>
+          <button type="button" class="sub-chip" data-sfilter="fav" aria-pressed="false">★ Избранное</button>
+          <button type="button" class="sub-chip" data-sfilter="mine" aria-pressed="false">👤 Мои</button>
+          <button type="button" class="sub-chip" data-sfilter="master" aria-pressed="false">Шедевры 8.5+</button>
+          <button type="button" class="sub-chip" data-sfilter="good" aria-pressed="false">Хорошие 7.5+</button>
+          <button type="button" class="sub-chip" data-sfilter="mid" aria-pressed="false">Средние 5–7.4</button>
+          <button type="button" class="sub-chip" data-sfilter="bad" aria-pressed="false">Слабые &lt;5</button>
+        </div>
         <div class="search" id="searchWrap" hidden>
-          <input id="search" type="search" placeholder="Найти в рейтинге" aria-label="Найти в рейтинге" autocomplete="off" enterkeyhint="search">
+          <input id="search" type="search" placeholder="Поиск по названию, тегам, заметкам или автору…" aria-label="Найти в рейтинге" autocomplete="off" enterkeyhint="search">
         </div>
         <p class="notice" id="boardNotice" hidden></p>
         <div class="example-bar" id="exampleBar" hidden>
@@ -661,6 +897,7 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
           <button type="button" class="btn text" id="dropExamples">Убрать примеры</button>
         </div>
         <ol class="board-list" id="board" hidden></ol>
+        <div class="tier-board" id="tierBoard" hidden></div>
         <p class="no-match" id="noMatch" hidden>Ничего не нашлось.</p>
         <div class="empty" id="empty">
           <div class="ghost-rows" aria-hidden="true">
@@ -670,6 +907,10 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
           </div>
           <p><strong>Здесь появится твой рейтинг.</strong> Оцени что-нибудь, нажми «Сохранить», и оно займёт своё место по итоговому баллу.</p>
         </div>
+      </div>
+
+      <div id="panelStats" role="tabpanel" aria-labelledby="tabStats" hidden>
+        <div class="stats-wrap" id="statsContent"></div>
       </div>
 
       <div id="panelLog" role="tabpanel" aria-labelledby="tabLog" hidden>
@@ -690,7 +931,14 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
         <div id="logApp" data-stat="5 версий, последняя 25 октября" hidden>
           <div class="log-days">
             <section class="log-day">
-              <h3 class="log-date">25 октября 2026<span>версии 4–5</span></h3>
+              <h3 class="log-date">25 октября 2026<span>версии 4–6</span></h3>
+              <article class="rel">
+                <span class="rel-v">v6</span>
+                <div>
+                  <h4>Аналитика, Тир-лист, Сравнение и Веса критериев</h4>
+                  <p>Добавлена вкладка «Статистика», режим отображения в виде Плитки и Тир-листа (S–D), сравнение двух оценок бок о бок, плюсы и минусы, избранное ★, статусы, веса критериев (×0.5 / ×1 / ×2), шаблоны категорий, смена темы и резервное копирование в JSON.</p>
+                </div>
+              </article>
               <article class="rel">
                 <span class="rel-v">v5</span>
                 <div>
@@ -751,6 +999,7 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
       <p class="label" id="optsLabel">Что показать</p>
       <div class="sheet-opts" role="group" aria-labelledby="optsLabel">
         <label class="opt" id="optDescWrap"><input type="checkbox" id="optDesc">Описания критериев</label>
+        <label class="opt" id="optPcWrap"><input type="checkbox" id="optPc" checked>Плюсы и минусы</label>
         <label class="opt" id="optNotesWrap"><input type="checkbox" id="optNotes">Заметки</label>
         <label class="opt" id="optPhotoWrap"><input type="checkbox" id="optPhoto">Фото</label>
       </div>
@@ -763,6 +1012,22 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
     </div>
     <p class="sheet-hint" id="sheetHint">Картинку можно сохранить и вручную: удерживай на ней палец или нажми правой кнопкой мыши.</p>
     <textarea id="sheetText" class="sheet-text" readonly hidden aria-label="Оценка текстом"></textarea>
+  </div>
+</div>
+
+
+<div class="sheet" id="compareModal" hidden>
+  <div class="sheet-card cmp-card" role="dialog" aria-modal="true" aria-labelledby="cmpTitle">
+    <div class="sheet-head">
+      <h3 id="cmpTitle">⚖️ Сравнение оценок</h3>
+      <div style="display:flex;gap:6px;">
+        <button type="button" class="btn small ghost" id="cmpClearBtn">Сбросить</button>
+        <button type="button" class="mini-btn" id="cmpClose" aria-label="Закрыть">
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+        </button>
+      </div>
+    </div>
+    <div id="cmpBody"></div>
   </div>
 </div>
 
@@ -806,6 +1071,45 @@ const NEW_CAT_CRITERIA = [
   { name: 'Качество', desc: 'Исполнение и внимание к деталям' },
   { name: 'Цена и ценность', desc: 'Стоит ли своих денег и времени' }
 ];
+
+const CAT_TEMPLATES = [
+  { name: 'Музыка и альбомы', criteria: [
+    { name: 'Звучание и продакшн', desc: 'Сведение, аранжировки, звук', w: 1 },
+    { name: 'Мелодии и хуки', desc: 'Насколько заедает в голове', w: 1 },
+    { name: 'Тексты и смысл', desc: 'Лирика, образы, подача', w: 1 },
+    { name: 'Атмосфера и стиль', desc: 'Цельность настроения', w: 1 },
+    { name: 'Репит-потенциал', desc: 'Хочется ли переслушивать', w: 1 }
+  ]},
+  { name: 'Книги', criteria: [
+    { name: 'Сюжет и интрига', desc: 'Динамика и развитие истории', w: 1 },
+    { name: 'Персонажи', desc: 'Глубина и развитие героев', w: 1 },
+    { name: 'Язык и стиль', desc: 'Как легко и приятно читать', w: 1 },
+    { name: 'Идеи и глубина', desc: 'Мысли и послевкусие', w: 1 },
+    { name: 'Концовка', desc: 'Насколько удался финал', w: 1 }
+  ]},
+  { name: 'Еда и заведения', criteria: [
+    { name: 'Вкус блюд', desc: 'Главное впечатление от кухни', w: 2 },
+    { name: 'Качество продуктов', desc: 'Свежесть и подача', w: 1 },
+    { name: 'Сервис', desc: 'Скорость и вежливость', w: 1 },
+    { name: 'Интерьер и уют', desc: 'Атмосфера места', w: 1 },
+    { name: 'Цена / качество', desc: 'Оправдан ли чек', w: 1 }
+  ]},
+  { name: 'Аниме и манга', criteria: [
+    { name: 'Сюжет и лор', desc: 'Мир и интрига', w: 1 },
+    { name: 'Рисовка и анимация', desc: 'Дизайн, сакуга, экшен', w: 1 },
+    { name: 'Персонажи', desc: 'Харизма и химия героев', w: 1 },
+    { name: 'ОСТ и сейю', desc: 'Опенинги, музыка, озвучка', w: 1 },
+    { name: 'Эмоции', desc: 'Насколько сильно цепляет', w: 1 }
+  ]},
+  { name: 'Гаджеты и техника', criteria: [
+    { name: 'Дизайн и сборка', desc: 'Материалы и эргономика', w: 1 },
+    { name: 'Экран / Звук', desc: 'Качество мультимедиа', w: 1 },
+    { name: 'Производительность', desc: 'Скорость и стабильность работы', w: 2 },
+    { name: 'Автономность', desc: 'Батарея и зарядка', w: 1 },
+    { name: 'Цена и ценность', desc: 'Конкурентоспособность', w: 1 }
+  ]}
+];
+
 const MAX_CATS = 24;
 const MAX_CRIT = 15;
 const DRAFT_KEY = 'ocenshik.draft.v2';
@@ -847,29 +1151,35 @@ function randomAvatarColor(name) {
 const STARTER_RATINGS = [
   {
     id: 'ex-witcher3', cat: 'games', catName: 'Игры', name: 'The Witcher 3: Wild Hunt',
+    fav: true, status: '✓ Завершено', meta: '2015 · RPG, Открытый мир',
+    pros: 'Выдающиеся побочные квесты\nЖивой и атмосферный мир\nШикарные дополнения Hearts of Stone и Blood and Wine',
+    cons: 'Плотва иногда застревает в заборах',
     scores: [
-      { id: 'g-gameplay', name: 'Геймплей', v: 9, note: 'Увлекательные бои и охота на чудовищ' },
-      { id: 'g-story', name: 'Сюжет', v: 10, note: 'Один из лучших сюжетов и квестов в жанре' },
-      { id: 'g-visuals', name: 'Графика', v: 9, note: 'Прекрасный визуальный стиль' },
-      { id: 'g-audio', name: 'Звук и музыка', v: 10, note: 'Невероятный саундтрек' },
-      { id: 'g-atmosphere', name: 'Атмосфера', v: 10 },
-      { id: 'g-replay', name: 'Реиграбельность', v: 8 },
-      { id: 'g-tech', name: 'Техническое состояние', v: 8 }
+      { id: 'g-gameplay', name: 'Геймплей', v: 9, w: 1, note: 'Увлекательные бои и охота на чудовищ' },
+      { id: 'g-story', name: 'Сюжет', v: 10, w: 1, note: 'Один из лучших сюжетов и квестов в жанре' },
+      { id: 'g-visuals', name: 'Графика', v: 9, w: 1, note: 'Прекрасный визуальный стиль' },
+      { id: 'g-audio', name: 'Звук и музыка', v: 10, w: 1, note: 'Невероятный саундтрек' },
+      { id: 'g-atmosphere', name: 'Атмосфера', v: 10, w: 1 },
+      { id: 'g-replay', name: 'Реиграбельность', v: 9, w: 1 },
+      { id: 'g-tech', name: 'Техническое состояние', v: 8, w: 1 }
     ],
-    note: 'Шедевр на все времена.', example: true,
+    note: 'Шедевр на все времена, эталон сюжетных ролевых игр.', example: true,
     author: { name: 'Гость' }
   },
   {
     id: 'ex-interstellar', cat: 'films', catName: 'Фильмы и сериалы', name: 'Интерстеллар (Interstellar)',
+    fav: true, status: '✓ Завершено', meta: '2014 · Научная фантастика, Драма',
+    pros: 'Мощнейший эмоциональный заряд\nГениальный саундтрек Ханса Циммера\nВизуализация космоса и Гаргантюа',
+    cons: 'Хронометраж почти 3 часа пролетает слишком быстро',
     scores: [
-      { id: 'f-story', name: 'Сюжет', v: 10, note: 'Грандиозная научная фантастика' },
-      { id: 'f-acting', name: 'Актёрская игра', v: 10, note: 'Мэттью Макконахи на высоте' },
-      { id: 'f-direction', name: 'Режиссура', v: 10, note: 'Кристофер Нолан' },
-      { id: 'f-visuals', name: 'Визуал', v: 10, note: 'Визуализация черной дыры' },
-      { id: 'f-music', name: 'Музыка и звук', v: 10, note: 'Ханс Циммер — орган великолепен' },
-      { id: 'f-rewatch', name: 'Пересматриваемость', v: 9 }
+      { id: 'f-story', name: 'Сюжет', v: 10, w: 1, note: 'Грандиозная научная фантастика' },
+      { id: 'f-acting', name: 'Актёрская игра', v: 10, w: 1, note: 'Мэттью Макконахи на высоте' },
+      { id: 'f-direction', name: 'Режиссура', v: 10, w: 1, note: 'Кристофер Нолан' },
+      { id: 'f-visuals', name: 'Визуал', v: 10, w: 1, note: 'Визуализация черной дыры' },
+      { id: 'f-music', name: 'Музыка и звук', v: 10, w: 1, note: 'Ханс Циммер — орган великолепен' },
+      { id: 'f-rewatch', name: 'Пересматриваемость', v: 9, w: 1 }
     ],
-    note: 'Один из самых сильных фильмов десятилетия.', example: true,
+    note: 'Один из самых сильных научно-фантастических фильмов в истории кино.', example: true,
     author: { name: 'Гость' }
   }
 ];
@@ -1208,7 +1518,14 @@ let idSeq = 0;
 function newId(p) { idSeq = (idSeq + 1) % 1296; return p + Date.now().toString(36) + idSeq.toString(36) + Math.random().toString(36).slice(2, 6); }
 function totalOf(scores) {
   const r = scores.filter(s => s.v > 0);
-  return r.length ? round1(r.reduce((a, s) => a + s.v, 0) / r.length) : null;
+  if (!r.length) return null;
+  let sum = 0, wSum = 0;
+  for (const s of r) {
+    const w = (typeof s.w === 'number' && s.w > 0) ? s.w : 1;
+    sum += s.v * w;
+    wSum += w;
+  }
+  return wSum ? round1(sum / wSum) : null;
 }
 function critWord(n) { return plural(n, 'критерий', 'критерия', 'критериев'); }
 function coverage(n, N) {
@@ -1254,7 +1571,15 @@ const el = {
   layout: $('layout'), mnav: $('mnav'), mnavCount: $('mnavCount'), navAnchor: $('navAnchor'),
   offlineBar: $('offlineBar'),
   userBar: $('userBar'), authModal: $('authModal'), authClose: $('authClose'), authBody: $('authBody'),
-  authTitle: $('authTitle')
+  authTitle: $('authTitle'),
+  themeBtn: $('themeBtn'), cmpTrayBtn: $('cmpTrayBtn'), cmpCount: $('cmpCount'),
+  favBtn: $('favBtn'), statusChips: $('statusChips'), meta: $('itemMeta'),
+  pros: $('itemPros'), cons: $('itemCons'),
+  tabStats: $('tabStats'), panelStats: $('panelStats'), statsContent: $('statsContent'),
+  layoutGroup: $('layoutGroup'), subFilters: $('subFilters'), randomBtn: $('randomBtn'),
+  tierBoard: $('tierBoard'),
+  optPc: $('optPc'), optPcWrap: $('optPcWrap'),
+  compareModal: $('compareModal'), cmpClose: $('cmpClose'), cmpClearBtn: $('cmpClearBtn'), cmpBody: $('cmpBody')
 };
 
 /* ---------- State ---------- */
@@ -1266,15 +1591,17 @@ const state = {
   ratings: [],
   cats: clone(STARTERS),
   editCat: false, catDelConfirm: false,
-  sort: 'score', filter: 'all', query: '',
+  sort: 'score', filter: 'all', sfilter: 'all', bmode: 'list', query: '',
+  theme: 'auto', cmpIds: [],
   open: new Set(), confirmDel: null, flashId: null, saving: false,
-  exportOpts: { desc: true, notes: true, photo: true },
+  exportOpts: { desc: true, pc: true, notes: true, photo: true },
   view: 'board', logTab: 'mine', section: 'rate'
 };
 function blankForm(cat) {
   return {
     editingId: null, cat: cat || (state.cats[0] ? state.cats[0].id : 'games'),
-    name: '', note: '', scores: {}, notes: {}, openNotes: {}, extra: [], extraCatName: '', photo: null
+    name: '', fav: false, status: '', meta: '', pros: '', cons: '',
+    note: '', scores: {}, notes: {}, openNotes: {}, extra: [], extraCatName: '', photo: null
   };
 }
 let form = blankForm();
@@ -1285,19 +1612,20 @@ let ready = Promise.resolve();
 function currentCat() { return state.cats.find(c => c.id === form.cat) || null; }
 function formRows() {
   const cat = currentCat();
-  const rows = cat ? cat.criteria.map(c => ({ id: c.id, name: c.name, desc: c.desc || '', extra: false })) : [];
+  const rows = cat ? cat.criteria.map(c => ({ id: c.id, name: c.name, desc: c.desc || '', w: c.w || 1, extra: false })) : [];
   const ids = new Set(rows.map(r => r.id));
   for (const x of form.extra) {
-    if (!ids.has(x.id)) { rows.push({ id: x.id, name: x.name, desc: x.desc || '', extra: true }); ids.add(x.id); }
+    if (!ids.has(x.id)) { rows.push({ id: x.id, name: x.name, desc: x.desc || '', w: x.w || 1, extra: true }); ids.add(x.id); }
   }
   return rows;
 }
 function collectScores(rows) {
   return rows
-    .map((r, i) => ({ id: r.id, name: r.name.trim() || `Критерий ${i + 1}`, desc: (r.desc || '').trim().slice(0, 120), v: form.scores[r.id] || 0, note: (form.notes[r.id] || '').trim().slice(0, 160) }))
+    .map((r, i) => ({ id: r.id, name: r.name.trim() || `Критерий ${i + 1}`, desc: (r.desc || '').trim().slice(0, 120), w: r.w || 1, v: form.scores[r.id] || 0, note: (form.notes[r.id] || '').trim().slice(0, 160) }))
     .filter(s => s.v > 0 || s.note)
     .map(s => {
       const o = { id: s.id, name: s.name, v: s.v };
+      if (s.w && s.w !== 1) o.w = s.w;
       if (s.desc) o.desc = s.desc;
       if (s.note) o.note = s.note;
       return o;
@@ -1356,9 +1684,10 @@ function critRowHTML(r) {
   const note = form.notes[r.id] || '';
   const open = !!note || !!form.openNotes[r.id];
   const nid = 'cn-' + r.id;
+  const wBadge = (r.w && r.w !== 1) ? `<span class="crit-w-badge" title="Вес критерия ×${r.w}">×${r.w}</span>` : '';
   return `<li class="crit" data-id="${esc(r.id)}" data-tier="${tierV(v)}">
 <div class="crit-top">
-<div class="crit-name"><span class="crit-title" id="${esc(nid)}">${esc(r.name.trim() || 'Без названия')}</span>${r.desc ? `<span class="crit-desc">${esc(r.desc)}</span>` : ''}</div>
+<div class="crit-name"><span class="crit-title" id="${esc(nid)}">${esc(r.name.trim() || 'Без названия')}${wBadge}</span>${r.desc ? `<span class="crit-desc">${esc(r.desc)}</span>` : ''}</div>
 <button type="button" class="mini-btn${note.trim() ? ' has' : ''}" data-act="note" aria-expanded="${open}" aria-controls="cnote-${esc(r.id)}" aria-label="Заметка к критерию «${esc(r.name)}»" title="Заметка к критерию">${ICON.note}</button>
 <button type="button" class="mini-btn" data-act="clear" aria-label="Сбросить оценку «${esc(r.name)}»" title="Сбросить"${v ? '' : ' hidden'}>${ICON.x}</button>
 <span class="crit-val" aria-hidden="true">${v || '—'}</span>
@@ -1370,24 +1699,30 @@ function critRowHTML(r) {
 function editorHTML(cat) {
   const n = cat.criteria.length;
   const starter = STARTERS.some(s => s.id === cat.id);
-  const items = cat.criteria.map((c, i) => `<li class="ed-item" data-id="${esc(c.id)}">
+  const tpls = CAT_TEMPLATES.map((t, idx) => `<button type="button" class="tpl-btn" data-act="apply-tpl" data-tpl="${idx}">${esc(t.name)}</button>`).join('');
+  const items = cat.criteria.map((c, i) => {
+    const w = c.w || 1;
+    return `<li class="ed-item" data-id="${esc(c.id)}">
 <span class="ed-num" aria-hidden="true">${i + 1}</span>
 <div class="ed-fields">
 <input class="ed-input ed-name" id="edn-${esc(c.id)}" data-act="cname" type="text" maxlength="40" enterkeyhint="next" value="${esc(c.name)}" placeholder="Название критерия" aria-label="Критерий ${i + 1}, название">
 <textarea class="ed-input ed-desc" id="edd-${esc(c.id)}" data-act="cdesc" rows="1" maxlength="120" enterkeyhint="next" placeholder="Описание, по желанию" aria-label="Критерий ${i + 1}, описание">${esc(c.desc || '')}</textarea>
 </div>
 <div class="ed-tools">
+<button type="button" class="ed-w-btn${w !== 1 ? ' active' : ''}" data-act="cweight" title="Вес критерия в итоге (нажми для смены: ×1 → ×2 → ×0.5)">×${w}</button>
 <button type="button" class="mini-btn" data-act="up" aria-label="Поднять критерий ${i + 1}"${i === 0 ? ' disabled' : ''}>${ICON.up}</button>
 <button type="button" class="mini-btn" data-act="down" aria-label="Опустить критерий ${i + 1}"${i === n - 1 ? ' disabled' : ''}>${ICON.down}</button>
 <button type="button" class="mini-btn del" data-act="delcrit" aria-label="Удалить критерий ${i + 1}"${n <= 1 ? ' disabled' : ''}>${ICON.trash}</button>
 </div>
-</li>`).join('');
+</li>`;
+  }).join('');
   const danger = state.catDelConfirm
     ? `<div class="ed-confirm"><span>Удалить категорию «${esc(cat.name)}»? Сохранённые оценки останутся в рейтинге.</span><button type="button" class="btn small danger-solid" data-act="catdel-yes">Удалить</button><button type="button" class="btn small ghost" data-act="catdel-no">Отмена</button></div>`
     : `<div class="ed-actions"><button type="button" class="btn small ghost danger" data-act="catdel"${state.cats.length <= 1 ? ' disabled title="Нужна хотя бы одна категория"' : ''}>${ICON.trash}Удалить категорию</button></div>`;
   return `<div class="editor">
+<div class="tpl-box"><span class="label">Быстрые шаблоны критериев</span><div class="tpl-list">${tpls}</div></div>
 <div><label class="label" for="catNameInput">Название категории</label><input class="ed-input ed-cat" id="catNameInput" data-act="catname" type="text" maxlength="40" enterkeyhint="next" value="${esc(cat.name)}" placeholder="Например, Кофейни"></div>
-<div><p class="label">Критерии · ${n} из ${MAX_CRIT}</p><ul class="ed-list">${items}</ul></div>
+<div><p class="label">Критерии · ${n} из ${MAX_CRIT} (кнопка ×1 меняет вес критерия)</p><ul class="ed-list">${items}</ul></div>
 <div class="ed-actions">
 <button type="button" class="btn small ghost" data-act="addcrit"${n >= MAX_CRIT ? ' disabled' : ''}>${ICON.plus}Добавить критерий</button>
 ${starter ? '<button type="button" class="btn small text" data-act="resetcat">Вернуть стандартные</button>' : ''}
@@ -1435,12 +1770,12 @@ function updateRow(id) {
 }
 function updateTotal() {
   const rows = formRows();
-  const vals = rows.map(r => form.scores[r.id] || 0).filter(v => v > 0);
-  const t = vals.length ? round1(vals.reduce((a, b) => a + b, 0) / vals.length) : null;
+  const ratedRows = rows.filter(r => (form.scores[r.id] || 0) > 0);
+  const t = ratedRows.length ? totalOf(ratedRows.map(r => ({ v: form.scores[r.id], w: r.w || 1 }))) : null;
   el.total.dataset.tier = tierT(t);
   el.totalNum.textContent = t == null ? '—' : fmt(t);
   el.verdict.textContent = t == null ? 'Пока без оценки' : verdict(t);
-  el.totalSub.textContent = t == null ? 'Подвинь хотя бы один ползунок' : coverage(vals.length, rows.length);
+  el.totalSub.textContent = t == null ? 'Подвинь хотя бы один ползунок' : coverage(ratedRows.length, rows.length);
   el.total.classList.remove('nudge');
 }
 function updateHead() {
@@ -1474,6 +1809,15 @@ function updateNameState(err) {
 function renderForm() {
   if (el.name.value !== form.name) el.name.value = form.name;
   if (el.note.value !== form.note) el.note.value = form.note;
+  if (el.meta && el.meta.value !== (form.meta || '')) el.meta.value = form.meta || '';
+  if (el.pros && el.pros.value !== (form.pros || '')) el.pros.value = form.pros || '';
+  if (el.cons && el.cons.value !== (form.cons || '')) el.cons.value = form.cons || '';
+  if (el.favBtn) el.favBtn.setAttribute('aria-pressed', String(!!form.fav));
+  if (el.statusChips) {
+    el.statusChips.querySelectorAll('button[data-status]').forEach(b => {
+      b.setAttribute('aria-pressed', String(b.dataset.status.trim() === (form.status || '').trim() && !!form.status));
+    });
+  }
   autoGrow(el.note);
   renderCats();
   renderPhoto();
@@ -1519,37 +1863,104 @@ function computeRanks(list) {
   });
   return m;
 }
+function resolvePhotoUrl(p) {
+  if (!p) return '';
+  if (p.data) return p.data;
+  if (p.url) return p.url;
+  if (p.id && (p.id.startsWith('data:') || p.id.startsWith('blob:') || p.id.startsWith('http://') || p.id.startsWith('https://'))) return p.id;
+  return '/_blob/' + p.id;
+}
+function splitLines(txt) {
+  return String(txt || '').split(/\r?\n/).map(s => s.replace(/^[+\-•*]\s*/, '').trim()).filter(Boolean);
+}
 function entryHTML(r, rank, showCat) {
   const t = r.total;
   const n = r.scores.filter(s => s.v > 0).length;
-  const notes = !!r.note || r.scores.some(s => s.note);
+  const notes = !!r.note || !!r.pros || !!r.cons || r.scores.some(s => s.note);
   const meta = [t != null ? verdict(t) : 'Без оценки', `${n} ${critWord(n)}`, fmtDate(stamp(r))].filter(Boolean).join(' · ');
   const spark = r.scores.map(s => `<i data-tier="${tierV(s.v)}" data-v="${s.v}"></i>`).join('');
-  const bd = r.scores.map(s => `<li data-tier="${tierV(s.v)}"><span class="bd-name">${esc(s.name)}</span><span class="bd-bar" aria-hidden="true">${cellsHTML(s.v, 'bc', false)}</span><b class="bd-v">${s.v || '—'}</b>${s.note ? `<span class="bd-note">${esc(s.note)}</span>` : ''}</li>`).join('');
+  const bd = r.scores.map(s => `<li data-tier="${tierV(s.v)}"><span class="bd-name">${esc(s.name)}${s.w && s.w !== 1 ? ` <small class="crit-w-badge">×${s.w}</small>` : ''}</span><span class="bd-bar" aria-hidden="true">${cellsHTML(s.v, 'bc', false)}</span><b class="bd-v">${s.v || '—'}</b>${s.note ? `<span class="bd-note">${esc(s.note)}</span>` : ''}</li>`).join('');
+  const prosList = splitLines(r.pros);
+  const consList = splitLines(r.cons);
+  const pcHTML = (prosList.length || consList.length)
+    ? `<div class="e-pc-grid">
+        ${prosList.length ? `<div class="e-pc-box pro"><span class="label pc-label-pro">➕ Плюсы</span><ul>${prosList.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
+        ${consList.length ? `<div class="e-pc-box con"><span class="label pc-label-con">➖ Минусы</span><ul>${consList.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
+      </div>`
+    : '';
+  const inCmp = state.cmpIds.includes(r.id);
   const confirming = state.confirmDel === r.id;
   const actions = confirming
     ? `<span class="confirm-q">Удалить «${esc(r.name)}» из рейтинга?</span><button type="button" class="btn small danger-solid" data-act="del-yes">Удалить</button><button type="button" class="btn small ghost" data-act="del-no">Отмена</button>`
     : (state.canWrite ? `<button type="button" class="btn small ghost" data-act="edit">${ICON.edit}Изменить</button>` : '')
+      + (state.canWrite ? `<button type="button" class="btn small ghost" data-act="fav-card" title="В избранное">${r.fav ? '★ В избранном' : '☆ В избранное'}</button>` : '')
+      + `<button type="button" class="btn small ghost${inCmp ? ' primary' : ''}" data-act="cmp">${inCmp ? '⚖️ Выбрано' : '⚖️ Сравнить'}</button>`
       + `<button type="button" class="btn small ghost" data-act="share">${ICON.share}Экспорт</button>`
       + (state.canWrite ? `<button type="button" class="btn small ghost danger" data-act="del">${ICON.trash}Удалить</button>` : '');
+  const pUrl = resolvePhotoUrl(r.photo);
   return `<li class="entry${state.flashId === r.id ? ' flash' : ''}" data-id="${esc(r.id)}">
 <details${state.open.has(r.id) ? ' open' : ''}>
 <summary><span class="sum">
 <span class="rank">${rank == null ? '—' : rank}</span>
-<span class="e-main">${r.photo ? `<img class="e-thumb" data-photo="thumb" src="${esc(r.photo.data || (r.photo.id && (r.photo.id.startsWith('data:') || r.photo.id.startsWith('blob:')) ? r.photo.id : '/_blob/' + r.photo.id))}" alt="" loading="lazy" decoding="async">` : ''}<span class="e-text"><span class="e-name">${esc(r.name)}</span><span class="e-sub"><span>${esc(meta)}</span>${showCat ? `<span class="tag">${esc(catNameOf(r))}</span>` : ''}${r.author && r.author.name ? `<span class="tag author-tag">👤 ${esc(r.author.name)}</span>` : ''}${r.example ? '<span class="tag ex">пример</span>' : ''}${notes ? `<span class="has-note" title="Есть заметки">${ICON.noteSm}<span class="vh">есть заметки</span></span>` : ''}</span></span></span>
+<span class="e-main">${pUrl ? `<img class="e-thumb" data-photo="thumb" src="${esc(pUrl)}" alt="" loading="lazy" decoding="async">` : ''}<span class="e-text"><span class="e-name">${r.fav ? '<span class="fav-star-inline" title="В избранном">★</span>' : ''}${esc(r.name)}</span><span class="e-sub"><span>${esc(meta)}</span>${showCat ? `<span class="tag">${esc(catNameOf(r))}</span>` : ''}${r.status ? `<span class="tag status-tag">${esc(r.status)}</span>` : ''}${r.meta ? `<span class="tag meta-tag">${esc(r.meta)}</span>` : ''}${r.author && r.author.name ? `<span class="tag author-tag">👤 ${esc(r.author.name)}</span>` : ''}${r.example ? '<span class="tag ex">пример</span>' : ''}${notes ? `<span class="has-note" title="Есть заметки">${ICON.noteSm}<span class="vh">есть заметки</span></span>` : ''}</span></span></span>
 <span class="spark" aria-hidden="true">${spark}</span>
 <span class="badge" data-tier="${tierT(t)}">${t != null ? fmt(t) : '—'}</span>
 ${ICON.chev}
 </span></summary>
 <div class="e-body">
-${r.photo ? `<img class="e-photo" data-photo="body" src="${esc(r.photo.data || (r.photo.id && (r.photo.id.startsWith('data:') || r.photo.id.startsWith('blob:')) ? r.photo.id : '/_blob/' + r.photo.id))}" alt="Фото: ${esc(r.name)}" loading="lazy" decoding="async"${r.photo.w && r.photo.h ? ` width="${r.photo.w}" height="${r.photo.h}"` : ''}>` : ''}
+${pUrl ? `<img class="e-photo" data-photo="body" src="${esc(pUrl)}" alt="Фото: ${esc(r.name)}" loading="lazy" decoding="async"${r.photo.w && r.photo.h ? ` width="${r.photo.w}" height="${r.photo.h}"` : ''}>` : ''}
 <ul class="bd">${bd}</ul>
+${pcHTML}
 ${r.note ? `<div class="e-note"><span class="label">Заметки</span><p>${esc(r.note)}</p></div>` : ''}
 ${histHTML(r)}
 <div class="e-actions">${actions}</div>
 </div>
 </details>
 </li>`;
+}
+function renderTierBoard(list) {
+  if (!el.tierBoard) return;
+  const tiers = [
+    { id: 'S', label: 'S', min: 9.2, col: 'var(--good)' },
+    { id: 'A', label: 'A', min: 8.2, col: 'color-mix(in srgb, var(--good) 75%, var(--mid))' },
+    { id: 'B', label: 'B', min: 7.0, col: 'var(--mid)' },
+    { id: 'C', label: 'C', min: 5.0, col: 'color-mix(in srgb, var(--mid) 65%, var(--bad))' },
+    { id: 'D', label: 'D', min: -1,  col: 'var(--bad)' }
+  ];
+  const buckets = new Map(tiers.map(t => [t.id, []]));
+  for (const r of [...list].sort(byScore)) {
+    const val = r.total != null ? r.total : 0;
+    const t = tiers.find(x => val >= x.min) || tiers[tiers.length - 1];
+    buckets.get(t.id).push(r);
+  }
+  el.tierBoard.innerHTML = tiers.map(t => {
+    const items = buckets.get(t.id);
+    const itemsHTML = items.length
+      ? items.map(r => {
+          const pUrl = resolvePhotoUrl(r.photo);
+          return `<button type="button" class="tier-item" data-tier-goto="${esc(r.id)}" title="${esc(r.name)} (${r.total != null ? fmt(r.total) : '—'})">
+            ${pUrl ? `<img src="${esc(pUrl)}" alt="">` : ''}
+            <span>${r.fav ? '★ ' : ''}${esc(r.name)}</span>
+            <b>${r.total != null ? fmt(r.total) : '—'}</b>
+          </button>`;
+        }).join('')
+      : `<span style="font-size:12.5px;color:var(--ink-3);padding-left:4px;">Пусто</span>`;
+    return `<div class="tier-row">
+      <div class="tier-head" style="--tier-bg:${t.col}">${t.label}</div>
+      <div class="tier-items">${itemsHTML}</div>
+    </div>`;
+  }).join('');
+}
+function applySubFilter(list) {
+  switch (state.sfilter) {
+    case 'fav': return list.filter(r => r.fav);
+    case 'mine': return list.filter(r => state.user ? (r.author && r.author.id === state.user.id) : (r.author && r.author.name === 'Гость'));
+    case 'master': return list.filter(r => r.total != null && r.total >= 8.5);
+    case 'good': return list.filter(r => r.total != null && r.total >= 7.5);
+    case 'mid': return list.filter(r => r.total != null && r.total >= 5 && r.total < 7.5);
+    case 'bad': return list.filter(r => r.total != null && r.total < 5);
+    default: return list;
+  }
 }
 function renderBoard() {
   const gs = groups();
@@ -1560,24 +1971,51 @@ function renderBoard() {
     ? `<button type="button" class="chip-btn" data-filter="all" aria-pressed="${state.filter === 'all'}">Все <b>${state.ratings.length}</b></button>`
       + gs.map(g => `<button type="button" class="chip-btn" data-filter="${esc(g.id)}" aria-pressed="${state.filter === g.id}">${esc(g.name)} <b>${g.n}</b></button>`).join('')
     : '';
-  const pool = state.filter === 'all' ? state.ratings : state.ratings.filter(r => (r.cat || '__none') === state.filter);
+  if (el.subFilters) {
+    el.subFilters.hidden = state.ratings.length < 1;
+    el.subFilters.querySelectorAll('button[data-sfilter]').forEach(b => {
+      b.setAttribute('aria-pressed', String(b.dataset.sfilter === state.sfilter));
+    });
+  }
+  if (el.layoutGroup) {
+    el.layoutGroup.querySelectorAll('button[data-bmode]').forEach(b => {
+      b.setAttribute('aria-pressed', String(b.dataset.bmode === state.bmode));
+    });
+  }
+  const catPool = state.filter === 'all' ? state.ratings : state.ratings.filter(r => (r.cat || '__none') === state.filter);
+  const pool = applySubFilter(catPool);
   const rated = pool.filter(r => r.total != null);
   const avg = rated.length ? round1(rated.reduce((a, r) => a + r.total, 0) / rated.length) : null;
   el.boardStat.textContent = !state.loaded ? 'Загружаю рейтинг…'
     : !state.ratings.length ? 'Пока ни одной оценки'
     : `${pool.length} ${plural(pool.length, 'оценка', 'оценки', 'оценок')}` + (avg != null ? ` · средний балл ${fmt(avg)}` : '');
-  el.searchWrap.hidden = state.ratings.length < 6;
+  el.searchWrap.hidden = state.ratings.length < 2;
   if (el.searchWrap.hidden && state.query) { state.query = ''; el.search.value = ''; }
   const q = keyOf(state.query);
   const ranks = computeRanks(pool);
-  const list = sortList(pool).filter(r => !q || r.nameKey.includes(q));
+  const list = sortList(pool).filter(r => {
+    if (!q) return true;
+    const hay = [r.nameKey, keyOf(r.meta), keyOf(r.status), keyOf(r.note), keyOf(r.pros), keyOf(r.cons), keyOf(r.author && r.author.name)].join(' ');
+    return hay.includes(q);
+  });
   const showCat = state.filter === 'all' && showFilters;
-  el.board.innerHTML = list.map(r => entryHTML(r, ranks.get(r.id), showCat)).join('');
-  el.board.hidden = !list.length;
-  el.noMatch.hidden = !(pool.length && !list.length);
+  const isTiers = state.bmode === 'tiers';
+  el.board.classList.toggle('grid-mode', state.bmode === 'grid');
+  if (isTiers) {
+    el.board.hidden = true;
+    el.tierBoard.hidden = !list.length;
+    renderTierBoard(list);
+  } else {
+    if (el.tierBoard) el.tierBoard.hidden = true;
+    el.board.innerHTML = list.map(r => entryHTML(r, ranks.get(r.id), showCat)).join('');
+    el.board.hidden = !list.length;
+  }
+  el.noMatch.hidden = !((catPool.length > 0) && !list.length);
   el.empty.hidden = state.ratings.length > 0;
   el.exampleBar.hidden = !(state.canWrite && state.ratings.some(r => r.example));
   el.mnavCount.textContent = state.ratings.length ? String(state.ratings.length) : '';
+  renderStats();
+  updateCmpTray();
   if (pendingFocus) {
     const t = el.board.querySelector(pendingFocus);
     pendingFocus = null;
@@ -1631,9 +2069,14 @@ function loadIntoForm(r) {
   form.cat = r.cat;
   form.editingId = r.id;
   form.name = r.name;
+  form.fav = !!r.fav;
+  form.status = r.status || '';
+  form.meta = r.meta || '';
+  form.pros = r.pros || '';
+  form.cons = r.cons || '';
   form.note = r.note || '';
   form.extraCatName = r.catName || '';
-  form.photo = r.photo ? { kind: 'saved', id: r.photo.id, w: r.photo.w, h: r.photo.h } : null;
+  form.photo = r.photo ? { kind: 'saved', id: r.photo.id, data: r.photo.data || '', w: r.photo.w, h: r.photo.h } : null;
   for (const s of r.scores) {
     if (s.v > 0) form.scores[s.id] = s.v;
     if (s.note) form.notes[s.id] = s.note;
@@ -1744,6 +2187,11 @@ async function save() {
     cat: form.cat,
     catName: cat ? (cat.name.trim() || 'Без названия') : (form.extraCatName || (target && target.catName) || 'Без категории'),
     name, nameKey: keyOf(name), scores, total: t,
+    fav: !!form.fav,
+    status: (form.status || '').trim().slice(0, 40),
+    meta: (form.meta || '').trim().slice(0, 80),
+    pros: (form.pros || '').trim().slice(0, 1000),
+    cons: (form.cons || '').trim().slice(0, 1000),
     note: form.note.trim().slice(0, 4000),
     example: false,
     createdAt: (target && target.createdAt) || now,
@@ -1757,12 +2205,11 @@ async function save() {
     await ready;
     let photo = null;
     if (p && p.kind === 'new') {
-      if (!state.assets) throw { code: 'photo_off' };
       try { uploaded = await uploadPhoto(p.blob); }
       catch (err) { handleAssetError(err); return; }
-      photo = { id: uploaded.id, w: p.w, h: p.h };
+      photo = { id: uploaded.id, data: uploaded.data || '', w: p.w, h: p.h };
     } else if (p && p.kind === 'saved') {
-      photo = { id: p.id, w: p.w || 0, h: p.h || 0 };
+      photo = { id: p.id, data: p.data || '', w: p.w || 0, h: p.h || 0 };
     } else if (!p && !form.editingId && target && target.photo) {
       photo = target.photo;
     }
@@ -1830,10 +2277,19 @@ function normalizeRating(id, d) {
   const scores = (Array.isArray(d.scores) ? d.scores : [])
     .filter(s => s && typeof s.id === 'string' && typeof s.name === 'string')
     .slice(0, 40)
-    .map(s => ({ id: s.id, name: s.name.slice(0, 60), desc: str(s.desc).slice(0, 120), v: clampInt(s.v, 0, 10), note: str(s.note).slice(0, 200) }));
+    .map(s => ({
+      id: s.id, name: s.name.slice(0, 60), desc: str(s.desc).slice(0, 120),
+      w: (typeof s.w === 'number' && [0.5, 1, 2].includes(s.w)) ? s.w : 1,
+      v: clampInt(s.v, 0, 10), note: str(s.note).slice(0, 200)
+    }));
   return {
     id, cat: str(d.cat), catName: str(d.catName).slice(0, 60),
     name: d.name.slice(0, 140), nameKey: keyOf(d.name), scores, total: totalOf(scores),
+    fav: d.fav === true,
+    status: str(d.status).slice(0, 40),
+    meta: str(d.meta).slice(0, 80),
+    pros: str(d.pros).slice(0, 1000),
+    cons: str(d.cons).slice(0, 1000),
     note: str(d.note).slice(0, 4000), example: d.example === true,
     author: (d.author && typeof d.author === 'object') ? { id: str(d.author.id), name: str(d.author.name) } : null,
     photo: normPhoto(d.photo),
@@ -1850,7 +2306,7 @@ function parseCats(d) {
     for (const k of c.criteria.slice(0, MAX_CRIT)) {
       if (!k || typeof k.id !== 'string' || seen.has(k.id)) continue;
       seen.add(k.id);
-      crit.push({ id: k.id, name: str(k.name).slice(0, 40), desc: str(k.desc).slice(0, 120) });
+      crit.push({ id: k.id, name: str(k.name).slice(0, 40), desc: str(k.desc).slice(0, 120), w: (typeof k.w === 'number' && [0.5, 1, 2].includes(k.w)) ? k.w : 1 });
     }
     if (!crit.length) continue;
     seen.add(c.id);
@@ -1862,7 +2318,7 @@ function serializeCats() {
   return state.cats.map(c => ({
     id: c.id,
     name: c.name.trim() || 'Без названия',
-    criteria: c.criteria.map((k, i) => ({ id: k.id, name: k.name.trim() || `Критерий ${i + 1}`, desc: (k.desc || '').trim() }))
+    criteria: c.criteria.map((k, i) => ({ id: k.id, name: k.name.trim() || `Критерий ${i + 1}`, desc: (k.desc || '').trim(), w: k.w || 1 }))
   }));
 }
 let catTimer = null, catBusy = false, catAgain = false, catPendingLocal = false;
@@ -2040,19 +2496,21 @@ function loadPrefs() {
   try {
     const p = JSON.parse(localStorage.getItem(PREFS_KEY) || 'null');
     if (p && ['score', 'date', 'name'].includes(p.sort)) state.sort = p.sort;
+    if (p && ['list', 'grid', 'tiers'].includes(p.bmode)) state.bmode = p.bmode;
+    if (p && ['auto', 'light', 'dark'].includes(p.theme)) state.theme = p.theme;
     if (p && typeof p.filter === 'string') state.filter = p.filter;
     if (p && p.exportOpts && typeof p.exportOpts === 'object') {
-      for (const k of ['desc', 'notes', 'photo']) if (typeof p.exportOpts[k] === 'boolean') state.exportOpts[k] = p.exportOpts[k];
+      for (const k of ['desc', 'pc', 'notes', 'photo']) if (typeof p.exportOpts[k] === 'boolean') state.exportOpts[k] = p.exportOpts[k];
     }
-    if (p && (p.view === 'board' || p.view === 'log')) state.view = p.view;
+    if (p && ['board', 'stats', 'log'].includes(p.view)) state.view = p.view;
     if (p && (p.logTab === 'mine' || p.logTab === 'app')) state.logTab = p.logTab;
-    if (p && ['rate', 'board', 'log'].includes(p.section)) state.section = p.section;
+    if (p && ['rate', 'board', 'stats', 'log'].includes(p.section)) state.section = p.section;
   } catch (_) {}
 }
 function savePrefs() {
   try {
     localStorage.setItem(PREFS_KEY, JSON.stringify({
-      sort: state.sort, filter: state.filter, exportOpts: state.exportOpts,
+      sort: state.sort, bmode: state.bmode, theme: state.theme, filter: state.filter, exportOpts: state.exportOpts,
       view: state.view, logTab: state.logTab, section: state.section
     }));
   } catch (_) {}
@@ -2065,7 +2523,11 @@ function exportFromForm() {
   const t = totalOf(scores);
   if (t == null) return null;
   const cat = currentCat();
-  return { name: form.name.trim() || 'Без названия', catName: cat ? cat.name.trim() : form.extraCatName, scores, total: t, note: form.note.trim(), date: new Date().toISOString(), photo: form.photo };
+  return {
+    name: form.name.trim() || 'Без названия', catName: cat ? cat.name.trim() : form.extraCatName,
+    status: form.status, meta: form.meta, pros: form.pros, cons: form.cons,
+    scores, total: t, note: form.note.trim(), date: new Date().toISOString(), photo: form.photo
+  };
 }
 function exportFromRating(r) {
   const cat = state.cats.find(c => c.id === r.cat);
@@ -2074,18 +2536,24 @@ function exportFromRating(r) {
     return Object.assign({}, s, { desc: s.desc || (cur && cur.desc ? cur.desc.trim() : '') });
   });
   return {
-    name: r.name, catName: catNameOf(r), scores, total: r.total, note: r.note, date: stamp(r) || new Date().toISOString(),
-    photo: r.photo ? { kind: 'saved', id: r.photo.id, w: r.photo.w, h: r.photo.h } : null
+    name: r.name, catName: catNameOf(r), status: r.status, meta: r.meta, pros: r.pros, cons: r.cons,
+    scores, total: r.total, note: r.note, date: stamp(r) || new Date().toISOString(),
+    photo: r.photo ? { kind: 'saved', id: r.photo.id, data: r.photo.data || '', w: r.photo.w, h: r.photo.h } : null
   };
 }
 function ratingText(d) {
   const lines = [`${d.name}: ${d.total != null ? `${fmt(d.total)} из 10, ${verdict(d.total).toLowerCase()}` : 'без оценки'}`];
-  if (d.catName) lines.push(d.catName);
+  const sub = [d.catName, d.status, d.meta].filter(Boolean).join(' · ');
+  if (sub) lines.push(sub);
   lines.push('');
   for (const s of d.scores) {
     lines.push(`${s.name}${s.desc ? ` (${s.desc})` : ''}: ${s.v > 0 ? '▰'.repeat(s.v) + '▱'.repeat(10 - s.v) + ' ' + s.v : 'без оценки'}`);
     if (s.note) lines.push(`  ${s.note}`);
   }
+  const pros = splitLines(d.pros);
+  const cons = splitLines(d.cons);
+  if (pros.length) { lines.push('', 'Плюсы:'); pros.forEach(p => lines.push(`+ ${p}`)); }
+  if (cons.length) { lines.push('', 'Минусы:'); cons.forEach(c => lines.push(`- ${c}`)); }
   if (d.note) lines.push('', d.note);
   return lines.join('\n');
 }
@@ -2231,6 +2699,38 @@ function paintCard(ctx, d, pal, draw, bmp) {
       y += nl.length * 34;
     }
   }
+  const prosArr = splitLines(d.pros);
+  const consArr = splitLines(d.cons);
+  if (prosArr.length || consArr.length) {
+    y += 38;
+    if (draw) { ctx.fillStyle = pal.line; ctx.fillRect(X0, y, IW, 2); }
+    y += 28;
+    if (prosArr.length) {
+      ctx.font = `700 22px ${FB}`; setLS(ctx, '2px');
+      if (draw) { ctx.fillStyle = pal.good; ctx.fillText('ПЛЮСЫ', X0, y + 20); }
+      setLS(ctx, '0px');
+      y += 32;
+      ctx.font = `400 26px ${FB}`;
+      for (const pItem of prosArr.slice(0, 6)) {
+        const pl = wrapLines(ctx, '+ ' + pItem, IW, 2);
+        if (draw) { ctx.fillStyle = pal.ink; pl.forEach((ln, i) => ctx.fillText(ln, X0, y + 24 + i * 34)); }
+        y += pl.length * 34 + 4;
+      }
+      y += 12;
+    }
+    if (consArr.length) {
+      ctx.font = `700 22px ${FB}`; setLS(ctx, '2px');
+      if (draw) { ctx.fillStyle = pal.bad; ctx.fillText('МИНУСЫ', X0, y + 20); }
+      setLS(ctx, '0px');
+      y += 32;
+      ctx.font = `400 26px ${FB}`;
+      for (const cItem of consArr.slice(0, 6)) {
+        const cl = wrapLines(ctx, '− ' + cItem, IW, 2);
+        if (draw) { ctx.fillStyle = pal.ink; cl.forEach((ln, i) => ctx.fillText(ln, X0, y + 24 + i * 34)); }
+        y += cl.length * 34 + 4;
+      }
+    }
+  }
   if (d.note) {
     y += 40;
     if (draw) { ctx.fillStyle = pal.line; ctx.fillRect(X0, y, IW, 2); }
@@ -2287,6 +2787,8 @@ const share = { data: null, blob: null, url: null, filename: '', text: '', trigg
 function shareView() {
   const d = share.data, o = state.exportOpts;
   return Object.assign({}, d, {
+    pros: o.pc !== false ? d.pros : '',
+    cons: o.pc !== false ? d.cons : '',
     note: o.notes ? d.note : '',
     photo: o.photo ? d.photo : null,
     scores: d.scores
@@ -2306,11 +2808,13 @@ function openShare(d, trigger) {
   el.optDesc.checked = state.exportOpts.desc;
   el.optNotes.checked = state.exportOpts.notes;
   el.optPhoto.checked = state.exportOpts.photo;
-  el.shDownload.hidden = !state.downloads;
+  el.shDownload.hidden = false;
   el.shCopyImg.hidden = !(window.ClipboardItem && navigator.clipboard && navigator.clipboard.write);
-  el.sheetHint.textContent = state.downloads
-    ? 'Если кнопка не сработала, сохрани картинку вручную: удерживай на ней палец или нажми правой кнопкой мыши.'
-    : 'Чтобы сохранить картинку, удерживай на ней палец или нажми правой кнопкой мыши.';
+  const hasPc = !!(d.pros || d.cons);
+  if (el.optPcWrap) el.optPcWrap.hidden = !hasPc;
+  if (el.optPc) el.optPc.checked = state.exportOpts.pc !== false;
+  el.sheetOpts.hidden = !hasDesc && !hasNotes && !d.photo && !hasPc;
+  el.sheetHint.textContent = 'Нажми «Скачать PNG», скопируй в буфер или удерживай картинку пальцем / правой кнопкой мыши.';
   el.sheetPreview.innerHTML = '<p class="sheet-wait">Рисую картинку…</p>';
   el.sheet.hidden = false;
   document.documentElement.classList.add('locked');
@@ -2361,16 +2865,25 @@ function closeShare() {
   if (share.trigger && document.contains(share.trigger)) share.trigger.focus({ preventScroll: true });
 }
 function downloadShare() {
-  if (!share.blob || !state.downloads) return;
-  let p;
-  try { p = state.downloads.save({ filename: share.filename, data: share.blob }); } catch (e) { p = Promise.reject(e); }
-  p.then(res => { if (res && res.status === 'saved') toast('Картинка сохранена'); }, e => {
-    const code = e && e.code;
-    if (code === 'declined') return;
-    if (code === 'rate_limited') { toast('Окно сохранения уже открыто, подожди немного'); return; }
-    el.shDownload.hidden = true;
-    toast('Скачивание здесь недоступно. Сохрани картинку вручную');
-  });
+  if (!share.blob) return;
+  if (state.downloads) {
+    let p;
+    try { p = state.downloads.save({ filename: share.filename, data: share.blob }); } catch (e) { p = Promise.reject(e); }
+    p.then(res => { if (res && res.status === 'saved') toast('Картинка сохранена'); }, () => fallbackDownload());
+    return;
+  }
+  fallbackDownload();
+}
+function fallbackDownload() {
+  if (!share.blob) return;
+  const url = share.url || URL.createObjectURL(share.blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = share.filename || 'оценка.png';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  toast('Картинка сохранена в загрузки');
 }
 function copyShareImage() {
   if (!share.blob) return;
@@ -2569,6 +3082,24 @@ el.critArea.addEventListener('click', e => {
     scheduleCatSave();
     const f = document.getElementById('edn-' + c.id);
     if (f) f.focus();
+  } else if (act === 'cweight') {
+    const c = cat.criteria.find(x => x.id === id);
+    if (!c) return;
+    const order = [1, 2, 0.5];
+    c.w = order[(order.indexOf(c.w || 1) + 1) % order.length];
+    renderCrit();
+    updateTotal();
+    scheduleCatSave();
+  } else if (act === 'apply-tpl') {
+    const tpl = CAT_TEMPLATES[Number(b.dataset.tpl)];
+    if (!tpl) return;
+    cat.name = tpl.name;
+    cat.criteria = tpl.criteria.map(x => ({ id: newId('c'), name: x.name, desc: x.desc, w: x.w || 1 }));
+    renderCats();
+    renderCrit();
+    updateTotal();
+    scheduleCatSave();
+    toast(`Применён шаблон «${tpl.name}»`);
   } else if (act === 'resetcat') {
     const s = STARTERS.find(x => x.id === cat.id);
     if (!s) return;
@@ -2621,6 +3152,8 @@ el.board.addEventListener('click', e => {
   const sel = `.entry[data-id="${CSS.escape(id)}"] [data-act=`;
   switch (b.dataset.act) {
     case 'edit': loadIntoForm(r); break;
+    case 'fav-card': r.fav = !r.fav; saveLocalRatings(); renderBoard(); toast(r.fav ? `★ В избранном: ${r.name}` : `Убрано из избранного`); break;
+    case 'cmp': toggleCompare(r.id); break;
     case 'share': openShare(exportFromRating(r), b); break;
     case 'journal': openJournalFor(id); break;
     case 'del': state.confirmDel = id; pendingFocus = sel + '"del-yes"]'; renderBoard(); break;
@@ -2686,9 +3219,13 @@ const PHOTO_ID = /^[A-Za-z0-9_-]{8,80}$/;
 const PHOTO_MAX = 1600;
 let photoBusy = false;
 function normPhoto(p) {
-  return p && typeof p.id === 'string' && PHOTO_ID.test(p.id)
-    ? { id: p.id, w: clampInt(p.w, 0, 20000), h: clampInt(p.h, 0, 20000) }
-    : null;
+  if (!p || typeof p !== 'object') return null;
+  const id = str(p.id || p.data);
+  if (!id) return null;
+  if (PHOTO_ID.test(id) || id.startsWith('data:image/') || id.startsWith('http://') || id.startsWith('https://') || id.startsWith('blob:')) {
+    return { id, data: str(p.data || (id.startsWith('data:') ? id : '')), w: clampInt(p.w, 0, 20000), h: clampInt(p.h, 0, 20000) };
+  }
+  return null;
 }
 function canPhoto() { return state.canWrite; }
 function revokeFormPhoto() {
@@ -2702,12 +3239,13 @@ function renderPhoto() {
   el.photoInput.disabled = !can;
   if (photoBusy) { el.photoBox.innerHTML = '<p class="photo-wait">Обрабатываю фото…</p>'; return; }
   if (p) {
-    const src = p.kind === 'new' ? p.url : '/_blob/' + p.id;
+    const src = p.kind === 'new' ? p.url : resolvePhotoUrl(p);
     el.photoBox.innerHTML = `<div class="photo-has"><img class="photo-img" data-photo="form" src="${esc(src)}" alt="Фото к оценке">`
-      + (can ? `<div class="photo-tools"><label class="btn small ghost" for="photoInput">${ICON.image}Заменить</label><button type="button" class="btn small ghost danger" data-act="photo-remove">${ICON.trash}Убрать фото</button></div>` : '')
+      + (can ? `<div class="photo-tools"><label class="btn small ghost" for="photoInput">${ICON.image}Заменить файл</label><button type="button" class="btn small ghost danger" data-act="photo-remove">${ICON.trash}Убрать фото</button></div>` : '')
       + '</div>';
   } else {
-    el.photoBox.innerHTML = `<label class="photo-drop" for="photoInput">${ICON.imageLg}<span><strong>Добавить фото</strong><small class="hint-desk">Выбери файл, перетащи его сюда или вставь из буфера</small><small class="hint-touch">Из галереи или с камеры</small></span></label>`;
+    el.photoBox.innerHTML = `<label class="photo-drop" for="photoInput">${ICON.imageLg}<span><strong>Добавить фото или обложку</strong><small class="hint-desk">Выбери файл, перетащи сюда, вставь из буфера (Ctrl+V) или укажи ссылку ниже</small><small class="hint-touch">Из галереи, с камеры или по ссылке</small></span></label>
+    <div class="photo-url-row"><input type="url" id="photoUrlInput" placeholder="Или вставь прямую ссылку на картинку (https://…)"><button type="button" class="btn small ghost" data-act="photo-url-apply">Ок</button></div>`;
   }
 }
 async function decodeImage(file) {
@@ -2821,6 +3359,19 @@ el.photoInput.addEventListener('change', () => {
 });
 el.photoBox.addEventListener('click', e => {
   if (e.target.closest('button[data-act="photo-remove"]')) removePhoto();
+  if (e.target.closest('button[data-act="photo-url-apply"]')) {
+    const inp = document.getElementById('photoUrlInput');
+    const url = inp ? inp.value.trim() : '';
+    if (!url || (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('data:image/'))) {
+      toast('Введи корректную ссылку на изображение (https://…)');
+      return;
+    }
+    revokeFormPhoto();
+    form.photo = { kind: 'saved', id: url, data: url, w: 0, h: 0 };
+    renderPhoto();
+    scheduleDraft();
+    toast('Ссылка на обложку добавлена');
+  }
 });
 const hasFiles = e => !!(e.dataTransfer && [...e.dataTransfer.types].includes('Files'));
 el.rater.addEventListener('dragover', e => {
@@ -3028,6 +3579,7 @@ function logEvent(data, session) {
     const i = LOG.entries.findIndex(x => x.id === n.id);
     if (i >= 0) { n.comment = LOG.entries[i].comment; LOG.entries[i] = n; } else LOG.entries.push(n);
     indexLog();
+    saveLocalLog();
     afterLogChange();
     return;
   }
@@ -3263,15 +3815,21 @@ function histHTML(r) {
 
 /* Views */
 function setView(v, focus) {
-  state.view = v === 'log' ? 'log' : 'board';
-  const isLog = state.view === 'log';
-  el.tabBoard.setAttribute('aria-selected', String(!isLog));
-  el.tabLog.setAttribute('aria-selected', String(isLog));
-  el.tabBoard.tabIndex = isLog ? -1 : 0;
-  el.tabLog.tabIndex = isLog ? 0 : -1;
-  el.panelBoard.hidden = isLog;
-  el.panelLog.hidden = !isLog;
-  if (focus) (isLog ? el.tabLog : el.tabBoard).focus();
+  state.view = ['board', 'stats', 'log'].includes(v) ? v : 'board';
+  const tabs = [
+    { id: 'board', tab: el.tabBoard, panel: el.panelBoard },
+    { id: 'stats', tab: el.tabStats, panel: el.panelStats },
+    { id: 'log',   tab: el.tabLog,   panel: el.panelLog }
+  ];
+  for (const t of tabs) {
+    if (!t.tab || !t.panel) continue;
+    const active = state.view === t.id;
+    t.tab.setAttribute('aria-selected', String(active));
+    t.tab.tabIndex = active ? 0 : -1;
+    t.panel.hidden = !active;
+    if (focus && active) t.tab.focus();
+  }
+  if (state.view === 'stats') renderStats();
   if (state.section !== 'rate') { state.section = state.view; syncNav(); }
   savePrefs();
 }
@@ -3285,7 +3843,7 @@ function syncNav() {
   el.mnav.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.section === state.section)));
 }
 function setSection(s) {
-  state.section = ['rate', 'board', 'log'].includes(s) ? s : 'rate';
+  state.section = ['rate', 'board', 'stats', 'log'].includes(s) ? s : 'rate';
   if (state.section === 'rate') { syncNav(); savePrefs(); requestAnimationFrame(() => autoGrow(el.note)); }
   else setView(state.section);
 }
@@ -3400,7 +3958,7 @@ async function commitComment() {
   renderLog(true);
   focusEntryAction(id);
   const done = text ? 'Описание сохранено' : 'Описание убрано';
-  if (state.mode !== 'db' || !state.db || entry.dayId === 'local') { toast(done); return; }
+  if (state.mode !== 'db' || !state.db || entry.dayId === 'local') { saveLocalLog(); toast(done); return; }
   LOG.pending.set(id, text);
   try {
     await enqueue(() => withRetry(() => state.db.collection('log').doc(entry.dayId).update({ entries: { [id]: { comment: text } } })));
@@ -3452,9 +4010,251 @@ el.logList.addEventListener('keydown', e => {
   else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); commitComment(); }
 });
 
+
+/* ---------- Statistics, Compare & Theme ---------- */
+function applyTheme(t) {
+  state.theme = ['light', 'dark', 'auto'].includes(t) ? t : 'auto';
+  if (state.theme === 'auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', state.theme);
+  if (el.themeBtn) {
+    const labels = { auto: '🌓 Тема: Авто', light: '☀️ Светлая', dark: '🌙 Тёмная' };
+    el.themeBtn.textContent = labels[state.theme];
+  }
+  savePrefs();
+}
+if (el.themeBtn) {
+  el.themeBtn.addEventListener('click', () => {
+    const order = ['auto', 'dark', 'light'];
+    const next = order[(order.indexOf(state.theme) + 1) % order.length];
+    applyTheme(next);
+  });
+}
+
+function renderStats() {
+  if (!el.statsContent) return;
+  const rated = state.ratings.filter(r => r.total != null);
+  if (!rated.length) {
+    el.statsContent.innerHTML = `<div class="empty"><p><strong>Статистика пока пуста.</strong> Добавь хотя бы одну оценку, чтобы увидеть распределение баллов, медиану, рекорды критериев и аналитику по категориям.</p></div>`;
+    return;
+  }
+  const scores = rated.map(r => r.total).sort((a, b) => a - b);
+  const avg = round1(scores.reduce((a, b) => a + b, 0) / scores.length);
+  const mid = Math.floor(scores.length / 2);
+  const median = scores.length % 2 ? scores[mid] : round1((scores[mid - 1] + scores[mid]) / 2);
+  const favCount = state.ratings.filter(r => r.fav).length;
+  const best = [...rated].sort(byScore)[0];
+
+  const buckets = [
+    { label: '9.0–10', min: 9.0, max: 10.1, col: 'var(--good)', n: 0 },
+    { label: '7.5–8.9', min: 7.5, max: 9.0, col: 'color-mix(in srgb, var(--good) 70%, var(--mid))', n: 0 },
+    { label: '6.0–7.4', min: 6.0, max: 7.5, col: 'var(--mid)', n: 0 },
+    { label: '4.0–5.9', min: 4.0, max: 6.0, col: 'color-mix(in srgb, var(--mid) 50%, var(--bad))', n: 0 },
+    { label: '1.0–3.9', min: 0,   max: 4.0, col: 'var(--bad)', n: 0 }
+  ];
+  for (const r of rated) {
+    const b = buckets.find(x => r.total >= x.min && r.total < x.max) || buckets[buckets.length - 1];
+    b.n++;
+  }
+  const maxB = Math.max(1, ...buckets.map(b => b.n));
+
+  const catStats = groups().map(g => {
+    const items = rated.filter(r => (r.cat || '__none') === g.id).sort(byScore);
+    const cAvg = items.length ? round1(items.reduce((a, x) => a + x.total, 0) / items.length) : null;
+    return { name: g.name, count: items.length, avg: cAvg, top: items[0] || null };
+  }).filter(c => c.count > 0);
+
+  el.statsContent.innerHTML = `
+    <div class="stats-kpis">
+      <div class="kpi-card">
+        <span class="kpi-val">${rated.length}</span>
+        <span class="kpi-sub">Всего оценок (${favCount} ★)</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-val" style="color:var(--${tierT(avg)})">${fmt(avg)}</span>
+        <span class="kpi-sub">Средний балл · ${verdict(avg)}</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-val">${fmt(median)}</span>
+        <span class="kpi-sub">Медиана (${fmt(scores[0])}–${fmt(scores[scores.length - 1])})</span>
+      </div>
+      <div class="kpi-card">
+        <span class="kpi-val" style="color:var(--good)">${best ? fmt(best.total) : '—'}</span>
+        <span class="kpi-sub" title="${best ? esc(best.name) : ''}" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Лидер: ${best ? esc(best.name) : '—'}</span>
+      </div>
+    </div>
+
+    <div class="stat-block">
+      <h4>Распределение по баллам</h4>
+      <div class="dist-list">
+        ${buckets.map(b => `
+          <div class="dist-row">
+            <span class="dist-label">${b.label}</span>
+            <div class="dist-track"><div class="dist-fill" style="width:${Math.round(b.n / maxB * 100)}%;background:${b.col}"></div></div>
+            <span class="dist-cnt">${b.n} (${Math.round(b.n / rated.length * 100)}%)</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+
+    <div class="stat-block">
+      <h4>Аналитика по категориям</h4>
+      <div style="display:grid;gap:8px;">
+        ${catStats.map(c => `
+          <div class="cat-stat-row">
+            <div style="min-width:0;">
+              <strong style="font-size:14.5px;">${esc(c.name)}</strong>
+              <p style="font-size:12.5px;color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">
+                ${c.count} ${plural(c.count, 'оценка', 'оценки', 'оценок')}${c.top ? ` · Топ-1: ${esc(c.top.name)} (${fmt(c.top.total)})` : ''}
+              </p>
+            </div>
+            <span class="badge sm" data-tier="${tierT(c.avg)}">${c.avg != null ? fmt(c.avg) : '—'}</span>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function toggleCompare(id) {
+  const idx = state.cmpIds.indexOf(id);
+  if (idx >= 0) {
+    state.cmpIds.splice(idx, 1);
+  } else {
+    if (state.cmpIds.length >= 2) state.cmpIds.shift();
+    state.cmpIds.push(id);
+  }
+  renderBoard();
+  if (state.cmpIds.length === 2) openCompareModal();
+  else if (state.cmpIds.length === 1) toast('Выбери вторую оценку для сравнения ⚖️');
+}
+function updateCmpTray() {
+  if (!el.cmpTrayBtn) return;
+  state.cmpIds = state.cmpIds.filter(id => state.ratings.some(r => r.id === id));
+  el.cmpTrayBtn.hidden = state.cmpIds.length === 0;
+  if (el.cmpCount) el.cmpCount.textContent = String(state.cmpIds.length);
+}
+function openCompareModal() {
+  if (state.cmpIds.length < 2) { toast('Выбери две оценки в рейтинге кнопкой «⚖️ Сравнить»'); return; }
+  const a = state.ratings.find(r => r.id === state.cmpIds[0]);
+  const b = state.ratings.find(r => r.id === state.cmpIds[1]);
+  if (!a || !b) return;
+  const allCritNames = [];
+  const seen = new Set();
+  for (const s of [...a.scores, ...b.scores]) {
+    const k = keyOf(s.name);
+    if (!seen.has(k)) { seen.add(k); allCritNames.push(s.name); }
+  }
+  const rowsHTML = allCritNames.map(name => {
+    const k = keyOf(name);
+    const sa = a.scores.find(s => keyOf(s.name) === k);
+    const sb = b.scores.find(s => keyOf(s.name) === k);
+    const va = sa ? sa.v : 0, vb = sb ? sb.v : 0;
+    return `<div class="cmp-row">
+      <div class="cmp-val${va > vb ? ' win' : ''}">${va || '—'}</div>
+      <div class="cmp-crit-name">${esc(name)}</div>
+      <div class="cmp-val right${vb > va ? ' win' : ''}">${vb || '—'}</div>
+    </div>`;
+  }).join('');
+
+  el.cmpBody.innerHTML = `
+    <div class="cmp-header-grid">
+      <div class="cmp-col-head">
+        <span class="badge big" data-tier="${tierT(a.total)}">${a.total != null ? fmt(a.total) : '—'}</span>
+        <h4>${esc(a.name)}</h4>
+        <span style="font-size:12px;color:var(--ink-2);">${esc(catNameOf(a))} · ${verdict(a.total)}</span>
+      </div>
+      <div class="cmp-col-head">
+        <span class="badge big" data-tier="${tierT(b.total)}">${b.total != null ? fmt(b.total) : '—'}</span>
+        <h4>${esc(b.name)}</h4>
+        <span style="font-size:12px;color:var(--ink-2);">${esc(catNameOf(b))} · ${verdict(b.total)}</span>
+      </div>
+    </div>
+    <div class="cmp-table">${rowsHTML}</div>
+  `;
+  el.compareModal.hidden = false;
+  document.documentElement.classList.add('locked');
+}
+function closeCompareModal() {
+  if (!el.compareModal) return;
+  el.compareModal.hidden = true;
+  document.documentElement.classList.remove('locked');
+}
+if (el.cmpTrayBtn) el.cmpTrayBtn.addEventListener('click', openCompareModal);
+if (el.cmpClose) el.cmpClose.addEventListener('click', closeCompareModal);
+if (el.cmpClearBtn) el.cmpClearBtn.addEventListener('click', () => { state.cmpIds = []; closeCompareModal(); renderBoard(); });
+if (el.compareModal) el.compareModal.addEventListener('click', e => { if (e.target === el.compareModal) closeCompareModal(); });
+
+if (el.favBtn) {
+  el.favBtn.addEventListener('click', () => {
+    form.fav = !form.fav;
+    el.favBtn.setAttribute('aria-pressed', String(form.fav));
+    scheduleDraft();
+  });
+}
+if (el.statusChips) {
+  el.statusChips.addEventListener('click', e => {
+    const b = e.target.closest('button[data-status]');
+    if (!b) return;
+    const val = b.dataset.status.trim();
+    form.status = form.status === val ? '' : val;
+    renderForm();
+    scheduleDraft();
+  });
+}
+if (el.meta) el.meta.addEventListener('input', () => { form.meta = el.meta.value; scheduleDraft(); });
+if (el.pros) el.pros.addEventListener('input', () => { form.pros = el.pros.value; autoGrow(el.pros); scheduleDraft(); });
+if (el.cons) el.cons.addEventListener('input', () => { form.cons = el.cons.value; autoGrow(el.cons); scheduleDraft(); });
+
+if (el.layoutGroup) {
+  el.layoutGroup.addEventListener('click', e => {
+    const b = e.target.closest('button[data-bmode]');
+    if (!b) return;
+    state.bmode = b.dataset.bmode;
+    savePrefs();
+    renderBoard();
+  });
+}
+if (el.subFilters) {
+  el.subFilters.addEventListener('click', e => {
+    const b = e.target.closest('button[data-sfilter]');
+    if (!b) return;
+    state.sfilter = b.dataset.sfilter;
+    renderBoard();
+  });
+}
+if (el.randomBtn) {
+  el.randomBtn.addEventListener('click', () => {
+    const visible = [...el.board.querySelectorAll('.entry')];
+    if (!visible.length && !state.ratings.length) { toast('Пока нет оценок для выбора'); return; }
+    const pool = state.ratings;
+    const pick = pool[Math.floor(Math.random() * pool.length)];
+    if (pick) {
+      if (state.bmode === 'tiers') { state.bmode = 'list'; }
+      goToRating(pick.id);
+      toast(`🎲 Случайный выбор: ${pick.name}`);
+    }
+  });
+}
+if (el.tierBoard) {
+  el.tierBoard.addEventListener('click', e => {
+    const b = e.target.closest('[data-tier-goto]');
+    if (!b) return;
+    state.bmode = 'list';
+    goToRating(b.dataset.tierGoto);
+  });
+}
+if (el.optPc) {
+  el.optPc.addEventListener('change', () => {
+    state.exportOpts.pc = el.optPc.checked;
+    savePrefs();
+    refreshShare();
+  });
+}
+
 /* ---------- Boot ---------- */
 loadDraft();
 loadPrefs();
+applyTheme(state.theme);
 syncSort();
 setView(state.view);
 setLogTab(state.logTab);
