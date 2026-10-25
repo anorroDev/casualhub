@@ -1,4 +1,41 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}
+/* User bar & Auth */
+.masthead-right { display: flex; flex-direction: column; align-items: flex-end; gap: 12px; }
+.user-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.user-pill {
+  display: inline-flex; align-items: center; gap: 8px; padding: 4px 12px 4px 6px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 999px;
+  cursor: pointer; font-size: 13.5px; font-weight: 600; color: var(--ink);
+  transition: border-color .15s, background-color .15s;
+}
+.user-pill:hover { border-color: var(--accent); background: var(--panel-2); }
+.user-avatar {
+  width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center;
+  color: #fff; font-size: 12px; font-weight: 700; text-transform: uppercase; flex: none;
+}
+.author-tag { background: color-mix(in srgb, var(--accent) 14%, var(--panel)); color: var(--accent); font-weight: 600; }
+.auth-card { max-width: 440px; }
+.auth-tabs { display: flex; gap: 6px; margin: 16px 0; background: var(--panel-2); padding: 4px; border-radius: 10px; border: 1px solid var(--line); }
+.auth-tab { flex: 1; padding: 8px 12px; border: 0; background: transparent; font-size: 13.5px; font-weight: 600; border-radius: 7px; color: var(--ink-2); cursor: pointer; transition: all .15s; }
+.auth-tab.active { background: var(--panel); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.08); }
+.auth-form { display: grid; gap: 14px; margin-top: 12px; }
+.auth-field { display: grid; gap: 6px; }
+.auth-field label { font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+.auth-field input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); font-size: 14px; color: var(--ink); }
+.auth-field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.auth-help { font-size: 12px; color: var(--ink-3); line-height: 1.4; }
+.auth-user-info { display: flex; align-items: center; gap: 14px; padding: 14px; background: var(--panel-2); border-radius: 12px; border: 1px solid var(--line); margin: 16px 0; }
+.auth-user-info .big-avatar { width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; color: #fff; font-size: 20px; font-weight: 700; }
+.auth-user-text h4 { font-size: 16px; font-weight: 700; margin: 0; }
+.auth-user-text p { font-size: 12.5px; color: var(--ink-2); margin: 2px 0 0 0; }
+.auth-switch-list { margin-top: 16px; border-top: 1px solid var(--line); padding-top: 14px; display: grid; gap: 8px; }
+.auth-switch-item { display: flex; align-items: center; justify-content: space-between; padding: 8px 10px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line); cursor: pointer; }
+.auth-switch-item:hover { border-color: var(--accent); }
+.backup-section { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); display: grid; gap: 10px; }
+.backup-title { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-2); margin: 0; }
+.backup-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+</style></head><body>
 <title>Оценщик всего</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -533,11 +570,14 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
       <h1 class="title">Оценщик всего</h1>
       <p class="lede">Игры, фильмы, еда, места или что угодно своё. Создавай категории и критерии, двигай ползунки от 1 до 10, добавляй фото и заметки. Рейтинг соберётся сам, а журнал запомнит каждое изменение.</p>
     </div>
-    <p class="scale"><span class="vh">Цвет итогового балла:</span>
-      <span data-tier="bad"><i></i>1–4,9</span>
-      <span data-tier="mid"><i></i>5–7,4</span>
-      <span data-tier="good"><i></i>7,5–10</span>
-    </p>
+    <div class="masthead-right">
+      <div id="userBar" class="user-bar"></div>
+      <p class="scale"><span class="vh">Цвет итогового балла:</span>
+        <span data-tier="bad"><i></i>1–4,9</span>
+        <span data-tier="mid"><i></i>5–7,4</span>
+        <span data-tier="good"><i></i>7,5–10</span>
+      </p>
+    </div>
   </header>
 
   <p class="offline-bar" id="offlineBar" role="status" hidden><strong>Сохранение здесь не работает.</strong> Страница открылась без доступа к хранилищу Claude, так бывает во встроенном браузере Telegram. Оценки пропадут после закрытия, фото и скачивание недоступны. Открой ссылку в Safari или в приложении Claude.</p>
@@ -726,6 +766,18 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
   </div>
 </div>
 
+<div class="sheet" id="authModal" hidden>
+  <div class="sheet-card auth-card" role="dialog" aria-modal="true" aria-labelledby="authTitle">
+    <div class="sheet-head">
+      <h3 id="authTitle">Профиль и вход</h3>
+      <button type="button" class="mini-btn" id="authClose" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div id="authBody"></div>
+  </div>
+</div>
+
 <script>
 'use strict';
 
@@ -776,6 +828,354 @@ const ICON = {
   imageLg: svg('<rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="M20.5 16l-4.5-4.5L7 19.5"/>', 28, 1.6),
   chev: '<svg class="chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M6 9l6 6 6-6"/></svg>'
 };
+
+const STORAGE_KEYS = {
+  RATINGS: 'ocenshik.ratings.v2',
+  CATS: 'ocenshik.cats.v2',
+  LOG: 'ocenshik.log.v2',
+  USERS: 'ocenshik.users.v1',
+  USER: 'ocenshik.user.v1'
+};
+
+const AVATAR_COLORS = ['#3550E8', '#2EAD60', '#EAA92C', '#E4553F', '#9333EA', '#06B6D4', '#EC4899', '#F97316'];
+function randomAvatarColor(name) {
+  let h = 0;
+  for (let i = 0; i < (name || '').length; i++) h = (h * 31 + name.charCodeAt(i)) % AVATAR_COLORS.length;
+  return AVATAR_COLORS[Math.abs(h)];
+}
+
+const STARTER_RATINGS = [
+  {
+    id: 'ex-witcher3', cat: 'games', catName: 'Игры', name: 'The Witcher 3: Wild Hunt',
+    scores: [
+      { id: 'g-gameplay', name: 'Геймплей', v: 9, note: 'Увлекательные бои и охота на чудовищ' },
+      { id: 'g-story', name: 'Сюжет', v: 10, note: 'Один из лучших сюжетов и квестов в жанре' },
+      { id: 'g-visuals', name: 'Графика', v: 9, note: 'Прекрасный визуальный стиль' },
+      { id: 'g-audio', name: 'Звук и музыка', v: 10, note: 'Невероятный саундтрек' },
+      { id: 'g-atmosphere', name: 'Атмосфера', v: 10 },
+      { id: 'g-replay', name: 'Реиграбельность', v: 8 },
+      { id: 'g-tech', name: 'Техническое состояние', v: 8 }
+    ],
+    note: 'Шедевр на все времена.', example: true,
+    author: { name: 'Гость' }
+  },
+  {
+    id: 'ex-interstellar', cat: 'films', catName: 'Фильмы и сериалы', name: 'Интерстеллар (Interstellar)',
+    scores: [
+      { id: 'f-story', name: 'Сюжет', v: 10, note: 'Грандиозная научная фантастика' },
+      { id: 'f-acting', name: 'Актёрская игра', v: 10, note: 'Мэттью Макконахи на высоте' },
+      { id: 'f-direction', name: 'Режиссура', v: 10, note: 'Кристофер Нолан' },
+      { id: 'f-visuals', name: 'Визуал', v: 10, note: 'Визуализация черной дыры' },
+      { id: 'f-music', name: 'Музыка и звук', v: 10, note: 'Ханс Циммер — орган великолепен' },
+      { id: 'f-rewatch', name: 'Пересматриваемость', v: 9 }
+    ],
+    note: 'Один из самых сильных фильмов десятилетия.', example: true,
+    author: { name: 'Гость' }
+  }
+];
+
+function saveLocalRatings() {
+  try { localStorage.setItem(STORAGE_KEYS.RATINGS, JSON.stringify(state.ratings)); }
+  catch (e) { console.error('Save ratings error:', e); }
+}
+function saveLocalCats() {
+  try { localStorage.setItem(STORAGE_KEYS.CATS, JSON.stringify(serializeCats())); }
+  catch (e) { console.error('Save cats error:', e); }
+}
+function saveLocalLog() {
+  try { localStorage.setItem(STORAGE_KEYS.LOG, JSON.stringify(LOG.entries.slice(0, 400))); }
+  catch (e) { console.error('Save log error:', e); }
+}
+
+function loadUsers() {
+  try {
+    state.users = JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]');
+    const cur = JSON.parse(localStorage.getItem(STORAGE_KEYS.USER) || 'null');
+    if (cur && cur.id) state.user = state.users.find(u => u.id === cur.id) || cur;
+  } catch (_) { state.users = []; state.user = null; }
+}
+function saveUsers() {
+  try {
+    localStorage.setItem(STORAGE_KEYS.USERS, JSON.stringify(state.users));
+    if (state.user) localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(state.user));
+    else localStorage.removeItem(STORAGE_KEYS.USER);
+  } catch (_) {}
+}
+function registerUser(username, password) {
+  username = (username || '').trim();
+  if (username.length < 2) { toast('Имя должно быть не менее 2 символов'); return false; }
+  if (state.users.some(u => u.name.toLowerCase() === username.toLowerCase())) {
+    toast('Пользователь с таким именем уже существует'); return false;
+  }
+  const u = {
+    id: 'u_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    name: username,
+    pass: (password || '').trim(),
+    color: randomAvatarColor(username),
+    createdAt: new Date().toISOString()
+  };
+  state.users.push(u);
+  state.user = u;
+  saveUsers();
+  renderUserBar();
+  renderBoard();
+  toast(`Добро пожаловать, ${username}!`);
+  closeAuthModal();
+  return true;
+}
+function loginUser(username, password) {
+  username = (username || '').trim();
+  const u = state.users.find(x => x.name.toLowerCase() === username.toLowerCase());
+  if (!u) { toast('Пользователь не найден. Зарегистрируйтесь'); return false; }
+  if (u.pass && u.pass !== (password || '').trim()) {
+    toast('Неверный пароль'); return false;
+  }
+  state.user = u;
+  saveUsers();
+  renderUserBar();
+  renderBoard();
+  toast(`Вы вошли как ${u.name}`);
+  closeAuthModal();
+  return true;
+}
+function logoutUser() {
+  state.user = null;
+  saveUsers();
+  renderUserBar();
+  renderBoard();
+  toast('Вы вышли из профиля');
+  renderAuthModal();
+}
+function switchUser(id) {
+  const u = state.users.find(x => x.id === id);
+  if (u) {
+    state.user = u;
+    saveUsers();
+    renderUserBar();
+    renderBoard();
+    toast(`Переключено на ${u.name}`);
+    closeAuthModal();
+  }
+}
+
+let authActiveTab = 'login';
+function renderUserBar() {
+  if (!el.userBar) return;
+  if (state.user) {
+    el.userBar.innerHTML = `
+      <div class="user-pill" id="userPill" role="button" tabindex="0" title="Открыть профиль">
+        <span class="user-avatar" style="background: ${esc(state.user.color || '#3550E8')}">${esc(state.user.name.charAt(0).toUpperCase())}</span>
+        <span class="user-name">${esc(state.user.name)}</span>
+      </div>`;
+    const pill = $('userPill');
+    if (pill) {
+      pill.addEventListener('click', () => openAuthModal());
+      pill.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAuthModal(); } });
+    }
+  } else {
+    el.userBar.innerHTML = `<button type="button" class="btn ghost small" id="authBtn">👤 Войти / Профиль</button>`;
+    const btn = $('authBtn');
+    if (btn) btn.addEventListener('click', () => openAuthModal('login'));
+  }
+}
+function openAuthModal(tab) {
+  if (tab) authActiveTab = tab;
+  renderAuthModal();
+  el.authModal.hidden = false;
+  document.documentElement.classList.add('locked');
+}
+function closeAuthModal() {
+  el.authModal.hidden = true;
+  document.documentElement.classList.remove('locked');
+}
+function renderAuthModal() {
+  if (!el.authBody) return;
+  if (state.user) {
+    const userRatingsCount = state.ratings.filter(r => r.author && r.author.id === state.user.id).length;
+    const dateStr = fmtDateLong(state.user.createdAt) || 'сегодня';
+    const otherUsers = state.users.filter(u => u.id !== state.user.id);
+    el.authTitle.textContent = 'Мой профиль';
+    el.authBody.innerHTML = `
+      <div class="auth-user-info">
+        <div class="big-avatar" style="background: ${esc(state.user.color || '#3550E8')}">${esc(state.user.name.charAt(0).toUpperCase())}</div>
+        <div class="auth-user-text">
+          <h4>${esc(state.user.name)}</h4>
+          <p>В клубе с ${esc(dateStr)} · Оценок: ${userRatingsCount}</p>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button type="button" class="btn ghost danger" id="btnLogoutUser" style="flex:1;">Выйти из профиля</button>
+      </div>
+      ${otherUsers.length ? `
+        <div class="auth-switch-list">
+          <p class="label">Другие профили на этом устройстве</p>
+          ${otherUsers.map(u => `
+            <div class="auth-switch-item" data-switch-id="${esc(u.id)}">
+              <span style="display:flex;align-items:center;gap:8px;font-weight:600;">
+                <span class="user-avatar" style="background:${esc(u.color || '#3550E8')}">${esc(u.name.charAt(0).toUpperCase())}</span>
+                ${esc(u.name)}
+              </span>
+              <span class="btn text small" style="pointer-events:none;">Войти</span>
+            </div>
+          `).join('')}
+        </div>
+      ` : ''}
+      <div class="backup-section">
+        <h4 class="backup-title">Резервная копия данных</h4>
+        <div class="backup-actions">
+          <button type="button" class="btn ghost small" id="btnExportBackup">💾 Скачать копию (JSON)</button>
+          <label class="btn ghost small" for="fileImportBackup" style="cursor:pointer;">📥 Восстановить из файла</label>
+          <input type="file" id="fileImportBackup" accept=".json" class="vh">
+        </div>
+      </div>
+    `;
+    const btnLogout = $('btnLogoutUser');
+    if (btnLogout) btnLogout.addEventListener('click', logoutUser);
+    const btnExport = $('btnExportBackup');
+    if (btnExport) btnExport.addEventListener('click', exportBackup);
+    const fileImport = $('fileImportBackup');
+    if (fileImport) fileImport.addEventListener('change', handleBackupImport);
+    el.authBody.querySelectorAll('[data-switch-id]').forEach(item => {
+      item.addEventListener('click', () => switchUser(item.dataset.switchId));
+    });
+  } else {
+    el.authTitle.textContent = authActiveTab === 'login' ? 'Вход в аккаунт' : 'Регистрация';
+    el.authBody.innerHTML = `
+      <div class="auth-tabs">
+        <button type="button" class="auth-tab${authActiveTab === 'login' ? ' active' : ''}" data-tab="login">Вход</button>
+        <button type="button" class="auth-tab${authActiveTab === 'reg' ? ' active' : ''}" data-tab="reg">Регистрация</button>
+      </div>
+      ${authActiveTab === 'login' ? `
+        <form class="auth-form" id="formLogin">
+          <div class="auth-field">
+            <label for="inputLoginName">Имя пользователя / Никнейм</label>
+            <input type="text" id="inputLoginName" autocomplete="username" required placeholder="Введите ваше имя">
+          </div>
+          <div class="auth-field">
+            <label for="inputLoginPass">Пароль (если задавали)</label>
+            <input type="password" id="inputLoginPass" autocomplete="current-password" placeholder="Пароль">
+          </div>
+          <button type="submit" class="btn primary">Войти</button>
+        </form>
+        ${state.users.length ? `
+          <div class="auth-switch-list">
+            <p class="label">Быстрый вход</p>
+            ${state.users.map(u => `
+              <div class="auth-switch-item" data-switch-id="${esc(u.id)}">
+                <span style="display:flex;align-items:center;gap:8px;font-weight:600;">
+                  <span class="user-avatar" style="background:${esc(u.color || '#3550E8')}">${esc(u.name.charAt(0).toUpperCase())}</span>
+                  ${esc(u.name)}
+                </span>
+                <span class="btn text small" style="pointer-events:none;">Выбрать</span>
+              </div>
+            `).join('')}
+          </div>
+        ` : ''}
+      ` : `
+        <form class="auth-form" id="formReg">
+          <div class="auth-field">
+            <label for="inputRegName">Имя или никнейм</label>
+            <input type="text" id="inputRegName" autocomplete="username" required placeholder="Например, Ярослав" minlength="2" maxlength="30">
+          </div>
+          <div class="auth-field">
+            <label for="inputRegPass">Пароль (необязательно)</label>
+            <input type="password" id="inputRegPass" autocomplete="new-password" placeholder="Можно оставить пустым">
+            <span class="auth-help">Если пароль не указан, войти в этот профиль можно в один клик.</span>
+          </div>
+          <button type="submit" class="btn primary">Создать аккаунт</button>
+        </form>
+      `}
+      <div class="backup-section">
+        <h4 class="backup-title">Резервная копия</h4>
+        <div class="backup-actions">
+          <button type="button" class="btn ghost small" id="btnExportBackup">💾 Скачать базу (JSON)</button>
+          <label class="btn ghost small" for="fileImportBackup" style="cursor:pointer;">📥 Загрузить базу</label>
+          <input type="file" id="fileImportBackup" accept=".json" class="vh">
+        </div>
+      </div>
+    `;
+    el.authBody.querySelectorAll('.auth-tab').forEach(b => {
+      b.addEventListener('click', () => { authActiveTab = b.dataset.tab; renderAuthModal(); });
+    });
+    const formLogin = $('formLogin');
+    if (formLogin) {
+      formLogin.addEventListener('submit', e => {
+        e.preventDefault();
+        loginUser($('inputLoginName').value, $('inputLoginPass').value);
+      });
+    }
+    const formReg = $('formReg');
+    if (formReg) {
+      formReg.addEventListener('submit', e => {
+        e.preventDefault();
+        registerUser($('inputRegName').value, $('inputRegPass').value);
+      });
+    }
+    const btnExport = $('btnExportBackup');
+    if (btnExport) btnExport.addEventListener('click', exportBackup);
+    const fileImport = $('fileImportBackup');
+    if (fileImport) fileImport.addEventListener('change', handleBackupImport);
+    el.authBody.querySelectorAll('[data-switch-id]').forEach(item => {
+      item.addEventListener('click', () => switchUser(item.dataset.switchId));
+    });
+  }
+}
+
+function exportBackup() {
+  const data = {
+    version: 2,
+    appName: 'Оценщик всего',
+    exportedAt: new Date().toISOString(),
+    ratings: state.ratings,
+    categories: serializeCats(),
+    users: state.users,
+    log: LOG.entries
+  };
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `rate-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Резервная копия сохранена в файл JSON');
+}
+function handleBackupImport(e) {
+  const f = e.target.files && e.target.files[0];
+  e.target.value = '';
+  if (!f) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!data || (!Array.isArray(data.ratings) && !Array.isArray(data.categories))) {
+        toast('Файл не содержит корректных данных Оценщика'); return;
+      }
+      if (Array.isArray(data.ratings)) {
+        state.ratings = data.ratings.map(r => normalizeRating(r.id, r)).filter(Boolean);
+        saveLocalRatings();
+      }
+      if (Array.isArray(data.categories) && data.categories.length) {
+        state.cats = parseCats({ items: data.categories });
+        saveLocalCats();
+      }
+      if (Array.isArray(data.users) && data.users.length) {
+        state.users = data.users;
+        saveUsers();
+      }
+      if (Array.isArray(data.log)) {
+        LOG.entries = data.log;
+        saveLocalLog();
+      }
+      renderBoard(); renderCats(); renderForm(); renderLog(); renderUserBar();
+      toast('Данные успешно восстановлены из копии!');
+      closeAuthModal();
+    } catch (_) {
+      toast('Ошибка при чтении файла бэкапа');
+    }
+  };
+  reader.readAsText(f);
+}
 
 /* ---------- Helpers ---------- */
 const clone = o => JSON.parse(JSON.stringify(o));
@@ -852,7 +1252,9 @@ const el = {
   logStat: $('logStat'), logTabs: $('logTabs'), logMine: $('logMine'), logApp: $('logApp'),
   logList: $('logList'), logMore: $('logMore'), logEmpty: $('logEmpty'),
   layout: $('layout'), mnav: $('mnav'), mnavCount: $('mnavCount'), navAnchor: $('navAnchor'),
-  offlineBar: $('offlineBar')
+  offlineBar: $('offlineBar'),
+  userBar: $('userBar'), authModal: $('authModal'), authClose: $('authClose'), authBody: $('authBody'),
+  authTitle: $('authTitle')
 };
 
 /* ---------- State ---------- */
@@ -860,6 +1262,7 @@ const state = {
   db: null, downloads: null, assets: null,
   mode: 'loading',          // loading | db | local
   canWrite: true, loaded: false, catsLoaded: false,
+  users: [], user: null,
   ratings: [],
   cats: clone(STARTERS),
   editCat: false, catDelConfirm: false,
@@ -1133,13 +1536,13 @@ function entryHTML(r, rank, showCat) {
 <details${state.open.has(r.id) ? ' open' : ''}>
 <summary><span class="sum">
 <span class="rank">${rank == null ? '—' : rank}</span>
-<span class="e-main">${r.photo ? `<img class="e-thumb" data-photo="thumb" src="/_blob/${esc(r.photo.id)}" alt="" loading="lazy" decoding="async">` : ''}<span class="e-text"><span class="e-name">${esc(r.name)}</span><span class="e-sub"><span>${esc(meta)}</span>${showCat ? `<span class="tag">${esc(catNameOf(r))}</span>` : ''}${r.example ? '<span class="tag ex">пример</span>' : ''}${notes ? `<span class="has-note" title="Есть заметки">${ICON.noteSm}<span class="vh">есть заметки</span></span>` : ''}</span></span></span>
+<span class="e-main">${r.photo ? `<img class="e-thumb" data-photo="thumb" src="${esc(r.photo.data || (r.photo.id && (r.photo.id.startsWith('data:') || r.photo.id.startsWith('blob:')) ? r.photo.id : '/_blob/' + r.photo.id))}" alt="" loading="lazy" decoding="async">` : ''}<span class="e-text"><span class="e-name">${esc(r.name)}</span><span class="e-sub"><span>${esc(meta)}</span>${showCat ? `<span class="tag">${esc(catNameOf(r))}</span>` : ''}${r.author && r.author.name ? `<span class="tag author-tag">👤 ${esc(r.author.name)}</span>` : ''}${r.example ? '<span class="tag ex">пример</span>' : ''}${notes ? `<span class="has-note" title="Есть заметки">${ICON.noteSm}<span class="vh">есть заметки</span></span>` : ''}</span></span></span>
 <span class="spark" aria-hidden="true">${spark}</span>
 <span class="badge" data-tier="${tierT(t)}">${t != null ? fmt(t) : '—'}</span>
 ${ICON.chev}
 </span></summary>
 <div class="e-body">
-${r.photo ? `<img class="e-photo" data-photo="body" src="/_blob/${esc(r.photo.id)}" alt="Фото: ${esc(r.name)}" loading="lazy" decoding="async"${r.photo.w && r.photo.h ? ` width="${r.photo.w}" height="${r.photo.h}"` : ''}>` : ''}
+${r.photo ? `<img class="e-photo" data-photo="body" src="${esc(r.photo.data || (r.photo.id && (r.photo.id.startsWith('data:') || r.photo.id.startsWith('blob:')) ? r.photo.id : '/_blob/' + r.photo.id))}" alt="Фото: ${esc(r.name)}" loading="lazy" decoding="async"${r.photo.w && r.photo.h ? ` width="${r.photo.w}" height="${r.photo.h}"` : ''}>` : ''}
 <ul class="bd">${bd}</ul>
 ${r.note ? `<div class="e-note"><span class="label">Заметки</span><p>${esc(r.note)}</p></div>` : ''}
 ${histHTML(r)}
@@ -1183,11 +1586,10 @@ function renderBoard() {
 }
 function renderNotice() {
   let msg = '';
-  if (state.mode === 'local') msg = 'Хранилище в этом окне недоступно, поэтому оценки продержатся только до закрытия страницы.';
-  else if (!state.canWrite) msg = 'Сохранять и менять оценки здесь может только владелец страницы. Ползунки и экспорт работают.';
+  if (!state.canWrite) msg = 'Сохранять и менять оценки здесь может только владелец страницы. Ползунки и экспорт работают.';
   el.boardNotice.textContent = msg;
   el.boardNotice.hidden = !msg;
-  el.offlineBar.hidden = state.mode !== 'local';
+  el.offlineBar.hidden = true;
 }
 function syncSort() {
   el.sortGroup.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.sort === state.sort)));
@@ -1395,13 +1797,18 @@ async function withRetry(fn) {
 async function putRating(id, data) {
   if (state.mode === 'db') { await withRetry(() => state.db.collection('ratings').doc(id).set(data)); return; }
   const r = normalizeRating(id, data);
+  if (!r.author) {
+    r.author = state.user ? { id: state.user.id, name: state.user.name } : { name: 'Гость' };
+  }
   const i = state.ratings.findIndex(x => x.id === id);
   if (i >= 0) state.ratings[i] = r; else state.ratings.push(r);
+  saveLocalRatings();
   renderBoard();
 }
 async function removeRating(id) {
   if (state.mode === 'db') { await withRetry(() => state.db.collection('ratings').doc(id).delete()); return; }
   state.ratings = state.ratings.filter(r => r.id !== id);
+  saveLocalRatings();
   renderBoard();
 }
 function handleWriteError(e) {
@@ -1427,7 +1834,9 @@ function normalizeRating(id, d) {
   return {
     id, cat: str(d.cat), catName: str(d.catName).slice(0, 60),
     name: d.name.slice(0, 140), nameKey: keyOf(d.name), scores, total: totalOf(scores),
-    note: str(d.note).slice(0, 4000), example: d.example === true, photo: normPhoto(d.photo),
+    note: str(d.note).slice(0, 4000), example: d.example === true,
+    author: (d.author && typeof d.author === 'object') ? { id: str(d.author.id), name: str(d.author.name) } : null,
+    photo: normPhoto(d.photo),
     createdAt: str(d.createdAt), updatedAt: str(d.updatedAt)
   };
 }
@@ -1459,25 +1868,30 @@ function serializeCats() {
 let catTimer = null, catBusy = false, catAgain = false, catPendingLocal = false;
 function scheduleCatSave(delay = 700) {
   if (state.mode === 'loading') { catPendingLocal = true; return; }
-  if (state.mode !== 'db') return;
   clearTimeout(catTimer);
   catTimer = setTimeout(flushCats, delay);
 }
 async function flushCats() {
   catTimer = null;
-  if (!state.db || !state.canWrite) return;
-  if (catBusy) { catAgain = true; return; }
-  catBusy = true;
-  try {
-    const items = serializeCats();
-    await withRetry(() => state.db.doc('settings/categories').set({ items, updatedAt: new Date().toISOString() }));
-    logCats(items);
-  } catch (e) {
-    handleWriteError(e);
-  } finally {
-    catBusy = false;
-    if (catAgain) { catAgain = false; flushCats(); }
+  const items = serializeCats();
+  if (state.mode === 'db') {
+    if (!state.db || !state.canWrite) return;
+    if (catBusy) { catAgain = true; return; }
+    catBusy = true;
+    try {
+      await withRetry(() => state.db.doc('settings/categories').set({ items, updatedAt: new Date().toISOString() }));
+      logCats(items);
+    } catch (e) {
+      handleWriteError(e);
+    } finally {
+      catBusy = false;
+      if (catAgain) { catAgain = false; flushCats(); }
+    }
+    return;
   }
+  // Local mode:
+  saveLocalCats();
+  logCats(items);
 }
 
 let ratingsSig = '';
@@ -1541,6 +1955,8 @@ function onDbError(e) {
   el.boardStat.textContent = 'Рейтинг сейчас не загружается. Обнови страницу';
 }
 async function initStorage() {
+  loadUsers();
+  renderUserBar();
   const c = window.claude;
   const has = !!(c && typeof c.use === 'function');
   if (has) c.use('downloads').then(d => { state.downloads = d || null; }, () => {});
@@ -1549,12 +1965,32 @@ async function initStorage() {
   if (has) { try { db = await c.use('db'); } catch (_) { db = null; } }
   if (!db) {
     state.mode = 'local';
+    state.canWrite = true;
+    try {
+      const savedCats = JSON.parse(localStorage.getItem(STORAGE_KEYS.CATS) || 'null');
+      if (savedCats && Array.isArray(savedCats) && savedCats.length) {
+        state.cats = parseCats({ items: savedCats });
+      }
+    } catch (_) {}
+    try {
+      const savedRatings = JSON.parse(localStorage.getItem(STORAGE_KEYS.RATINGS) || 'null');
+      if (savedRatings && Array.isArray(savedRatings)) {
+        state.ratings = savedRatings.map(r => normalizeRating(r.id, r)).filter(Boolean);
+      } else {
+        state.ratings = clone(STARTER_RATINGS).map(r => normalizeRating(r.id, r));
+        saveLocalRatings();
+      }
+    } catch (_) {}
+    try {
+      const savedLog = JSON.parse(localStorage.getItem(STORAGE_KEYS.LOG) || 'null');
+      if (savedLog && Array.isArray(savedLog)) LOG.entries = savedLog;
+    } catch (_) {}
     state.loaded = true;
     state.catsLoaded = true;
     LOG.loaded = true;
     logReadyResolve(false);
     if (!form.editingId && !currentCat()) form.cat = state.cats[0].id;
-    renderForm(); renderNotice(); renderBoard(); renderLog();
+    renderForm(); renderNotice(); renderBoard(); renderLog(); renderUserBar();
     return;
   }
   state.db = db;
@@ -2220,6 +2656,9 @@ el.dropExamples.addEventListener('click', async () => {
 });
 
 /* ---------- Events: export sheet ---------- */
+el.authClose.addEventListener('click', closeAuthModal);
+el.authModal.addEventListener('click', e => { if (e.target === el.authModal) closeAuthModal(); });
+window.addEventListener('keydown', e => { if (e.key === 'Escape' && !el.authModal.hidden) closeAuthModal(); });
 el.sheetClose.addEventListener('click', closeShare);
 el.sheet.addEventListener('click', e => { if (e.target === el.sheet) closeShare(); });
 el.shDownload.addEventListener('click', downloadShare);
@@ -2251,7 +2690,7 @@ function normPhoto(p) {
     ? { id: p.id, w: clampInt(p.w, 0, 20000), h: clampInt(p.h, 0, 20000) }
     : null;
 }
-function canPhoto() { return !!state.assets && state.canWrite && state.mode !== 'local'; }
+function canPhoto() { return state.canWrite; }
 function revokeFormPhoto() {
   if (form && form.photo && form.photo.kind === 'new' && form.photo.url) URL.revokeObjectURL(form.photo.url);
 }
@@ -2326,11 +2765,19 @@ function removePhoto() {
   scheduleDraft();
 }
 async function uploadPhoto(blob) {
-  try { return await state.assets.upload(blob, { type: 'image/jpeg' }); }
-  catch (e) {
-    if (e && e.code === 'store_unavailable') { await sleep(400 + Math.random() * 600); return await state.assets.upload(blob, { type: 'image/jpeg' }); }
-    throw e;
+  if (state.assets) {
+    try { return await state.assets.upload(blob, { type: 'image/jpeg' }); }
+    catch (e) {
+      if (e && e.code === 'store_unavailable') { await sleep(400 + Math.random() * 600); return await state.assets.upload(blob, { type: 'image/jpeg' }); }
+      throw e;
+    }
   }
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve({ id: reader.result, data: reader.result });
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
 }
 function dropAsset(id) {
   if (state.assets && id) state.assets.delete(id).catch(() => {});
@@ -2356,7 +2803,8 @@ async function loadPhotoBitmap(p) {
   try {
     let blob = p.kind === 'new' ? p.blob : null;
     if (!blob) {
-      const res = await fetch('/_blob/' + p.id);
+      const src = p.data || (p.id && (p.id.startsWith('data:') || p.id.startsWith('blob:')) ? p.id : '/_blob/' + p.id);
+      const res = await fetch(src);
       if (!res.ok) return null;
       blob = await res.blob();
     }
@@ -2601,6 +3049,15 @@ function noteDoc(id, size) {
   LOG.docs.set(id, d);
 }
 async function writeLogEntry(e, session) {
+  if (state.mode !== 'db') {
+    const idx = LOG.entries.findIndex(x => x.id === e.id);
+    if (idx >= 0) LOG.entries[idx] = e;
+    else LOG.entries.unshift(e);
+    if (LOG.entries.length > 400) LOG.entries.length = 400;
+    saveLocalLog();
+    renderLog();
+    return;
+  }
   const definitive = await Promise.race([logReady, sleep(12000).then(() => false)]);
   const body = Object.assign({}, e);
   delete body.id;
