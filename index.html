@@ -1144,10 +1144,17 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
             <p><strong>Журнал пока пуст.</strong> Сюда по датам попадут новые оценки, правки и удаления, а ещё изменения категорий и критериев. К любой записи можно дописать своё описание.</p>
           </div>
         </div>
-        <div id="logApp" data-stat="12 версий, последняя 25 октября" hidden>
+        <div id="logApp" data-stat="13 версий, последняя 25 октября" hidden>
           <div class="log-days">
             <section class="log-day">
-              <h3 class="log-date">25 октября 2026<span>версии 4–12</span></h3>
+              <h3 class="log-date">25 октября 2026<span>версии 4–13</span></h3>
+              <article class="rel">
+                <span class="rel-v">v13</span>
+                <div>
+                  <h4>Один аккаунт для всего</h4>
+                  <p>Регистрация по почте через «Войти / Профиль» сразу создаёт и аккаунт для друзей, отдельный вход больше не нужен. Войти можно по почте или по нику с любого устройства, профиль подтянется сам. В окне «Друзья» показан твой ник, по нему тебя добавляют. Старые аккаунты подключаются к друзьям одним паролем, а смена ника, почты или пароля в профиле меняет их и для друзей. Пароль теперь от 6 символов.</p>
+                </div>
+              </article>
               <article class="rel">
                 <span class="rel-v">v12</span>
                 <div>
@@ -1568,8 +1575,8 @@ function registerUser(username, email, password, avatar, color) {
     toast('Этот email уже привязан к другому аккаунту'); return false;
   }
 
-  if (password && password.length < 4) {
-    toast('Пароль должен содержать минимум 4 символа'); return false;
+  if (password.length < 6) {
+    toast('Пароль должен содержать минимум 6 символов'); return false;
   }
 
   const u = {
@@ -1756,8 +1763,8 @@ function renderAuthModal() {
         </div>
 
         <div class="auth-field">
-          <label for="inputEditName">Имя или никнейм</label>
-          <input type="text" id="inputEditName" value="${esc(state.user.name)}" required minlength="2" maxlength="30">
+          <label for="inputEditName">Ник</label>
+          <input type="text" id="inputEditName" value="${esc(state.user.name)}" required minlength="2" maxlength="24">
         </div>
         <div class="auth-field">
           <label for="inputEditEmail">Электронная почта (Email)</label>
@@ -1993,8 +2000,8 @@ function renderAuthModal() {
     ${authActiveTab === 'login' ? `
       <form class="auth-form" id="formLogin">
         <div class="auth-field">
-          <label for="inputLoginIdent">Имя пользователя или Email</label>
-          <input type="text" id="inputLoginIdent" autocomplete="username" required placeholder="username или name@domain.com">
+          <label for="inputLoginIdent">Ник или email</label>
+          <input type="text" id="inputLoginIdent" autocomplete="username" required placeholder="Ник или name@domain.com">
         </div>
         <div class="auth-field">
           <label for="inputLoginPass">Пароль</label>
@@ -2056,8 +2063,9 @@ function renderAuthModal() {
         </div>
 
         <div class="auth-field">
-          <label for="inputRegName">Имя или никнейм</label>
-          <input type="text" id="inputRegName" autocomplete="username" required placeholder="Например, Алекс" minlength="2" maxlength="30">
+          <label for="inputRegName">Ник</label>
+          <input type="text" id="inputRegName" autocomplete="username" required placeholder="Например, Алекс" minlength="2" maxlength="24">
+          <span class="auth-help">По этому нику тебя найдут друзья. Буквы, цифры, пробел, точка, дефис или подчёркивание.</span>
         </div>
 
         <div class="auth-field">
@@ -2069,7 +2077,7 @@ function renderAuthModal() {
         <div class="auth-field">
           <label for="inputRegPass">Пароль</label>
           <div class="pwd-wrap">
-            <input type="password" id="inputRegPass" autocomplete="new-password" placeholder="Минимум 4 символа">
+            <input type="password" id="inputRegPass" autocomplete="new-password" placeholder="Минимум 6 символов" required minlength="6">
             <button type="button" class="pwd-toggle" id="btnToggleRegPass" aria-label="Показать/скрыть пароль">${EYE_OPEN_SVG}</button>
           </div>
           <div class="pwd-meter" id="regPwdMeter">

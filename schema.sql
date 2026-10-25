@@ -7,8 +7,12 @@ CREATE TABLE IF NOT EXISTS users (
   uname TEXT NOT NULL UNIQUE,      -- ник в нижнем регистре, для поиска и уникальности
   pass_hash TEXT NOT NULL,         -- PBKDF2-SHA256, пароль в открытом виде не хранится
   salt TEXT NOT NULL,
-  created_at INTEGER NOT NULL
+  created_at INTEGER NOT NULL,
+  email TEXT                       -- почта в нижнем регистре, по ней тоже можно войти
 );
+CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users(email);
+-- Сервер сам создаёт эти таблицы и добавляет колонку email при первом запросе,
+-- так что этот файл нужен только для ручной установки.
 
 CREATE TABLE IF NOT EXISTS sessions (
   token_hash TEXT PRIMARY KEY,     -- SHA-256 от токена, сам токен лежит только у пользователя

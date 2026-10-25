@@ -6,6 +6,27 @@ const ITER = 10000; // PBKDF2: больше не даёт бесплатный �
 const SESSION_DAYS = 30;
 const MAX_SHELF = 800000; // байт JSON на одного человека
 const NAME_RE = /^[\p{L}\p{N}_.\- ]{2,24}$/u;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+// Таблицы создаются и обновляются сами при первом запросе (то же, что в schema.sql),
+// чтобы новые поля вроде email не требовали ручной миграции.
+let schemaReady = false;
+async function ensureSchema(env) {
+  if (schemaReady) return;
+  await env.DB.batch([
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, username TEXT NOT NULL, uname TEXT NOT NULL UNIQUE, pass_hash TEXT NOT NULL, salt TEXT NOT NULL, created_at INTEGER NOT NULL, email TEXT)'),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at INTEGER NOT NULL)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS sessions_user ON sessions(user_id)'),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS friendships (a TEXT NOT NULL, b TEXT NOT NULL, status TEXT NOT NULL, requested_by TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (a, b))'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS friendships_b ON friendships(b)'),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS shelves (user_id TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at INTEGER NOT NULL)'),
+  ]);
+  const { results } = await env.DB.prepare('PRAGMA table_info(users)').all();
+  if (!results.some((c) => c.name === 'email')) await env.DB.prepare('ALTER TABLE users ADD COLUMN email TEXT').run();
+  await env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users(email)').run();
+  schemaReady = true;
+}
+const cleanEmail = (s) => String(s || '').trim().toLowerCase();
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -53,27 +74,32 @@ async function link(env, x, y) {
 
 const routes = {
   async 'POST /register'({ env, request }) {
-    const { username, password } = await readBody(request);
+    const { username, password, email } = await readBody(request);
     const name = cleanName(username);
+    const mail = cleanEmail(email);
     const pass = String(password || '');
+    if (!EMAIL_RE.test(mail) || mail.length > 120) return fail(400, 'Нужна почта, например name@mail.com.');
     if (!NAME_RE.test(name)) return fail(400, 'Ник: от 2 до 24 символов, буквы, цифры, пробел, точка, дефис или подчёркивание.');
     if (pass.length < 6 || pass.length > 200) return fail(400, 'Пароль: от 6 символов.');
     const uname = name.toLowerCase();
+    if (await env.DB.prepare('SELECT 1 FROM users WHERE email = ?').bind(mail).first()) return fail(409, 'На эту почту уже есть аккаунт.');
     if (await env.DB.prepare('SELECT 1 FROM users WHERE uname = ?').bind(uname).first()) return fail(409, 'Такой ник уже занят.');
     const id = randHex(12);
     const salt = randHex(16);
-    await env.DB.prepare('INSERT INTO users (id, username, uname, pass_hash, salt, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(id, name, uname, await hashPass(pass, salt), salt, Date.now()).run();
-    return json({ token: await newSession(env, id), user: { id, username: name } });
+    await env.DB.prepare('INSERT INTO users (id, username, uname, pass_hash, salt, created_at, email) VALUES (?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, name, uname, await hashPass(pass, salt), salt, Date.now(), mail).run();
+    return json({ token: await newSession(env, id), user: { id, username: name, email: mail } });
   },
 
+  // вход по почте или по нику
   async 'POST /login'({ env, request }) {
-    const { username, password } = await readBody(request);
-    const u = await env.DB.prepare('SELECT id, username, pass_hash, salt FROM users WHERE uname = ?')
-      .bind(cleanName(username).toLowerCase()).first();
-    if (!u || !sameHex(await hashPass(String(password || ''), u.salt), u.pass_hash)) return fail(401, 'Неверный ник или пароль.');
+    const { login, username, password } = await readBody(request);
+    const ident = String(login || username || '').trim();
+    const u = await env.DB.prepare('SELECT id, username, email, pass_hash, salt FROM users WHERE uname = ? OR email = ?')
+      .bind(cleanName(ident).toLowerCase(), cleanEmail(ident)).first();
+    if (!u || !sameHex(await hashPass(String(password || ''), u.salt), u.pass_hash)) return fail(401, 'Неверная почта, ник или пароль.');
     await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND expires_at < ?').bind(u.id, Date.now()).run();
-    return json({ token: await newSession(env, u.id), user: { id: u.id, username: u.username } });
+    return json({ token: await newSession(env, u.id), user: { id: u.id, username: u.username, email: u.email || '' } });
   },
 
   async 'POST /logout'({ env, request }) {
@@ -84,6 +110,33 @@ const routes = {
 
   async 'GET /me'({ me }) {
     return json({ user: me });
+  },
+
+  // смена ника и/или пароля из профиля на сайте
+  async 'PUT /account'({ env, request, me }) {
+    const { username, password, email } = await readBody(request);
+    let name = me.username;
+    if (email != null && email !== '') {
+      const mail = cleanEmail(email);
+      if (!EMAIL_RE.test(mail) || mail.length > 120) return fail(400, 'Нужна почта, например name@mail.com.');
+      const taken = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(mail).first();
+      if (taken && taken.id !== me.id) return fail(409, 'На эту почту уже есть аккаунт.');
+      await env.DB.prepare('UPDATE users SET email = ? WHERE id = ?').bind(mail, me.id).run();
+    }
+    if (username != null && cleanName(username) !== me.username) {
+      name = cleanName(username);
+      if (!NAME_RE.test(name)) return fail(400, 'Ник: от 2 до 24 символов, буквы, цифры, пробел, точка, дефис или подчёркивание.');
+      const taken = await env.DB.prepare('SELECT id FROM users WHERE uname = ?').bind(name.toLowerCase()).first();
+      if (taken && taken.id !== me.id) return fail(409, 'Такой ник уже занят.');
+      await env.DB.prepare('UPDATE users SET username = ?, uname = ? WHERE id = ?').bind(name, name.toLowerCase(), me.id).run();
+    }
+    if (password) {
+      const pass = String(password);
+      if (pass.length < 6 || pass.length > 200) return fail(400, 'Пароль: от 6 символов.');
+      const salt = randHex(16);
+      await env.DB.prepare('UPDATE users SET pass_hash = ?, salt = ? WHERE id = ?').bind(await hashPass(pass, salt), salt, me.id).run();
+    }
+    return json({ user: { id: me.id, username: name } });
   },
 
   async 'GET /friends'({ env, me }) {
@@ -178,6 +231,7 @@ export async function onRequest({ request, env, params }) {
   if (!handler) return fail(404, 'Нет такого адреса.');
 
   try {
+    await ensureSchema(env);
     let me = null;
     if (!PUBLIC.has(key)) {
       me = await currentUser(env, request);
