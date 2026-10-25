@@ -384,7 +384,7 @@ fieldset:disabled { opacity: .6; }
 }
 .th-x:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-/* Music slots and list templates */
+/* Music slots: own file or a track from the list, plus the visible embedded player */
 .mslots { display: grid; gap: 8px; }
 .mslot { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; }
 .ms-text { flex: 1; min-width: 0; display: grid; gap: 1px; }
@@ -392,9 +392,14 @@ fieldset:disabled { opacity: .6; }
 .ms-text span { font-size: 12.5px; color: var(--ink-2); overflow-wrap: anywhere; }
 .ms-text span.hint { color: var(--accent); font-weight: 600; }
 .mslot .btn.small { flex: none; }
-.tpl { display: grid; gap: 8px; }
-.tpl h4 { font-size: 15px; font-weight: 700; }
-.tpl p { font-size: 13px; color: var(--ink-2); text-wrap: pretty; }
+.mslot { flex-wrap: wrap; }
+.ms-acts { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; flex: 1 1 260px; }
+.mpick { flex: 1 1 150px; width: auto; height: 36px; padding: 0 8px; font-size: 13px; cursor: pointer; }
+.mplayer { display: grid; gap: 8px; margin-top: 10px; padding: 10px 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; }
+.mplayer-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; }
+.mplayer-head .label { margin: 0; }
+#mplayerTitle { font-weight: 600; font-size: 14px; }
+.mplayer iframe { display: block; max-width: 100%; border: 0; border-radius: 8px; }
 
 /* Status strip right under the wheel, built from the rater's score badge */
 .scorebar {
@@ -586,6 +591,11 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
         <p class="label">Музыка</p>
         <input type="file" id="audioFile" accept="audio/*,.mp3,.ogg,.wav,.m4a" hidden>
         <div class="mslots" id="mslots"></div>
+        <div class="mplayer" id="mplayer" hidden>
+          <div class="mplayer-head"><span class="label">Сейчас играет</span><span id="mplayerTitle"></span></div>
+          <div id="ytWrap"><div id="ytHost"></div></div>
+          <div id="spWrap" hidden><div id="spHost"></div></div>
+        </div>
         <p class="field-msg" id="musicNote"></p>
       </div>
     </section>
@@ -639,11 +649,6 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
               <button type="button" class="btn small primary" id="bulkAdd">Добавить всё</button>
             </div>
           </div>
-        </details>
-
-        <details class="tool" id="tplBox">
-          <summary>Шаблоны <svg class="chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
-          <div class="dbody" id="tplList"></div>
         </details>
 
         <ol class="board-list" id="list"></ol>
@@ -744,22 +749,16 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     ['out', 'Вылет', 'когда сектор выбывает'],
     ['win', 'Победа', 'когда остался последний'],
   ];
-  // известно только про победную: после побед Папич включает тему Курта Энгла из WWE
-  const MUSIC_HINT = { win: 'Как у Папича: Kurt Angle — Medal (тема WWE)' };
-  const TEMPLATES = [{
-    id: 'papich',
-    title: 'Плейлист Папича',
-    note: 'Его победная, которую он включает после побед, и треки из плейлиста, который он выкладывал в 2015 году. Список собран по фанатскому треклисту на dota2.ru, точной статистики, что он ставит чаще, нет.',
-    items: [
-      'Kurt Angle — Medal', 'AC/DC — Highway to Hell', 'Ace of Base — All That She Wants', 'Aerosmith — Dream On',
-      'Basshunter — Dota', 'Aqua — Barbie Girl', 'Britney Spears — Toxic', 'Celine Dion — My Heart Will Go On',
-      'Crazy Frog — Axel F', 'Dschinghis Khan — Moskau', 'Eminem & Dido — Stan', 'Evanescence — Bring Me to Life',
-      'O-Zone — Dragostea Din Tei', 'Ray Parker Jr. — Ghostbusters', 'Robert Miles — Children', 'Nightwish — Nemo',
-      'Muse — Supermassive Black Hole', 'Агата Кристи — Как на войне', 'Алла Пугачёва — Миллион алых роз',
-      'Би-2 — Её глаза', 'Валерий Кипелов — Я свободен', 'Земфира — Хочешь', 'Ленинград — Никого не жалко',
-      'Мираж — Музыка нас связала', 'Океан Ельзи — Без бою', 'Руслана — Аркан', 'Ляпис Трубецкой — Яблони',
-    ],
-  }];
+  // треки на выбор: ровно те ссылки, что дал хозяин колеса; играют через встроенные плееры YouTube и Spotify
+  const PRESETS = [
+    { id: 'vika', title: 'VI KA — Гимн Папича (Arthas)', src: 'yt', key: 'SXe1aTEJU2w' },
+    { id: 'mk', title: 'Mortal Kombat — Techno Syndrome', src: 'sp', key: '2hTx8adLNJBwhLsavI1Xvr' },
+    { id: 'serious', title: 'Serious Sam — The Grand Cathedral', src: 'yt', key: '0IVRoqDWwIk' },
+    { id: 'chopin', title: 'Шопен — Вальс до-диез минор, оп. 64 № 2', src: 'yt', key: 'SUT_0c2QVzo' },
+    { id: 'eva', title: 'Evangelion — E05 (ReMaster TV Original)', src: 'sp', key: '1hukSz5tfR0P9FWgRoQCmC' },
+  ];
+  const DEFAULT_WIN = 'vika'; // победа по умолчанию
+  const presetOf = (v) => (typeof v === 'string' && v.startsWith('preset:') ? PRESETS.find((p) => p.id === v.slice(7)) || null : null);
   const EMPTY_HTML = `<li class="empty">
     <div class="ghost-rows" aria-hidden="true"><span>1</span><b class="w1"></b><i></i><span>2</span><b class="w2"></b><i></i><span>3</span><b class="w3"></b><i></i></div>
     <p><strong>Колесо пустое.</strong> Впиши первого участника выше или вставь сразу целый список.</p>
@@ -1037,10 +1036,17 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     const t = ac.currentTime;
     tone(330, t, 0.18, 0.12); tone(220, t + 0.12, 0.3, 0.12);
   }
+  // стандартная победа: фанфара по нотам и долгий аккорд, заметно громче щелчков
   function playWin() {
     if (!S.sound || !ac) return;
-    const t = ac.currentTime;
-    [523, 659, 784, 1047].forEach((f, k) => tone(f, t + k * 0.11, 0.38, 0.1));
+    const t = ac.currentTime + 0.02;
+    [523, 659, 784, 1047, 784, 1047].forEach((f, k) => {
+      tone(f, t + k * 0.13, 0.34, 0.22);
+      tone(f / 2, t + k * 0.13, 0.3, 0.08, 'square');
+    });
+    const end = t + 6 * 0.13;
+    [523, 659, 784, 1047].forEach((f) => tone(f, end, 1.4, 0.16));
+    tone(262, end, 1.4, 0.1, 'square');
   }
 
   // ---------- spin ----------
@@ -1378,12 +1384,100 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
   let A = [], current = null, previewSlot = '', spinMusic = false, pendingSlot = '';
   const slotTitle = (slot) => (MUSIC_SLOTS.find((m) => m[0] === slot) || [, slot])[1];
 
+  // ---------- встроенные плееры YouTube и Spotify для треков из списка ----------
+  const EMB = { yt: null, ytReady: null, sp: null, spReady: null, spUri: '', active: null, loop: false, failed: false };
+  function loadScript(src) {
+    return new Promise((res, rej) => {
+      const s = document.createElement('script');
+      s.src = src; s.async = true; s.onload = res; s.onerror = rej;
+      document.head.appendChild(s);
+    });
+  }
+  const timeout = (ms) => new Promise((_, rej) => setTimeout(() => rej(new Error('timeout')), ms));
+  function ytPlayer() {
+    if (!EMB.ytReady) {
+      EMB.ytReady = Promise.race([new Promise((res, rej) => {
+        window.onYouTubeIframeAPIReady = () => {
+          EMB.yt = new YT.Player('ytHost', {
+            width: 192, height: 108,
+            playerVars: { playsinline: 1, rel: 0 },
+            events: {
+              onReady: () => res(EMB.yt),
+              onStateChange: (e) => { if (e.data === 0 && EMB.active === 'yt' && EMB.loop) { EMB.yt.seekTo(0); EMB.yt.playVideo(); } },
+              onError: (e) => {
+                musicNote(e.data === 150 || e.data === 101
+                  ? 'Автор этого ролика на YouTube запретил проигрывать его на других сайтах. Скачай трек и поставь через «Свой файл», пока играет стандартный звук.'
+                  : 'YouTube не дал проиграть этот трек, пока играет стандартный звук.', 'err');
+                $('#mplayer').hidden = true;
+                const f = EMB.onFail;
+                EMB.onFail = null;
+                if (f && EMB.active === 'yt') f();
+              },
+            },
+          });
+        };
+        loadScript('https://www.youtube.com/iframe_api').catch(rej);
+      }), timeout(15000)]);
+      EMB.ytReady.catch(() => { EMB.failed = true; });
+    }
+    return EMB.ytReady;
+  }
+  function spPlayer(uri) {
+    if (!EMB.spReady) {
+      EMB.spUri = uri;
+      EMB.spReady = Promise.race([new Promise((res, rej) => {
+        window.onSpotifyIframeApiReady = (api) => {
+          api.createController($('#spHost'), { uri, width: '100%', height: 80 }, (ctrl) => {
+            EMB.sp = ctrl;
+            ctrl.addListener('ready', () => res(ctrl));
+          });
+        };
+        loadScript('https://open.spotify.com/embed/iframe-api/v1').catch(rej);
+      }), timeout(15000)]);
+      EMB.spReady.catch(() => { EMB.failed = true; });
+    }
+    return EMB.spReady;
+  }
+  async function playPreset(p, loop, onFail) {
+    $('#mplayer').hidden = false;
+    $('#mplayerTitle').textContent = p.title;
+    $('#ytWrap').hidden = p.src !== 'yt';
+    $('#spWrap').hidden = p.src !== 'sp';
+    EMB.active = p.src;
+    EMB.loop = !!loop;
+    EMB.onFail = onFail || null; // если ролик откажется играть, сыграет стандартный звук
+    try {
+      if (p.src === 'yt') {
+        const y = await ytPlayer();
+        if (EMB.active !== 'yt') return;
+        y.loadVideoById({ videoId: p.key, startSeconds: 0 });
+        y.playVideo();
+      } else {
+        const uri = 'spotify:track:' + p.key;
+        const s = await spPlayer(uri);
+        if (EMB.active !== 'sp') return;
+        if (EMB.spUri !== uri) { s.loadUri(uri); EMB.spUri = uri; setTimeout(() => { if (EMB.active === 'sp') s.play(); }, 500); }
+        else s.play();
+      }
+    } catch (e) {
+      $('#mplayer').hidden = true;
+      musicNote('Треки из списка играют на casualhub.pages.dev, здесь встроенные плееры недоступны. Пока играет стандартный звук.', 'err');
+      if (onFail) onFail();
+    }
+  }
+  function stopEmbeds() {
+    EMB.active = null;
+    try { if (EMB.yt && EMB.yt.pauseVideo) EMB.yt.pauseVideo(); } catch (e) {}
+    try { if (EMB.sp) EMB.sp.pause(); } catch (e) {}
+  }
+
   function stopMusic(fade) {
     const el = current, wasPreview = previewSlot;
     current = null;
     previewSlot = '';
     if (wasPreview) renderMusic();
     if (!el) return;
+    if (el.embed) { stopEmbeds(); return; }
     if (!fade || reduced) { el.pause(); return; }
     const v0 = el.volume, t0 = performance.now();
     const step = () => {
@@ -1397,6 +1491,13 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
   function playSlot(slot, loop, force) {
     stopMusic();
     if (!S.sound && !force) return false;
+    const p = presetOf(S.music[slot]);
+    if (p) {
+      if (EMB.failed) return false; // плееры недоступны: пусть играет стандартный звук
+      current = { embed: true };
+      playPreset(p, loop, slot === 'win' ? playWin : slot === 'out' ? playOut : null);
+      return true;
+    }
     const rec = A.find((a) => a.id === S.music[slot]);
     if (!rec) return false;
     const el = new Audio(rec.url);
@@ -1409,20 +1510,28 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
 
   function musicNote(text, kind) {
     const el = $('#musicNote');
-    el.textContent = text || 'Загрузи свои аудиофайлы, они хранятся в этом браузере. Без трека играет стандартный звук колеса.';
+    el.textContent = text || 'Выбери трек из списка или загрузи свой аудиофайл, он сохранится в этом браузере. Без трека играет стандартный звук колеса.';
     el.className = 'field-msg' + (kind ? ' ' + kind : '');
   }
 
   function renderMusic() {
     $('#mslots').innerHTML = MUSIC_SLOTS.map(([slot, title, when]) => {
       const rec = A.find((a) => a.id === S.music[slot]);
+      const pre = presetOf(S.music[slot]);
+      const has = rec || pre;
       const playing = previewSlot === slot;
-      const hint = !rec && MUSIC_HINT[slot] ? `<span class="hint">${MUSIC_HINT[slot]}</span>` : '';
+      const name = rec ? esc(rec.name) : pre ? `${esc(pre.title)} · ${pre.src === 'yt' ? 'YouTube' : 'Spotify'}` : `стандартный звук · ${when}`;
       return `<div class="mslot">
-        <div class="ms-text"><strong>${title}</strong><span>${rec ? esc(rec.name) : `стандартный звук · ${when}`}</span>${hint}</div>
-        ${rec ? `<button type="button" class="mini-btn" data-mplay="${slot}" aria-label="${playing ? 'Остановить' : 'Прослушать'}: ${title}">${playing ? ICON.stop : ICON.play}</button>
-        <button type="button" class="mini-btn del" data-mdel="${slot}" aria-label="Убрать трек: ${title}">${ICON.x}</button>` : ''}
-        <button type="button" class="btn small ghost" data-mup="${slot}">${rec ? 'Заменить' : 'Загрузить'}</button>
+        <div class="ms-text"><strong>${title}</strong><span>${name}</span></div>
+        <div class="ms-acts">
+          ${has ? `<button type="button" class="mini-btn" data-mplay="${slot}" aria-label="${playing ? 'Остановить' : 'Прослушать'}: ${title}">${playing ? ICON.stop : ICON.play}</button>
+          <button type="button" class="mini-btn del" data-mdel="${slot}" aria-label="Убрать трек: ${title}">${ICON.x}</button>` : ''}
+          <select class="inp mpick" data-mpick="${slot}" aria-label="Трек из списка: ${title}">
+            <option value="">Из списка…</option>
+            ${PRESETS.map((p) => `<option value="${p.id}"${pre && pre.id === p.id ? ' selected' : ''}>${esc(p.title)}</option>`).join('')}
+          </select>
+          <button type="button" class="btn small ghost" data-mup="${slot}">${rec ? 'Заменить' : 'Свой файл'}</button>
+        </div>
       </div>`;
     }).join('');
   }
@@ -1453,25 +1562,6 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     musicNote(persistOk ? `«${file.name}» стоит на «${slotTitle(slot)}».` : 'Браузер не даёт сохранить трек: после перезагрузки его придётся загрузить заново.', persistOk ? 'ok' : 'err');
   }
 
-  function renderTemplates() {
-    $('#tplList').innerHTML = TEMPLATES.map((t) => `<div class="tpl">
-      <h4>${t.title} · ${t.items.length} треков</h4>
-      <p>${t.note}</p>
-      <p>${t.items.slice(0, 6).map(esc).join(' · ')} и ещё ${t.items.length - 6}.</p>
-      <div><button type="button" class="btn small primary" data-tpl="${t.id}">Добавить на колесо</button></div>
-    </div>`).join('');
-  }
-  function applyTemplate(id) {
-    const t = TEMPLATES.find((x) => x.id === id);
-    if (!t || S.spinning) return;
-    let added = 0, had = 0;
-    t.items.forEach((n) => { const r = addItem(n, 0, S.cur); if (r === 'added') added++; else if (r !== 'empty') had++; });
-    save();
-    render();
-    msg(`Шаблон «${t.title}»: добавлено ${added}` + (had ? `, уже были на колесе: ${had}` : '') +
-      (S.mode === 'donate' ? '. Суммы донатов впиши в списке: пока у всех ноль, шансы равные.' : '.'), 'ok');
-  }
-
   function bind() {
     $('#spin').addEventListener('click', () => { clearTimeout(autoTimer); spin(); });
 
@@ -1495,18 +1585,29 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
       if (playSlot(slot, false, true)) {
         previewSlot = slot;
         const el = current;
-        el.addEventListener('ended', () => { if (current === el) { current = null; previewSlot = ''; renderMusic(); } });
+        if (el && el.addEventListener) el.addEventListener('ended', () => { if (current === el) { current = null; previewSlot = ''; renderMusic(); } });
         renderMusic();
       }
+    });
+    // трек из списка
+    $('#mslots').addEventListener('change', (e) => {
+      const sel = e.target.closest('[data-mpick]');
+      if (!sel) return;
+      const slot = sel.dataset.mpick;
+      stopMusic();
+      if (!sel.value) return;
+      const old = S.music[slot];
+      if (old && !presetOf(old)) dropAudio(old);
+      S.music[slot] = 'preset:' + sel.value;
+      save();
+      renderMusic();
+      const p = presetOf(S.music[slot]);
+      musicNote(`«${p.title}» стоит на «${slotTitle(slot)}». Нажми ▶, чтобы послушать.`, 'ok');
     });
     $('#audioFile').addEventListener('change', (e) => {
       const f = e.target.files && e.target.files[0];
       if (f && pendingSlot) addAudio(f, pendingSlot);
       e.target.value = '';
-    });
-    $('#tplList').addEventListener('click', (e) => {
-      const b = e.target.closest('[data-tpl]');
-      if (b) applyTemplate(b.dataset.tpl);
     });
     $('#restart').addEventListener('click', restoreAll);
 
@@ -1763,6 +1864,8 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     S.hub = nearest(+S.hub || HUBS[0][0], HUBS.map((h) => h[0]));
     if (!['wheel', 'list'].includes(S.section)) S.section = 'wheel';
     S.music = Object.assign({ spin: '', out: '', win: '' }, S.music || {});
+    // один раз ставим победную по умолчанию, дальше выбор человека не трогаем
+    if (!S.musicDefaults) { if (!S.music.win) S.music.win = 'preset:' + DEFAULT_WIN; S.musicDefaults = 1; }
     if (!d) { S.sample = true; SAMPLE.forEach(([n, a]) => S.items.push(makeItem(n, a, S.cur))); }
     $('#cur').innerHTML = CODES.map((c) => `<option value="${c}">${CUR[c].sym} ${c}</option>`).join('');
     $('#cur').value = S.cur;
@@ -1780,13 +1883,12 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     gifNote();
     renderMusic();
     musicNote();
-    renderTemplates();
     gifsAll()
       .then((recs) => {
         const all = recs || [];
         G = all.filter((r) => r.kind !== 'audio').sort((x, y) => x.added - y.added).map((r) => ({ ...r, url: URL.createObjectURL(r.blob) }));
         A = all.filter((r) => r.kind === 'audio').map((r) => ({ ...r, url: URL.createObjectURL(r.blob) }));
-        MUSIC_SLOTS.forEach(([s]) => { if (S.music[s] && !A.some((a) => a.id === S.music[s])) S.music[s] = ''; });
+        MUSIC_SLOTS.forEach(([s]) => { if (S.music[s] && !presetOf(S.music[s]) && !A.some((a) => a.id === S.music[s])) S.music[s] = ''; });
         renderGifs();
         renderMusic();
       })
