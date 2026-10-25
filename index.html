@@ -226,6 +226,20 @@ a.theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
 /* Sub-filters & Board Toolbar */
 .board-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; }
 .sub-filters { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; }
+/* Board toolbar: main switch on view, the rest behind one button */
+.board-bar { position: relative; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; }
+.board-more > summary { list-style: none; gap: 6px; }
+.board-more > summary::-webkit-details-marker { display: none; }
+.board-more > summary b { font-weight: 600; color: var(--accent); }
+.board-more[open] > summary { border-color: var(--accent); }
+.board-more-body {
+  position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; width: min(340px, 100%);
+  display: grid; gap: 14px; padding: 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 18px 40px -18px color-mix(in srgb, var(--ink) 55%, transparent);
+}
+.board-more-body .label { margin-bottom: 6px; }
+.lvl-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.board-more-body #randomBtn { justify-self: start; }
 .sub-chip {
   display: inline-flex; align-items: center; gap: 4px; height: 28px; padding: 0 10px;
   border: 1px solid var(--line); border-radius: 8px; background: var(--panel-2);
@@ -975,29 +989,45 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
       <div id="panelBoard" role="tabpanel" aria-labelledby="tabBoard">
         <div class="board-head">
           <p class="board-stat" id="boardStat">Загружаю рейтинг…</p>
-          <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
-            <div class="seg" id="layoutGroup" role="group" aria-label="Вид списка">
-              <button type="button" data-bmode="list" aria-pressed="true" title="Список">Список</button>
-              <button type="button" data-bmode="grid" aria-pressed="false" title="Плитка">Плитка</button>
-              <button type="button" data-bmode="tiers" aria-pressed="false" title="Тир-лист S/A/B/C/D">Тиры</button>
-            </div>
-            <div class="seg" id="sortGroup" role="group" aria-label="Сортировка">
-              <button type="button" data-sort="score" aria-pressed="true">По баллу</button>
-              <button type="button" data-sort="date" aria-pressed="false">Новые</button>
-              <button type="button" data-sort="name" aria-pressed="false">А–Я</button>
-            </div>
-            <button type="button" class="btn small ghost" id="randomBtn" title="Случайная оценка из списка" style="height:32px;padding:0 9px;">🎲</button>
-          </div>
         </div>
         <div class="filters" id="filters" role="group" aria-label="Категория в рейтинге" hidden></div>
-        <div class="sub-filters" id="subFilters" role="group" aria-label="Быстрый фильтр">
-          <button type="button" class="sub-chip" data-sfilter="all" aria-pressed="true">Все уровни</button>
-          <button type="button" class="sub-chip" data-sfilter="fav" aria-pressed="false">★ Избранное</button>
-          <button type="button" class="sub-chip" data-sfilter="mine" aria-pressed="false">👤 Мои</button>
-          <button type="button" class="sub-chip" data-sfilter="master" aria-pressed="false">Шедевры 8.5+</button>
-          <button type="button" class="sub-chip" data-sfilter="good" aria-pressed="false">Хорошие 7.5+</button>
-          <button type="button" class="sub-chip" data-sfilter="mid" aria-pressed="false">Средние 5–7.4</button>
-          <button type="button" class="sub-chip" data-sfilter="bad" aria-pressed="false">Слабые &lt;5</button>
+        <div class="board-bar" id="subFilters" role="group" aria-label="Что показать">
+          <div class="seg">
+            <button type="button" data-sfilter="all" aria-pressed="true">Все</button>
+            <button type="button" data-sfilter="mine" aria-pressed="false">👤 Мои</button>
+            <button type="button" data-sfilter="fav" aria-pressed="false">★ Избранное</button>
+          </div>
+          <details class="board-more" id="boardMore">
+            <summary class="btn small ghost">⚙ Вид и фильтры<b id="boardMoreHint"></b></summary>
+            <div class="board-more-body">
+              <div>
+                <span class="label">Вид</span>
+                <div class="seg" id="layoutGroup" role="group" aria-label="Вид списка">
+                  <button type="button" data-bmode="list" aria-pressed="true">Список</button>
+                  <button type="button" data-bmode="grid" aria-pressed="false">Плитка</button>
+                  <button type="button" data-bmode="tiers" aria-pressed="false" title="Тир-лист S/A/B/C/D">Тиры</button>
+                </div>
+              </div>
+              <div>
+                <span class="label">Сортировка</span>
+                <div class="seg" id="sortGroup" role="group" aria-label="Сортировка">
+                  <button type="button" data-sort="score" aria-pressed="true">По баллу</button>
+                  <button type="button" data-sort="date" aria-pressed="false">Новые</button>
+                  <button type="button" data-sort="name" aria-pressed="false">А–Я</button>
+                </div>
+              </div>
+              <div>
+                <span class="label">Только с баллом</span>
+                <div class="lvl-chips">
+                  <button type="button" class="sub-chip" data-sfilter="master" aria-pressed="false">8.5+ шедевры</button>
+                  <button type="button" class="sub-chip" data-sfilter="good" aria-pressed="false">7.5+ хорошие</button>
+                  <button type="button" class="sub-chip" data-sfilter="mid" aria-pressed="false">5–7.4 средние</button>
+                  <button type="button" class="sub-chip" data-sfilter="bad" aria-pressed="false">до 5 слабые</button>
+                </div>
+              </div>
+              <button type="button" class="btn small ghost" id="randomBtn">🎲 Случайная оценка</button>
+            </div>
+          </details>
         </div>
         <div class="search" id="searchWrap" hidden>
           <input id="search" type="search" placeholder="Поиск по названию, тегам, заметкам или автору…" aria-label="Найти в рейтинге" autocomplete="off" enterkeyhint="search">
@@ -1039,10 +1069,17 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
             <p><strong>Журнал пока пуст.</strong> Сюда по датам попадут новые оценки, правки и удаления, а ещё изменения категорий и критериев. К любой записи можно дописать своё описание.</p>
           </div>
         </div>
-        <div id="logApp" data-stat="10 версий, последняя 25 октября" hidden>
+        <div id="logApp" data-stat="11 версий, последняя 25 октября" hidden>
           <div class="log-days">
             <section class="log-day">
-              <h3 class="log-date">25 октября 2026<span>версии 4–10</span></h3>
+              <h3 class="log-date">25 октября 2026<span>версии 4–11</span></h3>
+              <article class="rel">
+                <span class="rel-v">v11</span>
+                <div>
+                  <h4>Рейтинг без лишних кнопок</h4>
+                  <p>Над рейтингом осталась одна строка «Все · Мои · Избранное». Вид, сортировка, фильтр по баллу и случайная оценка спрятаны в кнопку «⚙ Вид и фильтры», а на самой кнопке видно, что сейчас включено. У сайта появилась своя иконка во вкладке браузера.</p>
+                </div>
+              </article>
               <article class="rel">
                 <span class="rel-v">v10</span>
                 <div>
@@ -2644,6 +2681,16 @@ function renderBoard() {
     el.layoutGroup.querySelectorAll('button[data-bmode]').forEach(b => {
       b.setAttribute('aria-pressed', String(b.dataset.bmode === state.bmode));
     });
+  }
+  // на кнопке «Вид и фильтры» видно, что включено не по умолчанию
+  const moreHint = document.getElementById('boardMoreHint');
+  if (moreHint) {
+    const parts = [
+      { grid: 'плитка', tiers: 'тиры' }[state.bmode],
+      { date: 'новые', name: 'А–Я' }[state.sort],
+      { master: '8.5+', good: '7.5+', mid: '5–7.4', bad: 'до 5' }[state.sfilter],
+    ].filter(Boolean);
+    moreHint.textContent = parts.length ? ' · ' + parts.join(' · ') : '';
   }
   const catPool = state.filter === 'all' ? state.ratings : state.ratings.filter(r => (r.cat || '__none') === state.filter);
   const pool = applySubFilter(catPool);
@@ -4881,9 +4928,17 @@ if (el.subFilters) {
   el.subFilters.addEventListener('click', e => {
     const b = e.target.closest('button[data-sfilter]');
     if (!b) return;
-    state.sfilter = b.dataset.sfilter;
+    // повторное нажатие на уровень снимает фильтр
+    state.sfilter = (state.sfilter === b.dataset.sfilter && b.closest('.lvl-chips')) ? 'all' : b.dataset.sfilter;
     renderBoard();
   });
+  // меню «Вид и фильтры» закрывается кликом мимо, по Esc и после случайной оценки
+  const boardMore = document.getElementById('boardMore');
+  if (boardMore) {
+    document.addEventListener('click', e => { if (boardMore.open && !boardMore.contains(e.target)) boardMore.open = false; });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && boardMore.open) { boardMore.open = false; boardMore.querySelector('summary').focus(); } });
+    if (el.randomBtn) el.randomBtn.addEventListener('click', () => { boardMore.open = false; });
+  }
 }
 if (el.randomBtn) {
   el.randomBtn.addEventListener('click', () => {
