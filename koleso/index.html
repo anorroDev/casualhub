@@ -87,6 +87,10 @@ img{max-width:100%}
 @keyframes vt-out { to { opacity: 0; transform: scale(.985); } }
 @keyframes vt-in { from { opacity: 0; transform: translateY(16px); } }
 .title { view-transition-name: site-title; }
+html:active-view-transition-type(ui)::view-transition-old(root) { animation: ui-out .16s ease both; }
+html:active-view-transition-type(ui)::view-transition-new(root) { animation: ui-in .26s ease both; }
+@keyframes ui-out { to { opacity: 0; } }
+@keyframes ui-in { from { opacity: 0; } }
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }
@@ -1765,6 +1769,20 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
         renderMusic();
       })
       .catch(() => { persistOk = false; gifNote(); musicNote(); });
+  }
+
+  // плавные переходы для всех кнопок (тот же код, что на главной); пока колесо крутится, не мешаем
+  if (document.startViewTransition && typeof ViewTransition !== 'undefined' && 'types' in ViewTransition.prototype) {
+    let replaying = false;
+    document.addEventListener('click', (e) => {
+      if (replaying || !e.isTrusted || reduced || (S && S.spinning)) return;
+      const t = e.target.closest('button, summary');
+      if (!t || t.disabled) return;
+      if (t.matches('#spin, [type="submit"], [data-mup], #gifPick')) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      document.startViewTransition({ update: () => { replaying = true; try { t.click(); } finally { replaying = false; } }, types: ['ui'] });
+    }, true);
   }
 
   window.claude?.hot?.snapshot?.(() => { const { spinning, ...rest } = S || {}; return rest; });

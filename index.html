@@ -366,6 +366,25 @@ a.theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
 .cmp-val.right { justify-content: flex-end; }
 .cmp-val.win { color: var(--good); }
 
+
+/* Page transitions between the hub and the wheel (same rules in koleso/index.html).
+   Must live in <head>: the opt-in has to be known before the first paint, or the
+   transition into this page is skipped. */
+@view-transition { navigation: auto; }
+::view-transition-old(root) { animation: vt-out .26s ease both; }
+::view-transition-new(root) { animation: vt-in .42s cubic-bezier(.2, .8, .2, 1) both; }
+::view-transition-group(site-title) { animation-duration: .42s; animation-timing-function: cubic-bezier(.2, .8, .2, 1); }
+@keyframes vt-out { to { opacity: 0; transform: scale(.985); } }
+@keyframes vt-in { from { opacity: 0; transform: translateY(16px); } }
+.title { view-transition-name: site-title; }
+/* In-page transitions after any button press: a quick cross-fade of what changed */
+html:active-view-transition-type(ui)::view-transition-old(root) { animation: ui-out .16s ease both; }
+html:active-view-transition-type(ui)::view-transition-new(root) { animation: ui-in .26s ease both; }
+@keyframes ui-out { to { opacity: 0; } }
+@keyframes ui-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
 </style>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 </head><body>
@@ -450,17 +469,6 @@ a.theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
   --accent: #D6336C; --accent-soft: #FCE1EB;
   --good: #2F9E6B; --mid: #E0A21B; --bad: #E0533D; --bad-ink: #B23A27; --on-tier: #2B1A22;
   color-scheme: light;
-}
-/* Page transitions between the hub and the wheel (same rules in koleso/index.html) */
-@view-transition { navigation: auto; }
-::view-transition-old(root) { animation: vt-out .26s ease both; }
-::view-transition-new(root) { animation: vt-in .42s cubic-bezier(.2, .8, .2, 1) both; }
-::view-transition-group(site-title) { animation-duration: .42s; animation-timing-function: cubic-bezier(.2, .8, .2, 1); }
-@keyframes vt-out { to { opacity: 0; transform: scale(.985); } }
-@keyframes vt-in { from { opacity: 0; transform: translateY(16px); } }
-.title { view-transition-name: site-title; }
-@media (prefers-reduced-motion: reduce) {
-  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }
 /* Theme picker */
 .theme-pick { position: relative; }
@@ -5142,5 +5150,23 @@ renderLog();
 ready = initStorage();
 </script>
 <script src="/friends.js"></script>
+<script>
+/* Плавные переходы для всех кнопок: клик перехватывается и повторяется внутри View Transition,
+   поэтому любая перерисовка после нажатия идёт через мягкое растворение. Тот же код есть в колесе. */
+(() => {
+  if (!document.startViewTransition || typeof ViewTransition === 'undefined' || !('types' in ViewTransition.prototype)) return;
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)');
+  let replaying = false;
+  document.addEventListener('click', e => {
+    if (replaying || !e.isTrusted || reduce.matches) return;
+    const t = e.target.closest('button, summary');
+    if (!t || t.disabled) return;
+    if (t.matches('#spin, [type="submit"], [data-mup], #gifPick, #photoPick') || t.closest('.slider, #spin.spinning') || document.querySelector('#spin.spinning')) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    document.startViewTransition({ update: () => { replaying = true; try { t.click(); } finally { replaying = false; } }, types: ['ui'] });
+  }, true);
+})();
+</script>
 
 </body></html>
