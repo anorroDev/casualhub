@@ -21,7 +21,7 @@ addEventListener('pagereveal', function (e) {
 });
 </script>
 <style>
-/* Layout: a hub screen. Top bar with account, a big animated wordmark over a rating-cell strip, then two app cards. */
+/* Layout: a hub screen. Top bar, a big animated wordmark over a playable 1–10 meter, then two app cards with live previews. */
 :root {
   --bg: #ECEEF3; --dot: #D3D7E0; --panel: #FFFFFF; --panel-2: #F4F5F8;
   --ink: #14161C; --ink-2: #565C6B; --ink-3: #8B90A0; --line: #DADDE5; --cell: #E1E4EB;
@@ -29,6 +29,8 @@ addEventListener('pagereveal', function (e) {
   --good: #2EAD60; --mid: #EAA92C; --bad: #E4553F; --bad-ink: #B93222; --on-tier: #14161C;
   --font-display: "Handjet", "Onest", ui-sans-serif, system-ui, sans-serif;
   --font-body: "Onest", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+  --glow: .22; --shadow: 0 1px 0 color-mix(in srgb, #fff 70%, transparent) inset, 0 24px 48px -30px color-mix(in srgb, var(--ink) 45%, transparent);
+  --spring: cubic-bezier(.34, 1.56, .64, 1); --out: cubic-bezier(.2, .8, .2, 1);
   color-scheme: light;
   padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
 }
@@ -38,6 +40,7 @@ addEventListener('pagereveal', function (e) {
     --ink: #E8EAF0; --ink-2: #A3A9B8; --ink-3: #6F7585; --line: #2A2F3A; --cell: #272C36;
     --accent: #8C9BFF; --accent-soft: #232A4F;
     --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #0D0F14;
+    --glow: .3; --shadow: 0 1px 0 color-mix(in srgb, #fff 6%, transparent) inset, 0 28px 56px -30px rgba(0, 0, 0, .75);
     color-scheme: dark;
   }
 }
@@ -46,6 +49,7 @@ addEventListener('pagereveal', function (e) {
   --ink: #E8EAF0; --ink-2: #A3A9B8; --ink-3: #6F7585; --line: #2A2F3A; --cell: #272C36;
   --accent: #8C9BFF; --accent-soft: #232A4F;
   --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #0D0F14;
+  --glow: .3; --shadow: 0 1px 0 color-mix(in srgb, #fff 6%, transparent) inset, 0 28px 56px -30px rgba(0, 0, 0, .75);
   color-scheme: dark;
 }
 :root[data-theme="neon"] {
@@ -53,6 +57,7 @@ addEventListener('pagereveal', function (e) {
   --ink: #F3EAFF; --ink-2: #B9A8D6; --ink-3: #7F6E9E; --line: #33264F; --cell: #2C2047;
   --accent: #FF4FD8; --accent-soft: #3D1A45;
   --good: #3EE6A8; --mid: #FFC857; --bad: #FF5C7A; --bad-ink: #FF8FA3; --on-tier: #120B1F;
+  --glow: .3; --shadow: 0 1px 0 color-mix(in srgb, #fff 6%, transparent) inset, 0 28px 56px -30px rgba(0, 0, 0, .75);
   color-scheme: dark;
 }
 :root[data-theme="ocean"] {
@@ -60,6 +65,7 @@ addEventListener('pagereveal', function (e) {
   --ink: #E3F1FF; --ink-2: #9DB8D2; --ink-3: #66819C; --line: #1C3349; --cell: #172C42;
   --accent: #38BDF8; --accent-soft: #0F3550;
   --good: #34D399; --mid: #FBBF24; --bad: #F87171; --bad-ink: #FCA5A5; --on-tier: #07131F;
+  --glow: .3; --shadow: 0 1px 0 color-mix(in srgb, #fff 6%, transparent) inset, 0 28px 56px -30px rgba(0, 0, 0, .75);
   color-scheme: dark;
 }
 :root[data-theme="forest"] {
@@ -67,6 +73,7 @@ addEventListener('pagereveal', function (e) {
   --ink: #E6F0E9; --ink-2: #9DB3A5; --ink-3: #688070; --line: #26342C; --cell: #223029;
   --accent: #4CC9C0; --accent-soft: #173A38;
   --good: #7BDC6A; --mid: #E8C15A; --bad: #EE7355; --bad-ink: #FF9A80; --on-tier: #0E1411;
+  --glow: .3; --shadow: 0 1px 0 color-mix(in srgb, #fff 6%, transparent) inset, 0 28px 56px -30px rgba(0, 0, 0, .75);
   color-scheme: dark;
 }
 :root[data-theme="sand"] {
@@ -99,12 +106,31 @@ html:active-view-transition-type(back)::view-transition-new(root) { animation: v
 *, *::before, *::after { box-sizing: border-box; }
 html, body { min-height: 100%; }
 body {
-  margin: 0;
-  background-color: var(--bg);
+  margin: 0; background-color: var(--bg);
+  color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  -webkit-font-smoothing: antialiased; overflow-x: hidden;
+}
+/* Ambient light: three soft pools in the tier and accent colours drift behind everything */
+body::before {
+  content: ""; position: fixed; inset: -12vmax; z-index: -1; pointer-events: none; will-change: transform;
+  background:
+    radial-gradient(38vmax 30vmax at 22% 18%, color-mix(in srgb, var(--accent) calc(var(--glow) * 100%), transparent), transparent 70%),
+    radial-gradient(30vmax 26vmax at 82% 26%, color-mix(in srgb, var(--good) calc(var(--glow) * 55%), transparent), transparent 70%),
+    radial-gradient(34vmax 28vmax at 58% 88%, color-mix(in srgb, var(--mid) calc(var(--glow) * 45%), transparent), transparent 70%);
+  animation: drift 26s ease-in-out infinite alternate;
+}
+/* Dot grid that fades out towards the edges */
+body::after {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background-image: radial-gradient(circle at 1px 1px, var(--dot) 1px, transparent 1.5px);
   background-size: 18px 18px;
-  color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
+  -webkit-mask-image: radial-gradient(120% 90% at 50% 30%, #000 40%, transparent 100%);
+  mask-image: radial-gradient(120% 90% at 50% 30%, #000 40%, transparent 100%);
+}
+@keyframes drift {
+  0% { transform: translate3d(0, 0, 0) rotate(0deg); }
+  50% { transform: translate3d(3vmax, -2vmax, 0) rotate(6deg); }
+  100% { transform: translate3d(-2vmax, 2vmax, 0) rotate(-4deg); }
 }
 a { color: inherit; }
 h1, h2, p { margin: 0; }
@@ -112,29 +138,39 @@ h1, h2, p { margin: 0; }
 .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
 .page {
-  max-width: 1080px; margin: 0 auto; min-height: 100vh; min-height: 100dvh;
+  max-width: 1120px; margin: 0 auto; min-height: 100vh; min-height: 100dvh;
   display: flex; flex-direction: column;
-  padding-block: 22px 40px;
+  padding-block: 20px 36px;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
 
 /* Top bar */
-.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
-.mark { display: inline-flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 700; font-size: 22px; text-decoration: none; letter-spacing: .02em; }
-.mark svg { width: 30px; height: 30px; }
+.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; animation: drop-in .6s var(--out) backwards; }
+@keyframes drop-in { from { transform: translateY(-16px); } }
+.mark { display: inline-flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 700; font-size: 22px; text-decoration: none; letter-spacing: .02em; border-radius: 10px; }
+.mark svg { width: 30px; height: 30px; transition: transform .5s var(--spring); }
+.mark:hover svg { transform: rotate(-8deg) scale(1.08); }
+.mark svg rect + rect { transform-box: fill-box; transform-origin: 50% 100%; animation: bar-up .7s var(--spring) backwards; }
+.mark svg rect:nth-of-type(2) { animation-delay: .15s; }
+.mark svg rect:nth-of-type(3) { animation-delay: .25s; }
+.mark svg rect:nth-of-type(4) { animation-delay: .35s; }
+@keyframes bar-up { from { transform: scaleY(0); } }
 .user-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+#account { display: contents; }
 .pill {
   display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-  height: 36px; padding: 0 13px; border: 1px solid var(--line); border-radius: 999px;
-  background: var(--panel); color: var(--ink-2); font-size: 13.5px; font-weight: 600; text-decoration: none; cursor: pointer;
-  transition: transform .12s, border-color .15s, color .15s, background-color .15s;
+  height: 38px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  color: var(--ink-2); font-size: 13.5px; font-weight: 600; text-decoration: none; cursor: pointer; white-space: nowrap;
+  transition: transform .2s var(--spring), border-color .15s, color .15s, background-color .15s, box-shadow .2s;
 }
-.pill:hover { border-color: var(--accent); color: var(--ink); }
-.pill:active { transform: scale(.96); }
+.pill svg { flex: none; }
+.pill:hover { border-color: color-mix(in srgb, var(--accent) 70%, var(--line)); color: var(--ink); box-shadow: 0 6px 18px -10px color-mix(in srgb, var(--accent) 60%, transparent); }
+.pill:active { transform: scale(.95); }
 .pill.primary { background: var(--ink); border-color: var(--ink); color: var(--panel); }
 .pill.primary:hover { background: color-mix(in srgb, var(--ink) 84%, var(--accent)); color: var(--panel); }
-.pill:focus-visible, .app:focus-visible, .theme-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pill:focus-visible, .app:focus-visible, .theme-opt:focus-visible, .mark:focus-visible, .meter:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .avatar {
   width: 24px; height: 24px; margin-left: -6px; border-radius: 50%; display: grid; place-items: center; flex: none;
   color: #fff; font-size: 11.5px; font-weight: 700; text-transform: uppercase; background-size: cover; background-position: center;
@@ -146,96 +182,216 @@ h1, h2, p { margin: 0; }
 .theme-pick > summary { list-style: none; }
 .theme-pick > summary::-webkit-details-marker { display: none; }
 .theme-menu {
-  position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; width: 200px;
-  display: grid; gap: 2px; padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
-  box-shadow: 0 18px 40px -18px color-mix(in srgb, var(--ink) 55%, transparent);
-  animation: enter-up .2s cubic-bezier(.2, .8, .2, 1) both;
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; width: 210px;
+  display: grid; gap: 2px; padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
+  box-shadow: 0 24px 50px -20px color-mix(in srgb, var(--ink) 55%, transparent);
+  transform-origin: 90% 0; animation: menu-in .26s var(--spring) both;
 }
+@keyframes menu-in { from { transform: translateY(-6px) scale(.94); } }
 .theme-opt {
-  display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border: 0; border-radius: 9px;
+  display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 10px; border: 0; border-radius: 10px;
   background: transparent; color: var(--ink); font: inherit; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer;
+  transition: background-color .15s, transform .15s;
 }
-.theme-opt i { flex: none; width: 18px; height: 18px; border-radius: 50%; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 20%, transparent); }
+.theme-opt i { flex: none; width: 20px; height: 20px; border-radius: 50%; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 20%, transparent); transition: transform .3s var(--spring); }
+.theme-opt:hover i { transform: rotate(180deg) scale(1.1); }
 .theme-opt[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
 .theme-opt:hover { background: var(--panel-2); }
-@keyframes enter-up { from { transform: translateY(8px); } }
+.theme-opt[aria-pressed="true"]:hover { background: var(--accent-soft); }
 
-/* Hero wordmark */
-.hero { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 22px; padding-block: clamp(36px, 9vh, 96px) clamp(28px, 6vh, 64px); }
+/* Hero: wordmark, a playable meter and the lede */
+.hero { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 24px; padding-block: clamp(30px, 8vh, 88px) clamp(26px, 6vh, 60px); }
 .wordmark {
-  display: flex; flex-wrap: wrap; column-gap: .28em; row-gap: 0;
-  font-family: var(--font-display); font-weight: 800; font-size: clamp(76px, 17vw, 196px); line-height: .8; letter-spacing: .01em;
+  display: flex; flex-wrap: wrap; column-gap: .26em; row-gap: 0;
+  font-family: var(--font-display); font-weight: 800; font-size: clamp(76px, 17vw, 200px); line-height: .8; letter-spacing: .01em;
 }
 .word { display: inline-flex; white-space: nowrap; }
 .ch {
-  display: inline-block; transform-origin: 50% 100%;
+  display: inline-block; transform-origin: 50% 100%; cursor: default;
   animation:
-    ch-in .7s cubic-bezier(.2, .9, .25, 1.25) backwards calc(var(--i) * 55ms),
+    ch-in .75s cubic-bezier(.2, .9, .25, 1.25) backwards calc(var(--i) * 55ms),
     ch-wave 7s ease-in-out calc(1.4s + var(--i) * 70ms) infinite;
-  transition: color .2s;
+  transition: color .25s, scale .35s var(--spring);
 }
-.ch:hover { color: var(--accent); }
-@keyframes ch-in {
-  0% { transform: translateY(55%) scaleY(.35); font-weight: 300; color: var(--accent); }
-  70% { color: var(--accent); }
-  100% { transform: none; font-weight: 800; }
-}
-@keyframes ch-wave { 0%, 12%, 100% { font-weight: 800; } 6% { font-weight: 420; } }
-.cells { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; width: min(520px, 100%); }
-.cells i {
-  height: 14px; border-radius: 4px; background: var(--c);
-  animation: cell-on .32s cubic-bezier(.2, .8, .2, 1) backwards calc(.55s + var(--i) * 70ms);
-}
-.cells i:nth-child(-n+4) { --c: var(--bad); }
-.cells i:nth-child(n+5):nth-child(-n+7) { --c: var(--mid); }
-.cells i:nth-child(n+8) { --c: var(--good); }
-@keyframes cell-on { from { background: var(--cell); transform: scaleY(.4); } }
-.lede { max-width: 56ch; color: var(--ink-2); font-size: clamp(15px, 1.6vw, 17px); text-wrap: pretty; }
+.ch:hover { color: var(--accent); scale: 1 1.08; }
+/* Only transform/translate move here: they run on the GPU and keep every frame */
+@keyframes ch-in { from { transform: translateY(60%) scaleY(.3); } }
+@keyframes ch-wave { 0%, 12%, 100% { translate: 0 0; } 6% { translate: 0 -5%; } }
 
-/* App cards */
-.apps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; }
+/* The meter: a real 1–10 scale like in Мнение Казуала. Drag or hover to rate anything. */
+.meter-row { display: flex; flex-wrap: wrap; align-items: center; gap: 14px 20px; }
+.meter {
+  --tier: var(--cell);
+  position: relative; display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); align-items: center; gap: 6px;
+  width: min(560px, 100%); height: 44px; padding: 0 2px; border-radius: 10px; cursor: pointer;
+  touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-tap-highlight-color: transparent;
+}
+.meter[data-tier="bad"] { --tier: var(--bad); }
+.meter[data-tier="mid"] { --tier: var(--mid); }
+.meter[data-tier="good"] { --tier: var(--good); }
+.meter i {
+  height: 16px; border-radius: 5px; background: var(--cell);
+  transition: background-color .18s, height .2s var(--out);
+  transition-delay: calc(var(--d, 0) * 1ms);
+}
+.meter i.on { background: var(--tier); box-shadow: 0 0 18px -4px color-mix(in srgb, var(--tier) 70%, transparent); }
+.meter i.knob { height: 36px; border-radius: 8px; box-shadow: 0 0 0 3px var(--bg), 0 8px 22px -6px color-mix(in srgb, var(--tier) 90%, transparent); }
+.meter.live i { transition-delay: 0ms; }
+.meter-read { display: flex; align-items: center; gap: 12px; min-width: 190px; }
+.score {
+  display: inline-grid; place-items: center; min-width: 74px; height: 56px; padding: 0 10px; border-radius: 14px;
+  background: var(--tier, var(--cell)); color: var(--on-tier);
+  font-family: var(--font-display); font-weight: 800; font-size: 42px; line-height: 1; font-variant-numeric: tabular-nums;
+  transition: background-color .2s;
+  box-shadow: 0 10px 30px -12px color-mix(in srgb, var(--tier, var(--cell)) 85%, transparent);
+}
+.meter-read[data-tier="bad"] { --tier: var(--bad); }
+.meter-read[data-tier="mid"] { --tier: var(--mid); }
+.meter-read[data-tier="good"] { --tier: var(--good); }
+.meter-word { display: grid; line-height: 1.2; }
+.meter-word strong { font-size: 17px; }
+.meter-word span { font-size: 13px; color: var(--ink-3); }
+.lede { max-width: 58ch; color: var(--ink-2); font-size: clamp(15px, 1.6vw, 17.5px); text-wrap: pretty; animation: rise .7s var(--out) .45s backwards; }
+.meter-row { animation: rise .7s var(--out) .3s backwards; }
+@keyframes rise { from { transform: translateY(14px); } }
+
+/* App cards: a live preview on top, the name under it, the footer with counters */
+.apps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; perspective: 1200px; }
 @media (min-width: 760px) { .apps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; } }
 .app {
-  position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px 18px; align-items: start;
-  padding: 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; text-decoration: none;
-  transition: transform .18s cubic-bezier(.2, .8, .2, 1), border-color .18s, box-shadow .18s;
-  animation: app-in .5s cubic-bezier(.2, .8, .2, 1) backwards;
+  --lift: 0px;
+  position: relative; isolation: isolate; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px 16px; align-content: start;
+  padding: 14px 14px 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 22px; text-decoration: none;
+  box-shadow: var(--shadow);
+  transform: rotateX(var(--rx)) rotateY(var(--ry)) translateY(var(--lift));
+  transition: transform .35s var(--out), border-color .25s;
+  animation: app-in .8s var(--spring) backwards;
 }
-.app:nth-child(1) { animation-delay: .5s; }
-.app:nth-child(2) { animation-delay: .62s; }
-@keyframes app-in { from { transform: translateY(18px); } }
-.app:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--accent) 60%, var(--line)); box-shadow: 0 22px 40px -28px color-mix(in srgb, var(--ink) 60%, transparent); }
-.app:active { transform: translateY(-1px) scale(.99); }
-.app-icon { width: 64px; height: 64px; border-radius: 16px; background: var(--panel-2); border: 1px solid var(--line); display: grid; place-items: center; }
-.app-icon svg { width: 44px; height: 44px; transition: transform .6s cubic-bezier(.2, .8, .2, 1); }
-.app:hover .spin-icon svg { transform: rotate(180deg); }
-.app:hover .bars-icon rect { animation: bar-pop .5s cubic-bezier(.2, .9, .25, 1.3); }
-.app:hover .bars-icon rect:first-child { animation: none; }
-.bars-icon rect:nth-of-type(3) { animation-delay: .06s !important; }
-.bars-icon rect:nth-of-type(4) { animation-delay: .12s !important; }
-@keyframes bar-pop { 40% { transform: scaleY(1.25); } }
-.bars-icon rect { transform-box: fill-box; transform-origin: 50% 100%; }
-.app-icon.bars-icon svg { width: 100%; height: 100%; border-radius: 16px; }
-.app-icon.bars-icon { background: transparent; border: 0; }
-.app-text { display: grid; gap: 6px; min-width: 0; }
-.app-name { font-family: var(--font-display); font-weight: 800; font-size: clamp(34px, 4.6vw, 44px); line-height: .9; }
-.app-desc { color: var(--ink-2); font-size: 14.5px; text-wrap: pretty; }
-.app-foot { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; padding-top: 14px; border-top: 1px solid var(--line); }
+.app:nth-child(1) { animation-delay: .55s; }
+.app:nth-child(2) { animation-delay: .68s; }
+@keyframes app-in { from { transform: translateY(40px) rotateX(10deg); } }
+@property --rx { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+@property --ry { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
+/* Light that follows the pointer: a pre-painted spot that only slides, and an accent glow under the card that only fades */
+.glow { position: absolute; inset: 0; z-index: -1; border-radius: inherit; overflow: hidden; pointer-events: none; }
+.glow i {
+  position: absolute; left: 0; top: 0; width: 560px; height: 560px; margin: -280px 0 0 -280px; border-radius: 50%;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--accent) 16%, transparent), transparent);
+  opacity: 0; transition: opacity .3s; will-change: transform;
+}
+.app::after {
+  content: ""; position: absolute; inset: 0; z-index: -2; border-radius: inherit; pointer-events: none;
+  box-shadow: 0 36px 60px -34px color-mix(in srgb, var(--accent) 60%, transparent);
+  opacity: 0; transition: opacity .35s;
+}
+.app:hover { --lift: -4px; border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.app:hover .glow i, .app:hover::after { opacity: 1; }
+.app:active { --lift: -1px; transition-duration: .12s; }
+
+.pv {
+  grid-column: 1 / -1; position: relative; overflow: hidden; height: 196px; border-radius: 15px;
+  background:
+    radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--ink) 9%, transparent) 1px, transparent 1.5px) 0 0 / 14px 14px,
+    linear-gradient(160deg, var(--panel-2), color-mix(in srgb, var(--panel-2) 70%, var(--accent-soft)));
+  border: 1px solid var(--line);
+}
+/* Мнение preview: a tiny live leaderboard */
+.pv-board { display: grid; align-content: center; gap: 8px; padding: 16px; }
+.pv-row {
+  --tier: var(--cell);
+  display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto; align-items: center; gap: 10px;
+  height: 46px; padding: 0 8px 0 10px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line);
+  box-shadow: 0 8px 18px -14px color-mix(in srgb, var(--ink) 50%, transparent);
+  animation: row-in .6s var(--spring) backwards calc(.85s + var(--k) * 110ms);
+  transition: transform .35s var(--spring);
+}
+.pv-row[data-tier="good"] { --tier: var(--good); }
+.pv-row[data-tier="mid"] { --tier: var(--mid); }
+.pv-row[data-tier="bad"] { --tier: var(--bad); }
+@keyframes row-in { from { transform: translateX(-30px); } }
+.app:hover .pv-row:nth-child(1) { transform: translateX(6px); }
+.app:hover .pv-row:nth-child(2) { transform: translateX(3px); transition-delay: .04s; }
+.app:hover .pv-row:nth-child(3) { transition-delay: .08s; }
+.pv-rank { font-family: var(--font-display); font-weight: 800; font-size: 22px; line-height: 1; color: var(--ink-3); text-align: center; }
+.pv-row:first-child .pv-rank { color: var(--mid); }
+.pv-name { min-width: 0; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pv-bar { display: grid; grid-template-columns: repeat(10, 5px); gap: 2px; align-items: end; height: 20px; }
+.pv-bar b { height: 100%; border-radius: 2px; background: var(--cell); transform-origin: 50% 100%; transition: transform .4s var(--spring); }
+.pv-bar b.on { background: var(--tier); }
+.app:hover .pv-bar b { animation: eq .9s ease-in-out calc(var(--j) * 45ms); }
+@keyframes eq { 30% { transform: scaleY(.35); } 60% { transform: scaleY(1.15); } }
+.pv-badge {
+  display: inline-grid; place-items: center; min-width: 44px; height: 30px; padding: 0 6px; border-radius: 8px;
+  background: var(--tier); color: var(--on-tier); font-family: var(--font-display); font-weight: 800; font-size: 22px; line-height: 1; font-variant-numeric: tabular-nums;
+}
+.pv-row.ghost { background: transparent; border-style: dashed; box-shadow: none; color: var(--ink-3); }
+.pv-row.ghost .pv-badge { background: var(--cell); color: var(--ink-3); }
+.pv-tag { position: absolute; right: 10px; top: 8px; font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
+
+/* Колесо preview: a small wheel that really spins and names who landed under the pointer */
+.pv-wheel { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 0 22px 0 20px; }
+.pv-under { display: grid; gap: 4px; min-width: 0; }
+.pv-under small { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+.pv-under strong {
+  font-family: var(--font-display); font-weight: 800; font-size: clamp(26px, 3.4vw, 36px); line-height: .95;
+  overflow-wrap: anywhere; display: block; min-height: 1.9em;
+}
+.pv-under strong { transform-origin: 0 100%; }
+.wheel { position: relative; width: 168px; height: 168px; animation: wheel-in 1s var(--spring) .8s backwards; }
+@keyframes wheel-in { from { transform: scale(.4) rotate(-120deg); } }
+.wheel::before { content: ""; position: absolute; inset: 4px; border-radius: 50%; box-shadow: 0 16px 30px -8px color-mix(in srgb, var(--ink) 45%, transparent); }
+.wheel-layer { position: absolute; inset: 0; display: block; }
+.wheel-layer > span, #wheelRot { display: block; width: 100%; height: 100%; will-change: transform; }
+.wheel svg { display: block; width: 100%; height: 100%; }
+.wheel .wheel-ptr { position: absolute; left: 50%; top: -7px; width: 20px; height: 22px; margin-left: -10px; transform-origin: 50% 0; }
+
+.app-icon { width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center; transition: transform .5s var(--spring); }
+.app-icon svg { width: 100%; height: 100%; }
+.app:hover .app-icon { transform: rotate(-6deg) scale(1.06); }
+.app-text { display: grid; gap: 4px; min-width: 0; align-content: center; }
+.app-name { font-family: var(--font-display); font-weight: 800; font-size: clamp(32px, 4.2vw, 42px); line-height: .9; }
+.app-desc { color: var(--ink-2); font-size: 14px; text-wrap: pretty; }
+.app-foot { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; padding: 12px 4px 0; border-top: 1px solid var(--line); }
 .app-meta { display: flex; flex-wrap: wrap; gap: 6px; }
-.chip { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line); font-size: 12.5px; font-weight: 600; color: var(--ink-2); font-variant-numeric: tabular-nums; }
-.chip b { font-family: var(--font-display); font-size: 17px; font-weight: 800; color: var(--ink); }
-.chip.alert { border-color: transparent; background: color-mix(in srgb, var(--bad) 18%, var(--panel)); color: var(--bad-ink); }
-.app-go { font-weight: 700; color: var(--accent); white-space: nowrap; }
-.app-go span { display: inline-block; transition: transform .18s; }
-.app:hover .app-go span { transform: translateX(4px); }
+.chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 9px; background: var(--panel-2); border: 1px solid var(--line); font-size: 12.5px; font-weight: 600; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.chip b { font-family: var(--font-display); font-size: 18px; font-weight: 800; color: var(--ink); }
+.chip.alert { border-color: transparent; background: color-mix(in srgb, var(--bad) 18%, var(--panel)); color: var(--bad-ink); animation: nudge 2.4s ease-in-out 1.6s infinite; }
+@keyframes nudge { 0%, 86%, 100% { transform: none; } 90% { transform: rotate(-4deg); } 95% { transform: rotate(3deg); } }
+.app-go {
+  display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px 0 16px; border-radius: 999px;
+  background: var(--ink); color: var(--panel); font-weight: 700; font-size: 14px; white-space: nowrap;
+  transition: background-color .2s;
+}
+.app-go svg { transition: transform .3s var(--spring); }
+.app:hover .app-go { background: var(--accent); color: var(--on-tier); }
+.app:hover .app-go svg { transform: translateX(4px); }
 
 .foot { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 16px; margin-top: 28px; color: var(--ink-3); font-size: 13px; }
 
 @media (max-width: 560px) {
-  .page { padding-block: 16px 28px; }
-  .app { padding: 18px; }
-  .app-icon { width: 54px; height: 54px; border-radius: 14px; }
-  .app-icon svg { width: 36px; height: 36px; }
+  .page { padding-block: 14px 26px; }
+  .pill { height: 36px; padding: 0 12px; }
+  .pill.gh span, #themeBtn span { display: none; }
+  .pill.gh, #themeBtn { width: 36px; padding: 0; }
+  .top { gap: 10px; }
+  .theme-menu { right: -44px; }
+  .hero { gap: 18px; }
+  .meter { height: 40px; gap: 4px; }
+  .meter i.knob { height: 32px; }
+  .meter-read { min-width: 0; }
+  .score { min-width: 62px; height: 48px; font-size: 36px; }
+  .app { padding: 12px 12px 16px; border-radius: 20px; }
+  .pv { height: 172px; }
+  .pv-board { padding: 12px; gap: 6px; }
+  .pv-row { height: 42px; }
+  .pv-bar { display: none; }
+  .wheel { width: 140px; height: 140px; }
+  .pv-wheel { padding: 0 14px; }
+  .app-icon { width: 46px; height: 46px; }
+}
+@media (hover: none) {
+  .app:hover { --lift: 0px; }
+  .app:hover::before, .app:hover::after { opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -253,10 +409,10 @@ h1, h2, p { margin: 0; }
     <div class="user-bar">
       <span id="account"></span>
       <details class="theme-pick" id="themePick">
-        <summary class="pill" id="themeBtn" title="Тема оформления">🌓 Тема</summary>
+        <summary class="pill" id="themeBtn" title="Тема оформления">Тема</summary>
         <div class="theme-menu" id="themeMenu" role="group" aria-label="Тема оформления"></div>
       </details>
-      <a class="pill" href="https://github.com/anorroDev/casualhub" target="_blank" rel="noopener" title="Код сайта на GitHub"><svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a>
+      <a class="pill gh" href="https://github.com/anorroDev/casualhub" target="_blank" rel="noopener" title="Код сайта на GitHub" aria-label="Код сайта на GitHub"><svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span>GitHub</span></a>
     </div>
   </header>
 
@@ -265,26 +421,39 @@ h1, h2, p { margin: 0; }
       <span class="word" aria-hidden="true"><span class="ch" style="--i:0">К</span><span class="ch" style="--i:1">а</span><span class="ch" style="--i:2">з</span><span class="ch" style="--i:3">у</span><span class="ch" style="--i:4">а</span><span class="ch" style="--i:5">л</span></span>
       <span class="word" aria-hidden="true"><span class="ch" style="--i:6">Х</span><span class="ch" style="--i:7">а</span><span class="ch" style="--i:8">б</span></span>
     </h1>
-    <div class="cells" aria-hidden="true"><i style="--i:0"></i><i style="--i:1"></i><i style="--i:2"></i><i style="--i:3"></i><i style="--i:4"></i><i style="--i:5"></i><i style="--i:6"></i><i style="--i:7"></i><i style="--i:8"></i><i style="--i:9"></i></div>
+    <div class="meter-row">
+      <div class="meter" id="meter" role="slider" tabindex="0" aria-label="Попробуй шкалу от 1 до 10" aria-valuemin="1" aria-valuemax="10" aria-valuenow="10"></div>
+      <div class="meter-read" id="meterRead" aria-hidden="true">
+        <span class="score" id="meterScore">10</span>
+        <span class="meter-word"><strong id="meterWord">Шедевр</strong><span id="meterHint">Проведи по шкале</span></span>
+      </div>
+    </div>
     <p class="lede">Оценивай всё подряд от 1 до 10 и доверяй выбор колесу. Один аккаунт, друзья и тема общие для всех страниц.</p>
   </main>
 
   <section class="apps" aria-label="Разделы">
     <a class="app" href="/mnenie/">
-      <span class="app-icon bars-icon" aria-hidden="true"><svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#3550E8"/><path d="M14 13h36a6 6 0 0 1 6 6v21a6 6 0 0 1-6 6H31l-11 8v-8h-6a6 6 0 0 1-6-6V19a6 6 0 0 1 6-6z" fill="#FFFFFF"/><rect x="18.5" y="31" width="7.5" height="9" rx="2" fill="#E4553F"/><rect x="28.25" y="25" width="7.5" height="15" rx="2" fill="#EAA92C"/><rect x="38" y="19" width="7.5" height="21" rx="2" fill="#2EAD60"/></svg></span>
+      <span class="glow" aria-hidden="true"><i></i></span>
+      <span class="pv pv-board" id="mnPreview" aria-hidden="true"></span>
+      <span class="app-icon" aria-hidden="true"><svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="#3550E8"/><path d="M14 13h36a6 6 0 0 1 6 6v21a6 6 0 0 1-6 6H31l-11 8v-8h-6a6 6 0 0 1-6-6V19a6 6 0 0 1 6-6z" fill="#FFFFFF"/><rect x="18.5" y="31" width="7.5" height="9" rx="2" fill="#E4553F"/><rect x="28.25" y="25" width="7.5" height="15" rx="2" fill="#EAA92C"/><rect x="38" y="19" width="7.5" height="21" rx="2" fill="#2EAD60"/></svg></span>
       <span class="app-text">
         <span class="app-name">Мнение Казуала</span>
-        <span class="app-desc">Игры, фильмы, еда, места или что угодно своё. Оценки по критериям, рейтинг, тиры, статистика, журнал и оценки друзей.</span>
+        <span class="app-desc">Игры, фильмы, еда, места или что угодно своё. Критерии, рейтинг, тиры, статистика и оценки друзей.</span>
       </span>
-      <span class="app-foot"><span class="app-meta" id="mnenieMeta"></span><span class="app-go">Открыть <span>→</span></span></span>
+      <span class="app-foot"><span class="app-meta" id="mnenieMeta"></span><span class="app-go">Открыть <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></span></span>
     </a>
     <a class="app" href="/koleso/">
-      <span class="app-icon spin-icon" aria-hidden="true"><svg viewBox="0 0 64 64"><path d="M32 32L32 6A26 26 0 0 1 54.5 19Z" fill="#3550E8"/><path d="M32 32L54.5 19A26 26 0 0 1 54.5 45Z" fill="#EAA92C"/><path d="M32 32L54.5 45A26 26 0 0 1 32 58Z" fill="#2EAD60"/><path d="M32 32L32 58A26 26 0 0 1 9.5 45Z" fill="#EC4899"/><path d="M32 32L9.5 45A26 26 0 0 1 9.5 19Z" fill="#9333EA"/><path d="M32 32L9.5 19A26 26 0 0 1 32 6Z" fill="#06B6D4"/><circle cx="32" cy="32" r="27" fill="none" stroke="var(--ink)" stroke-width="4"/><circle cx="32" cy="32" r="7" fill="var(--accent)" stroke="var(--panel)" stroke-width="3"/></svg></span>
+      <span class="glow" aria-hidden="true"><i></i></span>
+      <span class="pv pv-wheel" aria-hidden="true">
+        <span class="pv-under"><small>Под стрелкой</small><strong id="wheelName">—</strong></span>
+        <span class="wheel" id="wheel"></span>
+      </span>
+      <span class="app-icon" aria-hidden="true"><svg viewBox="0 0 64 64"><rect width="64" height="64" rx="14" fill="var(--panel-2)"/><g transform="translate(32 32)"><path d="M0 0L0-22A22 22 0 0 1 19.05-11Z" fill="#3550E8"/><path d="M0 0L19.05-11A22 22 0 0 1 19.05 11Z" fill="#EAA92C"/><path d="M0 0L19.05 11A22 22 0 0 1 0 22Z" fill="#2EAD60"/><path d="M0 0L0 22A22 22 0 0 1-19.05 11Z" fill="#EC4899"/><path d="M0 0L-19.05 11A22 22 0 0 1-19.05-11Z" fill="#9333EA"/><path d="M0 0L-19.05-11A22 22 0 0 1 0-22Z" fill="#06B6D4"/><circle r="23" fill="none" stroke="var(--ink)" stroke-width="3"/><circle r="6" fill="var(--accent)" stroke="var(--panel)" stroke-width="2.5"/></g></svg></span>
       <span class="app-text">
         <span class="app-name">Колесо Казуала</span>
-        <span class="app-desc">Колесо на выбывание: просто имена или донаты, где шанс равен доле в банке. Пять валют, своя музыка и гифки в центре.</span>
+        <span class="app-desc">Колесо на выбывание: просто имена или донаты, где шанс равен доле в банке. Своя музыка и гифки в центре.</span>
       </span>
-      <span class="app-foot"><span class="app-meta" id="kolesoMeta"></span><span class="app-go">Крутить <span>→</span></span></span>
+      <span class="app-foot"><span class="app-meta" id="kolesoMeta"></span><span class="app-go">Крутить <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></span></span>
     </a>
   </section>
 
@@ -304,6 +473,9 @@ h1, h2, p { margin: 0; }
     return a > 10 && a < 20 ? many : b > 1 && b < 5 ? few : b === 1 ? one : many;
   };
   const chip = (num, word, cls) => `<span class="chip${cls ? ' ' + cls : ''}"><b>${num}</b>${word}</span>`;
+  const fmt = (n) => Number(n).toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const tierT = (t) => (t == null ? 'none' : t >= 7.5 ? 'good' : t >= 5 ? 'mid' : 'bad');
+  const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // ---------- аккаунт (тот же, что в Мнении Казуала) ----------
   const user = read('ocenshik.user.v1');
@@ -325,11 +497,156 @@ h1, h2, p { margin: 0; }
   mMeta.innerHTML = mine.length ? chip(mine.length, plural(mine.length, 'оценка', 'оценки', 'оценок')) : '<span class="chip">Пока ни одной оценки</span>';
 
   const wheel = read('koleso-vybyvanie-v1');
-  const alive = wheel && Array.isArray(wheel.items) ? wheel.items.filter((i) => !i.out).length : 0;
-  const total = wheel && Array.isArray(wheel.items) ? wheel.items.length : 0;
+  const items = wheel && Array.isArray(wheel.items) ? wheel.items : [];
+  const alive = items.filter((i) => !i.out).length;
+  const total = items.length;
   $('#kolesoMeta').innerHTML = total
     ? chip(alive, plural(alive, 'участник', 'участника', 'участников') + (alive < total ? ` из ${total}` : '') + ' на колесе')
     : '<span class="chip">Колесо пустое</span>';
+
+  // ---------- превью Мнения: свой топ-3 или примеры ----------
+  const top = mine.filter((r) => typeof r.total === 'number' && r.name).sort((a, b) => b.total - a.total).slice(0, 3);
+  const rows = top.length ? top.map((r) => ({ name: r.name, t: r.total }))
+    : [{ name: 'Интерстеллар', t: 9.8 }, { name: 'The Witcher 3', t: 9.3 }, { name: 'Hades', t: 8.4 }];
+  const barsOf = (on) => Array.from({ length: 10 }, (_, j) => `<b style="--j:${j};height:${30 + j * 7}%"${j < on ? ' class="on"' : ''}></b>`).join('');
+  // своих оценок меньше трёх: пустые места ждут следующих
+  const ghosts = Array.from({ length: 3 - rows.length }, (_, g) => `<span class="pv-row ghost" style="--k:${rows.length + g}"><span class="pv-rank">${rows.length + g + 1}</span><span class="pv-name">${g ? '…' : 'Следующая оценка'}</span><span class="pv-bar">${barsOf(0)}</span><span class="pv-badge">—</span></span>`).join('');
+  $('#mnPreview').innerHTML = (top.length ? '<span class="pv-tag">твой топ</span>' : '<span class="pv-tag">пример</span>')
+    + rows.map((r, k) => `<span class="pv-row" data-tier="${tierT(r.t)}" style="--k:${k}"><span class="pv-rank">${k + 1}</span><span class="pv-name">${esc(r.name)}</span><span class="pv-bar">${barsOf(Math.round(r.t))}</span><span class="pv-badge">${fmt(r.t)}</span></span>`).join('')
+    + ghosts;
+
+  // ---------- превью Колеса: настоящее мини-колесо ----------
+  // Крутятся только обычные блоки с готовой картинкой внутри: видеокарта двигает их сама, без перерисовки
+  const COLORS = ['#3550E8', '#EAA92C', '#2EAD60', '#EC4899', '#9333EA', '#06B6D4', '#F97316', '#14B8A6'];
+  const names = (items.filter((i) => !i.out).map((i) => i.name).filter(Boolean).slice(0, 8));
+  const seg = names.length >= 2 ? names : ['Hollow Knight', 'Hades', 'Celeste', 'Outer Wilds', 'Disco Elysium', 'Inscryption'];
+  const n = seg.length, R = 76, C = 84, step = 360 / n;
+  const pt = (deg, r) => { const a = (deg - 90) * Math.PI / 180; return [C + r * Math.cos(a), C + r * Math.sin(a)].map((v) => v.toFixed(2)); };
+  let paths = '', lines = '', ticks = '';
+  for (let i = 0; i < n; i++) {
+    const a0 = i * step, a1 = a0 + step;
+    paths += `<path d="M${C} ${C}L${pt(a0, R).join(' ')}A${R} ${R} 0 ${step > 180 ? 1 : 0} 1 ${pt(a1, R).join(' ')}Z" fill="${COLORS[i % COLORS.length]}"/>`;
+    const [x, y] = pt(a0, R);
+    lines += `<line x1="${C}" y1="${C}" x2="${x}" y2="${y}"/>`;
+  }
+  for (let i = 0; i < n * 2; i++) { const [x, y] = pt(i * step / 2, R + 4); ticks += `<circle cx="${x}" cy="${y}" r="1.6" fill="var(--panel)"/>`; }
+  $('#wheel').innerHTML =
+    `<svg class="wheel-layer" viewBox="0 0 168 168"><circle cx="${C}" cy="${C}" r="${R + 7}" fill="var(--ink)"/></svg>`
+    + `<span class="wheel-layer"><span id="wheelIdle"><span id="wheelRot"><svg viewBox="0 0 168 168">${paths}<g stroke="rgba(0,0,0,.18)" stroke-width="1">${lines}</g></svg></span></span></span>`
+    + `<svg class="wheel-layer" viewBox="0 0 168 168">${ticks}<circle cx="${C}" cy="${C}" r="17" fill="var(--accent)" stroke="var(--panel)" stroke-width="4"/></svg>`
+    + `<svg class="wheel-ptr" viewBox="0 0 20 22"><path d="M10 22L1 4a3 3 0 0 1 2.7-4h12.6A3 3 0 0 1 19 4z" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/></svg>`;
+  const rotEl = $('#wheelRot'), idleEl = $('#wheelIdle'), nameEl = $('#wheelName'), ptr = document.querySelector('.wheel-ptr');
+  const IDLE = 60000, SPIN = 3200, SPRING = 'cubic-bezier(.34, 1.56, .64, 1)';
+  const idle = calm ? null : idleEl.animate([{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }], { duration: IDLE, iterations: Infinity });
+  // угол считаем по времени анимаций, не трогая стили: так проверка «кто под стрелкой» ничего не стоит
+  let from = 0, to = 0, spinAnim = null;
+  const idleAngle = () => (idle ? ((idle.currentTime || 0) % IDLE) / IDLE * 360 : 0);
+  const spinAngle = () => {
+    if (!spinAnim || spinAnim.playState !== 'running') return to;
+    const p = spinAnim.effect.getComputedTiming().progress;
+    return p == null ? to : from + (to - from) * p;
+  };
+  const under = () => {
+    const rot = ((idleAngle() + spinAngle()) % 360 + 360) % 360;
+    return seg[Math.floor(((360 - rot) % 360) / step) % n];
+  };
+  const showName = (s) => {
+    if (nameEl.textContent === s) return;
+    nameEl.textContent = s;
+    if (!calm) nameEl.animate([{ transform: 'none' }, { transform: 'translateY(-5px) scale(1.05)' }, { transform: 'none' }], { duration: 300, easing: SPRING });
+  };
+  const flick = () => ptr.animate([{ transform: 'rotate(0deg)' }, { transform: 'rotate(-18deg)' }, { transform: 'rotate(0deg)' }], { duration: 120, easing: 'ease-in-out' });
+  nameEl.textContent = under();
+  let watching = false;
+  const watch = () => {
+    let last = nameEl.textContent;
+    const loop = () => {
+      const s = under();
+      if (s !== last) { last = s; showName(s); flick(); }
+      if (watching) requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+  };
+  const spin = () => {
+    if (calm) return;
+    from = spinAngle();
+    if (spinAnim) spinAnim.cancel();
+    to = from + 720 + Math.floor(Math.random() * 360);
+    if (idle) idle.pause();
+    spinAnim = rotEl.animate([{ transform: `rotate(${from}deg)` }, { transform: `rotate(${to}deg)` }], { duration: SPIN, easing: 'cubic-bezier(.12, .7, .12, 1)', fill: 'forwards' });
+    spinAnim.onfinish = () => { watching = false; showName(under()); if (idle) idle.play(); };
+    if (!watching) { watching = true; watch(); }
+  };
+  const kolesoCard = document.querySelector('.app[href="/koleso/"]');
+  kolesoCard.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') spin(); });
+  // на телефоне наводить нечем: колесо крутится само, когда показывается на экране
+  if (!matchMedia('(hover: hover)').matches && 'IntersectionObserver' in window) {
+    new IntersectionObserver((es) => es.forEach((en) => { if (en.isIntersecting) spin(); }), { threshold: 0.7 }).observe(document.getElementById('wheel'));
+  }
+
+  // ---------- шкала в шапке: проведи и оцени ----------
+  const meter = $('#meter'), read$ = $('#meterRead'), scoreEl = $('#meterScore'), wordEl = $('#meterWord'), hintEl = $('#meterHint');
+  meter.innerHTML = Array.from({ length: 10 }, (_, i) => `<i style="--d:${i * 45}"></i>`).join('');
+  const cells = [...meter.children];
+  const WORDS = { 1: 'Провал', 2: 'Провал', 3: 'Провал', 4: 'Слабо', 5: 'Средне', 6: 'Средне', 7: 'Неплохо', 8: 'Хорошо', 9: 'Отлично', 10: 'Шедевр' };
+  const tierV = (v) => (v >= 8 ? 'good' : v >= 5 ? 'mid' : 'bad');
+  let val = 0;
+  const setVal = (v, quiet) => {
+    v = Math.max(1, Math.min(10, v));
+    if (v === val) return;
+    val = v;
+    cells.forEach((c, i) => { c.classList.toggle('on', i < v); c.classList.toggle('knob', i + 1 === v); });
+    meter.dataset.tier = read$.dataset.tier = tierV(v);
+    meter.setAttribute('aria-valuenow', String(v));
+    meter.setAttribute('aria-valuetext', `${v} из 10, ${WORDS[v].toLowerCase()}`);
+    scoreEl.textContent = v; wordEl.textContent = WORDS[v];
+    if (!quiet && !calm) scoreEl.animate([{ transform: 'none' }, { transform: 'scale(1.14) rotate(-3deg)' }, { transform: 'none' }], { duration: 360, easing: SPRING });
+  };
+  let meterBox = null;
+  const fromX = (x) => { const r = meterBox || meter.getBoundingClientRect(); return Math.ceil(((x - r.left) / r.width) * 10) || 1; };
+  let drag = false, touched = false;
+  meter.addEventListener('pointerenter', () => { meterBox = meter.getBoundingClientRect(); });
+  meter.addEventListener('pointerleave', () => { meterBox = null; });
+  meter.addEventListener('pointerdown', (e) => { meterBox = meter.getBoundingClientRect(); drag = true; touched = true; meter.classList.add('live'); meter.setPointerCapture(e.pointerId); setVal(fromX(e.clientX)); hintEl.textContent = 'Так и оценивают в Мнении'; });
+  meter.addEventListener('pointermove', (e) => { if (drag || e.pointerType === 'mouse') { meter.classList.add('live'); touched = true; setVal(fromX(e.clientX)); } });
+  meter.addEventListener('pointerup', () => { drag = false; });
+  meter.addEventListener('pointercancel', () => { drag = false; });
+  meter.addEventListener('keydown', (e) => {
+    const k = { ArrowRight: 1, ArrowUp: 1, ArrowLeft: -1, ArrowDown: -1 }[e.key];
+    if (k) { e.preventDefault(); touched = true; meter.classList.add('live'); setVal(val + k); }
+    else if (e.key === 'Home') { e.preventDefault(); setVal(1); } else if (e.key === 'End') { e.preventDefault(); setVal(10); }
+  });
+  // на старте шкала заполняется сама, клетка за клеткой
+  if (calm) setVal(10, true);
+  else {
+    setVal(1, true);
+    let v = 1;
+    setTimeout(function grow() { if (touched) return; v += 1; setVal(v, v < 10); if (v < 10) setTimeout(grow, 80); }, 900);
+  }
+
+  // ---------- карточки: наклон и свет за курсором ----------
+  // размеры берём один раз при наведении, а сдвиг применяем раз в кадр
+  if (!calm && matchMedia('(hover: hover)').matches) {
+    document.querySelectorAll('.app').forEach((card) => {
+      const spot = card.querySelector('.glow i');
+      let box = null, px = 0, py = 0, queued = false;
+      const paint = () => {
+        queued = false;
+        if (!box) return;
+        const x = px / box.width, y = py / box.height;
+        spot.style.transform = `translate(${px.toFixed(1)}px, ${py.toFixed(1)}px)`;
+        card.style.setProperty('--rx', `${((0.5 - y) * 5).toFixed(2)}deg`);
+        card.style.setProperty('--ry', `${((x - 0.5) * 7).toFixed(2)}deg`);
+      };
+      card.addEventListener('pointerenter', () => { box = card.getBoundingClientRect(); });
+      card.addEventListener('pointermove', (e) => {
+        if (!box) box = card.getBoundingClientRect();
+        px = e.clientX - box.left; py = e.clientY - box.top;
+        if (!queued) { queued = true; requestAnimationFrame(paint); }
+      });
+      card.addEventListener('pointerleave', () => { box = null; card.style.setProperty('--rx', '0deg'); card.style.setProperty('--ry', '0deg'); });
+    });
+  }
 
   // ---------- друзья: сколько их и есть ли заявки ----------
   const tokens = read('casualhub.tokens.v1') || {};
@@ -352,15 +669,16 @@ h1, h2, p { margin: 0; }
 
   // ---------- темы: те же, что на других страницах ----------
   const THEMES = [
-    { id: 'auto', name: 'Авто', icon: '🌓', sw: ['#ECEEF3', '#0D0F14'] },
-    { id: 'light', name: 'Светлая', icon: '☀️', sw: ['#ECEEF3', '#3550E8'] },
-    { id: 'dark', name: 'Тёмная', icon: '🌙', sw: ['#0D0F14', '#8C9BFF'] },
-    { id: 'neon', name: 'Неон', icon: '🌆', sw: ['#120B1F', '#FF4FD8'] },
-    { id: 'ocean', name: 'Океан', icon: '🌊', sw: ['#07131F', '#38BDF8'] },
-    { id: 'forest', name: 'Лес', icon: '🌲', sw: ['#0E1411', '#4CC9C0'] },
-    { id: 'sand', name: 'Песок', icon: '🏜️', sw: ['#F3EDE3', '#C2571B'] },
-    { id: 'sakura', name: 'Сакура', icon: '🌸', sw: ['#FBEFF3', '#D6336C'] },
+    { id: 'auto', name: 'Авто', sw: ['#ECEEF3', '#0D0F14'] },
+    { id: 'light', name: 'Светлая', sw: ['#ECEEF3', '#3550E8'] },
+    { id: 'dark', name: 'Тёмная', sw: ['#0D0F14', '#8C9BFF'] },
+    { id: 'neon', name: 'Неон', sw: ['#120B1F', '#FF4FD8'] },
+    { id: 'ocean', name: 'Океан', sw: ['#07131F', '#38BDF8'] },
+    { id: 'forest', name: 'Лес', sw: ['#0E1411', '#4CC9C0'] },
+    { id: 'sand', name: 'Песок', sw: ['#F3EDE3', '#C2571B'] },
+    { id: 'sakura', name: 'Сакура', sw: ['#FBEFF3', '#D6336C'] },
   ];
+  const PALETTE = '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="6.4"/><path d="M8 1.6a6.4 6.4 0 0 0 0 12.8z" fill="currentColor"/></svg>';
   const PREFS_KEY = 'ocenshik.prefs.v1';
   let theme = (read(PREFS_KEY) || {}).theme;
   if (!THEMES.some((t) => t.id === theme)) theme = 'auto';
@@ -369,8 +687,9 @@ h1, h2, p { margin: 0; }
     theme = th.id;
     if (theme === 'auto') document.documentElement.removeAttribute('data-theme');
     else document.documentElement.setAttribute('data-theme', theme);
-    $('#themeBtn').textContent = `${th.icon} Тема: ${th.name}`;
-    $('#themeMenu').innerHTML = THEMES.map((t) => `<button type="button" class="theme-opt" data-theme-id="${t.id}" aria-pressed="${t.id === theme}"><i style="background:linear-gradient(135deg, ${t.sw[0]} 50%, ${t.sw[1]} 50%)"></i>${t.icon} ${t.name}</button>`).join('');
+    $('#themeBtn').innerHTML = `${PALETTE}<span>Тема: ${th.name}</span>`;
+    $('#themeBtn').setAttribute('aria-label', `Тема: ${th.name}`);
+    $('#themeMenu').innerHTML = THEMES.map((t) => `<button type="button" class="theme-opt" data-theme-id="${t.id}" aria-pressed="${t.id === theme}"><i style="background:linear-gradient(135deg, ${t.sw[0]} 50%, ${t.sw[1]} 50%)"></i>${t.name}</button>`).join('');
     if (save) {
       try {
         let p = read(PREFS_KEY);
@@ -385,7 +704,19 @@ h1, h2, p { margin: 0; }
   $('#themeMenu').addEventListener('click', (e) => {
     const b = e.target.closest('[data-theme-id]');
     if (!b) return;
-    applyTheme(b.dataset.themeId, true);
+    let done = false;
+    const go = () => { if (!done) { done = true; applyTheme(b.dataset.themeId, true); } };
+    // смена темы расходится кругом от кнопки, где это умеет браузер
+    if (document.startViewTransition && !calm) {
+      const r = b.getBoundingClientRect();
+      document.documentElement.style.setProperty('--tx', `${r.left + r.width / 2}px`);
+      document.documentElement.style.setProperty('--ty', `${r.top + r.height / 2}px`);
+      document.documentElement.classList.add('theme-swap');
+      const t = document.startViewTransition(go);
+      t.ready.catch(() => {});
+      t.finished.catch(() => {}).finally(() => document.documentElement.classList.remove('theme-swap'));
+      setTimeout(go, 400); // если переход не начался (вкладка в фоне), тема всё равно сменится
+    } else go();
     pick.open = false;
     $('#themeBtn').focus();
   });
@@ -393,5 +724,11 @@ h1, h2, p { margin: 0; }
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && pick.open) { pick.open = false; $('#themeBtn').focus(); } });
 })();
 </script>
+<style>
+/* Theme swap: the new theme grows as a circle from the option that was tapped */
+html.theme-swap::view-transition-old(root) { animation: none; }
+html.theme-swap::view-transition-new(root) { animation: theme-circle .6s cubic-bezier(.4, 0, .2, 1) both; }
+@keyframes theme-circle { from { clip-path: circle(0 at var(--tx, 50%) var(--ty, 0)); } to { clip-path: circle(150vmax at var(--tx, 50%) var(--ty, 0)); } }
+</style>
 </body>
 </html>

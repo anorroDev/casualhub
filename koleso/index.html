@@ -523,6 +523,155 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
 .card:has(> .views) { container-type: inline-size; }
 .views { flex-wrap: nowrap; gap: 2px clamp(10px, 4cqi, 22px); }
 .view-tab { font-size: clamp(24px, 10cqi, 46px); white-space: nowrap; }
+
+/* ===== Polish: depth, light and motion, same language as the hub and Мнение. Everything that moves is transform or opacity ===== */
+:root {
+  --spring: cubic-bezier(.34, 1.56, .64, 1); --out: cubic-bezier(.2, .8, .2, 1);
+  --glow: .26;
+  --lift: 0 1px 0 color-mix(in srgb, #fff 5%, transparent) inset, 0 26px 52px -32px rgba(0, 0, 0, .55);
+}
+body { background-image: none; overflow-x: hidden; }
+/* Ambient light pools and a dot grid fading to the edges (on html: body::before is the iPhone notch strip) */
+html::before {
+  content: ""; position: fixed; inset: -12vmax; z-index: -1; pointer-events: none; will-change: transform;
+  background:
+    radial-gradient(36vmax 28vmax at 18% 12%, color-mix(in srgb, var(--accent) calc(var(--glow) * 100%), transparent), transparent 70%),
+    radial-gradient(30vmax 26vmax at 86% 30%, color-mix(in srgb, #EC4899 calc(var(--glow) * 45%), transparent), transparent 70%),
+    radial-gradient(32vmax 26vmax at 50% 96%, color-mix(in srgb, var(--mid) calc(var(--glow) * 40%), transparent), transparent 70%);
+  animation: drift 28s ease-in-out infinite alternate;
+}
+html::after {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image: radial-gradient(circle at 1px 1px, var(--dot) 1px, transparent 1.5px); background-size: 18px 18px;
+  -webkit-mask-image: radial-gradient(120% 90% at 50% 20%, #000 40%, transparent 100%);
+  mask-image: radial-gradient(120% 90% at 50% 20%, #000 40%, transparent 100%);
+}
+@keyframes drift {
+  0% { transform: translate3d(0, 0, 0) rotate(0deg); }
+  50% { transform: translate3d(3vmax, -2vmax, 0) rotate(5deg); }
+  100% { transform: translate3d(-2vmax, 2vmax, 0) rotate(-4deg); }
+}
+
+/* Header: navigation is a top bar (home on the left, the rest on the right), the title sits under it */
+.masthead { flex-direction: column-reverse; align-items: stretch; gap: 26px; }
+.masthead-right { align-items: stretch; }
+.masthead-right > .user-bar { justify-content: flex-end; }
+#backLink { margin-right: auto; }
+.theme-btn {
+  height: 36px; padding: 0 13px; gap: 7px;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  transition: transform .2s var(--spring), border-color .15s, color .15s, box-shadow .2s;
+}
+.theme-btn:hover { box-shadow: 0 6px 18px -10px color-mix(in srgb, var(--accent) 60%, transparent); }
+#backLink:hover { transform: translateX(-2px); }
+#mnenieLink svg rect { transform-box: fill-box; transform-origin: 50% 100%; transition: transform .35s var(--spring); }
+#mnenieLink:hover svg rect:nth-child(2) { transform: scaleY(1.2); }
+#mnenieLink:hover svg rect:nth-child(3) { transform: scaleY(.8); }
+.scale span { background: color-mix(in srgb, var(--panel) 92%, transparent); }
+.theme-menu { border-radius: 16px; transform-origin: 90% 0; box-shadow: 0 24px 50px -20px color-mix(in srgb, var(--ink) 55%, transparent); }
+.theme-pick[open] .theme-menu { animation: menu-in .26s var(--spring) both; }
+@keyframes menu-in { from { transform: translateY(-6px) scale(.94); } }
+.theme-opt i { transition: transform .3s var(--spring); }
+.theme-opt:hover i { transform: rotate(180deg) scale(1.1); }
+html.theme-swap::view-transition-old(root) { animation: none; }
+html.theme-swap::view-transition-new(root) { animation: theme-circle .6s cubic-bezier(.4, 0, .2, 1) both; }
+@keyframes theme-circle { from { clip-path: circle(0 at var(--tx, 50%) var(--ty, 0)); } to { clip-path: circle(150vmax at var(--tx, 50%) var(--ty, 0)); } }
+@media (max-width: 560px) {
+  #themeBtn span, .ml-text, .hl-full { display: none; }
+  #themeBtn, #mnenieLink { width: 36px; padding: 0; }
+  #githubLink { display: none; }
+  .masthead { gap: 18px; }
+  .masthead-right > .user-bar { flex-wrap: nowrap; gap: 6px; }
+  .theme-menu { right: 0; left: auto; }
+}
+
+/* Title letters rise one by one and breathe (transforms only) */
+.title .ch { display: inline-block; transform-origin: 50% 100%; animation: ch-in .7s cubic-bezier(.2, .9, .25, 1.25) backwards calc(var(--i) * 40ms), ch-wave 8s ease-in-out calc(1.6s + var(--i) * 60ms) infinite; transition: color .25s, scale .35s var(--spring); }
+.title .ch:hover { color: var(--accent); scale: 1 1.08; }
+.title .w { display: inline-block; white-space: nowrap; }
+@keyframes ch-in { from { transform: translateY(60%) scaleY(.3); } }
+@keyframes ch-wave { 0%, 12%, 100% { translate: 0 0; } 6% { translate: 0 -5%; } }
+
+/* Cards: accent light at the top edge and real depth */
+.card {
+  border-radius: 22px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 93%, var(--accent)) 0, var(--panel) 140px);
+  box-shadow: var(--lift);
+}
+html.intro .layout > .card { animation: card-rise .8s var(--spring) backwards; }
+html.intro .layout > .card + .card { animation-delay: .1s; }
+html.intro .masthead-right { animation: drop-in .6s var(--out) backwards; }
+html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards; }
+@keyframes card-rise { from { transform: translateY(34px) scale(.985); } }
+@keyframes drop-in { from { transform: translateY(-14px); } }
+
+/* The dot next to the card title breathes: a ring that scales and fades */
+.eyebrow .dot { position: relative; }
+.eyebrow .dot::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: inherit; animation: breathe 2.6s ease-out infinite; }
+.stage.is-spinning .eyebrow .dot::after { animation-duration: .7s; }
+@keyframes breathe { 0% { transform: scale(1); opacity: .6; } 60%, 100% { transform: scale(2.4); opacity: 0; } }
+
+/* Wheel stage: a soft shadow under the wheel, the hub button lifts and glows */
+.wheel-wrap { isolation: isolate; }
+.wheel-wrap::before { content: ""; position: absolute; inset: 3%; z-index: -1; border-radius: 50%; box-shadow: 0 34px 70px -26px color-mix(in srgb, var(--ink) 55%, transparent); pointer-events: none; }
+.hub { transition: transform .3s var(--spring), background-color .15s; }
+@media (hover: hover) { .hub:hover:not(:disabled) { transform: translate(-50%, -50%) scale(1.05); } }
+.hub:active:not(:disabled) { transform: translate(-50%, -50%) scale(.94); transition-duration: .1s; }
+#ticker { transform-origin: 50% 100%; }
+.readout .label { letter-spacing: .14em; }
+.badge { transition: background-color .25s, color .2s; }
+.scorebar .badge[data-tier="good"], .scorebar .badge[data-tier="bad"] { box-shadow: 0 12px 26px -12px color-mix(in srgb, var(--tier) 85%, transparent); }
+.scorebar { background: color-mix(in srgb, var(--panel-2) 85%, var(--panel)); }
+
+/* Inputs and buttons */
+.inp { transition: border-color .18s, box-shadow .25s, background-color .18s; }
+.inp:focus { background: var(--panel); }
+.btn { transition: transform .22s var(--spring), background-color .15s, border-color .15s, color .15s; }
+.btn.primary { box-shadow: 0 10px 22px -12px color-mix(in srgb, var(--ink) 70%, transparent); }
+@media (hover: hover) { .btn.primary:hover:not(:disabled) { transform: translateY(-1px); } }
+.seg button, .opt { transition: transform .22s var(--spring), background-color .15s, border-color .15s, color .15s; }
+.th { transition: transform .25s var(--spring), border-color .15s, box-shadow .2s; }
+@media (hover: hover) { .th:hover { transform: translateY(-2px) scale(1.04); } }
+.th[aria-pressed="true"] { transform: scale(1.04); }
+
+/* Mode tabs: a pixel underline slides under the active one */
+.views { padding-bottom: 10px; }
+.view-tab { position: relative; transition: color .2s; }
+.view-tab::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -9px; height: 4px; border-radius: 2px;
+  background: repeating-linear-gradient(90deg, var(--accent) 0 9px, transparent 9px 12px);
+  transform: scaleX(0); transform-origin: 0 50%; transition: transform .45s var(--out);
+}
+.view-tab[aria-selected="true"]::after { transform: scaleX(1); }
+
+/* Participants: the colour swatch pops on hover, the remove cross turns */
+.sw { transition: transform .3s var(--spring); }
+@media (hover: hover) {
+  .prow:hover .sw { transform: scale(1.25) rotate(-8deg); }
+  .prow .mini-btn.del svg { transition: transform .3s var(--spring); }
+  .prow .mini-btn.del:hover svg { transform: rotate(90deg); }
+}
+
+/* Phone switcher: the dark pill slides between «Колесо» and «Участники» */
+@supports selector(:has(a)) {
+  @media (max-width: 979px) {
+    .mnav { isolation: isolate; }
+    .mnav::before {
+      content: ""; position: absolute; z-index: -1; top: 4px; bottom: 4px; left: 4px;
+      width: calc((100% - 8px - 4px) / 2); border-radius: 10px; background: var(--ink);
+      box-shadow: 0 8px 18px -10px color-mix(in srgb, var(--ink) 80%, transparent);
+      transition: transform .45s var(--spring);
+    }
+    .mnav:has(button:nth-child(2)[aria-pressed="true"])::before { transform: translateX(calc(100% + 4px)); }
+    .mnav button { transition: color .25s; }
+    .mnav button[aria-pressed="true"] { background: transparent; }
+  }
+}
+
+/* Winner: cells fly out of the card */
+.burst { position: fixed; z-index: 80; width: 10px; height: 10px; border-radius: 3px; pointer-events: none; }
+.sheet-card { border-radius: 22px; }
+.w-name { transform-origin: 0 100%; }
 </style>
 </head>
 <body>
@@ -538,8 +687,8 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     </div>
     <div class="masthead-right">
       <div class="user-bar">
-        <a class="theme-btn" id="backLink" href="/" hidden>← Казуал Хаб</a>
-        <a class="theme-btn" id="mnenieLink" href="/mnenie/" hidden>📊 Мнение</a>
+        <a class="theme-btn" id="backLink" href="/" hidden aria-label="Казуал Хаб, главная"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 8H3M7 4L3 8l4 4"/></svg><span class="hl-full">Казуал </span>Хаб</a>
+        <a class="theme-btn" id="mnenieLink" href="/mnenie/" hidden title="Мнение Казуала"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1.5" y="9" width="3.4" height="5.5" rx="1" fill="#E4553F"/><rect x="6.3" y="6" width="3.4" height="8.5" rx="1" fill="#EAA92C"/><rect x="11.1" y="2.5" width="3.4" height="12" rx="1" fill="#2EAD60"/></svg><span class="ml-text">Мнение</span></a>
         <a class="theme-btn" id="githubLink" href="https://github.com/anorroDev/casualhub" target="_blank" rel="noopener" title="Код сайта на GitHub"><svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a>
         <details class="theme-pick" id="themePick">
           <summary class="theme-btn" id="themeBtn" title="Тема оформления">🌓 Тема: Авто</summary>
@@ -713,6 +862,7 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
   const canvas = $('#wheel');
   const ctx = canvas.getContext('2d');
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let drawRot = null; // пока колесо крутит видеокарта, рисуем его в стартовом положении
   const FONT = 'Onest, ui-sans-serif, system-ui, sans-serif';
   const SAMPLE = [['Hollow Knight', 1500], ['Hades', 1200], ['Disco Elysium', 800], ['Outer Wilds', 500], ['Celeste', 300], ['Inscryption', 250]];
 
@@ -918,8 +1068,9 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     if (theme === 'auto') { if (fromUser) document.documentElement.removeAttribute('data-theme'); }
     else document.documentElement.setAttribute('data-theme', theme);
     const th = THEMES.find((x) => x.id === theme);
-    $('#themeBtn').textContent = `${th.icon} Тема: ${th.name}`;
-    $('#themeMenu').innerHTML = THEMES.map((x) => `<button type="button" class="theme-opt" data-theme-id="${x.id}" aria-pressed="${x.id === theme}"><i style="background:linear-gradient(135deg, ${x.sw[0]} 50%, ${x.sw[1]} 50%)"></i>${x.icon} ${x.name}</button>`).join('');
+    $('#themeBtn').innerHTML = `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="6.4"/><path d="M8 1.6a6.4 6.4 0 0 0 0 12.8z" fill="currentColor"/></svg><span>Тема: ${th.name}</span>`;
+    $('#themeBtn').setAttribute('aria-label', `Тема: ${th.name}`);
+    $('#themeMenu').innerHTML = THEMES.map((x) => `<button type="button" class="theme-opt" data-theme-id="${x.id}" aria-pressed="${x.id === theme}"><i style="background:linear-gradient(135deg, ${x.sw[0]} 50%, ${x.sw[1]} 50%)"></i>${x.name}</button>`).join('');
     if (fromUser) writeThemePref(theme);
   }
 
@@ -931,9 +1082,8 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
   }
 
   function resize() {
-    const r = canvas.getBoundingClientRect();
     dpr = Math.min(2.5, window.devicePixelRatio || 1);
-    size = Math.round(r.width * dpr);
+    size = Math.round(canvas.clientWidth * dpr); // clientWidth не меняется, когда колесо повёрнуто
     if (!size) return;
     canvas.width = size;
     canvas.height = size;
@@ -956,6 +1106,7 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
   function draw(segs, hl) {
     if (!size) return;
     segs = segs || segments();
+    const rot = drawRot == null ? S.rot : drawRot;
     const c = size / 2;
     const ring = Math.max(8, size * 0.03);
     const R = c - ring - 2 * dpr;
@@ -970,7 +1121,7 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     for (const s of segs) {
       ctx.beginPath();
       ctx.moveTo(0, 0);
-      ctx.arc(0, 0, R, S.rot + s.start, S.rot + s.end);
+      ctx.arc(0, 0, R, rot + s.start, rot + s.end);
       ctx.closePath();
       ctx.fillStyle = colorOf(s.item).c;
       ctx.fill();
@@ -981,7 +1132,7 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
       ctx.lineWidth = Math.max(1.5, 2 * dpr);
       ctx.strokeStyle = T.panel;
       for (const s of segs) {
-        const a = S.rot + s.start;
+        const a = rot + s.start;
         ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * R, Math.sin(a) * R); ctx.stroke();
       }
     }
@@ -996,7 +1147,7 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
       if (fs < 9 * dpr) continue;
       const font = `600 ${fs}px ${FONT}`;
       ctx.save();
-      ctx.rotate(S.rot + (s.start + s.end) / 2);
+      ctx.rotate(rot + (s.start + s.end) / 2);
       ctx.font = font;
       ctx.fillStyle = colorOf(s.item).t;
       ctx.fillText(fit(s.item.name, maxW, font), R - pad, 0);
@@ -1114,15 +1265,25 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     let last = segAt(from, segs);
     $('#ticker').textContent = last.item.name;
 
+    // колесо рисуется один раз, а крутит его видеокарта: canvas поворачивается целиком, без перерисовки в каждом кадре
+    drawRot = from;
+    draw(segs);
+    canvas.style.willChange = 'transform';
     const frame = (now) => {
       const t = Math.min(1, (now - t0) / dur);
       const e = 1 - Math.pow(1 - t, 4);
       S.rot = from + (to - from) * e;
       const cur = segAt(S.rot, segs);
       if (cur !== last) { last = cur; tick(); $('#ticker').textContent = cur.item.name; }
-      draw(segs);
+      canvas.style.transform = `rotate(${S.rot - from}rad)`;
       if (t < 1) requestAnimationFrame(frame);
-      else land(pick, segs);
+      else {
+        drawRot = null;
+        canvas.style.transform = '';
+        canvas.style.willChange = '';
+        draw(segs);
+        land(pick, segs);
+      }
     };
     requestAnimationFrame(frame);
   }
@@ -1752,7 +1913,20 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     $('#themeMenu').addEventListener('click', (e) => {
       const b = e.target.closest('[data-theme-id]');
       if (!b) return;
-      applyTheme(b.dataset.themeId, true);
+      const swap = () => { applyTheme(b.dataset.themeId, true); readTheme(); draw(); };
+      // новая тема расходится кругом от выбранного пункта, где это умеет браузер
+      if (document.startViewTransition && !reduced) {
+        const r = b.getBoundingClientRect();
+        document.documentElement.style.setProperty('--tx', `${r.left + r.width / 2}px`);
+        document.documentElement.style.setProperty('--ty', `${r.top + r.height / 2}px`);
+        document.documentElement.classList.add('theme-swap');
+        let done = false;
+        const go = () => { if (!done) { done = true; swap(); } };
+        const vt = document.startViewTransition(go);
+        vt.ready.catch(() => {});
+        vt.finished.catch(() => {}).finally(() => document.documentElement.classList.remove('theme-swap'));
+        setTimeout(go, 400); // если переход не начался (вкладка в фоне), тема всё равно сменится
+      } else swap();
       $('#themePick').open = false;
       $('#themeBtn').focus();
     });
@@ -2088,6 +2262,86 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
 
   window.claude?.hot?.snapshot?.(() => { const { spinning, ...rest } = S || {}; return rest; });
   window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
+})();
+</script>
+<script>
+/* Живость: буквы заголовка, въезд карточек, плавное перестроение списка участников и залп клеток у победителя */
+(() => {
+  const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const root = document.documentElement;
+  const SPRING = 'cubic-bezier(.34, 1.56, .64, 1)', OUT = 'cubic-bezier(.2, .8, .2, 1)';
+
+  // заголовок по буквам, как надпись на главной
+  const title = document.querySelector('.title');
+  if (title && !calm) {
+    const text = title.textContent.trim();
+    let i = 0;
+    title.setAttribute('aria-label', text);
+    title.innerHTML = text.split(' ').map(w => `<span class="w" aria-hidden="true">${[...w].map(c => `<span class="ch" style="--i:${i++}">${c}</span>`).join('')}</span>`).join(' ');
+  }
+  if (calm) return;
+
+  // карточки въезжают при загрузке
+  root.classList.add('intro');
+  setTimeout(() => root.classList.remove('intro'), 1400);
+
+  // участники: при каждом перестроении оставшиеся строки плывут на новое место, новые въезжают, имя под стрелкой подпрыгивает
+  const list = document.getElementById('list');
+  const spot = new Map();
+  const measure = () => { spot.clear(); list.querySelectorAll(':scope > .prow').forEach(li => spot.set(li.dataset.id, li.offsetTop)); };
+  measure();
+  new MutationObserver(() => {
+    let k = 0;
+    const had = spot.size;
+    list.querySelectorAll(':scope > .prow').forEach(li => {
+      const was = spot.get(li.dataset.id), now = li.offsetTop;
+      if (was != null) {
+        if (Math.abs(was - now) > 1) li.animate([{ transform: `translateY(${was - now}px)` }, { transform: 'none' }], { duration: 460, easing: OUT });
+      } else if (had && k < 14) {
+        li.animate([{ transform: 'translateX(-22px)' }, { transform: 'none' }], { duration: 420, delay: 30 * k++, easing: OUT, fill: 'backwards' });
+      }
+    });
+    measure();
+  }).observe(list, { childList: true });
+
+  // имя под стрелкой: маленький подскок при каждой смене
+  const ticker = document.getElementById('ticker');
+  let lastName = ticker.textContent, lastPop = 0;
+  new MutationObserver(() => {
+    const t = ticker.textContent, now = performance.now();
+    if (t === lastName) return;
+    lastName = t;
+    if (now - lastPop < 70) return; // на большой скорости имена мелькают часто, подскок не на каждое
+    lastPop = now;
+    ticker.animate([{ transform: 'translateY(0) scale(1)' }, { transform: 'translateY(-4px) scale(1.04)' }, { transform: 'translateY(0) scale(1)' }], { duration: 220, easing: SPRING });
+  }).observe(ticker, { childList: true, characterData: true, subtree: true });
+
+  // победитель: из карточки вылетают клетки, имя победителя выпрыгивает
+  const sheet = document.getElementById('winner');
+  const burst = () => {
+    const card = sheet.querySelector('.sheet-card');
+    const b = card.getBoundingClientRect();
+    const cs = getComputedStyle(root);
+    const colors = ['--good', '--mid', '--bad', '--accent'].map(v => cs.getPropertyValue(v).trim() || '#3550E8').concat(['#EC4899', '#06B6D4']);
+    for (let i = 0; i < 44; i++) {
+      const s = document.createElement('i');
+      s.className = 'burst';
+      s.style.background = colors[i % colors.length];
+      s.style.left = `${b.left + b.width / 2 - 5}px`;
+      s.style.top = `${b.top + Math.min(90, b.height / 3)}px`;
+      document.body.appendChild(s);
+      const a = (-170 + Math.random() * 160) * Math.PI / 180, d = 90 + Math.random() * 190, rot = (Math.random() - .5) * 900;
+      const dx = Math.cos(a) * d, dy = Math.sin(a) * d;
+      s.animate([
+        { transform: 'translate(0, 0) rotate(0) scale(.4)' },
+        { transform: `translate(${dx}px, ${dy}px) rotate(${rot / 2}deg) scale(1)`, offset: .45 },
+        { transform: `translate(${dx * 1.25}px, ${dy + 200}px) rotate(${rot}deg) scale(.5)`, opacity: 0 },
+      ], { duration: 1200 + Math.random() * 700, easing: 'cubic-bezier(.2, .7, .4, 1)' }).onfinish = () => s.remove();
+    }
+    const nm = document.getElementById('wName');
+    nm.animate([{ transform: 'translateY(26px) scaleY(.6)' }, { transform: 'none' }], { duration: 700, easing: SPRING, fill: 'backwards', delay: 80 });
+  };
+  new MutationObserver(() => { if (!sheet.hidden) burst(); }).observe(sheet, { attributes: true, attributeFilter: ['hidden'] });
 })();
 </script>
 </body>
