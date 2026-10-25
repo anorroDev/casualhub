@@ -79,6 +79,17 @@ img{max-width:100%}
   --good: #2F9E6B; --mid: #E0A21B; --bad: #E0533D; --bad-ink: #B23A27; --on-tier: #2B1A22;
   color-scheme: light;
 }
+/* Page transitions between the hub and the wheel (same rules on the main page) */
+@view-transition { navigation: auto; }
+::view-transition-old(root) { animation: vt-out .26s ease both; }
+::view-transition-new(root) { animation: vt-in .42s cubic-bezier(.2, .8, .2, 1) both; }
+::view-transition-group(site-title) { animation-duration: .42s; animation-timing-function: cubic-bezier(.2, .8, .2, 1); }
+@keyframes vt-out { to { opacity: 0; transform: scale(.985); } }
+@keyframes vt-in { from { opacity: 0; transform: translateY(16px); } }
+.title { view-transition-name: site-title; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}
 .theme-pick { position: relative; }
 .theme-pick > summary { list-style: none; }
 .theme-pick > summary::-webkit-details-marker { display: none; }
@@ -319,6 +330,10 @@ fieldset:disabled { opacity: .6; }
   font-weight: 700; font-size: clamp(14px, 3.4cqw, 19px); text-align: center;
 }
 .opts-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.dur-row { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.dur-row input[type="range"] { flex: 1; min-width: 0; height: 28px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.dur-edge { flex: none; font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+#durVal { flex: none; min-width: 3ch; padding: 2px 10px; border-radius: 8px; background: var(--panel-2); border: 1px solid var(--line); font-family: var(--font-display); font-weight: 800; font-size: 24px; line-height: 1.1; text-align: center; font-variant-numeric: tabular-nums; }
 .opt {
   display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 13px 0 10px;
   border: 1px solid var(--line); border-radius: 999px; background: var(--panel);
@@ -518,8 +533,13 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
       </div>
 
       <div class="field">
-        <p class="label" id="durLabel">Длительность спина</p>
-        <div class="seg" id="durSeg" role="group" aria-labelledby="durLabel"></div>
+        <label class="label" id="durLabel" for="durRange">Длительность спина</label>
+        <div class="dur-row">
+          <span class="dur-edge" aria-hidden="true">1 с</span>
+          <input type="range" id="durRange" min="1" max="30" step="1" value="8" aria-describedby="durVal">
+          <span class="dur-edge" aria-hidden="true">30 с</span>
+          <output id="durVal" for="durRange">8 с</output>
+        </div>
         <div class="opts-row">
           <label class="opt" for="auto"><input type="checkbox" id="auto"> Крутить до победителя</label>
           <label class="opt" for="snd"><input type="checkbox" id="snd" checked> Звук</label>
@@ -649,7 +669,7 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
   const CODES = Object.keys(CUR);
   // сколько единиц валюты дают за 1 доллар (примерно, правится на странице)
   const DEF_RATES = { UAH: 41.5, USD: 1, EUR: 0.86, ILS: 3.3, RUB: 80 };
-  const DURS = [3, 5, 8, 12, 20];
+  const DUR_MIN = 1, DUR_MAX = 30; // секунды прокрута
   const HUBS = [[24, 'Малый'], [34, 'Средний'], [44, 'Большой']];
   // те же темы, что на главной Казуал Хаба
   const THEMES = [
@@ -1149,7 +1169,8 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     }).join('');
   }
   function renderSegs() {
-    $('#durSeg').innerHTML = DURS.map((d) => `<button type="button" data-dur="${d}" aria-pressed="${d === S.duration}">${d} с</button>`).join('');
+    $('#durRange').value = S.duration;
+    $('#durVal').textContent = S.duration + ' с';
     $('#hubSeg').innerHTML = HUBS.map(([v, l]) => `<button type="button" data-hub="${v}" aria-pressed="${v === S.hub}">${l}</button>`).join('');
   }
   function markSeg(sel, attr, val) {
@@ -1491,11 +1512,9 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
       render();
     }));
 
-    $('#durSeg').addEventListener('click', (e) => {
-      const b = e.target.closest('[data-dur]');
-      if (!b) return;
-      S.duration = +b.dataset.dur;
-      markSeg('#durSeg', 'data-dur', S.duration);
+    $('#durRange').addEventListener('input', (e) => {
+      S.duration = Math.min(DUR_MAX, Math.max(DUR_MIN, Math.round(+e.target.value) || 8));
+      $('#durVal').textContent = S.duration + ' с';
       save();
     });
     $('#hubSeg').addEventListener('click', (e) => {
@@ -1714,7 +1733,7 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     if (!CUR[S.cur]) S.cur = 'UAH';
     S.rates = Object.assign({ ...DEF_RATES }, S.rates || {});
     S.items.forEach((i) => { if (!CUR[i.cur]) i.cur = S.cur; });
-    S.duration = nearest(+S.duration || 8, DURS);
+    S.duration = Math.min(DUR_MAX, Math.max(DUR_MIN, Math.round(+S.duration) || 8));
     S.hub = nearest(+S.hub || HUBS[0][0], HUBS.map((h) => h[0]));
     if (!['wheel', 'list'].includes(S.section)) S.section = 'wheel';
     S.music = Object.assign({ spin: '', out: '', win: '' }, S.music || {});

@@ -300,12 +300,17 @@ a.theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
 /* Tier List View */
 .tier-board { display: grid; gap: 8px; margin-top: 14px; }
 .tier-row {
-  display: grid; grid-template-columns: 56px minmax(0, 1fr); border: 1px solid var(--line);
+  display: grid; grid-template-columns: 64px minmax(0, 1fr); border: 1px solid var(--line);
   border-radius: 12px; overflow: hidden; background: var(--panel-2); min-height: 64px;
 }
 .tier-head {
-  display: grid; place-items: center; font-family: var(--font-display); font-weight: 800;
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px; padding: 6px 4px;
+  font-family: var(--font-display); font-weight: 800; line-height: 1;
   font-size: 34px; color: var(--on-tier); background: var(--tier-bg, var(--cell));
+}
+.tier-head small {
+  font-family: var(--font-body); font-size: 11px; font-weight: 700; letter-spacing: .01em;
+  opacity: .78; white-space: nowrap; font-variant-numeric: tabular-nums;
 }
 .tier-items { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 8px 10px; }
 .tier-item {
@@ -445,6 +450,17 @@ a.theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
   --accent: #D6336C; --accent-soft: #FCE1EB;
   --good: #2F9E6B; --mid: #E0A21B; --bad: #E0533D; --bad-ink: #B23A27; --on-tier: #2B1A22;
   color-scheme: light;
+}
+/* Page transitions between the hub and the wheel (same rules in koleso/index.html) */
+@view-transition { navigation: auto; }
+::view-transition-old(root) { animation: vt-out .26s ease both; }
+::view-transition-new(root) { animation: vt-in .42s cubic-bezier(.2, .8, .2, 1) both; }
+::view-transition-group(site-title) { animation-duration: .42s; animation-timing-function: cubic-bezier(.2, .8, .2, 1); }
+@keyframes vt-out { to { opacity: 0; transform: scale(.985); } }
+@keyframes vt-in { from { opacity: 0; transform: translateY(16px); } }
+.title { view-transition-name: site-title; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }
 /* Theme picker */
 .theme-pick { position: relative; }
@@ -1145,10 +1161,17 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
             <p><strong>Журнал пока пуст.</strong> Сюда по датам попадут новые оценки, правки и удаления, а ещё изменения категорий и критериев. К любой записи можно дописать своё описание.</p>
           </div>
         </div>
-        <div id="logApp" data-stat="13 версий, последняя 25 октября" hidden>
+        <div id="logApp" data-stat="14 версий, последняя 25 октября" hidden>
           <div class="log-days">
             <section class="log-day">
-              <h3 class="log-date">25 октября 2026<span>версии 4–13</span></h3>
+              <h3 class="log-date">25 октября 2026<span>версии 4–14</span></h3>
+              <article class="rel">
+                <span class="rel-v">v14</span>
+                <div>
+                  <h4>Тиры с баллами, переходы и ползунок в колесе</h4>
+                  <p>В тир-листе под каждой буквой подписан её диапазон: S 9,2–10, A 8,2–9,1, B 7–8,1, C 5–6,9, D ниже 5. Между главной и колесом страница меняется плавно, а заголовок перетекает из одного в другой. В колесе время прокрута выбирается ползунком от 1 до 30 секунд. В шапке появилась кнопка GitHub. Выход из аккаунта больше не отключает от друзей.</p>
+                </div>
+              </article>
               <article class="rel">
                 <span class="rel-v">v13</span>
                 <div>
@@ -2721,11 +2744,11 @@ ${histHTML(r)}
 function renderTierBoard(list) {
   if (!el.tierBoard) return;
   const tiers = [
-    { id: 'S', label: 'S', min: 9.2, col: 'var(--good)' },
-    { id: 'A', label: 'A', min: 8.2, col: 'color-mix(in srgb, var(--good) 75%, var(--mid))' },
-    { id: 'B', label: 'B', min: 7.0, col: 'var(--mid)' },
-    { id: 'C', label: 'C', min: 5.0, col: 'color-mix(in srgb, var(--mid) 65%, var(--bad))' },
-    { id: 'D', label: 'D', min: -1,  col: 'var(--bad)' }
+    { id: 'S', label: 'S', min: 9.2, range: '9,2–10', col: 'var(--good)' },
+    { id: 'A', label: 'A', min: 8.2, range: '8,2–9,1', col: 'color-mix(in srgb, var(--good) 75%, var(--mid))' },
+    { id: 'B', label: 'B', min: 7.0, range: '7–8,1', col: 'var(--mid)' },
+    { id: 'C', label: 'C', min: 5.0, range: '5–6,9', col: 'color-mix(in srgb, var(--mid) 65%, var(--bad))' },
+    { id: 'D', label: 'D', min: -1, range: 'ниже 5', col: 'var(--bad)' }
   ];
   const buckets = new Map(tiers.map(t => [t.id, []]));
   for (const r of [...list].sort(byScore)) {
@@ -2746,7 +2769,7 @@ function renderTierBoard(list) {
         }).join('')
       : `<span style="font-size:12.5px;color:var(--ink-3);padding-left:4px;">Пусто</span>`;
     return `<div class="tier-row">
-      <div class="tier-head" style="--tier-bg:${t.col}">${t.label}</div>
+      <div class="tier-head" style="--tier-bg:${t.col}" title="${t.id}: итоговый балл ${t.range}${t.id === 'D' ? ', и оценки без балла' : ''}">${t.label}<small>${t.range}</small></div>
       <div class="tier-items">${itemsHTML}</div>
     </div>`;
   }).join('');
