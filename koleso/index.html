@@ -16,6 +16,17 @@ img{max-width:100%}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Handjet:wght@400..800&family=Onest:wght@400..700&display=swap">
+<script>
+/* тема ставится до первой отрисовки, чтобы при обновлении страница не мелькала */
+try { var cp = JSON.parse(localStorage.getItem('ocenshik.prefs.v1') || 'null'); if (cp && cp.theme && cp.theme !== 'auto') document.documentElement.setAttribute('data-theme', cp.theme); } catch (e) {}
+/* направление сдвига между страницами: главная → Мнение → Колесо */
+addEventListener('pagereveal', function (e) {
+  if (!e.viewTransition) return;
+  var rank = function (u) { try { var p = new URL(u, location.href).pathname; return p.indexOf('/koleso') === 0 ? 2 : p.indexOf('/mnenie') === 0 ? 1 : 0; } catch (x) { return 0; } };
+  var from = window.navigation && navigation.activation && navigation.activation.from;
+  e.viewTransition.types.add(from && rank(from.url) > rank(location.href) ? 'back' : 'forward');
+});
+</script>
 <style>
 /* Layout: the rater's two-panel console. Wheel stage with a status bar on the left, participants board on the right; one section at a time on phones. */
 :root {
@@ -79,20 +90,30 @@ img{max-width:100%}
   --good: #2F9E6B; --mid: #E0A21B; --bad: #E0533D; --bad-ink: #B23A27; --on-tier: #2B1A22;
   color-scheme: light;
 }
-/* Page transitions between the hub and the wheel (same rules on the main page) */
+/* Motion shared by all Casual Hub pages (same block in /index.html and mnenie/index.html) */
+/* Between pages the page slides sideways, no fading: forward to the left, back to the right */
 @view-transition { navigation: auto; }
-::view-transition-old(root) { animation: vt-out .26s ease both; }
-::view-transition-new(root) { animation: vt-in .42s cubic-bezier(.2, .8, .2, 1) both; }
-::view-transition-group(site-title) { animation-duration: .42s; animation-timing-function: cubic-bezier(.2, .8, .2, 1); }
-@keyframes vt-out { to { opacity: 0; transform: scale(.985); } }
-@keyframes vt-in { from { opacity: 0; transform: translateY(16px); } }
-.title { view-transition-name: site-title; }
-html:active-view-transition-type(ui)::view-transition-old(root) { animation: ui-out .16s ease both; }
-html:active-view-transition-type(ui)::view-transition-new(root) { animation: ui-in .26s ease both; }
-@keyframes ui-out { to { opacity: 0; } }
-@keyframes ui-in { from { opacity: 0; } }
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+html:active-view-transition-type(forward)::view-transition-old(root) { animation: vt-out-l .42s cubic-bezier(.4, 0, .2, 1) both; }
+html:active-view-transition-type(forward)::view-transition-new(root) { animation: vt-in-r .42s cubic-bezier(.4, 0, .2, 1) both; }
+html:active-view-transition-type(back)::view-transition-old(root) { animation: vt-out-r .42s cubic-bezier(.4, 0, .2, 1) both; }
+html:active-view-transition-type(back)::view-transition-new(root) { animation: vt-in-l .42s cubic-bezier(.4, 0, .2, 1) both; }
+@keyframes vt-out-l { to { transform: translateX(-100%); } }
+@keyframes vt-in-r { from { transform: translateX(100%); } }
+@keyframes vt-out-r { to { transform: translateX(100%); } }
+@keyframes vt-in-l { from { transform: translateX(-100%); } }
+/* Buttons press in; menus and sections that appear slide up a little (.enter is set by script) */
+.btn, .seg button, .theme-btn, .mini-btn, .view-tab, .theme-opt, .mnav button, .th, .opt {
+  transition-property: transform, background-color, border-color, color, box-shadow, opacity; transition-duration: .12s;
+}
+.btn:active:not(:disabled), .seg button:active, .theme-btn:active, .mini-btn:active:not(:disabled),
+.theme-opt:active, .mnav button:active, .th:active, .opt:active { transform: scale(.96); }
+.enter { animation: enter-up .24s cubic-bezier(.2, .8, .2, 1) both; }
+.theme-pick[open] .theme-menu, details.tool[open] > .dbody { animation: enter-up .2s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes enter-up { from { transform: translateY(8px); } }
 @media (prefers-reduced-motion: reduce) {
-  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+  ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+  .enter { animation: none; }
 }
 .theme-pick { position: relative; }
 .theme-pick > summary { list-style: none; }
@@ -489,7 +510,8 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     </div>
     <div class="masthead-right">
       <div class="user-bar">
-        <a class="theme-btn" id="backLink" href="../" hidden>← Казуал Хаб</a>
+        <a class="theme-btn" id="backLink" href="/" hidden>← Казуал Хаб</a>
+        <a class="theme-btn" id="mnenieLink" href="/mnenie/" hidden>📊 Мнение</a>
         <a class="theme-btn" id="githubLink" href="https://github.com/anorroDev/casualhub" target="_blank" rel="noopener" title="Код сайта на GitHub"><svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a>
         <details class="theme-pick" id="themePick">
           <summary class="theme-btn" id="themeBtn" title="Тема оформления">🌓 Тема: Авто</summary>
@@ -1744,7 +1766,7 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     if (!d) { S.sample = true; SAMPLE.forEach(([n, a]) => S.items.push(makeItem(n, a, S.cur))); }
     $('#cur').innerHTML = CODES.map((c) => `<option value="${c}">${CUR[c].sym} ${c}</option>`).join('');
     $('#cur').value = S.cur;
-    if (/\/koleso(\/|\/index\.html)?$/.test(location.pathname)) $('#backLink').hidden = false;
+    if (/\/koleso(\/|\/index\.html)?$/.test(location.pathname)) { $('#backLink').hidden = false; $('#mnenieLink').hidden = false; }
 
     applyTheme(readThemePref(), false);
     readTheme();
@@ -1771,18 +1793,26 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
       .catch(() => { persistOk = false; gifNote(); musicNote(); });
   }
 
-  // плавные переходы для всех кнопок (тот же код, что на главной); пока колесо крутится, не мешаем
-  if (document.startViewTransition && typeof ViewTransition !== 'undefined' && 'types' in ViewTransition.prototype) {
-    let replaying = false;
-    document.addEventListener('click', (e) => {
-      if (replaying || !e.isTrusted || reduced || (S && S.spinning)) return;
-      const t = e.target.closest('button, summary');
-      if (!t || t.disabled) return;
-      if (t.matches('#spin, [type="submit"], [data-mup], #gifPick')) return;
-      e.preventDefault();
-      e.stopImmediatePropagation();
-      document.startViewTransition({ update: () => { replaying = true; try { t.click(); } finally { replaying = false; } }, types: ['ui'] });
-    }, true);
+  // появление разделов после нажатий: чуть выезжают снизу, без затухания; через секунду после загрузки
+  if (!reduced) {
+    const SEL = '.card, .out-box, .board-list, .example-bar, .empty';
+    const kick = (n) => {
+      if (!(n instanceof Element) || !n.matches(SEL)) return;
+      n.classList.remove('enter');
+      void n.offsetWidth;
+      n.classList.add('enter');
+    };
+    addEventListener('animationend', (e) => { if (e.animationName === 'enter-up' && e.target.classList) e.target.classList.remove('enter'); });
+    const watch = () => setTimeout(() => {
+      new MutationObserver((ms) => {
+        for (const m of ms) {
+          const n = m.target;
+          if (m.attributeName === 'hidden' && !n.hidden) kick(n);
+          if (m.attributeName === 'data-section') n.querySelectorAll(':scope > .card').forEach((c) => { if (getComputedStyle(c).display !== 'none') kick(c); });
+        }
+      }).observe(document.body, { attributes: true, subtree: true, attributeFilter: ['hidden', 'data-section'] });
+    }, 1000);
+    if (document.readyState === 'complete') watch(); else addEventListener('load', watch);
   }
 
   window.claude?.hot?.snapshot?.(() => { const { spinning, ...rest } = S || {}; return rest; });
