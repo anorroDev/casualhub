@@ -1,4 +1,4 @@
-# Оценщик всего (rate)
+# Оценщик всего (rategod)
 
 Веб-приложение **«Оценщик всего»** для оценки и составления рейтингов.
 
@@ -8,22 +8,23 @@
 
 ## ⚡ Развертывание на Cloudflare Pages
 
-Проект полностью оптимизирован и готов для деплоя на **Cloudflare Pages**:
+Проект настроен для развертывания под именем **`rategod`** (`https://rategod.pages.dev`):
 
-### Вариант 1: Через панель Cloudflare (Автоматический деплой при push)
+### Вариант 1: Через панель Cloudflare (Автоматический деплой)
 1. Откройте [Cloudflare Dashboard](https://dash.cloudflare.com/) и перейдите в раздел **Compute (Workers & Pages)**.
 2. Нажмите **Create application** -> вкладка **Pages** -> **Connect to Git**.
 3. Выберите репозиторий `anorroDev/rate`.
-4. В настройках сборки (**Build settings**):
+4. В поле **Project name** укажите: `rategod`.
+5. В настройках сборки (**Build settings**):
    - **Framework preset**: `None`
    - **Build command**: оставить пустым
    - **Build output directory**: `/` (или `.`)
-5. Нажмите **Save and Deploy**.
+6. Нажмите **Save and Deploy**.
 
-Сайт будет опубликован на бесплатном домене вида `*.pages.dev` с глобальным CDN, защитой от DDoS и автоматическим SSL.
+Ваш сайт будет опубликован по адресу **`https://rategod.pages.dev`**.
 
 ### Вариант 2: Через Wrangler CLI
 В терминале внутри папки проекта выполните:
 ```bash
-npx wrangler pages deploy . --project-name=rate
+npx wrangler pages deploy . --project-name=rategod
 ```
