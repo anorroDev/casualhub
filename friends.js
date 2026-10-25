@@ -145,11 +145,41 @@
         F.me = (await api('/me')).user;
         if (state.user && state.user.serverId !== F.me.id) { state.user.serverId = F.me.id; saveUsers(); }
         await refreshFriends();
+        await pullOwnShelf(); // сначала забираем свои оценки с сервера, потом отправляем общий список
         pushShelf();
       } catch (e) {}
     }
     if (F.view !== 'me' && !F.friends.some((f) => f.id === F.view)) setView('me');
     redraw();
+  }
+
+  // свои оценки с сервера: на новом устройстве появятся все, на старом добавятся недостающие.
+  // Совпадающие по id остаются в более свежей версии; фото на сервер не уходят, поэтому у местных оценок они сохраняются.
+  async function pullOwnShelf() {
+    if (!F.me || !state.user) return;
+    try { await ready; } catch (e) {}
+    let r;
+    try { r = await api('/shelf/' + encodeURIComponent(F.me.id)); } catch (e) { return; }
+    const remote = r && Array.isArray(r.ratings) ? r.ratings : [];
+    if (!remote.length) return;
+    const stampOf = (x) => +new Date(x.updatedAt || x.createdAt || 0) || 0;
+    const byId = new Map(state.ratings.map((x) => [x.id, x]));
+    let added = 0, updated = 0;
+    for (const rr of remote) {
+      if (!rr || !rr.id) continue;
+      const copy = { ...rr };
+      if (!state.cats.some((c) => c.id === copy.cat) && copy.catLabel) copy.catName = copy.catName || copy.catLabel;
+      delete copy.catLabel;
+      copy.author = { ...(rr.author || {}), id: state.user.id, name: state.user.name, avatar: state.user.avatar, color: state.user.color };
+      const loc = byId.get(rr.id);
+      if (!loc) { delete copy.example; state.ratings.push(copy); added++; }
+      else if (stampOf(rr) > stampOf(loc)) { const photo = loc.photo; Object.assign(loc, copy); if (photo) loc.photo = photo; updated++; }
+    }
+    if (!added && !updated) return;
+    if (added) state.ratings = state.ratings.filter((x) => !x.example); // примеры уступают место настоящим оценкам
+    saveLocalRatings();
+    renderBoard();
+    try { toast(`Оценки из аккаунта загружены: ${added ? '+' + added : ''}${added && updated ? ', ' : ''}${updated ? 'обновлено ' + updated : ''}`); } catch (e) {}
   }
 
   // привязать текущий профиль сайта к онлайн-аккаунту с тем же ником
