@@ -155,6 +155,39 @@ a.theme-btn { text-decoration: none; }
 a.theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .name-row { display: flex; align-items: stretch; gap: 8px; }
+/* Музыка: исполнитель с аватаркой и списком уже добавленных */
+.artist-box { margin-bottom: 12px; }
+.artist-row { display: flex; align-items: center; gap: 8px; }
+.artist-field { position: relative; flex: 1; min-width: 0; }
+.artist-input { width: 100%; font-size: 18px; }
+.artist-ava {
+  flex: none; position: relative; width: 50px; height: 50px; padding: 0; overflow: hidden; display: grid; place-items: center;
+  border: 1px dashed var(--line); border-radius: 50%; background: var(--panel-2); color: var(--ink-3);
+  font-family: var(--font-display); font-size: 24px; font-weight: 700; cursor: pointer;
+  transition: transform .25s cubic-bezier(.34, 1.56, .64, 1), border-color .15s, color .15s;
+}
+.artist-ava:hover { border-color: var(--accent); color: var(--accent); }
+.artist-ava:active { transform: scale(.92); }
+.artist-ava.has { border-style: solid; border-color: transparent; }
+.artist-ava img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.artist-ava .ava-cam { position: absolute; right: 2px; bottom: 2px; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%; background: var(--accent); color: #fff; }
+.artist-ava .ava-cam svg { width: 11px; height: 11px; }
+.artist-list {
+  position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 30; max-height: 280px; overflow: auto; margin: 0; padding: 6px; list-style: none;
+  border: 1px solid var(--line); border-radius: 14px; background: var(--panel); box-shadow: 0 18px 40px -18px rgba(0, 0, 0, .55);
+}
+.artist-list li { display: flex; align-items: center; gap: 10px; padding: 7px 8px; border-radius: 10px; cursor: pointer; font-weight: 600; }
+.artist-list li[aria-selected="true"], .artist-list li:hover { background: var(--panel-2); }
+.artist-list li small { margin-left: auto; color: var(--ink-3); font-weight: 500; white-space: nowrap; }
+.artist-mini { flex: none; width: 30px; height: 30px; border-radius: 50%; overflow: hidden; display: grid; place-items: center; background: var(--cell); color: var(--ink-2); font-family: var(--font-display); font-size: 16px; font-weight: 700; }
+.artist-mini img { width: 100%; height: 100%; object-fit: cover; }
+.artist-edit { display: grid; gap: 10px; margin-top: 10px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel-2); }
+.artist-edit .row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.artist-edit input { flex: 1; min-width: 160px; height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); font: inherit; font-weight: 600; }
+.artist-edit input:focus { outline: none; border-color: var(--accent); }
+.artist-edit p { margin: 0; font-size: 12.5px; color: var(--ink-3); }
+.e-thumb.ava { border-radius: 50%; }
+.tl-pic img.ava { border-radius: 50%; }
 .name-row .name-input { flex: 1; min-width: 0; }
 .fav-toggle {
   flex: none; width: 48px; display: grid; place-items: center;
@@ -1340,7 +1373,20 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
       </div>
 
       <div class="field">
-        <label class="label" for="itemName">Название</label>
+        <div class="artist-box" id="artistBox" hidden>
+          <label class="label" for="itemArtist">Исполнитель</label>
+          <div class="artist-row">
+            <button type="button" class="artist-ava" id="artistAva" aria-label="Аватарка исполнителя" title="Аватарка исполнителя: одна на все его треки и альбомы"></button>
+            <div class="artist-field">
+              <input id="itemArtist" class="name-input artist-input" type="text" placeholder="Кто исполняет?" autocomplete="off" maxlength="80" enterkeyhint="next" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="artistList">
+              <ul class="artist-list" id="artistList" role="listbox" aria-label="Уже добавленные исполнители" hidden></ul>
+            </div>
+            <button type="button" class="btn small ghost artist-edit-btn" id="artistEdit" hidden>Изменить</button>
+          </div>
+          <div class="artist-edit" id="artistEditBox" hidden></div>
+          <input type="file" id="artistFile" class="vh" accept="image/*" tabindex="-1" aria-hidden="true">
+        </div>
+        <label class="label" for="itemName" id="nameLabel">Название</label>
         <div class="name-row">
           <input id="itemName" class="name-input" type="text" placeholder="Что оцениваешь?" autocomplete="off" maxlength="140" enterkeyhint="done">
           <button type="button" class="fav-toggle" id="favBtn" aria-pressed="false" title="Добавить в избранное ★" aria-label="В избранное">★</button>
@@ -1563,6 +1609,7 @@ const STARTERS = [
     { id: 'g-audio', name: 'Звук и музыка', desc: 'Саундтрек, озвучка, эффекты' },
     { id: 'g-atmosphere', name: 'Атмосфера', desc: 'Погружение в мир игры' },
     { id: 'g-replay', name: 'Реиграбельность', desc: 'Хочется ли вернуться' },
+    { id: 'g-ending', name: 'Концовка', desc: 'Насколько удался финал' },
     { id: 'g-tech', name: 'Техническое состояние', desc: 'Оптимизация, баги, вылеты' }
   ] },
   { id: 'films', name: 'Фильмы и сериалы', criteria: [
@@ -1607,7 +1654,8 @@ const CAT_TEMPLATES = [
     { name: 'Рисовка и анимация', desc: 'Дизайн, сакуга, экшен', w: 1 },
     { name: 'Персонажи', desc: 'Харизма и химия героев', w: 1 },
     { name: 'ОСТ и сейю', desc: 'Опенинги, музыка, озвучка', w: 1 },
-    { name: 'Эмоции', desc: 'Насколько сильно цепляет', w: 1 }
+    { name: 'Эмоции', desc: 'Насколько сильно цепляет', w: 1 },
+    { name: 'Концовка', desc: 'Насколько удался финал', w: 1 }
   ]},
   { name: 'Гаджеты и техника', criteria: [
     { name: 'Дизайн и сборка', desc: 'Материалы и эргономика', w: 1 },
@@ -1692,6 +1740,28 @@ const STARTER_RATINGS = [
   }
 ];
 
+// новый базовый критерий «Концовка» добавляется в уже созданные «Игры» и «Аниме и мангу» один раз:
+// если его потом удалить, он не вернётся
+const MIG_KEY = 'ocenshik.mig.v1';
+function migrateCats(items) {
+  let done = {};
+  try { done = JSON.parse(localStorage.getItem(MIG_KEY) || '{}') || {}; } catch (_) {}
+  if (done.ending) return false;
+  let changed = false;
+  const animeId = tplId('Аниме и манга');
+  for (const c of items) {
+    const anime = c.id === animeId || keyOf(c.name) === keyOf('Аниме и манга');
+    if (c.id !== 'games' && !anime) continue;
+    if (c.criteria.length >= MAX_CRIT || c.criteria.some(k => keyOf(k.name) === keyOf('Концовка'))) continue;
+    let id = c.id === 'games' ? 'g-ending' : `${c.id}-${c.criteria.length}`;
+    if (c.criteria.some(k => k.id === id)) id = newId('c');
+    c.criteria.push({ id, name: 'Концовка', desc: 'Насколько удался финал', w: 1 });
+    changed = true;
+  }
+  done.ending = true;
+  try { localStorage.setItem(MIG_KEY, JSON.stringify(done)); } catch (_) {}
+  return changed;
+}
 function saveLocalRatings() {
   try { localStorage.setItem(STORAGE_KEYS.RATINGS, JSON.stringify(state.ratings)); }
   catch (e) { console.error('Save ratings error:', e); }
@@ -2591,7 +2661,9 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 const $ = id => document.getElementById(id);
 const el = {
   rater: $('rater'), raterTitle: $('raterTitle'), headBtn: $('headBtn'), cats: $('cats'),
-  name: $('itemName'), nameMsg: $('nameMsg'), note: $('itemNote'),
+  name: $('itemName'), nameMsg: $('nameMsg'), note: $('itemNote'), nameLabel: $('nameLabel'),
+  artistBox: $('artistBox'), artist: $('itemArtist'), artistAva: $('artistAva'), artistList: $('artistList'),
+  artistEdit: $('artistEdit'), artistEditBox: $('artistEditBox'), artistFile: $('artistFile'),
   photoField: $('photoField'), photoBox: $('photoBox'), photoInput: $('photoInput'),
   editCrit: $('editCrit'), critTip: $('critTip'), critArea: $('critArea'),
   total: $('total'), totalNum: $('totalNum'), verdict: $('verdict'), totalSub: $('totalSub'),
@@ -2640,7 +2712,7 @@ const state = {
 function blankForm(cat) {
   return {
     editingId: null, cat: cat || (state.cats[0] ? state.cats[0].id : 'games'),
-    name: '', fav: false, status: '', meta: '', pros: '', cons: '',
+    name: '', artist: '', fav: false, status: '', meta: '', pros: '', cons: '',
     note: '', scores: {}, notes: {}, openNotes: {}, weights: {}, extra: [], extraCatName: '', photo: null, ownOnly: false
   };
 }
@@ -2674,8 +2746,15 @@ function collectScores(rows) {
       return o;
     });
 }
+// у музыки название складывается из исполнителя и названия: «Исполнитель — Трек»
+function composeName(artist, title) { return artist && title ? `${artist} — ${title}` : (title || artist || ''); }
+function formMusic() { return isMusicCat(currentCat()); }
+function formFullName() {
+  const title = form.name.trim().replace(/\s+/g, ' ');
+  return formMusic() ? composeName((form.artist || '').trim().replace(/\s+/g, ' '), title) : title;
+}
 function findDup() {
-  const key = keyOf(form.name);
+  const key = keyOf(form.name.trim() ? formFullName() : '');
   if (!key) return null;
   return state.ratings.find(r => r.nameKey === key && r.cat === form.cat && r.id !== form.editingId) || null;
 }
@@ -2865,6 +2944,8 @@ function renderForm() {
   if (el.pros && el.pros.value !== (form.pros || '')) el.pros.value = form.pros || '';
   if (el.cons && el.cons.value !== (form.cons || '')) el.cons.value = form.cons || '';
   if (el.favBtn) el.favBtn.setAttribute('aria-pressed', String(!!form.fav));
+  renderStatusSet();
+  renderArtist();
   if (el.statusChips) {
     el.statusChips.querySelectorAll('button[data-status]').forEach(b => {
       b.setAttribute('aria-pressed', String(b.dataset.status.trim() === (form.status || '').trim() && !!form.status));
@@ -2876,6 +2957,190 @@ function renderForm() {
   renderCrit();
   updateTotal();
   updateNameState();
+}
+
+// у музыки вместо «Завершено / Брошено» — «Сингл / Альбом»
+const STATUS_SETS = {
+  music: [['Сингл', '♪ Сингл'], ['Альбом', '◉ Альбом']],
+  base: [['Завершено', '✓ Завершено'], ['Брошено', '✕ Брошено']]
+};
+function statusSet() { return formMusic() ? STATUS_SETS.music : STATUS_SETS.base; }
+function statusFits(v) { const t = String(v || '').trim(); return !t || statusSet().some(([k]) => t.includes(k)); }
+function renderStatusSet() {
+  const box = el.statusChips || $('statusChips');
+  if (!box) return;
+  const set = statusSet();
+  const sig = set.map(x => x[0]).join('|');
+  if (box.dataset.set !== sig) {
+    box.dataset.set = sig;
+    box.innerHTML = set.map(([v, t]) => `<button type="button" class="status-chip" data-status="${v}" aria-pressed="false">${t}</button>`).join('');
+  }
+  box.querySelectorAll('button[data-status]').forEach(b => b.setAttribute('aria-pressed', String(!!form.status && b.dataset.status === form.status.trim())));
+}
+
+/* ---------- Исполнители (музыка) ---------- */
+// аватарка исполнителя одна на все его треки: хранится в справочнике, а в оценке только её отпечаток (artistAva),
+// чтобы другие устройства и друзья знали, какую картинку подтянуть с сервера
+const ARTISTS_KEY = 'ocenshik.artists.v1';
+const MUSIC_TPL = 'Музыка и альбомы';
+function isMusicCat(c) { return !!c && (c.id === tplId(MUSIC_TPL) || keyOf(c.name).startsWith('музык')); }
+function avaFp(s) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < s.length; i += 7) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
+  return (h >>> 0).toString(36) + '.' + s.length.toString(36);
+}
+function artistRid(name) { let h = 5381; for (const ch of keyOf(name)) h = ((h * 33) ^ ch.codePointAt(0)) >>> 0; return 'art.' + h.toString(36); }
+let artistsCache = null;
+function artistsMap() {
+  if (!artistsCache) {
+    try { artistsCache = JSON.parse(localStorage.getItem(ARTISTS_KEY) || '{}') || {}; } catch (_) { artistsCache = {}; }
+  }
+  return artistsCache;
+}
+function saveArtists() {
+  try { localStorage.setItem(ARTISTS_KEY, JSON.stringify(artistsMap())); return true; }
+  catch (_) { toast('В браузере не хватает места для аватарки'); return false; }
+}
+function artistGet(name) { const k = keyOf(name); return k ? (artistsMap()[k] || null) : null; }
+function artistAvaUrl(r) { if (!r || !r.artist) return ''; const a = artistGet(r.artist); return a && a.ava ? a.ava : ''; }
+// все известные исполнители: из справочника и из оценок, частые сверху
+function artistList() {
+  const m = new Map();
+  for (const [k, a] of Object.entries(artistsMap())) if (a && a.name) m.set(k, { key: k, name: a.name, ava: a.ava || '', n: 0 });
+  for (const r of state.ratings) {
+    if (r.example || !r.artist) continue;
+    const k = keyOf(r.artist);
+    if (!k) continue;
+    const a = m.get(k) || { key: k, name: r.artist, ava: '', n: 0 };
+    a.n++;
+    m.set(k, a);
+  }
+  return [...m.values()].sort((a, b) => b.n - a.n || a.name.localeCompare(b.name, 'ru'));
+}
+function artistMiniHTML(a) {
+  return `<span class="artist-mini">${a.ava ? `<img src="${esc(a.ava)}" alt="">` : esc((a.name.trim().charAt(0) || '?').toUpperCase())}</span>`;
+}
+// меняет все оценки исполнителя (имя, отпечаток аватарки); оценка получает свежую дату, чтобы правка дошла до других устройств
+async function patchArtistRatings(key, patchOf) {
+  const list = state.ratings.filter(r => !r.example && r.artist && keyOf(r.artist) === key);
+  if (!list.length) return 0;
+  const now = new Date().toISOString();
+  if (state.mode === 'db') {
+    for (const r of list) await putRating(r.id, Object.assign({}, r, patchOf(r), { updatedAt: now }));
+  } else {
+    list.forEach(r => Object.assign(r, patchOf(r), { updatedAt: now }));
+    saveLocalRatings();
+    renderBoard();
+  }
+  return list.length;
+}
+// quiet: картинка пришла с сервера, оценки трогать не надо
+function artistSetAva(name, data, quiet) {
+  const k = keyOf(name);
+  if (!k) return;
+  const m = artistsMap();
+  const cur = m[k] || { name: name.trim() };
+  if (data) m[k] = Object.assign({}, cur, { ava: data, fp: avaFp(data) });
+  else { m[k] = Object.assign({}, cur); delete m[k].ava; delete m[k].fp; }
+  if (!saveArtists()) return;
+  if (!quiet) patchArtistRatings(k, () => ({ artistAva: m[k].fp || '' }));
+  renderArtist();
+  renderBoard();
+}
+async function artistRename(oldName, newName) {
+  const name = String(newName || '').trim().replace(/\s+/g, ' ').slice(0, 80);
+  const ok = keyOf(oldName), nk = keyOf(name);
+  if (!nk || !ok) return false;
+  const m = artistsMap();
+  const prev = m[ok] || {}, tgt = m[nk] || {};
+  if (ok !== nk) delete m[ok];
+  m[nk] = Object.assign({}, tgt, prev, (!prev.ava && tgt.ava) ? { ava: tgt.ava, fp: tgt.fp } : {}, { name });
+  saveArtists();
+  const fpv = m[nk].fp || '';
+  const n = await patchArtistRatings(ok, r => {
+    const title = r.title || (r.name.startsWith(r.artist + ' — ') ? r.name.slice(r.artist.length + 3) : r.name);
+    const full = composeName(name, title).slice(0, 140);
+    return { artist: name, title, name: full, nameKey: keyOf(full), artistAva: fpv };
+  });
+  if (keyOf(form.artist) === ok) form.artist = name;
+  renderForm();
+  toast(n ? `Исполнитель переименован, оценок: ${n}` : 'Исполнитель переименован');
+  return true;
+}
+// квадратная аватарка 192×192 из середины картинки
+async function artistAvaFromFile(f) {
+  if (!f || !/^image\//.test(f.type)) { toast('Нужна картинка'); return ''; }
+  try {
+    const bmp = await createImageBitmap(f);
+    const side = Math.min(bmp.width, bmp.height), out = 192;
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = out;
+    cv.getContext('2d').drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, out, out);
+    if (bmp.close) bmp.close();
+    return cv.toDataURL('image/jpeg', 0.86);
+  } catch (_) { toast('Эту картинку не получилось открыть'); return ''; }
+}
+let artistPick = -1, artistEditing = null;
+function renderArtist() {
+  if (!el.artistBox) return;
+  const music = formMusic();
+  el.artistBox.hidden = !music;
+  el.nameLabel.textContent = music ? 'Название трека или альбома' : 'Название';
+  el.name.placeholder = music ? 'Как называется?' : 'Что оцениваешь?';
+  if (!music) { hideArtistList(); return; }
+  if (el.artist.value !== (form.artist || '')) el.artist.value = form.artist || '';
+  const a = artistGet(form.artist);
+  const ava = a && a.ava ? a.ava : '';
+  const letter = (form.artist || '').trim().charAt(0).toUpperCase();
+  el.artistAva.classList.toggle('has', !!ava);
+  el.artistAva.innerHTML = ava ? `<img src="${esc(ava)}" alt="">` : `${letter ? esc(letter) : '♪'}<span class="ava-cam">${CAMERA_SVG}</span>`;
+  const known = !!keyOf(form.artist) && artistList().some(x => x.key === keyOf(form.artist));
+  el.artistEdit.hidden = !known || !!artistEditing;
+  if (artistEditing && keyOf(artistEditing) !== keyOf(form.artist)) closeArtistEdit();
+}
+function hideArtistList() {
+  if (!el.artistList) return;
+  el.artistList.hidden = true;
+  el.artist.setAttribute('aria-expanded', 'false');
+  el.artist.removeAttribute('aria-activedescendant');
+  artistPick = -1;
+}
+function showArtistList() {
+  const q = keyOf(el.artist.value);
+  const all = artistList();
+  const list = all.filter(a => !q || a.key.includes(q)).slice(0, 8);
+  if (!list.length || (list.length === 1 && list[0].key === q)) { hideArtistList(); return; }
+  artistPick = Math.min(artistPick, list.length - 1);
+  el.artistList.innerHTML = list.map((a, i) => `<li role="option" id="artOpt${i}" data-artist="${esc(a.name)}" aria-selected="${i === artistPick}">${artistMiniHTML(a)}<span>${esc(a.name)}</span>${a.n ? `<small>${a.n} ${plural(a.n, 'оценка', 'оценки', 'оценок')}</small>` : ''}</li>`).join('');
+  el.artistList.hidden = false;
+  el.artist.setAttribute('aria-expanded', 'true');
+  if (artistPick >= 0) el.artist.setAttribute('aria-activedescendant', 'artOpt' + artistPick); else el.artist.removeAttribute('aria-activedescendant');
+}
+function pickArtist(name) {
+  form.artist = name;
+  el.artist.value = name;
+  hideArtistList();
+  renderArtist();
+  updateNameState();
+  scheduleDraft();
+}
+function openArtistEdit() {
+  const a = artistList().find(x => x.key === keyOf(form.artist));
+  if (!a) return;
+  artistEditing = a.name;
+  el.artistEditBox.innerHTML = `<div class="row">${artistMiniHTML(a)}<input id="artistNewName" type="text" maxlength="80" value="${esc(a.name)}" aria-label="Имя исполнителя"></div>
+<div class="row"><button type="button" class="btn small" data-aact="save">Сохранить</button><button type="button" class="btn small ghost" data-aact="ava">${a.ava ? 'Сменить аватарку' : 'Поставить аватарку'}</button>${a.ava ? '<button type="button" class="btn small ghost danger" data-aact="noava">Убрать аватарку</button>' : ''}<button type="button" class="btn small ghost" data-aact="cancel">Отмена</button></div>
+<p>Имя и аватарка поменяются во всех оценках этого исполнителя${a.n ? ` (${a.n})` : ''}.</p>`;
+  el.artistEditBox.hidden = false;
+  el.artistEdit.hidden = true;
+  const inp = $('artistNewName');
+  inp.focus();
+  inp.select();
+}
+function closeArtistEdit() {
+  artistEditing = null;
+  el.artistEditBox.hidden = true;
+  el.artistEditBox.replaceChildren();
 }
 
 /* ---------- Rendering: board ---------- */
@@ -2952,11 +3217,12 @@ function entryHTML(r, rank, showCat) {
       + `<button type="button" class="btn small ghost" data-act="share">${ICON.share}Экспорт</button>`
       + (state.canWrite ? `<button type="button" class="btn small ghost danger" data-act="del">${ICON.trash}Удалить</button>` : '');
   const pUrl = resolvePhotoUrl(r.photo);
+  const aUrl = pUrl ? '' : artistAvaUrl(r);
   return `<li class="entry${state.flashId === r.id ? ' flash' : ''}" data-id="${esc(r.id)}">
 <details${state.open.has(r.id) ? ' open' : ''}>
 <summary><span class="sum">
 <span class="rank">${rank == null ? '—' : rank}</span>
-<span class="e-main">${pUrl ? `<img class="e-thumb" data-photo="thumb" src="${esc(pUrl)}" alt="" loading="lazy" decoding="async">` : ''}<span class="e-text"><span class="e-name">${r.fav ? '<span class="fav-star-inline" title="В избранном">★</span>' : ''}${esc(r.name)}</span><span class="e-sub"><span>${esc(meta)}</span>${showCat ? `<span class="tag">${esc(catNameOf(r))}</span>` : ''}${r.status ? `<span class="tag status-tag">${esc(r.status)}</span>` : ''}${r.meta ? `<span class="tag meta-tag">${esc(r.meta)}</span>` : ''}${r.author && r.author.name ? `<span class="tag author-tag" title="Автор: ${esc(r.author.name)}">${renderAuthorMini(r.author)} ${esc(r.author.name)}</span>` : ''}${r.example ? '<span class="tag ex">пример</span>' : ''}${notes ? `<span class="has-note" title="Есть заметки">${ICON.noteSm}<span class="vh">есть заметки</span></span>` : ''}</span></span></span>
+<span class="e-main">${pUrl ? `<img class="e-thumb" data-photo="thumb" src="${esc(pUrl)}" alt="" loading="lazy" decoding="async">` : aUrl ? `<img class="e-thumb ava" src="${esc(aUrl)}" alt="" loading="lazy" decoding="async">` : ''}<span class="e-text"><span class="e-name">${r.fav ? '<span class="fav-star-inline" title="В избранном">★</span>' : ''}${esc(r.name)}</span><span class="e-sub"><span>${esc(meta)}</span>${showCat ? `<span class="tag">${esc(catNameOf(r))}</span>` : ''}${r.status ? `<span class="tag status-tag">${esc(r.status)}</span>` : ''}${r.meta ? `<span class="tag meta-tag">${esc(r.meta)}</span>` : ''}${r.author && r.author.name ? `<span class="tag author-tag" title="Автор: ${esc(r.author.name)}">${renderAuthorMini(r.author)} ${esc(r.author.name)}</span>` : ''}${r.example ? '<span class="tag ex">пример</span>' : ''}${notes ? `<span class="has-note" title="Есть заметки">${ICON.noteSm}<span class="vh">есть заметки</span></span>` : ''}</span></span></span>
 <span class="spark" aria-hidden="true">${spark}</span>
 <span class="badge" data-tier="${tierT(t)}">${t != null ? fmt(t) : '—'}</span>
 ${ICON.chev}
@@ -2991,7 +3257,7 @@ function renderTierBoard(list) {
     const items = buckets.get(t.id);
     const itemsHTML = items.length
       ? items.map(r => {
-          const pUrl = resolvePhotoUrl(r.photo);
+          const pUrl = resolvePhotoUrl(r.photo) || artistAvaUrl(r);
           return `<button type="button" class="tier-item" data-tier-goto="${esc(r.id)}" title="${esc(r.name)} (${r.total != null ? fmt(r.total) : '—'})">
             ${pUrl ? `<img src="${esc(pUrl)}" alt="">` : ''}
             <span>${r.fav ? '★ ' : ''}${esc(r.name)}</span>
@@ -3169,6 +3435,14 @@ function loadIntoForm(r) {
   form.cat = r.cat;
   form.editingId = r.id;
   form.name = r.name;
+  if (r.artist) {
+    form.artist = r.artist;
+    form.name = r.title || (r.name.startsWith(r.artist + ' — ') ? r.name.slice(r.artist.length + 3) : r.name);
+  } else if (isMusicCat(cat) && r.name.includes(' — ')) {
+    const i = r.name.indexOf(' — ');
+    form.artist = r.name.slice(0, i);
+    form.name = r.name.slice(i + 3);
+  }
   form.fav = !!r.fav;
   form.status = r.status || '';
   form.meta = r.meta || '';
@@ -3247,7 +3521,10 @@ function switchCat(id) {
   if (prev && state.editCat) normalizeCat(prev);
   form.cat = id;
   form.extra = [];
+  if (!statusFits(form.status)) form.status = '';
   state.catDelConfirm = false;
+  renderStatusSet();
+  renderArtist();
   renderCats();
   renderCrit();
   updateTotal();
@@ -3320,8 +3597,10 @@ async function save() {
   if (state.saving) return;
   if (!state.canWrite) { toast('Сохранять оценки здесь может только владелец страницы'); return; }
   if (state.editCat) toggleEditCat();
-  const name = form.name.trim().replace(/\s+/g, ' ');
-  if (!name) { updateNameState('Напиши, что оцениваешь'); el.name.focus(); return; }
+  const title = form.name.trim().replace(/\s+/g, ' ');
+  if (!title) { updateNameState(formMusic() ? 'Напиши название трека или альбома' : 'Напиши, что оцениваешь'); el.name.focus(); return; }
+  const artist = formMusic() ? (form.artist || '').trim().replace(/\s+/g, ' ').slice(0, 80) : '';
+  const name = composeName(artist, title).slice(0, 140);
   const rows = formRows();
   if (!rows.length) { toast('Сначала выбери категорию'); return; }
   const scores = collectScores(rows);
@@ -3351,6 +3630,12 @@ async function save() {
     createdAt: (target && target.createdAt) || now,
     updatedAt: now
   };
+  if (artist) {
+    doc.artist = artist;
+    doc.title = title;
+    const a = artistGet(artist);
+    if (a && a.fp) doc.artistAva = a.fp;
+  }
   state.saving = true;
   updateHead();
   const p = form.photo;
@@ -3448,6 +3733,7 @@ function normalizeRating(id, d) {
     note: str(d.note).slice(0, 4000), example: d.example === true,
     author: (d.author && typeof d.author === 'object') ? { id: str(d.author.id), name: str(d.author.name), avatar: str(d.author.avatar), color: str(d.author.color) } : null,
     photo: normPhoto(d.photo),
+    ...(str(d.artist).trim() ? { artist: str(d.artist).slice(0, 80), title: str(d.title).slice(0, 140), artistAva: str(d.artistAva).slice(0, 40) } : {}),
     createdAt: str(d.createdAt), updatedAt: str(d.updatedAt)
   };
 }
@@ -3582,6 +3868,7 @@ async function initStorage() {
       if (savedCats && Array.isArray(savedCats) && savedCats.length) {
         state.cats = parseCats({ items: savedCats });
       }
+      if (migrateCats(state.cats)) saveLocalCats();
     } catch (_) {}
     try {
       const savedRatings = JSON.parse(localStorage.getItem(STORAGE_KEYS.RATINGS) || 'null');
@@ -3624,7 +3911,7 @@ function saveDraft() {
       && !Object.keys(form.scores).length && !Object.values(form.notes).some(n => n && n.trim()) && !form.photo;
     if (empty) localStorage.setItem(DRAFT_KEY, JSON.stringify({ v: 2, form: { cat: form.cat } }));
     else localStorage.setItem(DRAFT_KEY, JSON.stringify({ v: 2, form: {
-      editingId: form.editingId, cat: form.cat, name: form.name, note: form.note,
+      editingId: form.editingId, cat: form.cat, name: form.name, artist: form.artist, note: form.note,
       scores: form.scores, notes: form.notes, weights: form.weights, extra: form.extra, extraCatName: form.extraCatName,
       photo: form.photo && form.photo.kind === 'saved' ? { kind: 'saved', id: form.photo.id, w: form.photo.w, h: form.photo.h } : null
     } }));
@@ -3641,7 +3928,7 @@ function loadDraft() {
     form = Object.assign(blankForm(), {
       editingId: typeof f.editingId === 'string' ? f.editingId : null,
       cat: typeof f.cat === 'string' ? f.cat : blankForm().cat,
-      name: str(f.name).slice(0, 140), note: str(f.note).slice(0, 4000), scores, notes,
+      name: str(f.name).slice(0, 140), artist: str(f.artist).slice(0, 80), note: str(f.note).slice(0, 4000), scores, notes,
       extra: Array.isArray(f.extra) ? f.extra.filter(x => x && typeof x.id === 'string' && typeof x.name === 'string').map(x => ({ id: x.id, name: x.name, desc: str(x.desc).slice(0, 120) })) : [],
       extraCatName: str(f.extraCatName),
       weights: (() => { const o = {}; if (f.weights && typeof f.weights === 'object') for (const [k, v] of Object.entries(f.weights)) if ([2, 0.5].includes(v)) o[k] = v; return o; })(),
@@ -3687,7 +3974,7 @@ function exportFromForm() {
   if (t == null) return null;
   const cat = currentCat();
   return {
-    name: form.name.trim() || 'Без названия', catName: cat ? cat.name.trim() : form.extraCatName,
+    name: formFullName() || 'Без названия', catName: cat ? cat.name.trim() : form.extraCatName,
     status: form.status, meta: form.meta, pros: form.pros, cons: form.cons,
     scores, total: t, note: form.note.trim(), date: new Date().toISOString(), photo: form.photo
   };
@@ -5426,9 +5713,10 @@ function renderTierView() {
   const chip = (id, name, n, on) => `<button type="button" class="chip-btn" data-tlcat="${esc(id)}" aria-pressed="${on}">${esc(name)}${n != null ? ` <b>${n}</b>` : ''}</button>`;
   const item = (r) => {
     const pUrl = resolvePhotoUrl(r.photo);
+    const aUrl = pUrl ? '' : artistAvaUrl(r);
     const letter = esc([...String(r.name).trim()][0] || '?');
     return `<button type="button" class="tl-item" data-tier-goto="${esc(r.id)}" data-tier="${tierT(r.total)}" title="${esc(r.name)} · ${fmt(r.total)}">
-      <span class="tl-pic">${pUrl ? `<img src="${esc(pUrl)}" alt="" loading="lazy" decoding="async" data-photo="thumb">` : `<span>${letter}</span>`}${mode === 'scores' ? `<b>${fmt(r.total)}</b>` : ''}</span>
+      <span class="tl-pic">${pUrl ? `<img src="${esc(pUrl)}" alt="" loading="lazy" decoding="async" data-photo="thumb">` : aUrl ? `<img class="ava" src="${esc(aUrl)}" alt="" loading="lazy" decoding="async">` : `<span>${letter}</span>`}${mode === 'scores' ? `<b>${fmt(r.total)}</b>` : ''}</span>
       ${mode === 'names' ? `<span class="tl-name">${esc(r.name)}</span>` : ''}
     </button>`;
   };
@@ -5460,6 +5748,7 @@ async function tierPng() {
   const H = PAD + 92 + rows.reduce((a, n) => a + rowH(n) + 8, 0) + 40 + PAD;
   const bmps = new Map();
   await Promise.all(list.filter(r => r.photo && !/^https?:/.test(resolvePhotoUrl(r.photo))).map(async r => { const b = await loadPhotoBitmap(r.photo); if (b) bmps.set(r.id, b); }));
+  await Promise.all(list.filter(r => !r.photo && artistAvaUrl(r)).map(async r => { const b = await loadPhotoBitmap({ data: artistAvaUrl(r) }); if (b) bmps.set(r.id, b); }));
   const cv = document.createElement('canvas');
   const k = 2;
   cv.width = W * k; cv.height = H * k;
@@ -5695,6 +5984,66 @@ if (el.favBtn) {
     form.fav = !form.fav;
     el.favBtn.setAttribute('aria-pressed', String(form.fav));
     scheduleDraft();
+  });
+}
+if (el.artist) {
+  el.artist.addEventListener('input', () => { form.artist = el.artist.value; artistPick = -1; showArtistList(); renderArtist(); updateNameState(); scheduleDraft(); });
+  el.artist.addEventListener('focus', () => showArtistList());
+  el.artist.addEventListener('blur', () => setTimeout(hideArtistList, 120));
+  el.artist.addEventListener('keydown', e => {
+    const opts = el.artistList.hidden ? [] : [...el.artistList.querySelectorAll('[data-artist]')];
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+      if (!opts.length) { showArtistList(); return; }
+      e.preventDefault();
+      artistPick = (artistPick + (e.key === 'ArrowDown' ? 1 : -1) + opts.length) % opts.length;
+      opts.forEach((o, i) => o.setAttribute('aria-selected', String(i === artistPick)));
+      el.artist.setAttribute('aria-activedescendant', 'artOpt' + artistPick);
+      opts[artistPick].scrollIntoView({ block: 'nearest' });
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      if (artistPick >= 0 && opts[artistPick]) pickArtist(opts[artistPick].dataset.artist);
+      else { hideArtistList(); el.name.focus(); }
+    } else if (e.key === 'Escape' && !el.artistList.hidden) {
+      e.preventDefault();
+      hideArtistList();
+    }
+  });
+  el.artistList.addEventListener('mousedown', e => e.preventDefault()); // фокус остаётся в поле
+  el.artistList.addEventListener('click', e => { const o = e.target.closest('[data-artist]'); if (o) pickArtist(o.dataset.artist); });
+  el.artistAva.addEventListener('click', () => {
+    if (!keyOf(form.artist)) { toast('Сначала напиши исполнителя'); el.artist.focus(); return; }
+    el.artistFile.click();
+  });
+  el.artistFile.addEventListener('change', async () => {
+    const f = el.artistFile.files && el.artistFile.files[0];
+    el.artistFile.value = '';
+    const name = artistEditing || form.artist;
+    if (!f || !keyOf(name)) return;
+    const d = await artistAvaFromFile(f);
+    if (!d) return;
+    artistSetAva(name, d);
+    if (artistEditing) openArtistEdit();
+    toast(`Аватарка исполнителя «${name.trim()}» сохранена`);
+  });
+  el.artistEdit.addEventListener('click', openArtistEdit);
+  el.artistEditBox.addEventListener('click', async e => {
+    const b = e.target.closest('[data-aact]');
+    if (!b) return;
+    const act = b.dataset.aact;
+    if (act === 'cancel') { closeArtistEdit(); renderArtist(); }
+    else if (act === 'ava') el.artistFile.click();
+    else if (act === 'noava') { artistSetAva(artistEditing, ''); openArtistEdit(); }
+    else if (act === 'save') {
+      const v = $('artistNewName').value;
+      if (!keyOf(v)) { toast('Имя исполнителя не может быть пустым'); return; }
+      const old = artistEditing;
+      closeArtistEdit();
+      if (v.trim() !== old) await artistRename(old, v); else renderArtist();
+    }
+  });
+  el.artistEditBox.addEventListener('keydown', e => {
+    if (e.key === 'Enter' && e.target.id === 'artistNewName') { e.preventDefault(); el.artistEditBox.querySelector('[data-aact="save"]').click(); }
+    if (e.key === 'Escape') { closeArtistEdit(); renderArtist(); el.artistEdit.focus(); }
   });
 }
 if (el.statusChips) {

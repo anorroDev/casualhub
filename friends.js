@@ -200,6 +200,22 @@
         }
       }
     }
+    // аватарка исполнителя сменилась на другом устройстве: в оценках другой отпечаток, качаем новую
+    if (typeof artistGet === 'function') {
+      const seen = new Set();
+      for (const x of state.ratings) {
+        if (x.example || !x.artist || !x.artistAva) continue;
+        const rid = artistRid(x.artist);
+        if (seen.has(rid)) continue;
+        seen.add(rid);
+        const a = artistGet(x.artist);
+        if (a && a.fp === x.artistAva) continue;
+        try {
+          const ph = await api('/photo/' + encodeURIComponent(F.me.id) + '/' + encodeURIComponent(rid));
+          if (ph && ph.data) { artistSetAva(x.artist, ph.data, true); sent[rid] = avaFp(ph.data); photos++; }
+        } catch (e) {}
+      }
+    }
     if (photos) lsSet(PHOTOS_KEY, JSON.stringify(sent));
     if (!added && !updated && !removed && !photos) return;
     if (added) state.ratings = state.ratings.filter((x) => !x.example); // примеры уступают место настоящим оценкам
@@ -350,6 +366,15 @@
         }
       }
     }
+    // аватарки исполнителей (музыка): одна картинка на исполнителя по адресу art.<хеш имени>
+    if (typeof artistsMap === 'function') {
+      for (const a of Object.values(artistsMap())) {
+        if (!a || !a.name || !a.fp || typeof a.ava !== 'string' || !a.ava.startsWith('data:image/')) continue;
+        const rid = artistRid(a.name);
+        if (sent[rid] === a.fp) continue;
+        try { await api('/photo/' + encodeURIComponent(rid), 'PUT', { data: a.ava }); sent[rid] = a.fp; changed = true; } catch (e) {}
+      }
+    }
     if (changed) lsSet(PHOTOS_KEY, JSON.stringify(sent));
     if (tChanged) lsSet(THUMBS_KEY, JSON.stringify(thumbs));
   }
@@ -384,7 +409,9 @@
   // фото друга: ссылка показывается сразу, загруженное фото подтягивается с сервера, когда карточка на экране
   function friendPhoto(r, kind) {
     const p = r.photo;
-    if (!p) return '';
+    // без своего фото у трека друга видна аватарка исполнителя
+    if (!p) return kind === 'thumb' && r.artist && r.artistAva && F.view && F.view !== 'me' && typeof artistRid === 'function'
+      ? `<img class="e-thumb ava f-photo" data-fphoto="${esc(F.view + '|' + artistRid(r.artist))}" alt="" decoding="async">` : '';
     const cls = kind === 'thumb' ? 'e-thumb' : 'e-photo';
     const size = kind === 'body' && p.w && p.h ? ` width="${+p.w}" height="${+p.h}"` : '';
     const alt = kind === 'body' ? `Фото: ${esc(r.name)}` : '';

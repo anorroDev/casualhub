@@ -24,11 +24,11 @@
 
   // стили окна: только переменные цветов сайта, поэтому одинаково на всех страницах и темах
   const CSS = `
-.wn-sheet { position: fixed; inset: 0; z-index: 95; display: grid; place-items: center; overscroll-behavior: contain;
+.wn-sheet { position: fixed; inset: 0; z-index: 95; display: grid; grid-template-rows: minmax(0, 1fr); place-items: center; overscroll-behavior: contain;
   padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
   background: rgba(5, 6, 10, .55); }
 .wn-sheet[hidden] { display: none; }
-.wn-card { width: min(620px, 100%); max-height: 100%; display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--panel); color: var(--ink);
+.wn-card { width: min(620px, 100%); max-height: 100%; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--panel); color: var(--ink);
   border: 1px solid var(--line); border-radius: 20px; box-shadow: 0 30px 70px -30px rgba(0, 0, 0, .6); animation: wn-pop .32s cubic-bezier(.34, 1.56, .64, 1); }
 @keyframes wn-pop { from { transform: translateY(14px) scale(.96); } }
 .wn-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 20px 12px; border-bottom: 1px solid var(--line); }
@@ -37,7 +37,7 @@
 .wn-x { flex: none; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); color: var(--ink); font-size: 18px; cursor: pointer; }
 .wn-x:hover { border-color: var(--accent); }
 .wn-x:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.wn-body { overflow: auto; -webkit-overflow-scrolling: touch; padding: 0 20px 20px; }
+.wn-body { min-height: 0; overflow: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: var(--line) transparent; padding: 0 20px 20px; }
 .wn-body .log-days { display: grid; gap: 24px; margin-top: 16px; }
 .wn-body .log-date { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0; padding-bottom: 8px; border-bottom: 1px solid var(--line); font-size: 14px; font-weight: 700; }
 .wn-body .log-date span { flex: none; font-size: 12.5px; font-weight: 500; color: var(--ink-2); font-variant-numeric: tabular-nums; }
