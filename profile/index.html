@@ -366,14 +366,19 @@ button, input { font: inherit; color: inherit; }
 /* Histogram 1–10 */
 /* значки: полученные яркие, следующий с полоской до получения, остальные приглушены */
 .bdg { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
-.bdg-i { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel-2, var(--panel)); min-width: 0; }
-.bdg-i .ic { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-size: 22px; line-height: 1; background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
-.bdg-i b { display: block; font-size: 13.5px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+.bdg-i { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 9px; padding: 10px 9px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel-2, var(--panel)); min-width: 0; }
+.bdg-i .ic { width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-size: 19px; line-height: 1; background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
+.bdg-i b { display: block; font-size: 13.5px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; hyphens: auto; }
+.bdg-i > span:last-child { min-width: 0; }
 .bdg-i small { display: block; font-size: 11.5px; color: var(--ink-3); margin-top: 2px; }
 .bdg-i .tr { display: block; height: 4px; border-radius: 99px; background: var(--cell, var(--line)); margin-top: 6px; overflow: hidden; }
 .bdg-i .tr i { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
 .bdg-i.off .ic { filter: grayscale(1); opacity: .45; background: var(--cell, var(--line)); box-shadow: none; }
 .bdg-i.off b { color: var(--ink-2); }
+.bdg-more { margin-top: 8px; }
+.bdg-more summary { cursor: pointer; padding: 8px 2px; font-size: 13.5px; font-weight: 700; color: var(--accent); list-style: none; }
+.bdg-more summary::-webkit-details-marker { display: none; }
+.bdg-more[open] summary { margin-bottom: 6px; }
 .bdg-i.next { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
 .hist { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; align-items: end; height: 140px; }
 .hist div { display: grid; grid-template-rows: 1fr auto auto; height: 100%; gap: 4px; text-align: center; }
@@ -601,7 +606,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   const norm = (r) => ({
     id: r.id, name: String(r.name || 'Без названия'), cat: r.catName || r.catLabel || r.cat || 'Без категории',
     total: typeof r.total === 'number' ? r.total : null, scores: Array.isArray(r.scores) ? r.scores : [],
-    status: r.status || '', fav: !!r.fav, meta: r.meta || '', photo: r.photo || null,
+    status: r.status || '', fav: !!r.fav, meta: r.meta || '', photo: r.photo || null, note: !!String(r.note || '').trim(),
+    created: +new Date(r.createdAt || r.date || 0) || 0,
     at: +new Date(r.updatedAt || r.date || r.createdAt || 0) || 0,
   });
   const myRatings = () => {
@@ -658,31 +664,71 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     return out;
   }
 
-  // ---------- значки за стаж аккаунта ----------
+  // ---------- значки: стаж аккаунта, число оценок и особые ----------
   const AGE_BADGES = [
     { days: 7, ic: '🌱', t: 'Неделя в клубе', need: 'неделя' },
     { days: 30, ic: '🌙', t: 'Месяц в клубе', need: 'месяц' },
     { days: 91, ic: '🍂', t: 'Три месяца', need: '3 месяца' },
-    { days: 182, ic: '⭐', t: 'Полгода', need: 'полгода' },
+    { days: 182, ic: '🌗', t: 'Полгода', need: 'полгода' },
     { days: 365, ic: '🏆', t: 'Год в клубе', need: 'год' },
     { days: 730, ic: '👑', t: 'Два года', need: '2 года' },
     { days: 1095, ic: '💎', t: 'Три года', need: '3 года' },
   ];
+  const COUNT_BADGES = [[1, '📝', 'Первая оценка'], [10, '🗂️', '10 оценок'], [50, '📚', '50 оценок'], [100, '🏛️', '100 оценок'], [250, '🗿', '250 оценок']];
+  const PIONEER_BEFORE = +new Date(2026, 11, 1); // аккаунты до 1 декабря 2026
   const dayFmt = (t) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
-  function badgesOf(createdAt) {
-    const t0 = +new Date(createdAt || 0);
-    if (!t0) return null;
-    const age = (Date.now() - t0) / 864e5;
+  const dayKey = (t) => { const d = new Date(t); return d.getFullYear() * 400 + d.getMonth() * 32 + d.getDate(); };
+  // самая длинная серия дней подряд, в которые что-то оценено
+  function bestStreak(times) {
+    const days = [...new Set(times.filter(Boolean).map((t) => { const d = new Date(t); d.setHours(12, 0, 0, 0); return +d; }))].sort((a, b) => a - b);
+    let best = 0, cur = 0;
+    days.forEach((t, i) => { cur = i && Math.round((t - days[i - 1]) / 864e5) === 1 ? cur + 1 : 1; best = Math.max(best, cur); });
+    return best;
+  }
+  // ступенчатая серия: у первого неполученного видно, сколько осталось
+  function series(list, have, subOf) {
     let nextShown = false;
-    return AGE_BADGES.map((b) => {
-      const got = age >= b.days;
+    return list.map((b) => {
+      const got = have >= b.goal;
       const next = !got && !nextShown;
       if (next) nextShown = true;
-      const left = Math.max(1, Math.ceil(b.days - age));
-      return { ...b, got, next, sub: got ? 'с ' + dayFmt(t0 + b.days * 864e5) : next ? `через ${left} ${plural(left, 'день', 'дня', 'дней')}` : 'аккаунту ' + b.need, pct: Math.min(100, (age / b.days) * 100) };
+      return { ...b, got, next, pct: Math.min(100, (have / b.goal) * 100), sub: subOf(b, got, next) };
     });
   }
-  const badgesHTML = (list) => `<div class="bdg">${list.map((b) => `<div class="bdg-i${b.got ? '' : ' off'}${b.next ? ' next' : ''}" title="${esc(b.t)}: аккаунту ${esc(b.need)}"><span class="ic" aria-hidden="true">${b.ic}</span><span><b>${esc(b.t)}</b><small>${esc(b.sub)}</small>${b.next ? `<span class="tr"><i style="width:${b.pct.toFixed(1)}%"></i></span>` : ''}</span></div>`).join('')}</div>`;
+  // одиночный значок с прогрессом (сколько из скольких)
+  const goal = (ic, t, have, need, hint, word) => ({ ic, t, hint, got: have >= need, next: have < need && have > 0, pct: Math.min(100, (have / need) * 100),
+    sub: have >= need ? hint : `${have} из ${need} ${word}` });
+  const flag = (ic, t, got, hint, todo) => ({ ic, t, hint, got, sub: got ? hint : todo });
+  function badgesOf(p) {
+    const out = [];
+    const t0 = +new Date(p.createdAt || 0);
+    if (t0) {
+      const age = (Date.now() - t0) / 864e5;
+      out.push(...series(AGE_BADGES.map((b) => ({ ...b, goal: b.days, hint: 'аккаунту ' + b.need })), age, (b, got, next) => {
+        const left = Math.max(1, Math.ceil(b.days - age));
+        return got ? 'с ' + dayFmt(t0 + b.days * 864e5) : next ? `через ${left} ${plural(left, 'день', 'дня', 'дней')}` : 'аккаунту ' + b.need;
+      }));
+    }
+    const rs = p.ratings || [];
+    const n = rs.length;
+    out.push(...series(COUNT_BADGES.map(([k, ic, t]) => ({ goal: k, ic, t, hint: k === 1 ? 'первая оценка' : k + ' оценок' })), n,
+      (b, got, next) => (got ? 'есть' : next ? `ещё ${b.goal - n} ${plural(b.goal - n, 'оценка', 'оценки', 'оценок')}` : 'нужно ' + b.goal)));
+    const rated = rs.filter((r) => r.total != null);
+    out.push(flag('🔪', 'Безжалостный', rated.some((r) => r.total < 2.5), 'поставил 1 или 2', 'поставь 1 или 2'));
+    out.push(flag('💯', 'Щедрый', rated.some((r) => r.total >= 9.95), 'поставил 10', 'поставь 10'));
+    out.push(goal('🧭', 'Эрудит', new Set(rs.map((r) => keyOf(r.cat))).size, 5, 'оценки в 5 категориях', 'категорий'));
+    out.push(goal('✍️', 'Писатель', rs.filter((r) => r.note).length, 10, '10 оценок с заметками', 'с заметками'));
+    out.push(goal('📸', 'Фотограф', rs.filter((r) => r.photo).length, 10, '10 оценок с фото', 'с фото'));
+    out.push(goal('⭐', 'Коллекционер', rs.filter((r) => r.fav).length, 10, '10 оценок в избранном', 'в избранном'));
+    out.push(flag('🦉', 'Ночная сова', rs.some((r) => r.created && new Date(r.created).getHours() < 5), 'оценка между 0:00 и 5:00', 'оцени что-нибудь ночью, с 0 до 5'));
+    out.push(goal('🔥', 'Марафонец', bestStreak(rs.map((r) => r.created)), 7, 'оценки 7 дней подряд', 'дней подряд'));
+    if (p.friendCount != null) out.push(goal('👥', 'Душа компании', p.friendCount, 5, '5 друзей', 'друзей'));
+    // успеть можно было только до декабря 2026: позже значок не показывается
+    if (t0 && t0 < PIONEER_BEFORE) out.push(flag('🚀', 'Перво­проходец', true, 'в клубе с первых недель', ''));
+    // полученные сначала, из остальных выше те, до которых ближе
+    return out.filter((b) => b.got).concat(out.filter((b) => !b.got).sort((a, b) => (b.pct || 0) - (a.pct || 0)));
+  }
+  const badgesHTML = (list) => `<div class="bdg">${list.map((b) => `<div class="bdg-i${b.got ? '' : ' off'}${b.next ? ' next' : ''}" title="${esc(b.t)}: ${esc(b.hint)}"><span class="ic" aria-hidden="true">${b.ic}</span><span><b>${esc(b.t)}</b><small>${esc(b.sub)}</small>${b.next ? `<span class="tr"><i style="width:${b.pct.toFixed(1)}%"></i></span>` : ''}</span></div>`).join('')}</div>`;
 
   // ---------- отрисовка ----------
   const cells = (v) => `<span class="cells" data-tier="${tierT(v)}" aria-hidden="true">${Array.from({ length: 10 }, (_, i) => `<i${v != null && i < Math.round(v) ? ' class="on"' : ''}></i>`).join('')}</span>`;
@@ -709,7 +755,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const top3 = rated.slice().sort((a, b) => b.total - a.total || b.at - a.at).slice(0, 3);
     let d = 0;
     const isMe = p.kind === 'me';
-    p.badges = badgesOf(p.createdAt);
+    p.friendCount = p.kind === 'me' ? (p.friends ? p.friends.length : null) : p.friendCount;
+    p.badges = user || p.kind !== 'me' ? badgesOf(p) : null;
     const ava = p.avatar && /^(data:image\/|https?:\/\/)/.test(p.avatar)
       ? `<span class="ava" style="background-image:url('${esc(p.avatar)}')"></span>`
       : `<span class="ava" style="background-color:${esc(p.color || colorOf(p.name))}">${letter(p.name)}</span>`;
@@ -782,7 +829,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         <div class="col">
           ${p.badges ? `<section class="card rise" id="badgesSec" style="--d:${d++}">
             <div class="head"><h2 class="h2">Значки</h2><span class="label">${p.badges.filter((b) => b.got).length} из ${p.badges.length}</span></div>
-            ${badgesHTML(p.badges)}
+            ${(() => { const shown = p.badges.filter((b) => b.got).length + 4; return badgesHTML(p.badges.slice(0, shown)) + (p.badges.length > shown ? `<details class="bdg-more"><summary>Все значки · ещё ${p.badges.length - shown}</summary>${badgesHTML(p.badges.slice(shown))}</details>` : ''); })()}
           </section>` : ''}
           ${p.common ? `<section class="card rise" id="taste" style="--d:${d++}">
             <div class="head"><h2 class="h2">Вкусы</h2><span class="label">ты и ${esc(p.name)}</span></div>
@@ -1264,7 +1311,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       const match = common.length ? Math.max(0, Math.min(100, Math.round(100 - (common.reduce((a, c) => a + Math.abs(c.diff), 0) / common.length) * 10))) : 0;
       render({
         kind: 'friend', name: s.user.username, sub: [s.user.handle ? '@' + s.user.handle : '', s.updatedAt ? 'оценки обновлены ' + ago(s.updatedAt) : 'оценок пока нет'].filter(Boolean).join(' · '),
-        ratings, uid: s.user.id, common, match, createdAt: s.user.createdAt,
+        ratings, uid: s.user.id, common, match, createdAt: s.user.createdAt, friendCount: s.user.friends != null ? s.user.friends : null,
       });
       document.title = `${s.user.username} · Казуал Хаб`;
       api(`/photo/${encodeURIComponent(s.user.id)}/banner`).then((d) => { if (d.data) showBanner(d.data); }, () => {});

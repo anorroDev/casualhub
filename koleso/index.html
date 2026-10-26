@@ -1393,6 +1393,8 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     if (S.spinning) return;
     const a = alive();
     if (a.length < 2) { idleStatus(); return; }
+    // новый спин: песня прошлой победы замолкает
+    if (CH.win.active) { stopChannel('win'); resumeBg(); }
     if (a.length === S.items.length || S.pick === 'one') {
       const ch = chances();
       a.forEach((i) => { i.startWin = ch.get(i.id).win; });
@@ -1916,10 +1918,9 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     $('#winner').hidden = false;
     $('#wAgain').focus();
   }
+  // песня победы доигрывает до конца и после закрытия карточки; фон вернётся, когда она кончится
   function hideWinner() {
     if ($('#winner').hidden) return;
-    stopChannel('win');
-    resumeBg();
     $('#winner').hidden = true;
     $('#restart').focus();
   }

@@ -361,7 +361,9 @@ const routes = {
     if (!(await canSee(env, me, arg))) return fail(403, 'Оценки видны только друзьям.');
     const row = await env.DB.prepare('SELECT id, username, uname, created_at FROM users WHERE id = ?').bind(arg).first();
     if (!row) return fail(404, 'Пользователь не найден.');
-    const user = { ...pubUser(row), createdAt: row.created_at || null };
+    // число друзей — для значка «Душа компании»
+    const fc = await env.DB.prepare("SELECT COUNT(*) AS n FROM friendships WHERE (a = ?1 OR b = ?1) AND status = 'accepted'").bind(arg).first();
+    const user = { ...pubUser(row), createdAt: row.created_at || null, friends: fc ? fc.n : 0 };
     const shelf = await env.DB.prepare('SELECT data, updated_at FROM shelves WHERE user_id = ?').bind(arg).first();
     const s = readShelf(shelf);
     // свои категории видит только хозяин
