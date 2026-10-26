@@ -2819,7 +2819,7 @@ function renderCats() {
   let h = state.cats.map(c => {
     const name = esc(c.name.trim() || 'Без названия');
     if (state.catAsk === c.id) {
-      return `<span class="cat-ask" role="group" aria-label="Удаление категории">Удалить «${name}»? Оценки останутся.<button type="button" class="btn small danger-solid" data-act="catx-yes" data-id="${esc(c.id)}">Да</button><button type="button" class="btn small ghost" data-act="catx-no">Нет</button></span>`;
+      return `<span class="cat-ask" role="group" aria-label="Удаление категории">${catDelText(c)}<button type="button" class="btn small danger-solid" data-act="catx-yes" data-id="${esc(c.id)}">Да</button><button type="button" class="btn small ghost" data-act="catx-no">Нет</button></span>`;
     }
     const off = editing && c.id !== form.cat;
     const chip = `<button type="button" class="chip-btn" data-cat="${esc(c.id)}" aria-pressed="${c.id === form.cat}"${off ? ' disabled title="У сохранённой оценки категорию не поменять"' : ''}>${name}</button>`;
@@ -2868,7 +2868,7 @@ function editorHTML(cat) {
 </li>`;
   }).join('');
   const danger = state.catDelConfirm
-    ? `<div class="ed-confirm"><span>Удалить категорию «${esc(cat.name)}»? Сохранённые оценки останутся в рейтинге.</span><button type="button" class="btn small danger-solid" data-act="catdel-yes">Удалить</button><button type="button" class="btn small ghost" data-act="catdel-no">Отмена</button></div>`
+    ? `<div class="ed-confirm"><span>${catDelText(cat)}</span><button type="button" class="btn small danger-solid" data-act="catdel-yes">Удалить</button><button type="button" class="btn small ghost" data-act="catdel-no">Отмена</button></div>`
     : `<div class="ed-actions"><button type="button" class="btn small ghost danger" data-act="catdel"${state.cats.length <= 1 ? ' disabled title="Нужна хотя бы одна категория"' : ''}>${ICON.trash}Удалить категорию</button></div>`;
   return `<div class="editor">
 <div class="tpl-box"><span class="label">Быстрые шаблоны критериев</span><div class="tpl-list">${tpls}</div></div>
@@ -3714,9 +3714,31 @@ function newCategory() {
   const inp = document.getElementById('catNameInput');
   if (inp) { inp.focus(); inp.select(); }
 }
-function deleteCategory(id) {
+function catRatings(cat) {
+  if (!cat) return [];
+  const known = new Set(state.cats.map(c => c.id));
+  const k = keyOf(cat.name);
+  return state.ratings.filter(r => r && (r.cat === cat.id || (!known.has(r.cat) && k && keyOf(r.catName) === k)));
+}
+const catDelText = (cat) => {
+  const n = catRatings(cat).filter(r => !r.example).length;
+  return n ? `Удалить «${esc(cat.name)}» вместе с ${n} ${plural(n, 'оценкой', 'оценками', 'оценками')}? Они пропадут и на других устройствах.` : `Удалить «${esc(cat.name)}»?`;
+};
+// Категория удаляется по-настоящему: вместе со своими оценками. Если оставить оценки,
+// unifyCats на следующей отрисовке создаст категорию заново по их названию.
+async function deleteCategory(id) {
   if (state.cats.length <= 1) return;
   const gone = state.cats.find(c => c.id === id);
+  const doomed = catRatings(gone);
+  for (const r of doomed) {
+    try { await removeRating(r.id); } catch (e) { handleWriteError(e); return; }
+    state.open.delete(r.id);
+    if (r.example) continue;
+    // как при обычном удалении оценки: запись в журнал и фото
+    logEvent({ kind: 'rating', op: 'delete', ref: r.id, name: r.name, cat: r.cat, catName: catNameOf(r), total: r.total, info: ratingInfo(r) });
+    if (r.photo) dropAsset(r.photo.id);
+    if (form.editingId === r.id) form.editingId = null;
+  }
   state.cats = state.cats.filter(c => c.id !== id);
   state.editCat = false;
   state.catDelConfirm = false;
@@ -3729,7 +3751,8 @@ function deleteCategory(id) {
   renderBoard();
   scheduleCatSave(0);
   scheduleDraft();
-  toast(`Категория «${gone ? gone.name : ''}» удалена`);
+  const n = doomed.filter(r => !r.example).length;
+  toast(n ? `Категория «${gone ? gone.name : ''}» удалена вместе с ${n} ${plural(n, 'оценкой', 'оценками', 'оценками')}` : `Категория «${gone ? gone.name : ''}» удалена`);
 }
 
 async function save() {

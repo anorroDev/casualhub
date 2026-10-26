@@ -553,7 +553,9 @@ h1, h2, p { margin: 0; }
   const ratings = (read('ocenshik.ratings.v2') || []).filter((r) => r && !r.example);
   const mine = user ? ratings.filter((r) => r.author && r.author.id === user.id) : ratings;
   const mMeta = $('#mnenieMeta');
-  mMeta.innerHTML = mine.length ? chip(mine.length, plural(mine.length, 'оценка', 'оценки', 'оценок')) : '<span class="chip">Пока ни одной оценки</span>';
+  mMeta.innerHTML = '<span id="mnCount" style="display:contents"></span>';
+  const renderMnCount = (n) => { $('#mnCount').innerHTML = n ? chip(n, plural(n, 'оценка', 'оценки', 'оценок')) : '<span class="chip">Пока ни одной оценки</span>'; };
+  renderMnCount(mine.length);
 
   const wheel = read('koleso-vybyvanie-v1');
   const items = wheel && Array.isArray(wheel.items) ? wheel.items : [];
@@ -564,7 +566,8 @@ h1, h2, p { margin: 0; }
     : '<span class="chip">Колесо пустое</span>';
 
   // ---------- превью Мнения: свой топ-3 или примеры ----------
-  const top = mine.filter((r) => typeof r.total === 'number' && r.name).sort((a, b) => b.total - a.total).slice(0, 3);
+  function renderMnPreview(list) {
+  const top = list.filter((r) => typeof r.total === 'number' && r.name).sort((a, b) => b.total - a.total).slice(0, 3);
   const rows = top.length ? top.map((r) => ({ name: r.name, t: r.total }))
     : [{ name: 'Интерстеллар', t: 9.8 }, { name: 'The Witcher 3', t: 9.3 }, { name: 'Hades', t: 8.4 }];
   const barsOf = (on) => Array.from({ length: 10 }, (_, j) => `<b style="--j:${j};height:${30 + j * 7}%"${j < on ? ' class="on"' : ''}></b>`).join('');
@@ -573,11 +576,16 @@ h1, h2, p { margin: 0; }
   $('#mnPreview').innerHTML = (top.length ? '<span class="pv-tag">твой топ</span>' : '<span class="pv-tag">пример</span>')
     + rows.map((r, k) => `<span class="pv-row" data-tier="${tierT(r.t)}" style="--k:${k}"><span class="pv-rank">${k + 1}</span><span class="pv-name">${esc(r.name)}</span><span class="pv-bar">${barsOf(Math.round(r.t))}</span><span class="pv-badge">${fmt(r.t)}</span></span>`).join('')
     + ghosts;
+  }
+  renderMnPreview(mine);
 
   // ---------- превью Колеса: настоящее мини-колесо ----------
   // Крутятся только обычные блоки с готовой картинкой внутри: видеокарта двигает их сама, без перерисовки
   const COLORS = ['#3550E8', '#EAA92C', '#2EAD60', '#EC4899', '#9333EA', '#06B6D4', '#F97316', '#14B8A6'];
-  const names = (items.filter((i) => !i.out).map((i) => i.name).filter(Boolean).slice(0, 8));
+  const aliveNames = items.filter((i) => !i.out).map((i) => i.name).filter(Boolean);
+  const allNames = items.map((i) => i.name).filter(Boolean);
+  // на колесе живых меньше двух (розыгрыш закончен): показываем всех участников, а не пример
+  const names = (aliveNames.length >= 2 ? aliveNames : allNames).slice(0, 12);
   const seg = names.length >= 2 ? names : ['Hollow Knight', 'Hades', 'Celeste', 'Outer Wilds', 'Disco Elysium', 'Inscryption'];
   const n = seg.length, R = 76, C = 84, step = 360 / n;
   const pt = (deg, r) => { const a = (deg - 90) * Math.PI / 180; return [C + r * Math.cos(a), C + r * Math.sin(a)].map((v) => v.toFixed(2)); };
@@ -737,6 +745,24 @@ h1, h2, p { margin: 0; }
   // ---------- друзья: сколько их и есть ли заявки ----------
   const tokens = read('casualhub.tokens.v1') || {};
   const token = user && tokens[user.id];
+  if (token) {
+    const sidP = user.serverId ? Promise.resolve(user.serverId)
+      : fetch('/api/me', { headers: { authorization: 'Bearer ' + token } }).then((r) => (r.ok ? r.json() : null)).then((d) => d && d.user && d.user.id);
+    sidP.then((sid) => sid && fetch('/api/shelf/' + encodeURIComponent(sid), { headers: { authorization: 'Bearer ' + token }, cache: 'no-store' }))
+      .then((r) => (r && r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d || !Array.isArray(d.ratings)) return;
+        const gone = new Map((d.deleted || []).map((x) => [x.id, +x.at || 0]));
+        const stampOf = (x) => +new Date(x.updatedAt || x.createdAt || 0) || 0;
+        // аккаунт плюс то, что ещё не успело уйти с этого устройства
+        const byId = new Map(d.ratings.filter((x) => x && x.id && !(gone.has(x.id) && stampOf(x) <= gone.get(x.id))).map((x) => [x.id, x]));
+        mine.forEach((x) => { const sv = byId.get(x.id); if ((!sv || stampOf(x) > stampOf(sv)) && !(gone.has(x.id) && stampOf(x) <= gone.get(x.id))) byId.set(x.id, x); });
+        const list = [...byId.values()];
+        renderMnCount(list.length);
+        renderMnPreview(list);
+      })
+      .catch(() => {});
+  }
   if (token && window.CasualAvatar) {
     // аватар общий для аккаунта: на телефоне или в новом браузере подтягивается с сервера
     const sid = user.serverId;
