@@ -319,6 +319,12 @@ h1, h2, p { margin: 0; }
 .meter-word { display: grid; line-height: 1.2; }
 .meter-word strong { font-size: 17px; }
 .meter-word span { font-size: 13px; color: var(--ink-3); }
+.online-now { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; margin-top: 10px; font-size: 14px; color: var(--ink-2); }
+.online-now[hidden] { display: none; }
+.online-now i { width: 9px; height: 9px; border-radius: 50%; background: var(--good, #2EAD60); box-shadow: 0 0 0 3px color-mix(in srgb, var(--good, #2EAD60) 25%, transparent); }
+.online-now b { color: var(--ink); font-weight: 700; }
+.online-now a { color: var(--ink); font-weight: 600; text-decoration: none; }
+.online-now a:hover { color: var(--accent); }
 .lede { max-width: 58ch; color: var(--ink-2); font-size: clamp(15px, 1.6vw, 17.5px); text-wrap: pretty; animation: rise .7s var(--out) .45s backwards; }
 .meter-row { animation: rise .7s var(--out) .3s backwards; }
 @keyframes rise { from { transform: translateY(14px); } }
@@ -507,6 +513,7 @@ h1, h2, p { margin: 0; }
 }
 </style>
 <script src="/whatsnew.js"></script>
+<script src="/online.js" defer></script>
 <script src="/avatar-sync.js"></script>
 </head>
 <body>
@@ -562,6 +569,7 @@ h1, h2, p { margin: 0; }
       </div>
     </div>
     <p class="lede">Оценивай всё подряд от 1 до 10 и доверяй выбор колесу. Один аккаунт, друзья и тема общие для всех страниц.</p>
+    <p class="online-now" id="onlineNow" hidden aria-live="polite"><i aria-hidden="true"></i><span id="onlineText"></span></p>
   </main>
 
   <section class="apps" aria-label="Разделы">
@@ -831,6 +839,19 @@ h1, h2, p { margin: 0; }
       ${r.total != null ? `<span class="fd-score" data-tier="${tierT(r.total)}">${fmt(r.total)}</span>` : '<span class="fd-score none">без оценки</span>'}</a></li>`;
   }
 
+  // ---------- онлайн: сколько людей на сайте и кто из друзей в сети (online.js) ----------
+  const hubFriends = new Map(); // id -> ник
+  function renderOnline() {
+    const O = window.CasualOnline;
+    if (!O || !O.ready) return;
+    const on = O.friendsOnline().filter((id) => hubFriends.has(id));
+    $('#onlineText').innerHTML = `Сейчас на сайте: <b>${O.count}</b>` + (on.length
+      ? ` · из друзей: ${on.slice(0, 5).map((id) => `<a href="/profile/?id=${encodeURIComponent(id)}">${esc(hubFriends.get(id))}</a>`).join(', ')}${on.length > 5 ? ` и ещё ${on.length - 5}` : ''}`
+      : '');
+    $('#onlineNow').hidden = false;
+  }
+  document.addEventListener('casual-online', renderOnline);
+
   // ---------- друзья: сколько их и есть ли заявки ----------
   const tokens = read('casualhub.tokens.v1') || {};
   const token = user && tokens[user.id];
@@ -885,6 +906,8 @@ h1, h2, p { margin: 0; }
       .then((d) => {
         if (!d) return;
         const f = d.friends.length, inc = d.incoming.length;
+        d.friends.forEach((x) => hubFriends.set(x.id, x.username));
+        renderOnline();
         if (f) mMeta.insertAdjacentHTML('beforeend', chip(f, plural(f, 'друг', 'друга', 'друзей'), 'go', '/mnenie/#friends'));
         if (inc) {
           mMeta.insertAdjacentHTML('beforeend', chip(inc, plural(inc, 'заявка', 'заявки', 'заявок') + ' в друзья', 'alert go', '/mnenie/#friends'));
@@ -984,6 +1007,7 @@ h1, h2, p { margin: 0; }
       document.documentElement.classList.add('theme-swap');
       const t = document.startViewTransition(go);
       t.ready.catch(() => {});
+      if (t.updateCallbackDone) t.updateCallbackDone.catch(() => {});
       t.finished.catch(() => {}).finally(() => document.documentElement.classList.remove('theme-swap'));
       setTimeout(go, 400); // если переход не начался (вкладка в фоне), тема всё равно сменится
     } else go();

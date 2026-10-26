@@ -30,7 +30,7 @@ async function freeHandle(env, base, selfId) {
 }
 // что отдаём о человеке: друзьям — ник и юзернейм, себе — ещё почту и дату регистрации
 const pubUser = (u) => ({ id: u.id, username: u.username, handle: u.handle || u.uname });
-const ownUser = (u) => ({ ...pubUser(u), email: u.email || '', createdAt: u.created_at || u.createdAt || null });
+const ownUser = (u) => ({ ...pubUser(u), email: u.email || '', createdAt: u.created_at || u.createdAt || null, hideOnline: !!u.hide_online });
 
 // Таблицы создаются и обновляются сами при первом запросе (то же, что в schema.sql),
 // чтобы новые поля вроде email не требовали ручной миграции.
@@ -53,6 +53,13 @@ async function ensureSchema(env) {
   if (!results.some((c) => c.name === 'email')) await env.DB.prepare('ALTER TABLE users ADD COLUMN email TEXT').run();
   await env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users(email)').run();
   if (!results.some((c) => c.name === 'nkey')) await env.DB.prepare('ALTER TABLE users ADD COLUMN nkey TEXT').run();
+  if (!results.some((c) => c.name === 'last_seen')) await env.DB.prepare('ALTER TABLE users ADD COLUMN last_seen INTEGER').run();
+  if (!results.some((c) => c.name === 'hide_online')) await env.DB.prepare('ALTER TABLE users ADD COLUMN hide_online INTEGER').run();
+  await env.DB.batch([
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS users_seen ON users(last_seen)'),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS presence (id TEXT PRIMARY KEY, at INTEGER NOT NULL)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS presence_at ON presence(at)'),
+  ]);
   await env.DB.prepare('CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)').run();
   if (!(await env.DB.prepare("SELECT 1 FROM meta WHERE k = 'handles'").first())) {
     const { results: all } = await env.DB.prepare('SELECT id, username, uname, nkey FROM users').all();
@@ -70,7 +77,7 @@ const cleanEmail = (s) => String(s || '').trim().toLowerCase();
 
 const json = (data, status = 200) => new Response(JSON.stringify(data), {
   status,
-  headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' },
+  headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' },
 });
 const fail = (status, error) => json({ error }, status);
 const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -90,16 +97,81 @@ function sameHex(a, b) {
   for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return r === 0;
 }
+const MAX_BODY = 2200000; // фото до ~1,9 МБ плюс запас
+class TooBig extends Error {}
 async function readBody(request) {
-  try { return await request.json(); } catch (e) { return {}; }
+  if (+(request.headers.get('content-length') || 0) > MAX_BODY) throw new TooBig();
+  let text = '';
+  try { text = await request.text(); } catch (e) { return {}; }
+  if (text.length > MAX_BODY) throw new TooBig();
+  try { const v = JSON.parse(text); return v && typeof v === 'object' ? v : {}; } catch (e) { return {}; }
+}
+
+// ---------- защита от наплыва запросов: счётчик в памяти воркера, без запросов к базе ----------
+// Не общий для всех серверов Cloudflare, но гасит перебор и флуд с одного адреса почти бесплатно.
+const BURST = new Map(); // ключ -> { n, reset }
+function burst(key, max, winMs) {
+  const now = Date.now();
+  let b = BURST.get(key);
+  if (!b || b.reset <= now) { b = { n: 0, reset: now + winMs }; BURST.set(key, b); }
+  b.n++;
+  if (BURST.size > 20000) for (const [k, v] of BURST) if (v.reset <= now) BURST.delete(k);
+  return b.n > max ? Math.ceil((b.reset - now) / 1000) : 0;
+}
+
+// ---------- чужие оценки: только ожидаемые типы, чтобы в страницу друга не попал код ----------
+const clip = (v, n) => String(v == null ? '' : v).slice(0, n);
+const numOrNull = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : (typeof v === 'string' && v.trim() !== '' && Number.isFinite(+v) ? +v : null));
+const SAFE_URL = /^https?:\/\/[^\s"'<>()\\]{1,1500}$/;
+// любое значение: строки, числа, да/нет и вложенные объекты/списки неглубоко; функции и прочее отбрасываются
+function plain(v, depth) {
+  if (v == null || typeof v === 'boolean') return v;
+  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
+  if (typeof v === 'string') return v.slice(0, 20000);
+  if (depth > 3) return null;
+  if (Array.isArray(v)) return v.slice(0, 400).map((x) => plain(x, depth + 1));
+  if (typeof v === 'object') {
+    const o = {};
+    let k = 0;
+    for (const key of Object.keys(v)) { if (k++ > 80) break; if (key === '__proto__' || key === 'constructor') continue; o[key.slice(0, 60)] = plain(v[key], depth + 1); }
+    return o;
+  }
+  return null;
+}
+function cleanRating(r) {
+  if (!r || typeof r !== 'object' || Array.isArray(r) || typeof r.id !== 'string' || !r.id || r.id.length > 120) return null;
+  const o = plain(r, 0);
+  for (const k of ['name', 'meta', 'note', 'catLabel', 'catName', 'status', 'pros', 'cons', 'artist']) if (o[k] != null) o[k] = clip(o[k], k === 'note' || k === 'pros' || k === 'cons' ? 8000 : 300);
+  o.total = numOrNull(o.total);
+  if (o.total != null) o.total = Math.max(0, Math.min(10, o.total));
+  o.fav = !!o.fav;
+  o.scores = Array.isArray(o.scores) ? o.scores.filter((x) => x && typeof x === 'object' && !Array.isArray(x)).slice(0, 60).map((x) => ({
+    ...x, name: clip(x.name, 120), v: Math.max(0, Math.min(10, numOrNull(x.v) || 0)), note: x.note != null ? clip(x.note, 2000) : undefined,
+    w: x.w != null ? numOrNull(x.w) : undefined,
+  })) : [];
+  if (o.photo != null) {
+    const p = o.photo && typeof o.photo === 'object' ? o.photo : {};
+    const url = typeof p.url === 'string' && SAFE_URL.test(p.url) ? p.url : '';
+    const remote = typeof p.remote === 'string' ? clip(p.remote, 80) : p.remote === true;
+    o.photo = url || remote ? { ...(url ? { url } : {}), ...(remote ? { remote } : {}), w: Math.max(0, numOrNull(p.w) || 0), h: Math.max(0, numOrNull(p.h) || 0) } : null;
+    if (!o.photo) delete o.photo;
+  }
+  // artistAva — отпечаток фото исполнителя (короткая строка), не адрес
+  if (o.artistAva != null && !(typeof o.artistAva === 'string' && /^[w.-]{0,80}$/.test(o.artistAva))) delete o.artistAva;
+  return o;
 }
 
 async function currentUser(env, request) {
   const m = (request.headers.get('authorization') || '').match(/^Bearer ([0-9a-f]{64})$/);
   if (!m) return null;
-  return env.DB.prepare(
-    'SELECT u.id, u.username, u.uname AS handle, u.email, u.created_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?'
-  ).bind(await sha256(m[1]), Date.now()).first();
+  const th = await sha256(m[1]);
+  const now = Date.now();
+  const u = await env.DB.prepare(
+    'SELECT u.id, u.username, u.uname AS handle, u.email, u.created_at, u.hide_online, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?'
+  ).bind(th, now).first();
+  // кто заходит, тот не вылетает: меньше 20 дней до конца сессии — продлеваем на 30 (запись раз в ~10 дней)
+  if (u && u.expires_at - now < 20 * 864e5) await env.DB.prepare('UPDATE sessions SET expires_at = ? WHERE token_hash = ?').bind(now + SESSION_DAYS * 864e5, th).run();
+  return u;
 }
 async function newSession(env, userId) {
   const token = randHex(32);
@@ -180,7 +252,9 @@ const routes = {
       const { results: same } = await env.DB.prepare(`SELECT ${COLS} FROM users WHERE nkey = ? LIMIT 2`).bind(cleanName(ident).toLowerCase()).all();
       if (same.length === 1) u = same[0];
     }
-    if (!u || !sameHex(await hashPass(String(password || ''), u.salt), u.pass_hash)) {
+    // и для несуществующего аккаунта считаем хеш: по времени ответа не понять, есть ли такой
+    const hash = await hashPass(String(password || ''), u ? u.salt : 'no-such-user-salt');
+    if (!u || !sameHex(hash, u.pass_hash)) {
       await hit(env, ipKey, 'loginIp');
       await hit(env, accKey, 'loginAcc');
       return fail(401, 'Неверная почта, юзернейм или пароль.');
@@ -202,9 +276,24 @@ const routes = {
 
   // смена ника и/или пароля из профиля на сайте
   async 'PUT /account'({ env, request, me }) {
-    const { username, handle, password, email } = await readBody(request);
+    const { username, handle, password, email, current, hideOnline } = await readBody(request);
     const out = { ...me };
-    if (email != null && email !== '') {
+    const mailChange = email != null && email !== '' && cleanEmail(email) !== (me.email || '');
+    if (password || mailChange) {
+      // украденной сессии мало, чтобы угнать аккаунт: почту и пароль меняют, зная текущий пароль
+      const wait = await overLimit(env, 'acc:' + me.id, 'loginAcc');
+      if (wait) return tooMany(wait);
+      const row = await env.DB.prepare('SELECT pass_hash, salt FROM users WHERE id = ?').bind(me.id).first();
+      if (!row || !sameHex(await hashPass(String(current || ''), row.salt), row.pass_hash)) {
+        await hit(env, 'acc:' + me.id, 'loginAcc');
+        return fail(403, current ? 'Текущий пароль не подходит.' : 'Чтобы сменить почту или пароль, впиши текущий пароль.');
+      }
+    }
+    if (hideOnline != null) {
+      await env.DB.prepare('UPDATE users SET hide_online = ? WHERE id = ?').bind(hideOnline ? 1 : 0, me.id).run();
+      out.hide_online = hideOnline ? 1 : 0;
+    }
+    if (mailChange) {
       const mail = cleanEmail(email);
       if (!EMAIL_RE.test(mail) || mail.length > 120) return fail(400, 'Нужна почта, например name@mail.com.');
       const taken = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(mail).first();
@@ -232,20 +321,58 @@ const routes = {
       if (pass.length < 6 || pass.length > 200) return fail(400, 'Пароль: от 6 символов.');
       const salt = randHex(16);
       await env.DB.prepare('UPDATE users SET pass_hash = ?, salt = ? WHERE id = ?').bind(await hashPass(pass, salt), salt, me.id).run();
+      // все остальные устройства выходят из аккаунта: если пароль утёк, старые сессии больше не работают
+      const m = (request.headers.get('authorization') || '').match(/^Bearer ([0-9a-f]{64})$/);
+      await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?').bind(me.id, m ? await sha256(m[1]) : '').run();
     }
     return json({ user: ownUser(out) });
   },
 
+  // гость присылает случайный id из своего браузера, вошедший — токен
+  async 'POST /ping'({ env, request }) {
+    const ip = clientIp(request);
+    if (burst('ping:' + ip, 150, 60e3)) return json({ online: onlineCache.n, friends: [] });
+    const now = Date.now();
+    const me = await currentUser(env, request);
+    if (me) {
+      // пишем не чаще раза в 45 секунд: база не тратится на каждую вкладку
+      await env.DB.prepare('UPDATE users SET last_seen = ?1 WHERE id = ?2 AND (last_seen IS NULL OR last_seen < ?3)').bind(now, me.id, now - 45e3).run();
+    } else {
+      const { guest } = await readBody(request);
+      if (typeof guest === 'string' && /^[a-z0-9]{12,40}$/.test(guest) && !burst('pingw:' + ip, 60, 60e3)) {
+        await env.DB.prepare('INSERT INTO presence (id, at) VALUES (?1, ?2) ON CONFLICT(id) DO UPDATE SET at = ?2 WHERE at < ?3').bind('g:' + guest, now, now - 45e3).run();
+      }
+    }
+    // число на сайте считается не чаще раза в 20 секунд на сервер
+    if (onlineCache.at < now - 20e3) {
+      const [a, b] = await env.DB.batch([
+        env.DB.prepare('SELECT COUNT(*) AS n FROM users WHERE last_seen > ?').bind(now - ONLINE_MS),
+        env.DB.prepare('SELECT COUNT(*) AS n FROM presence WHERE at > ?').bind(now - ONLINE_MS),
+      ]);
+      onlineCache.n = ((a.results[0] || {}).n || 0) + ((b.results[0] || {}).n || 0);
+      onlineCache.at = now;
+      if (Math.random() < 0.05) await env.DB.prepare('DELETE FROM presence WHERE at < ?').bind(now - 864e5).run();
+    }
+    let friends = [];
+    if (me) {
+      const { results } = await env.DB.prepare(
+        "SELECT u.id, u.last_seen FROM friendships f JOIN users u ON u.id = (CASE WHEN f.a = ?1 THEN f.b ELSE f.a END) WHERE (f.a = ?1 OR f.b = ?1) AND f.status = 'accepted' AND (u.hide_online IS NULL OR u.hide_online = 0) AND u.last_seen > ?2"
+      ).bind(me.id, now - ONLINE_MS).all();
+      friends = results.map((x) => ({ id: x.id, at: x.last_seen }));
+    }
+    return json({ online: Math.max(onlineCache.n, me ? 1 : 0), friends, window: ONLINE_MS });
+  },
+
   async 'GET /friends'({ env, me }) {
     const { results } = await env.DB.prepare(
-      `SELECT f.status, f.requested_by, u.id, u.username, u.uname, s.updated_at
+      `SELECT f.status, f.requested_by, u.id, u.username, u.uname, u.last_seen, u.hide_online, s.updated_at
          FROM friendships f
          JOIN users u ON u.id = CASE WHEN f.a = ?1 THEN f.b ELSE f.a END
          LEFT JOIN shelves s ON s.user_id = u.id
         WHERE f.a = ?1 OR f.b = ?1
         ORDER BY u.uname`
     ).bind(me.id).all();
-    const pick = (r) => ({ ...pubUser(r), updatedAt: r.updated_at || null });
+    const pick = (r) => ({ ...pubUser(r), updatedAt: r.updated_at || null, lastSeen: r.status === 'accepted' && !r.hide_online ? r.last_seen || null : null });
     return json({
       friends: results.filter((r) => r.status === 'accepted').map(pick),
       incoming: results.filter((r) => r.status === 'pending' && r.requested_by !== me.id).map(pick),
@@ -306,7 +433,9 @@ const routes = {
       if (d && typeof d.id === 'string' && Number.isFinite(+d.at)) del.set(d.id, Math.max(del.get(d.id) || 0, +d.at));
     }
     const byId = new Map();
-    for (const r of [...old.ratings, ...ratings]) {
+    // новые оценки чистим, старые уже лежат в базе (их чистит чтение для друзей)
+    const incoming = ratings.slice(0, 5000).map(cleanRating).filter(Boolean);
+    for (const r of [...old.ratings, ...incoming]) {
       if (!r || typeof r.id !== 'string') continue;
       const cur = byId.get(r.id);
       if (!cur || stampOf(r) >= stampOf(cur)) byId.set(r.id, r);
@@ -365,15 +494,16 @@ const routes = {
 
   async 'GET /shelf/:id'({ env, me, arg }) {
     if (!(await canSee(env, me, arg))) return fail(403, 'Оценки видны только друзьям.');
-    const row = await env.DB.prepare('SELECT id, username, uname, created_at FROM users WHERE id = ?').bind(arg).first();
+    const row = await env.DB.prepare('SELECT id, username, uname, created_at, last_seen, hide_online FROM users WHERE id = ?').bind(arg).first();
     if (!row) return fail(404, 'Пользователь не найден.');
     // число друзей — для значка «Душа компании»
     const fc = await env.DB.prepare("SELECT COUNT(*) AS n FROM friendships WHERE (a = ?1 OR b = ?1) AND status = 'accepted'").bind(arg).first();
-    const user = { ...pubUser(row), createdAt: row.created_at || null, friends: fc ? fc.n : 0 };
+    const user = { ...pubUser(row), createdAt: row.created_at || null, friends: fc ? fc.n : 0, lastSeen: row.hide_online ? null : row.last_seen || null };
     const shelf = await env.DB.prepare('SELECT data, updated_at FROM shelves WHERE user_id = ?').bind(arg).first();
     const s = readShelf(shelf);
     // свои категории видит только хозяин
-    return json({ user, ratings: s.ratings, deleted: s.deleted, cats: arg === me.id ? s.cats || null : undefined, profile: s.profile || null, sticker: s.sticker || null, updatedAt: shelf ? shelf.updated_at : null });
+    // друзьям — только очищенные оценки (вдруг в базе лежит что-то записанное до проверки типов)
+    return json({ user, ratings: arg === me.id ? s.ratings : s.ratings.map(cleanRating).filter(Boolean), deleted: s.deleted, cats: arg === me.id ? s.cats || null : undefined, profile: s.profile || null, sticker: s.sticker || null, updatedAt: shelf ? shelf.updated_at : null });
   },
 
   // исполнители по имени: имя и фото, без заглушек Genius вместо фото
@@ -410,12 +540,17 @@ const routes = {
   // фото оценки: кладёт и удаляет хозяин, смотрят хозяин и друзья
   async 'PUT /photo/:rid'({ env, request, me, arg }) {
     const { data } = await readBody(request);
-    if (typeof data !== 'string' || !/^data:image\/(jpeg|png|webp|gif);base64,/.test(data)) return fail(400, 'Нужна картинка.');
+    if (typeof data !== 'string' || !/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/]+=*$/.test(data)) return fail(400, 'Нужна картинка.');
     if (data.length > MAX_PHOTO) return fail(413, 'Фото слишком большое.');
+    const key = `${me.id}:${arg}`;
+    if (!(await env.DB.prepare('SELECT 1 FROM photos WHERE key = ?').bind(key).first())) {
+      const c = await env.DB.prepare('SELECT COUNT(*) AS n FROM photos WHERE user_id = ?').bind(me.id).first();
+      if (c && c.n >= MAX_PHOTOS) return fail(413, `Слишком много фото в аккаунте (больше ${MAX_PHOTOS}). Удали старые оценки с фото.`);
+    }
     const now = Date.now();
     await env.DB.prepare(
       'INSERT INTO photos (key, user_id, data, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at'
-    ).bind(`${me.id}:${arg}`, me.id, data, now).run();
+    ).bind(key, me.id, data, now).run();
     return json({ ok: true, updatedAt: now });
   },
   async 'DELETE /photo/:rid'({ env, me, arg }) {
@@ -470,7 +605,7 @@ const routes = {
         if (!r || !r.name || !at) return;
         items.push({
           kind: 'rating', at, user: people.get(sh.user_id),
-          rating: { id: r.id, name: String(r.name).slice(0, 120), total: r.total ?? null, cat: r.catLabel || '', status: r.status || '', fav: !!r.fav, photo: r.photo && (r.photo.remote || r.photo.url) ? { remote: !!r.photo.remote, url: r.photo.url || '' } : null, edited: !!(r.updatedAt && r.createdAt && stampOf({ updatedAt: r.updatedAt }) - stampOf({ createdAt: r.createdAt }) > 60e3) },
+          rating: { id: clip(r.id, 120), name: clip(r.name, 120), total: numOrNull(r.total), cat: clip(r.catLabel, 80), status: clip(r.status, 60), fav: !!r.fav, photo: r.photo && (r.photo.remote || r.photo.url) ? { remote: !!r.photo.remote, url: typeof r.photo.url === 'string' && SAFE_URL.test(r.photo.url) ? r.photo.url : '' } : null, edited: !!(r.updatedAt && r.createdAt && stampOf({ updatedAt: r.updatedAt }) - stampOf({ createdAt: r.createdAt }) > 60e3) },
         });
       });
     }
@@ -522,6 +657,7 @@ const routes = {
 
 const NAME_HINT = 'Ник: от 2 до 24 символов, буквы, цифры, пробел, точка, дефис или подчёркивание.';
 const HANDLE_HINT = 'Юзернейм: от 3 до 20 символов, латинские буквы, цифры, «_» и «.» (точка не в начале и не в конце).';
+const MAX_PHOTOS = 1200; // фото, превью, аватар и баннер вместе
 const MAX_PHOTO = 1900000; // символов в data URL, предел строки в D1 около 2 МБ
 const RID_RE = /^[\w.-]{1,80}$/;
 const STICKER_RE = /^hub\/(?!.*\.\.)[\w\-\/.]{1,100}\.(png|gif|webp|webm|jpe?g)$/; // путь картинки из каталога колеса
@@ -566,7 +702,9 @@ async function canSee(env, me, uid) {
   return !!row && row.status === 'accepted';
 }
 
-const PUBLIC = new Set(['POST /register', 'POST /login', 'POST /logout']);
+const PUBLIC = new Set(['POST /register', 'POST /login', 'POST /logout', 'POST /ping']);
+const ONLINE_MS = 150e3; // «в сети» — заходил за последние 2,5 минуты
+const onlineCache = { n: 0, at: 0 };
 
 export async function onRequest({ request, env, params }) {
   const segs = [].concat(params.path || []);
@@ -583,6 +721,11 @@ export async function onRequest({ request, env, params }) {
   if (!routes[key] && segs.length === 2 && segs[0] === 'reacts') { key = `${request.method} /reacts/:id`; arg = segs[1]; }
   const handler = routes[key];
   if (!handler) return fail(404, 'Нет такого адреса.');
+  // флуд с одного адреса гасится до базы данных
+  const ip = clientIp(request);
+  // щедро: за одним адресом бывает много людей (мобильный интернет), а доска друга с фото — это десятки запросов
+  const slow = burst('all:' + ip, 900, 60e3) || (request.method !== 'GET' && burst('w:' + ip, 150, 60e3));
+  if (slow) return new Response(JSON.stringify({ error: 'Слишком много запросов, подожди немного.' }), { status: 429, headers: { 'content-type': 'application/json; charset=utf-8', 'retry-after': String(slow) } });
 
   try {
     await ensureSchema(env);
@@ -593,6 +736,7 @@ export async function onRequest({ request, env, params }) {
     }
     return await handler({ env, request, me, arg });
   } catch (e) {
+    if (e instanceof TooBig) return fail(413, 'Слишком большой запрос.');
     console.error(e);
     return fail(500, 'Ошибка сервера, попробуй ещё раз.');
   }

@@ -57,19 +57,23 @@
 .fr-sec { display: grid; gap: 8px; }
 .fr-sec + .fr-sec { padding-top: 14px; border-top: 1px solid var(--line); }
 .fr-list { display: grid; gap: 6px; }
-.fr-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 6px 6px 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
+.fr-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 6px 6px 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; min-width: 0; }
 .fr-row span { min-width: 0; overflow-wrap: anywhere; }
 .fr-row b { font-weight: 600; }
 .fr-row small { display: block; font-size: 12px; color: var(--ink-3); }
 .fr-row i, .rx-list li i { font-style: normal; font-weight: 600; color: var(--ink-3); margin-left: 6px; }
 .fr-nick.copy { border: 0; font: inherit; cursor: pointer; }
 .fr-nick.copy svg { width: 13px; height: 13px; }
-.fr-acts { display: flex; flex: none; gap: 6px; }
+.fr-row > span:first-child { flex: 1 1 150px; }
+.fr-acts { display: flex; flex: none; flex-wrap: wrap; gap: 6px; margin-left: auto; }
 .fr-form { display: flex; flex-wrap: wrap; gap: 8px; }
 .fr-form input { flex: 1 1 160px; min-width: 0; height: 40px; padding: 0 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; font-size: 15px; color: var(--ink); }
 .fr-form input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .fr-nick { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 8px; background: var(--accent-soft); color: var(--accent); font-weight: 700; }
 .fr-msg { font-size: 13px; color: var(--ink-2); }
+.fr-toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
+.fr-toggle input { width: 18px; height: 18px; accent-color: var(--accent); }
+.friend-bar .sub-chip .on-dot { margin-right: 2px; }
 .fr-msg.err { color: var(--bad-ink); font-weight: 600; }
 .fr-muted { font-size: 13px; color: var(--ink-2); text-wrap: pretty; }
 @media (pointer: coarse) { .fr-form input { font-size: 16px; } }
@@ -195,6 +199,7 @@
         F.me = (await api('/me')).user;
         if (state.user && state.user.serverId !== F.me.id) { state.user.serverId = F.me.id; saveUsers(); }
         adoptAccount(F.me);
+        forgetPass();
         await syncAvatar();
         await refreshFriends();
         await pullOwnShelf(); // сначала забираем свои оценки с сервера, потом отправляем общий список
@@ -310,11 +315,19 @@
     if (!state.user || state.user.id !== localId) return false;
     setTokenFor(localId, r.token);
     state.user.serverId = r.user.id;
-    if (!state.user.pass) state.user.pass = String(pass).trim();
+    delete state.user.pass;
     saveUsers();
     F.linkError = '';
     await syncSession();
     return true;
+  }
+
+  // профиль подключён к аккаунту: пароль из браузера стираем (его могли сохранить старые версии сайта)
+  function forgetPass() {
+    let ch = false;
+    state.users.forEach((u) => { if (u.serverId && u.pass && readTokens()[u.id]) { delete u.pass; ch = true; } });
+    if (state.user && state.user.pass && state.user.serverId) { delete state.user.pass; ch = true; }
+    if (ch) saveUsers();
   }
 
   async function refreshFriends() {
@@ -535,11 +548,12 @@
   // ---------- полоса «Я / друзья» и чужой рейтинг ----------
   function renderBar() {
     const chips = [`<button type="button" class="sub-chip" data-fview="me" aria-pressed="${F.view === 'me'}">Я</button>`]
-      .concat(F.friends.map((f) => `<button type="button" class="sub-chip" data-fview="${esc(f.id)}" aria-pressed="${F.view === f.id}" title="${esc(atOf(f))}">${esc(f.username)}</button>`));
+      .concat(F.friends.map((f) => `<button type="button" class="sub-chip" data-fview="${esc(f.id)}" aria-pressed="${F.view === f.id}" title="${esc(atOf(f))}"><i class="on-dot" data-on="${esc(f.id)}" data-last="${+f.lastSeen || ''}"></i> ${esc(f.username)}</button>`));
     const n = F.incoming.length;
     const needLink = F.online && state.user && !F.me;
     chips.push(`<button type="button" class="sub-chip" data-fopen="1">👥 Друзья${n ? ` <b>+${n}</b>` : ''}${needLink ? ' <b>· подключить</b>' : ''}</button>`);
     bar.innerHTML = chips.join('');
+    if (window.CasualOnline) window.CasualOnline.paint(bar);
   }
 
   // фото друга: ссылка показывается сразу, загруженное фото подтягивается с сервера, когда карточка на экране
@@ -651,8 +665,8 @@
   }
 
   function friendEntryHTML(r, rank) {
-    const t = r.total;
-    const scores = Array.isArray(r.scores) ? r.scores : [];
+    const t = typeof r.total === 'number' && Number.isFinite(r.total) ? r.total : null;
+    const scores = (Array.isArray(r.scores) ? r.scores : []).filter((s) => s && typeof s === 'object').map((s) => ({ ...s, v: Math.max(0, Math.min(10, +s.v || 0)) }));
     const n = scores.filter((s) => s.v > 0).length;
     let when = '';
     try { when = fmtDate(stamp(r)); } catch (e) {}
@@ -761,6 +775,7 @@ ${ICON.chev}
       const row = (u, acts, sub) => `<div class="fr-row"><span>${whoHTML(u)}${sub ? `<small>${sub}</small>` : ''}</span><span class="fr-acts">${acts}</span></div>`;
       const btn = (act, id, label, cls) => `<button type="button" class="btn small ${cls || 'ghost'}" data-fr="${act}" data-id="${esc(id)}">${label}</button>`;
       const when = (t) => (t ? 'оценки обновлены ' + new Date(t).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'оценок пока нет');
+      const seenOf = (u) => `<span data-seen="${esc(u.id)}" data-last="${+u.lastSeen || ''}" data-post=" · "></span>`;
       body = `
         <div class="fr-sec">
           <span class="label">Добавить друга</span>
@@ -771,16 +786,19 @@ ${ICON.chev}
         </div>
         ${F.incoming.length ? `<div class="fr-sec"><span class="label">Заявки тебе</span><div class="fr-list">${F.incoming.map((u) => row(u, btn('accept', u.id, 'Принять', 'primary') + btn('remove', u.id, 'Отклонить'))).join('')}</div></div>` : ''}
         <div class="fr-sec"><span class="label">Друзья</span>
-          ${F.friends.length ? `<div class="fr-list">${F.friends.map((u) => row(u, `<a class="btn small ghost" href="/profile/?id=${encodeURIComponent(u.id)}" style="text-decoration:none">Профиль</a>` + btn('show', u.id, 'Оценки') + (F.removeArmed === u.id ? btn('remove', u.id, 'Точно убрать?', 'danger-solid') : btn('arm', u.id, 'Убрать', 'ghost danger')), when(u.updatedAt))).join('')}</div>`
+          ${F.friends.length ? `<div class="fr-list">${F.friends.map((u) => row(u, `<a class="btn small ghost" href="/profile/?id=${encodeURIComponent(u.id)}" style="text-decoration:none">Профиль</a>` + btn('show', u.id, 'Оценки') + (F.removeArmed === u.id ? btn('remove', u.id, 'Точно убрать?', 'danger-solid') : btn('arm', u.id, 'Убрать', 'ghost danger')), seenOf(u) + when(u.updatedAt))).join('')}</div>`
             : '<p class="fr-muted">Пока никого. Отправь заявку по @юзернейму, друг увидит её у себя в этом окне.</p>'}
         </div>
         ${F.outgoing.length ? `<div class="fr-sec"><span class="label">Ты отправил</span><div class="fr-list">${F.outgoing.map((u) => row(u, btn('remove', u.id, 'Отменить'), 'ждёт ответа')).join('')}</div></div>` : ''}
         <div class="fr-sec">
           <p class="fr-muted">${F.pushedAt ? `Друзья видят ${F.pushedCount} ${plural(F.pushedCount, 'твою оценку', 'твои оценки', 'твоих оценок')}, отправлено ${new Date(F.pushedAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}.` : 'Твои оценки отправляются друзьям сами после каждого сохранения.'}</p>
           <div class="sheet-actions"><button type="button" class="btn small ghost" data-fr="push">Отправить оценки сейчас</button></div>
-        </div>`;
+        </div>
+        <div class="fr-sec"><label class="fr-toggle"><input type="checkbox" data-fr-online${F.me.hideOnline ? '' : ' checked'}> Показывать друзьям, что я в сети</label>
+          <p class="fr-muted">Если выключить, друзья не увидят, что ты в сети и когда был(а) последний раз. Общий счётчик на главной тебя всё равно посчитает, но без имени.</p></div>`;
     }
     card.innerHTML = head + msg + body;
+    if (window.CasualOnline) window.CasualOnline.paint(card);
   }
 
   function openSheet() {
@@ -819,6 +837,17 @@ ${ICON.chev}
     btn.disabled = false;
     if (!sheet.hidden) renderSheet();
   });
+
+  card.addEventListener('change', async (e) => {
+    const t = e.target.closest('[data-fr-online]');
+    if (!t || !F.me) return;
+    t.disabled = true;
+    try { F.me = (await api('/account', 'PUT', { hideOnline: !t.checked })).user; }
+    catch (err) { t.checked = !t.checked; say(err.message, true); }
+    t.disabled = false;
+  });
+  // онлайн обновился: перерисовывается только полоса друзей (окно с полем ввода не трогаем, там точки красит online.js)
+  document.addEventListener('casual-online', () => { if (state.sfilter === 'mine' && F.friends.length) renderBar(); });
 
   card.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-fr]');
@@ -914,6 +943,7 @@ ${ICON.chev}
         setTokenFor(state.user.id, r.token);
         state.user.serverId = r.user.id;
         state.user.handle = r.user.handle;
+        delete state.user.pass;
         saveUsers();
         await syncSession();
       }
@@ -946,7 +976,7 @@ ${ICON.chev}
           state.users.push(u);
         }
         u.serverId = r.user.id;
-        u.pass = pass; // пароль сервера главный
+        delete u.pass; // пароль проверяет сервер, в браузере он не хранится
         setTokenFor(u.id, r.token);
         state.user = u;
         adoptAccount(r.user);
@@ -991,7 +1021,7 @@ ${ICON.chev}
   }
 
   if (typeof orig.update === 'function') {
-    window.updateUserProfile = async function (username, email, password, avatar, color, handle) {
+    window.updateUserProfile = async function (username, email, password, avatar, color, handle, current) {
       if (!F.me || !state.user) return orig.update.apply(this, arguments);
       const nick = cleanNick(username);
       const pass = String(password || '').trim();
@@ -1004,8 +1034,9 @@ ${ICON.chev}
       if ((nickChanged || pass || emailChanged || handleChanged) && nick.length >= 2) {
         if (nickChanged && !NICK_RE.test(nick)) { toast('Ник: буквы, цифры, пробел, точка, дефис или подчёркивание, до 24 символов'); return false; }
         if (pass && pass.length < 6) { toast('Пароль должен содержать минимум 6 символов'); return false; }
+        if ((pass || emailChanged) && !current) { toast('Чтобы сменить почту или пароль, впиши текущий пароль'); return false; }
         try {
-          const r = await api('/account', 'PUT', { username: nickChanged ? nick : undefined, handle: handleChanged ? h : undefined, password: pass || undefined, email: emailChanged ? em : undefined });
+          const r = await api('/account', 'PUT', { username: nickChanged ? nick : undefined, handle: handleChanged ? h : undefined, password: pass || undefined, email: emailChanged ? em : undefined, current: current || undefined });
           F.me = r.user;
         } catch (e) {
           toast(e.message);
@@ -1015,6 +1046,8 @@ ${ICON.chev}
       const before = state.user.avatar;
       // почта берётся из аккаунта: пустое или неверное поле её не сбрасывает
       const ok = orig.update.call(this, nick, F.me.email || email, password, avatar, color, F.me.handle);
+      if (state.user && state.user.pass) { delete state.user.pass; saveUsers(); }
+      if (ok && pass) toast('Пароль сменён. На других устройствах нужно войти заново.');
       // сменили аватар здесь: он уходит в аккаунт, чтобы его видели другие устройства и друзья
       if (ok && state.user && state.user.avatar !== before && window.CasualAvatar) {
         window.CasualAvatar.apply(state.user.id, state.user.avatar, null);

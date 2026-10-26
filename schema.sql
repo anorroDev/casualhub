@@ -9,8 +9,11 @@ CREATE TABLE IF NOT EXISTS users (
   salt TEXT NOT NULL,
   created_at INTEGER NOT NULL,
   email TEXT,                      -- почта в нижнем регистре, по ней тоже можно войти
-  nkey TEXT                        -- ник в нижнем регистре: вход старым ником, пока он ни у кого не совпадает
+  nkey TEXT,                       -- ник в нижнем регистре: вход старым ником, пока он ни у кого не совпадает
+  last_seen INTEGER,               -- когда последний раз был на сайте (для «в сети»)
+  hide_online INTEGER              -- 1: не показывать друзьям, что в сети
 );
+CREATE INDEX IF NOT EXISTS users_seen ON users(last_seen);
 CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users(email);
 -- Сервер сам создаёт эти таблицы и добавляет колонки email и nkey при первом запросе,
 -- так что этот файл нужен только для ручной установки.
@@ -70,3 +73,7 @@ CREATE INDEX IF NOT EXISTS reactions_from ON reactions(from_id);
 
 -- Служебные отметки сервера, например «старые ники уже переведены в юзернеймы»
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
+
+-- Гости на сайте для счётчика «сейчас на сайте»: случайный id браузера и время последней отметки
+CREATE TABLE IF NOT EXISTS presence (id TEXT PRIMARY KEY, at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS presence_at ON presence(at);

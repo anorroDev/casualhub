@@ -792,6 +792,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
 @media (pointer: coarse) { .seg button, .seg > button { min-height: 40px; } }
 </style>
 <script src="/whatsnew.js"></script>
+<script src="/online.js" defer></script>
 </head>
 <body>
 <div class="page">
@@ -2427,6 +2428,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
         const go = () => { if (!done) { done = true; swap(); } };
         const vt = document.startViewTransition(go);
         vt.ready.catch(() => {});
+        if (vt.updateCallbackDone) vt.updateCallbackDone.catch(() => {});
         vt.finished.catch(() => {}).finally(() => document.documentElement.classList.remove('theme-swap'));
         setTimeout(go, 400); // если переход не начался (вкладка в фоне), тема всё равно сменится
       } else swap();

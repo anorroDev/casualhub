@@ -515,6 +515,7 @@ addEventListener('pagereveal', function (e) {
 });
 </script>
 <script src="/whatsnew.js"></script>
+<script src="/online.js" defer></script>
 <script src="/avatar-sync.js"></script>
 </head><body>
 <title>Мнение Казуала</title>
@@ -2198,6 +2199,10 @@ function renderAuthModal() {
             <button type="button" class="pwd-toggle" id="btnToggleEditPass" aria-label="Показать/скрыть пароль">${EYE_OPEN_SVG}</button>
           </div>
         </div>
+        ${state.user.serverId ? `<div class="auth-field">
+          <label for="inputEditCurPass">Текущий пароль</label>
+          <input type="password" id="inputEditCurPass" autocomplete="current-password" placeholder="Нужен, только если меняешь почту или пароль">
+        </div>` : ''}
 
         <div style="display:flex;gap:8px;margin-top:6px;">
           <button type="button" class="btn ghost" id="btnCancelEdit" style="flex:1;">Отмена</button>
@@ -2266,7 +2271,7 @@ function renderAuthModal() {
     $('formEditProfile').addEventListener('submit', e => {
       e.preventDefault();
       const finalAvatar = editSelectedAvatar || $('inputEditName').value.trim().charAt(0).toUpperCase();
-      updateUserProfile($('inputEditName').value, $('inputEditEmail').value, $('inputEditPass').value, finalAvatar, editSelectedColor, $('inputEditHandle') ? $('inputEditHandle').value : undefined);
+      updateUserProfile($('inputEditName').value, $('inputEditEmail').value, $('inputEditPass').value, finalAvatar, editSelectedColor, $('inputEditHandle') ? $('inputEditHandle').value : undefined, $('inputEditCurPass') ? $('inputEditCurPass').value : '');
     });
     return;
   }
@@ -5976,6 +5981,7 @@ function applyTheme(t) {
         const go = () => { if (!done) { done = true; applyTheme(b.dataset.themeId); } };
         const vt = document.startViewTransition(go);
         vt.ready.catch(() => {});
+        if (vt.updateCallbackDone) vt.updateCallbackDone.catch(() => {});
         vt.finished.catch(() => {}).finally(() => document.documentElement.classList.remove('theme-swap'));
         setTimeout(go, 400); // если переход не начался (вкладка в фоне), тема всё равно сменится
       } else applyTheme(b.dataset.themeId);
