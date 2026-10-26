@@ -73,7 +73,7 @@ async function newSession(env, userId) {
 const LIMITS = {
   loginIp: { max: 30, win: 15 * 60e3 },   // неудачных входов с одного адреса
   loginAcc: { max: 10, win: 15 * 60e3 },  // неудачных входов в один аккаунт
-  register: { max: 6, win: 60 * 60e3 },   // регистраций с одного адреса
+  register: { max: 10, win: 60 * 60e3 },  // регистраций (и попыток на занятые почту/ник) с одного адреса
   friendReq: { max: 40, win: 10 * 60e3 }, // заявок в друзья (перебор ников)
 };
 const clientIp = (request) => request.headers.get('CF-Connecting-IP') || 'local';
@@ -105,7 +105,6 @@ const routes = {
     const ipKey = 'reg:' + clientIp(request);
     const wait = await overLimit(env, ipKey, 'register');
     if (wait) return tooMany(wait);
-    await hit(env, ipKey, 'register');
     const { username, password, email } = await readBody(request);
     const name = cleanName(username);
     const mail = cleanEmail(email);
@@ -114,6 +113,8 @@ const routes = {
     if (!NAME_RE.test(name)) return fail(400, 'Ник: от 2 до 24 символов, буквы, цифры, пробел, точка, дефис или подчёркивание.');
     if (pass.length < 6 || pass.length > 200) return fail(400, 'Пароль: от 6 символов.');
     const uname = name.toLowerCase();
+    // в лимит идут только настоящие регистрации и проверки занятых почт и ников, опечатки в форме не считаются
+    await hit(env, ipKey, 'register');
     if (await env.DB.prepare('SELECT 1 FROM users WHERE email = ?').bind(mail).first()) return fail(409, 'На эту почту уже есть аккаунт.');
     if (await env.DB.prepare('SELECT 1 FROM users WHERE uname = ?').bind(uname).first()) return fail(409, 'Такой ник уже занят.');
     const id = randHex(12);
@@ -324,8 +325,8 @@ const routes = {
     const [uid, rid] = arg;
     if (!(await canSee(env, me, uid))) return fail(403, 'Фото видны только друзьям.');
     const row = await env.DB.prepare('SELECT data FROM photos WHERE key = ?').bind(`${uid}:${rid}`).first();
-    if (!row) return fail(404, 'Фото нет.');
-    return json({ data: row.data });
+    // фото нет — это обычное дело (нет аватарки, баннера), не ошибка: браузер не сыплет 404 в консоль
+    return json({ data: row ? row.data : null });
   },
 };
 

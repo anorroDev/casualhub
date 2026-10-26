@@ -406,8 +406,8 @@ h1, h2, p { margin: 0; }
 @media (max-width: 560px) {
   .page { padding-block: 14px 26px; }
   .pill { height: 36px; padding: 0 12px; }
-  .pill.gh span, #themeBtn span { display: none; }
-  .pill.gh, #themeBtn { width: 36px; padding: 0; }
+  .pill.gh span, #themeBtn span, .pill.wn span { display: none; }
+  .pill.gh, #themeBtn, .pill.wn { width: 36px; padding: 0; }
   .top { gap: 10px; }
   .theme-menu { right: -44px; }
   .hero { gap: 18px; }
@@ -433,6 +433,7 @@ h1, h2, p { margin: 0; }
   ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }
 </style>
+<script src="/whatsnew.js"></script>
 </head>
 <body>
 <div class="page">
@@ -442,6 +443,7 @@ h1, h2, p { margin: 0; }
       casualhub
     </a>
     <div class="user-bar">
+      <button type="button" class="pill wn" data-whatsnew title="Что нового на сайте"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.5l1.6 3.6 3.9.4-2.9 2.6.8 3.9L8 10l-3.4 2 .8-3.9-2.9-2.6 3.9-.4z"/></svg><span>Что нового</span></button>
       <span id="account"></span>
       <details class="theme-pick" id="themePick">
         <summary class="pill" id="themeBtn" title="Тема оформления">Тема</summary>
@@ -708,7 +710,7 @@ h1, h2, p { margin: 0; }
     const who = esc(it.user.username || 'друг');
     if (it.kind !== 'rating') return '';
     const r = it.rating;
-    const pic = r.photo && r.photo.url ? `<img src="${esc(r.photo.url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode('${esc(String(r.name).charAt(0)).replace(/'/g, '')}'))">`
+    const pic = r.photo && r.photo.url ? `<img src="${esc(r.photo.url)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fallback="${esc(String(r.name).charAt(0))}">`
       : r.photo && r.photo.remote ? '' : esc(String(r.name).charAt(0));
     const meta = [`<em>${who}</em>`, r.cat && esc(r.cat), r.status && esc(r.status), ago(it.at)].filter(Boolean).join(' · ');
     return `<li><a class="fd" href="/profile/?id=${encodeURIComponent(it.user.id)}">
@@ -749,6 +751,8 @@ h1, h2, p { margin: 0; }
         if (!d.items.length) { $('#feedList').innerHTML = '<li class="feed-empty">Друзья пока ничего не оценили.</li>'; return; }
         $('#feedNote').textContent = `${d.friends} ${plural(d.friends, 'друг', 'друга', 'друзей')}`;
         $('#feedList').innerHTML = d.items.slice(0, 12).map(feedItem).join('');
+        // фото по ссылке не открылось: вместо него буква
+        document.querySelectorAll('#feedList img[data-fallback]').forEach((img) => { img.onerror = () => img.replaceWith(img.dataset.fallback); if (img.complete && !img.naturalWidth) img.onerror(); });
         // загруженные фото подтягиваются, когда строка видна
         const pics = [...document.querySelectorAll('.fd-pic[data-ph]')];
         const load = (el) => {
