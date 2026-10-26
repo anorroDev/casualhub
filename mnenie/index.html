@@ -1446,7 +1446,7 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
                 <span class="rel-v">v24</span>
                 <div>
                   <h4>Баннер в профиле и пропорции фото</h4>
-                  <p>В профиль можно поставить свой баннер: загрузить картинку, перетащить её на шапку или выбрать один из шести готовых в стиле сайта. Баннер хранится в аккаунте, поэтому его видно на всех твоих устройствах и друзьям. У фото в оценке теперь можно выбрать пропорции: как есть, 1:1, 4:3, 3:4, 3:2, 16:9 или 9:16. Кадр двигается пальцем или мышью и приближается ползунком, а уже сохранённое фото можно перекадрировать. В рейтинге фото показывается в выбранной пропорции.</p>
+                  <p>В профиль можно поставить свой баннер: загрузить картинку, перетащить её на шапку или выбрать один из шести готовых в стиле сайта. Баннер хранится в аккаунте, поэтому его видно на всех твоих устройствах и друзьям. У фото в оценке теперь можно выбрать пропорции: как есть, 1:1, 4:3, 3:4, 3:2, 16:9 или 9:16. Кадр двигается пальцем или мышью и приближается ползунком, а уже сохранённое фото можно перекадрировать. В рейтинге фото показывается в выбранной пропорции. Баннер стал выше, его верх и низ слегка размыты, а после установки можно потянуть картинку и выбрать, какая её часть видна. Баннер и аватар теперь могут быть анимированными: GIF или WebP ставятся как есть. Аватар меняется прямо в профиле нажатием на него. В оценки уходит лёгкий первый кадр, а анимированный аватар видят на главной, в Мнении и друзья в твоём профиле.</p>
                 </div>
               </article>
               <article class="rel">
@@ -1896,6 +1896,14 @@ function processAvatarFile(file, callback) {
   reader.readAsDataURL(file);
 }
 
+// анимированная аватарка (её ставят в профиле) хранится отдельно и показывается, пока статичная та же
+function shownAvatar(u) {
+  try {
+    const a = JSON.parse(localStorage.getItem('casualhub.avatarAnim.v1') || '{}')[u.id];
+    if (a && a.data && typeof u.avatar === 'string' && a.sig === u.avatar.slice(-48)) return a.data;
+  } catch (e) {}
+  return u.avatar;
+}
 function renderAuthorMini(author) {
   if (!author) return '👤';
   const isImg = author.avatar && (author.avatar.startsWith('data:image/') || author.avatar.startsWith('http://') || author.avatar.startsWith('https://'));
@@ -2071,7 +2079,7 @@ function renderUserBar() {
   if (state.user) {
     const isImg = state.user.avatar && (state.user.avatar.startsWith('data:image/') || state.user.avatar.startsWith('http://') || state.user.avatar.startsWith('https://'));
     const avStyle = isImg
-      ? `background-image: url('${esc(state.user.avatar)}');`
+      ? `background-image: url('${esc(shownAvatar(state.user))}');`
       : `background-color: ${esc(state.user.color || '#3550E8')};`;
     const avContent = isImg ? '' : esc(state.user.name.charAt(0).toUpperCase());
     el.userBar.innerHTML = `
@@ -2235,7 +2243,7 @@ function renderAuthModal() {
 
     const isImg = state.user.avatar && (state.user.avatar.startsWith('data:image/') || state.user.avatar.startsWith('http://') || state.user.avatar.startsWith('https://'));
     const avStyle = isImg
-      ? `background-image: url('${esc(state.user.avatar)}');`
+      ? `background-image: url('${esc(shownAvatar(state.user))}');`
       : `background-color: ${esc(state.user.color || '#3550E8')};`;
     const avContent = isImg ? '' : esc(state.user.name.charAt(0).toUpperCase());
 

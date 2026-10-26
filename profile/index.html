@@ -192,7 +192,7 @@ button, input { font: inherit; color: inherit; }
 .hero { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px 26px; align-items: start; padding: 0 26px 26px; }
 /* Banner: own picture or a ready-made one; without one, soft light in the site colours */
 .banner {
-  position: relative; grid-column: 1 / -1; margin: 0 -26px; height: clamp(150px, 22vw, 230px); overflow: hidden;
+  position: relative; grid-column: 1 / -1; margin: 0 -26px; height: clamp(220px, 31vw, 420px); overflow: hidden;
   border-radius: 21px 21px 0 0; background-color: var(--panel-2); background-size: cover; background-position: center;
 }
 .banner.def {
@@ -201,12 +201,27 @@ button, input { font: inherit; color: inherit; }
     radial-gradient(45% 120% at 80% 10%, color-mix(in srgb, var(--good) 40%, transparent), transparent 70%),
     radial-gradient(40% 100% at 55% 110%, color-mix(in srgb, var(--mid) 40%, transparent), transparent 70%);
 }
-.banner::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 50%, color-mix(in srgb, var(--panel) 75%, transparent)); pointer-events: none; }
+.banner::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 45%, color-mix(in srgb, var(--panel) 55%, transparent) 80%, var(--panel)); pointer-events: none; }
 .banner.drag::before {
   content: "Отпусти, чтобы поставить баннер"; position: absolute; inset: 10px; z-index: 2; display: grid; place-items: center;
   border: 2px dashed var(--accent); border-radius: 14px; background: color-mix(in srgb, var(--accent-soft) 80%, transparent); color: var(--accent); font-weight: 700;
 }
 .banner.busy { filter: saturate(.6) brightness(.8); }
+/* Soft edges: the top and bottom bands of the banner are slightly blurred */
+.ban-blur { position: absolute; left: 0; right: 0; z-index: 1; pointer-events: none; -webkit-backdrop-filter: blur(5px); backdrop-filter: blur(5px); }
+.ban-blur.top { top: 0; height: 22%; -webkit-mask-image: linear-gradient(#000, transparent); mask-image: linear-gradient(#000, transparent); }
+.ban-blur.bot { bottom: 0; height: 30%; -webkit-mask-image: linear-gradient(transparent, #000); mask-image: linear-gradient(transparent, #000); }
+.banner::after { z-index: 1; }
+/* Choosing the visible part: drag the picture inside the banner */
+.banner.posing { cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; box-shadow: inset 0 0 0 3px var(--accent); }
+.banner.posing.grabbing { cursor: grabbing; }
+.ban-pos {
+  position: absolute; left: 50%; bottom: 16px; z-index: 4; transform: translateX(-50%); display: flex; align-items: center; gap: 10px;
+  max-width: calc(100% - 24px); padding: 6px 6px 6px 14px; border-radius: 999px; background: rgba(10, 12, 18, .72); color: #fff;
+  font-size: 13px; font-weight: 600; white-space: nowrap;
+}
+.ban-pos span { overflow: hidden; text-overflow: ellipsis; }
+.ban-pos .btn { height: 34px; padding: 0 14px; border-radius: 999px; background: #fff; color: #14161C; box-shadow: none; }
 .ban-btn {
   position: absolute; right: 14px; top: 14px; z-index: 3; display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 13px;
   border: 1px solid rgba(255, 255, 255, .28); border-radius: 999px; background: rgba(10, 12, 18, .5); color: #fff;
@@ -233,6 +248,21 @@ button, input { font: inherit; color: inherit; }
 .ban-msg:empty { display: none; }
 .ban-msg.err { color: var(--bad-ink); font-weight: 600; }
 .ava-wrap { position: relative; z-index: 1; width: 116px; height: 116px; flex: none; margin-top: -64px; }
+.ava-wrap.can { cursor: pointer; }
+.ava-wrap.can:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 50%; }
+.ava-edit {
+  position: absolute; right: 2px; bottom: 2px; z-index: 2; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
+  background: var(--ink); color: var(--panel); border: 3px solid var(--panel); transition: transform .25s var(--spring);
+}
+.ava-wrap.can:hover .ava-edit { transform: scale(1.12) rotate(-8deg); }
+.ava-wrap.busy .ava { filter: brightness(.6); }
+.fr .av { background-size: cover; background-position: center; }
+.toast {
+  position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 14px); z-index: 70; max-width: min(92vw, 460px); padding: 11px 18px; border-radius: 14px;
+  background: var(--ink); color: var(--panel); font-size: 14px; font-weight: 600; text-align: center;
+  opacity: 0; transform: translate(-50%, -18px) scale(.92); transition: opacity .2s, transform .45s var(--spring); pointer-events: none;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0) scale(1); }
 .who { padding-top: 12px; }
 .ava-ring {
   position: absolute; inset: 0; border-radius: 50%;
@@ -526,17 +556,18 @@ button, input { font: inherit; color: inherit; }
 
     app.innerHTML = `
       <section class="card hero rise" style="--d:${d++}">
-        <div class="banner${p.banner ? '' : ' def'}" id="banner"${p.banner ? ` style="background-image:url('${esc(p.banner)}')"` : ''}>${isMe ? `<button type="button" class="ban-btn" id="banBtn" aria-expanded="false" aria-controls="banMenu"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="1.5" y="3" width="13" height="10" rx="2"/><circle cx="5.5" cy="6.5" r="1.3"/><path d="M14.5 11l-4-3.5-6 5.5"/></svg><span>Баннер</span></button>` : ''}</div>
+        <div class="banner${p.banner ? '' : ' def'}" id="banner"${p.banner ? ` style="background-image:url('${esc(p.banner)}');background-position:${posOf(p.banner).x}% ${posOf(p.banner).y}%"` : ''}><span class="ban-blur top" aria-hidden="true"></span><span class="ban-blur bot" aria-hidden="true"></span>${isMe ? `<button type="button" class="ban-btn" id="banBtn" aria-expanded="false" aria-controls="banMenu"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="1.5" y="3" width="13" height="10" rx="2"/><circle cx="5.5" cy="6.5" r="1.3"/><path d="M14.5 11l-4-3.5-6 5.5"/></svg><span>Баннер</span></button>` : ''}</div>
         ${isMe ? `<div class="ban-menu" id="banMenu" role="dialog" aria-label="Баннер профиля" hidden>
           <span class="label">Своя картинка</span>
           <label class="btn ghost ban-up">Загрузить картинку<input type="file" id="banFile" accept="image/*" class="vh"></label>
           <p class="ban-hint">Лучше широкая, примерно 3 к 1. Картинку можно и просто перетащить на баннер.</p>
           <span class="label">Готовые</span>
           <div class="ban-presets" id="banPresets"></div>
+          <button type="button" class="btn ghost" id="banPos"${p.banner ? '' : ' hidden'}>Выбрать видимую часть</button>
           <button type="button" class="btn ghost" id="banRemove"${p.banner ? '' : ' hidden'}>Убрать баннер</button>
           <p class="ban-msg" id="banMsg" role="status"></p>
         </div>` : ''}
-        <div class="ava-wrap"><span class="ava-ring" aria-hidden="true"></span>${ava}</div>
+        <div class="ava-wrap${isMe && user ? ' can' : ''}" id="avaWrap"${isMe && user ? ' role="button" tabindex="0" aria-label="Сменить аватар, можно и анимированный GIF" title="Сменить аватар"' : ''}><span class="ava-ring" aria-hidden="true"></span>${ava}${isMe && user ? `<span class="ava-edit" aria-hidden="true"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M2 5.5h2.5L6 3.5h4l1.5 2H14v7H2z"/><circle cx="8" cy="9" r="2.3"/></svg></span><input type="file" id="avaFile" accept="image/*" class="vh">` : ''}</div>
         <div class="who">
           <h1 class="name" aria-label="${esc(p.name)}">${nameHTML}</h1>
           <p class="sub">${esc(p.sub)}</p>
@@ -594,7 +625,7 @@ button, input { font: inherit; color: inherit; }
           ${p.friends ? `<section class="card rise" style="--d:${d++}">
             <div class="head"><h2 class="h2">Друзья</h2><span class="label">${p.friends.length}</span></div>
             ${p.friends.length ? `<div class="frs">${p.friends.map((f) => `<a class="fr" href="/profile/?id=${encodeURIComponent(f.id)}">
-                <span class="av" style="background:${colorOf(f.username)}">${letter(f.username)}</span>
+                <span class="av" data-uid="${esc(f.id)}" style="background-color:${colorOf(f.username)}">${letter(f.username)}</span>
                 <span class="tx"><b>${esc(f.username)}</b><small>${f.updatedAt ? 'оценки обновлены ' + ago(f.updatedAt) : 'оценок пока нет'}</small></span>${ICON.go}</a>`).join('')}</div>`
               : '<p class="muted">Пока никого. Добавить друга по нику можно в Мнении Казуала, кнопка «Друзья».</p>'}
             ${p.incoming ? `<p class="note">${p.incoming} ${plural(p.incoming, 'заявка', 'заявки', 'заявок')} в друзья ${plural(p.incoming, 'ждёт', 'ждут', 'ждут')} ответа. <a href="/mnenie/">Открыть в Мнении</a></p>` : ''}
@@ -612,7 +643,8 @@ button, input { font: inherit; color: inherit; }
       </div>`;
 
     if (rs.length) wireList(p);
-    if (isMe) wireBanner(p);
+    if (isMe) { wireBanner(p); wireAvatar(p); }
+    hydrateFriendAvatars(p);
     hydratePhotos(p, app);
     countUp();
   }
@@ -673,13 +705,17 @@ button, input { font: inherit; color: inherit; }
   const send = (method, path, body) => fetch('/api' + path, {
     method, headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined,
   }).then((r) => (r.ok ? r.json() : Promise.reject(r.status)));
+  // видимая часть баннера едет вместе с картинкой: «…#pos=x,y» в конце (браузер такой хвост у картинки не читает)
+  const posOf = (d) => { const m = /#pos=(\d{1,3}),(\d{1,3})$/.exec(d || ''); return m ? { x: Math.min(100, +m[1]), y: Math.min(100, +m[2]) } : { x: 50, y: 50 }; };
+  const bare = (d) => String(d || '').replace(/#pos=\d{1,3},\d{1,3}$/, '');
   const showBanner = (d) => {
     const b = document.getElementById('banner');
     if (!b) return;
     b.classList.toggle('def', !d);
     b.style.backgroundImage = d ? `url("${d}")` : '';
-    const rm = document.getElementById('banRemove');
-    if (rm) rm.hidden = !d;
+    const ps = posOf(d);
+    b.style.backgroundPosition = d ? `${ps.x}% ${ps.y}%` : '';
+    ['banRemove', 'banPos'].forEach((id) => { const e = document.getElementById(id); if (e) e.hidden = !d; });
   };
   // любая картинка ложится в 1500×500 «по ширине», в JPEG, чтобы влезть и в браузер, и в аккаунт
   const W = 1500, H = 500;
@@ -748,6 +784,96 @@ button, input { font: inherit; color: inherit; }
     } },
   ];
 
+  const ANIM_MAX = 1.3 * 1048576, ANIM_MAX_MB = '1,3', AVA_ANIM_MAX = 1048576;
+  const asDataUrl = (f) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+  // картинку «по размеру» w×h: обрезаем по центру, как background-size: cover
+  const fitImage = (bmp, w, h, type, q) => {
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const k = Math.max(w / bmp.width, h / bmp.height);
+    c.getContext('2d').drawImage(bmp, (w - bmp.width * k) / 2, (h - bmp.height * k) / 2, bmp.width * k, bmp.height * k);
+    let qq = q || 0.86, d = c.toDataURL(type, qq);
+    while (d.length > 900000 && qq > 0.5) { qq -= 0.1; d = c.toDataURL(type, qq); }
+    return d;
+  };
+  // анимированная аватарка хранится отдельно, один раз на аккаунт: в оценки уходит маленький статичный первый кадр.
+  // Показывается, пока статичная аватарка та же (если сменить её в Мнении, анимация больше не показывается).
+  const ANIM_KEY = 'casualhub.avatarAnim.v1';
+  const sigOf = (a) => (typeof a === 'string' ? a.slice(-48) : '');
+  const shownAvatar = (u) => {
+    if (!u) return null;
+    const a = (read(ANIM_KEY) || {})[u.id];
+    return a && a.data && a.sig === sigOf(u.avatar) ? a.data : u.avatar;
+  };
+  const isImgSrc = (a) => typeof a === 'string' && /^(data:image\/|https?:\/\/)/.test(a);
+  const toastEl = () => document.getElementById('toast') || document.body.appendChild(Object.assign(document.createElement('div'), { id: 'toast', className: 'toast', role: 'status' }));
+  let toastT = 0;
+  const toast = (t) => { const e = toastEl(); e.textContent = t; e.classList.add('show'); clearTimeout(toastT); toastT = setTimeout(() => e.classList.remove('show'), 3200); };
+  const setAvaEl = (src) => {
+    const a = document.querySelector('#avaWrap .ava');
+    if (!a || !isImgSrc(src)) return;
+    a.style.backgroundImage = `url("${src}")`;
+    a.textContent = '';
+  };
+
+  function wireAvatar(p) {
+    const wrap = $('#avaWrap'), inp = $('#avaFile');
+    if (!wrap || !inp) return;
+    wrap.addEventListener('click', (e) => { if (e.target !== inp) inp.click(); });
+    wrap.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inp.click(); } });
+    inp.addEventListener('change', async () => {
+      const f = inp.files && inp.files[0];
+      inp.value = '';
+      if (!f) return;
+      if (!/^image\//.test(f.type)) { toast('Нужна картинка: JPG, PNG, WebP или GIF'); return; }
+      const animated = /^image\/(gif|webp)$/.test(f.type) && f.size <= AVA_ANIM_MAX;
+      if (f.type === 'image/gif' && f.size > AVA_ANIM_MAX) toast('GIF больше 1 МБ, поставлю его первый кадр без анимации');
+      wrap.classList.add('busy');
+      try {
+        const bmp = await createImageBitmap(f);
+        const still = fitImage(bmp, 160, 160, 'image/jpeg', 0.88); // первый кадр, квадратом
+        if (bmp.close) bmp.close();
+        const anim = animated ? await asDataUrl(f) : null;
+        // статичная аватарка там же, где её хранит Мнение: в профиле, в списке профилей и в твоих оценках
+        const cur = read('ocenshik.user.v1');
+        if (!cur || cur.id !== user.id) throw new Error('user');
+        cur.avatar = still; user.avatar = still;
+        const users = (read('ocenshik.users.v1') || []).map((u) => (u.id === cur.id ? Object.assign(u, { avatar: still }) : u));
+        const ratings = (read('ocenshik.ratings.v2') || []).map((r) => (r && r.author && r.author.id === cur.id ? Object.assign(r, { author: Object.assign({}, r.author, { avatar: still }) }) : r));
+        const all = read(ANIM_KEY) || {};
+        if (anim) all[cur.id] = { data: anim, sig: sigOf(still) }; else delete all[cur.id];
+        try {
+          localStorage.setItem('ocenshik.user.v1', JSON.stringify(cur));
+          localStorage.setItem('ocenshik.users.v1', JSON.stringify(users));
+          localStorage.setItem('ocenshik.ratings.v2', JSON.stringify(ratings));
+        } catch (e) { toast('Браузер не дал сохранить аватар: мало места'); return; }
+        let animKept = true;
+        try { localStorage.setItem(ANIM_KEY, JSON.stringify(all)); } catch (e) { animKept = false; }
+        p.avatar = anim && animKept ? anim : still;
+        setAvaEl(p.avatar);
+        if (token) {
+          send('PUT', '/photo/avatar', { data: anim || still })
+            .then(() => toast(anim ? 'Анимированный аватар стоит, друзья тоже его увидят' : 'Аватар обновлён, друзья тоже его увидят'), () => toast('Аватар стоит здесь, но в аккаунт не сохранился'));
+        } else toast(anim && !animKept ? 'Аватар стоит, но анимация не влезла в браузер' : 'Аватар обновлён');
+      } catch (e) {
+        toast('Не получилось открыть эту картинку');
+      } finally {
+        wrap.classList.remove('busy');
+      }
+    });
+  }
+
+  // аватарки друзей: каждый ставит свою в профиле, сервер отдаёт её друзьям
+  const friendAva = new Map();
+  function hydrateFriendAvatars(p) {
+    if (!token || !p.friends) return;
+    document.querySelectorAll('.fr .av[data-uid]').forEach((el) => {
+      const id = el.dataset.uid;
+      if (!friendAva.has(id)) friendAva.set(id, api(`/photo/${encodeURIComponent(id)}/avatar`).then((d) => d.data || null, () => null));
+      friendAva.get(id).then((src) => { if (isImgSrc(src) && el.isConnected) { el.style.backgroundImage = `url("${src}")`; el.textContent = ''; } });
+    });
+  }
+
   function wireBanner(p) {
     const btn = $('#banBtn'), menu = $('#banMenu'), banner = $('#banner'), msg = $('#banMsg');
     if (!btn) return;
@@ -759,27 +885,73 @@ button, input { font: inherit; color: inherit; }
       }
       if (on) say('');
     };
-    const apply = (d) => {
+    // выбор видимой части: тянем картинку внутри баннера, «Готово» сохраняет положение
+    let posing = null;
+    const startPos = async () => {
+      if (!p.banner || posing) return;
+      open(false);
+      const img = new Image();
+      img.src = bare(p.banner);
+      try { await img.decode(); } catch (e) { return; }
+      const ps = posOf(p.banner);
+      posing = { x: ps.x, y: ps.y, iw: img.naturalWidth, ih: img.naturalHeight, drag: null };
+      banner.classList.add('posing');
+      banner.insertAdjacentHTML('beforeend', '<div class="ban-pos" id="banPosBar"><span>Потяни картинку, чтобы выбрать, что видно</span><button type="button" class="btn small" id="banPosDone">Готово</button></div>');
+      $('#banPosDone').addEventListener('click', (e) => {
+        e.stopPropagation();
+        const d = `${bare(p.banner)}#pos=${Math.round(posing.x)},${Math.round(posing.y)}`;
+        posing = null;
+        banner.classList.remove('posing', 'grabbing');
+        const bar = $('#banPosBar'); if (bar) bar.remove();
+        apply(d);
+      });
+    };
+    banner.addEventListener('pointerdown', (e) => {
+      if (!posing || e.target.closest('#banPosBar')) return;
+      posing.drag = { x: e.clientX, y: e.clientY, px: posing.x, py: posing.y };
+      try { banner.setPointerCapture(e.pointerId); } catch (_) {}
+      banner.classList.add('grabbing');
+    });
+    banner.addEventListener('pointermove', (e) => {
+      if (!posing || !posing.drag) return;
+      const bw = banner.clientWidth, bh = banner.clientHeight, k = Math.max(bw / posing.iw, bh / posing.ih);
+      const ox = posing.iw * k - bw, oy = posing.ih * k - bh; // насколько картинка шире и выше баннера
+      if (ox > 1) posing.x = Math.min(100, Math.max(0, posing.drag.px - (e.clientX - posing.drag.x) / ox * 100));
+      if (oy > 1) posing.y = Math.min(100, Math.max(0, posing.drag.py - (e.clientY - posing.drag.y) / oy * 100));
+      banner.style.backgroundPosition = `${posing.x}% ${posing.y}%`;
+    });
+    const dragEnd = () => { if (posing) { posing.drag = null; banner.classList.remove('grabbing'); } };
+    banner.addEventListener('pointerup', dragEnd);
+    banner.addEventListener('pointercancel', dragEnd);
+    const apply = (d, pose) => {
       p.banner = d;
       showBanner(d);
       const kept = keepBanner(d);
+      if (!kept && token) say('Баннер большой, поэтому хранится только в аккаунте.');
       if (!token) { say(kept ? (d ? 'Баннер стоит. Войди в аккаунт, чтобы его видели друзья.' : 'Баннер убран.') : 'Браузер не дал сохранить баннер: мало места.', !kept); return; }
       banner.classList.add('busy');
       (d ? send('PUT', '/photo/banner', { data: d }) : send('DELETE', '/photo/banner'))
         .then(() => say(d ? 'Готово, друзья тоже увидят этот баннер.' : 'Баннер убран.'), () => say('Баннер стоит здесь, но в аккаунт не сохранился. Попробуй ещё раз позже.', true))
         .finally(() => banner.classList.remove('busy'));
+      if (d && pose) startPos();
     };
     const fromFile = async (f) => {
       if (!f || !/^image\//.test(f.type)) { say('Нужна картинка: JPG, PNG, WebP или GIF.', true); return; }
+      // GIF и WebP могут быть анимированными: их не перерисовываем, а ставим как есть, чтобы анимация осталась
+      if (/^image\/(gif|webp)$/.test(f.type)) {
+        if (f.size <= ANIM_MAX) { apply(await asDataUrl(f), true); return; }
+        if (f.type === 'image/gif') { say(`Анимированный баннер должен весить до ${ANIM_MAX_MB} МБ, этот ${(f.size / 1048576).toFixed(1)} МБ. Сожми GIF или возьми WebP.`, true); return; }
+      }
       try {
         const bmp = await createImageBitmap(f);
-        apply(paint((ctx) => { const k = Math.max(W / bmp.width, H / bmp.height); ctx.drawImage(bmp, (W - bmp.width * k) / 2, (H - bmp.height * k) / 2, bmp.width * k, bmp.height * k); }));
+        apply(fitImage(bmp, 1600, 640, 'image/jpeg'), true);
         if (bmp.close) bmp.close();
       } catch (e) { say('Не получилось открыть эту картинку.', true); }
     };
-    btn.addEventListener('click', () => open(menu.hidden));
+    btn.addEventListener('click', () => { if (!posing) open(menu.hidden); });
     $('#banFile').addEventListener('change', (e) => { fromFile(e.target.files && e.target.files[0]); e.target.value = ''; });
-    $('#banPresets').addEventListener('click', (e) => { const b = e.target.closest('[data-k]'); if (b) apply(paint(PRESETS[+b.dataset.k].draw)); });
+    $('#banPresets').addEventListener('click', (e) => { const b = e.target.closest('[data-k]'); if (b) apply(paint(PRESETS[+b.dataset.k].draw), true); });
+    $('#banPos').addEventListener('click', () => startPos());
     $('#banRemove').addEventListener('click', () => apply(null));
     document.addEventListener('click', (e) => { if (!menu.hidden && !menu.contains(e.target) && !btn.contains(e.target)) open(false); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !menu.hidden) { open(false); btn.focus(); } });
@@ -797,7 +969,7 @@ button, input { font: inherit; color: inherit; }
     const local = (read('ocenshik.users.v1') || []).find((u) => user && u.id === user.id) || user || {};
     const since = local.createdAt ? new Date(local.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
     const p = {
-      kind: 'me', name: user ? user.name : 'Гость', avatar: user && user.avatar, color: user && user.color,
+      kind: 'me', name: user ? user.name : 'Гость', avatar: shownAvatar(user), color: user && user.color,
       sub: user ? [meServer ? 'ник для друзей: ' + meServer.username : '', since ? 'в Казуал Хабе с ' + since : ''].filter(Boolean).join(' · ') || 'твой профиль' : 'Гостевой профиль: оценки хранятся в этом браузере',
       ratings: myRatings(), uid: meServer && meServer.id, banner: localBanner(),
     };
@@ -806,6 +978,9 @@ button, input { font: inherit; color: inherit; }
     render(p);
     if (!token) return;
     if (meServer) {
+      // свой аватар главнее: если в аккаунте лежит другой (или ещё ничего), отправляем тот, что здесь
+      const mine = isImgSrc(p.avatar) ? p.avatar : null;
+      if (mine) api(`/photo/${encodeURIComponent(meServer.id)}/avatar`).then((d) => d.data, () => null).then((srv) => { if (srv !== mine) send('PUT', '/photo/avatar', { data: mine }).catch(() => {}); });
       api(`/photo/${encodeURIComponent(meServer.id)}/banner`).then(
         (d) => { if (d.data && d.data !== p.banner) { p.banner = d.data; keepBanner(d.data); showBanner(d.data); } },
         () => { if (p.banner) send('PUT', '/photo/banner', { data: p.banner }).catch(() => {}); } // в аккаунте ещё нет: отправляем свой
@@ -844,6 +1019,7 @@ button, input { font: inherit; color: inherit; }
       });
       document.title = `${s.user.username} · Казуал Хаб`;
       api(`/photo/${encodeURIComponent(s.user.id)}/banner`).then((d) => { if (d.data) showBanner(d.data); }, () => {});
+      api(`/photo/${encodeURIComponent(s.user.id)}/avatar`).then((d) => { if (d.data) setAvaEl(d.data); }, () => {});
     } catch (e) {
       message('Профиль закрыт', esc(e && e.error ? e.error : 'Не получилось загрузить профиль. Профили видны только друзьям.'), '<a class="btn primary" href="/profile/">Мой профиль</a>');
     }

@@ -484,11 +484,13 @@ h1, h2, p { margin: 0; }
 
   // ---------- аккаунт (тот же, что в Мнении Казуала) ----------
   const user = read('ocenshik.user.v1');
+  // анимированная аватарка из профиля, пока статичная та же
+  const shownAvatar = (u) => { const a = (read('casualhub.avatarAnim.v1') || {})[u.id]; return a && a.data && typeof u.avatar === 'string' && a.sig === u.avatar.slice(-48) ? a.data : u.avatar; };
   const acc = $('#account');
   if (user && user.name) {
     const img = typeof user.avatar === 'string' && /^(data:image\/|https?:\/\/)/.test(user.avatar);
     const av = img
-      ? `<span class="avatar" style="background-image:url('${esc(user.avatar)}')"></span>`
+      ? `<span class="avatar" style="background-image:url('${esc(shownAvatar(user))}')"></span>`
       : `<span class="avatar" style="background-color:${esc(user.color || '#3550E8')}">${esc(user.name.charAt(0))}</span>`;
     acc.innerHTML = `<a class="pill" href="/profile/" title="Мой профиль">${av}${esc(user.name)}<span class="badge-dot" id="reqDot" hidden></span></a>`;
   } else {
