@@ -2598,7 +2598,7 @@ function blankForm(cat) {
   return {
     editingId: null, cat: cat || (state.cats[0] ? state.cats[0].id : 'games'),
     name: '', fav: false, status: '', meta: '', pros: '', cons: '',
-    note: '', scores: {}, notes: {}, openNotes: {}, extra: [], extraCatName: '', photo: null
+    note: '', scores: {}, notes: {}, openNotes: {}, extra: [], extraCatName: '', photo: null, ownOnly: false
   };
 }
 let form = blankForm();
@@ -2608,7 +2608,7 @@ let ready = Promise.resolve();
 
 function currentCat() { return state.cats.find(c => c.id === form.cat) || null; }
 function formRows() {
-  const cat = currentCat();
+  const cat = form.ownOnly ? null : currentCat(); // ownOnly: у категории теперь совсем другие критерии, чем у этой оценки
   const rows = cat ? cat.criteria.map(c => ({ id: c.id, name: c.name, desc: c.desc || '', w: c.w || 1, extra: false })) : [];
   const ids = new Set(rows.map(r => r.id));
   for (const x of form.extra) {
@@ -3098,6 +3098,7 @@ function loadIntoForm(r) {
     if (s.note) form.notes[s.id] = s.note;
     if (!ids.has(s.id)) form.extra.push({ id: s.id, name: s.name, desc: s.desc || '' });
   }
+  form.ownOnly = !!cat && r.scores.length > 0 && !r.scores.some(s => ids.has(s.id));
   state.editCat = false;
   state.catDelConfirm = false;
   renderForm();
@@ -3105,6 +3106,55 @@ function loadIntoForm(r) {
   if (isNarrow()) { setSection('rate'); scrollToSectionTop(); }
   else el.rater.scrollIntoView({ behavior: smoothScroll(), block: 'start' });
   toast(`Открыто для правки: ${r.name}`);
+}
+// Раньше шаблон переписывал категорию вместе с её оценками: у оценок оставались старые критерии,
+// а категория становилась, например, «Музыкой». Такие оценки (ни одного общего критерия с категорией)
+// получают свою категорию с прежними критериями; название берётся из подходящего шаблона.
+function repairOverwrittenCats() {
+  const byId = new Map(state.cats.map(c => [c.id, c]));
+  const broken = state.ratings.filter(r => {
+    if (r.example || !r.scores || !r.scores.length) return false;
+    const cat = byId.get(r.cat);
+    if (!cat) return false;
+    const ids = new Set(cat.criteria.map(k => k.id));
+    return !r.scores.some(s => ids.has(s.id));
+  });
+  if (!broken.length) return;
+  // оценки с общими критериями — одна прежняя категория
+  const groups = [];
+  for (const r of broken) {
+    const ids = new Set(r.scores.map(x => x.id));
+    let g = groups.find(x => x.cat === r.cat && r.scores.some(sc => x.ids.has(sc.id)));
+    if (!g) { g = { cat: r.cat, ids: new Set(), crit: [], list: [] }; groups.push(g); }
+    for (const sc of r.scores) if (!g.ids.has(sc.id)) { g.ids.add(sc.id); g.crit.push({ id: sc.id, name: sc.name, desc: sc.desc || '', w: sc.w || 1 }); }
+    ids.forEach(i => g.ids.add(i));
+    g.list.push(r);
+  }
+  const key = (t) => keyOf(t);
+  const guess = (crit) => {
+    const names = new Set(crit.map(k => key(k.name)));
+    let best = null, bestHit = 0;
+    for (const t of [...STARTERS, ...CAT_TEMPLATES]) {
+      const hit = t.criteria.filter(k => names.has(key(k.name))).length;
+      if (hit > bestHit && hit >= Math.ceil(Math.min(names.size, t.criteria.length) * 0.6)) { best = t.name; bestHit = hit; }
+    }
+    return best;
+  };
+  let made = 0;
+  for (const g of groups) {
+    if (state.cats.length >= MAX_CATS) break;
+    const old = byId.get(g.cat);
+    let name = guess(g.crit) || `${old ? old.name : 'Категория'} (прежние критерии)`;
+    if (state.cats.some(c => c.name === name)) name = `${name} (прежние критерии)`;
+    const nc = { id: newId('k'), name: name.slice(0, 40), criteria: g.crit.slice(0, MAX_CRIT) };
+    state.cats.push(nc);
+    g.list.forEach(r => { r.cat = nc.id; r.catName = nc.name; });
+    made++;
+  }
+  if (!made) return;
+  saveLocalCats();
+  saveLocalRatings();
+  setTimeout(() => toast(made === 1 ? 'Вернул оценкам их прежнюю категорию, которую перезаписал шаблон' : `Вернул оценкам их прежние категории (${made}), которые перезаписал шаблон`), 600);
 }
 function switchCat(id) {
   if (form.editingId || id === form.cat || !state.cats.some(c => c.id === id)) return;
@@ -3465,6 +3515,7 @@ async function initStorage() {
     state.catsLoaded = true;
     LOG.loaded = true;
     logReadyResolve(false);
+    repairOverwrittenCats();
     if (!form.editingId && !currentCat()) form.cat = state.cats[0].id;
     renderForm(); renderNotice(); renderBoard(); renderLog(); renderUserBar();
     return;
@@ -4124,6 +4175,23 @@ el.critArea.addEventListener('click', e => {
   } else if (act === 'apply-tpl') {
     const tpl = CAT_TEMPLATES[Number(b.dataset.tpl)];
     if (!tpl) return;
+    if (form.editingId) { toast('Сначала сохрани или отмени правку оценки, потом меняй критерии'); return; }
+    // в категории уже есть оценки: шаблон становится новой категорией, старые оценки и их критерии не трогаем
+    if (state.ratings.some(r => r.cat === cat.id && !r.example)) {
+      if (state.cats.length >= MAX_CATS) { toast(`Можно создать до ${MAX_CATS} категорий`); return; }
+      const nc = { id: newId('k'), name: tpl.name, criteria: tpl.criteria.map(x => ({ id: newId('c'), name: x.name, desc: x.desc, w: x.w || 1 })) };
+      state.cats.push(nc);
+      form.cat = nc.id;
+      form.extra = [];
+      renderCats();
+      renderCrit();
+      updateTotal();
+      updateNameState();
+      scheduleCatSave(0);
+      scheduleDraft();
+      toast(`Шаблон «${tpl.name}» добавлен новой категорией, оценки в «${cat.name}» остались как были`);
+      return;
+    }
     cat.name = tpl.name;
     cat.criteria = tpl.criteria.map(x => ({ id: newId('c'), name: x.name, desc: x.desc, w: x.w || 1 }));
     renderCats();
