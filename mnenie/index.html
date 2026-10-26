@@ -196,6 +196,17 @@ a.theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
 .pc-label-con { color: var(--bad) !important; display: flex; align-items: center; gap: 5px; }
 
 /* Criterion weights & quick actions */
+.crit-w {
+  display: inline-grid; place-items: center; min-width: 30px; height: 22px; margin-left: 6px; padding: 0 6px; vertical-align: 1px;
+  border: 1px dashed var(--line); border-radius: 6px; background: transparent; color: var(--ink-3);
+  font-family: var(--font-display); font-size: 16px; font-weight: 700; line-height: 1; cursor: pointer;
+  transition: transform .2s cubic-bezier(.34, 1.56, .64, 1), background-color .15s, color .15s, border-color .15s;
+}
+.crit-w:hover { border-color: var(--accent); color: var(--accent); }
+.crit-w.on { border-style: solid; border-color: transparent; background: var(--accent-soft); color: var(--accent); }
+.crit-w:active { transform: scale(.9); }
+.crit-w:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (pointer: coarse) { .crit-w { height: 28px; min-width: 36px; } }
 .crit-w-badge {
   display: inline-block; margin-left: 6px; padding: 1px 5px; border-radius: 5px;
   font-family: var(--font-display); font-size: 15px; font-weight: 700; line-height: 1;
@@ -2510,6 +2521,8 @@ function verdict(t) {
   if (t == null) return '';
   return VERDICTS[Math.max(1, Math.min(10, Math.round(t))) - 1];
 }
+// постоянные id для категорий из шаблонов: один шаблон на телефоне и на ПК даёт одну и ту же категорию
+function tplId(name) { let h = 5381; for (const ch of keyOf(name)) h = ((h * 33) ^ ch.codePointAt(0)) >>> 0; return 't' + h.toString(36); }
 function keyOf(s) { return String(s || '').trim().toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' '); }
 let idSeq = 0;
 function newId(p) { idSeq = (idSeq + 1) % 1296; return p + Date.now().toString(36) + idSeq.toString(36) + Math.random().toString(36).slice(2, 6); }
@@ -2598,7 +2611,7 @@ function blankForm(cat) {
   return {
     editingId: null, cat: cat || (state.cats[0] ? state.cats[0].id : 'games'),
     name: '', fav: false, status: '', meta: '', pros: '', cons: '',
-    note: '', scores: {}, notes: {}, openNotes: {}, extra: [], extraCatName: '', photo: null, ownOnly: false
+    note: '', scores: {}, notes: {}, openNotes: {}, weights: {}, extra: [], extraCatName: '', photo: null, ownOnly: false
   };
 }
 let form = blankForm();
@@ -2609,10 +2622,11 @@ let ready = Promise.resolve();
 function currentCat() { return state.cats.find(c => c.id === form.cat) || null; }
 function formRows() {
   const cat = form.ownOnly ? null : currentCat(); // ownOnly: у категории теперь совсем другие критерии, чем у этой оценки
-  const rows = cat ? cat.criteria.map(c => ({ id: c.id, name: c.name, desc: c.desc || '', w: c.w || 1, extra: false })) : [];
+  // вес критерия свой у каждой оценки (по умолчанию ×1), он хранится в форме, а не в категории
+  const rows = cat ? cat.criteria.map(c => ({ id: c.id, name: c.name, desc: c.desc || '', w: form.weights[c.id] || 1, extra: false })) : [];
   const ids = new Set(rows.map(r => r.id));
   for (const x of form.extra) {
-    if (!ids.has(x.id)) { rows.push({ id: x.id, name: x.name, desc: x.desc || '', w: x.w || 1, extra: true }); ids.add(x.id); }
+    if (!ids.has(x.id)) { rows.push({ id: x.id, name: x.name, desc: x.desc || '', w: form.weights[x.id] || 1, extra: true }); ids.add(x.id); }
   }
   return rows;
 }
@@ -2690,7 +2704,8 @@ function critRowHTML(r) {
   const note = form.notes[r.id] || '';
   const open = !!note || !!form.openNotes[r.id];
   const nid = 'cn-' + r.id;
-  const wBadge = (r.w && r.w !== 1) ? `<span class="crit-w-badge" title="Вес критерия ×${r.w}">×${r.w}</span>` : '';
+  const w = r.w || 1;
+  const wBadge = `<button type="button" class="crit-w${w !== 1 ? ' on' : ''}" data-act="w" title="Вес критерия в итоге этой оценки. Нажми: ×1 → ×2 → ×0,5" aria-label="Вес критерия «${esc(r.name)}»: ×${String(w).replace('.', ',')}">×${String(w).replace('.', ',')}</button>`;
   return `<li class="crit" data-id="${esc(r.id)}" data-tier="${tierV(v)}">
 <div class="crit-top">
 <div class="crit-name"><span class="crit-title" id="${esc(nid)}">${esc(r.name.trim() || 'Без названия')}${wBadge}</span>${r.desc ? `<span class="crit-desc">${esc(r.desc)}</span>` : ''}</div>
@@ -2715,7 +2730,6 @@ function editorHTML(cat) {
 <textarea class="ed-input ed-desc" id="edd-${esc(c.id)}" data-act="cdesc" rows="1" maxlength="120" enterkeyhint="next" placeholder="Описание, по желанию" aria-label="Критерий ${i + 1}, описание">${esc(c.desc || '')}</textarea>
 </div>
 <div class="ed-tools">
-<button type="button" class="ed-w-btn${w !== 1 ? ' active' : ''}" data-act="cweight" title="Вес критерия в итоге (нажми для смены: ×1 → ×2 → ×0.5)">×${w}</button>
 <button type="button" class="mini-btn" data-act="up" aria-label="Поднять критерий ${i + 1}"${i === 0 ? ' disabled' : ''}>${ICON.up}</button>
 <button type="button" class="mini-btn" data-act="down" aria-label="Опустить критерий ${i + 1}"${i === n - 1 ? ' disabled' : ''}>${ICON.down}</button>
 <button type="button" class="mini-btn del" data-act="delcrit" aria-label="Удалить критерий ${i + 1}"${n <= 1 ? ' disabled' : ''}>${ICON.trash}</button>
@@ -2728,7 +2742,7 @@ function editorHTML(cat) {
   return `<div class="editor">
 <div class="tpl-box"><span class="label">Быстрые шаблоны критериев</span><div class="tpl-list">${tpls}</div></div>
 <div><label class="label" for="catNameInput">Название категории</label><input class="ed-input ed-cat" id="catNameInput" data-act="catname" type="text" maxlength="40" enterkeyhint="next" value="${esc(cat.name)}" placeholder="Например, Кофейни"></div>
-<div><p class="label">Критерии · ${n} из ${MAX_CRIT} (кнопка ×1 меняет вес критерия)</p><ul class="ed-list">${items}</ul></div>
+<div><p class="label">Критерии · ${n} из ${MAX_CRIT}. Вес критерия ставится в каждой оценке, кнопкой ×1 рядом с его названием</p><ul class="ed-list">${items}</ul></div>
 <div class="ed-actions">
 <button type="button" class="btn small ghost" data-act="addcrit"${n >= MAX_CRIT ? ' disabled' : ''}>${ICON.plus}Добавить критерий</button>
 ${starter ? '<button type="button" class="btn small text" data-act="resetcat">Вернуть стандартные</button>' : ''}
@@ -2837,14 +2851,16 @@ function catNameOf(r) {
   const c = state.cats.find(x => x.id === r.cat);
   return c ? (c.name.trim() || 'Без названия') : (r.catName || 'Без категории');
 }
+// одна и та же категория с разных устройств может прийти с разными id: в рейтинге их объединяет название
+function catKey(r) { return keyOf(catNameOf(r)) || '__none'; }
 function groups() {
   const m = new Map();
   for (const r of state.ratings) {
-    const k = r.cat || '__none';
+    const k = catKey(r);
     if (!m.has(k)) m.set(k, { id: k, name: catNameOf(r), n: 0 });
     m.get(k).n++;
   }
-  const order = state.cats.map(c => c.id);
+  const order = state.cats.map(c => keyOf(c.name));
   return [...m.values()].sort((a, b) => {
     const ia = order.indexOf(a.id), ib = order.indexOf(b.id);
     return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib) || a.name.localeCompare(b.name, 'ru');
@@ -2968,7 +2984,44 @@ function applySubFilter(list) {
     default: return list;
   }
 }
+// Оценка с другого устройства ссылается на категорию, которой здесь нет (категории не синхронизируются, только оценки).
+// Есть здесь категория с тем же названием: привязываем оценку к ней, а её критерии к местным по названию.
+// Нет такой: создаём категорию из критериев оценки с тем же id, что и на другом устройстве. Так у оценки снова есть «Настроить».
+function unifyCats() {
+  const byId = new Map(state.cats.map(c => [c.id, c]));
+  const byName = new Map();
+  state.cats.forEach(c => { const k = keyOf(c.name); if (k && !byName.has(k)) byName.set(k, c); });
+  let ratings = false, cats = false;
+  for (const r of state.ratings) {
+    if (!r || r.example || !r.cat || byId.has(r.cat)) continue;
+    const k = keyOf(r.catName);
+    if (!k) continue;
+    let c = byName.get(k);
+    if (!c) {
+      if (state.cats.length >= MAX_CATS) continue;
+      const crit = r.scores.slice(0, MAX_CRIT).map(x => ({ id: x.id, name: x.name, desc: x.desc || '' }));
+      c = { id: r.cat, name: String(r.catName).slice(0, 40), criteria: crit.length ? crit : NEW_CAT_CRITERIA.map(x => ({ id: newId('c'), name: x.name, desc: x.desc })) };
+      state.cats.push(c); byId.set(c.id, c); byName.set(k, c);
+      cats = true;
+      continue;
+    }
+    const local = new Map(c.criteria.map(x => [keyOf(x.name), x.id]));
+    const used = new Set();
+    r.scores = r.scores.map(x => {
+      const id = local.get(keyOf(x.name));
+      if (!id || used.has(id)) return x;
+      used.add(id);
+      return id === x.id ? x : Object.assign({}, x, { id });
+    });
+    r.cat = c.id;
+    ratings = true;
+  }
+  if (cats) { scheduleCatSave(0); renderCats(); }
+  if (ratings && state.mode !== 'db') saveLocalRatings();
+  return ratings || cats;
+}
 function renderBoard() {
+  if (state.loaded) unifyCats();
   const gs = groups();
   if (state.filter !== 'all' && !gs.some(g => g.id === state.filter)) state.filter = 'all';
   const showFilters = gs.length >= 2;
@@ -2998,7 +3051,7 @@ function renderBoard() {
     ].filter(Boolean);
     moreHint.textContent = parts.length ? ' · ' + parts.join(' · ') : '';
   }
-  const catPool = state.filter === 'all' ? state.ratings : state.ratings.filter(r => (r.cat || '__none') === state.filter);
+  const catPool = state.filter === 'all' ? state.ratings : state.ratings.filter(r => catKey(r) === state.filter);
   const pool = applySubFilter(catPool);
   const rated = pool.filter(r => r.total != null);
   const avg = rated.length ? round1(rated.reduce((a, r) => a + r.total, 0) / rated.length) : null;
@@ -3096,6 +3149,7 @@ function loadIntoForm(r) {
   for (const s of r.scores) {
     if (s.v > 0) form.scores[s.id] = s.v;
     if (s.note) form.notes[s.id] = s.note;
+    if (s.w && s.w !== 1) form.weights[s.id] = s.w;
     if (!ids.has(s.id)) form.extra.push({ id: s.id, name: s.name, desc: s.desc || '' });
   }
   form.ownOnly = !!cat && r.scores.length > 0 && !r.scores.some(s => ids.has(s.id));
@@ -3540,7 +3594,7 @@ function saveDraft() {
     if (empty) localStorage.setItem(DRAFT_KEY, JSON.stringify({ v: 2, form: { cat: form.cat } }));
     else localStorage.setItem(DRAFT_KEY, JSON.stringify({ v: 2, form: {
       editingId: form.editingId, cat: form.cat, name: form.name, note: form.note,
-      scores: form.scores, notes: form.notes, extra: form.extra, extraCatName: form.extraCatName,
+      scores: form.scores, notes: form.notes, weights: form.weights, extra: form.extra, extraCatName: form.extraCatName,
       photo: form.photo && form.photo.kind === 'saved' ? { kind: 'saved', id: form.photo.id, w: form.photo.w, h: form.photo.h } : null
     } }));
   } catch (_) {}
@@ -3559,6 +3613,7 @@ function loadDraft() {
       name: str(f.name).slice(0, 140), note: str(f.note).slice(0, 4000), scores, notes,
       extra: Array.isArray(f.extra) ? f.extra.filter(x => x && typeof x.id === 'string' && typeof x.name === 'string').map(x => ({ id: x.id, name: x.name, desc: str(x.desc).slice(0, 120) })) : [],
       extraCatName: str(f.extraCatName),
+      weights: (() => { const o = {}; if (f.weights && typeof f.weights === 'object') for (const [k, v] of Object.entries(f.weights)) if ([2, 0.5].includes(v)) o[k] = v; return o; })(),
       photo: (() => { const n = f.photo && f.photo.kind === 'saved' ? normPhoto(f.photo) : null; return n ? Object.assign({ kind: 'saved' }, n) : null; })()
     });
   } catch (_) {}
@@ -4128,6 +4183,15 @@ el.critArea.addEventListener('click', e => {
   if (act === 'clear') {
     setScore(id, 0);
     host.querySelector('.slider').focus({ preventScroll: true });
+  } else if (act === 'w') {
+    const order = [1, 2, 0.5];
+    const nw = order[(order.indexOf(form.weights[id] || 1) + 1) % order.length];
+    if (nw === 1) delete form.weights[id]; else form.weights[id] = nw;
+    renderCrit();
+    updateTotal();
+    scheduleDraft();
+    const nb = el.critArea.querySelector(`.crit[data-id="${CSS.escape(id)}"] [data-act="w"]`);
+    if (nb) nb.focus({ preventScroll: true });
   } else if (act === 'note') {
     const inp = host.querySelector('.crit-note');
     if (inp.hidden) { inp.hidden = false; form.openNotes[id] = true; b.setAttribute('aria-expanded', 'true'); inp.focus(); }
@@ -4179,7 +4243,8 @@ el.critArea.addEventListener('click', e => {
     // в категории уже есть оценки: шаблон становится новой категорией, старые оценки и их критерии не трогаем
     if (state.ratings.some(r => r.cat === cat.id && !r.example)) {
       if (state.cats.length >= MAX_CATS) { toast(`Можно создать до ${MAX_CATS} категорий`); return; }
-      const nc = { id: newId('k'), name: tpl.name, criteria: tpl.criteria.map(x => ({ id: newId('c'), name: x.name, desc: x.desc, w: x.w || 1 })) };
+      const tid = tplId(tpl.name);
+      const nc = { id: state.cats.some(c => c.id === tid) ? newId('k') : tid, name: tpl.name, criteria: tpl.criteria.map((x, i) => ({ id: `${tid}-${i}`, name: x.name, desc: x.desc })) };
       state.cats.push(nc);
       form.cat = nc.id;
       form.extra = [];
@@ -4192,8 +4257,10 @@ el.critArea.addEventListener('click', e => {
       toast(`Шаблон «${tpl.name}» добавлен новой категорией, оценки в «${cat.name}» остались как были`);
       return;
     }
+    const tid = tplId(tpl.name);
+    if (cat.id !== tid && !state.cats.some(c => c.id === tid)) { cat.id = tid; form.cat = tid; }
     cat.name = tpl.name;
-    cat.criteria = tpl.criteria.map(x => ({ id: newId('c'), name: x.name, desc: x.desc, w: x.w || 1 }));
+    cat.criteria = tpl.criteria.map((x, i) => ({ id: `${tid}-${i}`, name: x.name, desc: x.desc }));
     renderCats();
     renderCrit();
     updateTotal();
@@ -5127,7 +5194,7 @@ function goToRating(id) {
   const r = state.ratings.find(x => x.id === id);
   if (!r) { toast('Этой оценки уже нет в рейтинге'); return; }
   if (isNarrow()) setSection('board'); else setView('board');
-  if (state.filter !== 'all' && (r.cat || '__none') !== state.filter) { state.filter = 'all'; savePrefs(); }
+  if (state.filter !== 'all' && catKey(r) !== state.filter) { state.filter = 'all'; savePrefs(); }
   if (state.query && !r.nameKey.includes(keyOf(state.query))) { state.query = ''; el.search.value = ''; }
   state.open.add(id);
   state.flashId = id;
@@ -5321,7 +5388,7 @@ function renderStats() {
   const maxB = Math.max(1, ...buckets.map(b => b.n));
 
   const catStats = groups().map(g => {
-    const items = rated.filter(r => (r.cat || '__none') === g.id).sort(byScore);
+    const items = rated.filter(r => catKey(r) === g.id).sort(byScore);
     const cAvg = items.length ? round1(items.reduce((a, x) => a + x.total, 0) / items.length) : null;
     return { name: g.name, count: items.length, avg: cAvg, top: items[0] || null };
   }).filter(c => c.count > 0);
