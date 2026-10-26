@@ -37,6 +37,21 @@
   const css = document.createElement('style');
   css.textContent = `
 .friend-bar { margin-top: 8px; }
+.rx { margin-top: 14px; display: grid; gap: 8px; }
+.rx-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.rx-btns button { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink-2); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; transition: transform .2s cubic-bezier(.34,1.56,.64,1), border-color .15s, background-color .15s; }
+.rx-btns button b { font-weight: 800; color: var(--ink); }
+.rx-btns button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
+.rx-btns button:active { transform: scale(.94); }
+.rx-form { display: flex; gap: 6px; }
+.rx-form input { flex: 1; min-width: 0; height: 38px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); font: inherit; font-size: 14px; }
+.rx-form button { flex: none; height: 38px; padding: 0 14px; border: 0; border-radius: 10px; background: var(--ink); color: var(--panel); font: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer; }
+.rx-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.rx-list li { padding: 8px 11px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); font-size: 13.5px; overflow-wrap: anywhere; }
+.rx-list li b { font-weight: 700; }
+.rx-list li span { color: var(--ink-2); }
+.rx-sum { display: inline-flex; gap: 6px; font-size: 12px; color: var(--ink-2); }
+.rx-title { font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
 .friend-bar .sub-chip b { font-weight: 700; color: var(--bad-ink); margin-left: 2px; }
 .fr-card .sheet-head p { font-size: 13px; color: var(--ink-2); margin-top: 2px; }
 .fr-sec { display: grid; gap: 8px; }
@@ -180,6 +195,7 @@
         await refreshFriends();
         await pullOwnShelf(); // сначала забираем свои оценки с сервера, потом отправляем общий список
         pushShelf();
+        loadReacts(F.me.id, true).then(() => decorateOwn());
       } catch (e) {}
     }
     if (F.view !== 'me' && !F.friends.some((f) => f.id === F.view)) setView('me');
@@ -311,7 +327,8 @@
     if (F.loading.has(id) || (F.shelves.has(id) && !force)) return;
     F.loading.add(id);
     try {
-      F.shelves.set(id, await api('/shelf/' + encodeURIComponent(id)));
+      const [sh] = await Promise.all([api('/shelf/' + encodeURIComponent(id)), loadReacts(id, true)]);
+      F.shelves.set(id, sh);
     } catch (e) {
       F.shelves.set(id, { error: e.message, ratings: [] });
     }
@@ -531,6 +548,83 @@
     imgs.forEach((img) => photoObs.observe(img));
   }
 
+  // ---------- реакции: 🔥 / 💀 / «не согласен» и короткий комментарий ----------
+  const RX = [['fire', '🔥', 'огонь'], ['skull', '💀', 'жесть'], ['nope', '🙅', 'не согласен']];
+  const rxIcon = (k) => (RX.find((x) => x[0] === k) || [])[1] || '';
+  F.reacts = new Map(); // id владельца -> [{ rid, from, emoji, text, at }]
+  async function loadReacts(uid, force) {
+    if (!F.token || !uid || (F.reacts.has(uid) && !force)) return F.reacts.get(uid) || [];
+    try { F.reacts.set(uid, (await api('/reacts/' + encodeURIComponent(uid))).items || []); } catch (e) { F.reacts.set(uid, []); }
+    return F.reacts.get(uid);
+  }
+  const reactsOf = (uid, rid) => (F.reacts.get(uid) || []).filter((x) => x.rid === rid);
+  function rxSummary(list) {
+    if (!list.length) return '';
+    const parts = RX.map(([k, ico]) => { const n = list.filter((x) => x.emoji === k).length; return n ? `${ico}${n}` : ''; }).filter(Boolean);
+    const c = list.filter((x) => x.text).length;
+    if (c) parts.push(`💬${c}`);
+    return `<span class="rx-sum" title="Реакции друзей">${parts.join(' ')}</span>`;
+  }
+  const rxComments = (list) => {
+    const withText = list.filter((x) => x.text || x.emoji);
+    return withText.length ? `<ul class="rx-list">${withText.map((x) => `<li><b>${esc(x.from.username)}</b> ${rxIcon(x.emoji)} ${x.text ? `<span>${esc(x.text)}</span>` : ''}</li>`).join('')}</ul>` : '';
+  };
+  // блок на доске друга: свои кнопки, своё поле и чужие реакции
+  function rxBlock(uid, rid) {
+    const list = reactsOf(uid, rid);
+    const mine = list.find((x) => F.me && x.from.id === F.me.id) || {};
+    const others = list.filter((x) => !(F.me && x.from.id === F.me.id));
+    return `<div class="rx-title">Твоя реакция</div>
+      <div class="rx-btns">${RX.map(([k, ico, label]) => { const n = list.filter((x) => x.emoji === k).length; return `<button type="button" data-rx-emoji="${k}" aria-pressed="${mine.emoji === k}">${ico} ${label}${n ? ` <b>${n}</b>` : ''}</button>`; }).join('')}</div>
+      <form class="rx-form" data-rx-form><input type="text" maxlength="140" enterkeyhint="send" placeholder="Пара слов о его оценке…" value="${esc(mine.text || '')}" aria-label="Комментарий к оценке"><button type="submit">${mine.text ? 'Изменить' : 'Отправить'}</button></form>
+      ${rxComments(others)}`;
+  }
+  async function sendReact(uid, rid, emoji, text) {
+    const list = F.reacts.get(uid) || [];
+    const prev = list.find((x) => x.rid === rid && F.me && x.from.id === F.me.id);
+    try {
+      await api('/react/' + encodeURIComponent(uid) + '/' + encodeURIComponent(rid), 'PUT', { emoji, text });
+    } catch (e) { toast(e.message); return; }
+    const rest = list.filter((x) => x !== prev);
+    if (emoji || text) rest.unshift({ rid, from: { id: F.me.id, username: F.me.username }, emoji, text, at: Date.now() });
+    F.reacts.set(uid, rest);
+    const box = fboard.querySelector(`.rx[data-rx="${CSS.escape(rid)}"]`);
+    if (box) box.innerHTML = rxBlock(uid, rid);
+    const sum = fboard.querySelector(`.entry[data-rid="${CSS.escape(rid)}"] .rx-sum-slot`);
+    if (sum) sum.innerHTML = rxSummary(reactsOf(uid, rid));
+  }
+  fboard.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-rx-emoji]');
+    if (!b || !F.view || F.view === 'me') return;
+    const rid = b.closest('.rx').dataset.rx;
+    const mine = reactsOf(F.view, rid).find((x) => F.me && x.from.id === F.me.id) || {};
+    const k = b.dataset.rxEmoji;
+    sendReact(F.view, rid, mine.emoji === k ? null : k, mine.text || '');
+  });
+  fboard.addEventListener('submit', (e) => {
+    const form = e.target.closest('[data-rx-form]');
+    if (!form || !F.view || F.view === 'me') return;
+    e.preventDefault();
+    const rid = form.closest('.rx').dataset.rx;
+    const mine = reactsOf(F.view, rid).find((x) => F.me && x.from.id === F.me.id) || {};
+    sendReact(F.view, rid, mine.emoji || null, form.querySelector('input').value.trim());
+    form.querySelector('input').blur();
+  });
+  // свои оценки в рейтинге: что сказали друзья
+  function decorateOwn() {
+    if (!F.me || state.sfilter === 'mine' && F.view !== 'me') return;
+    const list = F.reacts.get(F.me.id);
+    if (!list || !list.length) return;
+    el.board.querySelectorAll('.entry[data-id]').forEach((li) => {
+      const got = list.filter((x) => x.rid === li.dataset.id);
+      if (!got.length || li.querySelector('.rx-own')) return;
+      const sub = li.querySelector('.e-sub');
+      if (sub) sub.insertAdjacentHTML('beforeend', rxSummary(got));
+      const body = li.querySelector('.e-body');
+      if (body) body.insertAdjacentHTML('beforeend', `<div class="rx rx-own"><div class="rx-title">Друзья о твоей оценке</div>${rxComments(got)}</div>`);
+    });
+  }
+
   function friendEntryHTML(r, rank) {
     const t = r.total;
     const scores = Array.isArray(r.scores) ? r.scores : [];
@@ -547,12 +641,12 @@
       </div>` : '';
     return `<li class="entry" data-rid="${esc(r.id || '')}"><details><summary><span class="sum">
 <span class="rank">${rank}</span>
-<span class="e-main">${friendPhoto(r, 'thumb')}<span class="e-text"><span class="e-name">${r.fav ? '<span class="fav-star-inline">★</span>' : ''}${esc(r.name)}</span><span class="e-sub"><span>${esc(meta)}</span>${r.catLabel ? `<span class="tag">${esc(r.catLabel)}</span>` : ''}${r.status ? `<span class="tag status-tag">${esc(r.status)}</span>` : ''}${r.meta ? `<span class="tag meta-tag">${esc(r.meta)}</span>` : ''}</span></span></span>
+<span class="e-main">${friendPhoto(r, 'thumb')}<span class="e-text"><span class="e-name">${r.fav ? '<span class="fav-star-inline">★</span>' : ''}${esc(r.name)}</span><span class="e-sub"><span>${esc(meta)}</span><span class="rx-sum-slot">${rxSummary(reactsOf(F.view, r.id))}</span>${r.catLabel ? `<span class="tag">${esc(r.catLabel)}</span>` : ''}${r.status ? `<span class="tag status-tag">${esc(r.status)}</span>` : ''}${r.meta ? `<span class="tag meta-tag">${esc(r.meta)}</span>` : ''}</span></span></span>
 <span class="spark" aria-hidden="true">${spark}</span>
 <span class="badge" data-tier="${tierT(t)}">${t != null ? fmt(t) : '—'}</span>
 ${ICON.chev}
 </span></summary>
-<div class="e-body">${friendPhoto(r, 'body')}<ul class="bd">${bd}</ul>${pc}${r.note ? `<div class="e-note"><span class="label">Заметки</span><p>${esc(r.note)}</p></div>` : ''}</div>
+<div class="e-body">${friendPhoto(r, 'body')}<ul class="bd">${bd}</ul>${pc}${r.note ? `<div class="e-note"><span class="label">Заметки</span><p>${esc(r.note)}</p></div>` : ''}<div class="rx" data-rx="${esc(r.id || '')}">${rxBlock(F.view, r.id)}</div></div>
 </details></li>`;
   }
 
@@ -599,6 +693,7 @@ ${ICON.chev}
   }
 
   function afterBoard() {
+    try { decorateOwn(); } catch (e) {}
     const mine = state.sfilter === 'mine';
     bar.hidden = !mine;
     if (!mine || F.view === 'me') {

@@ -118,6 +118,37 @@ addEventListener('pagereveal', function (e) {
   --good: #2E9E5B; --mid: #D99A12; --bad: #DE5340; --bad-ink: #B13628; --on-tier: #2E1D14;
   color-scheme: light;
 }
+/* Тёмные пары новых светлых тем: система в тёмном режиме — тема темнеет в своих цветах */
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="mint"] {
+    --bg: #0B1612; --dot: #16261F; --panel: #111F19; --panel-2: #172821;
+    --ink: #E3F2EC; --ink-2: #9DBDB1; --ink-3: #65857A; --line: #22382F; --cell: #1E3229;
+    --accent: #3DD6A6; --accent-soft: #143A2F;
+    --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #0B1612;
+    color-scheme: dark;
+  }
+  :root[data-theme="lavender"] {
+    --bg: #110E1C; --dot: #1F1A32; --panel: #171328; --panel-2: #1E1933;
+    --ink: #ECE8FA; --ink-2: #ADA4C8; --ink-3: #766D92; --line: #2C2645; --cell: #27213E;
+    --accent: #A98BFF; --accent-soft: #2A2150;
+    --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #110E1C;
+    color-scheme: dark;
+  }
+  :root[data-theme="sky"] {
+    --bg: #0A121C; --dot: #15212F; --panel: #0F1A27; --panel-2: #152232;
+    --ink: #E4EEF8; --ink-2: #9CB2C9; --ink-3: #637B94; --line: #213247; --cell: #1B2B3E;
+    --accent: #5AB2FF; --accent-soft: #14304D;
+    --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #0A121C;
+    color-scheme: dark;
+  }
+  :root[data-theme="peach"] {
+    --bg: #170F0B; --dot: #2A1D16; --panel: #1F1510; --panel-2: #271B15;
+    --ink: #F6EAE2; --ink-2: #C7AE9F; --ink-3: #8D7365; --line: #3A2A21; --cell: #33251D;
+    --accent: #FF8F57; --accent-soft: #45261A;
+    --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #170F0B;
+    color-scheme: dark;
+  }
+}
 /* Motion shared by all Casual Hub pages (same block in /index.html and mnenie/index.html) */
 /* Between pages the page slides sideways, no fading: forward to the left, back to the right */
 @view-transition { navigation: auto; }

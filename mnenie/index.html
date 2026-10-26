@@ -623,6 +623,37 @@ addEventListener('pagereveal', function (e) {
   --good: #2E9E5B; --mid: #D99A12; --bad: #DE5340; --bad-ink: #B13628; --on-tier: #2E1D14;
   color-scheme: light;
 }
+/* Тёмные пары новых светлых тем: система в тёмном режиме — тема темнеет в своих цветах */
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="mint"] {
+    --bg: #0B1612; --dot: #16261F; --panel: #111F19; --panel-2: #172821;
+    --ink: #E3F2EC; --ink-2: #9DBDB1; --ink-3: #65857A; --line: #22382F; --cell: #1E3229;
+    --accent: #3DD6A6; --accent-soft: #143A2F;
+    --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #0B1612;
+    color-scheme: dark;
+  }
+  :root[data-theme="lavender"] {
+    --bg: #110E1C; --dot: #1F1A32; --panel: #171328; --panel-2: #1E1933;
+    --ink: #ECE8FA; --ink-2: #ADA4C8; --ink-3: #766D92; --line: #2C2645; --cell: #27213E;
+    --accent: #A98BFF; --accent-soft: #2A2150;
+    --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #110E1C;
+    color-scheme: dark;
+  }
+  :root[data-theme="sky"] {
+    --bg: #0A121C; --dot: #15212F; --panel: #0F1A27; --panel-2: #152232;
+    --ink: #E4EEF8; --ink-2: #9CB2C9; --ink-3: #637B94; --line: #213247; --cell: #1B2B3E;
+    --accent: #5AB2FF; --accent-soft: #14304D;
+    --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #0A121C;
+    color-scheme: dark;
+  }
+  :root[data-theme="peach"] {
+    --bg: #170F0B; --dot: #2A1D16; --panel: #1F1510; --panel-2: #271B15;
+    --ink: #F6EAE2; --ink-2: #C7AE9F; --ink-3: #8D7365; --line: #3A2A21; --cell: #33251D;
+    --accent: #FF8F57; --accent-soft: #45261A;
+    --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #170F0B;
+    color-scheme: dark;
+  }
+}
 /* Theme picker */
 .theme-pick { position: relative; }
 .theme-pick > summary { list-style: none; }
@@ -2852,8 +2883,8 @@ function renderCats() {
     if (state.catAsk === c.id) {
       return `<span class="cat-ask" role="group" aria-label="Удаление категории">${catDelText(c)}<button type="button" class="btn small danger-solid" data-act="catx-yes" data-id="${esc(c.id)}">Да</button><button type="button" class="btn small ghost" data-act="catx-no">Нет</button></span>`;
     }
-    const off = editing && c.id !== form.cat;
-    const chip = `<button type="button" class="chip-btn" data-cat="${esc(c.id)}" aria-pressed="${c.id === form.cat}"${off ? ' disabled title="У сохранённой оценки категорию не поменять"' : ''}>${name}</button>`;
+    const move = editing && c.id !== form.cat;
+    const chip = `<button type="button" class="chip-btn" data-cat="${esc(c.id)}" aria-pressed="${c.id === form.cat}"${move ? ' title="Перенести оценку в эту категорию"' : ''}>${name}</button>`;
     return canDel
       ? `<span class="cat-chip">${chip}<button type="button" class="cat-x" data-act="catx" data-id="${esc(c.id)}" aria-label="Удалить категорию «${name}»" title="Удалить категорию">${CAT_X}</button></span>`
       : chip;
@@ -3685,8 +3716,52 @@ function repairOverwrittenCats() {
   saveLocalRatings();
   setTimeout(() => toast(made === 1 ? 'Вернул оценкам их прежнюю категорию, которую перезаписал шаблон' : `Вернул оценкам их прежние категории (${made}), которые перезаписал шаблон`), 600);
 }
+// Перенос сохранённой оценки в другую категорию: баллы, заметки и веса переходят на критерии
+// с тем же названием, остальные оценённые критерии остаются у оценки своими — ничего не теряется.
+function moveRatingCat(id) {
+  const nc = state.cats.find(c => c.id === id);
+  if (!nc) return;
+  const wasMusic = formMusic();
+  const rows = formRows();
+  const byName = new Map(nc.criteria.map(k => [keyOf(k.name), k.id]));
+  const own = new Set(nc.criteria.map(k => k.id));
+  const used = new Set();
+  const scores = {}, notes = {}, weights = {}, extra = [];
+  for (const r of rows) {
+    let to = byName.get(keyOf(r.name));
+    if (!to || used.has(to)) to = own.has(r.id) && !used.has(r.id) ? r.id : null;
+    const has = form.scores[r.id] != null || !!form.notes[r.id];
+    const target = to || r.id;
+    if (to) used.add(to);
+    if (form.scores[r.id] != null) scores[target] = form.scores[r.id];
+    if (form.notes[r.id]) notes[target] = form.notes[r.id];
+    if (form.weights[r.id]) weights[target] = form.weights[r.id];
+    if (!to && has) extra.push({ id: r.id, name: r.name, desc: r.desc || '' });
+  }
+  form.cat = id;
+  form.scores = scores; form.notes = notes; form.weights = weights; form.extra = extra;
+  form.ownOnly = false;
+  form.extraCatName = '';
+  // из музыки в другую категорию: исполнитель остаётся в названии
+  if (wasMusic && !isMusicCat(nc) && (form.artist || '').trim()) {
+    form.name = composeName(form.artist.trim(), form.name.trim());
+    form.artist = '';
+    if (el.name) el.name.value = form.name;
+  }
+  if (!statusFits(form.status)) form.status = '';
+  state.catDelConfirm = false;
+  renderStatusSet();
+  renderArtist();
+  renderCats();
+  renderCrit();
+  updateTotal();
+  updateNameState();
+  scheduleDraft();
+  toast(`Оценка переедет в «${nc.name}», когда нажмёшь «Обновить»`);
+}
 function switchCat(id) {
-  if (form.editingId || id === form.cat || !state.cats.some(c => c.id === id)) return;
+  if (id === form.cat || !state.cats.some(c => c.id === id)) return;
+  if (form.editingId) { if (state.editCat) toggleEditCat(); moveRatingCat(id); return; }
   const prev = currentCat();
   if (prev && state.editCat) normalizeCat(prev);
   form.cat = id;

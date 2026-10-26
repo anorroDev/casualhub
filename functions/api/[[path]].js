@@ -22,6 +22,8 @@ async function ensureSchema(env) {
     env.DB.prepare('CREATE TABLE IF NOT EXISTS shelves (user_id TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at INTEGER NOT NULL)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS photos (key TEXT PRIMARY KEY, user_id TEXT NOT NULL, data TEXT NOT NULL, updated_at INTEGER NOT NULL)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS attempts (key TEXT PRIMARY KEY, count INTEGER NOT NULL, reset_at INTEGER NOT NULL)'),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS reactions (owner_id TEXT NOT NULL, rid TEXT NOT NULL, from_id TEXT NOT NULL, emoji TEXT, text TEXT, at INTEGER NOT NULL, PRIMARY KEY (owner_id, rid, from_id))'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS reactions_from ON reactions(from_id)'),
   ]);
   const { results } = await env.DB.prepare('PRAGMA table_info(users)').all();
   if (!results.some((c) => c.name === 'email')) await env.DB.prepare('ALTER TABLE users ADD COLUMN email TEXT').run();
@@ -75,6 +77,7 @@ const LIMITS = {
   loginAcc: { max: 10, win: 15 * 60e3 },  // неудачных входов в один аккаунт
   register: { max: 10, win: 60 * 60e3 },  // регистраций (и попыток на занятые почту/ник) с одного адреса
   friendReq: { max: 40, win: 10 * 60e3 }, // заявок в друзья (перебор ников)
+  react: { max: 120, win: 10 * 60e3 },    // реакций и комментариев
 };
 const clientIp = (request) => request.headers.get('CF-Connecting-IP') || 'local';
 async function overLimit(env, key, kind) {
@@ -356,6 +359,36 @@ const routes = {
     await env.DB.prepare('DELETE FROM photos WHERE key = ? OR key = ?').bind(`${me.id}:${arg}`, `${me.id}:${arg}.t`).run();
     return json({ ok: true });
   },
+  // ---------- реакции: друг ставит 🔥 / 💀 / «не согласен» и может оставить короткий комментарий ----------
+  async 'PUT /react/:uid/:rid'({ env, request, me, arg }) {
+    const [uid, rid] = arg;
+    if (uid === me.id) return fail(400, 'На свои оценки реакции не ставятся.');
+    if (!(await canSee(env, me, uid))) return fail(403, 'Реагировать можно только на оценки друзей.');
+    const wait = await overLimit(env, 'react:' + me.id, 'react');
+    if (wait) return tooMany(wait);
+    await hit(env, 'react:' + me.id, 'react');
+    const body = await readBody(request);
+    const emoji = REACTIONS.includes(body.emoji) ? body.emoji : null;
+    const text = String(body.text || '').replace(/\s+/g, ' ').trim().slice(0, 140);
+    if (!emoji && !text) {
+      await env.DB.prepare('DELETE FROM reactions WHERE owner_id = ? AND rid = ? AND from_id = ?').bind(uid, rid, me.id).run();
+      return json({ ok: true, removed: true });
+    }
+    const now = Date.now();
+    await env.DB.prepare(
+      'INSERT INTO reactions (owner_id, rid, from_id, emoji, text, at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(owner_id, rid, from_id) DO UPDATE SET emoji = excluded.emoji, text = excluded.text, at = excluded.at'
+    ).bind(uid, rid, me.id, emoji, text || null, now).run();
+    return json({ ok: true, at: now });
+  },
+  // все реакции на оценки человека: видят он сам и его друзья
+  async 'GET /reacts/:id'({ env, me, arg }) {
+    if (!(await canSee(env, me, arg))) return fail(403, 'Реакции видны только друзьям.');
+    const { results } = await env.DB.prepare(
+      'SELECT r.rid, r.from_id, u.username, r.emoji, r.text, r.at FROM reactions r JOIN users u ON u.id = r.from_id WHERE r.owner_id = ? ORDER BY r.at DESC LIMIT 2000'
+    ).bind(arg).all();
+    return json({ items: results.map((x) => ({ rid: x.rid, from: { id: x.from_id, username: x.username }, emoji: x.emoji || null, text: x.text || '', at: x.at })) });
+  },
+
   // лента: свежие оценки друзей
   async 'GET /feed'({ env, me }) {
     const { results: fr } = await env.DB.prepare(
@@ -377,6 +410,30 @@ const routes = {
           rating: { id: r.id, name: String(r.name).slice(0, 120), total: r.total ?? null, cat: r.catLabel || '', status: r.status || '', fav: !!r.fav, photo: r.photo && (r.photo.remote || r.photo.url) ? { remote: !!r.photo.remote, url: r.photo.url || '' } : null, edited: !!(r.updatedAt && r.createdAt && stampOf({ updatedAt: r.updatedAt }) - stampOf({ createdAt: r.createdAt }) > 60e3) },
         });
       });
+    }
+    // реакции на эти оценки друзей: счётчики у строк ленты
+    const rids = items.filter((x) => x.kind === 'rating').map((x) => x.user.id + ':' + x.rating.id);
+    if (rids.length) {
+      const { results: rx } = await env.DB.prepare(`SELECT owner_id, rid, emoji, text FROM reactions WHERE owner_id IN (${marks})`).bind(...ids).all();
+      const sum = new Map();
+      for (const x of rx) {
+        const k = x.owner_id + ':' + x.rid;
+        const o = sum.get(k) || { fire: 0, skull: 0, nope: 0, text: 0 };
+        if (x.emoji && o[x.emoji] != null) o[x.emoji]++;
+        if (x.text) o.text++;
+        sum.set(k, o);
+      }
+      items.forEach((x) => { if (x.kind === 'rating') { const o = sum.get(x.user.id + ':' + x.rating.id); if (o) x.reacts = o; } });
+    }
+    // друзья отреагировали на мои оценки
+    const { results: mineRx } = await env.DB.prepare(`SELECT rid, from_id, emoji, text, at FROM reactions WHERE owner_id = ? AND from_id IN (${marks}) ORDER BY at DESC LIMIT 15`).bind(me.id, ...ids).all();
+    if (mineRx.length) {
+      const myShelf = readShelf(await env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(me.id).first());
+      const nameOf = new Map(myShelf.ratings.map((r) => [r.id, r.name]));
+      for (const x of mineRx) {
+        if (!nameOf.has(x.rid)) continue;
+        items.push({ kind: 'react', at: x.at, user: { id: x.from_id, username: names.get(x.from_id) }, react: { rid: x.rid, name: String(nameOf.get(x.rid)).slice(0, 120), emoji: x.emoji || null, text: x.text || '' } });
+      }
     }
     items.sort((a, b) => b.at - a.at);
     return json({ friends: fr.length, items: items.slice(0, 40) });
@@ -402,6 +459,7 @@ const routes = {
 
 const MAX_PHOTO = 1900000; // символов в data URL, предел строки в D1 около 2 МБ
 const RID_RE = /^[\w.-]{1,80}$/;
+const REACTIONS = ['fire', 'skull', 'nope']; // 🔥 огонь, 💀 жесть, 🙅 не согласен
 const stampOf = (r) => +new Date(r.updatedAt || r.createdAt || 0) || 0;
 function readShelf(row) {
   if (!row) return { ratings: [], deleted: [] };
@@ -454,6 +512,8 @@ export async function onRequest({ request, env, params }) {
   if (!routes[key] && segs.length === 2 && segs[0] === 'shelf') { key = `${request.method} /shelf/:id`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'photo' && RID_RE.test(segs[1])) { key = `${request.method} /photo/:rid`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'photo' && RID_RE.test(segs[2])) { key = `${request.method} /photo/:uid/:rid`; arg = [segs[1], segs[2]]; }
+  if (!routes[key] && segs.length === 3 && segs[0] === 'react' && RID_RE.test(segs[2])) { key = `${request.method} /react/:uid/:rid`; arg = [segs[1], segs[2]]; }
+  if (!routes[key] && segs.length === 2 && segs[0] === 'reacts') { key = `${request.method} /reacts/:id`; arg = segs[1]; }
   const handler = routes[key];
   if (!handler) return fail(404, 'Нет такого адреса.');
 

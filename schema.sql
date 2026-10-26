@@ -54,3 +54,15 @@ CREATE TABLE IF NOT EXISTS attempts (
   reset_at INTEGER NOT NULL        -- когда окно обнуляется
 );
 
+
+-- Реакции друзей на оценки: 🔥 / 💀 / «не согласен» (fire / skull / nope) и короткий комментарий
+CREATE TABLE IF NOT EXISTS reactions (
+  owner_id TEXT NOT NULL,          -- чья оценка
+  rid TEXT NOT NULL,               -- id оценки
+  from_id TEXT NOT NULL,           -- кто отреагировал
+  emoji TEXT,
+  text TEXT,                       -- до 140 символов
+  at INTEGER NOT NULL,
+  PRIMARY KEY (owner_id, rid, from_id)
+);
+CREATE INDEX IF NOT EXISTS reactions_from ON reactions(from_id);
