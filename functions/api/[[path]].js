@@ -240,7 +240,7 @@ const routes = {
   // Оценки с разных устройств объединяются: по id остаётся более свежая версия,
   // удалённые (deleted: [{id, at}]) запоминаются и больше не возвращаются, их фото стираются.
   async 'PUT /shelf'({ env, request, me }) {
-    const { ratings, deleted } = await readBody(request);
+    const { ratings, deleted, cats } = await readBody(request);
     if (!Array.isArray(ratings)) return fail(400, 'Нужен список оценок.');
     const row = await env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(me.id).first();
     const old = readShelf(row);
@@ -258,7 +258,12 @@ const routes = {
     // отметки об удалении старше полугода больше не нужны: все устройства давно синхронизировались
     const keepAfter = Date.now() - 183 * 864e5;
     const tomb = [...del.entries()].filter(([, at]) => at > keepAfter).map(([id, at]) => ({ id, at }));
-    const data = JSON.stringify({ ratings: merged, deleted: tomb });
+    // категории с критериями: целый список, остаётся более свежий (at — время правки на устройстве)
+    let catsOut = old.cats;
+    if (cats && Array.isArray(cats.items) && Number.isFinite(+cats.at) && (!old.cats || +cats.at > +old.cats.at)) {
+      catsOut = { items: cats.items.slice(0, 40), at: +cats.at };
+    }
+    const data = JSON.stringify(catsOut ? { ratings: merged, deleted: tomb, cats: catsOut } : { ratings: merged, deleted: tomb });
     if (data.length > MAX_SHELF) return fail(413, 'Слишком много данных, убери длинные заметки.');
     const now = Date.now();
     await env.DB.prepare(
@@ -272,7 +277,7 @@ const routes = {
       // вместе с фото уходит и его превью «<id>.t»
       await env.DB.batch(gone.flatMap((id) => [`${me.id}:${id}`, `${me.id}:${id}.t`].map((k) => env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(k))));
     }
-    return json({ ok: true, updatedAt: now, count: merged.length });
+    return json({ ok: true, updatedAt: now, count: merged.length, catsAt: catsOut ? catsOut.at : null });
   },
 
   async 'GET /shelf/:id'({ env, me, arg }) {
@@ -281,9 +286,40 @@ const routes = {
     if (!user) return fail(404, 'Пользователь не найден.');
     const shelf = await env.DB.prepare('SELECT data, updated_at FROM shelves WHERE user_id = ?').bind(arg).first();
     const s = readShelf(shelf);
-    return json({ user, ratings: s.ratings, deleted: s.deleted, updatedAt: shelf ? shelf.updated_at : null });
+    // свои категории видит только хозяин
+    return json({ user, ratings: s.ratings, deleted: s.deleted, cats: arg === me.id ? s.cats || null : undefined, updatedAt: shelf ? shelf.updated_at : null });
   },
 
+  // исполнители по имени: имя и фото, без заглушек Genius вместо фото
+  async 'GET /genius/artist'({ env, request }) {
+    if (!env.GENIUS_TOKEN) return fail(503, 'Genius не подключён.');
+    const q = (new URL(request.url).searchParams.get('q') || '').trim().slice(0, 80);
+    if (q.length < 2) return json({ artists: [] });
+    const res = await geniusFetch(env, 'https://api.genius.com/search?q=' + encodeURIComponent(q), 86400);
+    if (!res.ok) return fail(502, 'Genius не ответил.');
+    const d = await res.json();
+    const seen = new Set();
+    const artists = [];
+    for (const h of (d.response && d.response.hits) || []) {
+      const a = h && h.result && h.result.primary_artist;
+      if (!a || seen.has(a.id) || typeof a.image_url !== 'string' || /default_avatar|default_cover/.test(a.image_url)) continue;
+      seen.add(a.id);
+      artists.push({ name: String(a.name || '').slice(0, 80), image: a.image_url });
+      if (artists.length >= 4) break;
+    }
+    return json({ artists });
+  },
+  // картинка с Genius в виде data URL: браузер не может скачать её напрямую из-за CORS
+  async 'GET /genius/img'({ env, request }) {
+    const u = new URL(request.url).searchParams.get('u') || '';
+    if (!GENIUS_IMG.test(u)) return fail(400, 'Это не картинка Genius.');
+    const res = await geniusFetch(env, u, 604800);
+    const type = (res.headers.get('content-type') || '').split(';')[0];
+    if (!res.ok || !/^image\/(jpeg|png|webp|gif)$/.test(type)) return fail(502, 'Картинка не загрузилась.');
+    const buf = await res.arrayBuffer();
+    if (buf.byteLength > 3e6) return fail(413, 'Картинка слишком большая.');
+    return json({ data: `data:${type};base64,${b64(buf)}` });
+  },
   // фото оценки: кладёт и удаляет хозяин, смотрят хозяин и друзья
   async 'PUT /photo/:rid'({ env, request, me, arg }) {
     const { data } = await readBody(request);
@@ -350,8 +386,31 @@ function readShelf(row) {
   if (!row) return { ratings: [], deleted: [] };
   const d = JSON.parse(row.data);
   if (Array.isArray(d)) return { ratings: d, deleted: [] }; // старый формат: просто список
-  return { ratings: Array.isArray(d.ratings) ? d.ratings : [], deleted: Array.isArray(d.deleted) ? d.deleted : [] };
+  const cats = d.cats && Array.isArray(d.cats.items) && Number.isFinite(+d.cats.at) ? d.cats : null;
+  return { ratings: Array.isArray(d.ratings) ? d.ratings : [], deleted: Array.isArray(d.deleted) ? d.deleted : [], cats };
 }
+// ---------- Genius: фото исполнителей ----------
+// Токен лежит в секрете GENIUS_TOKEN и наружу не уходит. Поиск доступен только вошедшим, ответы кэшируются на сутки.
+const GENIUS_IMG = /^https:\/\/(images|assets|t2)\.genius\.com\/|^https:\/\/images\.rapgenius\.com\//;
+async function geniusFetch(env, url, ttl) {
+  const cache = caches.default;
+  const key = new Request('https://genius-cache.casualhub/' + encodeURIComponent(url));
+  const hitRes = await cache.match(key);
+  if (hitRes) return hitRes;
+  const res = await fetch(url, { headers: url.startsWith('https://api.genius.com/') ? { authorization: 'Bearer ' + env.GENIUS_TOKEN } : {} });
+  if (!res.ok) return res;
+  const copy = new Response(res.body, res);
+  copy.headers.set('cache-control', 'public, max-age=' + ttl);
+  await cache.put(key, copy.clone());
+  return copy;
+}
+const b64 = (buf) => {
+  const u = new Uint8Array(buf);
+  let s = '';
+  for (let i = 0; i < u.length; i += 0x8000) s += String.fromCharCode.apply(null, u.subarray(i, i + 0x8000));
+  return btoa(s);
+};
+
 async function canSee(env, me, uid) {
   if (uid === me.id) return true;
   const row = await link(env, me.id, uid);

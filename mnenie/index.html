@@ -187,6 +187,24 @@ a.theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
 .artist-edit input:focus { outline: none; border-color: var(--accent); }
 .artist-edit p { margin: 0; font-size: 12.5px; color: var(--ink-3); }
 .e-thumb.ava { border-radius: 50%; }
+/* Подсказки: обложки из Apple Music и фото исполнителя с Genius */
+.cover-sugg { margin-top: 10px; }
+.cover-sugg .label { display: block; margin-bottom: 6px; }
+.cover-list { display: grid; grid-auto-flow: column; grid-auto-columns: 104px; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; scroll-snap-type: x proximity; }
+.cover-opt {
+  display: grid; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); color: var(--ink);
+  text-align: left; cursor: pointer; scroll-snap-align: start; transition: transform .25s cubic-bezier(.34, 1.56, .64, 1), border-color .15s;
+}
+.cover-opt:hover { border-color: var(--accent); }
+.cover-opt:active { transform: scale(.95); }
+.cover-opt img { width: 100%; aspect-ratio: 1; border-radius: 8px; object-fit: cover; background: var(--cell); }
+.cover-opt span { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 12px; font-weight: 600; line-height: 1.25; }
+.cover-opt small { font-size: 11px; color: var(--ink-3); }
+.artist-sugg { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; font-size: 12.5px; color: var(--ink-3); }
+.artist-sugg button { display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 10px 0 4px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel-2); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
+.artist-sugg button:hover { border-color: var(--accent); }
+.artist-sugg button img { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; }
+.artist-sugg .x { padding: 0 10px; color: var(--ink-3); }
 .tl-pic img.ava { border-radius: 50%; }
 .name-row .name-input { flex: 1; min-width: 0; }
 .fav-toggle {
@@ -1383,6 +1401,7 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
             </div>
             <button type="button" class="btn small ghost artist-edit-btn" id="artistEdit" hidden>Изменить</button>
           </div>
+          <div class="artist-sugg" id="artistSugg" hidden></div>
           <div class="artist-edit" id="artistEditBox" hidden></div>
           <input type="file" id="artistFile" class="vh" accept="image/*" tabindex="-1" aria-hidden="true">
         </div>
@@ -1411,6 +1430,7 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
         <p class="label" id="photoLabel">Фото</p>
         <input type="file" id="photoInput" class="vh" accept="image/*" aria-labelledby="photoLabel">
         <div class="photo-box" id="photoBox"></div>
+        <div class="cover-sugg" id="coverSugg" hidden></div>
       </div>
 
       <div class="crit-head">
@@ -3096,6 +3116,7 @@ function renderArtist() {
   el.artistAva.innerHTML = ava ? `<img src="${esc(ava)}" alt="">` : `${letter ? esc(letter) : '♪'}<span class="ava-cam">${CAMERA_SVG}</span>`;
   const known = !!keyOf(form.artist) && artistList().some(x => x.key === keyOf(form.artist));
   el.artistEdit.hidden = !known || !!artistEditing;
+  scheduleGenius();
   if (artistEditing && keyOf(artistEditing) !== keyOf(form.artist)) closeArtistEdit();
 }
 function hideArtistList() {
@@ -3141,6 +3162,124 @@ function closeArtistEdit() {
   artistEditing = null;
   el.artistEditBox.hidden = true;
   el.artistEditBox.replaceChildren();
+}
+
+/* ---------- Обложки из Apple Music (музыка) ---------- */
+// поиск iTunes без ключа; выбранная обложка скачивается и становится обычным фото оценки (с кадрированием и синхронизацией)
+let coverTimer = null, coverCtl = null, coverKey = '', coverItems = [];
+function coverQuery() {
+  if (!formMusic() || form.photo || !canPhoto() || photoBusy) return '';
+  const t = form.name.trim();
+  return t.length < 2 ? '' : `${(form.artist || '').trim()} ${t}`.trim();
+}
+function scheduleCovers() {
+  clearTimeout(coverTimer);
+  if (!coverQuery()) { if (coverItems.length || coverKey) { coverItems = []; coverKey = ''; renderCovers(); } return; }
+  coverTimer = setTimeout(findCovers, 650);
+}
+async function findCovers() {
+  const q = coverQuery();
+  const key = q + '|' + (form.status || '');
+  if (!q || key === coverKey) return;
+  coverKey = key;
+  if (coverCtl) coverCtl.abort();
+  const ctl = coverCtl = new AbortController();
+  const ent = form.status === 'Альбом' ? 'album' : form.status === 'Сингл' ? 'song' : 'album,song';
+  try {
+    const res = await fetch(`https://itunes.apple.com/search?media=music&entity=${ent}&limit=15&country=US&term=${encodeURIComponent(q)}`, { signal: ctl.signal });
+    const d = await res.json();
+    const seen = new Set();
+    coverItems = (d.results || []).filter(r => r && typeof r.artworkUrl100 === 'string').map(r => ({
+      title: String((r.wrapperType === 'collection' ? r.collectionName : r.trackName) || ''),
+      artist: String(r.artistName || ''),
+      kind: r.wrapperType === 'collection' ? 'Альбом' : 'Трек',
+      year: String(r.releaseDate || '').slice(0, 4),
+      genre: String(r.primaryGenreName || ''),
+      art: r.artworkUrl100.replace(/\/\d+x\d+bb\./, '/600x600bb.')
+    })).filter(c => /^https:\/\/[\w.-]+\.mzstatic\.com\//.test(c.art) && !seen.has(c.art) && seen.add(c.art)).slice(0, 8);
+  } catch (e) {
+    if (e && e.name === 'AbortError') return;
+    coverItems = [];
+  }
+  if (ctl === coverCtl) renderCovers();
+}
+function renderCovers() {
+  const box = $('coverSugg');
+  if (!box) return;
+  const show = coverItems.length > 0 && !!coverQuery();
+  box.hidden = !show;
+  if (!show) { box.replaceChildren(); return; }
+  box.innerHTML = `<span class="label">Обложки из Apple Music</span><div class="cover-list">${coverItems.map((c, i) => `<button type="button" class="cover-opt" data-cover="${i}" title="${esc(c.artist)} — ${esc(c.title)}"><img src="${esc(c.art.replace('/600x600bb.', '/200x200bb.'))}" alt="" loading="lazy" decoding="async"><span>${esc(c.title)}</span><small>${esc([c.kind, c.year].filter(Boolean).join(' · '))}</small></button>`).join('')}</div>`;
+}
+async function pickCover(i) {
+  const c = coverItems[i];
+  if (!c || photoBusy) return;
+  try {
+    const res = await fetch(c.art);
+    if (!res.ok) throw new Error('http');
+    const blob = await res.blob();
+    await setPhotoFromFile(new File([blob], 'cover.jpg', { type: blob.type || 'image/jpeg' }), false);
+    if (!form.photo) throw new Error('photo');
+    if (!(form.meta || '').trim()) { form.meta = [c.year, c.genre].filter(Boolean).join(', '); if (el.meta) el.meta.value = form.meta; }
+    coverItems = [];
+    renderCovers();
+    scheduleDraft();
+    toast('Обложка добавлена, можно выбрать пропорции');
+  } catch (_) {
+    toast('Обложка не загрузилась, попробуй другую');
+  }
+}
+
+/* ---------- Фото исполнителя с Genius ---------- */
+// работает только после входа в онлайн-аккаунт: запрос идёт через наш сервер, где лежит токен Genius
+let geniusTimer = null, geniusKey = '', geniusItems = [];
+const geniusSkip = new Set();
+function geniusWanted() {
+  const a = (form.artist || '').trim();
+  const api = window.casualApi;
+  const known = artistGet(a);
+  return formMusic() && a.length >= 2 && !(known && known.ava) && !geniusSkip.has(keyOf(a)) && !!api && api.online();
+}
+function scheduleGenius() {
+  clearTimeout(geniusTimer);
+  if (!geniusWanted()) { geniusItems = []; renderGenius(); return; }
+  if (keyOf(form.artist) === geniusKey) { renderGenius(); return; }
+  geniusTimer = setTimeout(findGenius, 700);
+}
+async function findGenius() {
+  const k = keyOf(form.artist);
+  if (!k || k === geniusKey) return;
+  geniusKey = k;
+  try {
+    const r = await window.casualApi.get('/genius/artist?q=' + encodeURIComponent(form.artist.trim()));
+    if (keyOf(form.artist) !== k) return;
+    geniusItems = ((r && r.artists) || []).filter(a => a && typeof a.image === 'string' && /^https:\/\//.test(a.image)).slice(0, 3);
+  } catch (_) { geniusItems = []; }
+  renderGenius();
+}
+function renderGenius() {
+  const box = $('artistSugg');
+  if (!box) return;
+  const show = geniusItems.length > 0 && geniusWanted();
+  box.hidden = !show;
+  if (!show) { box.replaceChildren(); return; }
+  box.innerHTML = `<span>Фото с Genius:</span>${geniusItems.map((a, i) => `<button type="button" data-genius="${i}" title="Поставить как аватарку исполнителя"><img src="${esc(a.image)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">${esc(a.name)}</button>`).join('')}<button type="button" class="x" data-genius="skip" aria-label="Не нужно">Не нужно</button>`;
+}
+async function pickGenius(i) {
+  const a = geniusItems[i], name = (form.artist || '').trim();
+  if (!a || !keyOf(name)) return;
+  try {
+    const r = await window.casualApi.get('/genius/img?u=' + encodeURIComponent(a.image));
+    if (!r || typeof r.data !== 'string') throw new Error('img');
+    const blob = await (await fetch(r.data)).blob();
+    const d = await artistAvaFromFile(new File([blob], 'artist.jpg', { type: blob.type || 'image/jpeg' }));
+    if (!d) return;
+    geniusItems = [];
+    artistSetAva(name, d);
+    toast(`Аватарка исполнителя «${name}» поставлена`);
+  } catch (_) {
+    toast('Фото с Genius не загрузилось, можно поставить своё');
+  }
 }
 
 /* ---------- Rendering: board ---------- */
@@ -4376,7 +4515,7 @@ el.cats.addEventListener('click', e => {
   if (act === 'newcat') newCategory();
   else if (b.dataset.cat) switchCat(b.dataset.cat);
 });
-el.name.addEventListener('input', () => { form.name = el.name.value; updateNameState(); scheduleDraft(); });
+el.name.addEventListener('input', () => { form.name = el.name.value; updateNameState(); scheduleDraft(); scheduleCovers(); });
 el.note.addEventListener('input', () => { form.note = el.note.value; autoGrow(el.note); scheduleDraft(); });
 el.name.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.isComposing) { e.preventDefault(); el.name.blur(); }
@@ -4770,6 +4909,7 @@ async function cropNow() {
   p.url = blob === p.orig ? p.origUrl : URL.createObjectURL(blob);
 }
 function renderPhoto() {
+  scheduleCovers();
   const p = form.photo;
   const can = canPhoto();
   el.photoField.hidden = !can && !p;
@@ -6026,6 +6166,13 @@ if (el.artist) {
     toast(`Аватарка исполнителя «${name.trim()}» сохранена`);
   });
   el.artistEdit.addEventListener('click', openArtistEdit);
+  $('artistSugg').addEventListener('click', e => {
+    const b = e.target.closest('[data-genius]');
+    if (!b) return;
+    if (b.dataset.genius === 'skip') { geniusSkip.add(keyOf(form.artist)); geniusItems = []; renderGenius(); return; }
+    pickGenius(+b.dataset.genius);
+  });
+  $('coverSugg').addEventListener('click', e => { const b = e.target.closest('[data-cover]'); if (b) pickCover(+b.dataset.cover); });
   el.artistEditBox.addEventListener('click', async e => {
     const b = e.target.closest('[data-aact]');
     if (!b) return;

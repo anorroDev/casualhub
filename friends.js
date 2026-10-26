@@ -88,6 +88,9 @@
   document.body.appendChild(sheet);
   const card = sheet.querySelector('#friendCard');
 
+  // для Мнения: запросы к серверу от имени вошедшего (фото исполнителей с Genius)
+  window.casualApi = { get: (path) => api(path), online: () => !!(F.me && F.token) };
+
   // ---------- сервер ----------
   async function api(path, method = 'GET', data, token = F.token) {
     const headers = { 'content-type': 'application/json' };
@@ -161,6 +164,7 @@
     try { await ready; } catch (e) {}
     let r;
     try { r = await api('/shelf/' + encodeURIComponent(F.me.id)); } catch (e) { return; }
+    pullCats(r && r.cats);
     const remote = r && Array.isArray(r.ratings) ? r.ratings : [];
     const remoteDeleted = r && Array.isArray(r.deleted) ? r.deleted : [];
     const stampOf = (x) => +new Date(x.updatedAt || x.createdAt || 0) || 0;
@@ -304,6 +308,51 @@
     return (h >>> 0).toString(36) + '.' + s.length.toString(36);
   }
   let rawSave = null; // сохранение без отправки на сервер, ставится в хуках внизу
+
+  // ---------- категории: общие для всех устройств аккаунта ----------
+  // На сервере лежит весь список категорий с критериями и время его правки (at), остаётся более свежий.
+  // Первая синхронизация на устройстве объединяет серверные категории со здешними, чтобы ничего не потерять.
+  const CATS_AT_KEY = 'ocenshik.catsAt.v1'; // { id аккаунта: время последней правки категорий на этом устройстве }
+  let rawSaveCats = null;
+  const catsAt = () => (F.me ? +readJSON(CATS_AT_KEY, {})[F.me.id] || 0 : 0);
+  const setCatsAt = (t) => { if (!F.me) return; const m = readJSON(CATS_AT_KEY, {}); m[F.me.id] = t; lsSet(CATS_AT_KEY, JSON.stringify(m)); };
+  function catsPayload() {
+    if (typeof serializeCats !== 'function' || !state.cats || !state.cats.length) return undefined;
+    return { items: serializeCats(), at: catsAt() };
+  }
+  function mergeCats(remote, local) {
+    const out = remote.map((c) => ({ ...c, criteria: c.criteria.map((k) => ({ ...k })) }));
+    for (const c of local) {
+      let t = out.find((x) => x.id === c.id) || out.find((x) => keyOf(x.name) === keyOf(c.name));
+      if (!t) { if (out.length < MAX_CATS) out.push({ ...c, criteria: c.criteria.map((k) => ({ ...k })) }); continue; }
+      for (const k of c.criteria) {
+        if (t.criteria.length >= MAX_CRIT) break;
+        if (!t.criteria.some((x) => x.id === k.id || keyOf(x.name) === keyOf(k.name))) t.criteria.push({ ...k });
+      }
+    }
+    return out;
+  }
+  function applyCats(items) {
+    state.cats = items;
+    (rawSaveCats || saveLocalCats)();
+    if (!form.editingId && !state.cats.some((c) => c.id === form.cat)) form.cat = state.cats[0].id;
+    try { renderForm(); } catch (e) {}
+    renderBoard();
+  }
+  function pullCats(rc) {
+    if (typeof parseCats !== 'function' || state.editCat) return;
+    const items = rc && Array.isArray(rc.items) ? parseCats({ items: rc.items }) : null;
+    const local = catsAt();
+    if (!items || !items.length) { if (!local) setCatsAt(Date.now()); return; } // на сервере пусто: отправим здешние
+    if (!local) {
+      const merged = mergeCats(items, state.cats);
+      if (JSON.stringify(merged) !== JSON.stringify(state.cats)) applyCats(merged);
+      setCatsAt(Date.now());
+    } else if (+rc.at > local) {
+      if (JSON.stringify(items) !== JSON.stringify(state.cats)) applyCats(items);
+      setCatsAt(+rc.at);
+    }
+  }
   function saveLocalRatingsQuiet() { return (rawSave || saveLocalRatings)(); }
   const ownsRating =(r) => !r.example && r.author && state.user && r.author.id === state.user.id;
   // гостевые оценки этого устройства переходят в аккаунт
@@ -384,7 +433,7 @@
     if (claimGuestRatings()) { saveLocalRatingsQuiet(); renderBoard(); }
     try {
       await uploadPhotos();
-      const r = await api('/shelf', 'PUT', { ratings: myRatings(), deleted: readJSON(DELETED_KEY, []) });
+      const r = await api('/shelf', 'PUT', { ratings: myRatings(), deleted: readJSON(DELETED_KEY, []), cats: catsPayload() });
       F.pushedAt = r.updatedAt;
       F.pushedCount = r.count;
     } catch (e) { say(e.message, true); }
@@ -803,6 +852,12 @@ ${ICON.chev}
     const o = window.saveLocalRatings;
     rawSave = o;
     window.saveLocalRatings = function () { const r = o.apply(this, arguments); schedulePush(); return r; };
+  }
+  // правка категорий здесь: новое время правки и отправка на сервер
+  if (typeof window.saveLocalCats === 'function') {
+    const o = window.saveLocalCats;
+    rawSaveCats = o;
+    window.saveLocalCats = function () { const r = o.apply(this, arguments); setCatsAt(Date.now()); schedulePush(); return r; };
   }
   // удаление запоминаем, чтобы оценка пропала и на других устройствах
   if (typeof window.removeRating === 'function') {
