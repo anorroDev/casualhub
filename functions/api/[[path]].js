@@ -296,7 +296,8 @@ const routes = {
     const q = (new URL(request.url).searchParams.get('q') || '').trim().slice(0, 80);
     if (q.length < 2) return json({ artists: [] });
     const res = await geniusFetch(env, 'https://api.genius.com/search?q=' + encodeURIComponent(q), 86400);
-    if (!res.ok) return fail(502, 'Genius не ответил.');
+    if (res.status === 401) return fail(502, 'Genius не принял токен (401): в секрете GENIUS_TOKEN нужен Client Access Token.');
+    if (!res.ok) return fail(502, `Genius не ответил (${res.status}).`);
     const d = await res.json();
     const seen = new Set();
     const artists = [];
@@ -397,7 +398,9 @@ async function geniusFetch(env, url, ttl) {
   const key = new Request('https://genius-cache.casualhub/' + encodeURIComponent(url));
   const hitRes = await cache.match(key);
   if (hitRes) return hitRes;
-  const res = await fetch(url, { headers: url.startsWith('https://api.genius.com/') ? { authorization: 'Bearer ' + env.GENIUS_TOKEN } : {} });
+  const headers = { 'user-agent': 'CasualHub/1.0 (+https://casualhub.pages.dev)', accept: url.startsWith('https://api.genius.com/') ? 'application/json' : 'image/*' };
+  if (url.startsWith('https://api.genius.com/')) headers.authorization = 'Bearer ' + String(env.GENIUS_TOKEN).trim();
+  const res = await fetch(url, { headers });
   if (!res.ok) return res;
   const copy = new Response(res.body, res);
   copy.headers.set('cache-control', 'public, max-age=' + ttl);
