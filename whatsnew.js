@@ -6,7 +6,7 @@
 
   function load() {
     if (!cache) {
-      cache = fetch('/whatsnew.html', { cache: 'no-cache' })
+      cache = fetch('/whatsnew', { cache: 'no-cache' }) // Cloudflare отдаёт whatsnew.html по адресу без .html
         .then((r) => (r.ok ? r.text() : Promise.reject(new Error(r.status))))
         .then((html) => {
           const box = document.createElement('div');

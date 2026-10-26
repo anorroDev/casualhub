@@ -339,7 +339,7 @@ h1, h2, p { margin: 0; }
 .pv-under small { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
 .pv-under strong {
   font-family: var(--font-display); font-weight: 800; font-size: clamp(26px, 3.4vw, 36px); line-height: .95;
-  overflow-wrap: anywhere; display: block; min-height: 1.9em;
+  overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; display: block; min-height: 1.9em;
 }
 .pv-under strong { transform-origin: 0 100%; }
 .wheel { position: relative; width: 168px; height: 168px; animation: wheel-in 1s var(--spring) .8s backwards; }

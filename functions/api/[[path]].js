@@ -255,7 +255,9 @@ const routes = {
       if (!cur || stampOf(r) >= stampOf(cur)) byId.set(r.id, r);
     }
     const merged = [...byId.values()].filter((r) => !(del.has(r.id) && stampOf(r) <= del.get(r.id)));
-    const tomb = [...del.entries()].map(([id, at]) => ({ id, at }));
+    // отметки об удалении старше полугода больше не нужны: все устройства давно синхронизировались
+    const keepAfter = Date.now() - 183 * 864e5;
+    const tomb = [...del.entries()].filter(([, at]) => at > keepAfter).map(([id, at]) => ({ id, at }));
     const data = JSON.stringify({ ratings: merged, deleted: tomb });
     if (data.length > MAX_SHELF) return fail(413, 'Слишком много данных, убери длинные заметки.');
     const now = Date.now();
