@@ -770,6 +770,7 @@ input::placeholder, textarea::placeholder { color: var(--ink-3); font-weight: 40
   .scorebar .btn.icon { width: 40px; }
 }
 @media (max-width: 345px) { .total-meta { display: none; } }
+@media (max-width: 370px) { .user-name { max-width: 64px; } }
 
 /* Board and journal tabs */
 .views { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 22px; }
@@ -851,7 +852,6 @@ details[open] .chev { transform: rotate(180deg); }
 
 /* Journal */
 .log-days { display: grid; gap: 24px; margin-top: 18px; }
-.log-loading { margin: 0; padding: 18px 0; color: var(--ink-2); font-size: 14px; }
 .log-date { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); font-size: 14px; font-weight: 700; }
 .log-date span { flex: none; font-size: 12.5px; font-weight: 500; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .log-list { list-style: none; margin: 0; padding: 0; }
@@ -1227,8 +1227,12 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
   }
 }
 @media (max-width: 560px) {
-  #themeBtn span, .wl-text, .hl-full { display: none; }
-  #themeBtn, #wheelLink { width: 36px; padding: 0; }
+  #themeBtn span, .wl-text, .hl-full, .wn-text { display: none; }
+  #themeBtn, #wheelLink, #whatsNewBtn { width: 36px; padding: 0; }
+  /* длинный ник не выталкивает шапку за экран */
+  #userBar { min-width: 0; flex-shrink: 1; }
+  .user-pill { min-width: 0; max-width: 100%; }
+  .user-name { min-width: 0; max-width: 100px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   #githubLink { display: none; }
   .masthead { gap: 18px; }
   .masthead-right > .user-bar { flex-wrap: nowrap; gap: 6px; }
@@ -1262,6 +1266,7 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
         <button type="button" class="cmp-tray" id="cmpTrayBtn" hidden>⚖️ Сравнить (<span id="cmpCount">0</span>/2)</button>
         <a class="theme-btn" id="homeLink" href="/" title="Главная Казуал Хаба" aria-label="Казуал Хаб, главная"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 8H3M7 4L3 8l4 4"/></svg><span class="hl-full">Казуал </span>Хаб</a>
         <a class="theme-btn" id="wheelLink" href="/koleso/" title="Колесо Казуала: колесо фортуны на выбывание"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><g transform="translate(8 8)"><path d="M0 0V-6.5A6.5 6.5 0 0 1 5.63-3.25Z" fill="#3550E8"/><path d="M0 0L5.63-3.25A6.5 6.5 0 0 1 5.63 3.25Z" fill="#EAA92C"/><path d="M0 0L5.63 3.25A6.5 6.5 0 0 1 0 6.5Z" fill="#2EAD60"/><path d="M0 0V6.5A6.5 6.5 0 0 1-5.63 3.25Z" fill="#EC4899"/><path d="M0 0L-5.63 3.25A6.5 6.5 0 0 1-5.63-3.25Z" fill="#9333EA"/><path d="M0 0L-5.63-3.25A6.5 6.5 0 0 1 0-6.5Z" fill="#06B6D4"/><circle r="2" fill="currentColor"/></g></svg><span class="wl-text">Колесо</span></a>
+        <button type="button" class="theme-btn" id="whatsNewBtn" data-whatsnew title="Что нового на сайте"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.5l1.6 3.6 3.9.4-2.9 2.6.8 3.9L8 10l-3.4 2 .8-3.9-2.9-2.6 3.9-.4z"/></svg><span class="wn-text">Что нового</span></button>
         <a class="theme-btn" id="githubLink" href="https://github.com/anorroDev/casualhub" target="_blank" rel="noopener" title="Код сайта на GitHub"><svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a>
         <details class="theme-pick" id="themePick">
           <summary class="theme-btn" id="themeBtn" title="Тема оформления">🌓 Тема</summary>
@@ -1434,10 +1439,6 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
       <div id="panelLog" role="tabpanel" aria-labelledby="tabLog" hidden>
         <div class="board-head">
           <p class="board-stat" id="logStat">Загружаю журнал…</p>
-          <div class="seg" id="logTabs" role="group" aria-label="Что показать в журнале">
-            <button type="button" data-logtab="mine" aria-pressed="true">Мои изменения</button>
-            <button type="button" data-logtab="app" aria-pressed="false">Что нового</button>
-          </div>
         </div>
         <div id="logMine">
           <div class="log-days" id="logList" hidden></div>
@@ -1446,7 +1447,6 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
             <p><strong>Журнал пока пуст.</strong> Сюда по датам попадут новые оценки, правки и удаления, а ещё изменения категорий и критериев. К любой записи можно дописать своё описание.</p>
           </div>
         </div>
-        <div id="logApp" data-stat="" hidden><p class="log-loading">Загружаю…</p></div>
       </div>
     </section>
   </main>
@@ -2563,7 +2563,7 @@ const el = {
   sheetOpts: $('sheetOpts'), optDesc: $('optDesc'), optNotes: $('optNotes'), optPhoto: $('optPhoto'),
   optDescWrap: $('optDescWrap'), optNotesWrap: $('optNotesWrap'), optPhotoWrap: $('optPhotoWrap'),
   views: $('views'), tabBoard: $('tabBoard'), tabLog: $('tabLog'), panelBoard: $('panelBoard'), panelLog: $('panelLog'),
-  logStat: $('logStat'), logTabs: $('logTabs'), logMine: $('logMine'), logApp: $('logApp'),
+  logStat: $('logStat'), logMine: $('logMine'),
   logList: $('logList'), logMore: $('logMore'), logEmpty: $('logEmpty'),
   layout: $('layout'), mnav: $('mnav'), mnavCount: $('mnavCount'), navAnchor: $('navAnchor'),
   offlineBar: $('offlineBar'),
@@ -4941,7 +4941,6 @@ function logDayHTML(g) {
   return `<section class="log-day"><h3 class="log-date">${esc(dayLabel(g.key))}<span>${n} ${plural(n, 'запись', 'записи', 'записей')}</span></h3><ol class="log-list">${g.items.map(logEntryHTML).join('')}</ol></section>`;
 }
 function renderLogStat() {
-  if (state.logTab === 'app') { el.logStat.textContent = el.logApp.dataset.stat || ''; return; }
   if (LOG.error) { el.logStat.textContent = 'Журнал сейчас не загружается. Обнови страницу'; return; }
   const c = LOG.count;
   el.logStat.textContent = !LOG.loaded ? 'Загружаю журнал…'
@@ -5049,29 +5048,11 @@ el.rater.addEventListener('focusout', () => {
   }, 150);
 });
 el.search.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.isComposing) el.search.blur(); });
-function setLogTab(t) {
-  state.logTab = t === 'app' ? 'app' : 'mine';
-  el.logTabs.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.logtab === state.logTab)));
-  el.logMine.hidden = state.logTab !== 'mine';
-  el.logApp.hidden = state.logTab !== 'app';
-  if (state.logTab === 'app') loadWhatsNew();
+// «Что нового» открывается кнопкой в шапке (whatsnew.js), во вкладке «Журнал» только свои изменения
+function setLogTab() {
+  state.logTab = 'mine';
+  el.logMine.hidden = false;
   renderLogStat();
-  savePrefs();
-}
-// «Что нового» лежит в общем /whatsnew.html, его же открывают главная и Колесо
-let whatsNewLoaded = false;
-function loadWhatsNew() {
-  if (whatsNewLoaded || !window.CasualWhatsNew) return;
-  whatsNewLoaded = true;
-  window.CasualWhatsNew.load().then((d) => {
-    el.logApp.innerHTML = d.html;
-    el.logApp.dataset.stat = d.stat;
-    window.CasualWhatsNew.markSeen(d.latest);
-    renderLogStat();
-  }, () => {
-    whatsNewLoaded = false;
-    el.logApp.innerHTML = '<p class="log-loading">Не получилось загрузить журнал обновлений, обнови страницу.</p>';
-  });
 }
 const smoothScroll = () => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
 function goToRating(id) {
@@ -5167,10 +5148,6 @@ el.views.addEventListener('keydown', e => {
   if (!v) return;
   e.preventDefault();
   setView(v, true);
-});
-el.logTabs.addEventListener('click', e => {
-  const b = e.target.closest('button[data-logtab]');
-  if (b) setLogTab(b.dataset.logtab);
 });
 el.logMore.addEventListener('click', () => { LOG.shownDays += LOG_PAGE_DAYS; renderLog(); });
 el.logList.addEventListener('click', e => {
