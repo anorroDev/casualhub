@@ -672,6 +672,54 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
 .burst { position: fixed; z-index: 80; width: 10px; height: 10px; border-radius: 3px; pointer-events: none; }
 .sheet-card { border-radius: 22px; }
 .w-name { transform-origin: 0 100%; }
+
+/* Победа: заставка перед карточкой, пропускается кликом или клавишей */
+.winfx {
+  position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; overflow: hidden; cursor: pointer;
+  background: color-mix(in srgb, var(--bg) 82%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  clip-path: circle(0 at var(--fx-x, 50%) var(--fx-y, 50%));
+}
+.winfx[hidden] { display: none; }
+.winfx.open { animation: fx-open .55s cubic-bezier(.6, 0, .2, 1) forwards; }
+.winfx.closing { animation: fx-close .4s cubic-bezier(.6, 0, .4, 1) forwards; }
+@keyframes fx-open { to { clip-path: circle(150vmax at var(--fx-x, 50%) var(--fx-y, 50%)); } }
+@keyframes fx-close { from { clip-path: circle(150vmax at 50% 50%); } to { clip-path: circle(0 at 50% 50%); } }
+.fx-rays {
+  position: absolute; left: 50%; top: 50%; width: 220vmax; height: 220vmax; margin: -110vmax 0 0 -110vmax; pointer-events: none;
+  background: repeating-conic-gradient(color-mix(in srgb, var(--accent) 16%, transparent) 0 9deg, transparent 9deg 22.5deg);
+  -webkit-mask: radial-gradient(closest-side, #000 8%, transparent 46%); mask: radial-gradient(closest-side, #000 8%, transparent 46%);
+  animation: fx-spin 18s linear infinite;
+}
+@keyframes fx-spin { to { transform: rotate(1turn); } }
+.fx-confetti { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.fx-stage { position: relative; display: grid; justify-items: center; gap: 10px; padding: 24px 16px; max-width: 100%; text-align: center; }
+.fx-sticker { width: clamp(110px, 26vmin, 200px); aspect-ratio: 1; display: grid; place-items: center; transform: translateY(70vh) rotate(-540deg) scale(.3); }
+.fx-sticker img, .fx-sticker video { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 14px 24px rgb(0 0 0 / .28)); }
+.fx-sticker.in { animation: fx-sticker 1s cubic-bezier(.3, 1.35, .5, 1) forwards, fx-bob 2.4s ease-in-out 1s infinite; }
+@keyframes fx-sticker { to { transform: none; } }
+@keyframes fx-bob { 0%, 100% { translate: 0 0; rotate: 0deg; } 50% { translate: 0 -8px; rotate: 4deg; } }
+.fx-eyebrow { font-family: var(--font-display); font-weight: 700; font-size: clamp(18px, 4vw, 26px); letter-spacing: .3em; text-transform: uppercase; color: var(--accent); transform: scaleX(0); }
+.fx-eyebrow.in { animation: fx-unroll .5s cubic-bezier(.3, 1.4, .5, 1) forwards; }
+@keyframes fx-unroll { to { transform: none; } }
+.fx-name {
+  font-family: var(--font-display); font-weight: 800; line-height: .9; color: var(--ink); max-width: 94vw; text-wrap: balance;
+  font-size: clamp(40px, calc(150vw / max(var(--len, 6), 6)), 150px);
+}
+.fx-word { display: inline-block; white-space: nowrap; }
+.fx-ch { display: inline-block; transform: translate(var(--dx), var(--dy)) rotate(var(--r)) scale(0); }
+.fx-ch.in { animation: fx-ch .6s cubic-bezier(.3, 1.5, .5, 1) forwards; animation-delay: var(--d); }
+@keyframes fx-ch { to { transform: none; } }
+.fx-sum {
+  font-family: var(--font-display); font-weight: 800; font-size: clamp(30px, 8vw, 64px); line-height: 1;
+  padding: 6px 18px; border-radius: 14px; background: var(--good); color: var(--on-tier); transform: scale(0) rotate(-8deg);
+}
+.fx-sum.in { animation: fx-slam .5s cubic-bezier(.3, 1.6, .5, 1) forwards; }
+@keyframes fx-slam { 0% { transform: scale(2.6) rotate(-8deg); } 100% { transform: rotate(-3deg); } }
+.fx-skip {
+  position: absolute; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); padding: 8px 14px; border-radius: 999px; cursor: pointer;
+  font: 600 14px var(--font-body); color: var(--ink-2); background: var(--panel); border: 1px solid var(--line);
+}
+.fx-skip:hover { color: var(--ink); }
 </style>
 </head>
 <body>
@@ -839,6 +887,18 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
       </fieldset>
     </section>
   </main>
+</div>
+
+<div class="winfx" id="winFx" hidden role="dialog" aria-modal="true" aria-label="Победитель">
+  <div class="fx-rays" aria-hidden="true"></div>
+  <canvas class="fx-confetti" aria-hidden="true"></canvas>
+  <div class="fx-stage">
+    <div class="fx-sticker" aria-hidden="true"></div>
+    <p class="fx-eyebrow">Победитель</p>
+    <p class="fx-name"></p>
+    <p class="fx-sum" hidden></p>
+  </div>
+  <button type="button" class="fx-skip">Пропустить ›</button>
 </div>
 
 <div class="sheet" id="winner" hidden role="dialog" aria-modal="true" aria-labelledby="wName">
@@ -1450,7 +1510,127 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     if (!keep) idleStatus();
   }
 
+  // заставка победы: стикер, имя по буквам, сумма, конфетти; клик или клавиша — сразу к карточке
+  let fxDone = null;
+  function winFx(it) {
+    const fx = $('#winFx');
+    if (reduced) return Promise.resolve();
+    return new Promise((resolve) => {
+      const timers = [];
+      const at = (ms, f) => timers.push(setTimeout(f, ms));
+      let raf = 0;
+      const stage = fx.querySelector('.fx-stage');
+      const stick = fx.querySelector('.fx-sticker');
+      const brow = fx.querySelector('.fx-eyebrow');
+      const name = fx.querySelector('.fx-name');
+      const sum = fx.querySelector('.fx-sum');
+      stage.querySelectorAll('.in').forEach((n) => n.classList.remove('in'));
+      // случайный стикер из базовых картинок сайта
+      const pool = BASE_HUBS.length ? BASE_HUBS : [];
+      const st = pool[Math.floor(Math.random() * pool.length)];
+      stick.innerHTML = st ? (st.video
+        ? `<video src="${st.src}" autoplay muted loop playsinline></video>`
+        : `<img src="${st.src}" alt="">`) : '';
+      stick.hidden = !st;
+      // имя: каждая буква прилетает со своей стороны, слова не рвутся
+      const chars = Array.from(it.name);
+      name.style.setProperty('--len', String(Math.min(chars.length, 24)));
+      let k = 0;
+      name.innerHTML = it.name.split(/(\s+)/).map((w) => /^\s+$/.test(w) ? w : `<span class="fx-word">${Array.from(w).map((c) => {
+        const a = Math.random() * TAU, dist = 160 + Math.random() * 220;
+        return `<span class="fx-ch" style="--dx:${Math.round(Math.cos(a) * dist)}px;--dy:${Math.round(Math.sin(a) * dist)}px;--r:${Math.round((Math.random() - .5) * 400)}deg;--d:${(k++ * Math.min(70, 900 / chars.length)).toFixed(0)}ms">${esc(c)}</span>`;
+      }).join('')}</span>`).join('');
+      const money = S.mode === 'donate' && +it.amount > 0;
+      sum.hidden = !money;
+      sum.textContent = money ? `${fmt(0)} ${sym(it.cur)}` : '';
+      // заставка раскрывается кругом из центра колеса
+      const wr = $('.wheel-wrap').getBoundingClientRect();
+      fx.style.setProperty('--fx-x', `${Math.round(wr.left + wr.width / 2)}px`);
+      fx.style.setProperty('--fx-y', `${Math.round(wr.top + wr.height / 2)}px`);
+      fx.classList.remove('closing');
+      fx.hidden = false;
+      fx.classList.add('open');
+      fx.querySelector('.fx-skip').focus({ preventScroll: true });
+      const nameAt = st ? 700 : 250;
+      const lettersEnd = nameAt + 600 + chars.length * Math.min(70, 900 / chars.length);
+      at(st ? 150 : 0, () => stick.classList.add('in'));
+      at(nameAt - 150, () => brow.classList.add('in'));
+      at(nameAt, () => name.querySelectorAll('.fx-ch').forEach((c) => c.classList.add('in')));
+      at(lettersEnd - 250, () => confetti());
+      if (money) {
+        at(lettersEnd, () => {
+          sum.classList.add('in');
+          const t0 = performance.now(), D = 900, to = +it.amount;
+          const count = (now) => {
+            const t = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - t, 3);
+            sum.textContent = `${fmt(t < 1 ? Math.round(to * e) : to)} ${sym(it.cur)}`;
+            if (t < 1) requestAnimationFrame(count);
+          };
+          requestAnimationFrame(count);
+        });
+      }
+      const end = () => {
+        if (!fxDone) return;
+        fxDone = null;
+        timers.forEach(clearTimeout);
+        cancelAnimationFrame(raf);
+        fx.removeEventListener('click', end);
+        document.removeEventListener('keydown', onKey, true);
+        fx.classList.remove('open');
+        fx.classList.add('closing');
+        setTimeout(() => {
+          fx.hidden = true;
+          fx.classList.remove('closing');
+          stick.innerHTML = '';
+          const cv = fx.querySelector('.fx-confetti');
+          cv.getContext('2d').clearRect(0, 0, cv.width, cv.height);
+        }, 400);
+        resolve();
+      };
+      const onKey = (e) => {
+        if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); end(); }
+      };
+      fxDone = end;
+      fx.addEventListener('click', end);
+      document.addEventListener('keydown', onKey, true);
+      at(lettersEnd + (money ? 2400 : 2000), end);
+
+      function confetti() {
+        const cv = fx.querySelector('.fx-confetti');
+        const dpr = Math.min(2, devicePixelRatio || 1);
+        cv.width = innerWidth * dpr; cv.height = innerHeight * dpr;
+        const g = cv.getContext('2d');
+        g.scale(dpr, dpr);
+        const nb = name.getBoundingClientRect();
+        const ox = nb.left + nb.width / 2, oy = nb.top + nb.height / 2;
+        const parts = Array.from({ length: 160 }, (_, i) => {
+          const a = -Math.PI / 2 + (Math.random() - .5) * Math.PI * 1.6, v = 6 + Math.random() * 11;
+          return { x: ox, y: oy, vx: Math.cos(a) * v, vy: Math.sin(a) * v, w: 6 + Math.random() * 6, h: 4 + Math.random() * 6,
+            r: Math.random() * TAU, vr: (Math.random() - .5) * .4, c: PALETTE[i % PALETTE.length] };
+        });
+        const tick = () => {
+          g.clearRect(0, 0, innerWidth, innerHeight);
+          let alive = 0;
+          for (const p of parts) {
+            p.vx *= .985; p.vy = p.vy * .985 + .32; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+            if (p.y > innerHeight + 20) continue;
+            alive++;
+            g.save(); g.translate(p.x, p.y); g.rotate(p.r); g.fillStyle = p.c;
+            g.fillRect(-p.w / 2, -p.h / 2 * Math.abs(Math.cos(p.r * 2)), p.w, p.h * Math.abs(Math.cos(p.r * 2)) + 1);
+            g.restore();
+          }
+          if (alive) raf = requestAnimationFrame(tick);
+        };
+        raf = requestAnimationFrame(tick);
+      }
+    });
+  }
+
   function showWinner(it) {
+    playWinMusic();
+    winFx(it).then(() => openWinnerCard(it));
+  }
+  function openWinnerCard(it) {
     $('#wName').textContent = it.name;
     const total = S.items.length;
     $('#wStats').innerHTML = S.mode === 'donate' && it.startWin != null
@@ -1460,7 +1640,6 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
          <div class="total-meta"><strong>${S.mode === 'donate' ? `донат ${fmt(it.amount)} ${sym(it.cur)}` : 'участников было на колесе'}</strong><span>остался последним</span></div>`;
     $('#winner').hidden = false;
     $('#wAgain').focus();
-    playWinMusic();
   }
   function hideWinner() {
     if ($('#winner').hidden) return;
@@ -1530,6 +1709,8 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
       .then((d) => {
         BASE_GROUPS = d.groups || [];
+        // убранный повтор: выбор переходит на оставшийся вариант того же смайла
+        if (d.aliases && d.aliases[S.gif]) { S.gif = d.aliases[S.gif]; save(); }
         BASE_HUBS = BASE_GROUPS.flatMap((g) => g.items.map((it) => ({ ...it, video: /\.webm$/i.test(it.src) })));
         if (!BASE_GROUPS.some((g) => g.id === S.baseGroup)) {
           const own = BASE_GROUPS.find((g) => g.items.some((it) => it.id === S.gif));
