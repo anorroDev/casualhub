@@ -932,7 +932,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     { id: 'mk', title: 'Mortal Kombat — Techno Syndrome', src: 'yt', key: 'Sr1bLLvsbh0' },
     { id: 'serious', title: 'Serious Sam — The Grand Cathedral', src: 'yt', key: '0IVRoqDWwIk' },
     { id: 'chopin', title: 'Шопен — Вальс до-диез минор, оп. 64 № 2', src: 'yt', key: 'SUT_0c2QVzo' },
-    { id: 'eva', title: 'Evangelion — E05 (ReMaster TV Original)', src: 'sp', key: '1hukSz5tfR0P9FWgRoQCmC' },
+    { id: 'eva', title: 'Evangelion — E05 (ReMaster TV Original)', src: 'yt', key: '7dVDG6IqtV8', alt: ['ELcLRK8LZ-o'] },
   ];
   const DEFAULT_WIN = 'vika'; // победа по умолчанию
   const presetOf = (v) => (typeof v === 'string' && v.startsWith('preset:') ? PRESETS.find((p) => p.id === v.slice(7)) || null : null);
@@ -1657,9 +1657,14 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
           events: {
             onReady: () => res(EMB.yt[ch]),
             onStateChange: (e) => { if (e.data === 0) channelEnded(ch); },
-            onError: (e) => embedFailed(ch, e.data === 150 || e.data === 101
+            onError: (e) => {
+              // запасная копия ролика, если основной нельзя встраивать
+              const c = CH[ch];
+              if (c.active && c.type === 'yt' && c.alts && c.alts.length) { EMB.yt[ch].loadVideoById({ videoId: c.alts.shift(), startSeconds: 0 }); return; }
+              embedFailed(ch, e.data === 150 || e.data === 101
               ? 'Автор этого ролика на YouTube запретил проигрывать его на других сайтах. Поставь трек через «Свой файл».'
-              : 'YouTube не дал проиграть этот трек.'),
+              : 'YouTube не дал проиграть этот трек.');
+            },
           },
         });
       }));
@@ -1708,6 +1713,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
       if (p.src === 'yt') {
         const y = await ytPlayer(ch);
         if (!c.active || c.type !== 'yt') return;
+        c.alts = (p.alt || []).slice();
         y.loadVideoById({ videoId: p.key, startSeconds: 0 });
         y.playVideo();
       } else {
