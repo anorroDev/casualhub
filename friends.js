@@ -144,6 +144,7 @@
       try {
         F.me = (await api('/me')).user;
         if (state.user && state.user.serverId !== F.me.id) { state.user.serverId = F.me.id; saveUsers(); }
+        await syncAvatar();
         await refreshFriends();
         await pullOwnShelf(); // сначала забираем свои оценки с сервера, потом отправляем общий список
         pushShelf();
@@ -598,6 +599,19 @@ ${ICON.chev}
   };
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const NICK_RE = /^[\p{L}\p{N}_.\- ]{2,24}$/u;
+  // аватар общий для аккаунта: на новом устройстве подтягивается с сервера (avatar-sync.js)
+  async function syncAvatar() {
+    if (!window.CasualAvatar || !F.me || !state.user) return;
+    const ch = await window.CasualAvatar.sync(F.me.id, F.token);
+    if (!ch || !state.user) return;
+    state.user.avatar = ch.still;
+    state.users.forEach((u) => { if (u.id === state.user.id) u.avatar = ch.still; });
+    state.ratings.forEach((r) => { if (r.author && r.author.id === state.user.id) r.author = { ...r.author, avatar: ch.still }; });
+    saveUsers();
+    saveLocalRatingsQuiet();
+    renderUserBar();
+    renderBoard();
+  }
   const cleanNick = (s) => String(s || '').trim().replace(/\s+/g, ' ');
 
   if (typeof orig.register === 'function') {
@@ -716,7 +730,14 @@ ${ICON.chev}
           return false;
         }
       }
-      return orig.update.call(this, nick, email, password, avatar, color);
+      const before = state.user.avatar;
+      const ok = orig.update.call(this, nick, email, password, avatar, color);
+      // сменили аватар здесь: он уходит в аккаунт, чтобы его видели другие устройства и друзья
+      if (ok && state.user && state.user.avatar !== before && window.CasualAvatar) {
+        window.CasualAvatar.apply(state.user.id, state.user.avatar, null);
+        window.CasualAvatar.push(F.token, state.user.avatar);
+      }
+      return ok;
     };
   }
 

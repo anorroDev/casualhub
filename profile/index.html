@@ -437,6 +437,7 @@ button, input { font: inherit; color: inherit; }
 /* iPhone увеличивает страницу, если у поля шрифт меньше 16px: на iOS поля всегда 16px */
 @supports (-webkit-touch-callout: none) { input, textarea, select { font-size: max(16px, 1em) !important; } }
 </style>
+<script src="/avatar-sync.js"></script>
 </head>
 <body>
 <div class="page">
@@ -1011,9 +1012,14 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     render(p);
     if (!token) return;
     if (meServer) {
-      // свой аватар главнее: если в аккаунте лежит другой (или ещё ничего), отправляем тот, что здесь
-      const mine = isImgSrc(p.avatar) ? p.avatar : null;
-      if (mine) api(`/photo/${encodeURIComponent(meServer.id)}/avatar`).then((d) => d.data, () => null).then((srv) => { if (srv !== mine) send('PUT', '/photo/avatar', { data: mine }).catch(() => {}); });
+      // аватар общий для аккаунта: в аккаунте другой — берём его (его сменили на другом устройстве),
+      // в аккаунте пусто — отправляем тот, что здесь
+      if (window.CasualAvatar) window.CasualAvatar.sync(meServer.id, token).then((ch) => {
+        if (!ch || !user) return;
+        user.avatar = ch.still;
+        p.avatar = shownAvatar(user);
+        setAvaEl(p.avatar);
+      });
       api(`/photo/${encodeURIComponent(meServer.id)}/banner`).then(
         (d) => { if (d.data && d.data !== p.banner) { p.banner = d.data; keepBanner(d.data); showBanner(d.data); } },
         () => { if (p.banner) send('PUT', '/photo/banner', { data: p.banner }).catch(() => {}); } // в аккаунте ещё нет: отправляем свой

@@ -434,6 +434,7 @@ h1, h2, p { margin: 0; }
 }
 </style>
 <script src="/whatsnew.js"></script>
+<script src="/avatar-sync.js"></script>
 </head>
 <body>
 <div class="page">
@@ -524,15 +525,18 @@ h1, h2, p { margin: 0; }
   // анимированная аватарка из профиля, пока статичная та же
   const shownAvatar = (u) => { const a = (read('casualhub.avatarAnim.v1') || {})[u.id]; return a && a.data && typeof u.avatar === 'string' && a.sig === u.avatar.slice(-48) ? a.data : u.avatar; };
   const acc = $('#account');
-  if (user && user.name) {
-    const img = typeof user.avatar === 'string' && /^(data:image\/|https?:\/\/)/.test(user.avatar);
-    const av = img
-      ? `<span class="avatar" style="background-image:url('${esc(shownAvatar(user))}')"></span>`
-      : `<span class="avatar" style="background-color:${esc(user.color || '#3550E8')}">${esc(user.name.charAt(0))}</span>`;
-    acc.innerHTML = `<a class="pill" href="/profile/" title="Мой профиль">${av}${esc(user.name)}<span class="badge-dot" id="reqDot" hidden></span></a>`;
-  } else {
-    acc.innerHTML = `<a class="pill" href="/mnenie/#login">Войти</a> <a class="pill primary" href="/mnenie/#reg">Регистрация</a>`;
+  function renderAccount() {
+    if (user && user.name) {
+      const img = typeof user.avatar === 'string' && /^(data:image\/|https?:\/\/)/.test(user.avatar);
+      const av = img
+        ? `<span class="avatar" style="background-image:url('${esc(shownAvatar(user))}')"></span>`
+        : `<span class="avatar" style="background-color:${esc(user.color || '#3550E8')}">${esc(user.name.charAt(0))}</span>`;
+      acc.innerHTML = `<a class="pill" href="/profile/" title="Мой профиль">${av}${esc(user.name)}<span class="badge-dot" id="reqDot" hidden></span></a>`;
+    } else {
+      acc.innerHTML = `<a class="pill" href="/mnenie/#login">Войти</a> <a class="pill primary" href="/mnenie/#reg">Регистрация</a>`;
+    }
   }
+  renderAccount();
 
   // ---------- что лежит в разделах ----------
   const ratings = (read('ocenshik.ratings.v2') || []).filter((r) => r && !r.example);
@@ -722,6 +726,20 @@ h1, h2, p { margin: 0; }
   // ---------- друзья: сколько их и есть ли заявки ----------
   const tokens = read('casualhub.tokens.v1') || {};
   const token = user && tokens[user.id];
+  if (token && window.CasualAvatar) {
+    // аватар общий для аккаунта: на телефоне или в новом браузере подтягивается с сервера
+    const sid = user.serverId;
+    (sid ? Promise.resolve(sid) : fetch('/api/me', { headers: { authorization: 'Bearer ' + token } }).then((r) => (r.ok ? r.json() : null)).then((d) => d && d.user && d.user.id))
+      .then((id) => id && window.CasualAvatar.sync(id, token))
+      .then((ch) => {
+        if (!ch) return;
+        user.avatar = ch.still;
+        const dot = $('#reqDot'), dotState = dot && !dot.hidden ? dot.textContent : null;
+        renderAccount();
+        if (dotState) { const d2 = $('#reqDot'); d2.textContent = dotState; d2.hidden = false; }
+      })
+      .catch(() => {});
+  }
   if (token) {
     fetch('/api/friends', { headers: { authorization: 'Bearer ' + token } })
       .then((r) => (r.ok ? r.json() : null))
