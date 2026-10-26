@@ -47,7 +47,7 @@
     (root || document).querySelectorAll('[data-on]').forEach((el) => el.classList.toggle('on', seen(el.dataset.on, el.dataset.last).on));
   }
   const css = document.createElement('style');
-  css.textContent = '.on-dot{display:none;flex:none;width:8px;height:8px;border-radius:50%;background:var(--good,#2EAD60);box-shadow:0 0 0 2px color-mix(in srgb,var(--good,#2EAD60) 30%,transparent);vertical-align:middle}.on-dot.on{display:inline-block}[data-seen].on{color:var(--good,#2EAD60);font-weight:700}[data-seen]:empty{display:none}';
+  css.textContent = '.on-dot{display:none;flex:none;width:8px;height:8px;border-radius:50%;background:var(--good,#2EAD60);box-shadow:0 0 0 2px color-mix(in srgb,var(--good,#2EAD60) 30%,transparent);vertical-align:middle}.on-dot.on{display:inline-block}[data-seen].on{color:var(--good,#2EAD60);font-weight:700}[data-seen]:empty{display:none}.online-chip{display:inline-flex;align-items:center;gap:7px}.online-chip[hidden]{display:none!important}.online-chip em{flex:none;width:8px;height:8px;border-radius:50%;background:var(--good,#2EAD60);box-shadow:0 0 0 3px color-mix(in srgb,var(--good,#2EAD60) 25%,transparent)}.online-chip b{font-weight:800;color:var(--ink)}';
   document.head.appendChild(css);
   window.CasualOnline = {
     paint,
@@ -76,6 +76,8 @@
         st.friends = new Map((d.friends || []).map((x) => [x.id, +x.at || Date.now()]));
         st.ready = true;
         paint(document);
+        // общий счётчик «N на сайте» на всех страницах
+        document.querySelectorAll('[data-online-count]').forEach((el) => { el.querySelector('b').textContent = st.online; el.hidden = false; });
         document.dispatchEvent(new CustomEvent('casual-online', { detail: { online: st.online, friends: [...st.friends.keys()] } }));
       }
     } catch (e) {} finally { busy = false; }
