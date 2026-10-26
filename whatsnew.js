@@ -47,7 +47,8 @@
 .wn-body .rel h4 { margin: 0; font-size: 15px; font-weight: 700; line-height: 1.3; }
 .wn-body .rel p { max-width: 62ch; margin: 3px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); text-wrap: pretty; }
 /* в патче дня каждое изменение начинается со своего жирного названия на отдельной строке */
-.wn-body .rel p > b:first-child { display: block; margin: 14px 0 2px; color: var(--ink); font-size: 14px; }
+.wn-body .rel p > b:first-child { display: flex; align-items: center; gap: 8px; margin: 16px 0 4px; color: var(--ink); font-size: 14.5px; line-height: 1.3; }
+.wn-emo { flex: none; width: 30px; height: 30px; object-fit: contain; }
 .wn-body .rel h4 + p > b:first-child { margin-top: 8px; }
 .wn-msg { padding: 24px 0; color: var(--ink-2); }
 [data-whatsnew] { position: relative; }
