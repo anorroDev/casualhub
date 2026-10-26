@@ -46,6 +46,9 @@
 .wn-body .rel-v { padding-top: 1px; font-family: var(--font-display); font-weight: 700; font-size: 22px; line-height: 1; color: var(--ink-3); white-space: nowrap; }
 .wn-body .rel h4 { margin: 0; font-size: 15px; font-weight: 700; line-height: 1.3; }
 .wn-body .rel p { max-width: 62ch; margin: 3px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); text-wrap: pretty; }
+/* в патче дня каждое изменение начинается со своего жирного названия на отдельной строке */
+.wn-body .rel p > b:first-child { display: block; margin: 14px 0 2px; color: var(--ink); font-size: 14px; }
+.wn-body .rel h4 + p > b:first-child { margin-top: 8px; }
 .wn-msg { padding: 24px 0; color: var(--ink-2); }
 [data-whatsnew] { position: relative; }
 [data-whatsnew] .wn-dot { position: absolute; top: 4px; right: 4px; width: 9px; height: 9px; border-radius: 50%; background: var(--bad); box-shadow: 0 0 0 2px var(--panel); }
