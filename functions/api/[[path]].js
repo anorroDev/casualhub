@@ -240,7 +240,7 @@ const routes = {
   // Оценки с разных устройств объединяются: по id остаётся более свежая версия,
   // удалённые (deleted: [{id, at}]) запоминаются и больше не возвращаются, их фото стираются.
   async 'PUT /shelf'({ env, request, me }) {
-    const { ratings, deleted, cats } = await readBody(request);
+    const { ratings, deleted, cats, profile } = await readBody(request);
     if (!Array.isArray(ratings)) return fail(400, 'Нужен список оценок.');
     const row = await env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(me.id).first();
     const old = readShelf(row);
@@ -263,7 +263,15 @@ const routes = {
     if (cats && Array.isArray(cats.items) && Number.isFinite(+cats.at) && (!old.cats || +cats.at > +old.cats.at)) {
       catsOut = { items: cats.items.slice(0, 40), at: +cats.at };
     }
-    const data = JSON.stringify(catsOut ? { ratings: merged, deleted: tomb, cats: catsOut } : { ratings: merged, deleted: tomb });
+    // темы, скрытые из профиля: тоже остаётся более свежий выбор
+    let profileOut = old.profile;
+    if (profile && Array.isArray(profile.hide) && Number.isFinite(+profile.at) && (!old.profile || +profile.at > +old.profile.at)) {
+      profileOut = { hide: profile.hide.filter((x) => typeof x === 'string').slice(0, 40).map((x) => x.slice(0, 60)), at: +profile.at };
+    }
+    const shelfData = { ratings: merged, deleted: tomb };
+    if (catsOut) shelfData.cats = catsOut;
+    if (profileOut) shelfData.profile = profileOut;
+    const data = JSON.stringify(shelfData);
     if (data.length > MAX_SHELF) return fail(413, 'Слишком много данных, убери длинные заметки.');
     const now = Date.now();
     await env.DB.prepare(
@@ -287,7 +295,7 @@ const routes = {
     const shelf = await env.DB.prepare('SELECT data, updated_at FROM shelves WHERE user_id = ?').bind(arg).first();
     const s = readShelf(shelf);
     // свои категории видит только хозяин
-    return json({ user, ratings: s.ratings, deleted: s.deleted, cats: arg === me.id ? s.cats || null : undefined, updatedAt: shelf ? shelf.updated_at : null });
+    return json({ user, ratings: s.ratings, deleted: s.deleted, cats: arg === me.id ? s.cats || null : undefined, profile: s.profile || null, updatedAt: shelf ? shelf.updated_at : null });
   },
 
   // исполнители по имени: имя и фото, без заглушек Genius вместо фото
@@ -388,7 +396,8 @@ function readShelf(row) {
   const d = JSON.parse(row.data);
   if (Array.isArray(d)) return { ratings: d, deleted: [] }; // старый формат: просто список
   const cats = d.cats && Array.isArray(d.cats.items) && Number.isFinite(+d.cats.at) ? d.cats : null;
-  return { ratings: Array.isArray(d.ratings) ? d.ratings : [], deleted: Array.isArray(d.deleted) ? d.deleted : [], cats };
+  const profile = d.profile && Array.isArray(d.profile.hide) && Number.isFinite(+d.profile.at) ? d.profile : null;
+  return { ratings: Array.isArray(d.ratings) ? d.ratings : [], deleted: Array.isArray(d.deleted) ? d.deleted : [], cats, profile };
 }
 // ---------- Genius: фото исполнителей ----------
 // Токен лежит в секрете GENIUS_TOKEN и наружу не уходит. Поиск доступен только вошедшим, ответы кэшируются на сутки.

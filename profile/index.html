@@ -343,6 +343,12 @@ button, input { font: inherit; color: inherit; }
 /* All ratings */
 .tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+/* Темы профиля: какие категории видны в профиле тебе и друзьям */
+.topics-btn { height: 34px; padding: 0 12px; font-size: 13px; }
+.topics { display: grid; gap: 8px; margin: -4px 0 14px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel-2, var(--panel)); }
+.topics[hidden] { display: none; }
+.topics .chip[aria-pressed="false"] { opacity: .6; text-decoration: line-through; }
+.topics p { margin: 0; font-size: 12.5px; color: var(--ink-2); }
 .chip { display: inline-flex; align-items: center; gap: 5px; height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink-2); font-size: 13.5px; font-weight: 600; cursor: pointer; transition: transform .2s var(--spring), background-color .15s, color .15s; }
 .chip b { font-weight: 600; opacity: .55; }
 .chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--panel); }
@@ -505,7 +511,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   const wantId = new URLSearchParams(location.search).get('id');
 
   const norm = (r) => ({
-    id: r.id, name: String(r.name || 'Без названия'), cat: r.catName || r.cat || 'Без категории',
+    id: r.id, name: String(r.name || 'Без названия'), cat: r.catName || r.catLabel || r.cat || 'Без категории',
     total: typeof r.total === 'number' ? r.total : null, scores: Array.isArray(r.scores) ? r.scores : [],
     status: r.status || '', fav: !!r.fav, meta: r.meta || '', photo: r.photo || null,
     at: +new Date(r.updatedAt || r.date || r.createdAt || 0) || 0,
@@ -569,7 +575,14 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   const badge = (t, cls) => `<span class="badge${cls ? ' ' + cls : ''}" data-tier="${tierT(t)}">${t != null ? fmt(t) : '—'}</span>`;
   const letter = (s) => esc([...String(s).trim()][0] || '?');
 
-  const ST = { cat: 'all', sort: 'score', q: '', limit: 24 };
+  const ST = { cat: 'all', sort: 'score', q: '', limit: 24, topics: false };
+
+  // ---------- темы профиля: скрытые категории не видны ни в своём профиле, ни у друзей ----------
+  const HIDE_KEY = 'casualhub.profileHide.v1'; // { id профиля: { hide: [ключи категорий], at } }
+  const hideOwner = () => (user ? user.id : 'guest');
+  const localHide = () => (read(HIDE_KEY) || {})[hideOwner()] || { hide: [], at: 0 };
+  const keepHide = (h) => { try { const all = read(HIDE_KEY) || {}; all[hideOwner()] = h; localStorage.setItem(HIDE_KEY, JSON.stringify(all)); } catch (e) {} };
+  const visibleOf = (list, hide) => { const set = new Set(hide || []); return set.size ? list.filter((r) => !set.has(keyOf(r.cat))) : list; };
 
   function render(p) {
     const rs = p.ratings;
@@ -633,7 +646,12 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
           </section>` : ''}
 
           <section class="card rise" style="--d:${d++}">
-            <div class="head"><h2 class="h2">Все оценки</h2><span class="label" id="listStat"></span></div>
+            <div class="head"><h2 class="h2">Все оценки</h2><span class="label" id="listStat"></span>${isMe && p.allRatings && p.allRatings.length ? `<button type="button" class="btn ghost topics-btn" id="topicsBtn" aria-expanded="${ST.topics}" aria-controls="topics">Темы профиля${p.hide && p.hide.length ? ` · скрыто ${p.hide.length}` : ''}</button>` : ''}</div>
+            ${isMe && p.allRatings && p.allRatings.length ? `<div class="topics" id="topics"${ST.topics ? '' : ' hidden'}>
+              <span class="label">Что видно в профиле</span>
+              <div class="chips" style="margin:0">${[...new Map(p.allRatings.map((r) => [keyOf(r.cat), r.cat])).entries()].map(([k, name]) => `<button type="button" class="chip" data-topic="${esc(k)}" aria-pressed="${!(p.hide || []).includes(k)}">${esc(name)} <b>${p.allRatings.filter((r) => keyOf(r.cat) === k).length}</b></button>`).join('')}</div>
+              <p>Нажми на тему, чтобы скрыть её или вернуть. Скрытые темы не видны в профиле ни тебе, ни друзьям, а в Мнении всё остаётся как было.</p>
+            </div>` : ''}
             ${rs.length ? `
             <div class="chips" id="catChips"></div>
             <div class="tools">
@@ -677,10 +695,30 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       </div>`;
 
     if (rs.length) wireList(p);
-    if (isMe) { wireBanner(p); wireAvatar(p); }
+    if (isMe) { wireBanner(p); wireAvatar(p); wireTopics(p); }
     hydrateFriendAvatars(p);
     hydratePhotos(p, app);
     countUp();
+  }
+
+  function wireTopics(p) {
+    const btn = $('#topicsBtn'), box = $('#topics');
+    if (!btn || !box) return;
+    btn.addEventListener('click', () => { ST.topics = !ST.topics; box.hidden = !ST.topics; btn.setAttribute('aria-expanded', String(ST.topics)); });
+    box.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-topic]');
+      if (!b) return;
+      const k = b.dataset.topic;
+      const hide = new Set(p.hide || []);
+      if (hide.has(k)) hide.delete(k); else hide.add(k);
+      const h = { hide: [...hide], at: Date.now() };
+      p.hide = h.hide;
+      keepHide(h);
+      if (token) send('PUT', '/shelf', { ratings: [], profile: h }).catch(() => {});
+      p.ratings = visibleOf(p.allRatings, p.hide);
+      if (ST.cat !== 'all' && !p.ratings.some((r) => r.cat === ST.cat)) ST.cat = 'all';
+      render(p);
+    });
   }
 
   function wireList(p) {
@@ -1005,13 +1043,30 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const p = {
       kind: 'me', name: user ? user.name : 'Гость', avatar: shownAvatar(user), color: user && user.color,
       sub: user ? [meServer ? 'ник для друзей: ' + meServer.username : '', since ? 'в Казуал Хабе с ' + since : ''].filter(Boolean).join(' · ') || 'твой профиль' : 'Гостевой профиль: оценки хранятся в этом браузере',
-      ratings: myRatings(), uid: meServer && meServer.id, banner: localBanner(),
+      ratings: [], allRatings: myRatings(), hide: localHide().hide, uid: meServer && meServer.id, banner: localBanner(),
     };
+    p.ratings = visibleOf(p.allRatings, p.hide);
     if (!user) p.friendsHint = 'Друзья появятся, когда войдёшь в аккаунт. Это можно сделать в Мнении Казуала.';
     else if (!token) p.friendsHint = 'Аккаунт ещё не подключён к друзьям. Подключить можно в Мнении, кнопка «Друзья».';
     render(p);
     if (!token) return;
     if (meServer) {
+      // оценки из аккаунта: здесь могут быть не все (например, музыку оценили на другом устройстве, а Мнение здесь не открывали)
+      api(`/shelf/${encodeURIComponent(meServer.id)}`).then((s) => {
+        let changed = false;
+        const have = new Set(p.allRatings.map((r) => r.id));
+        for (const r of s.ratings || []) {
+          if (!r || r.example || have.has(r.id)) continue;
+          p.allRatings.push(norm(r));
+          changed = true;
+        }
+        const sh = s.profile, lh = localHide();
+        if (sh && +sh.at > (+lh.at || 0)) { p.hide = sh.hide; keepHide({ hide: sh.hide, at: +sh.at }); changed = true; }
+        else if (lh.at && (!sh || +lh.at > +sh.at)) send('PUT', '/shelf', { ratings: [], profile: lh }).catch(() => {}); // выбор сделан здесь до входа
+        if (!changed) return;
+        p.ratings = visibleOf(p.allRatings, p.hide);
+        render(p);
+      }, () => {});
       // аватар общий для аккаунта: в аккаунте другой — берём его (его сменили на другом устройстве),
       // в аккаунте пусто — отправляем тот, что здесь
       if (window.CasualAvatar) window.CasualAvatar.sync(meServer.id, token).then((ch) => {
@@ -1045,7 +1100,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     app.innerHTML = '<section class="card state"><p class="muted">Загружаю профиль…</p></section>';
     try {
       const s = await api(`/shelf/${encodeURIComponent(id)}`);
-      const ratings = (s.ratings || []).filter((r) => r && !r.example).map(norm);
+      const ratings = visibleOf((s.ratings || []).filter((r) => r && !r.example).map(norm), s.profile && s.profile.hide);
       const mine = new Map(myRatings().filter((r) => r.total != null).map((r) => [keyOf(r.name), r]));
       const common = ratings.filter((r) => r.total != null && mine.has(keyOf(r.name))).map((r) => {
         const m = mine.get(keyOf(r.name));
