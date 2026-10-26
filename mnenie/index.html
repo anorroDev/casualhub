@@ -633,7 +633,39 @@ input::placeholder, textarea::placeholder { color: var(--ink-3); font-weight: 40
 .photo-drop small { display: block; font-size: 12.5px; line-height: 1.35; }
 #photoInput:focus-visible + .photo-box label { outline: 2px solid var(--accent); outline-offset: 2px; }
 .photo-has { display: grid; gap: 8px; }
-.photo-img { display: block; width: 100%; max-height: 260px; object-fit: cover; border-radius: var(--r-sm); background: var(--cell); }
+.photo-img { display: block; width: auto; max-width: 100%; max-height: 340px; margin: 0 auto; border-radius: var(--r-sm); background: var(--cell); }
+/* Cropper: a frame in the chosen proportion; drag the photo inside it, zoom with the slider */
+.crop { display: grid; gap: 10px; }
+.crop-frame {
+  --r: 1.5; position: relative; overflow: hidden; margin: 0 auto; width: min(100%, calc(340px * var(--r))); aspect-ratio: var(--r);
+  border-radius: var(--r-sm); background: var(--cell); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none;
+}
+.crop-frame.free { cursor: default; }
+.crop-frame.grabbing { cursor: grabbing; }
+.crop-frame img { position: absolute; left: 0; top: 0; max-width: none; transform-origin: 0 0; pointer-events: none; will-change: transform; }
+.crop-frame::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; border-radius: inherit;
+  background:
+    linear-gradient(90deg, transparent calc(33.33% - .5px), rgba(255, 255, 255, .45) calc(33.33% - .5px) calc(33.33% + .5px), transparent calc(33.33% + .5px) calc(66.66% - .5px), rgba(255, 255, 255, .45) calc(66.66% - .5px) calc(66.66% + .5px), transparent calc(66.66% + .5px)),
+    linear-gradient(180deg, transparent calc(33.33% - .5px), rgba(255, 255, 255, .45) calc(33.33% - .5px) calc(33.33% + .5px), transparent calc(33.33% + .5px) calc(66.66% - .5px), rgba(255, 255, 255, .45) calc(66.66% - .5px) calc(66.66% + .5px), transparent calc(66.66% + .5px));
+  box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 70%, transparent);
+  opacity: 0; transition: opacity .2s;
+}
+.crop-frame:not(.free):hover::after, .crop-frame.grabbing::after, .crop-frame:focus-visible::after { opacity: 1; }
+.crop-frame:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.crop-ratios { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px; }
+.crop-ratios button {
+  display: inline-flex; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--panel); color: var(--ink-2); font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; cursor: pointer;
+  transition: transform .2s cubic-bezier(.34, 1.56, .64, 1), background-color .15s, color .15s;
+}
+.crop-ratios button i { display: inline-block; height: 12px; border: 1.5px solid currentColor; border-radius: 2px; }
+.crop-ratios button[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--panel); }
+.crop-ratios button:active { transform: scale(.94); }
+.crop-zoom { display: flex; align-items: center; gap: 10px; font-size: 12.5px; color: var(--ink-2); }
+.crop-zoom input { flex: 1; accent-color: var(--accent); }
+.crop-hint { font-size: 12.5px; color: var(--ink-3); text-align: center; }
+@media (pointer: coarse) { .crop-ratios button { height: 38px; } }
 .photo-box.drag .photo-img { outline: 2px dashed var(--accent); outline-offset: 2px; }
 .photo-tools { display: flex; flex-wrap: wrap; gap: 8px; }
 .photo-wait { padding: 16px; border: 1.5px dashed var(--line); border-radius: var(--r-sm); color: var(--ink-2); font-size: 14px; }
@@ -1406,10 +1438,17 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
             <p><strong>Журнал пока пуст.</strong> Сюда по датам попадут новые оценки, правки и удаления, а ещё изменения категорий и критериев. К любой записи можно дописать своё описание.</p>
           </div>
         </div>
-        <div id="logApp" data-stat="23 версии, последняя 26 октября" hidden>
+        <div id="logApp" data-stat="24 версии, последняя 26 октября" hidden>
           <div class="log-days">
             <section class="log-day">
-              <h3 class="log-date">26 октября 2026<span>версии 22–23</span></h3>
+              <h3 class="log-date">26 октября 2026<span>версии 22–24</span></h3>
+              <article class="rel">
+                <span class="rel-v">v24</span>
+                <div>
+                  <h4>Баннер в профиле и пропорции фото</h4>
+                  <p>В профиль можно поставить свой баннер: загрузить картинку, перетащить её на шапку или выбрать один из шести готовых в стиле сайта. Баннер хранится в аккаунте, поэтому его видно на всех твоих устройствах и друзьям. У фото в оценке теперь можно выбрать пропорции: как есть, 1:1, 4:3, 3:4, 3:2, 16:9 или 9:16. Кадр двигается пальцем или мышью и приближается ползунком, а уже сохранённое фото можно перекадрировать. В рейтинге фото показывается в выбранной пропорции.</p>
+                </div>
+              </article>
               <article class="rel">
                 <span class="rel-v">v23</span>
                 <div>
@@ -3351,6 +3390,7 @@ async function save() {
   let uploaded = null;
   try {
     await ready;
+    if (cropPending) await cropPending;
     let photo = null;
     if (p && p.kind === 'new') {
       try { uploaded = await uploadPhoto(p.blob); }
@@ -4388,7 +4428,55 @@ function normPhoto(p) {
 }
 function canPhoto() { return state.canWrite; }
 function revokeFormPhoto() {
-  if (form && form.photo && form.photo.kind === 'new' && form.photo.url) URL.revokeObjectURL(form.photo.url);
+  if (form && form.photo && form.photo.kind === 'new') {
+    if (form.photo.url) URL.revokeObjectURL(form.photo.url);
+    if (form.photo.origUrl && form.photo.origUrl !== form.photo.url) URL.revokeObjectURL(form.photo.origUrl);
+  }
+}
+// пропорции кадра: «как есть» (null) и привычные форматы
+const RATIOS = [[null, 'Как есть'], [1, '1:1'], [4 / 3, '4:3'], [3 / 4, '3:4'], [3 / 2, '3:2'], [16 / 9, '16:9'], [9 / 16, '9:16']];
+const crop = { zoom: 1, cx: 0.5, cy: 0.5 };
+function cropGeom(frame) {
+  const p = form.photo, fw = frame.clientWidth, fh = frame.clientHeight;
+  const s0 = Math.max(fw / p.origW, fh / p.origH), sc = s0 * crop.zoom;
+  const cw = fw / sc, ch = fh / sc;
+  crop.cx = Math.min(1 - cw / 2 / p.origW, Math.max(cw / 2 / p.origW, crop.cx));
+  crop.cy = Math.min(1 - ch / 2 / p.origH, Math.max(ch / 2 / p.origH, crop.cy));
+  return { sc, cw, ch, x: fw / 2 - crop.cx * p.origW * sc, y: fh / 2 - crop.cy * p.origH * sc };
+}
+function placeCrop() {
+  const frame = el.photoBox.querySelector('.crop-frame'), img = frame && frame.querySelector('img');
+  if (!img || !form.photo || !form.photo.origW) return;
+  const g = cropGeom(frame);
+  img.style.width = form.photo.origW + 'px';
+  img.style.height = form.photo.origH + 'px';
+  img.style.transform = `translate(${g.x}px, ${g.y}px) scale(${g.sc})`;
+}
+// вырезаем выбранный кадр из оригинала; «как есть» просто возвращает оригинал
+let cropJob = 0, cropPending = null;
+function commitCrop() { cropPending = cropNow().catch(() => {}); return cropPending; } // сохранение ждёт, пока кадр дорежется
+async function cropNow() {
+  const p = form.photo;
+  if (!p || p.kind !== 'new' || !p.orig) return;
+  const job = ++cropJob;
+  let blob = p.orig, w = p.origW, h = p.origH;
+  if (p.ratio) {
+    const frame = el.photoBox.querySelector('.crop-frame');
+    if (!frame) return;
+    const g = cropGeom(frame);
+    const k = Math.min(1, PHOTO_MAX / Math.max(g.cw, g.ch));
+    w = Math.max(1, Math.round(g.cw * k)); h = Math.max(1, Math.round(g.ch * k));
+    const bmp = await createImageBitmap(p.orig);
+    const cv = document.createElement('canvas');
+    cv.width = w; cv.height = h;
+    cv.getContext('2d').drawImage(bmp, crop.cx * p.origW - g.cw / 2, crop.cy * p.origH - g.ch / 2, g.cw, g.ch, 0, 0, w, h);
+    if (bmp.close) bmp.close();
+    blob = await new Promise((res, rej) => cv.toBlob(b => (b ? res(b) : rej(new Error('encode'))), 'image/jpeg', 0.88));
+  }
+  if (job !== cropJob || form.photo !== p) return;
+  if (p.url && p.url !== p.origUrl) URL.revokeObjectURL(p.url);
+  p.blob = blob; p.w = w; p.h = h;
+  p.url = blob === p.orig ? p.origUrl : URL.createObjectURL(blob);
 }
 function renderPhoto() {
   const p = form.photo;
@@ -4397,14 +4485,62 @@ function renderPhoto() {
   if (el.photoField.hidden) return;
   el.photoInput.disabled = !can;
   if (photoBusy) { el.photoBox.innerHTML = '<p class="photo-wait">Обрабатываю фото…</p>'; return; }
-  if (p) {
+  const tools = (extra) => can ? `<div class="photo-tools"><label class="btn small ghost" for="photoInput">${ICON.image}Заменить файл</label>${extra || ''}<button type="button" class="btn small ghost danger" data-act="photo-remove">${ICON.trash}Убрать фото</button></div>` : '';
+  if (p && p.kind === 'new' && p.orig && can) {
+    const r = p.ratio || p.origW / p.origH;
+    const chip = ([v, label]) => {
+      const shape = v || p.origW / p.origH;
+      return `<button type="button" data-ratio="${v || ''}" aria-pressed="${(p.ratio || null) === v}"><i style="width:${Math.round(Math.min(18, 12 * shape))}px"></i>${label}</button>`;
+    };
+    el.photoBox.innerHTML = `<div class="crop">
+      <div class="crop-frame${p.ratio ? '' : ' free'}" style="--r:${r}" tabindex="${p.ratio ? 0 : -1}" aria-label="Кадр фото. Тяни или жми стрелки, чтобы сдвинуть"><img src="${esc(p.origUrl)}" alt=""></div>
+      <div class="crop-ratios" role="group" aria-label="Пропорции фото">${RATIOS.map(chip).join('')}</div>
+      ${p.ratio ? `<label class="crop-zoom">Масштаб<input type="range" id="cropZoom" min="1" max="3" step="0.01" value="${crop.zoom}"></label><p class="crop-hint">Потяни фото, чтобы выбрать, что попадёт в кадр</p>` : ''}
+      ${tools()}
+    </div>`;
+    placeCrop();
+    wireCrop();
+  } else if (p) {
     const src = p.kind === 'new' ? p.url : resolvePhotoUrl(p);
+    const croppable = can && !(p.kind === 'saved' && /^https?:/.test(p.data || p.id || ''));
     el.photoBox.innerHTML = `<div class="photo-has"><img class="photo-img" data-photo="form" src="${esc(src)}" alt="Фото к оценке">`
-      + (can ? `<div class="photo-tools"><label class="btn small ghost" for="photoInput">${ICON.image}Заменить файл</label><button type="button" class="btn small ghost danger" data-act="photo-remove">${ICON.trash}Убрать фото</button></div>` : '')
+      + tools(croppable ? `<button type="button" class="btn small ghost" data-act="photo-crop">Кадрировать</button>` : '')
       + '</div>';
   } else {
-    el.photoBox.innerHTML = `<label class="photo-drop" for="photoInput">${ICON.imageLg}<span><strong>Добавить фото или обложку</strong><small class="hint-desk">Выбери файл, перетащи сюда, вставь из буфера (Ctrl+V) или укажи ссылку ниже</small><small class="hint-touch">Из галереи, с камеры или по ссылке</small></span></label>
+    el.photoBox.innerHTML = `<label class="photo-drop" for="photoInput">${ICON.imageLg}<span><strong>Добавить фото или обложку</strong><small class="hint-desk">Выбери файл, перетащи сюда, вставь из буфера (Ctrl+V) или укажи ссылку ниже. Потом можно выбрать пропорции: 1:1, 4:3, 16:9 и другие</small><small class="hint-touch">Из галереи, с камеры или по ссылке, потом выберешь пропорции</small></span></label>
     <div class="photo-url-row"><input type="url" id="photoUrlInput" placeholder="Или вставь прямую ссылку на картинку (https://…)"><button type="button" class="btn small ghost" data-act="photo-url-apply">Ок</button></div>`;
+  }
+}
+// перетаскивание кадра и масштаб: двигаем только картинку внутри рамки, обрезаем, когда отпустили
+function wireCrop() {
+  const frame = el.photoBox.querySelector('.crop-frame');
+  if (!frame || frame.classList.contains('free')) return;
+  let drag = null;
+  frame.addEventListener('pointerdown', e => {
+    drag = { x: e.clientX, y: e.clientY, cx: crop.cx, cy: crop.cy, sc: cropGeom(frame).sc };
+    try { frame.setPointerCapture(e.pointerId); } catch (_) {}
+    frame.classList.add('grabbing');
+  });
+  frame.addEventListener('pointermove', e => {
+    if (!drag) return;
+    crop.cx = drag.cx - (e.clientX - drag.x) / (form.photo.origW * drag.sc);
+    crop.cy = drag.cy - (e.clientY - drag.y) / (form.photo.origH * drag.sc);
+    placeCrop();
+  });
+  const end = () => { if (!drag) return; drag = null; frame.classList.remove('grabbing'); commitCrop(); };
+  frame.addEventListener('pointerup', end);
+  frame.addEventListener('pointercancel', end);
+  frame.addEventListener('keydown', e => {
+    const d = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.key];
+    if (!d) return;
+    e.preventDefault();
+    crop.cx += d[0] * 0.02; crop.cy += d[1] * 0.02;
+    placeCrop(); commitCrop();
+  });
+  const z = document.getElementById('cropZoom');
+  if (z) {
+    z.addEventListener('input', () => { crop.zoom = +z.value; placeCrop(); });
+    z.addEventListener('change', () => commitCrop());
   }
 }
 async function decodeImage(file) {
@@ -4437,6 +4573,13 @@ async function processPhoto(file) {
     im.done();
   }
 }
+// новое фото: оригинал лежит рядом, пока оценка не сохранена, поэтому пропорции можно менять сколько угодно
+function takeOriginal(blob, w, h, ratio) {
+  revokeFormPhoto();
+  const url = URL.createObjectURL(blob);
+  form.photo = { kind: 'new', blob, url, w, h, orig: blob, origUrl: url, origW: w, origH: h, ratio: ratio || null };
+  crop.zoom = 1; crop.cx = 0.5; crop.cy = 0.5;
+}
 async function setPhotoFromFile(file, announce) {
   if (!canPhoto() || photoBusy || !file) return;
   if (file.size > 40 * 1024 * 1024) { toast('Фото слишком большое, выбери файл до 40 МБ'); return; }
@@ -4444,15 +4587,39 @@ async function setPhotoFromFile(file, announce) {
   renderPhoto();
   try {
     const p = await processPhoto(file);
-    revokeFormPhoto();
-    form.photo = { kind: 'new', blob: p.blob, url: URL.createObjectURL(p.blob), w: p.w, h: p.h };
-    if (announce) toast('Фото добавлено');
+    takeOriginal(p.blob, p.w, p.h);
+    if (announce) toast('Фото добавлено, можно выбрать пропорции');
   } catch (_) {
     toast('Не получилось открыть фото. Попробуй JPG или PNG');
   } finally {
     photoBusy = false;
     renderPhoto();
     scheduleDraft();
+  }
+}
+// сохранённое фото тоже можно перекадрировать: берём его как новый оригинал
+async function cropSavedPhoto() {
+  const p = form.photo;
+  if (!p || photoBusy) return;
+  photoBusy = true;
+  renderPhoto();
+  try {
+    const bmp = await loadPhotoBitmap(p);
+    if (!bmp) throw new Error('load');
+    const cv = document.createElement('canvas');
+    cv.width = bmp.width; cv.height = bmp.height;
+    cv.getContext('2d').drawImage(bmp, 0, 0);
+    if (bmp.close) bmp.close();
+    const blob = await new Promise((res, rej) => cv.toBlob(b => (b ? res(b) : rej(new Error('encode'))), 'image/jpeg', 0.9));
+    takeOriginal(blob, cv.width, cv.height, 1);
+    photoBusy = false;
+    renderPhoto();
+    await commitCrop();
+  } catch (_) {
+    toast('Это фото не получается кадрировать здесь. Загрузи файл заново');
+  } finally {
+    photoBusy = false;
+    renderPhoto();
   }
 }
 function removePhoto() {
@@ -4518,6 +4685,14 @@ el.photoInput.addEventListener('change', () => {
 });
 el.photoBox.addEventListener('click', e => {
   if (e.target.closest('button[data-act="photo-remove"]')) removePhoto();
+  if (e.target.closest('button[data-act="photo-crop"]')) cropSavedPhoto();
+  const rb = e.target.closest('button[data-ratio]');
+  if (rb && form.photo && form.photo.kind === 'new') {
+    form.photo.ratio = rb.dataset.ratio ? +rb.dataset.ratio : null;
+    crop.zoom = 1; crop.cx = 0.5; crop.cy = 0.5;
+    renderPhoto();
+    commitCrop();
+  }
   if (e.target.closest('button[data-act="photo-url-apply"]')) {
     const inp = document.getElementById('photoUrlInput');
     const url = inp ? inp.value.trim() : '';
