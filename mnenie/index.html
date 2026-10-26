@@ -257,7 +257,11 @@ a.theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
 
 /* Board toolbar: main switch on view, the rest behind one button */
 .board-bar { position: relative; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; }
-.board-view { margin-top: 12px; }
+.board-tools { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+.board-tools .board-more > summary { height: 36px; padding: 0 12px; }
+.icon-seg button { width: 34px; padding: 0; display: grid; place-items: center; }
+.icon-seg button svg { display: block; }
+@media (pointer: coarse) { .icon-seg button { width: 40px; } }
 .board-more > summary { list-style: none; gap: 6px; }
 .board-more > summary::-webkit-details-marker { display: none; }
 .board-more > summary b { font-weight: 600; color: var(--accent); }
@@ -311,6 +315,31 @@ a.theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
 
 /* Tier List View */
 .tier-board { display: grid; gap: 8px; margin-top: 14px; }
+/* Статистика: переключатель «Обзор · Тиры» и тир-лист */
+.stats-switch { margin: 14px 0 4px; }
+.tl-tools { display: grid; gap: 12px; margin-top: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel-2); }
+.tl-opt { display: grid; gap: 6px; }
+.tl-cats { margin: 0; }
+.tl-acts { display: flex; flex-wrap: wrap; gap: 8px; }
+.tl { display: grid; gap: 8px; margin-top: 14px; }
+.tl-row { display: grid; grid-template-columns: 74px minmax(0, 1fr); min-height: 84px; border-radius: 14px; overflow: hidden; background: var(--panel-2); border: 1px solid var(--line); }
+.tl-head { display: grid; place-content: center; justify-items: center; gap: 2px; background: var(--c); color: #0D0F14; }
+.tl-head b { font-family: var(--font-display); font-weight: 800; font-size: 40px; line-height: .9; }
+.tl-head small { font-size: 10.5px; font-weight: 700; opacity: .75; }
+.tl-items { display: flex; flex-wrap: wrap; align-content: center; gap: 8px; padding: 8px; }
+.tl-empty { font-size: 12.5px; color: var(--ink-3); padding-left: 4px; }
+.tl-item { display: grid; gap: 4px; justify-items: center; width: 64px; padding: 0; border: 0; background: none; color: inherit; cursor: pointer; transition: transform .25s cubic-bezier(.34, 1.56, .64, 1); }
+.tl-item:hover { transform: translateY(-3px) scale(1.04); }
+.tl-item:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 12px; }
+.tl-pic { position: relative; display: grid; place-items: center; width: 64px; height: 64px; border-radius: 12px; overflow: hidden; background: var(--panel); border: 1px solid var(--line); }
+.tl-pic img { width: 100%; height: 100%; object-fit: cover; }
+.tl-pic > span { position: absolute; inset: 0; display: grid; place-items: center; font-family: var(--font-display); font-weight: 800; font-size: 34px; color: color-mix(in srgb, var(--tier) 75%, var(--ink)); }
+.tl-pic b {
+  position: absolute; right: 3px; bottom: 3px; min-width: 30px; height: 20px; padding: 0 4px; border-radius: 6px; display: grid; place-items: center;
+  background: var(--tier); color: var(--on-tier); font-family: var(--font-display); font-weight: 800; font-size: 16px; line-height: 1;
+}
+.tl-name { width: 100%; font-size: 11.5px; font-weight: 600; line-height: 1.2; text-align: center; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+@media (max-width: 440px) { .tl-row { grid-template-columns: 58px minmax(0, 1fr); } .tl-item, .tl-pic { width: 56px; } .tl-pic { height: 56px; } }
 .tier-row {
   display: grid; grid-template-columns: 64px minmax(0, 1fr); border: 1px solid var(--line);
   border-radius: 12px; overflow: hidden; background: var(--panel-2); min-height: 64px;
@@ -1384,13 +1413,6 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
         <div class="board-head">
           <p class="board-stat" id="boardStat">Загружаю рейтинг…</p>
         </div>
-        <div class="board-view">
-          <div class="seg" id="layoutGroup" role="group" aria-label="Вид списка">
-            <button type="button" data-bmode="list" aria-pressed="true">Список</button>
-            <button type="button" data-bmode="grid" aria-pressed="false">Плитка</button>
-            <button type="button" data-bmode="tiers" aria-pressed="false" title="Тир-лист S/A/B/C/D">Тиры</button>
-          </div>
-        </div>
         <div class="filters" id="filters" role="group" aria-label="Категория в рейтинге" hidden></div>
         <div class="board-bar" id="subFilters" role="group" aria-label="Что показать">
           <div class="seg">
@@ -1398,8 +1420,9 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
             <button type="button" data-sfilter="mine" aria-pressed="false">👤 Мои</button>
             <button type="button" data-sfilter="fav" aria-pressed="false">★ Избранное</button>
           </div>
+          <div class="board-tools">
           <details class="board-more" id="boardMore">
-            <summary class="btn small ghost">⚙ Сортировка и фильтры<b id="boardMoreHint"></b></summary>
+            <summary class="btn small ghost">Фильтры<b id="boardMoreHint"></b></summary>
             <div class="board-more-body">
               <div>
                 <span class="label">Сортировка</span>
@@ -1421,6 +1444,11 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
               <button type="button" class="btn small ghost" id="randomBtn">🎲 Случайная оценка</button>
             </div>
           </details>
+          <div class="seg icon-seg" id="layoutGroup" role="group" aria-label="Вид списка">
+            <button type="button" data-bmode="list" aria-pressed="true" aria-label="Список" title="Список"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M5.5 4h8M5.5 8h8M5.5 12h8"/><circle cx="2.5" cy="4" r=".6" fill="currentColor"/><circle cx="2.5" cy="8" r=".6" fill="currentColor"/><circle cx="2.5" cy="12" r=".6" fill="currentColor"/></svg></button>
+            <button type="button" data-bmode="grid" aria-pressed="false" aria-label="Плитка" title="Плитка"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1.3"/><rect x="9" y="2" width="5" height="5" rx="1.3"/><rect x="2" y="9" width="5" height="5" rx="1.3"/><rect x="9" y="9" width="5" height="5" rx="1.3"/></svg></button>
+          </div>
+          </div>
         </div>
         <div class="search" id="searchWrap" hidden>
           <input id="search" type="search" placeholder="Поиск по названию, тегам, заметкам или автору…" aria-label="Найти в рейтинге" autocomplete="off" enterkeyhint="search">
@@ -1444,7 +1472,9 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
       </div>
 
       <div id="panelStats" role="tabpanel" aria-labelledby="tabStats" hidden>
+        <div class="stats-switch"><div class="seg" id="statsSeg" role="group" aria-label="Что показать в статистике"><button type="button" data-sview="overview" aria-pressed="true">Обзор</button><button type="button" data-sview="tiers" aria-pressed="false">Тиры</button></div></div>
         <div class="stats-wrap" id="statsContent"></div>
+        <div class="tl-wrap" id="tierView" hidden></div>
       </div>
 
       <div id="panelLog" role="tabpanel" aria-labelledby="tabLog" hidden>
@@ -2614,6 +2644,8 @@ function blankForm(cat) {
     note: '', scores: {}, notes: {}, openNotes: {}, weights: {}, extra: [], extraCatName: '', photo: null, ownOnly: false
   };
 }
+state.statsView = state.statsView || 'overview';
+state.tierOpts = state.tierOpts || { mode: 'scores', cats: null };
 let form = blankForm();
 let drag = null;
 let pendingFocus = null;
@@ -3621,7 +3653,12 @@ function loadPrefs() {
   try {
     const p = JSON.parse(localStorage.getItem(PREFS_KEY) || 'null');
     if (p && ['score', 'date', 'name'].includes(p.sort)) state.sort = p.sort;
-    if (p && ['list', 'grid', 'tiers'].includes(p.bmode)) state.bmode = p.bmode;
+    if (p && ['list', 'grid'].includes(p.bmode)) state.bmode = p.bmode;
+    if (p && ['overview', 'tiers'].includes(p.statsView)) state.statsView = p.statsView;
+    if (p && p.tierOpts && typeof p.tierOpts === 'object') {
+      if (['icons', 'scores', 'names'].includes(p.tierOpts.mode)) state.tierOpts.mode = p.tierOpts.mode;
+      if (Array.isArray(p.tierOpts.cats)) state.tierOpts.cats = p.tierOpts.cats.filter(x => typeof x === 'string').slice(0, 40);
+    }
     if (p && ['auto', 'light', 'dark', 'neon', 'ocean', 'forest', 'sand', 'sakura'].includes(p.theme)) state.theme = p.theme;
     if (p && typeof p.filter === 'string') state.filter = p.filter;
     if (p && p.exportOpts && typeof p.exportOpts === 'object') {
@@ -3636,6 +3673,7 @@ function savePrefs() {
   try {
     localStorage.setItem(PREFS_KEY, JSON.stringify({
       sort: state.sort, bmode: state.bmode, theme: state.theme, filter: state.filter, exportOpts: state.exportOpts,
+      statsView: state.statsView, tierOpts: state.tierOpts,
       view: state.view, logTab: state.logTab, section: state.section
     }));
   } catch (_) {}
@@ -5359,8 +5397,147 @@ function applyTheme(t) {
   }
 }
 
+// ---------- Тир-лист в статистике: свои категории, вид элементов и картинка для экспорта ----------
+const TL_TIERS = [
+  { id: 'S', min: 9.2, range: '9,2–10', col: '#43C97A' },
+  { id: 'A', min: 8.2, range: '8,2–9,1', col: '#9BCF4E' },
+  { id: 'B', min: 7.0, range: '7–8,1', col: '#F2BA44' },
+  { id: 'C', min: 5.0, range: '5–6,9', col: '#F28E4C' },
+  { id: 'D', min: -1, range: 'ниже 5', col: '#F26A55' }
+];
+function tierPool() {
+  const cats = state.tierOpts.cats;
+  // примеры показываем, только пока своих оценок нет
+  const base = state.ratings.some(r => !r.example) ? state.ratings.filter(r => !r.example) : state.ratings;
+  return base.filter(r => r.total != null && (!cats || cats.includes(catKey(r)))).sort(byScore);
+}
+function tierBuckets(list) {
+  const b = TL_TIERS.map(t => ({ t, items: [] }));
+  for (const r of list) (b.find(x => r.total >= x.t.min) || b[b.length - 1]).items.push(r);
+  return b;
+}
+function renderTierView() {
+  const box = document.getElementById('tierView');
+  if (!box) return;
+  const gs = groups().filter(g => g.id !== '__none' || g.n);
+  const sel = state.tierOpts.cats;
+  const list = tierPool();
+  const mode = state.tierOpts.mode;
+  const chip = (id, name, n, on) => `<button type="button" class="chip-btn" data-tlcat="${esc(id)}" aria-pressed="${on}">${esc(name)}${n != null ? ` <b>${n}</b>` : ''}</button>`;
+  const item = (r) => {
+    const pUrl = resolvePhotoUrl(r.photo);
+    const letter = esc([...String(r.name).trim()][0] || '?');
+    return `<button type="button" class="tl-item" data-tier-goto="${esc(r.id)}" data-tier="${tierT(r.total)}" title="${esc(r.name)} · ${fmt(r.total)}">
+      <span class="tl-pic">${pUrl ? `<img src="${esc(pUrl)}" alt="" loading="lazy" decoding="async" data-photo="thumb">` : `<span>${letter}</span>`}${mode === 'scores' ? `<b>${fmt(r.total)}</b>` : ''}</span>
+      ${mode === 'names' ? `<span class="tl-name">${esc(r.name)}</span>` : ''}
+    </button>`;
+  };
+  box.innerHTML = `<div class="tl-tools">
+      <div class="tl-opt"><span class="label">Категории</span><div class="chips tl-cats">${chip('all', 'Все', null, !sel)}${gs.map(g => chip(g.id, g.name, g.n, !!sel && sel.includes(g.id))).join('')}</div></div>
+      <div class="tl-opt"><span class="label">Вид</span><div class="seg" id="tlMode" role="group" aria-label="Вид тир-листа">
+        <button type="button" data-tlmode="icons" aria-pressed="${mode === 'icons'}">Иконки</button>
+        <button type="button" data-tlmode="scores" aria-pressed="${mode === 'scores'}">С оценками</button>
+        <button type="button" data-tlmode="names" aria-pressed="${mode === 'names'}">С названиями</button>
+      </div></div>
+      <div class="tl-acts"><button type="button" class="btn small primary" data-tl="png">Скачать PNG</button>${window.ClipboardItem && navigator.clipboard && navigator.clipboard.write ? '<button type="button" class="btn small ghost" data-tl="copy">Скопировать картинку</button>' : ''}</div>
+    </div>
+    ${list.length ? `<div class="tl" data-mode="${mode}">${tierBuckets(list).map(({ t, items }) => `<div class="tl-row">
+      <div class="tl-head" style="--c:${t.col}"><b>${t.id}</b><small>${t.range}</small></div>
+      <div class="tl-items">${items.length ? items.map(item).join('') : '<span class="tl-empty">пусто</span>'}</div>
+    </div>`).join('')}</div>` : '<div class="empty"><p><strong>Тир-лист пуст.</strong> Здесь появятся оценки с баллом из выбранных категорий.</p></div>'}`;
+}
+// картинка тир-листа: рисуем заново на canvas, фото берём те же, что в рейтинге
+async function tierPng() {
+  const list = tierPool();
+  if (!list.length) { toast('В тир-листе пока пусто'); return null; }
+  const mode = state.tierOpts.mode;
+  try { await document.fonts.load('800 40px Handjet'); await document.fonts.load('600 16px Onest'); } catch (_) {}
+  const W = 1200, PAD = 32, HEAD = 112, TILE = 96, GAP = 10, CAP = mode === 'names' ? 38 : 0;
+  const perRow = Math.floor((W - PAD * 2 - HEAD - GAP * 2) / (TILE + GAP));
+  const buckets = tierBuckets(list);
+  const rows = buckets.map(b => Math.max(1, Math.ceil(b.items.length / perRow)));
+  const rowH = (n) => n * (TILE + CAP) + (n - 1) * GAP + GAP * 2;
+  const H = PAD + 92 + rows.reduce((a, n) => a + rowH(n) + 8, 0) + 40 + PAD;
+  const bmps = new Map();
+  await Promise.all(list.filter(r => r.photo && !/^https?:/.test(resolvePhotoUrl(r.photo))).map(async r => { const b = await loadPhotoBitmap(r.photo); if (b) bmps.set(r.id, b); }));
+  const cv = document.createElement('canvas');
+  const k = 2;
+  cv.width = W * k; cv.height = H * k;
+  const ctx = cv.getContext('2d');
+  ctx.scale(k, k);
+  ctx.fillStyle = '#0D0F14'; ctx.fillRect(0, 0, W, H);
+  const rr = (x, y, w, h, r, fill) => { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); ctx.fillStyle = fill; ctx.fill(); };
+  ctx.fillStyle = '#E8EAF0'; ctx.font = '800 46px Handjet, sans-serif'; ctx.textBaseline = 'top';
+  ctx.fillText('Мой тир-лист', PAD, PAD);
+  const cats = state.tierOpts.cats;
+  const sub = (cats ? groups().filter(g => cats.includes(g.id)).map(g => g.name).join(', ') : 'Все категории') + ` · ${list.length} ${plural(list.length, 'оценка', 'оценки', 'оценок')}`;
+  ctx.fillStyle = '#A3A9B8'; ctx.font = '500 16px Onest, sans-serif';
+  ctx.fillText(sub.length > 110 ? sub.slice(0, 108) + '…' : sub, PAD, PAD + 54);
+  let y = PAD + 92;
+  buckets.forEach((b, i) => {
+    const h = rowH(rows[i]);
+    rr(PAD, y, W - PAD * 2, h, 16, '#161920');
+    rr(PAD, y, HEAD, h, 16, b.t.col);
+    ctx.fillStyle = '#0D0F14'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = '800 56px Handjet, sans-serif'; ctx.fillText(b.t.id, PAD + HEAD / 2, y + h / 2 - 8);
+    ctx.font = '600 13px Onest, sans-serif'; ctx.fillText(b.t.range, PAD + HEAD / 2, y + h / 2 + 30);
+    b.items.forEach((r, j) => {
+      const cx = PAD + HEAD + GAP * 2 + (j % perRow) * (TILE + GAP), cy = y + GAP + Math.floor(j / perRow) * (TILE + CAP + GAP);
+      const col = { good: '#43C97A', mid: '#F2BA44', bad: '#F26A55' }[tierT(r.total)] || '#272C36';
+      ctx.save();
+      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(cx, cy, TILE, TILE, 12) : ctx.rect(cx, cy, TILE, TILE); ctx.clip();
+      const bmp = bmps.get(r.id);
+      if (bmp) { const s2 = Math.max(TILE / bmp.width, TILE / bmp.height); ctx.drawImage(bmp, cx + (TILE - bmp.width * s2) / 2, cy + (TILE - bmp.height * s2) / 2, bmp.width * s2, bmp.height * s2); }
+      else { ctx.fillStyle = '#1D2129'; ctx.fillRect(cx, cy, TILE, TILE); ctx.fillStyle = col; ctx.font = '800 50px Handjet, sans-serif'; ctx.fillText([...String(r.name).trim()][0] || '?', cx + TILE / 2, cy + TILE / 2); }
+      ctx.restore();
+      if (mode === 'scores') {
+        const t = fmt(r.total);
+        ctx.font = '800 22px Handjet, sans-serif';
+        const bw = ctx.measureText(t).width + 14;
+        rr(cx + TILE - bw - 4, cy + TILE - 30, bw, 26, 7, col);
+        ctx.fillStyle = '#0D0F14'; ctx.fillText(t, cx + TILE - bw / 2 - 4, cy + TILE - 17);
+      }
+      if (mode === 'names') {
+        ctx.fillStyle = '#E8EAF0'; ctx.font = '600 12px Onest, sans-serif';
+        let n = String(r.name);
+        while (n.length > 1 && ctx.measureText(n).width > TILE) n = n.slice(0, -2) + '…';
+        ctx.fillText(n, cx + TILE / 2, cy + TILE + 18);
+      }
+    });
+    ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    y += h + 8;
+  });
+  ctx.fillStyle = '#6F7585'; ctx.font = '500 14px Onest, sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'alphabetic';
+  ctx.fillText('Мнение Казуала · casualhub.pages.dev', W - PAD, H - PAD + 6);
+  bmps.forEach(b => b.close && b.close());
+  return await new Promise(res => cv.toBlob(res, 'image/png'));
+}
+async function tierExport(kind) {
+  const blob = await tierPng();
+  if (!blob) return;
+  if (kind === 'copy') {
+    try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); toast('Тир-лист скопирован'); }
+    catch (_) { toast('Браузер не дал скопировать картинку, скачай её'); }
+    return;
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'тир-лист.png';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  toast('Тир-лист сохранён в загрузки');
+}
 function renderStats() {
   if (!el.statsContent) return;
+  const seg = document.getElementById('statsSeg'), tv = document.getElementById('tierView');
+  if (seg) seg.querySelectorAll('[data-sview]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.sview === state.statsView)));
+  if (state.statsView === 'tiers' && tv) {
+    el.statsContent.hidden = true; tv.hidden = false;
+    renderTierView();
+    return;
+  }
+  el.statsContent.hidden = false;
+  if (tv) tv.hidden = true;
   const rated = state.ratings.filter(r => r.total != null);
   if (!rated.length) {
     el.statsContent.innerHTML = `<div class="empty"><p><strong>Статистика пока пуста.</strong> Добавь хотя бы одну оценку, чтобы увидеть распределение баллов, медиану, рекорды критериев и аналитику по категориям.</p></div>`;
@@ -5570,6 +5747,34 @@ if (el.randomBtn) {
       goToRating(pick.id);
       toast(`🎲 Случайный выбор: ${pick.name}`);
     }
+  });
+}
+{
+  const seg = document.getElementById('statsSeg'), tv = document.getElementById('tierView');
+  if (seg) seg.addEventListener('click', e => {
+    const b = e.target.closest('[data-sview]');
+    if (!b || state.statsView === b.dataset.sview) return;
+    state.statsView = b.dataset.sview;
+    savePrefs();
+    renderStats();
+  });
+  if (tv) tv.addEventListener('click', e => {
+    const c = e.target.closest('[data-tlcat]');
+    if (c) {
+      const id = c.dataset.tlcat;
+      let cats = state.tierOpts.cats ? [...state.tierOpts.cats] : [];
+      if (id === 'all') cats = null;
+      else { cats = cats.includes(id) ? cats.filter(x => x !== id) : [...cats, id]; if (!cats.length) cats = null; }
+      state.tierOpts.cats = cats;
+      savePrefs(); renderTierView();
+      return;
+    }
+    const m = e.target.closest('[data-tlmode]');
+    if (m) { state.tierOpts.mode = m.dataset.tlmode; savePrefs(); renderTierView(); return; }
+    const a = e.target.closest('[data-tl]');
+    if (a) { a.disabled = true; tierExport(a.dataset.tl).finally(() => { a.disabled = false; }); return; }
+    const g = e.target.closest('[data-tier-goto]');
+    if (g) goToRating(g.dataset.tierGoto);
   });
 }
 if (el.tierBoard) {
