@@ -62,12 +62,18 @@
 }
 @media (prefers-reduced-motion: reduce) { .wn-card { animation: none; } }`;
 
-  let sheet = null, lastFocus = null;
-  function ensureSheet() {
-    if (sheet) return sheet;
+  let sheet = null, lastFocus = null, styled = false;
+  // стили подключаются сразу: точка «новое» на кнопке должна быть оформлена ещё до открытия окна
+  function ensureStyle() {
+    if (styled) return;
+    styled = true;
     const st = document.createElement('style');
     st.textContent = CSS;
     document.head.appendChild(st);
+  }
+  function ensureSheet() {
+    if (sheet) return sheet;
+    ensureStyle();
     sheet = document.createElement('div');
     sheet.className = 'wn-sheet';
     sheet.hidden = true;
@@ -106,6 +112,7 @@
   function bindButtons() {
     const btns = document.querySelectorAll('[data-whatsnew]');
     if (!btns.length) return;
+    ensureStyle();
     btns.forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); open(); }));
     load().then((d) => {
       if (d.latest && d.latest !== seen()) btns.forEach((b) => { if (!b.querySelector('.wn-dot')) b.insertAdjacentHTML('beforeend', '<i class="wn-dot" aria-hidden="true"></i>'); });

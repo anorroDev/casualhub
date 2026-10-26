@@ -741,14 +741,14 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     </div>
     <div class="masthead-right">
       <div class="user-bar">
-        <a class="theme-btn" id="backLink" href="/" hidden aria-label="Казуал Хаб, главная"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 8H3M7 4L3 8l4 4"/></svg><span class="hl-full">Казуал </span>Хаб</a>
-        <a class="theme-btn" id="mnenieLink" href="/mnenie/" hidden title="Мнение Казуала"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1.5" y="9" width="3.4" height="5.5" rx="1" fill="#E4553F"/><rect x="6.3" y="6" width="3.4" height="8.5" rx="1" fill="#EAA92C"/><rect x="11.1" y="2.5" width="3.4" height="12" rx="1" fill="#2EAD60"/></svg><span class="ml-text">Мнение</span></a>
-        <button type="button" class="theme-btn" id="whatsNewBtn" data-whatsnew title="Что нового на сайте"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.5l1.6 3.6 3.9.4-2.9 2.6.8 3.9L8 10l-3.4 2 .8-3.9-2.9-2.6 3.9-.4z"/></svg><span class="wn-text">Что нового</span></button>
+        <a class="theme-btn" id="backLink" href="/" aria-label="Казуал Хаб, главная"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 8H3M7 4L3 8l4 4"/></svg><span class="hl-full">Казуал </span>Хаб</a>
+        <a class="theme-btn" id="mnenieLink" href="/mnenie/" title="Мнение Казуала"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1.5" y="9" width="3.4" height="5.5" rx="1" fill="#E4553F"/><rect x="6.3" y="6" width="3.4" height="8.5" rx="1" fill="#EAA92C"/><rect x="11.1" y="2.5" width="3.4" height="12" rx="1" fill="#2EAD60"/></svg><span class="ml-text">Мнение</span></a>
         <a class="theme-btn" id="githubLink" href="https://github.com/anorroDev/casualhub" target="_blank" rel="noopener" title="Код сайта на GitHub"><svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a>
         <details class="theme-pick" id="themePick">
           <summary class="theme-btn" id="themeBtn" title="Тема оформления">🌓 Тема: Авто</summary>
           <div class="theme-menu" id="themeMenu" role="group" aria-label="Тема оформления"></div>
         </details>
+        <button type="button" class="theme-btn" id="whatsNewBtn" data-whatsnew title="Что нового на сайте"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.5l1.6 3.6 3.9.4-2.9 2.6.8 3.9L8 10l-3.4 2 .8-3.9-2.9-2.6 3.9-.4z"/></svg><span class="wn-text">Что нового</span></button>
       </div>
     </div>
   </header>
@@ -2615,7 +2615,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     if (!d) { S.sample = true; SAMPLE.forEach(([n, a]) => S.items.push(makeItem(n, a, S.cur))); }
     $('#cur').innerHTML = CODES.map((c) => `<option value="${c}">${CUR[c].sym} ${c}</option>`).join('');
     $('#cur').value = S.cur;
-    if (/\/koleso(\/|\/index\.html)?$/.test(location.pathname)) { $('#backLink').hidden = false; $('#mnenieLink').hidden = false; }
+    if (!/\/koleso(\/|\/index\.html)?$/.test(location.pathname)) { $('#backLink').hidden = true; $('#mnenieLink').hidden = true; } // вне сайта ссылкам некуда вести
 
     applyTheme(readThemePref(), false);
     readTheme();
