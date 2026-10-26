@@ -695,6 +695,9 @@ ${ICON.chev}
   function afterBoard() {
     try { decorateOwn(); } catch (e) {}
     const mine = state.sfilter === 'mine';
+    // во «Моих» уже есть строка друзей со своей кнопкой «Друзья» — вторая не нужна
+    const fo = document.getElementById('friendsOpen');
+    if (fo) fo.hidden = mine;
     bar.hidden = !mine;
     if (!mine || F.view === 'me') {
       fboard.hidden = true;
