@@ -357,6 +357,9 @@ h1, h2, p { margin: 0; }
   display: inline-grid; place-items: center; min-width: 44px; height: 30px; padding: 0 6px; border-radius: 8px;
   background: var(--tier); color: var(--on-tier); font-family: var(--font-display); font-weight: 800; font-size: 22px; line-height: 1; font-variant-numeric: tabular-nums;
 }
+.pv-row[data-go], .chip[data-go] { cursor: pointer; }
+.pv-row[data-go]:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.chip[data-go]:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); color: var(--ink); }
 .pv-row.ghost { background: transparent; border-style: dashed; box-shadow: none; color: var(--ink-3); }
 .pv-row.ghost .pv-badge { background: var(--cell); color: var(--ink-3); }
 .pv-tag { position: absolute; right: 10px; top: 9px; line-height: 1; font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
@@ -383,7 +386,10 @@ h1, h2, p { margin: 0; }
 @keyframes feed-in { from { transform: translateY(18px); } }
 .feed-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; }
 .feed h2 { font-family: var(--font-display); font-weight: 800; font-size: clamp(30px, 4.4vw, 40px); line-height: .95; }
-.feed-head span { color: var(--ink-3); font-size: 13px; }
+.feed-head span, .feed-all { color: var(--ink-3); font-size: 13px; }
+.feed-all { text-decoration: none; font-weight: 600; }
+.feed-side { display: inline-flex; gap: 10px; align-items: baseline; }
+.feed-all:hover { color: var(--accent); }
 .feed-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 @media (min-width: 760px) { .feed-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .fd {
@@ -549,7 +555,7 @@ h1, h2, p { margin: 0; }
   </section>
 
   <section class="feed" id="feed" hidden aria-labelledby="feedTitle">
-    <div class="feed-head"><h2 id="feedTitle">Что оценили друзья</h2><span id="feedNote"></span></div>
+    <div class="feed-head"><h2 id="feedTitle">Что оценили друзья</h2><span class="feed-side"><span id="feedNote"></span><a class="feed-all" href="/mnenie/#friends">все друзья →</a></span></div>
     <ul class="feed-list" id="feedList"></ul>
   </section>
 
@@ -568,7 +574,7 @@ h1, h2, p { margin: 0; }
     const a = Math.abs(n) % 100, b = a % 10;
     return a > 10 && a < 20 ? many : b > 1 && b < 5 ? few : b === 1 ? one : many;
   };
-  const chip = (num, word, cls) => `<span class="chip${cls ? ' ' + cls : ''}"><b>${num}</b>${word}</span>`;
+  const chip = (num, word, cls, go) => `<span class="chip${cls ? ' ' + cls : ''}"${go ? ` data-go="${go}"` : ''}><b>${num}</b>${word}</span>`;
   const fmt = (n) => Number(n).toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const tierT = (t) => (t == null ? 'none' : t >= 7.5 ? 'good' : t >= 5 ? 'mid' : 'bad');
   const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -577,12 +583,20 @@ h1, h2, p { margin: 0; }
   const user = read('ocenshik.user.v1');
   const renderAccount = () => window.hubRenderAccount(); // кнопка профиля рисуется сразу после шапки
 
+  // ---------- точные переходы внутри карточек: строка топа — к оценке, чип — к рейтингу или друзьям ----------
+  document.querySelector('.apps').addEventListener('click', (e) => {
+    const go = e.target.closest('[data-go]');
+    if (!go) return;
+    e.preventDefault();
+    location.href = go.dataset.go;
+  });
+
   // ---------- что лежит в разделах ----------
   const ratings = (read('ocenshik.ratings.v2') || []).filter((r) => r && !r.example);
   const mine = user ? ratings.filter((r) => r.author && r.author.id === user.id) : ratings;
   const mMeta = $('#mnenieMeta');
   mMeta.innerHTML = '<span id="mnCount" style="display:contents"></span>';
-  const renderMnCount = (n) => { $('#mnCount').innerHTML = n ? chip(n, plural(n, 'оценка', 'оценки', 'оценок')) : '<span class="chip">Пока ни одной оценки</span>'; };
+  const renderMnCount = (n) => { $('#mnCount').innerHTML = n ? chip(n, plural(n, 'оценка', 'оценки', 'оценок'), 'go', '/mnenie/#rating') : '<span class="chip">Пока ни одной оценки</span>'; };
   renderMnCount(mine.length);
 
   const wheel = read('koleso-vybyvanie-v1');
@@ -596,13 +610,13 @@ h1, h2, p { margin: 0; }
   // ---------- превью Мнения: свой топ-3 или примеры ----------
   function renderMnPreview(list) {
   const top = list.filter((r) => typeof r.total === 'number' && r.name).sort((a, b) => b.total - a.total).slice(0, 3);
-  const rows = top.length ? top.map((r) => ({ name: r.name, t: r.total }))
+  const rows = top.length ? top.map((r) => ({ name: r.name, t: r.total, id: r.id }))
     : [{ name: 'Интерстеллар', t: 9.8 }, { name: 'The Witcher 3', t: 9.3 }, { name: 'Hades', t: 8.4 }];
   const barsOf = (on) => Array.from({ length: 10 }, (_, j) => `<b style="--j:${j};height:${30 + j * 7}%"${j < on ? ' class="on"' : ''}></b>`).join('');
   // своих оценок меньше трёх: пустые места ждут следующих
   const ghosts = Array.from({ length: 3 - rows.length }, (_, g) => `<span class="pv-row ghost" style="--k:${rows.length + g}"><span class="pv-rank">${rows.length + g + 1}</span><span class="pv-name">${g ? '…' : 'Следующая оценка'}</span><span class="pv-bar">${barsOf(0)}</span><span class="pv-badge">—</span></span>`).join('');
   $('#mnPreview').innerHTML = (top.length ? '<span class="pv-tag">твой топ</span>' : '<span class="pv-tag">пример</span>')
-    + rows.map((r, k) => `<span class="pv-row" data-tier="${tierT(r.t)}" style="--k:${k}"><span class="pv-rank">${k + 1}</span><span class="pv-name">${esc(r.name)}</span><span class="pv-bar">${barsOf(Math.round(r.t))}</span><span class="pv-badge">${fmt(r.t)}</span></span>`).join('')
+    + rows.map((r, k) => `<span class="pv-row" data-tier="${tierT(r.t)}" style="--k:${k}"${r.id ? ` data-go="/mnenie/#r=${encodeURIComponent(r.id)}" title="Открыть оценку «${esc(r.name)}»"` : ''}><span class="pv-rank">${k + 1}</span><span class="pv-name">${esc(r.name)}</span><span class="pv-bar">${barsOf(Math.round(r.t))}</span><span class="pv-badge">${fmt(r.t)}</span></span>`).join('')
     + ghosts;
   }
   renderMnPreview(mine);
@@ -764,7 +778,7 @@ h1, h2, p { margin: 0; }
     const pic = r.photo && r.photo.url ? `<img src="${esc(r.photo.url)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fallback="${esc(String(r.name).charAt(0))}">`
       : r.photo && r.photo.remote ? '' : esc(String(r.name).charAt(0));
     const meta = [`<em>${who}</em>`, r.cat && esc(r.cat), r.status && esc(r.status), ago(it.at)].filter(Boolean).join(' · ');
-    return `<li><a class="fd" href="/profile/?id=${encodeURIComponent(it.user.id)}">
+    return `<li><a class="fd" href="/mnenie/#friend=${encodeURIComponent(it.user.id)}&r=${encodeURIComponent(r.id)}" title="Открыть оценку у ${who}">
       <span class="fd-pic" style="--fc:${colorOf(r.id || r.name)}"${r.photo && r.photo.remote ? ` data-ph="${esc(it.user.id + '|' + r.id)}"` : ''}>${pic || esc(String(r.name).charAt(0))}</span>
       <span class="fd-text"><b>${r.fav ? '★ ' : ''}${esc(r.name)}</b><span>${meta}</span></span>
       ${r.total != null ? `<span class="fd-score" data-tier="${tierT(r.total)}">${fmt(r.total)}</span>` : '<span class="fd-score none">без оценки</span>'}</a></li>`;
@@ -809,9 +823,9 @@ h1, h2, p { margin: 0; }
       .then((d) => {
         if (!d) return;
         const f = d.friends.length, inc = d.incoming.length;
-        if (f) mMeta.insertAdjacentHTML('beforeend', chip(f, plural(f, 'друг', 'друга', 'друзей')));
+        if (f) mMeta.insertAdjacentHTML('beforeend', chip(f, plural(f, 'друг', 'друга', 'друзей'), 'go', '/mnenie/#friends'));
         if (inc) {
-          mMeta.insertAdjacentHTML('beforeend', chip(inc, plural(inc, 'заявка', 'заявки', 'заявок') + ' в друзья', 'alert'));
+          mMeta.insertAdjacentHTML('beforeend', chip(inc, plural(inc, 'заявка', 'заявки', 'заявок') + ' в друзья', 'alert go', '/mnenie/#friends'));
           const dot = $('#reqDot');
           if (dot) { dot.textContent = inc; dot.hidden = false; }
         }
@@ -925,6 +939,8 @@ html.theme-swap::view-transition-new(root) { animation: theme-circle .6s cubic-b
 @keyframes theme-circle { from { clip-path: circle(0 at var(--tx, 50%) var(--ty, 0)); } to { clip-path: circle(150vmax at var(--tx, 50%) var(--ty, 0)); } }
 /* iPhone увеличивает страницу, если у поля шрифт меньше 16px: на iOS поля всегда 16px */
 @supports (-webkit-touch-callout: none) { input, textarea, select { font-size: max(16px, 1em) !important; } }
+/* на телефоне переключатели под палец: не ниже 40px */
+@media (pointer: coarse) { .seg button, .seg > button { min-height: 40px; } }
 </style>
 </body>
 </html>

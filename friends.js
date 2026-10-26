@@ -90,6 +90,35 @@
 
   // для Мнения: запросы к серверу от имени вошедшего (фото исполнителей с Genius)
   window.casualApi = { get: (path) => api(path), online: () => !!(F.me && F.token) };
+  // переходы с главной и из профиля: доска друга на его оценке, окно друзей
+  const waitFor = (test, ms = 8000) => new Promise((res) => {
+    const t0 = Date.now();
+    const tick = () => { const v = test(); if (v || Date.now() - t0 > ms) res(v); else setTimeout(tick, 250); };
+    tick();
+  });
+  window.CasualFriends = {
+    openSheet: () => waitFor(() => F.me || !F.online, 6000).then(() => openSheet()),
+    async showFriend(uid, rid) {
+      // друзья подгружаются после входа: ждём, пока этот друг появится в списке
+      const ok = await waitFor(() => F.friends.some((f) => f.id === uid));
+      if (!ok) { toast('Оценки этого человека видны только друзьям'); return; }
+      if (isNarrow()) setSection('board'); else setView('board');
+      state.sfilter = 'mine';
+      F.view = uid;
+      lsSet(VIEW_KEY, uid);
+      loadShelf(uid, true);
+      renderBoard();
+      if (!rid) return;
+      const li = await waitFor(() => fboard.querySelector(`.entry[data-rid="${CSS.escape(rid)}"]`));
+      if (!li) { toast('Этой оценки у друга уже нет'); return; }
+      const det = li.querySelector('details');
+      if (det) det.open = true;
+      li.classList.add('flash');
+      li.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+      for (const ms of [700, 1400]) setTimeout(() => { const r = li.getBoundingClientRect(); if (r.top < 0 || r.bottom > innerHeight) li.scrollIntoView({ block: 'center' }); }, ms); // после того как страница доразложится
+      setTimeout(() => li.classList.remove('flash'), 2000);
+    },
+  };
 
   // ---------- сервер ----------
   async function api(path, method = 'GET', data, token = F.token) {
@@ -516,7 +545,7 @@
         ${pros.length ? `<div class="e-pc-box pro"><span class="label pc-label-pro">➕ Плюсы</span><ul>${pros.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
         ${cons.length ? `<div class="e-pc-box con"><span class="label pc-label-con">➖ Минусы</span><ul>${cons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
       </div>` : '';
-    return `<li class="entry"><details><summary><span class="sum">
+    return `<li class="entry" data-rid="${esc(r.id || '')}"><details><summary><span class="sum">
 <span class="rank">${rank}</span>
 <span class="e-main">${friendPhoto(r, 'thumb')}<span class="e-text"><span class="e-name">${r.fav ? '<span class="fav-star-inline">★</span>' : ''}${esc(r.name)}</span><span class="e-sub"><span>${esc(meta)}</span>${r.catLabel ? `<span class="tag">${esc(r.catLabel)}</span>` : ''}${r.status ? `<span class="tag status-tag">${esc(r.status)}</span>` : ''}${r.meta ? `<span class="tag meta-tag">${esc(r.meta)}</span>` : ''}</span></span></span>
 <span class="spark" aria-hidden="true">${spark}</span>

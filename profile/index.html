@@ -357,6 +357,18 @@ button, input { font: inherit; color: inherit; }
 .pod .row small { color: var(--ink-3); font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 @supports not (aspect-ratio: 1 / 1) { .pod .pic { height: 96px; } .pod.p1 .pic { height: 128px; } }
 
+/* Нажимаемые плитки, категории, оценки */
+button.stat, button.cat { font: inherit; color: inherit; text-align: left; cursor: pointer; width: 100%; }
+button.cat { display: grid; padding: 6px 8px; margin: 0 -8px; width: calc(100% + 16px); border: 0; border-radius: 10px; background: transparent; }
+a.item, a.pod { color: inherit; text-decoration: none; }
+button.stat, a.item, a.pod, button.cat { transition: transform .2s var(--spring), border-color .15s, background-color .15s; }
+@media (hover: hover) {
+  button.stat:hover, a.pod:hover { border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
+  a.item:hover, button.cat:hover { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+}
+button.stat:active, a.item:active, a.pod:active, button.cat:active { transform: scale(.98); }
+button.stat:focus-visible, a.item:focus-visible, a.pod:focus-visible, button.cat:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
 /* Badges and tiny meters */
 .badge {
   display: inline-grid; place-items: center; min-width: 46px; height: 32px; padding: 0 7px; border-radius: 9px;
@@ -470,6 +482,8 @@ button, input { font: inherit; color: inherit; }
 }
 /* iPhone увеличивает страницу, если у поля шрифт меньше 16px: на iOS поля всегда 16px */
 @supports (-webkit-touch-callout: none) { input, textarea, select { font-size: max(16px, 1em) !important; } }
+/* на телефоне переключатели под палец: не ниже 40px */
+@media (pointer: coarse) { .seg button, .seg > button { min-height: 40px; } }
 </style>
 <script src="/avatar-sync.js"></script>
 </head>
@@ -654,27 +668,27 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       </section>
 
       <div class="stats">
-        <div class="stat rise" style="--d:${d++}"><b data-count="${rs.length}">${rs.length}</b><span>${plural(rs.length, 'оценка', 'оценки', 'оценок')}</span></div>
+        <button type="button" class="stat rise" data-jump="allSec" style="--d:${d++}"><b data-count="${rs.length}">${rs.length}</b><span>${plural(rs.length, 'оценка', 'оценки', 'оценок')}</span></button>
         <div class="stat tiered rise" data-tier="${tierT(avg)}" style="--d:${d++}"><b>${avg != null ? fmt(avg) : '—'}</b><span>средний балл</span></div>
-        <div class="stat rise" style="--d:${d++}"><b data-count="${masters}">${masters}</b><span>${plural(masters, 'шедевр', 'шедевра', 'шедевров')} 8,5+</span></div>
-        <div class="stat rise" style="--d:${d++}"><b data-count="${cats.size}">${cats.size}</b><span>${plural(cats.size, 'категория', 'категории', 'категорий')}</span></div>
+        <button type="button" class="stat rise" data-jump="best" style="--d:${d++}"><b data-count="${masters}">${masters}</b><span>${plural(masters, 'шедевр', 'шедевра', 'шедевров')} 8,5+</span></button>
+        <button type="button" class="stat rise" data-jump="catsSec" style="--d:${d++}"><b data-count="${cats.size}">${cats.size}</b><span>${plural(cats.size, 'категория', 'категории', 'категорий')}</span></button>
         ${p.common
-          ? `<div class="stat rise" style="--d:${d++}"><b data-count="${p.common.length}">${p.common.length}</b><span>${plural(p.common.length, 'общая оценка', 'общие оценки', 'общих оценок')}</span></div>`
-          : `<div class="stat rise" style="--d:${d++}"><b>${p.friends ? `<span data-count="${p.friends.length}">${p.friends.length}</span>` : '—'}</b><span>${p.friends ? plural(p.friends.length, 'друг', 'друга', 'друзей') : 'друзья'}</span></div>`}
+          ? `<button type="button" class="stat rise" data-jump="taste" style="--d:${d++}"><b data-count="${p.common.length}">${p.common.length}</b><span>${plural(p.common.length, 'общая оценка', 'общие оценки', 'общих оценок')}</span></button>`
+          : `<button type="button" class="stat rise" data-jump="friendsSec" style="--d:${d++}"><b>${p.friends ? `<span data-count="${p.friends.length}">${p.friends.length}</span>` : '—'}</b><span>${p.friends ? plural(p.friends.length, 'друг', 'друга', 'друзей') : 'друзья'}</span></button>`}
       </div>
 
       <div class="grid">
         <div class="col">
           ${top3.length ? `<section class="card rise" style="--d:${d++}">
             <div class="head"><h2 class="h2">Любимое</h2><span class="label">топ по баллу</span></div>
-            <div class="podium">${top3.map((r, k) => `<div class="pod p${k + 1}" data-tier="${tierT(r.total)}">
+            <div class="podium">${top3.map((r, k) => `<a class="pod p${k + 1}" href="${rateLink(p, r)}" title="Открыть оценку «${esc(r.name)}»" data-tier="${tierT(r.total)}">
               <div class="pic" data-photo="${r.photo ? esc(r.id) : ''}"><span class="place">${k + 1}</span><span class="ltr">${letter(r.name)}</span></div>
               <strong>${esc(r.name)}</strong>
-              <div class="row"><small>${esc(r.cat)}</small>${badge(r.total)}</div></div>`).join('')}</div>
+              <div class="row"><small>${esc(r.cat)}</small>${badge(r.total)}</div></a>`).join('')}</div>
           </section>` : ''}
 
-          <section class="card rise" style="--d:${d++}">
-            <div class="head"><h2 class="h2">Все оценки</h2><span class="label" id="listStat"></span>${isMe && p.allRatings && p.allRatings.length ? `<button type="button" class="btn ghost topics-btn" id="topicsBtn" aria-expanded="${ST.topics}" aria-controls="topics">Темы профиля${p.hide && p.hide.length ? ` · скрыто ${p.hide.length}` : ''}</button>` : ''}</div>
+          <section class="card rise" id="allSec" style="--d:${d++}">
+            <div class="head"><h2 class="h2">Все оценки</h2><span class="label" id="listStat"></span>${isMe && p.allRatings && p.allRatings.length ? `<button type="button" class="btn ghost topics-btn" id="topicsBtn" aria-expanded="${ST.topics}" aria-controls="topics">Что показывать${p.hide && p.hide.length ? ` · скрыто ${p.hide.length}` : ''}</button>` : ''}</div>
             ${isMe && p.allRatings && p.allRatings.length ? `<div class="topics" id="topics"${ST.topics ? '' : ' hidden'}>
               <span class="label">Что видно в профиле</span>
               <div class="chips" style="margin:0">${[...new Map(p.allRatings.map((r) => [keyOf(r.cat), r.cat])).entries()].map(([k, name]) => `<button type="button" class="chip" data-topic="${esc(k)}" aria-pressed="${!(p.hide || []).includes(k)}">${esc(name)} <b>${p.allRatings.filter((r) => keyOf(r.cat) === k).length}</b></button>`).join('')}</div>
@@ -703,7 +717,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
           </section>` : ''}
 
           ${p.friends ? `<section class="card rise" style="--d:${d++}">
-            <div class="head"><h2 class="h2">Друзья</h2><span class="label">${p.friends.length}</span></div>
+            <div class="head" id="friendsSec"><h2 class="h2">Друзья</h2><span class="label">${p.friends.length}</span></div>
             ${p.friends.length ? `<div class="frs">${p.friends.map((f) => `<a class="fr" href="/profile/?id=${encodeURIComponent(f.id)}">
                 <span class="av" data-uid="${esc(f.id)}" style="background-color:${colorOf(f.username)}">${letter(f.username)}</span>
                 <span class="tx"><b>${esc(f.username)}</b><small>${f.updatedAt ? 'оценки обновлены ' + ago(f.updatedAt) : 'оценок пока нет'}</small></span>${ICON.go}</a>`).join('')}</div>`
@@ -715,18 +729,51 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
             <div class="head"><h2 class="h2">Оценки 1–10</h2><span class="label">${rated.length} с баллом</span></div>
             <div class="hist">${hist.map((n, k) => `<div data-tier="${tierV(k + 1)}"><span class="bar${n ? '' : ' zero'}" style="height:${n ? Math.max(6, (n / hmax) * 100) : 3}%;--d:${k}"></span><small>${n || ''}</small><em>${k + 1}</em></div>`).join('')}</div>
           </section>
-          <section class="card rise" style="--d:${d++}">
+          <section class="card rise" id="catsSec" style="--d:${d++}">
             <div class="head"><h2 class="h2">Категории</h2></div>
-            <div class="catl">${[...cats.entries()].sort((a, b) => b[1].n - a[1].n).map(([name, c]) => { const av = c.k ? c.sum / c.k : null; return `<div class="cat"><b>${esc(name)}</b><small>${c.n} · ${av != null ? 'в среднем ' + fmt(av) : 'без балла'}</small><span class="tr" data-tier="${tierT(av)}"><i style="width:${(c.n / rs.length) * 100}%"></i></span></div>`; }).join('')}</div>
+            <div class="catl">${[...cats.entries()].sort((a, b) => b[1].n - a[1].n).map(([name, c]) => { const av = c.k ? c.sum / c.k : null; return `<button type="button" class="cat" data-catgo="${esc(name)}" title="Показать оценки «${esc(name)}»"><b>${esc(name)}</b><small>${c.n} · ${av != null ? 'в среднем ' + fmt(av) : 'без балла'}</small><span class="tr" data-tier="${tierT(av)}"><i style="width:${(c.n / rs.length) * 100}%"></i></span></button>`; }).join('')}</div>
           </section>` : ''}
         </div>
       </div>`;
 
     if (rs.length) wireList(p);
+    wireJumps(p);
     if (isMe) { wireBanner(p); wireAvatar(p); wireTopics(p); }
     hydrateFriendAvatars(p);
     hydratePhotos(p, app);
     countUp();
+  }
+
+  const rateLink = (p, r) => (p.kind === 'me' || !p.uid ? `/mnenie/#r=${encodeURIComponent(r.id)}` : `/mnenie/#friend=${encodeURIComponent(p.uid)}&r=${encodeURIComponent(r.id)}`);
+  // плитки и категории: прокрутка к разделу, категория ещё и фильтрует список
+  // плавная прокрутка к разделу; если браузер её не довёл — докручиваем сразу
+  const jumpTo = (el) => {
+    if (!el) return;
+    el.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'start' });
+    setTimeout(() => { if (Math.abs(el.getBoundingClientRect().top) > 60) el.scrollIntoView({ block: 'start' }); }, 900);
+  };
+  let jumpP = null, jumpsWired = false;
+  function wireJumps(p) {
+    jumpP = p; // обработчик один на страницу, профиль берётся последний отрисованный
+    if (jumpsWired) return;
+    jumpsWired = true;
+    app.addEventListener('click', (e) => {
+      const p = jumpP;
+      if (!p) return;
+      const j = e.target.closest('[data-jump]');
+      if (j) {
+        const to = j.dataset.jump;
+        if (to === 'best') { ST.sort = 'score'; ST.cat = 'all'; ST.limit = 24; render(p); }
+        jumpTo(document.getElementById(to === 'best' ? 'allSec' : to));
+        return;
+      }
+      const c = e.target.closest('[data-catgo]');
+      if (c) {
+        ST.cat = c.dataset.catgo; ST.limit = 24; ST.q = '';
+        render(p);
+        jumpTo(document.getElementById('allSec'));
+      }
+    });
   }
 
   function wireTopics(p) {
@@ -762,12 +809,12 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       list.sort(ST.sort === 'date' ? (a, b) => b.at - a.at : ST.sort === 'name' ? (a, b) => a.name.localeCompare(b.name, 'ru') : (a, b) => (b.total ?? -1) - (a.total ?? -1) || b.at - a.at);
       $('#listStat').textContent = `${list.length} ${plural(list.length, 'оценка', 'оценки', 'оценок')}`;
       const shown = list.slice(0, ST.limit);
-      $('#list').innerHTML = shown.length ? shown.map((r) => `<div class="item" data-tier="${tierT(r.total)}">
+      $('#list').innerHTML = shown.length ? shown.map((r) => `<a class="item" href="${rateLink(p, r)}" title="Открыть оценку «${esc(r.name)}»" data-tier="${tierT(r.total)}">
           <span class="th" data-photo="${r.photo ? esc(r.id) : ''}">${letter(r.name)}</span>
           <span class="nm" title="${esc(r.name)}">${r.fav ? `<span class="fav">${ICON.star}</span> ` : ''}${esc(r.name)}</span>
           ${badge(r.total)}
           <span class="meta">${cells(r.total)}<span>${esc(r.cat)}${r.status ? ' · ' + esc(r.status) : ''}</span></span>
-        </div>`).join('') : '<p class="muted">Ничего не нашлось.</p>';
+        </a>`).join('') : '<p class="muted">Ничего не нашлось.</p>';
       $('#more').hidden = list.length <= ST.limit;
       hydratePhotos(p, $('#list'));
     };

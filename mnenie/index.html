@@ -1368,6 +1368,8 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
 .burst { position: fixed; z-index: 80; width: 9px; height: 9px; border-radius: 3px; pointer-events: none; }
 /* iPhone увеличивает страницу, если у поля шрифт меньше 16px: на iOS поля всегда 16px */
 @supports (-webkit-touch-callout: none) { input, textarea, select { font-size: max(16px, 1em) !important; } }
+/* на телефоне переключатели под палец: не ниже 40px */
+@media (pointer: coarse) { .seg button, .seg > button { min-height: 40px; } }
 </style>
 
 <div class="page">
@@ -1514,6 +1516,7 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
             <button type="button" data-sfilter="mine" aria-pressed="false">👤 Мои</button>
             <button type="button" data-sfilter="fav" aria-pressed="false">★ Избранное</button>
           </div>
+          <button type="button" class="btn small ghost" id="friendsOpen" title="Друзья: заявки, их оценки и профили">👥 Друзья</button>
           <div class="board-tools">
           <details class="board-more" id="boardMore">
             <summary class="btn small ghost">Фильтры<b id="boardMoreHint"></b></summary>
@@ -6273,6 +6276,13 @@ if (el.layoutGroup) {
 }
 if (el.subFilters) {
   el.subFilters.addEventListener('click', e => {
+    // друзья на виду: переключаемся на «Мои», где их доски, и открываем окно друзей
+    if (e.target.closest('#friendsOpen')) {
+      state.sfilter = 'mine';
+      renderBoard();
+      if (window.CasualFriends) window.CasualFriends.openSheet();
+      return;
+    }
     const b = e.target.closest('button[data-sfilter]');
     if (!b) return;
     // повторное нажатие на уровень снимает фильтр
@@ -6386,10 +6396,34 @@ ready = initStorage();
 
 /* Ссылки с главной: /mnenie/#login, #reg и #profile сразу открывают окно аккаунта */
 function openAuthFromHash() {
-  if (!/^#(login|reg|profile)$/.test(location.hash)) return;
-  const tab = location.hash.slice(1);
+  const h = location.hash;
+  if (/^#(login|reg|profile)$/.test(h)) {
+    const tab = h.slice(1);
+    history.replaceState(null, '', location.pathname + location.search);
+    Promise.resolve(ready).then(() => openAuthModal(tab === 'profile' ? undefined : tab));
+    return;
+  }
+  // ссылки с главной и из профиля: #r=<оценка>, #friend=<друг>&r=<оценка>, #friends, #rating
+  const q = new URLSearchParams(h.slice(1));
+  if (!q.has('r') && !q.has('friend') && h !== '#friends' && h !== '#rating') return;
   history.replaceState(null, '', location.pathname + location.search);
-  Promise.resolve(ready).then(() => openAuthModal(tab === 'profile' ? undefined : tab));
+  Promise.resolve(ready).catch(() => {}).then(async () => {
+    for (let i = 0; i < 20 && !window.CasualFriends; i++) await new Promise(r => setTimeout(r, 150)); // модуль друзей грузится последним
+    if (h === '#rating') { if (isNarrow()) setSection('board'); else setView('board'); return; }
+    if (h === '#friends') { if (window.CasualFriends) window.CasualFriends.openSheet(); return; }
+    if (q.has('friend')) { if (window.CasualFriends) window.CasualFriends.showFriend(q.get('friend'), q.get('r')); return; }
+    // своя оценка могла прийти из аккаунта чуть позже загрузки: ждём её несколько секунд
+    const id = q.get('r');
+    for (let i = 0; i < 24 && !state.ratings.some(x => x.id === id); i++) await new Promise(r => setTimeout(r, 250));
+    goToRating(id);
+    // страница ещё раскладывается после загрузки: доводим прокрутку до оценки ещё раз
+    for (const ms of [700, 1400]) setTimeout(() => {
+      const li = el.board.querySelector(`.entry[data-id="${CSS.escape(id)}"]`);
+      if (!li) return;
+      const r = li.getBoundingClientRect();
+      if (r.top < 0 || r.bottom > innerHeight) li.scrollIntoView({ block: 'center' });
+    }, ms);
+  });
 }
 openAuthFromHash();
 addEventListener('hashchange', openAuthFromHash);

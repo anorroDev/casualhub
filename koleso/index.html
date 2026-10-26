@@ -753,6 +753,8 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
 .fx-skip:hover { color: var(--ink); }
 /* iPhone увеличивает страницу, если у поля шрифт меньше 16px: на iOS поля всегда 16px */
 @supports (-webkit-touch-callout: none) { input, textarea, select { font-size: max(16px, 1em) !important; } }
+/* на телефоне переключатели под палец: не ниже 40px */
+@media (pointer: coarse) { .seg button, .seg > button { min-height: 40px; } }
 </style>
 <script src="/whatsnew.js"></script>
 </head>
