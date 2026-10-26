@@ -595,6 +595,34 @@ addEventListener('pagereveal', function (e) {
   --good: #2F9E6B; --mid: #E0A21B; --bad: #E0533D; --bad-ink: #B23A27; --on-tier: #2B1A22;
   color-scheme: light;
 }
+:root[data-theme="mint"] {
+  --bg: #EAF6F1; --dot: #CFE7DD; --panel: #FFFFFF; --panel-2: #F2FAF6;
+  --ink: #12251D; --ink-2: #4D6A5E; --ink-3: #87A396; --line: #D3E8DF; --cell: #DDEEE7;
+  --accent: #0F9D76; --accent-soft: #D6F2E8;
+  --good: #2E9E5B; --mid: #D99A12; --bad: #DE5340; --bad-ink: #B13628; --on-tier: #12251D;
+  color-scheme: light;
+}
+:root[data-theme="lavender"] {
+  --bg: #F1EEFA; --dot: #DCD5F0; --panel: #FFFFFF; --panel-2: #F7F5FD;
+  --ink: #221B36; --ink-2: #5E5577; --ink-3: #9A92B2; --line: #E2DCF3; --cell: #E8E3F6;
+  --accent: #7C4DDB; --accent-soft: #EAE1FB;
+  --good: #2E9E5B; --mid: #D99A12; --bad: #DE5340; --bad-ink: #B13628; --on-tier: #221B36;
+  color-scheme: light;
+}
+:root[data-theme="sky"] {
+  --bg: #EAF3FB; --dot: #CFE0F0; --panel: #FFFFFF; --panel-2: #F3F8FD;
+  --ink: #12233A; --ink-2: #4F647E; --ink-3: #8A9DB4; --line: #D5E3F1; --cell: #DEE9F5;
+  --accent: #1D7FD6; --accent-soft: #DCECFA;
+  --good: #2E9E5B; --mid: #D99A12; --bad: #DE5340; --bad-ink: #B13628; --on-tier: #12233A;
+  color-scheme: light;
+}
+:root[data-theme="peach"] {
+  --bg: #FDF0E8; --dot: #F1D9CB; --panel: #FFFFFF; --panel-2: #FEF6F1;
+  --ink: #2E1D14; --ink-2: #735A4C; --ink-3: #A88E80; --line: #F2DFD3; --cell: #F6E6DC;
+  --accent: #E8692A; --accent-soft: #FDE3D4;
+  --good: #2E9E5B; --mid: #D99A12; --bad: #DE5340; --bad-ink: #B13628; --on-tier: #2E1D14;
+  color-scheme: light;
+}
 /* Theme picker */
 .theme-pick { position: relative; }
 .theme-pick > summary { list-style: none; }
@@ -4108,7 +4136,7 @@ function loadPrefs() {
       if (['icons', 'scores', 'names'].includes(p.tierOpts.mode)) state.tierOpts.mode = p.tierOpts.mode;
       if (Array.isArray(p.tierOpts.cats)) state.tierOpts.cats = p.tierOpts.cats.filter(x => typeof x === 'string').slice(0, 40);
     }
-    if (p && ['auto', 'light', 'dark', 'neon', 'ocean', 'forest', 'sand', 'sakura'].includes(p.theme)) state.theme = p.theme;
+    if (p && THEMES.some(t => t.id === p.theme)) state.theme = p.theme;
     if (p && typeof p.filter === 'string') state.filter = p.filter;
     if (p && p.exportOpts && typeof p.exportOpts === 'object') {
       for (const k of ['desc', 'pc', 'notes', 'photo']) if (typeof p.exportOpts[k] === 'boolean') state.exportOpts[k] = p.exportOpts[k];
@@ -5803,6 +5831,10 @@ const THEMES = [
   { id: 'forest', name: 'Лес', icon: '🌲', sw: ['#0E1411', '#4CC9C0'] },
   { id: 'sand', name: 'Песок', icon: '🏜️', sw: ['#F3EDE3', '#C2571B'] },
   { id: 'sakura', name: 'Сакура', icon: '🌸', sw: ['#FBEFF3', '#D6336C'] },
+  { id: 'mint', name: 'Мята', icon: '🌿', sw: ['#EAF6F1', '#0F9D76'] },
+  { id: 'lavender', name: 'Лаванда', icon: '💜', sw: ['#F1EEFA', '#7C4DDB'] },
+  { id: 'sky', name: 'Небо', icon: '☁️', sw: ['#EAF3FB', '#1D7FD6'] },
+  { id: 'peach', name: 'Персик', icon: '🍑', sw: ['#FDF0E8', '#E8692A'] },
 ];
 function applyTheme(t) {
   const th = THEMES.find(x => x.id === t) || THEMES[0];

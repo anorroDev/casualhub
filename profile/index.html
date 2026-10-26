@@ -92,6 +92,34 @@ addEventListener('pagereveal', function (e) {
   --good: #2F9E6B; --mid: #E0A21B; --bad: #E0533D; --bad-ink: #B23A27; --on-tier: #2B1A22;
   color-scheme: light;
 }
+:root[data-theme="mint"] {
+  --bg: #EAF6F1; --dot: #CFE7DD; --panel: #FFFFFF; --panel-2: #F2FAF6;
+  --ink: #12251D; --ink-2: #4D6A5E; --ink-3: #87A396; --line: #D3E8DF; --cell: #DDEEE7;
+  --accent: #0F9D76; --accent-soft: #D6F2E8;
+  --good: #2E9E5B; --mid: #D99A12; --bad: #DE5340; --bad-ink: #B13628; --on-tier: #12251D;
+  color-scheme: light;
+}
+:root[data-theme="lavender"] {
+  --bg: #F1EEFA; --dot: #DCD5F0; --panel: #FFFFFF; --panel-2: #F7F5FD;
+  --ink: #221B36; --ink-2: #5E5577; --ink-3: #9A92B2; --line: #E2DCF3; --cell: #E8E3F6;
+  --accent: #7C4DDB; --accent-soft: #EAE1FB;
+  --good: #2E9E5B; --mid: #D99A12; --bad: #DE5340; --bad-ink: #B13628; --on-tier: #221B36;
+  color-scheme: light;
+}
+:root[data-theme="sky"] {
+  --bg: #EAF3FB; --dot: #CFE0F0; --panel: #FFFFFF; --panel-2: #F3F8FD;
+  --ink: #12233A; --ink-2: #4F647E; --ink-3: #8A9DB4; --line: #D5E3F1; --cell: #DEE9F5;
+  --accent: #1D7FD6; --accent-soft: #DCECFA;
+  --good: #2E9E5B; --mid: #D99A12; --bad: #DE5340; --bad-ink: #B13628; --on-tier: #12233A;
+  color-scheme: light;
+}
+:root[data-theme="peach"] {
+  --bg: #FDF0E8; --dot: #F1D9CB; --panel: #FFFFFF; --panel-2: #FEF6F1;
+  --ink: #2E1D14; --ink-2: #735A4C; --ink-3: #A88E80; --line: #F2DFD3; --cell: #F6E6DC;
+  --accent: #E8692A; --accent-soft: #FDE3D4;
+  --good: #2E9E5B; --mid: #D99A12; --bad: #DE5340; --bad-ink: #B13628; --on-tier: #2E1D14;
+  color-scheme: light;
+}
 
 /* Motion shared by all Casual Hub pages */
 @view-transition { navigation: auto; }
@@ -1132,6 +1160,10 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     { id: 'dark', name: 'Тёмная', sw: ['#0D0F14', '#8C9BFF'] }, { id: 'neon', name: 'Неон', sw: ['#120B1F', '#FF4FD8'] },
     { id: 'ocean', name: 'Океан', sw: ['#07131F', '#38BDF8'] }, { id: 'forest', name: 'Лес', sw: ['#0E1411', '#4CC9C0'] },
     { id: 'sand', name: 'Песок', sw: ['#F3EDE3', '#C2571B'] }, { id: 'sakura', name: 'Сакура', sw: ['#FBEFF3', '#D6336C'] },
+    { id: 'mint', name: 'Мята', sw: ['#EAF6F1', '#0F9D76'] },
+    { id: 'lavender', name: 'Лаванда', sw: ['#F1EEFA', '#7C4DDB'] },
+    { id: 'sky', name: 'Небо', sw: ['#EAF3FB', '#1D7FD6'] },
+    { id: 'peach', name: 'Персик', sw: ['#FDF0E8', '#E8692A'] },
   ];
   const PALETTE = '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="6.4"/><path d="M8 1.6a6.4 6.4 0 0 0 0 12.8z" fill="currentColor"/></svg>';
   const PREFS_KEY = 'ocenshik.prefs.v1';
