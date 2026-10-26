@@ -299,6 +299,34 @@ button, input { font: inherit; color: inherit; }
   transform-origin: 90% 0; animation: menu-in .26s var(--spring) both;
 }
 .ban-up { position: relative; width: 100%; }
+/* стикер возле ника */
+.name-row { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; min-width: 0; }
+.name-row .name { min-width: 0; }
+.nick-st { flex: none; width: clamp(52px, 7vw, 76px); aspect-ratio: 1; display: grid; place-items: center; padding: 0; border: 0; border-radius: 14px; background: none; color: inherit; }
+.nick-st img, .nick-st video { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+button.nick-st { cursor: pointer; transition: transform .2s var(--spring); }
+button.nick-st:hover { transform: scale(1.08) rotate(-4deg); }
+button.nick-st:active { transform: scale(.94); }
+button.nick-st:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.nick-st.empty { width: auto; aspect-ratio: auto; height: 34px; padding: 0 12px; align-self: center; border: 1.5px dashed var(--line); border-radius: 999px; font: 600 13px var(--font-body); color: var(--ink-2); }
+.nick-st.empty:hover { color: var(--ink); border-color: var(--accent); transform: none; }
+.st-pick { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg) 70%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.st-pick[hidden] { display: none; }
+.st-card { width: min(560px, 100%); max-height: min(640px, calc(100dvh - 32px)); display: grid; grid-template-rows: auto auto 1fr auto; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 30px 60px -24px color-mix(in srgb, var(--ink) 60%, transparent); }
+.st-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.st-head h2 { font-family: var(--font-display); font-size: 24px; line-height: 1; }
+.st-x { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink); font-size: 18px; cursor: pointer; }
+.st-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+.st-tabs::-webkit-scrollbar { display: none; }
+.st-tabs button { flex: none; height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink-2); font: 600 13px var(--font-body); cursor: pointer; }
+.st-tabs button[aria-pressed="true"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.st-grid { min-height: 0; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); grid-auto-rows: min-content; gap: 6px; align-content: start; overscroll-behavior: contain; }
+.st-grid button { min-width: 0; overflow: hidden; aspect-ratio: 1; padding: 6px; border-radius: 12px; border: 2px solid transparent; background: var(--panel-2); cursor: pointer; display: grid; place-items: center; }
+.st-grid button:hover { border-color: color-mix(in srgb, var(--accent) 50%, transparent); }
+.st-grid button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft, var(--panel-2)); }
+.st-grid img, .st-grid video { width: 100%; height: 100%; min-width: 0; object-fit: contain; pointer-events: none; }
+.st-foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.st-foot small { font-size: 12px; color: var(--ink-3); }
 .ban-hint { font-size: 12px; color: var(--ink-3); }
 .ban-presets { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
 .ban-presets button {
@@ -740,6 +768,97 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   // ---------- темы профиля: скрытые категории не видны ни в своём профиле, ни у друзей ----------
   const HIDE_KEY = 'casualhub.profileHide.v1'; // { id профиля: { hide: [ключи категорий], at } }
   const hideOwner = () => (user ? user.id : 'guest');
+  // ---------- стикер возле ника: любая картинка из колеса, общий для аккаунта ----------
+  const STICKER_KEY = 'casualhub.profileSticker.v1'; // { id профиля: { src: 'hub/…', at } }
+  const localSticker = () => (read(STICKER_KEY) || {})[hideOwner()] || { src: '', at: 0 };
+  const keepSticker = (st) => { try { const all = read(STICKER_KEY) || {}; all[hideOwner()] = st; localStorage.setItem(STICKER_KEY, JSON.stringify(all)); } catch (e) {} };
+  // старые iPhone не играют WebM: рядом лежит тот же ролик в MP4
+  const WEBM_OK = (() => { try { return !!document.createElement('video').canPlayType('video/webm; codecs="vp9"'); } catch (e) { return false; } })();
+  const stUrl = (src) => '/koleso/' + (WEBM_OK ? src : String(src).replace(/\.webm$/i, '.mp4'));
+  const isVid = (src) => /\.webm$/i.test(src);
+  const stMedia = (src, lazy) => (isVid(src)
+    ? `<video ${lazy ? 'data-src' : 'src'}="${esc(stUrl(src))}" muted loop playsinline${lazy ? '' : ' autoplay'}></video>`
+    : `<img src="${esc(stUrl(src))}" alt=""${lazy ? ' loading="lazy"' : ''} decoding="async">`);
+  const stickerSlot = (p) => (p.kind === 'me'
+    ? `<button type="button" class="nick-st${p.sticker ? '' : ' empty'}" id="stBtn" aria-haspopup="dialog" title="Стикер возле ника">${p.sticker ? stMedia(p.sticker) : '＋ стикер'}</button>`
+    : p.sticker ? `<span class="nick-st" aria-hidden="true">${stMedia(p.sticker)}</span>` : '');
+
+  let stCatalog = null, stP = null, stGroup = '', stObs = null;
+  function stickerPicker(p) {
+    stP = p;
+    let box = $('#stPick');
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'st-pick'; box.id = 'stPick'; box.hidden = true;
+      box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('aria-labelledby', 'stTitle');
+      box.innerHTML = `<div class="st-card">
+        <div class="st-head"><h2 id="stTitle">Стикер возле ника</h2><button type="button" class="st-x" data-st="close" aria-label="Закрыть">✕</button></div>
+        <div class="st-tabs" role="group" aria-label="Набор стикеров"></div>
+        <div class="st-grid"><p class="muted">Загружаю стикеры…</p></div>
+        <div class="st-foot"><small>Его видят все, кто открывает твой профиль.</small><button type="button" class="btn ghost" data-st="none">Убрать стикер</button></div>
+      </div>`;
+      document.body.appendChild(box);
+      box.addEventListener('click', (e) => {
+        if (e.target === box || e.target.closest('[data-st="close"]')) return closePicker();
+        const t = e.target.closest('[data-stg]');
+        if (t) { stGroup = t.dataset.stg; return fillPicker(); }
+        const it = e.target.closest('[data-stsrc]');
+        if (it) return setSticker(it.dataset.stsrc);
+        if (e.target.closest('[data-st="none"]')) return setSticker('');
+      });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !box.hidden) closePicker(); });
+    }
+    box.hidden = false;
+    document.body.style.overflow = 'hidden';
+    box.querySelector('.st-x').focus({ preventScroll: true });
+    if (stCatalog) return fillPicker();
+    fetch('/koleso/hub/index.json').then((r) => r.json()).then((d) => { stCatalog = d.groups || []; fillPicker(); })
+      .catch(() => { box.querySelector('.st-grid').innerHTML = '<p class="muted">Стикеры не загрузились, попробуй ещё раз.</p>'; });
+  }
+  function fillPicker() {
+    const box = $('#stPick');
+    if (!box || !stCatalog || !stCatalog.length) return;
+    // открывается на наборе, где лежит текущий стикер
+    if (!stCatalog.some((g) => g.id === stGroup)) {
+      const own = stCatalog.find((g) => g.items.some((i) => i.src === stP.sticker));
+      stGroup = (own || stCatalog[0]).id;
+    }
+    box.querySelector('.st-tabs').innerHTML = stCatalog.map((g) => `<button type="button" data-stg="${esc(g.id)}" aria-pressed="${g.id === stGroup}">${esc(g.title)} · ${g.items.length}</button>`).join('');
+    const g = stCatalog.find((x) => x.id === stGroup);
+    const grid = box.querySelector('.st-grid');
+    grid.innerHTML = g.items.map((i) => `<button type="button" data-stsrc="${esc(i.src)}" title="${esc(i.name)}" aria-label="${esc(i.name)}" aria-pressed="${i.src === stP.sticker}">${stMedia(i.src, true)}</button>`).join('');
+    grid.scrollTop = 0;
+    // ролики играют, только пока видны в окне
+    if (stObs) stObs.disconnect();
+    const vids = grid.querySelectorAll('video[data-src]');
+    if (!('IntersectionObserver' in window)) { vids.forEach((v) => { v.src = v.dataset.src; v.play().catch(() => {}); }); return; }
+    stObs = new IntersectionObserver((ents) => ents.forEach((e) => {
+      const v = e.target;
+      if (e.isIntersecting) { if (!v.src) v.src = v.dataset.src; v.play().catch(() => {}); } else v.pause();
+    }), { root: grid, rootMargin: '120px' });
+    vids.forEach((v) => stObs.observe(v));
+  }
+  function closePicker() {
+    const box = $('#stPick');
+    if (!box) return;
+    box.hidden = true;
+    document.body.style.overflow = '';
+    if (stObs) stObs.disconnect();
+    box.querySelectorAll('video').forEach((v) => v.pause());
+    const b = $('#stBtn');
+    if (b) b.focus({ preventScroll: true });
+  }
+  function setSticker(src) {
+    const p = stP;
+    const st = { src, at: Date.now() };
+    p.sticker = src;
+    keepSticker(st);
+    if (token) send('PUT', '/shelf', { ratings: [], sticker: st }).catch(() => {});
+    // меняем только кнопку: ник заново не анимируется
+    const b = $('#stBtn');
+    if (b) { b.classList.toggle('empty', !src); b.innerHTML = src ? stMedia(src) : '＋ стикер'; }
+    closePicker();
+  }
   const localHide = () => (read(HIDE_KEY) || {})[hideOwner()] || { hide: [], at: 0 };
   const keepHide = (h) => { try { const all = read(HIDE_KEY) || {}; all[hideOwner()] = h; localStorage.setItem(HIDE_KEY, JSON.stringify(all)); } catch (e) {} };
   const visibleOf = (list, hide) => { const set = new Set(hide || []); return set.size ? list.filter((r) => !set.has(keyOf(r.cat))) : list; };
@@ -778,7 +897,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         </div>` : ''}
         <div class="ava-wrap${isMe && user ? ' can' : ''}" id="avaWrap"${isMe && user ? ' role="button" tabindex="0" aria-label="Сменить аватар, можно и анимированный GIF" title="Сменить аватар"' : ''}><span class="ava-ring" aria-hidden="true"></span>${ava}${isMe && user ? `<span class="ava-edit" aria-hidden="true"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M2 5.5h2.5L6 3.5h4l1.5 2H14v7H2z"/><circle cx="8" cy="9" r="2.3"/></svg></span><input type="file" id="avaFile" accept="image/*" class="vh">` : ''}</div>
         <div class="who">
-          <h1 class="name" aria-label="${esc(p.name)}">${nameHTML}</h1>
+          <div class="name-row"><h1 class="name" aria-label="${esc(p.name)}">${nameHTML}</h1>${stickerSlot(p)}</div>
           <p class="sub">${esc(p.sub)}</p>
           <div class="titles">${titlesOf(rs).map((t) => `<span class="title-chip" data-tier="${t.tier}"><i></i>${esc(t.t)}</span>`).join('')}</div>
           <div class="hero-acts">${isMe
@@ -862,7 +981,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
 
     if (rs.length) wireList(p);
     wireJumps(p);
-    if (isMe) { wireBanner(p); wireAvatar(p); wireTopics(p); }
+    if (isMe) { wireBanner(p); wireAvatar(p); wireTopics(p); const sb = $('#stBtn'); if (sb) sb.addEventListener('click', () => stickerPicker(p)); }
     hydrateFriendAvatars(p);
     hydratePhotos(p, app);
     countUp();
@@ -1245,7 +1364,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       kind: 'me', name: meServer && meServer.username ? meServer.username : user ? user.name : 'Гость', avatar: shownAvatar(user), color: user && user.color,
       sub: user ? [meServer && meServer.handle ? '@' + meServer.handle : '', since ? 'в Казуал Хабе с ' + since : ''].filter(Boolean).join(' · ') || 'твой профиль' : 'Гостевой профиль: оценки хранятся в этом браузере',
       createdAt: user ? born : null,
-      ratings: [], allRatings: myRatings(), hide: localHide().hide, uid: meServer && meServer.id, banner: localBanner(),
+      ratings: [], allRatings: myRatings(), hide: localHide().hide, uid: meServer && meServer.id, banner: localBanner(), sticker: localSticker().src,
     };
     p.ratings = visibleOf(p.allRatings, p.hide);
     if (!user) p.friendsHint = 'Друзья появятся, когда войдёшь в аккаунт. Это можно сделать в Мнении Казуала.';
@@ -1265,6 +1384,10 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         const sh = s.profile, lh = localHide();
         if (sh && +sh.at > (+lh.at || 0)) { p.hide = sh.hide; keepHide({ hide: sh.hide, at: +sh.at }); changed = true; }
         else if (lh.at && (!sh || +lh.at > +sh.at)) send('PUT', '/shelf', { ratings: [], profile: lh }).catch(() => {}); // выбор сделан здесь до входа
+        // стикер: более свежий выбор побеждает — с другого устройства берём, свой отправляем
+        const ss = s.sticker, ls = localSticker();
+        if (ss && +ss.at > (+ls.at || 0)) { if (ss.src !== p.sticker) { p.sticker = ss.src; changed = true; } keepSticker(ss); }
+        else if (ls.at && (!ss || +ls.at > +ss.at)) send('PUT', '/shelf', { ratings: [], sticker: ls }).catch(() => {});
         if (!changed) return;
         p.ratings = visibleOf(p.allRatings, p.hide);
         render(p);
@@ -1311,7 +1434,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       const match = common.length ? Math.max(0, Math.min(100, Math.round(100 - (common.reduce((a, c) => a + Math.abs(c.diff), 0) / common.length) * 10))) : 0;
       render({
         kind: 'friend', name: s.user.username, sub: [s.user.handle ? '@' + s.user.handle : '', s.updatedAt ? 'оценки обновлены ' + ago(s.updatedAt) : 'оценок пока нет'].filter(Boolean).join(' · '),
-        ratings, uid: s.user.id, common, match, createdAt: s.user.createdAt, friendCount: s.user.friends != null ? s.user.friends : null,
+        ratings, uid: s.user.id, common, match, createdAt: s.user.createdAt, sticker: s.sticker && s.sticker.src, friendCount: s.user.friends != null ? s.user.friends : null,
       });
       document.title = `${s.user.username} · Казуал Хаб`;
       api(`/photo/${encodeURIComponent(s.user.id)}/banner`).then((d) => { if (d.data) showBanner(d.data); }, () => {});

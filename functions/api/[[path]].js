@@ -297,7 +297,7 @@ const routes = {
   // Оценки с разных устройств объединяются: по id остаётся более свежая версия,
   // удалённые (deleted: [{id, at}]) запоминаются и больше не возвращаются, их фото стираются.
   async 'PUT /shelf'({ env, request, me }) {
-    const { ratings, deleted, cats, profile } = await readBody(request);
+    const { ratings, deleted, cats, profile, sticker } = await readBody(request);
     if (!Array.isArray(ratings)) return fail(400, 'Нужен список оценок.');
     const row = await env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(me.id).first();
     const old = readShelf(row);
@@ -337,7 +337,13 @@ const routes = {
     if (profile && Array.isArray(profile.hide) && Number.isFinite(+profile.at) && (!old.profile || +profile.at > +old.profile.at)) {
       profileOut = { hide: profile.hide.filter((x) => typeof x === 'string').slice(0, 40).map((x) => x.slice(0, 60)), at: +profile.at };
     }
+    // стикер возле ника в профиле (картинка из колеса): остаётся более свежий выбор, пустой src — стикер убран
+    let stickerOut = old.sticker;
+    if (sticker && Number.isFinite(+sticker.at) && (sticker.src === '' || STICKER_RE.test(String(sticker.src))) && (!old.sticker || +sticker.at > +old.sticker.at)) {
+      stickerOut = { src: String(sticker.src), at: +sticker.at };
+    }
     const shelfData = { ratings: merged, deleted: tomb };
+    if (stickerOut) shelfData.sticker = stickerOut;
     if (catsOut) shelfData.cats = catsOut;
     if (profileOut) shelfData.profile = profileOut;
     const data = JSON.stringify(shelfData);
@@ -367,7 +373,7 @@ const routes = {
     const shelf = await env.DB.prepare('SELECT data, updated_at FROM shelves WHERE user_id = ?').bind(arg).first();
     const s = readShelf(shelf);
     // свои категории видит только хозяин
-    return json({ user, ratings: s.ratings, deleted: s.deleted, cats: arg === me.id ? s.cats || null : undefined, profile: s.profile || null, updatedAt: shelf ? shelf.updated_at : null });
+    return json({ user, ratings: s.ratings, deleted: s.deleted, cats: arg === me.id ? s.cats || null : undefined, profile: s.profile || null, sticker: s.sticker || null, updatedAt: shelf ? shelf.updated_at : null });
   },
 
   // исполнители по имени: имя и фото, без заглушек Genius вместо фото
@@ -518,6 +524,7 @@ const NAME_HINT = 'Ник: от 2 до 24 символов, буквы, цифр
 const HANDLE_HINT = 'Юзернейм: от 3 до 20 символов, латинские буквы, цифры, «_» и «.» (точка не в начале и не в конце).';
 const MAX_PHOTO = 1900000; // символов в data URL, предел строки в D1 около 2 МБ
 const RID_RE = /^[\w.-]{1,80}$/;
+const STICKER_RE = /^hub\/(?!.*\.\.)[\w\-\/.]{1,100}\.(png|gif|webp|webm|jpe?g)$/; // путь картинки из каталога колеса
 const REACTIONS = ['fire', 'skull', 'nope']; // 🔥 огонь, 💀 жесть, 🙅 не согласен
 const stampOf = (r) => +new Date(r.updatedAt || r.createdAt || 0) || 0;
 function readShelf(row) {
@@ -526,7 +533,8 @@ function readShelf(row) {
   if (Array.isArray(d)) return { ratings: d, deleted: [] }; // старый формат: просто список
   const cats = d.cats && Array.isArray(d.cats.items) && Number.isFinite(+d.cats.at) ? d.cats : null;
   const profile = d.profile && Array.isArray(d.profile.hide) && Number.isFinite(+d.profile.at) ? d.profile : null;
-  return { ratings: Array.isArray(d.ratings) ? d.ratings : [], deleted: Array.isArray(d.deleted) ? d.deleted : [], cats, profile };
+  const sticker = d.sticker && typeof d.sticker.src === 'string' && Number.isFinite(+d.sticker.at) ? d.sticker : null;
+  return { ratings: Array.isArray(d.ratings) ? d.ratings : [], deleted: Array.isArray(d.deleted) ? d.deleted : [], cats, profile, sticker };
 }
 // ---------- Genius: фото исполнителей ----------
 // Токен лежит в секрете GENIUS_TOKEN и наружу не уходит. Поиск доступен только вошедшим, ответы кэшируются на сутки.
