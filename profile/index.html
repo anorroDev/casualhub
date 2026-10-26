@@ -314,10 +314,11 @@ button, input { font: inherit; color: inherit; }
 .pod {
   position: relative; display: grid; gap: 8px; padding: 12px; border-radius: 18px; background: var(--panel-2); border: 1px solid var(--line);
   text-decoration: none; min-width: 0; transition: transform .3s var(--spring);
+  grid-template-columns: minmax(0, 1fr); /* Safari иначе растягивает картинку шире карточки */
 }
 .pod:hover { transform: translateY(-4px); }
 .pod.p1 { order: 2; } .pod.p2 { order: 1; } .pod.p3 { order: 3; }
-.pod .pic { position: relative; aspect-ratio: 4 / 3; border-radius: 12px; overflow: hidden; display: grid; place-items: center; background: color-mix(in srgb, var(--tier) 22%, var(--panel)); }
+.pod .pic { position: relative; width: 100%; min-width: 0; aspect-ratio: 4 / 3; border-radius: 12px; overflow: hidden; display: grid; place-items: center; background: color-mix(in srgb, var(--tier) 22%, var(--panel)); }
 .pod.p1 .pic { aspect-ratio: 1; }
 .pod .pic img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .pod .pic .ltr { font-family: var(--font-display); font-weight: 800; font-size: 54px; color: color-mix(in srgb, var(--tier) 70%, var(--ink)); }
@@ -326,6 +327,7 @@ button, input { font: inherit; color: inherit; }
 .pod strong { font-size: 14.5px; line-height: 1.25; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .pod .row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .pod .row small { color: var(--ink-3); font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@supports not (aspect-ratio: 1 / 1) { .pod .pic { height: 96px; } .pod.p1 .pic { height: 128px; } }
 
 /* Badges and tiny meters */
 .badge {
@@ -417,8 +419,14 @@ button, input { font: inherit; color: inherit; }
   .card { padding: 16px; border-radius: 20px; }
   .stat b { font-size: 38px; }
   .podium { gap: 8px; }
-  .pod { padding: 8px; border-radius: 14px; }
+  .pod { padding: 8px; border-radius: 14px; gap: 6px; }
   .pod .pic .ltr { font-size: 38px; }
+  .pod .place { width: 24px; height: 24px; font-size: 16px; left: 5px; top: 5px; border-radius: 7px; }
+  .pod strong { font-size: 13px; }
+  /* узкая карточка: категория сверху, балл под ней, ничего не вылезает */
+  .pod .row { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .pod .row small { max-width: 100%; font-size: 11px; }
+  .pod .badge { min-width: 40px; height: 28px; font-size: 20px; }
   .hist { height: 110px; gap: 4px; }
   .theme-menu { right: 0; }
 }
@@ -522,7 +530,17 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const load = (n) => {
       const r = p.ratings.find((x) => x.id === n.dataset.photo);
       if (!r) return;
-      photoOf(p, r).then((src) => { if (src) { const img = new Image(); img.alt = ''; img.decoding = 'async'; img.src = src; n.textContent = ''; n.appendChild(img); } });
+      photoOf(p, r).then((src) => {
+        if (!src) return;
+        const img = new Image(); img.alt = ''; img.decoding = 'async';
+        img.onload = () => {
+          // номер места на пьедестале остаётся, убираем только букву-заглушку
+          const ltr = n.querySelector('.ltr');
+          if (ltr) ltr.remove(); else n.textContent = '';
+          n.appendChild(img);
+        };
+        img.src = src;
+      });
     };
     if (!('IntersectionObserver' in window)) { nodes.forEach(load); return; }
     const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { io.unobserve(e.target); load(e.target); } }), { rootMargin: '200px' });
