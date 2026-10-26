@@ -164,7 +164,6 @@
     try { await ready; } catch (e) {}
     let r;
     try { r = await api('/shelf/' + encodeURIComponent(F.me.id)); } catch (e) { return; }
-    pullCats(r && r.cats);
     const remote = r && Array.isArray(r.ratings) ? r.ratings : [];
     const remoteDeleted = r && Array.isArray(r.deleted) ? r.deleted : [];
     const stampOf = (x) => +new Date(x.updatedAt || x.createdAt || 0) || 0;
@@ -176,6 +175,8 @@
       state.ratings = state.ratings.filter((x) => !(del.has(x.id) && stampOf(x) <= del.get(x.id)));
       removed = before - state.ratings.length;
     }
+    // категории — только после удалений: иначе отрисовка соберёт удалённую категорию заново по её старым оценкам
+    pullCats(r && r.cats);
     const byId = new Map(state.ratings.map((x) => [x.id, x]));
     let added = 0, updated = 0, photos = 0;
     const sent = readJSON(PHOTOS_KEY, {});
@@ -316,9 +317,17 @@
   let rawSaveCats = null;
   const catsAt = () => (F.me ? +readJSON(CATS_AT_KEY, {})[F.me.id] || 0 : 0);
   const setCatsAt = (t) => { if (!F.me) return; const m = readJSON(CATS_AT_KEY, {}); m[F.me.id] = t; lsSet(CATS_AT_KEY, JSON.stringify(m)); };
+  const CATS_DEL_KEY = 'ocenshik.catsDeleted.v1'; // [{ id, name, at }] удалённые категории
+  const catTombs = () => readJSON(CATS_DEL_KEY, []);
+  const isTombed = (c, tombs) => tombs.some((d) => d.id === c.id || (d.name && keyOf(d.name) === keyOf(c.name)));
+  function addCatTombs(list) {
+    const m = new Map(catTombs().map((d) => [d.id, d]));
+    for (const d of list || []) if (d && d.id && (!m.has(d.id) || +d.at > +m.get(d.id).at)) m.set(d.id, { id: d.id, name: d.name || '', at: +d.at || Date.now() });
+    lsSet(CATS_DEL_KEY, JSON.stringify([...m.values()].sort((a, b) => b.at - a.at).slice(0, 100)));
+  }
   function catsPayload() {
     if (typeof serializeCats !== 'function' || !state.cats || !state.cats.length) return undefined;
-    return { items: serializeCats(), at: catsAt() };
+    return { items: serializeCats(), at: catsAt(), deleted: catTombs() };
   }
   function mergeCats(remote, local) {
     const out = remote.map((c) => ({ ...c, criteria: c.criteria.map((k) => ({ ...k })) }));
@@ -341,11 +350,18 @@
   }
   function pullCats(rc) {
     if (typeof parseCats !== 'function' || state.editCat) return;
+    if (rc && Array.isArray(rc.deleted)) addCatTombs(rc.deleted);
+    // действуют только отметки новее здешнего списка: категорию, созданную здесь заново позже удаления, не трогаем
+    const tombs = catTombs().filter((d) => +d.at > catsAt());
+    // категория удалена на другом устройстве: здесь её тоже нет, даже если здешний список свежее
+    if (tombs.length && state.cats.some((c) => isTombed(c, tombs)) && state.cats.some((c) => !isTombed(c, tombs))) {
+      applyCats(state.cats.filter((c) => !isTombed(c, tombs)));
+    }
     const items = rc && Array.isArray(rc.items) ? parseCats({ items: rc.items }) : null;
     const local = catsAt();
     if (!items || !items.length) { if (!local) setCatsAt(Date.now()); return; } // на сервере пусто: отправим здешние
     if (!local) {
-      const merged = mergeCats(items, state.cats);
+      const merged = mergeCats(items, state.cats.filter((c) => !isTombed(c, tombs)));
       if (JSON.stringify(merged) !== JSON.stringify(state.cats)) applyCats(merged);
       setCatsAt(Date.now());
     } else if (+rc.at > local) {
@@ -857,7 +873,23 @@ ${ICON.chev}
   if (typeof window.saveLocalCats === 'function') {
     const o = window.saveLocalCats;
     rawSaveCats = o;
-    window.saveLocalCats = function () { const r = o.apply(this, arguments); setCatsAt(Date.now()); schedulePush(); return r; };
+    window.saveLocalCats = function () {
+      // категорию с тем же названием или id создали заново — значит, она снова нужна
+      const tombs = catTombs();
+      if (tombs.length && state.cats.some((c) => isTombed(c, tombs))) lsSet(CATS_DEL_KEY, JSON.stringify(tombs.filter((d) => !state.cats.some((c) => c.id === d.id || (d.name && keyOf(d.name) === keyOf(c.name))))));
+      const r = o.apply(this, arguments); setCatsAt(Date.now()); schedulePush(); return r;
+    };
+  }
+  if (typeof window.deleteCategory === 'function') {
+    const o = window.deleteCategory;
+    window.deleteCategory = async function (id) {
+      const c = state.cats.find((x) => x.id === id);
+      const tomb = c ? { id: c.id, name: c.name, at: Date.now() } : null;
+      if (tomb) addCatTombs([tomb]); // до удаления: сохранение категорий не должно принять её за «созданную заново»
+      const r = await o.apply(this, arguments);
+      if (tomb && state.cats.some((x) => x.id === tomb.id)) lsSet(CATS_DEL_KEY, JSON.stringify(catTombs().filter((d) => d.id !== tomb.id))); // не удалилась
+      return r;
+    };
   }
   // удаление запоминаем, чтобы оценка пропала и на других устройствах
   if (typeof window.removeRating === 'function') {

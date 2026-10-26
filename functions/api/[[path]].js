@@ -263,6 +263,18 @@ const routes = {
     if (cats && Array.isArray(cats.items) && Number.isFinite(+cats.at) && (!old.cats || +cats.at > +old.cats.at)) {
       catsOut = { items: cats.items.slice(0, 40), at: +cats.at };
     }
+    // удалённые категории ({ id, name, at }): объединяем всегда, чтобы их не вернуло устройство со старым списком
+    const catDel = new Map();
+    for (const d of [...((old.cats && old.cats.deleted) || []), ...((cats && Array.isArray(cats.deleted)) ? cats.deleted : [])]) {
+      if (!d || typeof d.id !== 'string' || !Number.isFinite(+d.at)) continue;
+      const prev = catDel.get(d.id);
+      if (!prev || +d.at > prev.at) catDel.set(d.id, { id: d.id.slice(0, 80), name: String(d.name || '').slice(0, 60), at: +d.at });
+    }
+    // категорию создали заново позже удаления (она есть в более свежем списке): отметка больше не нужна
+    if (catsOut) for (const [id, d] of catDel) {
+      if (catsOut.items.some((c) => c && (c.id === d.id || (d.name && String(c.name || '').trim().toLowerCase() === d.name.trim().toLowerCase()))) && +catsOut.at > d.at) catDel.delete(id);
+    }
+    if (catsOut) catsOut = { ...catsOut, deleted: [...catDel.values()].sort((a, b) => b.at - a.at).slice(0, 100) };
     // темы, скрытые из профиля: тоже остаётся более свежий выбор
     let profileOut = old.profile;
     if (profile && Array.isArray(profile.hide) && Number.isFinite(+profile.at) && (!old.profile || +profile.at > +old.profile.at)) {
