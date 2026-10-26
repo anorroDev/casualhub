@@ -269,7 +269,8 @@ const routes = {
     const live = new Set(merged.map((r) => r.id));
     const gone = tomb.filter((d) => !oldDel.has(d.id) && !live.has(d.id)).map((d) => d.id).slice(0, 100);
     if (gone.length) {
-      await env.DB.batch(gone.map((id) => env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(`${me.id}:${id}`)));
+      // вместе с фото уходит и его превью «<id>.t»
+      await env.DB.batch(gone.flatMap((id) => [`${me.id}:${id}`, `${me.id}:${id}.t`].map((k) => env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(k))));
     }
     return json({ ok: true, updatedAt: now, count: merged.length });
   },
@@ -288,13 +289,14 @@ const routes = {
     const { data } = await readBody(request);
     if (typeof data !== 'string' || !/^data:image\/(jpeg|png|webp|gif);base64,/.test(data)) return fail(400, 'Нужна картинка.');
     if (data.length > MAX_PHOTO) return fail(413, 'Фото слишком большое.');
+    const now = Date.now();
     await env.DB.prepare(
       'INSERT INTO photos (key, user_id, data, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at'
-    ).bind(`${me.id}:${arg}`, me.id, data, Date.now()).run();
-    return json({ ok: true });
+    ).bind(`${me.id}:${arg}`, me.id, data, now).run();
+    return json({ ok: true, updatedAt: now });
   },
   async 'DELETE /photo/:rid'({ env, me, arg }) {
-    await env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(`${me.id}:${arg}`).run();
+    await env.DB.prepare('DELETE FROM photos WHERE key = ? OR key = ?').bind(`${me.id}:${arg}`, `${me.id}:${arg}.t`).run();
     return json({ ok: true });
   },
   // лента: свежие оценки друзей
@@ -323,10 +325,19 @@ const routes = {
     return json({ friends: fr.length, items: items.slice(0, 40) });
   },
 
-  async 'GET /photo/:uid/:rid'({ env, me, arg }) {
+  // ?meta=1 — только когда фото менялось (телефон не качает аватар заново, если он тот же);
+  // ?thumb=1 — маленькое превью «<id>.t», а если его ещё нет, то полное фото
+  async 'GET /photo/:uid/:rid'({ env, request, me, arg }) {
     const [uid, rid] = arg;
     if (!(await canSee(env, me, uid))) return fail(403, 'Фото видны только друзьям.');
-    const row = await env.DB.prepare('SELECT data FROM photos WHERE key = ?').bind(`${uid}:${rid}`).first();
+    const q = new URL(request.url).searchParams;
+    if (q.has('meta')) {
+      const m = await env.DB.prepare('SELECT updated_at FROM photos WHERE key = ?').bind(`${uid}:${rid}`).first();
+      return json({ updatedAt: m ? m.updated_at : null });
+    }
+    let row = null;
+    if (q.has('thumb')) row = await env.DB.prepare('SELECT data FROM photos WHERE key = ?').bind(`${uid}:${rid}.t`).first();
+    if (!row) row = await env.DB.prepare('SELECT data FROM photos WHERE key = ?').bind(`${uid}:${rid}`).first();
     // фото нет — это обычное дело (нет аватарки, баннера), не ошибка: браузер не сыплет 404 в консоль
     return json({ data: row ? row.data : null });
   },

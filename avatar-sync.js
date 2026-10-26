@@ -1,7 +1,8 @@
 // Аватар один на аккаунт: лежит на сервере (/api/photo/<id>/avatar), а на устройстве — его копия.
 // Главная, Мнение и профиль сверяют копию с аккаунтом: так аватар видно и с телефона, и с нового браузера.
 (() => {
-  const ANIM_KEY = 'casualhub.avatarAnim.v1'; // анимированный аватар целиком; в профиле и оценках лежит его первый кадр
+  const ANIM_KEY = 'casualhub.avatarAnim.v1';
+  const SEEN_KEY = 'casualhub.avatarSeen.v1'; // { id аккаунта: когда аватар в аккаунте менялся } — чтобы не качать его на каждом заходе // анимированный аватар целиком; в профиле и оценках лежит его первый кадр
   const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
   const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } };
   const isImg = (a) => typeof a === 'string' && /^(data:image\/|https?:\/\/)/.test(a);
@@ -51,23 +52,36 @@
   async function sync(serverId, token) {
     const user = read('ocenshik.user.v1');
     if (!user || !serverId || !token) return null;
-    let srv;
-    try {
-      const r = await call('/photo/' + encodeURIComponent(serverId) + '/avatar', token);
-      if (!r.ok) return null;
-      srv = (await r.json()).data || null;
-    } catch (e) { return null; }
     const local = shown(user);
+    const seen = read(SEEN_KEY) || {};
+    const remember = (at) => { if (at) { seen[serverId] = at; write(SEEN_KEY, seen); } };
+    // сначала только отметка времени: если аватар в аккаунте не менялся, саму картинку не качаем
+    let at = null;
+    try {
+      const m = await call('/photo/' + encodeURIComponent(serverId) + '/avatar?meta=1', token);
+      if (!m.ok) return null;
+      at = (await m.json()).updatedAt || null;
+    } catch (e) { return null; }
+    if (at && seen[serverId] === at && isImg(local)) return null;
+    let srv = null;
+    if (at) {
+      try {
+        const r = await call('/photo/' + encodeURIComponent(serverId) + '/avatar', token);
+        if (!r.ok) return null;
+        srv = (await r.json()).data || null;
+      } catch (e) { return null; }
+    }
     if (!srv) {
       // в аккаунте пусто (аватар ставили до того, как он стал общим): отправляем свой
-      if (isImg(local)) call('/photo/avatar', token, 'PUT', { data: local }).catch(() => {});
+      if (isImg(local)) call('/photo/avatar', token, 'PUT', { data: local }).then((r) => r.json()).then((d) => remember(d.updatedAt), () => {});
       return null;
     }
-    if (srv === local || srv === user.avatar) return null;
+    if (srv === local || srv === user.avatar) { remember(at); return null; }
     const anim = /^data:image\/(gif|webp)/.test(srv) ? srv : null;
     const still = anim || srv.length > 150000 ? await stillOf(srv) : srv;
     if (!still) return null;
     apply(user.id, still, anim);
+    remember(at);
     return { still, anim };
   }
 

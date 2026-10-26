@@ -784,7 +784,7 @@ h1, h2, p { margin: 0; }
         const pics = [...document.querySelectorAll('.fd-pic[data-ph]')];
         const load = (el) => {
           const [u, id] = el.dataset.ph.split('|');
-          fetch(`/api/photo/${encodeURIComponent(u)}/${encodeURIComponent(id)}`, { headers: { authorization: 'Bearer ' + token } })
+          fetch(`/api/photo/${encodeURIComponent(u)}/${encodeURIComponent(id)}?thumb=1`, { headers: { authorization: 'Bearer ' + token } })
             .then((r) => (r.ok ? r.json() : null))
             .then((p) => {
               if (!p || !p.data) return;

@@ -522,7 +522,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     if (r.photo.data && /^data:image\//.test(r.photo.data)) return Promise.resolve(r.photo.data);
     if (!token || !p.uid) return Promise.resolve(null);
     const k = p.uid + ':' + r.id;
-    if (!photoCache.has(k)) photoCache.set(k, api(`/photo/${encodeURIComponent(p.uid)}/${encodeURIComponent(r.id)}`).then((d) => d.data || null, () => null));
+    if (!photoCache.has(k)) photoCache.set(k, api(`/photo/${encodeURIComponent(p.uid)}/${encodeURIComponent(r.id)}?thumb=1`).then((d) => d.data || null, () => null)); // превью: в профиле картинки маленькие
     return photoCache.get(k);
   };
   const hydratePhotos = (p, root) => {

@@ -271,6 +271,7 @@
 
   // свои оценки: те же, что показывает фильтр «Мои», без примеров и без фото
   // ---------- синхронизация: фото, удаления, старые оценки ----------
+  const THUMBS_KEY = 'casualhub.thumbs.v1'; // { id оценки: отпечаток фото, к которому уже отправлено превью }
   const PHOTOS_KEY = 'casualhub.photos.v1';   // { id оценки: отпечаток уже отправленного фото }
   const DELETED_KEY = 'casualhub.deleted.v1'; // [{ id, at }] оценки, удалённые на этом устройстве
   const readJSON = (k, d) => { try { return JSON.parse(lsGet(k) || 'null') || d; } catch (e) { return d; } };
@@ -314,18 +315,43 @@
       return copy;
     });
   }
+  // маленькое превью фото (до 320px): его показывают лента и карточки друзей, чтобы телефон не качал полные фото
+  function thumbOf(src) {
+    return new Promise((res) => {
+      const im = new Image();
+      im.onload = () => {
+        const k = Math.min(1, 320 / Math.max(im.naturalWidth, im.naturalHeight));
+        const cv = document.createElement('canvas');
+        cv.width = Math.max(1, Math.round(im.naturalWidth * k)); cv.height = Math.max(1, Math.round(im.naturalHeight * k));
+        cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height);
+        try { res(cv.toDataURL('image/jpeg', 0.8)); } catch (e) { res(null); }
+      };
+      im.onerror = () => res(null);
+      im.src = src;
+    });
+  }
   async function uploadPhotos() {
     const sent = readJSON(PHOTOS_KEY, {});
-    let changed = false;
+    const thumbs = readJSON(THUMBS_KEY, {});
+    let changed = false, tChanged = false;
     for (const r of state.ratings.filter(ownsRating)) {
       const d = photoData(r.photo);
       if (!d) continue;
       const f = fp(d);
-      if (sent[r.id] === f) continue;
-      try { await api('/photo/' + encodeURIComponent(r.id), 'PUT', { data: d }); sent[r.id] = f; changed = true; }
-      catch (e) { if (e.status === 413) { sent[r.id] = f; changed = true; } }
+      if (sent[r.id] !== f) {
+        try { await api('/photo/' + encodeURIComponent(r.id), 'PUT', { data: d }); sent[r.id] = f; changed = true; }
+        catch (e) { if (e.status === 413) { sent[r.id] = f; changed = true; } }
+      }
+      // превью уходит и для старых фото, и для слишком больших, которые сервер не принял целиком
+      if (thumbs[r.id] !== f) {
+        const t = await thumbOf(d);
+        if (t) {
+          try { await api('/photo/' + encodeURIComponent(r.id + '.t'), 'PUT', { data: t }); thumbs[r.id] = f; tChanged = true; } catch (e) {}
+        }
+      }
     }
     if (changed) lsSet(PHOTOS_KEY, JSON.stringify(sent));
+    if (tChanged) lsSet(THUMBS_KEY, JSON.stringify(thumbs));
   }
   // сервер сам объединяет оценки с разных устройств, поэтому отправка ничего не затирает
   async function pushShelf() {
@@ -364,14 +390,14 @@
     const alt = kind === 'body' ? `Фото: ${esc(r.name)}` : '';
     if (photoLink(p)) return `<img class="${cls}" src="${esc(photoLink(p))}" alt="${alt}" loading="lazy" decoding="async" referrerpolicy="no-referrer"${size}>`;
     if (!p.remote || !F.view || F.view === 'me') return '';
-    return `<img class="${cls} f-photo" data-fphoto="${esc(F.view + '|' + r.id)}" alt="${alt}" decoding="async"${size}>`;
+    return `<img class="${cls} f-photo" data-fphoto="${esc(F.view + '|' + r.id + (kind === 'thumb' ? '|t' : ''))}" alt="${alt}" decoding="async"${size}>`;
   }
   const photoCache = new Map(); // "uid|rid" -> Promise<data URL | ''>
   let photoObs = null;
   function loadFriendPhoto(key) {
     if (!photoCache.has(key)) {
-      const [uid, rid] = key.split('|');
-      photoCache.set(key, api('/photo/' + encodeURIComponent(uid) + '/' + encodeURIComponent(rid)).then((r) => (r && r.data) || '', () => ''));
+      const [uid, rid, small] = key.split('|');
+      photoCache.set(key, api('/photo/' + encodeURIComponent(uid) + '/' + encodeURIComponent(rid) + (small ? '?thumb=1' : '')).then((r) => (r && r.data) || '', () => ''));
     }
     return photoCache.get(key);
   }
@@ -762,6 +788,8 @@ ${ICON.chev}
         lsSet(DELETED_KEY, JSON.stringify(list.slice(-2000)));
         const sent = readJSON(PHOTOS_KEY, {});
         if (sent[id]) { delete sent[id]; lsSet(PHOTOS_KEY, JSON.stringify(sent)); }
+        const thumbs = readJSON(THUMBS_KEY, {});
+        if (thumbs[id]) { delete thumbs[id]; lsSet(THUMBS_KEY, JSON.stringify(thumbs)); }
       }
       return o.apply(this, arguments);
     };
