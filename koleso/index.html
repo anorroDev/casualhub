@@ -391,15 +391,16 @@ fieldset:disabled { opacity: .6; }
 .th-x:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 /* Music slots: own file or a track from the list, plus the visible embedded player */
-.mslots { display: grid; gap: 8px; }
+.mslots { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.mslot .mpick { flex: 1 1 150px; min-width: 0; max-width: 100%; text-overflow: ellipsis; }
 .mslot { display: flex; align-items: center; gap: 8px; padding: 8px 8px 8px 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 12px; }
-.ms-text { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.ms-text { flex: 1 1 200px; min-width: 0; display: grid; gap: 1px; }
 .ms-text strong { font-size: 14px; font-weight: 600; }
 .ms-text span { font-size: 12.5px; color: var(--ink-2); overflow-wrap: anywhere; }
 .ms-text span.hint { color: var(--accent); font-weight: 600; }
 .mslot .btn.small { flex: none; }
 .mslot { flex-wrap: wrap; }
-.ms-acts { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; flex: 1 1 260px; }
+.ms-acts { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; flex: 1 1 260px; min-width: 0; max-width: 100%; }
 .mpick { flex: 1 1 150px; width: auto; height: 36px; padding: 0 8px; font-size: 13px; cursor: pointer; }
 .ms-text small { font-size: 12px; color: var(--ink-3); }
 .mplayer { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-top: 8px; padding: 8px 12px; background: var(--accent-soft); border-radius: 10px; }
@@ -673,6 +674,8 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
 .sheet-card { border-radius: 22px; }
 .w-name { transform-origin: 0 100%; }
 
+.w-share .btn { font-size: 13.5px; }
+
 /* Победа: заставка перед карточкой, пропускается кликом или клавишей */
 .winfx {
   position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; overflow: hidden; cursor: pointer;
@@ -720,6 +723,8 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
   font: 600 14px var(--font-body); color: var(--ink-2); background: var(--panel); border: 1px solid var(--line);
 }
 .fx-skip:hover { color: var(--ink); }
+/* iPhone увеличивает страницу, если у поля шрифт меньше 16px: на iOS поля всегда 16px */
+@supports (-webkit-touch-callout: none) { input, textarea, select { font-size: max(16px, 1em) !important; } }
 </style>
 </head>
 <body>
@@ -780,6 +785,17 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
       </div>
 
       <div class="field">
+        <div class="hp-head">
+          <p class="label" id="pickLabel">Как выбирать</p>
+          <div class="seg" id="pickSeg" role="group" aria-labelledby="pickLabel">
+            <button type="button" data-pick="out" aria-pressed="true">На выбывание</button>
+            <button type="button" data-pick="one" aria-pressed="false">Один победитель</button>
+          </div>
+        </div>
+        <p class="field-msg" id="pickHint"></p>
+      </div>
+
+      <div class="field">
         <label class="label" id="durLabel" for="durRange">Длительность спина</label>
         <div class="dur-row">
           <span class="dur-edge" aria-hidden="true">1 с</span>
@@ -788,7 +804,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
           <output id="durVal" for="durRange">8 с</output>
         </div>
         <div class="opts-row">
-          <label class="opt" for="auto"><input type="checkbox" id="auto"> Крутить до победителя</label>
+          <label class="opt" for="auto" id="autoOpt"><input type="checkbox" id="auto"> Крутить до победителя</label>
           <label class="opt" for="snd"><input type="checkbox" id="snd" checked> Звук</label>
         </div>
       </div>
@@ -910,6 +926,11 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
       <button type="button" class="btn primary" id="wAgain">Новый раунд с теми же</button>
       <button type="button" class="btn ghost" id="wClose">Закрыть</button>
     </div>
+    <div class="sheet-actions w-share">
+      <button type="button" class="btn ghost" id="wImg">🖼 Картинка с итогом</button>
+      <button type="button" class="btn ghost" id="wCopy">📋 Скопировать текст</button>
+    </div>
+    <p class="field-msg" id="wMsg" role="status"></p>
   </div>
 </div>
 
@@ -1023,7 +1044,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
   function fresh() {
     return {
       v: 2, mode: 'donate', cur: 'UAH', rates: { ...DEF_RATES }, items: [], seq: 0, outSeq: 0, rot: 0,
-      duration: 8, auto: false, sound: true, sample: false, hub: 24, gif: '', section: 'wheel',
+      duration: 8, pick: 'out', auto: false, sound: true, sample: false, hub: 24, gif: '', section: 'wheel',
       music: { bg: '', win: 'preset:vika' }, bgOn: true,
     };
   }
@@ -1300,7 +1321,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     if (S.spinning) return;
     const a = alive();
     if (a.length < 2) { idleStatus(); return; }
-    if (a.length === S.items.length) {
+    if (a.length === S.items.length || S.pick === 'one') {
       const ch = chances();
       a.forEach((i) => { i.startWin = ch.get(i.id).win; });
     }
@@ -1349,6 +1370,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
   }
 
   function land(pick, segs) {
+    if (S.pick === 'one') return landOne(pick, segs);
     setStatus(`Вылетает: <b>${esc(pick.item.name)}</b>`, baseSub(), 'bad');
     // на последнем вылете звучит победная, её запускает showWinner
     if (alive().length > 2) playOut();
@@ -1379,6 +1401,29 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     requestAnimationFrame(pulse);
   }
 
+  // обычный режим: на кого показала стрелка, тот и победил, никто не выбывает
+  function landOne(pick, segs) {
+    setStatus(`Выпал: <b>${esc(pick.item.name)}</b>`, baseSub(), 'good');
+    const t0 = performance.now(), D = reduced ? 400 : 900;
+    const pulse = (now) => {
+      const t = (now - t0) / D;
+      if (t < 1) {
+        draw(segs, { id: pick.item.id, a: 0.5 * Math.abs(Math.sin(t * Math.PI * 3)) });
+        requestAnimationFrame(pulse);
+        return;
+      }
+      S.rot = mod(S.rot, TAU);
+      S.spinning = false;
+      S.lastWin = pick.item.id;
+      lock(false);
+      save();
+      render(true);
+      setStatus(`Победитель: <b>${esc(pick.item.name)}</b>`, winSub(pick.item), 'good');
+      showWinner(pick.item);
+    };
+    requestAnimationFrame(pulse);
+  }
+
   // ---------- UI ----------
   function setStatus(main, sub, tier) {
     $('#statusMain').innerHTML = main;
@@ -1393,12 +1438,13 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     return (n < total ? `осталось из ${total}` : 'участников на колесе') + bank;
   }
   function winSub(w) {
+    if (S.pick === 'one') return S.mode === 'donate' && w.startWin != null ? `шанс был ${pct(w.startWin)}` : `выпал из ${S.items.length}`;
     return S.mode === 'donate' && w.startWin != null ? `шанс на старте был ${pct(w.startWin)}` : `последний из ${S.items.length}`;
   }
   function idleStatus() {
     const a = alive(), n = a.length;
     if (n >= 2) setStatus('Жми «Крутить»', baseSub());
-    else if (n === 1 && S.items.some((i) => i.out)) setStatus(`Победитель: <b>${esc(a[0].name)}</b>`, winSub(a[0]), 'good');
+    else if (n === 1 && S.items.some((i) => i.out) && S.pick !== 'one') setStatus(`Победитель: <b>${esc(a[0].name)}</b>`, winSub(a[0]), 'good');
     else if (n === 1) setStatus('Нужен ещё хотя бы один', 'добавь участника в список');
     else setStatus('Колесо пустое', 'добавь участников в список');
   }
@@ -1500,6 +1546,11 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
       </li>`).join('');
 
     $('#auto').checked = S.auto;
+    $('#autoOpt').hidden = S.pick === 'one';
+    document.querySelectorAll('#pickSeg [data-pick]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.pick === S.pick)));
+    $('#pickHint').textContent = S.pick === 'one'
+      ? 'Одна прокрутка — один победитель, участники остаются на колесе.'
+      : 'Каждая прокрутка выбивает одного, побеждает последний.';
     $('#snd').checked = S.sound;
 
     updateMeta();
@@ -1626,7 +1677,132 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     });
   }
 
+  // ---------- итог розыгрыша: текст и картинка ----------
+  let lastWinner = null;
+  function resultData(it) {
+    const don = S.mode === 'donate';
+    const money = (i) => (don ? `${fmt(i.amount)} ${sym(i.cur)}` : '');
+    const outs = S.pick === 'one' ? [] : S.items.filter((i) => i.out).sort((x, y) => x.outOrder - y.outOrder);
+    return {
+      name: it.name, money: money(it), don,
+      chance: don && it.startWin != null ? pct(it.startWin) : '',
+      total: S.items.length,
+      bank: don ? `${fmt(S.items.reduce((t, i) => t + weight(i), 0))} ${sym(S.cur)}` : '', // весь банк, а не только оставшиеся
+      outs: outs.map((i) => ({ name: i.name, money: money(i) })),
+      date: new Date().toLocaleString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+    };
+  }
+  function resultText(it) {
+    const d = resultData(it);
+    const lines = [`🏆 Победитель: ${d.name}${d.money ? ' — ' + d.money : ''}${d.chance ? ` (шанс ${d.chance})` : ''}`];
+    lines.push(S.pick === 'one' ? `Выпал с одной прокрутки из ${d.total}` : `Остался последним из ${d.total}`);
+    if (d.bank) lines.push(`Банк: ${d.bank}`);
+    if (d.outs.length) {
+      lines.push('', 'Порядок вылета:');
+      d.outs.forEach((o, k) => lines.push(`${k + 1}. ${o.name}${o.money ? ' — ' + o.money : ''}`));
+    }
+    lines.push('', `Колесо Казуала · ${d.date}`, location.origin + '/koleso/');
+    return lines.join('\n');
+  }
+  async function resultImage(it) {
+    const d = resultData(it);
+    const cs = getComputedStyle(document.documentElement);
+    const v = (n, fb) => cs.getPropertyValue(n).trim() || fb;
+    const C = { bg: v('--bg', '#101114'), panel: v('--panel', '#17181c'), ink: v('--ink', '#f2f2f2'), ink2: v('--ink-2', '#b5b5b5'), ink3: v('--ink-3', '#7a7a7a'), line: v('--line', '#2a2b30'), good: v('--good', '#2EAD60'), accent: v('--accent', '#3550E8'), onTier: v('--on-tier', '#fff') };
+    const disp = (v('--font-display', 'Handjet') || 'Handjet').split(',')[0].replace(/["']/g, '').trim();
+    try { await document.fonts.load(`800 80px "${disp}"`); await document.fonts.load('600 30px Onest'); } catch (e) {}
+    const W = 1080, rows = Math.min(d.outs.length, 14);
+    const H = Math.max(1080, 720 + (rows ? 110 + rows * 52 : 0) + (d.outs.length > rows ? 52 : 0));
+    const cv = document.createElement('canvas');
+    cv.width = W; cv.height = H;
+    const g = cv.getContext('2d');
+    const rrect = (x, y, w, h, r) => { g.beginPath(); g.moveTo(x + r, y); g.arcTo(x + w, y, x + w, y + h, r); g.arcTo(x + w, y + h, x, y + h, r); g.arcTo(x, y + h, x, y, r); g.arcTo(x, y, x + w, y, r); g.closePath(); };
+    g.fillStyle = C.bg; g.fillRect(0, 0, W, H);
+    // точечный фон, как на сайте
+    g.fillStyle = C.line;
+    for (let y = 20; y < H; y += 28) for (let x = 20; x < W; x += 28) g.fillRect(x, y, 2, 2);
+    // лучи за победителем
+    g.save(); g.translate(W / 2, 330); g.fillStyle = C.accent; g.globalAlpha = .12;
+    for (let k = 0; k < 16; k++) { g.rotate(TAU / 16); g.beginPath(); g.moveTo(0, 0); g.lineTo(-60, -620); g.lineTo(60, -620); g.closePath(); g.fill(); }
+    g.restore();
+    const fit = (text, font, size, max) => { let sz = size; do { g.font = font.replace('$', sz); sz -= 4; } while (g.measureText(text).width > max && sz > 20); };
+    g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+    g.fillStyle = C.ink3; g.font = `700 34px "${disp}", ${FONT}`;
+    g.fillText('КОЛЕСО КАЗУАЛА', W / 2, 90);
+    g.fillStyle = C.accent; g.font = `700 40px "${disp}", ${FONT}`;
+    g.fillText('П О Б Е Д И Т Е Л Ь', W / 2, 230);
+    g.fillStyle = C.ink; fit(d.name, `800 $px "${disp}", ${FONT}`, 190, W - 120);
+    g.fillText(d.name, W / 2, 400);
+    let y = 470;
+    if (d.money) {
+      g.font = `800 64px "${disp}", ${FONT}`;
+      const tw = g.measureText(d.money).width + 60;
+      g.fillStyle = C.good; rrect((W - tw) / 2, y, tw, 92, 20); g.fill();
+      g.fillStyle = C.onTier; g.fillText(d.money, W / 2, y + 70);
+      y += 130;
+    } else y += 30;
+    g.fillStyle = C.ink2; g.font = `600 32px ${FONT}`;
+    const sub = [S.pick === 'one' ? `выпал из ${d.total}` : `последний из ${d.total}`, d.chance && `шанс ${d.chance}`, d.bank && `банк ${d.bank}`].filter(Boolean).join('  ·  ');
+    g.fillText(sub, W / 2, y + 20);
+    y += 100;
+    if (rows) {
+      g.textAlign = 'left'; g.fillStyle = C.ink3; g.font = `700 30px "${disp}", ${FONT}`;
+      g.fillText('ПОРЯДОК ВЫЛЕТА', 120, y); y += 24;
+      g.fillStyle = C.panel; g.strokeStyle = C.line; g.lineWidth = 2;
+      const boxH = rows * 52 + (d.outs.length > rows ? 52 : 0) + 24;
+      rrect(100, y, W - 200, boxH, 24); g.fill(); g.stroke();
+      y += 50;
+      d.outs.slice(0, rows).forEach((o, k) => {
+        g.font = `500 30px ${FONT}`;
+        g.textAlign = 'left'; g.fillStyle = C.ink3; g.fillText(String(k + 1), 130, y);
+        g.fillStyle = C.ink2; fit(o.name, `500 $px ${FONT}`, 30, o.money ? 560 : 760); g.fillText(o.name, 190, y);
+        g.font = `500 30px ${FONT}`;
+        if (o.money) { g.textAlign = 'right'; g.fillStyle = C.ink3; g.fillText(o.money, W - 130, y); }
+        y += 52;
+      });
+      if (d.outs.length > rows) { g.textAlign = 'left'; g.fillStyle = C.ink3; g.fillText(`…и ещё ${d.outs.length - rows}`, 190, y); }
+    }
+    g.textAlign = 'center'; g.fillStyle = C.ink3; g.font = `500 28px ${FONT}`;
+    g.fillText(`${d.date}  ·  ${location.host}/koleso`, W / 2, H - 50);
+    return new Promise((res) => cv.toBlob(res, 'image/png'));
+  }
+  function wMsg(t) { $('#wMsg').textContent = t || ''; }
+  async function shareImage() {
+    if (!lastWinner) return;
+    wMsg('Рисую картинку…');
+    try {
+      const blob = await resultImage(lastWinner);
+      const file = new File([blob], `koleso-${Date.now()}.png`, { type: 'image/png' });
+      // на телефоне — системное «Поделиться» (сохранить в фото, отправить в чат), на компьютере — скачать файл
+      if (matchMedia('(pointer: coarse)').matches && navigator.canShare && navigator.canShare({ files: [file] })) {
+        try { await navigator.share({ files: [file], title: 'Колесо Казуала', text: `Победитель: ${lastWinner.name}` }); wMsg(''); return; }
+        catch (e) { if (e.name === 'AbortError') { wMsg(''); return; } }
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = file.name;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 4000);
+      wMsg('Картинка сохранена.');
+    } catch (e) { wMsg('Не получилось сделать картинку.'); }
+  }
+  async function copyResult() {
+    if (!lastWinner) return;
+    const text = resultText(lastWinner);
+    let ok = false;
+    try { await navigator.clipboard.writeText(text); ok = true; } catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.top = '-1000px';
+      document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0, text.length);
+      try { ok = document.execCommand('copy'); } catch (e2) {}
+      ta.remove();
+    }
+    wMsg(ok ? 'Текст скопирован, можно вставить в чат.' : 'Не удалось скопировать.');
+  }
+
   function showWinner(it) {
+    lastWinner = it;
+    wMsg('');
     playWinMusic();
     winFx(it).then(() => openWinnerCard(it));
   }
@@ -1635,9 +1811,10 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     const total = S.items.length;
     $('#wStats').innerHTML = S.mode === 'donate' && it.startWin != null
       ? `<span class="badge" data-tier="good">${pct(it.startWin)}</span>
-         <div class="total-meta"><strong>шанс на старте</strong><span>донат ${fmt(it.amount)} ${sym(it.cur)}${it.cur !== S.cur ? ' ' + convText(it) : ''}</span></div>`
+         <div class="total-meta"><strong>${S.pick === 'one' ? 'шанс был' : 'шанс на старте'}</strong><span>донат ${fmt(it.amount)} ${sym(it.cur)}${it.cur !== S.cur ? ' ' + convText(it) : ''}</span></div>`
       : `<span class="badge" data-tier="good">${total}</span>
-         <div class="total-meta"><strong>${S.mode === 'donate' ? `донат ${fmt(it.amount)} ${sym(it.cur)}` : 'участников было на колесе'}</strong><span>остался последним</span></div>`;
+         <div class="total-meta"><strong>${S.mode === 'donate' ? `донат ${fmt(it.amount)} ${sym(it.cur)}` : 'участников было на колесе'}</strong><span>${S.pick === 'one' ? 'выпал с одной прокрутки' : 'остался последним'}</span></div>`;
+    $('#wAgain').textContent = S.pick === 'one' ? 'Крутить ещё раз' : 'Новый раунд с теми же';
     $('#winner').hidden = false;
     $('#wAgain').focus();
   }
@@ -1704,6 +1881,9 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
   // базовые картинки для центра лежат в hub/ и перечислены в hub/index.json по группам:
   // стикеры «Папич by @St1ckyyy», roflan-эмоуты, эмоуты канала arthas
   let BASE_GROUPS = [], BASE_HUBS = [];
+  // iPhone со старой iOS не играет WebM: рядом лежат те же ролики в MP4
+  const WEBM_OK = (() => { try { return !!document.createElement('video').canPlayType('video/webm; codecs="vp9"'); } catch (e) { return false; } })();
+  const vsrc = (src) => (WEBM_OK ? src : src.replace(/\.webm$/i, '.mp4'));
   function loadBaseHubs() {
     return fetch('hub/index.json')
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(r.status))))
@@ -1711,7 +1891,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
         BASE_GROUPS = d.groups || [];
         // убранный повтор: выбор переходит на оставшийся вариант того же смайла
         if (d.aliases && d.aliases[S.gif]) { S.gif = d.aliases[S.gif]; save(); }
-        BASE_HUBS = BASE_GROUPS.flatMap((g) => g.items.map((it) => ({ ...it, video: /\.webm$/i.test(it.src) })));
+        BASE_HUBS = BASE_GROUPS.flatMap((g) => g.items.map((it) => ({ ...it, src: vsrc(it.src), video: /\.webm$/i.test(it.src) })));
         if (!BASE_GROUPS.some((g) => g.id === S.baseGroup)) {
           const own = BASE_GROUPS.find((g) => g.items.some((it) => it.id === S.gif));
           S.baseGroup = own ? own.id : (BASE_GROUPS[0] && BASE_GROUPS[0].id);
@@ -1727,9 +1907,25 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     $('#baseThumbs').innerHTML = g ? g.items.map((it) => {
       const b = BASE_HUBS.find((x) => x.id === it.id);
       return `<button type="button" class="th th-base" data-gif="${b.id}" aria-pressed="${b.id === S.gif}" title="${esc(b.name)}" aria-label="${esc(b.name)}">${b.video
-        ? `<video src="${b.src}" muted loop autoplay playsinline preload="auto"></video>`
+        ? `<video data-src="${b.src}" muted loop playsinline preload="none"></video>`
         : `<img src="${b.src}" alt="" loading="lazy" decoding="async">`}</button>`;
     }).join('') : '';
+    watchThumbVideos();
+  }
+  // видео-стикеры грузятся и играют, только пока видны: на телефоне не качаем все сразу
+  let thumbObs = null;
+  function watchThumbVideos() {
+    const vids = [...document.querySelectorAll('#baseThumbs video[data-src]')];
+    if (!('IntersectionObserver' in window)) { vids.forEach((v) => { v.src = v.dataset.src; v.play().catch(() => {}); }); return; }
+    if (!thumbObs) {
+      thumbObs = new IntersectionObserver((ents) => ents.forEach((e) => {
+        const v = e.target;
+        if (e.isIntersecting) { if (!v.getAttribute('src')) v.src = v.dataset.src; v.play().catch(() => {}); }
+        else if (!v.paused) v.pause();
+      }), { rootMargin: '120px' });
+    }
+    thumbObs.disconnect(); // старые миниатюры после перерисовки больше не нужны
+    vids.forEach((v) => thumbObs.observe(v));
   }
 
   function renderGifs() {
@@ -1897,6 +2093,13 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
         c.alts = (p.alt || []).slice();
         y.loadVideoById({ videoId: p.key, startSeconds: 0 });
         y.playVideo();
+        // iPhone и Android молча блокируют звук без нажатия: если трек так и не заиграл, звучит стандартная фанфара
+        setTimeout(() => {
+          if (!c.active || c.type !== 'yt') return;
+          let st = -1;
+          try { st = y.getPlayerState(); } catch (e) {}
+          if (st !== 1 && st !== 3) embedFailed(ch, ch === 'bg' ? 'Браузер не дал включить музыку сам: нажми ▶ у фоновой музыки.' : 'Браузер не дал включить трек без нажатия.');
+        }, 4000);
       } else {
         const uri = 'spotify:track:' + p.key;
         const s = await spPlayer(ch, uri);
@@ -1928,7 +2131,9 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     el.loop = !!opts.loop;
     el.volume = ch === 'bg' ? 0.55 : 0.9;
     el.addEventListener('ended', () => channelEnded(ch));
-    el.play().catch(() => {});
+    const fail = opts.onFail || null;
+    // заблокированный автозапуск своего файла: на победе вместо него стандартная фанфара
+    el.play().catch(() => { if (c.el === el) { stopChannel(ch); if (fail) fail(); } });
     Object.assign(c, { active: true, type: 'file', el, loop: !!opts.loop, onFail: null });
     renderMusic();
     return true;
@@ -2151,6 +2356,16 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
       applyHub();
       save();
     });
+    $('#pickSeg').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-pick]');
+      if (!b || S.spinning || b.dataset.pick === S.pick) return;
+      S.pick = b.dataset.pick;
+      // в обычном режиме выбывших нет: возвращаем всех на колесо
+      if (S.pick === 'one') S.items.forEach((i) => { i.out = false; i.outOrder = 0; });
+      clearTimeout(autoTimer);
+      save();
+      render();
+    });
     $('#auto').addEventListener('change', (e) => { S.auto = e.target.checked; if (!S.auto) clearTimeout(autoTimer); save(); });
     $('#snd').addEventListener('change', (e) => {
       S.sound = e.target.checked;
@@ -2348,7 +2563,9 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
       addGifs(e.dataTransfer.files);
     });
 
-    $('#wAgain').addEventListener('click', restoreAll);
+    $('#wImg').addEventListener('click', shareImage);
+    $('#wCopy').addEventListener('click', copyResult);
+    $('#wAgain').addEventListener('click', () => { restoreAll(); if (S.pick === 'one') spin(); });
     $('#wClose').addEventListener('click', hideWinner);
     $('#winner').addEventListener('click', (e) => { if (e.target.id === 'winner') hideWinner(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideWinner(); });
@@ -2369,6 +2586,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     }
     S = Object.assign(fresh(), d || {});
     S.spinning = false;
+    if (S.pick !== 'one') S.pick = 'out';
     if (d && !d.v) {
       // старые сохранения открывались в рублях; по умолчанию банк в гривнах
       const wasRub = !d.cur || d.cur === 'RUB';

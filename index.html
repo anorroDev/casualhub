@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Казуал Хаб</title>
-<meta name="description" content="Казуал Хаб: Мнение Казуала для оценок всего подряд и Колесо Казуала на выбывание.">
+<meta name="description" content="Казуал Хаб: Мнение Казуала для оценок всего подряд, и Колесо Казуала на выбывание, лента оценок друзей.">
 <link rel="icon" href="/favicon.ico" sizes="48x48">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png">
@@ -350,6 +350,36 @@ h1, h2, p { margin: 0; }
 .wheel svg { display: block; width: 100%; height: 100%; }
 .wheel .wheel-ptr { position: absolute; left: 50%; top: -7px; width: 20px; height: 22px; margin-left: -10px; transform-origin: 50% 0; }
 
+/* Лента друзей */
+.feed { display: grid; gap: 12px; margin-top: 26px; animation: feed-in .6s var(--spring); }
+@keyframes feed-in { from { transform: translateY(18px); } }
+.feed-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; }
+.feed h2 { font-family: var(--font-display); font-weight: 800; font-size: clamp(30px, 4.4vw, 40px); line-height: .95; }
+.feed-head span { color: var(--ink-3); font-size: 13px; }
+.feed-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+@media (min-width: 760px) { .feed-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+.fd {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 12px;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 16px; text-decoration: none;
+  transition: transform .25s var(--spring), border-color .15s;
+}
+.fd:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.fd-pic { width: 46px; height: 46px; border-radius: 12px; display: grid; place-items: center; overflow: hidden; background: var(--fc, var(--cell)); color: #fff; font-weight: 800; font-size: 18px; text-transform: uppercase; }
+.fd-pic img { width: 100%; height: 100%; object-fit: cover; }
+.fd-text { display: grid; gap: 1px; min-width: 0; }
+.fd-text b { font-size: 14.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fd-text span { color: var(--ink-3); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.fd-text em { font-style: normal; color: var(--ink-2); font-weight: 600; }
+.fd-score {
+  --tier: var(--cell);
+  display: inline-grid; place-items: center; min-width: 46px; height: 34px; padding: 0 7px; border-radius: 9px;
+  background: var(--tier); color: var(--on-tier); font-family: var(--font-display); font-weight: 800; font-size: 22px; line-height: 1;
+}
+.fd-score[data-tier="good"] { --tier: var(--good); } .fd-score[data-tier="mid"] { --tier: var(--mid); } .fd-score[data-tier="bad"] { --tier: var(--bad); }
+.fd-score.none { background: var(--panel-2); color: var(--ink-3); font-size: 14px; font-family: var(--font-body); }
+.feed-empty { padding: 16px; border: 1px dashed var(--line); border-radius: 16px; color: var(--ink-2); font-size: 14px; }
+.feed-empty a { color: var(--accent); font-weight: 600; }
+
 .app-icon { width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center; transition: transform .5s var(--spring); }
 .app-icon svg { width: 100%; height: 100%; }
 .app:hover .app-icon { transform: rotate(-6deg) scale(1.06); }
@@ -456,10 +486,15 @@ h1, h2, p { margin: 0; }
       <span class="app-icon" aria-hidden="true"><svg viewBox="0 0 256 256"><rect width="256" height="256" rx="58" fill="#14161C"/><path d="M137.00 114.02L137.00 32.02A82 82 0 0 1 208.01 73.02Z" fill="#43C97A" stroke="#14161C" stroke-width="9" stroke-linejoin="round"/><path d="M122.00 140.00L193.01 99.00A82 82 0 0 1 193.01 181.00Z" fill="#F2BA44" stroke="#14161C" stroke-width="9" stroke-linejoin="round"/><path d="M122.00 140.00L193.01 181.00A82 82 0 0 1 122.00 222.00Z" fill="#F26A55" stroke="#14161C" stroke-width="9" stroke-linejoin="round"/><path d="M122.00 140.00L122.00 222.00A82 82 0 0 1 50.99 181.00Z" fill="#43C97A" stroke="#14161C" stroke-width="9" stroke-linejoin="round"/><path d="M122.00 140.00L50.99 181.00A82 82 0 0 1 50.99 99.00Z" fill="#F2BA44" stroke="#14161C" stroke-width="9" stroke-linejoin="round"/><path d="M122.00 140.00L50.99 99.00A82 82 0 0 1 122.00 58.00Z" fill="#F26A55" stroke="#14161C" stroke-width="9" stroke-linejoin="round"/><circle cx="122" cy="140" r="22" fill="#8C9BFF" stroke="#14161C" stroke-width="9"/></svg></span>
       <span class="app-text">
         <span class="app-name">Колесо Казуала</span>
-        <span class="app-desc">Колесо на выбывание: просто имена или донаты, где шанс равен доле в банке. Своя музыка и гифки в центре.</span>
+        <span class="app-desc">На выбывание или один победитель с одной прокрутки: просто имена или донаты, где шанс равен доле в банке. Своя музыка и стикеры в центре.</span>
       </span>
       <span class="app-foot"><span class="app-meta" id="kolesoMeta"></span><span class="app-go">Крутить <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></span></span>
     </a>
+  </section>
+
+  <section class="feed" id="feed" hidden aria-labelledby="feedTitle">
+    <div class="feed-head"><h2 id="feedTitle">Что оценили друзья</h2><span id="feedNote"></span></div>
+    <ul class="feed-list" id="feedList"></ul>
   </section>
 
   <footer class="foot">
@@ -655,6 +690,32 @@ h1, h2, p { margin: 0; }
     });
   }
 
+  // ---------- лента: что оценили друзья ----------
+  const ago = (t) => {
+    const m = Math.round((Date.now() - t) / 60000);
+    if (m < 1) return 'только что';
+    if (m < 60) return `${m} мин назад`;
+    const h = Math.round(m / 60);
+    if (h < 24) return `${h} ч назад`;
+    const d = Math.round(h / 24);
+    if (d < 7) return `${d} ${plural(d, 'день', 'дня', 'дней')} назад`;
+    return new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
+  };
+  const FC = ['#3550E8', '#EAA92C', '#2EAD60', '#EC4899', '#9333EA', '#06B6D4', '#F97316', '#14B8A6'];
+  const colorOf = (id) => FC[[...String(id)].reduce((a, c) => a + c.charCodeAt(0), 0) % FC.length];
+  function feedItem(it) {
+    const who = esc(it.user.username || 'друг');
+    if (it.kind !== 'rating') return '';
+    const r = it.rating;
+    const pic = r.photo && r.photo.url ? `<img src="${esc(r.photo.url)}" alt="" loading="lazy" referrerpolicy="no-referrer" onerror="this.replaceWith(document.createTextNode('${esc(String(r.name).charAt(0)).replace(/'/g, '')}'))">`
+      : r.photo && r.photo.remote ? '' : esc(String(r.name).charAt(0));
+    const meta = [`<em>${who}</em>`, r.cat && esc(r.cat), r.status && esc(r.status), ago(it.at)].filter(Boolean).join(' · ');
+    return `<li><a class="fd" href="/profile/?id=${encodeURIComponent(it.user.id)}">
+      <span class="fd-pic" style="--fc:${colorOf(r.id || r.name)}"${r.photo && r.photo.remote ? ` data-ph="${esc(it.user.id + '|' + r.id)}"` : ''}>${pic || esc(String(r.name).charAt(0))}</span>
+      <span class="fd-text"><b>${r.fav ? '★ ' : ''}${esc(r.name)}</b><span>${meta}</span></span>
+      ${r.total != null ? `<span class="fd-score" data-tier="${tierT(r.total)}">${fmt(r.total)}</span>` : '<span class="fd-score none">без оценки</span>'}</a></li>`;
+  }
+
   // ---------- друзья: сколько их и есть ли заявки ----------
   const tokens = read('casualhub.tokens.v1') || {};
   const token = user && tokens[user.id];
@@ -670,6 +731,42 @@ h1, h2, p { margin: 0; }
           const dot = $('#reqDot');
           if (dot) { dot.textContent = inc; dot.hidden = false; }
         }
+      })
+      .catch(() => {});
+
+    // лента: сервер собирает свежие оценки всех друзей
+    fetch('/api/feed', { headers: { authorization: 'Bearer ' + token }, cache: 'no-store' })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d) => {
+        if (!d) return;
+        const feed = $('#feed');
+        feed.hidden = false;
+        if (!d.friends) {
+          $('#feedList').innerHTML = '<li class="feed-empty">Тут появятся оценки друзей. <a href="/mnenie/">Добавь друзей в Мнении Казуала</a> через кнопку «👥 Друзья».</li>';
+          return;
+        }
+        if (!d.items.length) { $('#feedList').innerHTML = '<li class="feed-empty">Друзья пока ничего не оценили.</li>'; return; }
+        $('#feedNote').textContent = `${d.friends} ${plural(d.friends, 'друг', 'друга', 'друзей')}`;
+        $('#feedList').innerHTML = d.items.slice(0, 12).map(feedItem).join('');
+        // загруженные фото подтягиваются, когда строка видна
+        const pics = [...document.querySelectorAll('.fd-pic[data-ph]')];
+        const load = (el) => {
+          const [u, id] = el.dataset.ph.split('|');
+          fetch(`/api/photo/${encodeURIComponent(u)}/${encodeURIComponent(id)}`, { headers: { authorization: 'Bearer ' + token } })
+            .then((r) => (r.ok ? r.json() : null))
+            .then((p) => {
+              if (!p || !p.data) return;
+              const img = new Image();
+              img.alt = '';
+              img.onload = () => { el.textContent = ''; el.appendChild(img); }; // битое фото не показываем, остаётся буква
+              img.src = p.data;
+            })
+            .catch(() => {});
+        };
+        if ('IntersectionObserver' in window) {
+          const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { io.unobserve(e.target); load(e.target); } }), { rootMargin: '200px' });
+          pics.forEach((el) => io.observe(el));
+        } else pics.forEach(load);
       })
       .catch(() => {});
   }
@@ -736,6 +833,8 @@ h1, h2, p { margin: 0; }
 html.theme-swap::view-transition-old(root) { animation: none; }
 html.theme-swap::view-transition-new(root) { animation: theme-circle .6s cubic-bezier(.4, 0, .2, 1) both; }
 @keyframes theme-circle { from { clip-path: circle(0 at var(--tx, 50%) var(--ty, 0)); } to { clip-path: circle(150vmax at var(--tx, 50%) var(--ty, 0)); } }
+/* iPhone увеличивает страницу, если у поля шрифт меньше 16px: на iOS поля всегда 16px */
+@supports (-webkit-touch-callout: none) { input, textarea, select { font-size: max(16px, 1em) !important; } }
 </style>
 </body>
 </html>

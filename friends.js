@@ -178,6 +178,7 @@
       if (!rr || !rr.id) continue;
       const copy = { ...rr };
       const remotePhoto = copy.photo && copy.photo.remote ? copy.photo : null;
+      const linkPhoto = copy.photo && !copy.photo.remote && photoLink(copy.photo) ? copy.photo : null;
       delete copy.photo;
       if (!state.cats.some((c) => c.id === copy.cat) && copy.catLabel) copy.catName = copy.catName || copy.catLabel;
       delete copy.catLabel;
@@ -185,6 +186,7 @@
       let loc = byId.get(rr.id);
       if (!loc) { delete copy.example; state.ratings.push(copy); byId.set(copy.id, copy); loc = copy; added++; }
       else if (stampOf(rr) > stampOf(loc)) { const photo = loc.photo; Object.assign(loc, copy); if (photo) loc.photo = photo; updated++; }
+      if (linkPhoto && !loc.photo) { loc.photo = { id: linkPhoto.url, url: linkPhoto.url, w: linkPhoto.w || 0, h: linkPhoto.h || 0 }; photos++; }
       // фото: качаем, если здесь его нет или на сервере другое и оценка там свежее
       if (remotePhoto) {
         const localData = photoData(loc.photo);
@@ -273,6 +275,10 @@
   const readJSON = (k, d) => { try { return JSON.parse(lsGet(k) || 'null') || d; } catch (e) { return d; } };
   const photoData = (p) => (p && typeof p.data === 'string' && p.data.startsWith('data:image/') ? p.data
     : p && typeof p.id === 'string' && p.id.startsWith('data:image/') ? p.id : '');
+  const photoLink = (p) => {
+    const u = p && (p.url || p.id);
+    return typeof u === 'string' && /^https:///.test(u) && u.length < 2000 ? u : '';
+  };
   // быстрый отпечаток строки (FNV-1a), чтобы не отправлять одно и то же фото дважды
   function fp(s) {
     let h = 0x811c9dc5;
@@ -297,7 +303,9 @@
     return state.ratings.filter(ownsRating).map((r) => {
       const copy = { ...r };
       const d = photoData(r.photo);
-      copy.photo = d ? { remote: fp(d), w: r.photo.w || 0, h: r.photo.h || 0 } : undefined;
+      const link = photoLink(r.photo);
+      copy.photo = d ? { remote: fp(d), w: r.photo.w || 0, h: r.photo.h || 0 }
+        : link ? { url: link, w: r.photo.w || 0, h: r.photo.h || 0 } : undefined;
       if (!copy.photo) delete copy.photo;
       delete copy.hist;
       delete copy.history;
@@ -346,6 +354,35 @@
     bar.innerHTML = chips.join('');
   }
 
+  // фото друга: ссылка показывается сразу, загруженное фото подтягивается с сервера, когда карточка на экране
+  function friendPhoto(r, kind) {
+    const p = r.photo;
+    if (!p) return '';
+    const cls = kind === 'thumb' ? 'e-thumb' : 'e-photo';
+    const size = kind === 'body' && p.w && p.h ? ` width="${+p.w}" height="${+p.h}"` : '';
+    const alt = kind === 'body' ? `Фото: ${esc(r.name)}` : '';
+    if (photoLink(p)) return `<img class="${cls}" src="${esc(photoLink(p))}" alt="${alt}" loading="lazy" decoding="async" referrerpolicy="no-referrer"${size}>`;
+    if (!p.remote || !F.view || F.view === 'me') return '';
+    return `<img class="${cls} f-photo" data-fphoto="${esc(F.view + '|' + r.id)}" alt="${alt}" decoding="async"${size}>`;
+  }
+  const photoCache = new Map(); // "uid|rid" -> Promise<data URL | ''>
+  let photoObs = null;
+  function loadFriendPhoto(key) {
+    if (!photoCache.has(key)) {
+      const [uid, rid] = key.split('|');
+      photoCache.set(key, api('/photo/' + encodeURIComponent(uid) + '/' + encodeURIComponent(rid)).then((r) => (r && r.data) || '', () => ''));
+    }
+    return photoCache.get(key);
+  }
+  function hydratePhotos(root) {
+    const imgs = [...root.querySelectorAll('img[data-fphoto]:not([src])')];
+    if (!imgs.length) return;
+    const show = (img) => loadFriendPhoto(img.dataset.fphoto).then((d) => { if (d) { img.onerror = () => img.remove(); img.src = d; } else img.remove(); });
+    if (!('IntersectionObserver' in window)) { imgs.forEach(show); return; }
+    if (!photoObs) photoObs = new IntersectionObserver((ents) => ents.forEach((e) => { if (e.isIntersecting) { photoObs.unobserve(e.target); show(e.target); } }), { rootMargin: '300px' });
+    imgs.forEach((img) => photoObs.observe(img));
+  }
+
   function friendEntryHTML(r, rank) {
     const t = r.total;
     const scores = Array.isArray(r.scores) ? r.scores : [];
@@ -362,12 +399,12 @@
       </div>` : '';
     return `<li class="entry"><details><summary><span class="sum">
 <span class="rank">${rank}</span>
-<span class="e-main"><span class="e-text"><span class="e-name">${r.fav ? '<span class="fav-star-inline">★</span>' : ''}${esc(r.name)}</span><span class="e-sub"><span>${esc(meta)}</span>${r.catLabel ? `<span class="tag">${esc(r.catLabel)}</span>` : ''}${r.status ? `<span class="tag status-tag">${esc(r.status)}</span>` : ''}${r.meta ? `<span class="tag meta-tag">${esc(r.meta)}</span>` : ''}</span></span></span>
+<span class="e-main">${friendPhoto(r, 'thumb')}<span class="e-text"><span class="e-name">${r.fav ? '<span class="fav-star-inline">★</span>' : ''}${esc(r.name)}</span><span class="e-sub"><span>${esc(meta)}</span>${r.catLabel ? `<span class="tag">${esc(r.catLabel)}</span>` : ''}${r.status ? `<span class="tag status-tag">${esc(r.status)}</span>` : ''}${r.meta ? `<span class="tag meta-tag">${esc(r.meta)}</span>` : ''}</span></span></span>
 <span class="spark" aria-hidden="true">${spark}</span>
 <span class="badge" data-tier="${tierT(t)}">${t != null ? fmt(t) : '—'}</span>
 ${ICON.chev}
 </span></summary>
-<div class="e-body"><ul class="bd">${bd}</ul>${pc}${r.note ? `<div class="e-note"><span class="label">Заметки</span><p>${esc(r.note)}</p></div>` : ''}</div>
+<div class="e-body">${friendPhoto(r, 'body')}<ul class="bd">${bd}</ul>${pc}${r.note ? `<div class="e-note"><span class="label">Заметки</span><p>${esc(r.note)}</p></div>` : ''}</div>
 </details></li>`;
   }
 
@@ -407,6 +444,7 @@ ${ICON.chev}
     el.boardStat.textContent = `${shelf.user.username}: ${shelf.ratings.length} ${plural(shelf.ratings.length, 'оценка', 'оценки', 'оценок')}` + (avg != null ? ` · средний балл ${fmt(avg)}` : '');
     fboard.classList.toggle('grid-mode', state.bmode === 'grid');
     fboard.innerHTML = list.map((r, i) => friendEntryHTML(r, i + 1)).join('');
+    hydratePhotos(fboard);
     fboard.hidden = !list.length;
     fnote.hidden = !!list.length;
     fnote.textContent = shelf.ratings.length ? 'Ничего не нашлось.' : `${shelf.user.username} пока ничего не оценил.`;
@@ -629,6 +667,7 @@ ${ICON.chev}
       }
       // сервер недоступен: обычный вход на этом устройстве
       if (err && (err.status === 0 || err.status === 503)) return orig.login.apply(this, arguments);
+      if (err && err.status === 429) { toast(err.message); return false; }
       // старый аккаунт, созданный до онлайн-входа: входим локально и тихо подключаем к друзьям
       if (local && !local.serverId && (!local.pass || local.pass === pass)) {
         const ok = orig.login.apply(this, arguments);

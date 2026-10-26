@@ -426,6 +426,8 @@ button, input { font: inherit; color: inherit; }
   *, *::before, *::after { animation: none !important; transition: none !important; }
   ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }
+/* iPhone увеличивает страницу, если у поля шрифт меньше 16px: на iOS поля всегда 16px */
+@supports (-webkit-touch-callout: none) { input, textarea, select { font-size: max(16px, 1em) !important; } }
 </style>
 </head>
 <body>
@@ -446,6 +448,19 @@ button, input { font: inherit; color: inherit; }
 </div>
 
 <script>
+// iOS 15 и старые браузеры не знают roundRect у canvas: рисуем скругление сами
+if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.roundRect) {
+  CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+    r = Math.max(0, Math.min(Array.isArray(r) ? r[0] : +r || 0, Math.abs(w) / 2, Math.abs(h) / 2));
+    this.moveTo(x + r, y);
+    this.arcTo(x + w, y, x + w, y + h, r);
+    this.arcTo(x + w, y + h, x, y + h, r);
+    this.arcTo(x, y + h, x, y, r);
+    this.arcTo(x, y, x + w, y, r);
+    this.closePath();
+    return this;
+  };
+}
 (() => {
   const $ = (s) => document.querySelector(s);
   const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };

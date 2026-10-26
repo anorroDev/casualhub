@@ -46,3 +46,11 @@ CREATE TABLE IF NOT EXISTS shelves (
   data TEXT NOT NULL,
   updated_at INTEGER NOT NULL
 );
+
+-- Счётчики попыток входа/регистрации/заявок (защита от перебора паролей)
+CREATE TABLE IF NOT EXISTS attempts (
+  key TEXT PRIMARY KEY,            -- например login-ip:1.2.3.4 или login-acc:ник
+  count INTEGER NOT NULL,
+  reset_at INTEGER NOT NULL        -- когда окно обнуляется
+);
+

@@ -21,6 +21,7 @@ async function ensureSchema(env) {
     env.DB.prepare('CREATE INDEX IF NOT EXISTS friendships_b ON friendships(b)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS shelves (user_id TEXT PRIMARY KEY, data TEXT NOT NULL, updated_at INTEGER NOT NULL)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS photos (key TEXT PRIMARY KEY, user_id TEXT NOT NULL, data TEXT NOT NULL, updated_at INTEGER NOT NULL)'),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS attempts (key TEXT PRIMARY KEY, count INTEGER NOT NULL, reset_at INTEGER NOT NULL)'),
   ]);
   const { results } = await env.DB.prepare('PRAGMA table_info(users)').all();
   if (!results.some((c) => c.name === 'email')) await env.DB.prepare('ALTER TABLE users ADD COLUMN email TEXT').run();
@@ -68,6 +69,32 @@ async function newSession(env, userId) {
     .bind(await sha256(token), userId, Date.now() + SESSION_DAYS * 864e5).run();
   return token;
 }
+// ---------- защита от перебора: счётчики попыток в окне времени ----------
+const LIMITS = {
+  loginIp: { max: 30, win: 15 * 60e3 },   // неудачных входов с одного адреса
+  loginAcc: { max: 10, win: 15 * 60e3 },  // неудачных входов в один аккаунт
+  register: { max: 6, win: 60 * 60e3 },   // регистраций с одного адреса
+  friendReq: { max: 40, win: 10 * 60e3 }, // заявок в друзья (перебор ников)
+};
+const clientIp = (request) => request.headers.get('CF-Connecting-IP') || 'local';
+async function overLimit(env, key, kind) {
+  const row = await env.DB.prepare('SELECT count, reset_at FROM attempts WHERE key = ?').bind(key).first();
+  if (!row || row.reset_at <= Date.now() || row.count < LIMITS[kind].max) return 0;
+  return Math.max(1, Math.ceil((row.reset_at - Date.now()) / 60e3));
+}
+async function hit(env, key, kind) {
+  const now = Date.now();
+  await env.DB.prepare(
+    'INSERT INTO attempts (key, count, reset_at) VALUES (?1, 1, ?2) ON CONFLICT(key) DO UPDATE SET ' +
+    'count = CASE WHEN reset_at <= ?3 THEN 1 ELSE count + 1 END, reset_at = CASE WHEN reset_at <= ?3 THEN ?2 ELSE reset_at END'
+  ).bind(key, now + LIMITS[kind].win, now).run();
+  if (Math.random() < 0.02) await env.DB.prepare('DELETE FROM attempts WHERE reset_at <= ?').bind(now).run();
+}
+const tooMany = (min) => new Response(JSON.stringify({ error: `Слишком много попыток. Подожди ${min} мин. и попробуй снова.` }), {
+  status: 429,
+  headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'retry-after': String(min * 60) },
+});
+
 async function link(env, x, y) {
   const [a, b] = pair(x, y);
   return env.DB.prepare('SELECT status, requested_by FROM friendships WHERE a = ? AND b = ?').bind(a, b).first();
@@ -75,6 +102,10 @@ async function link(env, x, y) {
 
 const routes = {
   async 'POST /register'({ env, request }) {
+    const ipKey = 'reg:' + clientIp(request);
+    const wait = await overLimit(env, ipKey, 'register');
+    if (wait) return tooMany(wait);
+    await hit(env, ipKey, 'register');
     const { username, password, email } = await readBody(request);
     const name = cleanName(username);
     const mail = cleanEmail(email);
@@ -96,9 +127,18 @@ const routes = {
   async 'POST /login'({ env, request }) {
     const { login, username, password } = await readBody(request);
     const ident = String(login || username || '').trim();
+    const ipKey = 'login-ip:' + clientIp(request);
+    const accKey = 'login-acc:' + ident.toLowerCase().slice(0, 120);
+    const wait = Math.max(await overLimit(env, ipKey, 'loginIp'), await overLimit(env, accKey, 'loginAcc'));
+    if (wait) return tooMany(wait);
     const u = await env.DB.prepare('SELECT id, username, email, pass_hash, salt FROM users WHERE uname = ? OR email = ?')
       .bind(cleanName(ident).toLowerCase(), cleanEmail(ident)).first();
-    if (!u || !sameHex(await hashPass(String(password || ''), u.salt), u.pass_hash)) return fail(401, 'Неверная почта, ник или пароль.');
+    if (!u || !sameHex(await hashPass(String(password || ''), u.salt), u.pass_hash)) {
+      await hit(env, ipKey, 'loginIp');
+      await hit(env, accKey, 'loginAcc');
+      return fail(401, 'Неверная почта, ник или пароль.');
+    }
+    await env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind(accKey).run();
     await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND expires_at < ?').bind(u.id, Date.now()).run();
     return json({ token: await newSession(env, u.id), user: { id: u.id, username: u.username, email: u.email || '' } });
   },
@@ -158,6 +198,9 @@ const routes = {
   },
 
   async 'POST /friends/request'({ env, request, me }) {
+    const wait = await overLimit(env, 'freq:' + me.id, 'friendReq');
+    if (wait) return tooMany(wait);
+    await hit(env, 'freq:' + me.id, 'friendReq');
     const { username } = await readBody(request);
     const other = await env.DB.prepare('SELECT id, username FROM users WHERE uname = ?').bind(cleanName(username).toLowerCase()).first();
     if (!other) return fail(404, 'Такого ника нет среди подключённых к друзьям. Проверь ник; если друг зарегистрировался давно, пусть зайдёт на сайт в свой аккаунт или нажмёт «👥 Друзья» → «Подключить».');
@@ -218,7 +261,10 @@ const routes = {
     await env.DB.prepare(
       'INSERT INTO shelves (user_id, data, updated_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at'
     ).bind(me.id, data, now).run();
-    const gone = tomb.filter((d) => !merged.some((r) => r.id === d.id)).map((d) => d.id);
+    // фото стираем только у оценок, удалённых в этот раз, а не у всех прежних
+    const oldDel = new Set(old.deleted.map((d) => d.id));
+    const live = new Set(merged.map((r) => r.id));
+    const gone = tomb.filter((d) => !oldDel.has(d.id) && !live.has(d.id)).map((d) => d.id).slice(0, 100);
     if (gone.length) {
       await env.DB.batch(gone.map((id) => env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(`${me.id}:${id}`)));
     }
@@ -248,6 +294,32 @@ const routes = {
     await env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(`${me.id}:${arg}`).run();
     return json({ ok: true });
   },
+  // лента: свежие оценки друзей
+  async 'GET /feed'({ env, me }) {
+    const { results: fr } = await env.DB.prepare(
+      "SELECT CASE WHEN f.a = ?1 THEN f.b ELSE f.a END AS id, u.username FROM friendships f JOIN users u ON u.id = (CASE WHEN f.a = ?1 THEN f.b ELSE f.a END) WHERE (f.a = ?1 OR f.b = ?1) AND f.status = 'accepted'"
+    ).bind(me.id).all();
+    if (!fr.length) return json({ friends: 0, items: [] });
+    const ids = fr.slice(0, 90).map((x) => x.id);
+    const names = new Map(fr.map((x) => [x.id, x.username]));
+    const marks = ids.map(() => '?').join(',');
+    const items = [];
+    const { results: shelves } = await env.DB.prepare(`SELECT user_id, data FROM shelves WHERE user_id IN (${marks})`).bind(...ids).all();
+    for (const sh of shelves) {
+      let list = [];
+      try { list = readShelf(sh).ratings; } catch (e) { continue; }
+      list.map((r) => ({ r, at: stampOf(r) })).sort((a, b) => b.at - a.at).slice(0, 15).forEach(({ r, at }) => {
+        if (!r || !r.name || !at) return;
+        items.push({
+          kind: 'rating', at, user: { id: sh.user_id, username: names.get(sh.user_id) },
+          rating: { id: r.id, name: String(r.name).slice(0, 120), total: r.total ?? null, cat: r.catLabel || '', status: r.status || '', fav: !!r.fav, photo: r.photo && (r.photo.remote || r.photo.url) ? { remote: !!r.photo.remote, url: r.photo.url || '' } : null, edited: !!(r.updatedAt && r.createdAt && stampOf({ updatedAt: r.updatedAt }) - stampOf({ createdAt: r.createdAt }) > 60e3) },
+        });
+      });
+    }
+    items.sort((a, b) => b.at - a.at);
+    return json({ friends: fr.length, items: items.slice(0, 40) });
+  },
+
   async 'GET /photo/:uid/:rid'({ env, me, arg }) {
     const [uid, rid] = arg;
     if (!(await canSee(env, me, uid))) return fail(403, 'Фото видны только друзьям.');
