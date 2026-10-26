@@ -852,6 +852,21 @@ h1, h2, p { margin: 0; }
       })
       .catch(() => {});
   }
+  if (token) {
+    // ник, почта и @юзернейм — из аккаунта: поменял ник на другом устройстве, здесь он тоже новый
+    fetch('/api/me', { headers: { authorization: 'Bearer ' + token } }).then((r) => (r.ok ? r.json() : null)).then((d) => {
+      const u = d && d.user;
+      if (!u || (u.username === user.name && (u.email || '') === (user.email || '') && (u.handle || '') === (user.handle || ''))) return;
+      if (u.username !== user.name && !/^(data:image\/|https?:\/\/)/.test(user.avatar || '')) user.avatar = u.username.charAt(0).toUpperCase(); // аватар-буква следует за ником
+      Object.assign(user, { name: u.username, email: u.email || user.email || '', handle: u.handle || '' });
+      try {
+        localStorage.setItem('ocenshik.user.v1', JSON.stringify(user));
+        const all = read('ocenshik.users.v1') || [];
+        localStorage.setItem('ocenshik.users.v1', JSON.stringify(all.map((x) => (x.id === user.id ? { ...x, name: user.name, email: user.email, handle: user.handle, avatar: user.avatar } : x))));
+      } catch (e) {}
+      renderAccount();
+    }).catch(() => {});
+  }
   if (token && window.CasualAvatar) {
     // аватар общий для аккаунта: на телефоне или в новом браузере подтягивается с сервера
     const sid = user.serverId;

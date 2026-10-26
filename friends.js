@@ -61,6 +61,9 @@
 .fr-row span { min-width: 0; overflow-wrap: anywhere; }
 .fr-row b { font-weight: 600; }
 .fr-row small { display: block; font-size: 12px; color: var(--ink-3); }
+.fr-row i, .rx-list li i { font-style: normal; font-weight: 600; color: var(--ink-3); margin-left: 6px; }
+.fr-nick.copy { border: 0; font: inherit; cursor: pointer; }
+.fr-nick.copy svg { width: 13px; height: 13px; }
 .fr-acts { display: flex; flex: none; gap: 6px; }
 .fr-form { display: flex; flex-wrap: wrap; gap: 8px; }
 .fr-form input { flex: 1 1 160px; min-width: 0; height: 40px; padding: 0 12px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; font-size: 15px; color: var(--ink); }
@@ -191,6 +194,7 @@
       try {
         F.me = (await api('/me')).user;
         if (state.user && state.user.serverId !== F.me.id) { state.user.serverId = F.me.id; saveUsers(); }
+        adoptAccount(F.me);
         await syncAvatar();
         await refreshFriends();
         await pullOwnShelf(); // сначала забираем свои оценки с сервера, потом отправляем общий список
@@ -287,7 +291,7 @@
     const mail = String(state.user.email || '').trim().toLowerCase();
     let r = null;
     try {
-      r = await api('/login', 'POST', { login: nick, password: pass }, null);
+      r = await api('/login', 'POST', { login: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail) ? mail : nick, password: pass }, null);
     } catch (e) {
       if (e.status !== 401) { F.linkError = e.message; return false; }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) {
@@ -295,7 +299,7 @@
         return false;
       }
       try {
-        r = await api('/register', 'POST', { username: nick, password: pass, email: mail }, null);
+        r = await api('/register', 'POST', { username: nick, handle: state.user.handle || undefined, password: pass, email: mail }, null);
       } catch (e2) {
         F.linkError = e2.status === 409
           ? `${e2.message} Если аккаунт твой, проверь пароль, иначе поменяй ник или почту в профиле.`
@@ -507,10 +511,31 @@
     F.pushTimer = setTimeout(() => pushShelf(true), 1500);
   }
 
+  const atOf = (u) => (u && u.handle ? '@' + u.handle : '');
+  const whoHTML = (u) => `<b>${esc(u.username)}</b>${u.handle ? `<i>@${esc(u.handle)}</i>` : ''}`;
+  // профиль сайта повторяет аккаунт: ник, почта и юзернейм, поменянные на другом устройстве, приходят сюда
+  function adoptAccount(u) {
+    if (!u || !state.user) return;
+    let ch = false;
+    const set = (k, v) => { if (v && state.user[k] !== v) { state.user[k] = v; ch = true; } };
+    // аватар-буква следует за ником
+    if (u.username && u.username !== state.user.name && !/^(data:image\/|https?:\/\/)/.test(state.user.avatar || '')) set('avatar', u.username.charAt(0).toUpperCase());
+    set('name', u.username);
+    set('email', u.email);
+    set('handle', u.handle);
+    if (u.createdAt) set('serverCreatedAt', new Date(u.createdAt).toISOString());
+    if (!ch) return;
+    const i = state.users.findIndex((x) => x.id === state.user.id);
+    if (i >= 0) state.users[i] = state.user;
+    state.ratings.forEach((r) => { if (r.author && r.author.id === state.user.id && r.author.name !== state.user.name) r.author = { ...r.author, name: state.user.name }; });
+    saveUsers();
+    renderUserBar();
+  }
+
   // ---------- полоса «Я / друзья» и чужой рейтинг ----------
   function renderBar() {
     const chips = [`<button type="button" class="sub-chip" data-fview="me" aria-pressed="${F.view === 'me'}">Я</button>`]
-      .concat(F.friends.map((f) => `<button type="button" class="sub-chip" data-fview="${esc(f.id)}" aria-pressed="${F.view === f.id}">${esc(f.username)}</button>`));
+      .concat(F.friends.map((f) => `<button type="button" class="sub-chip" data-fview="${esc(f.id)}" aria-pressed="${F.view === f.id}" title="${esc(atOf(f))}">${esc(f.username)}</button>`));
     const n = F.incoming.length;
     const needLink = F.online && state.user && !F.me;
     chips.push(`<button type="button" class="sub-chip" data-fopen="1">👥 Друзья${n ? ` <b>+${n}</b>` : ''}${needLink ? ' <b>· подключить</b>' : ''}</button>`);
@@ -567,7 +592,7 @@
   }
   const rxComments = (list) => {
     const withText = list.filter((x) => x.text || x.emoji);
-    return withText.length ? `<ul class="rx-list">${withText.map((x) => `<li><b>${esc(x.from.username)}</b> ${rxIcon(x.emoji)} ${x.text ? `<span>${esc(x.text)}</span>` : ''}</li>`).join('')}</ul>` : '';
+    return withText.length ? `<ul class="rx-list">${withText.map((x) => `<li>${whoHTML(x.from)} ${rxIcon(x.emoji)} ${x.text ? `<span>${esc(x.text)}</span>` : ''}</li>`).join('')}</ul>` : '';
   };
   // блок на доске друга: свои кнопки, своё поле и чужие реакции
   function rxBlock(uid, rid) {
@@ -586,7 +611,7 @@
       await api('/react/' + encodeURIComponent(uid) + '/' + encodeURIComponent(rid), 'PUT', { emoji, text });
     } catch (e) { toast(e.message); return; }
     const rest = list.filter((x) => x !== prev);
-    if (emoji || text) rest.unshift({ rid, from: { id: F.me.id, username: F.me.username }, emoji, text, at: Date.now() });
+    if (emoji || text) rest.unshift({ rid, from: { id: F.me.id, username: F.me.username, handle: F.me.handle }, emoji, text, at: Date.now() });
     F.reacts.set(uid, rest);
     const box = fboard.querySelector(`.rx[data-rx="${CSS.escape(rid)}"]`);
     if (box) box.innerHTML = rxBlock(uid, rid);
@@ -665,7 +690,7 @@ ${ICON.chev}
       fboard.hidden = true;
       fnote.hidden = false;
       fnote.textContent = 'Загружаю оценки…';
-      el.boardStat.textContent = friend ? friend.username : '';
+      el.boardStat.textContent = friend ? `${friend.username} ${atOf(friend)}` : '';
       loadShelf(F.view);
       return;
     }
@@ -683,7 +708,7 @@ ${ICON.chev}
         : ((b.total ?? -1) - (a.total ?? -1)));
     const rated = shelf.ratings.filter((r) => r.total != null);
     const avg = rated.length ? Math.round(rated.reduce((s, r) => s + r.total, 0) / rated.length * 10) / 10 : null;
-    el.boardStat.textContent = `${shelf.user.username}: ${shelf.ratings.length} ${plural(shelf.ratings.length, 'оценка', 'оценки', 'оценок')}` + (avg != null ? ` · средний балл ${fmt(avg)}` : '');
+    el.boardStat.textContent = `${shelf.user.username}${shelf.user.handle ? ' @' + shelf.user.handle : ''}: ${shelf.ratings.length} ${plural(shelf.ratings.length, 'оценка', 'оценки', 'оценок')}` + (avg != null ? ` · средний балл ${fmt(avg)}` : '');
     fboard.classList.toggle('grid-mode', state.bmode === 'grid');
     fboard.innerHTML = list.map((r, i) => friendEntryHTML(r, i + 1)).join('');
     hydratePhotos(fboard);
@@ -713,7 +738,7 @@ ${ICON.chev}
   function say(text, err) { F.msg = text || ''; F.msgErr = !!err; if (!sheet.hidden) renderSheet(); }
 
   function renderSheet() {
-    const head = `<div class="sheet-head"><div><h3 id="friendSheetTitle">Друзья</h3>${F.me ? `<p>Твой ник для друзей: <span class="fr-nick">${esc(F.me.username)}</span></p>` : ''}</div>
+    const head = `<div class="sheet-head"><div><h3 id="friendSheetTitle">Друзья</h3>${F.me ? `<p>Тебя добавляют по юзернейму: <button type="button" class="fr-nick copy" data-fr="copy" title="Скопировать">@${esc(F.me.handle || '')} <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg></button></p>` : ''}</div>
       <button type="button" class="mini-btn" data-fr="close" aria-label="Закрыть">${ICON.x}</button></div>`;
     const msg = F.msg ? `<p class="fr-msg${F.msgErr ? ' err' : ''}" role="status">${esc(F.msg)}</p>` : '';
     let body = '';
@@ -721,33 +746,33 @@ ${ICON.chev}
       body = `<div class="fr-sec"><p class="fr-muted"><strong>Сервер друзей сейчас не отвечает.</strong> Заявки и оценки друзей появятся, когда он заработает. Всё остальное работает как обычно.</p></div>`;
     } else if (!state.user) {
       body = `<div class="fr-sec">
-        <p class="fr-muted">Друзья работают через твой аккаунт Казуал Хаба. Войди или зарегистрируйся, и по твоему нику тебя смогут добавить.</p>
+        <p class="fr-muted">Друзья работают через твой аккаунт Казуал Хаба. Войди или зарегистрируйся, и по твоему @юзернейму тебя смогут добавить.</p>
         <div class="sheet-actions"><button type="button" class="btn small primary" data-fr="auth-login">Войти</button><button type="button" class="btn small ghost" data-fr="auth-reg">Зарегистрироваться</button></div>
       </div>`;
     } else if (!F.me) {
       body = `<div class="fr-sec">
-        <p class="fr-muted">Аккаунт <span class="fr-nick">${esc(state.user.name)}</span> ещё не подключён к друзьям. Введи его пароль, и по этому нику тебя смогут добавить. Друзья увидят твои оценки из вкладки «Мои», фото не отправляются.</p>
+        <p class="fr-muted">Аккаунт <span class="fr-nick">${esc(state.user.name)}</span> ещё не подключён к друзьям. Введи его пароль, и друзья смогут добавить тебя по @юзернейму. Друзья увидят твои оценки из вкладки «Мои», фото не отправляются.</p>
         ${F.linkError ? `<p class="fr-msg err">${esc(F.linkError)}</p>` : ''}
         <form class="fr-form" data-fr-form="link">
           <input name="password" type="password" placeholder="Пароль от аккаунта, от 6 символов" autocomplete="current-password" required minlength="6">
           <button type="submit" class="btn small primary">Подключить</button>
         </form></div>`;
     } else {
-      const row = (u, acts, sub) => `<div class="fr-row"><span><b>${esc(u.username)}</b>${sub ? `<small>${sub}</small>` : ''}</span><span class="fr-acts">${acts}</span></div>`;
+      const row = (u, acts, sub) => `<div class="fr-row"><span>${whoHTML(u)}${sub ? `<small>${sub}</small>` : ''}</span><span class="fr-acts">${acts}</span></div>`;
       const btn = (act, id, label, cls) => `<button type="button" class="btn small ${cls || 'ghost'}" data-fr="${act}" data-id="${esc(id)}">${label}</button>`;
       const when = (t) => (t ? 'оценки обновлены ' + new Date(t).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'оценок пока нет');
       body = `
         <div class="fr-sec">
           <span class="label">Добавить друга</span>
           <form class="fr-form" data-fr-form="request">
-            <input name="username" placeholder="Ник друга" maxlength="24" required autocomplete="off">
+            <input name="handle" placeholder="@юзернейм друга" maxlength="21" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
             <button type="submit" class="btn small primary">Отправить заявку</button>
           </form>
         </div>
         ${F.incoming.length ? `<div class="fr-sec"><span class="label">Заявки тебе</span><div class="fr-list">${F.incoming.map((u) => row(u, btn('accept', u.id, 'Принять', 'primary') + btn('remove', u.id, 'Отклонить'))).join('')}</div></div>` : ''}
         <div class="fr-sec"><span class="label">Друзья</span>
           ${F.friends.length ? `<div class="fr-list">${F.friends.map((u) => row(u, `<a class="btn small ghost" href="/profile/?id=${encodeURIComponent(u.id)}" style="text-decoration:none">Профиль</a>` + btn('show', u.id, 'Оценки') + (F.removeArmed === u.id ? btn('remove', u.id, 'Точно убрать?', 'danger-solid') : btn('arm', u.id, 'Убрать', 'ghost danger')), when(u.updatedAt))).join('')}</div>`
-            : '<p class="fr-muted">Пока никого. Отправь заявку по нику, друг увидит её у себя в этом окне.</p>'}
+            : '<p class="fr-muted">Пока никого. Отправь заявку по @юзернейму, друг увидит её у себя в этом окне.</p>'}
         </div>
         ${F.outgoing.length ? `<div class="fr-sec"><span class="label">Ты отправил</span><div class="fr-list">${F.outgoing.map((u) => row(u, btn('remove', u.id, 'Отменить'), 'ждёт ответа')).join('')}</div></div>` : ''}
         <div class="fr-sec">
@@ -783,8 +808,8 @@ ${ICON.chev}
         F.msg = ok ? 'Готово, аккаунт подключён к друзьям.' : '';
         F.msgErr = false;
       } else if (kind === 'request') {
-        const r = await api('/friends/request', 'POST', { username: fd.get('username') });
-        F.msg = r.status === 'accepted' ? `${r.user.username} теперь в друзьях.` : `Заявка отправлена: ${r.user.username}.`;
+        const r = await api('/friends/request', 'POST', { handle: fd.get('handle') });
+        F.msg = r.status === 'accepted' ? `${r.user.username} (@${r.user.handle}) теперь в друзьях.` : `Заявка отправлена: ${r.user.username} (@${r.user.handle}).`;
         F.msgErr = false;
         await refreshFriends();
       }
@@ -800,6 +825,11 @@ ${ICON.chev}
     if (!b) return;
     const act = b.dataset.fr, id = b.dataset.id;
     if (act === 'close') return closeSheet();
+    if (act === 'copy' && F.me) {
+      const t = '@' + F.me.handle;
+      try { await navigator.clipboard.writeText(t); toast('Скопировано: ' + t); } catch (err) { toast(t); }
+      return;
+    }
     if (act === 'auth-login' || act === 'auth-reg') { closeSheet(); return openAuthModal(act === 'auth-reg' ? 'reg' : 'login'); }
     if (act === 'arm') { F.removeArmed = id; return renderSheet(); }
     if (act === 'show') {
@@ -844,6 +874,7 @@ ${ICON.chev}
   };
   const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   const NICK_RE = /^[\p{L}\p{N}_.\- ]{2,24}$/u;
+  const HANDLE_RE = /^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/;
   // аватар общий для аккаунта: на новом устройстве подтягивается с сервера (avatar-sync.js)
   async function syncAvatar() {
     if (!window.CasualAvatar || !F.me || !state.user) return;
@@ -860,27 +891,29 @@ ${ICON.chev}
   const cleanNick = (s) => String(s || '').trim().replace(/\s+/g, ' ');
 
   if (typeof orig.register === 'function') {
-    window.registerUser = async function (username, email, password, avatar, color) {
+    window.registerUser = async function (username, email, password, avatar, color, handle) {
       if (!F.online) return orig.register.apply(this, arguments);
       const nick = cleanNick(username);
       const em = String(email || '').trim().toLowerCase();
       const pass = String(password || '').trim();
       // локальные проверки отдаём исходной функции, она сама покажет подсказку
-      const localBad = nick.length < 2 || state.users.some((u) => u.name.toLowerCase() === nick.toLowerCase())
-        || !EMAIL_RE.test(em) || state.users.some((u) => u.email && u.email.toLowerCase() === em) || pass.length < 6;
+      const localBad = nick.length < 2 || !EMAIL_RE.test(em) || state.users.some((u) => u.email && u.email.toLowerCase() === em) || pass.length < 6;
       if (localBad) return orig.register.apply(this, arguments);
       if (!NICK_RE.test(nick)) { toast('Ник: буквы, цифры, пробел, точка, дефис или подчёркивание, до 24 символов'); return false; }
+      const h = String(handle || '').trim().replace(/^@+/, '').toLowerCase();
+      if (!HANDLE_RE.test(h)) { toast(h ? 'Юзернейм: от 3 до 20 символов, латинские буквы, цифры, «_» и «.»' : 'Придумай юзернейм: по нему тебя найдут друзья'); return false; }
       let r;
-      try { r = await api('/register', 'POST', { username: nick, password: pass, email: em }, null); }
+      try { r = await api('/register', 'POST', { username: nick, handle: h, password: pass, email: em }, null); }
       catch (e) {
-        if (e.status === 0 || e.status === 503) return orig.register.call(this, nick, email, password, avatar, color);
-        toast(e.status === 409 ? `${e.message} Если это твой аккаунт, войди на вкладке «Вход».` : e.message);
+        if (e.status === 0 || e.status === 503) return orig.register.call(this, nick, email, password, avatar, color, h);
+        toast(e.status === 409 && /почт/.test(e.message) ? `${e.message} Если это твой аккаунт, войди на вкладке «Вход».` : e.message);
         return false;
       }
-      const ok = orig.register.call(this, nick, email, password, avatar, color);
+      const ok = orig.register.call(this, nick, email, password, avatar, color, r.user.handle);
       if (ok && state.user) {
         setTokenFor(state.user.id, r.token);
         state.user.serverId = r.user.id;
+        state.user.handle = r.user.handle;
         saveUsers();
         await syncSession();
       }
@@ -895,17 +928,17 @@ ${ICON.chev}
       const pass = String(password || '').trim();
       if (!ident) return orig.login.apply(this, arguments);
       const low = ident.toLowerCase();
-      const local = state.users.find((x) => (x.name && x.name.toLowerCase() === low) || (x.email && x.email.toLowerCase() === low));
+      const local = state.users.find((x) => (x.email && x.email.toLowerCase() === low) || (x.handle && x.handle === low.replace(/^@+/, '')) || (x.name && x.name.toLowerCase() === low));
       let r = null, err = null;
       try { r = await api('/login', 'POST', { login: ident, password: pass }, null); } // сервер ищет и по почте, и по нику
       catch (e) { err = e; }
       if (r) {
-        let u = local || state.users.find((x) => x.serverId === r.user.id);
+        let u = state.users.find((x) => x.serverId === r.user.id) || (local && (!local.serverId || local.serverId === r.user.id) ? local : null);
         if (!u) {
           // вход на новом устройстве: заводим профиль сайта из онлайн-аккаунта
           u = {
             id: 'u_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-            name: r.user.username, email: r.user.email || '', pass: '',
+            name: r.user.username, email: r.user.email || '', handle: r.user.handle || '', pass: '',
             avatar: r.user.username.charAt(0).toUpperCase(),
             color: randomAvatarColor(r.user.username),
             createdAt: new Date().toISOString(),
@@ -916,6 +949,7 @@ ${ICON.chev}
         u.pass = pass; // пароль сервера главный
         setTokenFor(u.id, r.token);
         state.user = u;
+        adoptAccount(r.user);
         saveUsers();
         renderUserBar();
         renderBoard();
@@ -933,7 +967,7 @@ ${ICON.chev}
         if (ok) await linkCurrent(pass);
         return ok;
       }
-      toast(local ? 'Неверный пароль. Попробуйте еще раз' : 'Неверная почта, ник или пароль');
+      toast(local ? 'Неверный пароль. Попробуйте еще раз' : 'Неверная почта, юзернейм или пароль');
       return false;
     };
   }
@@ -957,26 +991,30 @@ ${ICON.chev}
   }
 
   if (typeof orig.update === 'function') {
-    window.updateUserProfile = async function (username, email, password, avatar, color) {
+    window.updateUserProfile = async function (username, email, password, avatar, color, handle) {
       if (!F.me || !state.user) return orig.update.apply(this, arguments);
       const nick = cleanNick(username);
       const pass = String(password || '').trim();
       const em = String(email || '').trim().toLowerCase();
       const nickChanged = nick !== state.user.name;
       const emailChanged = !!em && em !== (state.user.email || '').toLowerCase() && EMAIL_RE.test(em);
-      if ((nickChanged || pass || emailChanged) && nick.length >= 2) {
+      const h = handle == null ? '' : String(handle).trim().replace(/^@+/, '').toLowerCase();
+      const handleChanged = !!h && h !== (F.me.handle || '');
+      if (handle != null && !HANDLE_RE.test(h)) { toast('Юзернейм: от 3 до 20 символов, латинские буквы, цифры, «_» и «.»'); return false; }
+      if ((nickChanged || pass || emailChanged || handleChanged) && nick.length >= 2) {
         if (nickChanged && !NICK_RE.test(nick)) { toast('Ник: буквы, цифры, пробел, точка, дефис или подчёркивание, до 24 символов'); return false; }
         if (pass && pass.length < 6) { toast('Пароль должен содержать минимум 6 символов'); return false; }
         try {
-          const r = await api('/account', 'PUT', { username: nickChanged ? nick : undefined, password: pass || undefined, email: emailChanged ? em : undefined });
+          const r = await api('/account', 'PUT', { username: nickChanged ? nick : undefined, handle: handleChanged ? h : undefined, password: pass || undefined, email: emailChanged ? em : undefined });
           F.me = r.user;
         } catch (e) {
-          toast(e.status === 409 ? 'Такой ник уже занят, выбери другой' : e.message);
+          toast(e.message);
           return false;
         }
       }
       const before = state.user.avatar;
-      const ok = orig.update.call(this, nick, email, password, avatar, color);
+      // почта берётся из аккаунта: пустое или неверное поле её не сбрасывает
+      const ok = orig.update.call(this, nick, F.me.email || email, password, avatar, color, F.me.handle);
       // сменили аватар здесь: он уходит в аккаунт, чтобы его видели другие устройства и друзья
       if (ok && state.user && state.user.avatar !== before && window.CasualAvatar) {
         window.CasualAvatar.apply(state.user.id, state.user.avatar, null);

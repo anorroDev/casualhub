@@ -7,6 +7,30 @@ const SESSION_DAYS = 30;
 const MAX_SHELF = 1800000; // символов JSON на одного человека (фото хранятся отдельно)
 const NAME_RE = /^[\p{L}\p{N}_.\- ]{2,24}$/u;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// @юзернейм: латиница, цифры, «_» и «.», от 3 до 20 символов, точка не по краям. Хранится в колонке uname.
+const HANDLE_RE = /^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/;
+const cleanHandle = (s) => String(s || '').trim().replace(/^@+/, '').toLowerCase();
+const TR = { а: 'a', б: 'b', в: 'v', г: 'g', ґ: 'g', д: 'd', е: 'e', ё: 'e', є: 'ye', ж: 'zh', з: 'z', и: 'i', і: 'i', ї: 'yi', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya' };
+// юзернейм из ника: «Бог» → bog, «Алекс 2» → aleks_2
+function toHandle(name) {
+  let h = Array.from(String(name || '').toLowerCase()).map((c) => (TR[c] != null ? TR[c] : c)).join('')
+    .replace(/[\s-]+/g, '_').replace(/[^a-z0-9_.]/g, '').replace(/_{2,}/g, '_').replace(/^\.+|\.+$/g, '').slice(0, 20);
+  if (!h) h = 'user';
+  while (h.length < 3) h += Math.floor(Math.random() * 10);
+  return h.replace(/\.+$/, '_');
+}
+// свободный юзернейм: сам вариант или он же с цифрами
+async function freeHandle(env, base, selfId) {
+  for (let i = 0; i < 12; i++) {
+    const h = i ? base.slice(0, 15) + '_' + Math.floor(1000 + Math.random() * 9000) : base;
+    const row = await env.DB.prepare('SELECT id FROM users WHERE uname = ?').bind(h).first();
+    if (!row || row.id === selfId) return h;
+  }
+  return 'user_' + randHex(6);
+}
+// что отдаём о человеке: друзьям — ник и юзернейм, себе — ещё почту и дату регистрации
+const pubUser = (u) => ({ id: u.id, username: u.username, handle: u.handle || u.uname });
+const ownUser = (u) => ({ ...pubUser(u), email: u.email || '', createdAt: u.created_at || u.createdAt || null });
 
 // Таблицы создаются и обновляются сами при первом запросе (то же, что в schema.sql),
 // чтобы новые поля вроде email не требовали ручной миграции.
@@ -28,6 +52,18 @@ async function ensureSchema(env) {
   const { results } = await env.DB.prepare('PRAGMA table_info(users)').all();
   if (!results.some((c) => c.name === 'email')) await env.DB.prepare('ALTER TABLE users ADD COLUMN email TEXT').run();
   await env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users(email)').run();
+  if (!results.some((c) => c.name === 'nkey')) await env.DB.prepare('ALTER TABLE users ADD COLUMN nkey TEXT').run();
+  await env.DB.prepare('CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)').run();
+  if (!(await env.DB.prepare("SELECT 1 FROM meta WHERE k = 'handles'").first())) {
+    const { results: all } = await env.DB.prepare('SELECT id, username, uname, nkey FROM users').all();
+    for (const u of all) {
+      // nkey — ник в нижнем регистре: по нему ещё можно войти старым ником, пока он ни у кого не совпадает
+      const nkey = u.nkey || String(u.username).toLowerCase();
+      const handle = HANDLE_RE.test(u.uname) ? u.uname : await freeHandle(env, toHandle(u.username), u.id);
+      try { await env.DB.prepare('UPDATE users SET uname = ?, nkey = ? WHERE id = ?').bind(handle, nkey, u.id).run(); } catch (e) {}
+    }
+    await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('handles', '1')").run();
+  }
   schemaReady = true;
 }
 const cleanEmail = (s) => String(s || '').trim().toLowerCase();
@@ -62,7 +98,7 @@ async function currentUser(env, request) {
   const m = (request.headers.get('authorization') || '').match(/^Bearer ([0-9a-f]{64})$/);
   if (!m) return null;
   return env.DB.prepare(
-    'SELECT u.id, u.username FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?'
+    'SELECT u.id, u.username, u.uname AS handle, u.email, u.created_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?'
   ).bind(await sha256(m[1]), Date.now()).first();
 }
 async function newSession(env, userId) {
@@ -108,23 +144,26 @@ const routes = {
     const ipKey = 'reg:' + clientIp(request);
     const wait = await overLimit(env, ipKey, 'register');
     if (wait) return tooMany(wait);
-    const { username, password, email } = await readBody(request);
+    const { username, handle, password, email } = await readBody(request);
     const name = cleanName(username);
     const mail = cleanEmail(email);
     const pass = String(password || '');
+    const wanted = handle ? cleanHandle(handle) : '';
     if (!EMAIL_RE.test(mail) || mail.length > 120) return fail(400, 'Нужна почта, например name@mail.com.');
-    if (!NAME_RE.test(name)) return fail(400, 'Ник: от 2 до 24 символов, буквы, цифры, пробел, точка, дефис или подчёркивание.');
+    if (!NAME_RE.test(name)) return fail(400, NAME_HINT);
+    if (wanted && !HANDLE_RE.test(wanted)) return fail(400, HANDLE_HINT);
     if (pass.length < 6 || pass.length > 200) return fail(400, 'Пароль: от 6 символов.');
-    const uname = name.toLowerCase();
-    // в лимит идут только настоящие регистрации и проверки занятых почт и ников, опечатки в форме не считаются
+    // в лимит идут только настоящие регистрации и проверки занятых почт и юзернеймов, опечатки в форме не считаются
     await hit(env, ipKey, 'register');
     if (await env.DB.prepare('SELECT 1 FROM users WHERE email = ?').bind(mail).first()) return fail(409, 'На эту почту уже есть аккаунт.');
-    if (await env.DB.prepare('SELECT 1 FROM users WHERE uname = ?').bind(uname).first()) return fail(409, 'Такой ник уже занят.');
+    if (wanted && await env.DB.prepare('SELECT 1 FROM users WHERE uname = ?').bind(wanted).first()) return fail(409, `Юзернейм @${wanted} уже занят.`);
+    const uname = wanted || await freeHandle(env, toHandle(name)); // старые версии сайта юзернейм не присылают
     const id = randHex(12);
     const salt = randHex(16);
-    await env.DB.prepare('INSERT INTO users (id, username, uname, pass_hash, salt, created_at, email) VALUES (?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, name, uname, await hashPass(pass, salt), salt, Date.now(), mail).run();
-    return json({ token: await newSession(env, id), user: { id, username: name, email: mail } });
+    const now = Date.now();
+    await env.DB.prepare('INSERT INTO users (id, username, uname, pass_hash, salt, created_at, email, nkey) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .bind(id, name, uname, await hashPass(pass, salt), salt, now, mail, name.toLowerCase()).run();
+    return json({ token: await newSession(env, id), user: ownUser({ id, username: name, uname, email: mail, created_at: now }) });
   },
 
   // вход по почте или по нику
@@ -135,16 +174,20 @@ const routes = {
     const accKey = 'login-acc:' + ident.toLowerCase().slice(0, 120);
     const wait = Math.max(await overLimit(env, ipKey, 'loginIp'), await overLimit(env, accKey, 'loginAcc'));
     if (wait) return tooMany(wait);
-    const u = await env.DB.prepare('SELECT id, username, email, pass_hash, salt FROM users WHERE uname = ? OR email = ?')
-      .bind(cleanName(ident).toLowerCase(), cleanEmail(ident)).first();
+    const COLS = 'id, username, uname, email, created_at, pass_hash, salt';
+    let u = await env.DB.prepare(`SELECT ${COLS} FROM users WHERE uname = ? OR email = ?`).bind(cleanHandle(ident), cleanEmail(ident)).first();
+    if (!u) {
+      const { results: same } = await env.DB.prepare(`SELECT ${COLS} FROM users WHERE nkey = ? LIMIT 2`).bind(cleanName(ident).toLowerCase()).all();
+      if (same.length === 1) u = same[0];
+    }
     if (!u || !sameHex(await hashPass(String(password || ''), u.salt), u.pass_hash)) {
       await hit(env, ipKey, 'loginIp');
       await hit(env, accKey, 'loginAcc');
-      return fail(401, 'Неверная почта, ник или пароль.');
+      return fail(401, 'Неверная почта, юзернейм или пароль.');
     }
     await env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind(accKey).run();
     await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND expires_at < ?').bind(u.id, Date.now()).run();
-    return json({ token: await newSession(env, u.id), user: { id: u.id, username: u.username, email: u.email || '' } });
+    return json({ token: await newSession(env, u.id), user: ownUser(u) });
   },
 
   async 'POST /logout'({ env, request }) {
@@ -154,26 +197,35 @@ const routes = {
   },
 
   async 'GET /me'({ me }) {
-    return json({ user: me });
+    return json({ user: ownUser(me) });
   },
 
   // смена ника и/или пароля из профиля на сайте
   async 'PUT /account'({ env, request, me }) {
-    const { username, password, email } = await readBody(request);
-    let name = me.username;
+    const { username, handle, password, email } = await readBody(request);
+    const out = { ...me };
     if (email != null && email !== '') {
       const mail = cleanEmail(email);
       if (!EMAIL_RE.test(mail) || mail.length > 120) return fail(400, 'Нужна почта, например name@mail.com.');
       const taken = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(mail).first();
       if (taken && taken.id !== me.id) return fail(409, 'На эту почту уже есть аккаунт.');
       await env.DB.prepare('UPDATE users SET email = ? WHERE id = ?').bind(mail, me.id).run();
+      out.email = mail;
     }
+    if (handle != null && cleanHandle(handle) !== me.handle) {
+      const h = cleanHandle(handle);
+      if (!HANDLE_RE.test(h)) return fail(400, HANDLE_HINT);
+      const taken = await env.DB.prepare('SELECT id FROM users WHERE uname = ?').bind(h).first();
+      if (taken && taken.id !== me.id) return fail(409, `Юзернейм @${h} уже занят.`);
+      await env.DB.prepare('UPDATE users SET uname = ? WHERE id = ?').bind(h, me.id).run();
+      out.handle = h;
+    }
+    // ник может совпадать с чужим: друзья различают людей по @юзернейму
     if (username != null && cleanName(username) !== me.username) {
-      name = cleanName(username);
-      if (!NAME_RE.test(name)) return fail(400, 'Ник: от 2 до 24 символов, буквы, цифры, пробел, точка, дефис или подчёркивание.');
-      const taken = await env.DB.prepare('SELECT id FROM users WHERE uname = ?').bind(name.toLowerCase()).first();
-      if (taken && taken.id !== me.id) return fail(409, 'Такой ник уже занят.');
-      await env.DB.prepare('UPDATE users SET username = ?, uname = ? WHERE id = ?').bind(name, name.toLowerCase(), me.id).run();
+      const name = cleanName(username);
+      if (!NAME_RE.test(name)) return fail(400, NAME_HINT);
+      await env.DB.prepare('UPDATE users SET username = ?, nkey = ? WHERE id = ?').bind(name, name.toLowerCase(), me.id).run();
+      out.username = name;
     }
     if (password) {
       const pass = String(password);
@@ -181,19 +233,19 @@ const routes = {
       const salt = randHex(16);
       await env.DB.prepare('UPDATE users SET pass_hash = ?, salt = ? WHERE id = ?').bind(await hashPass(pass, salt), salt, me.id).run();
     }
-    return json({ user: { id: me.id, username: name } });
+    return json({ user: ownUser(out) });
   },
 
   async 'GET /friends'({ env, me }) {
     const { results } = await env.DB.prepare(
-      `SELECT f.status, f.requested_by, u.id, u.username, s.updated_at
+      `SELECT f.status, f.requested_by, u.id, u.username, u.uname, s.updated_at
          FROM friendships f
          JOIN users u ON u.id = CASE WHEN f.a = ?1 THEN f.b ELSE f.a END
          LEFT JOIN shelves s ON s.user_id = u.id
         WHERE f.a = ?1 OR f.b = ?1
         ORDER BY u.uname`
     ).bind(me.id).all();
-    const pick = (r) => ({ id: r.id, username: r.username, updatedAt: r.updated_at || null });
+    const pick = (r) => ({ ...pubUser(r), updatedAt: r.updated_at || null });
     return json({
       friends: results.filter((r) => r.status === 'accepted').map(pick),
       incoming: results.filter((r) => r.status === 'pending' && r.requested_by !== me.id).map(pick),
@@ -205,14 +257,16 @@ const routes = {
     const wait = await overLimit(env, 'freq:' + me.id, 'friendReq');
     if (wait) return tooMany(wait);
     await hit(env, 'freq:' + me.id, 'friendReq');
-    const { username } = await readBody(request);
-    const other = await env.DB.prepare('SELECT id, username FROM users WHERE uname = ?').bind(cleanName(username).toLowerCase()).first();
-    if (!other) return fail(404, 'Такого ника нет среди подключённых к друзьям. Проверь ник; если друг зарегистрировался давно, пусть зайдёт на сайт в свой аккаунт или нажмёт «👥 Друзья» → «Подключить».');
+    const body = await readBody(request);
+    const h = cleanHandle(body.handle || body.username);
+    const row0 = HANDLE_RE.test(h) ? await env.DB.prepare('SELECT id, username, uname FROM users WHERE uname = ?').bind(h).first() : null;
+    if (!row0) return fail(404, `Нет никого с юзернеймом @${h || '…'}. Попроси друга глянуть свой @ в окне «Друзья» или в профиле.`);
+    const other = pubUser(row0);
     if (other.id === me.id) return fail(400, 'Себя в друзья добавить нельзя.');
     const row = await link(env, me.id, other.id);
     const [a, b] = pair(me.id, other.id);
     if (row) {
-      if (row.status === 'accepted') return fail(409, `Вы с ${other.username} уже друзья.`);
+      if (row.status === 'accepted') return fail(409, `Вы с ${other.username} (@${other.handle}) уже друзья.`);
       if (row.requested_by === me.id) return fail(409, 'Заявка уже отправлена.');
       // встречная заявка: просто принимаем
       await env.DB.prepare("UPDATE friendships SET status = 'accepted' WHERE a = ? AND b = ?").bind(a, b).run();
@@ -305,8 +359,9 @@ const routes = {
 
   async 'GET /shelf/:id'({ env, me, arg }) {
     if (!(await canSee(env, me, arg))) return fail(403, 'Оценки видны только друзьям.');
-    const user = await env.DB.prepare('SELECT id, username FROM users WHERE id = ?').bind(arg).first();
-    if (!user) return fail(404, 'Пользователь не найден.');
+    const row = await env.DB.prepare('SELECT id, username, uname, created_at FROM users WHERE id = ?').bind(arg).first();
+    if (!row) return fail(404, 'Пользователь не найден.');
+    const user = { ...pubUser(row), createdAt: row.created_at || null };
     const shelf = await env.DB.prepare('SELECT data, updated_at FROM shelves WHERE user_id = ?').bind(arg).first();
     const s = readShelf(shelf);
     // свои категории видит только хозяин
@@ -384,19 +439,19 @@ const routes = {
   async 'GET /reacts/:id'({ env, me, arg }) {
     if (!(await canSee(env, me, arg))) return fail(403, 'Реакции видны только друзьям.');
     const { results } = await env.DB.prepare(
-      'SELECT r.rid, r.from_id, u.username, r.emoji, r.text, r.at FROM reactions r JOIN users u ON u.id = r.from_id WHERE r.owner_id = ? ORDER BY r.at DESC LIMIT 2000'
+      'SELECT r.rid, r.from_id, u.username, u.uname, r.emoji, r.text, r.at FROM reactions r JOIN users u ON u.id = r.from_id WHERE r.owner_id = ? ORDER BY r.at DESC LIMIT 2000'
     ).bind(arg).all();
-    return json({ items: results.map((x) => ({ rid: x.rid, from: { id: x.from_id, username: x.username }, emoji: x.emoji || null, text: x.text || '', at: x.at })) });
+    return json({ items: results.map((x) => ({ rid: x.rid, from: { id: x.from_id, username: x.username, handle: x.uname }, emoji: x.emoji || null, text: x.text || '', at: x.at })) });
   },
 
   // лента: свежие оценки друзей
   async 'GET /feed'({ env, me }) {
     const { results: fr } = await env.DB.prepare(
-      "SELECT CASE WHEN f.a = ?1 THEN f.b ELSE f.a END AS id, u.username FROM friendships f JOIN users u ON u.id = (CASE WHEN f.a = ?1 THEN f.b ELSE f.a END) WHERE (f.a = ?1 OR f.b = ?1) AND f.status = 'accepted'"
+      "SELECT CASE WHEN f.a = ?1 THEN f.b ELSE f.a END AS id, u.username, u.uname FROM friendships f JOIN users u ON u.id = (CASE WHEN f.a = ?1 THEN f.b ELSE f.a END) WHERE (f.a = ?1 OR f.b = ?1) AND f.status = 'accepted'"
     ).bind(me.id).all();
     if (!fr.length) return json({ friends: 0, items: [] });
     const ids = fr.slice(0, 90).map((x) => x.id);
-    const names = new Map(fr.map((x) => [x.id, x.username]));
+    const people = new Map(fr.map((x) => [x.id, pubUser(x)]));
     const marks = ids.map(() => '?').join(',');
     const items = [];
     const { results: shelves } = await env.DB.prepare(`SELECT user_id, data FROM shelves WHERE user_id IN (${marks})`).bind(...ids).all();
@@ -406,7 +461,7 @@ const routes = {
       list.map((r) => ({ r, at: stampOf(r) })).sort((a, b) => b.at - a.at).slice(0, 15).forEach(({ r, at }) => {
         if (!r || !r.name || !at) return;
         items.push({
-          kind: 'rating', at, user: { id: sh.user_id, username: names.get(sh.user_id) },
+          kind: 'rating', at, user: people.get(sh.user_id),
           rating: { id: r.id, name: String(r.name).slice(0, 120), total: r.total ?? null, cat: r.catLabel || '', status: r.status || '', fav: !!r.fav, photo: r.photo && (r.photo.remote || r.photo.url) ? { remote: !!r.photo.remote, url: r.photo.url || '' } : null, edited: !!(r.updatedAt && r.createdAt && stampOf({ updatedAt: r.updatedAt }) - stampOf({ createdAt: r.createdAt }) > 60e3) },
         });
       });
@@ -432,7 +487,7 @@ const routes = {
       const nameOf = new Map(myShelf.ratings.map((r) => [r.id, r.name]));
       for (const x of mineRx) {
         if (!nameOf.has(x.rid)) continue;
-        items.push({ kind: 'react', at: x.at, user: { id: x.from_id, username: names.get(x.from_id) }, react: { rid: x.rid, name: String(nameOf.get(x.rid)).slice(0, 120), emoji: x.emoji || null, text: x.text || '' } });
+        items.push({ kind: 'react', at: x.at, user: people.get(x.from_id), react: { rid: x.rid, name: String(nameOf.get(x.rid)).slice(0, 120), emoji: x.emoji || null, text: x.text || '' } });
       }
     }
     items.sort((a, b) => b.at - a.at);
@@ -457,6 +512,8 @@ const routes = {
   },
 };
 
+const NAME_HINT = 'Ник: от 2 до 24 символов, буквы, цифры, пробел, точка, дефис или подчёркивание.';
+const HANDLE_HINT = 'Юзернейм: от 3 до 20 символов, латинские буквы, цифры, «_» и «.» (точка не в начале и не в конце).';
 const MAX_PHOTO = 1900000; // символов в data URL, предел строки в D1 около 2 МБ
 const RID_RE = /^[\w.-]{1,80}$/;
 const REACTIONS = ['fire', 'skull', 'nope']; // 🔥 огонь, 💀 жесть, 🙅 не согласен

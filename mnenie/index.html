@@ -120,6 +120,10 @@
   border: 1px solid var(--line); margin-top: 4px; word-break: break-all;
 }
 .profile-meta { font-size: 11.5px; color: var(--ink-3); margin-top: 4px; }
+.profile-handle { display: block; font-size: 13px; font-weight: 700; color: var(--accent); margin-top: 2px; overflow-wrap: anywhere; }
+.handle-wrap { position: relative; display: flex; align-items: center; }
+.handle-wrap > span { position: absolute; left: 12px; color: var(--ink-3); font-weight: 700; pointer-events: none; }
+.handle-wrap > input { padding-left: 28px !important; width: 100%; }
 .profile-stats-grid {
   display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
   background: var(--panel); padding: 10px 8px; border-radius: 10px; border: 1px solid var(--line);
@@ -1934,6 +1938,15 @@ function renderAuthorMini(author) {
   return '👤';
 }
 
+const HANDLE_RE = /^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/;
+const HANDLE_HINT = 'Юзернейм: от 3 до 20 символов, латинские буквы, цифры, «_» и «.»';
+const cleanHandle = (s) => String(s || '').trim().replace(/^@+/, '').toLowerCase();
+const TRANSLIT = { а: 'a', б: 'b', в: 'v', г: 'g', ґ: 'g', д: 'd', е: 'e', ё: 'e', є: 'ye', ж: 'zh', з: 'z', и: 'i', і: 'i', ї: 'yi', й: 'y', к: 'k', л: 'l', м: 'm', н: 'n', о: 'o', п: 'p', р: 'r', с: 's', т: 't', у: 'u', ф: 'f', х: 'h', ц: 'ts', ч: 'ch', ш: 'sh', щ: 'sch', ъ: '', ы: 'y', ь: '', э: 'e', ю: 'yu', я: 'ya' };
+function suggestHandle(name) {
+  return Array.from(String(name || '').toLowerCase()).map(c => (TRANSLIT[c] != null ? TRANSLIT[c] : c)).join('')
+    .replace(/[\s-]+/g, '_').replace(/[^a-z0-9_.]/g, '').replace(/_{2,}/g, '_').replace(/^\.+|\.+$/g, '').slice(0, 20);
+}
+
 function loadUsers() {
   try {
     state.users = JSON.parse(localStorage.getItem(STORAGE_KEYS.USERS) || '[]');
@@ -1960,15 +1973,14 @@ function saveUsers() {
   } catch (_) {}
 }
 
-function registerUser(username, email, password, avatar, color) {
+function registerUser(username, email, password, avatar, color, handle) {
   username = (username || '').trim();
+  handle = cleanHandle(handle);
+  if (handle && !HANDLE_RE.test(handle)) { toast(HANDLE_HINT); return false; }
   email = (email || '').trim().toLowerCase();
   password = (password || '').trim();
 
   if (username.length < 2) { toast('Имя должно быть не менее 2 символов'); return false; }
-  if (state.users.some(u => u.name.toLowerCase() === username.toLowerCase())) {
-    toast('Пользователь с таким именем уже существует'); return false;
-  }
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!email || !emailRegex.test(email)) {
@@ -1986,6 +1998,7 @@ function registerUser(username, email, password, avatar, color) {
     id: 'u_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
     name: username,
     email,
+    handle: handle || '',
     pass: password,
     avatar: avatar || username.charAt(0).toUpperCase(),
     color: color || '#3550E8',
@@ -2005,11 +2018,12 @@ function registerUser(username, email, password, avatar, color) {
 function loginUser(identifier, password) {
   identifier = (identifier || '').trim().toLowerCase();
   password = (password || '').trim();
-  if (!identifier) { toast('Введите имя пользователя или email'); return false; }
+  if (!identifier) { toast('Введите почту или @юзернейм'); return false; }
 
-  const u = state.users.find(x => 
-    (x.name && x.name.toLowerCase() === identifier) || 
-    (x.email && x.email.toLowerCase() === identifier)
+  const u = state.users.find(x =>
+    (x.name && x.name.toLowerCase() === identifier) ||
+    (x.email && x.email.toLowerCase() === identifier) ||
+    (x.handle && x.handle === identifier.replace(/^@+/, ''))
   );
 
   if (!u) { toast('Пользователь не найден. Зарегистрируйтесь'); return false; }
@@ -2026,16 +2040,13 @@ function loginUser(identifier, password) {
   return true;
 }
 
-function updateUserProfile(username, email, password, avatar, color) {
+function updateUserProfile(username, email, password, avatar, color, handle) {
   if (!state.user) return false;
   username = (username || '').trim();
   email = (email || '').trim().toLowerCase();
   password = (password || '').trim();
 
   if (username.length < 2) { toast('Имя должно содержать не менее 2 символов'); return false; }
-  if (state.users.some(u => u.id !== state.user.id && u.name.toLowerCase() === username.toLowerCase())) {
-    toast('Имя уже занято другим аккаунтом'); return false;
-  }
 
   if (email) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -2046,7 +2057,8 @@ function updateUserProfile(username, email, password, avatar, color) {
   }
 
   state.user.name = username;
-  state.user.email = email;
+  if (email) state.user.email = email;
+  if (handle != null && HANDLE_RE.test(cleanHandle(handle))) state.user.handle = cleanHandle(handle);
   if (password) state.user.pass = password;
   if (avatar !== undefined) state.user.avatar = avatar;
   if (color) state.user.color = color;
@@ -2168,7 +2180,13 @@ function renderAuthModal() {
         <div class="auth-field">
           <label for="inputEditName">Ник</label>
           <input type="text" id="inputEditName" value="${esc(state.user.name)}" required minlength="2" maxlength="24">
+          <span class="auth-help">Так тебя видят все. Может совпадать с чужим ником.</span>
         </div>
+        ${state.user.handle ? `<div class="auth-field">
+          <label for="inputEditHandle">Юзернейм</label>
+          <div class="handle-wrap"><span>@</span><input type="text" id="inputEditHandle" value="${esc(state.user.handle)}" required minlength="3" maxlength="21" autocapitalize="none" autocorrect="off" spellcheck="false"></div>
+          <span class="auth-help">По нему тебя находят друзья и по нему можно войти. Латиница, цифры, «_» и «.».</span>
+        </div>` : ''}
         <div class="auth-field">
           <label for="inputEditEmail">Электронная почта (Email)</label>
           <input type="email" id="inputEditEmail" value="${esc(state.user.email || '')}" placeholder="name@domain.com">
@@ -2248,7 +2266,7 @@ function renderAuthModal() {
     $('formEditProfile').addEventListener('submit', e => {
       e.preventDefault();
       const finalAvatar = editSelectedAvatar || $('inputEditName').value.trim().charAt(0).toUpperCase();
-      updateUserProfile($('inputEditName').value, $('inputEditEmail').value, $('inputEditPass').value, finalAvatar, editSelectedColor);
+      updateUserProfile($('inputEditName').value, $('inputEditEmail').value, $('inputEditPass').value, finalAvatar, editSelectedColor, $('inputEditHandle') ? $('inputEditHandle').value : undefined);
     });
     return;
   }
@@ -2283,6 +2301,7 @@ function renderAuthModal() {
           <input type="file" id="profileQuickAvatarFile" accept="image/*" class="vh">
           <div class="profile-titles">
             <h4 class="profile-name">${esc(state.user.name)}</h4>
+            ${state.user.handle ? `<span class="profile-handle">@${esc(state.user.handle)}</span>` : ''}
             ${state.user.email ? `<div class="profile-email-tag">✉ ${esc(state.user.email)}</div>` : '<div class="profile-meta">Email не указан</div>'}
             <div class="profile-meta">В клубе с ${esc(dateStr)}</div>
           </div>
@@ -2404,8 +2423,8 @@ function renderAuthModal() {
     ${authActiveTab === 'login' ? `
       <form class="auth-form" id="formLogin">
         <div class="auth-field">
-          <label for="inputLoginIdent">Ник или email</label>
-          <input type="text" id="inputLoginIdent" autocomplete="username" required placeholder="Ник или name@domain.com">
+          <label for="inputLoginIdent">Почта или @юзернейм</label>
+          <input type="text" id="inputLoginIdent" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required placeholder="name@domain.com или @юзернейм">
         </div>
         <div class="auth-field">
           <label for="inputLoginPass">Пароль</label>
@@ -2468,8 +2487,14 @@ function renderAuthModal() {
 
         <div class="auth-field">
           <label for="inputRegName">Ник</label>
-          <input type="text" id="inputRegName" autocomplete="username" required placeholder="Например, Алекс" minlength="2" maxlength="24">
-          <span class="auth-help">По этому нику тебя найдут друзья. Буквы, цифры, пробел, точка, дефис или подчёркивание.</span>
+          <input type="text" id="inputRegName" autocomplete="nickname" required placeholder="Например, Алекс" minlength="2" maxlength="24">
+          <span class="auth-help">Так тебя видят все, может совпадать с чужим. Буквы, цифры, пробел, точка, дефис или подчёркивание.</span>
+        </div>
+
+        <div class="auth-field">
+          <label for="inputRegHandle">Юзернейм</label>
+          <div class="handle-wrap"><span>@</span><input type="text" id="inputRegHandle" autocomplete="username" required placeholder="aleks" minlength="3" maxlength="21" autocapitalize="none" autocorrect="off" spellcheck="false"></div>
+          <span class="auth-help">Твой @ для друзей и для входа, у каждого свой. Латиница, цифры, «_» и «.», потом можно сменить.</span>
         </div>
 
         <div class="auth-field">
@@ -2577,10 +2602,15 @@ function renderAuthModal() {
       });
     }
 
+    // юзернейм подсказывается из ника, пока его не поправили руками
+    const handleInput = $('inputRegHandle');
+    let handleTouched = false;
+    handleInput.addEventListener('input', () => { handleTouched = !!handleInput.value; });
     $('inputRegName').addEventListener('input', () => {
       if (!regSelectedAvatar) {
         initialSpan.textContent = $('inputRegName').value.trim().charAt(0).toUpperCase() || '👤';
       }
+      if (!handleTouched) handleInput.value = suggestHandle($('inputRegName').value);
     });
 
     const passInput = $('inputRegPass');
@@ -2610,7 +2640,7 @@ function renderAuthModal() {
     formReg.addEventListener('submit', e => {
       e.preventDefault();
       const finalAvatar = regSelectedAvatar || $('inputRegName').value.trim().charAt(0).toUpperCase();
-      registerUser($('inputRegName').value, $('inputRegEmail').value, $('inputRegPass').value, finalAvatar, regSelectedColor);
+      registerUser($('inputRegName').value, $('inputRegEmail').value, $('inputRegPass').value, finalAvatar, regSelectedColor, $('inputRegHandle').value);
     });
   }
 

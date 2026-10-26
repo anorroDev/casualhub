@@ -3,15 +3,16 @@
 
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,
-  username TEXT NOT NULL,          -- как человек написал ник
-  uname TEXT NOT NULL UNIQUE,      -- ник в нижнем регистре, для поиска и уникальности
+  username TEXT NOT NULL,          -- ник, как его видят все; может совпадать с чужим
+  uname TEXT NOT NULL UNIQUE,      -- @юзернейм: латиница, цифры, _ и .; по нему вход и заявки в друзья
   pass_hash TEXT NOT NULL,         -- PBKDF2-SHA256, пароль в открытом виде не хранится
   salt TEXT NOT NULL,
   created_at INTEGER NOT NULL,
-  email TEXT                       -- почта в нижнем регистре, по ней тоже можно войти
+  email TEXT,                      -- почта в нижнем регистре, по ней тоже можно войти
+  nkey TEXT                        -- ник в нижнем регистре: вход старым ником, пока он ни у кого не совпадает
 );
 CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users(email);
--- Сервер сам создаёт эти таблицы и добавляет колонку email при первом запросе,
+-- Сервер сам создаёт эти таблицы и добавляет колонки email и nkey при первом запросе,
 -- так что этот файл нужен только для ручной установки.
 
 CREATE TABLE IF NOT EXISTS sessions (
@@ -66,3 +67,6 @@ CREATE TABLE IF NOT EXISTS reactions (
   PRIMARY KEY (owner_id, rid, from_id)
 );
 CREATE INDEX IF NOT EXISTS reactions_from ON reactions(from_id);
+
+-- Служебные отметки сервера, например «старые ники уже переведены в юзернеймы»
+CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);

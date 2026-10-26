@@ -777,10 +777,14 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
 }
 .fx-sum.in { animation: fx-slam .5s cubic-bezier(.3, 1.6, .5, 1) forwards; }
 @keyframes fx-slam { 0% { transform: scale(2.6) rotate(-8deg); } 100% { transform: rotate(-3deg); } }
+/* сверху: внизу на телефоне кнопку закрывает панель браузера */
 .fx-skip {
-  position: absolute; right: 16px; bottom: max(16px, env(safe-area-inset-bottom)); padding: 8px 14px; border-radius: 999px; cursor: pointer;
-  font: 600 14px var(--font-body); color: var(--ink-2); background: var(--panel); border: 1px solid var(--line);
+  position: absolute; right: 16px; top: max(16px, env(safe-area-inset-top)); padding: 10px 16px; border-radius: 999px; cursor: pointer; overflow: hidden;
+  font: 700 15px var(--font-body); color: var(--ink); background: var(--panel); border: 1px solid var(--line); box-shadow: 0 6px 18px rgb(0 0 0 / .16);
 }
+.fx-prog { position: absolute; left: 0; bottom: 0; height: 3px; width: 0; background: var(--accent); }
+.fx-hint { margin-top: 14px; font-size: 13px; color: var(--ink-3); visibility: hidden; }
+.fx-hint.in { visibility: visible; }
 .fx-skip:hover { color: var(--ink); }
 /* iPhone увеличивает страницу, если у поля шрифт меньше 16px: на iOS поля всегда 16px */
 @supports (-webkit-touch-callout: none) { input, textarea, select { font-size: max(16px, 1em) !important; } }
@@ -976,8 +980,9 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     <p class="fx-eyebrow">Победитель</p>
     <p class="fx-name"></p>
     <p class="fx-sum" hidden></p>
+    <p class="fx-hint">Нажми в любом месте, чтобы пропустить</p>
   </div>
-  <button type="button" class="fx-skip">Пропустить ›</button>
+  <button type="button" class="fx-skip">Пропустить ›<i class="fx-prog" aria-hidden="true"></i></button>
 </div>
 
 <div class="sheet" id="winner" hidden role="dialog" aria-modal="true" aria-labelledby="wName">
@@ -1668,16 +1673,19 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
       fx.hidden = false;
       fx.classList.add('open');
       fx.querySelector('.fx-skip').focus({ preventScroll: true });
-      const nameAt = st ? 700 : 250;
-      const lettersEnd = nameAt + 600 + chars.length * Math.min(70, 900 / chars.length);
+      const step = Math.min(110, 1400 / chars.length);
+      name.querySelectorAll('.fx-ch').forEach((c, j) => c.style.setProperty('--d', (j * step).toFixed(0) + 'ms'));
+      const nameAt = st ? 1100 : 400;
+      const lettersEnd = nameAt + 800 + chars.length * step;
       at(st ? 150 : 0, () => stick.classList.add('in'));
       at(nameAt - 150, () => brow.classList.add('in'));
       at(nameAt, () => name.querySelectorAll('.fx-ch').forEach((c) => c.classList.add('in')));
       at(lettersEnd - 250, () => confetti());
+      at(lettersEnd + 600, () => fx.querySelector('.fx-hint').classList.add('in'));
       if (money) {
         at(lettersEnd, () => {
           sum.classList.add('in');
-          const t0 = performance.now(), D = 900, to = +it.amount;
+          const t0 = performance.now(), D = 1400, to = +it.amount;
           const count = (now) => {
             const t = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - t, 3);
             sum.textContent = `${fmt(t < 1 ? Math.round(to * e) : to)} ${sym(it.cur)}`;
@@ -1693,6 +1701,9 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
         cancelAnimationFrame(raf);
         fx.removeEventListener('click', end);
         document.removeEventListener('keydown', onKey, true);
+        clearInterval(watch);
+        fx.querySelector('.fx-hint').classList.remove('in');
+        prog.style.width = '0';
         fx.classList.remove('open');
         fx.classList.add('closing');
         setTimeout(() => {
@@ -1710,7 +1721,28 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
       fxDone = end;
       fx.addEventListener('click', end);
       document.addEventListener('keydown', onKey, true);
-      at(lettersEnd + (money ? 2400 : 2000), end);
+      // сама заставка уходит, когда кончилась песня победы; без песни (звук выключен, трек не включился) — через несколько секунд
+      const t0 = Date.now();
+      const minEnd = lettersEnd + (money ? 4500 : 4000);
+      const prog = fx.querySelector('.fx-prog');
+      let lastBurst = 0, lastSwap = 0;
+      const watch = setInterval(() => {
+        const el = Date.now() - t0;
+        const tr = winTrack();
+        prog.style.width = (tr && tr.dur > 0 ? Math.min(1, tr.pos / tr.dur) : Math.min(1, el / minEnd)) * 100 + '%';
+        if (el < minEnd) return;
+        if (!tr) { end(); return; }
+        // пока играет песня: время от времени снова конфетти и новый стикер
+        if (el - lastBurst > 9000) { lastBurst = el; confetti(); }
+        if (pool.length > 1 && el - lastSwap > 12000) {
+          lastSwap = el;
+          const nx = pool[Math.floor(Math.random() * pool.length)];
+          stick.classList.remove('in');
+          stick.innerHTML = nx.video ? `<video src="${nx.src}" autoplay muted loop playsinline></video>` : `<img src="${nx.src}" alt="">`;
+          void stick.offsetWidth;
+          stick.classList.add('in');
+        }
+      }, 400);
 
       function confetti() {
         const cv = fx.querySelector('.fx-confetti');
@@ -2123,6 +2155,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
           ctrl.addListener('ready', () => res(ctrl));
           ctrl.addListener('playback_update', (e) => {
             const d = e && e.data;
+            if (d) { CH[ch].pos = d.position; CH[ch].dur = d.duration; }
             if (d && d.duration && !d.isPaused && d.position >= d.duration - 400) channelEnded(ch);
           });
         });
@@ -2215,6 +2248,17 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     c.onFail = null;
     hideFrame(ch);
     if (was) renderMusic();
+  }
+  // песня победы сейчас играет: { pos, dur } в секундах (dur 0 — длина пока неизвестна), иначе null
+  function winTrack() {
+    const c = CH.win;
+    if (!c.active) return null;
+    try {
+      if (c.type === 'file' && c.el) return { pos: c.el.currentTime || 0, dur: c.el.duration || 0 };
+      if (c.type === 'yt' && EMB.yt.win && EMB.yt.win.getDuration) return { pos: EMB.yt.win.getCurrentTime() || 0, dur: EMB.yt.win.getDuration() || 0 };
+      if (c.type === 'sp') return { pos: (c.pos || 0) / 1000, dur: (c.dur || 0) / 1000 };
+    } catch (e) {}
+    return { pos: 0, dur: 0 };
   }
   function channelEnded(ch) {
     const c = CH[ch];

@@ -364,6 +364,17 @@ button, input { font: inherit; color: inherit; }
 .col { display: grid; gap: 16px; min-width: 0; }
 
 /* Histogram 1–10 */
+/* значки: полученные яркие, следующий с полоской до получения, остальные приглушены */
+.bdg { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.bdg-i { display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 10px; padding: 10px; border-radius: 12px; border: 1px solid var(--line); background: var(--panel-2, var(--panel)); min-width: 0; }
+.bdg-i .ic { width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; font-size: 22px; line-height: 1; background: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--accent) 45%, transparent); }
+.bdg-i b { display: block; font-size: 13.5px; font-weight: 700; line-height: 1.2; overflow-wrap: anywhere; }
+.bdg-i small { display: block; font-size: 11.5px; color: var(--ink-3); margin-top: 2px; }
+.bdg-i .tr { display: block; height: 4px; border-radius: 99px; background: var(--cell, var(--line)); margin-top: 6px; overflow: hidden; }
+.bdg-i .tr i { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.bdg-i.off .ic { filter: grayscale(1); opacity: .45; background: var(--cell, var(--line)); box-shadow: none; }
+.bdg-i.off b { color: var(--ink-2); }
+.bdg-i.next { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
 .hist { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; align-items: end; height: 140px; }
 .hist div { display: grid; grid-template-rows: 1fr auto auto; height: 100%; gap: 4px; text-align: center; }
 .hist .bar { align-self: end; border-radius: 6px; background: var(--tier); min-height: 4px; transform-origin: 50% 100%; animation: grow-y .8s var(--spring) backwards; animation-delay: calc(.3s + var(--d) * 45ms); }
@@ -647,6 +658,32 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     return out;
   }
 
+  // ---------- значки за стаж аккаунта ----------
+  const AGE_BADGES = [
+    { days: 7, ic: '🌱', t: 'Неделя в клубе', need: 'неделя' },
+    { days: 30, ic: '🌙', t: 'Месяц в клубе', need: 'месяц' },
+    { days: 91, ic: '🍂', t: 'Три месяца', need: '3 месяца' },
+    { days: 182, ic: '⭐', t: 'Полгода', need: 'полгода' },
+    { days: 365, ic: '🏆', t: 'Год в клубе', need: 'год' },
+    { days: 730, ic: '👑', t: 'Два года', need: '2 года' },
+    { days: 1095, ic: '💎', t: 'Три года', need: '3 года' },
+  ];
+  const dayFmt = (t) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+  function badgesOf(createdAt) {
+    const t0 = +new Date(createdAt || 0);
+    if (!t0) return null;
+    const age = (Date.now() - t0) / 864e5;
+    let nextShown = false;
+    return AGE_BADGES.map((b) => {
+      const got = age >= b.days;
+      const next = !got && !nextShown;
+      if (next) nextShown = true;
+      const left = Math.max(1, Math.ceil(b.days - age));
+      return { ...b, got, next, sub: got ? 'с ' + dayFmt(t0 + b.days * 864e5) : next ? `через ${left} ${plural(left, 'день', 'дня', 'дней')}` : 'аккаунту ' + b.need, pct: Math.min(100, (age / b.days) * 100) };
+    });
+  }
+  const badgesHTML = (list) => `<div class="bdg">${list.map((b) => `<div class="bdg-i${b.got ? '' : ' off'}${b.next ? ' next' : ''}" title="${esc(b.t)}: аккаунту ${esc(b.need)}"><span class="ic" aria-hidden="true">${b.ic}</span><span><b>${esc(b.t)}</b><small>${esc(b.sub)}</small>${b.next ? `<span class="tr"><i style="width:${b.pct.toFixed(1)}%"></i></span>` : ''}</span></div>`).join('')}</div>`;
+
   // ---------- отрисовка ----------
   const cells = (v) => `<span class="cells" data-tier="${tierT(v)}" aria-hidden="true">${Array.from({ length: 10 }, (_, i) => `<i${v != null && i < Math.round(v) ? ' class="on"' : ''}></i>`).join('')}</span>`;
   const badge = (t, cls) => `<span class="badge${cls ? ' ' + cls : ''}" data-tier="${tierT(t)}">${t != null ? fmt(t) : '—'}</span>`;
@@ -672,6 +709,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const top3 = rated.slice().sort((a, b) => b.total - a.total || b.at - a.at).slice(0, 3);
     let d = 0;
     const isMe = p.kind === 'me';
+    p.badges = badgesOf(p.createdAt);
     const ava = p.avatar && /^(data:image\/|https?:\/\/)/.test(p.avatar)
       ? `<span class="ava" style="background-image:url('${esc(p.avatar)}')"></span>`
       : `<span class="ava" style="background-color:${esc(p.color || colorOf(p.name))}">${letter(p.name)}</span>`;
@@ -742,6 +780,10 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         </div>
 
         <div class="col">
+          ${p.badges ? `<section class="card rise" id="badgesSec" style="--d:${d++}">
+            <div class="head"><h2 class="h2">Значки</h2><span class="label">${p.badges.filter((b) => b.got).length} из ${p.badges.length}</span></div>
+            ${badgesHTML(p.badges)}
+          </section>` : ''}
           ${p.common ? `<section class="card rise" id="taste" style="--d:${d++}">
             <div class="head"><h2 class="h2">Вкусы</h2><span class="label">ты и ${esc(p.name)}</span></div>
             ${p.common.length ? `<div class="match"><div class="ring" data-tier="${tierT(p.match / 10)}" style="--p:${p.match}"><b>${p.match}%</b></div>
@@ -755,8 +797,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
             <div class="head" id="friendsSec"><h2 class="h2">Друзья</h2><span class="label">${p.friends.length}</span></div>
             ${p.friends.length ? `<div class="frs">${p.friends.map((f) => `<a class="fr" href="/profile/?id=${encodeURIComponent(f.id)}">
                 <span class="av" data-uid="${esc(f.id)}" style="background-color:${colorOf(f.username)}">${letter(f.username)}</span>
-                <span class="tx"><b>${esc(f.username)}</b><small>${f.updatedAt ? 'оценки обновлены ' + ago(f.updatedAt) : 'оценок пока нет'}</small></span>${ICON.go}</a>`).join('')}</div>`
-              : '<p class="muted">Пока никого. Добавить друга по нику можно в Мнении Казуала, кнопка «Друзья».</p>'}
+                <span class="tx"><b>${esc(f.username)}</b><small>${f.handle ? '@' + esc(f.handle) + ' · ' : ''}${f.updatedAt ? 'оценки обновлены ' + ago(f.updatedAt) : 'оценок пока нет'}</small></span>${ICON.go}</a>`).join('')}</div>`
+              : '<p class="muted">Пока никого. Добавить друга по @юзернейму можно в Мнении Казуала, кнопка «Друзья».</p>'}
             ${p.incoming ? `<p class="note">${p.incoming} ${plural(p.incoming, 'заявка', 'заявки', 'заявок')} в друзья ${plural(p.incoming, 'ждёт', 'ждут', 'ждут')} ответа. <a href="/mnenie/">Открыть в Мнении</a></p>` : ''}
           </section>` : (isMe ? `<section class="card rise" style="--d:${d++}"><div class="head"><h2 class="h2">Друзья</h2></div><p class="muted">${esc(p.friendsHint || '')}</p></section>` : '')}
 
@@ -1149,10 +1191,13 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   // ---------- свой профиль ----------
   async function showMe(meServer) {
     const local = (read('ocenshik.users.v1') || []).find((u) => user && u.id === user.id) || user || {};
-    const since = local.createdAt ? new Date(local.createdAt).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+    // дата регистрации и ник — из аккаунта, если он есть: так они одинаковые на всех устройствах
+    const born = (meServer && meServer.createdAt) || local.createdAt;
+    const since = born ? dayFmt(born) : '';
     const p = {
-      kind: 'me', name: user ? user.name : 'Гость', avatar: shownAvatar(user), color: user && user.color,
-      sub: user ? [meServer ? 'ник для друзей: ' + meServer.username : '', since ? 'в Казуал Хабе с ' + since : ''].filter(Boolean).join(' · ') || 'твой профиль' : 'Гостевой профиль: оценки хранятся в этом браузере',
+      kind: 'me', name: meServer && meServer.username ? meServer.username : user ? user.name : 'Гость', avatar: shownAvatar(user), color: user && user.color,
+      sub: user ? [meServer && meServer.handle ? '@' + meServer.handle : '', since ? 'в Казуал Хабе с ' + since : ''].filter(Boolean).join(' · ') || 'твой профиль' : 'Гостевой профиль: оценки хранятся в этом браузере',
+      createdAt: user ? born : null,
       ratings: [], allRatings: myRatings(), hide: localHide().hide, uid: meServer && meServer.id, banner: localBanner(),
     };
     p.ratings = visibleOf(p.allRatings, p.hide);
@@ -1218,8 +1263,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       }).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
       const match = common.length ? Math.max(0, Math.min(100, Math.round(100 - (common.reduce((a, c) => a + Math.abs(c.diff), 0) / common.length) * 10))) : 0;
       render({
-        kind: 'friend', name: s.user.username, sub: s.updatedAt ? 'оценки обновлены ' + ago(s.updatedAt) : 'оценок пока нет',
-        ratings, uid: s.user.id, common, match,
+        kind: 'friend', name: s.user.username, sub: [s.user.handle ? '@' + s.user.handle : '', s.updatedAt ? 'оценки обновлены ' + ago(s.updatedAt) : 'оценок пока нет'].filter(Boolean).join(' · '),
+        ratings, uid: s.user.id, common, match, createdAt: s.user.createdAt,
       });
       document.title = `${s.user.username} · Казуал Хаб`;
       api(`/photo/${encodeURIComponent(s.user.id)}/banner`).then((d) => { if (d.data) showBanner(d.data); }, () => {});
