@@ -707,7 +707,6 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   const COUNT_BADGES = [[1, '📝', 'Первая оценка'], [10, '🗂️', '10 оценок'], [50, '📚', '50 оценок'], [100, '🏛️', '100 оценок'], [250, '🗿', '250 оценок']];
   const PIONEER_BEFORE = +new Date(2026, 11, 1); // аккаунты до 1 декабря 2026
   const dayFmt = (t) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
-  const dayKey = (t) => { const d = new Date(t); return d.getFullYear() * 400 + d.getMonth() * 32 + d.getDate(); };
   // самая длинная серия дней подряд, в которые что-то оценено
   function bestStreak(times) {
     const days = [...new Set(times.filter(Boolean).map((t) => { const d = new Date(t); d.setHours(12, 0, 0, 0); return +d; }))].sort((a, b) => a - b);
@@ -744,8 +743,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     out.push(...series(COUNT_BADGES.map(([k, ic, t]) => ({ goal: k, ic, t, hint: k === 1 ? 'первая оценка' : k + ' оценок' })), n,
       (b, got, next) => (got ? 'есть' : next ? `ещё ${b.goal - n} ${plural(b.goal - n, 'оценка', 'оценки', 'оценок')}` : 'нужно ' + b.goal)));
     const rated = rs.filter((r) => r.total != null);
-    out.push(flag('🔪', 'Безжалостный', rated.some((r) => r.total < 2.5), 'поставил 1 или 2', 'поставь 1 или 2'));
-    out.push(flag('💯', 'Щедрый', rated.some((r) => r.total >= 9.95), 'поставил 10', 'поставь 10'));
+    out.push(flag('🔪', 'Безжалостный', rated.some((r) => r.total < 2.5), 'есть оценка 1 или 2', 'поставь 1 или 2'));
+    out.push(flag('💯', 'Щедрый', rated.some((r) => r.total >= 9.95), 'есть оценка 10', 'поставь 10'));
     out.push(goal('🧭', 'Эрудит', new Set(rs.map((r) => keyOf(r.cat))).size, 5, 'оценки в 5 категориях', 'категорий'));
     out.push(goal('✍️', 'Писатель', rs.filter((r) => r.note).length, 10, '10 оценок с заметками', 'с заметками'));
     out.push(goal('📸', 'Фотограф', rs.filter((r) => r.photo).length, 10, '10 оценок с фото', 'с фото'));

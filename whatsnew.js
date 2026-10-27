@@ -1,5 +1,5 @@
 // Журнал обновлений «Что нового»: один файл /whatsnew.html на весь сайт.
-// Мнение показывает его во вкладке «Журнал», главная и Колесо — окном по кнопке [data-whatsnew].
+// Главная, Мнение и Колесо показывают его окном по кнопке [data-whatsnew].
 (() => {
   const SEEN_KEY = 'casualhub.whatsnewSeen.v1'; // последняя версия, которую человек уже открывал
   let cache = null;
@@ -13,7 +13,10 @@
           box.innerHTML = html;
           const days = box.querySelector('.log-days');
           const top = days && days.querySelector('.rel-v');
-          return { html: days ? days.outerHTML : html, stat: (days && days.dataset.stat) || '', latest: top ? top.textContent.trim() : '' };
+          // версия и число пунктов в ней: патч дня дополняется, и точка «новое» загорается снова
+          const rel = top && top.closest('.rel');
+          const latest = top ? top.textContent.trim() + '+' + (rel ? rel.querySelectorAll('p').length : 0) : '';
+          return { html: days ? days.outerHTML : html, stat: (days && days.dataset.stat) || '', latest };
         })
         .catch((e) => { cache = null; throw e; });
     }

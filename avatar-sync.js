@@ -1,8 +1,8 @@
 // Аватар один на аккаунт: лежит на сервере (/api/photo/<id>/avatar), а на устройстве — его копия.
 // Главная, Мнение и профиль сверяют копию с аккаунтом: так аватар видно и с телефона, и с нового браузера.
 (() => {
-  const ANIM_KEY = 'casualhub.avatarAnim.v1';
-  const SEEN_KEY = 'casualhub.avatarSeen.v1'; // { id аккаунта: когда аватар в аккаунте менялся } — чтобы не качать его на каждом заходе // анимированный аватар целиком; в профиле и оценках лежит его первый кадр
+  const ANIM_KEY = 'casualhub.avatarAnim.v1'; // анимированный аватар целиком; в профиле и оценках лежит его первый кадр
+  const SEEN_KEY = 'casualhub.avatarSeen.v1'; // { id аккаунта: когда аватар в аккаунте менялся } — чтобы не качать его на каждом заходе
   const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
   const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } };
   const isImg = (a) => typeof a === 'string' && /^(data:image\/|https?:\/\/)/.test(a);
