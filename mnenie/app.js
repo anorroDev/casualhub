@@ -27,6 +27,14 @@ const NEW_CAT_CRITERIA = [
   { name: 'Цена и ценность', desc: 'Стоит ли своих денег и времени' }
 ];
 
+// быстрые шаблоны: встроенные «Игры» и «Фильмы и сериалы» (чтобы вернуть удалённую) и дополнительные
+function allTemplates() { return [...STARTERS, ...CAT_TEMPLATES]; }
+// у встроенных свои постоянные id категории и критериев, как при первом запуске: старые оценки снова к ним привязываются
+function tplCatId(t) { return t.id || tplId(t.name); }
+function tplCriteria(t, catId) {
+  const own = catId === tplCatId(t);
+  return t.criteria.map((x, i) => ({ id: own ? (x.id || `${catId}-${i}`) : `${catId}-${i}`, name: x.name, desc: x.desc }));
+}
 const CAT_TEMPLATES = [
   { name: 'Музыка и альбомы', criteria: [
     { name: 'Звучание и продакшн', desc: 'Сведение, аранжировки, звук', w: 1 },
@@ -1266,7 +1274,7 @@ function critRowHTML(r) {
 function editorHTML(cat) {
   const n = cat.criteria.length;
   const starter = STARTERS.some(s => s.id === cat.id);
-  const tpls = CAT_TEMPLATES.map((t, idx) => `<button type="button" class="tpl-btn" data-act="apply-tpl" data-tpl="${idx}">${esc(t.name)}</button>`).join('');
+  const tpls = allTemplates().map((t, idx) => `<button type="button" class="tpl-btn" data-act="apply-tpl" data-tpl="${idx}">${esc(t.name)}</button>`).join('');
   const items = cat.criteria.map((c, i) => {
     const w = c.w || 1;
     return `<li class="ed-item" data-id="${esc(c.id)}">
@@ -3198,14 +3206,23 @@ el.critArea.addEventListener('click', e => {
     updateTotal();
     scheduleCatSave();
   } else if (act === 'apply-tpl') {
-    const tpl = CAT_TEMPLATES[Number(b.dataset.tpl)];
+    const tpl = allTemplates()[Number(b.dataset.tpl)];
     if (!tpl) return;
     if (form.editingId) { toast('Сначала сохрани или отмени правку оценки, потом меняй критерии'); return; }
+    // такая категория уже есть (например, «Фильмы» вернулись сами по старым оценкам): переключаемся на неё, без дубля
+    const same = state.cats.find(c => c.id !== cat.id && (c.id === tplCatId(tpl) || keyOf(c.name) === keyOf(tpl.name)));
+    if (same) {
+      if (state.editCat) toggleEditCat();
+      switchCat(same.id);
+      toast(`Категория «${same.name}» уже есть, открыл её`);
+      return;
+    }
     // в категории уже есть оценки: шаблон становится новой категорией, старые оценки и их критерии не трогаем
     if (state.ratings.some(r => r.cat === cat.id && !r.example)) {
       if (state.cats.length >= MAX_CATS) { toast(`Можно создать до ${MAX_CATS} категорий`); return; }
-      const tid = tplId(tpl.name);
-      const nc = { id: state.cats.some(c => c.id === tid) ? newId('k') : tid, name: tpl.name, criteria: tpl.criteria.map((x, i) => ({ id: `${tid}-${i}`, name: x.name, desc: x.desc })) };
+      const tid = tplCatId(tpl);
+      const nid = state.cats.some(c => c.id === tid) ? newId('k') : tid;
+      const nc = { id: nid, name: tpl.name, criteria: tplCriteria(tpl, nid) };
       state.cats.push(nc);
       form.cat = nc.id;
       form.extra = [];
@@ -3218,10 +3235,10 @@ el.critArea.addEventListener('click', e => {
       toast(`Шаблон «${tpl.name}» добавлен новой категорией, оценки в «${cat.name}» остались как были`);
       return;
     }
-    const tid = tplId(tpl.name);
+    const tid = tplCatId(tpl);
     if (cat.id !== tid && !state.cats.some(c => c.id === tid)) { cat.id = tid; form.cat = tid; }
     cat.name = tpl.name;
-    cat.criteria = tpl.criteria.map((x, i) => ({ id: `${tid}-${i}`, name: x.name, desc: x.desc }));
+    cat.criteria = tplCriteria(tpl, cat.id);
     renderCats();
     renderCrit();
     updateTotal();
