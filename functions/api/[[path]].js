@@ -157,7 +157,7 @@ function cleanRating(r) {
     if (!o.photo) delete o.photo;
   }
   // artistAva — отпечаток фото исполнителя (короткая строка), не адрес
-  if (o.artistAva != null && !(typeof o.artistAva === 'string' && /^[w.-]{0,80}$/.test(o.artistAva))) delete o.artistAva;
+  if (o.artistAva != null && !(typeof o.artistAva === 'string' && /^[\w.-]{0,80}$/.test(o.artistAva))) delete o.artistAva;
   return o;
 }
 
@@ -253,7 +253,7 @@ const routes = {
       if (same.length === 1) u = same[0];
     }
     // и для несуществующего аккаунта считаем хеш: по времени ответа не понять, есть ли такой
-    const hash = await hashPass(String(password || ''), u ? u.salt : 'no-such-user-salt');
+    const hash = await hashPass(String(password || '').slice(0, 200), u ? u.salt : 'no-such-user-salt'); // паролей длиннее 200 не бывает
     if (!u || !sameHex(hash, u.pass_hash)) {
       await hit(env, ipKey, 'loginIp');
       await hit(env, accKey, 'loginAcc');
