@@ -171,6 +171,7 @@ async function currentUser(env, request) {
   ).bind(th, now).first();
   // кто заходит, тот не вылетает: меньше 20 дней до конца сессии — продлеваем на 30 (запись раз в ~10 дней)
   if (u && u.expires_at - now < 20 * 864e5) await env.DB.prepare('UPDATE sessions SET expires_at = ? WHERE token_hash = ?').bind(now + SESSION_DAYS * 864e5, th).run();
+  if (Math.random() < 0.002) await env.DB.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(now).run(); // старые сессии не копятся
   return u;
 }
 async function newSession(env, userId) {
@@ -214,6 +215,8 @@ async function link(env, x, y) {
 const routes = {
   async 'POST /register'({ env, request }) {
     const ipKey = 'reg:' + clientIp(request);
+    // общий потолок на сервер: бот-сеть с тысяч адресов не наплодит аккаунтов и не выжжет записи в базу
+    if (burst('reg:all', 30, 60e3)) return tooMany(1);
     const wait = await overLimit(env, ipKey, 'register');
     if (wait) return tooMany(wait);
     const { username, handle, password, email } = await readBody(request);
@@ -244,6 +247,8 @@ const routes = {
     const ident = String(login || username || '').trim();
     const ipKey = 'login-ip:' + clientIp(request);
     const accKey = 'login-acc:' + ident.toLowerCase().slice(0, 120);
+    // общий потолок входов на сервер: перебор с многих адресов упирается в него раньше, чем в лимит базы
+    if (burst('login:all', 300, 60e3)) return tooMany(1);
     const wait = Math.max(await overLimit(env, ipKey, 'loginIp'), await overLimit(env, accKey, 'loginAcc'));
     if (wait) return tooMany(wait);
     const COLS = 'id, username, uname, email, created_at, pass_hash, salt';
@@ -339,7 +344,7 @@ const routes = {
       await env.DB.prepare('UPDATE users SET last_seen = ?1 WHERE id = ?2 AND (last_seen IS NULL OR last_seen < ?3)').bind(now, me.id, now - 45e3).run();
     } else {
       const { guest } = await readBody(request);
-      if (typeof guest === 'string' && /^[a-z0-9]{12,40}$/.test(guest) && !burst('pingw:' + ip, 60, 60e3)) {
+      if (typeof guest === 'string' && /^[a-z0-9]{12,40}$/.test(guest) && !burst('pingw:' + ip, 60, 60e3) && !burst('pingw:all', 400, 60e3)) {
         await env.DB.prepare('INSERT INTO presence (id, at) VALUES (?1, ?2) ON CONFLICT(id) DO UPDATE SET at = ?2 WHERE at < ?3').bind('g:' + guest, now, now - 45e3).run();
       }
     }
@@ -424,6 +429,8 @@ const routes = {
   // Оценки с разных устройств объединяются: по id остаётся более свежая версия,
   // удалённые (deleted: [{id, at}]) запоминаются и больше не возвращаются, их фото стираются.
   async 'PUT /shelf'({ env, request, me }) {
+    // обычный сайт шлёт оценки раз в несколько секунд; больше — это флуд записями
+    if (burst('shelf:' + me.id, 40, 60e3)) return tooMany(1);
     const { ratings, deleted, cats, profile, sticker } = await readBody(request);
     if (!Array.isArray(ratings)) return fail(400, 'Нужен список оценок.');
     const row = await env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(me.id).first();
@@ -539,6 +546,7 @@ const routes = {
   },
   // фото оценки: кладёт и удаляет хозяин, смотрят хозяин и друзья
   async 'PUT /photo/:rid'({ env, request, me, arg }) {
+    if (burst('photo:' + me.id, 80, 60e3)) return tooMany(1);
     const { data } = await readBody(request);
     if (typeof data !== 'string' || !/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/]+=*$/.test(data)) return fail(400, 'Нужна картинка.');
     if (data.length > MAX_PHOTO) return fail(413, 'Фото слишком большое.');

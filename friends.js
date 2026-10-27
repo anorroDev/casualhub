@@ -477,41 +477,45 @@
   async function uploadPhotos() {
     const sent = readJSON(PHOTOS_KEY, {});
     const thumbs = readJSON(THUMBS_KEY, {});
-    let changed = false, tChanged = false;
+    let changed = false, tChanged = false, busy = false;
+    // сервер попросил подождать (429): остальные фото уйдут со следующей отправкой
     for (const r of state.ratings.filter(ownsRating)) {
+      if (busy) break;
       const d = photoData(r.photo);
       if (!d) continue;
       const f = fp(d);
       if (sent[r.id] !== f) {
         try { await api('/photo/' + encodeURIComponent(r.id), 'PUT', { data: d }); sent[r.id] = f; changed = true; }
-        catch (e) { if (e.status === 413) { sent[r.id] = f; changed = true; } }
+        catch (e) { if (e.status === 413) { sent[r.id] = f; changed = true; } if (e.status === 429) { busy = true; break; } }
       }
       // превью уходит и для старых фото, и для слишком больших, которые сервер не принял целиком
       if (thumbs[r.id] !== f) {
         const t = await thumbOf(d);
         if (t) {
-          try { await api('/photo/' + encodeURIComponent(r.id + '.t'), 'PUT', { data: t }); thumbs[r.id] = f; tChanged = true; } catch (e) {}
+          try { await api('/photo/' + encodeURIComponent(r.id + '.t'), 'PUT', { data: t }); thumbs[r.id] = f; tChanged = true; } catch (e) { if (e.status === 429) busy = true; }
         }
       }
     }
     // аватарки исполнителей (музыка): одна картинка на исполнителя по адресу art.<хеш имени>
-    if (typeof artistsMap === 'function') {
+    if (typeof artistsMap === 'function' && !busy) {
       for (const a of Object.values(artistsMap())) {
         if (!a || !a.name || !a.fp || typeof a.ava !== 'string' || !a.ava.startsWith('data:image/')) continue;
         const rid = artistRid(a.name);
         if (sent[rid] === a.fp) continue;
-        try { await api('/photo/' + encodeURIComponent(rid), 'PUT', { data: a.ava }); sent[rid] = a.fp; changed = true; } catch (e) {}
+        try { await api('/photo/' + encodeURIComponent(rid), 'PUT', { data: a.ava }); sent[rid] = a.fp; changed = true; } catch (e) { if (e.status === 429) break; }
       }
     }
     if (changed) lsSet(PHOTOS_KEY, JSON.stringify(sent));
     if (tChanged) lsSet(THUMBS_KEY, JSON.stringify(thumbs));
+    return busy;
   }
   // сервер сам объединяет оценки с разных устройств, поэтому отправка ничего не затирает
   async function pushShelf() {
     if (!F.me) return;
     if (claimGuestRatings()) { saveLocalRatingsQuiet(); renderBoard(); }
     try {
-      await uploadPhotos();
+      // не все фото ушли (сервер попросил подождать): досылаем через минуту
+      if (await uploadPhotos()) { clearTimeout(F.photoRetry); F.photoRetry = setTimeout(() => pushShelf(), 65e3); }
       const r = await api('/shelf', 'PUT', { ratings: myRatings(), deleted: readJSON(DELETED_KEY, []), cats: catsPayload() });
       F.pushedAt = r.updatedAt;
       F.pushedCount = r.count;
