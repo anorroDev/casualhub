@@ -1265,9 +1265,57 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     return s;
   }
 
+  // Перерисовка колеса. Без своих сегментов (обычная перерисовка после изменений) колесо не прыгает,
+  // а плавно перетекает: выбывший или удалённый участник сужается до нуля, новый вырастает из нуля.
+  let shownSegs = null, tweenRaf = 0;
   function draw(segs, hl) {
+    if (segs || hl || S.spinning || reduced || !shownSegs || !size) {
+      if (tweenRaf) { cancelAnimationFrame(tweenRaf); tweenRaf = 0; }
+      const out = segs || segments();
+      paint(out, hl);
+      shownSegs = out;
+      return;
+    }
+    const next = segments();
+    const same = next.length === shownSegs.length && next.every((x, k) => x.item.id === shownSegs[k].item.id && Math.abs((x.end - x.start) - (shownSegs[k].end - shownSegs[k].start)) < 1e-4);
+    if (same) { if (!tweenRaf) paint(next); shownSegs = tweenRaf ? shownSegs : next; return; }
+    tweenTo(next);
+  }
+  function tweenTo(next) {
+    const prev = shownSegs;
+    const ids = new Set(next.map((x) => x.item.id));
+    // порядок как у нового колеса, а ушедшие стоят на прежнем месте и сужаются там
+    const order = next.map((x) => x.item);
+    prev.forEach((x, k) => {
+      if (ids.has(x.item.id)) return;
+      const before = prev.slice(0, k).reverse().find((p) => ids.has(p.item.id));
+      order.splice(before ? order.findIndex((it) => it.id === before.item.id) + 1 : 0, 0, x.item);
+    });
+    const w0 = new Map(prev.map((x) => [x.item.id, x.end - x.start]));
+    const w1 = new Map(next.map((x) => [x.item.id, x.end - x.start]));
+    const t0 = performance.now(), D = 650;
+    if (tweenRaf) cancelAnimationFrame(tweenRaf);
+    const frame = (now) => {
+      const t = Math.min(1, (now - t0) / D);
+      const k = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+      let acc = 0;
+      const cur = [];
+      for (const it of order) {
+        const a = w0.get(it.id) || 0, b = w1.get(it.id) || 0;
+        const w = a + (b - a) * k;
+        if (w > 1e-4) cur.push({ item: it, p: w / TAU, start: acc, end: acc + w });
+        acc += w;
+      }
+      paint(cur);
+      shownSegs = cur;
+      if (t < 1) tweenRaf = requestAnimationFrame(frame);
+      else { tweenRaf = 0; shownSegs = next; paint(next); }
+    };
+    tweenRaf = requestAnimationFrame(frame);
+  }
+
+  function paint(segs, hl) {
     if (!size) return;
-    segs = segs || segments();
     const rot = drawRot == null ? S.rot : drawRot;
     const c = size / 2;
     const ring = Math.max(8, size * 0.03);
@@ -2531,6 +2579,23 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
       if (nb) nb.focus();
     });
 
+    // в суммах и курсах — только число: цифры, пробелы между тысячами и одна запятая или точка.
+    // Ловим раньше остальных обработчиков, поэтому буквы не успевают попасть ни в поле, ни в сохранённые данные
+    document.addEventListener('input', (e) => {
+      const t = e.target;
+      if (!(t instanceof HTMLInputElement) || t.inputMode !== 'decimal') return;
+      const dec = t.closest('#rateGrid') ? 6 : 2; // у курса бывает много знаков после запятой
+      let v = t.value.replace(/[^\d.,\s ]/g, '').replace(/^[\s ]+/, '');
+      const sep = v.search(/[.,]/);
+      let int = sep < 0 ? v : v.slice(0, sep), frac = sep < 0 ? null : v.slice(sep + 1).replace(/[^\d]/g, '').slice(0, dec);
+      if (int.replace(/\D/g, '').length > 10) int = int.replace(/\D/g, '').slice(0, 10); // больше миллиарда донатов не бывает
+      v = frac == null ? int : int + v[sep] + frac;
+      if (v === t.value) return;
+      const pos = Math.max(0, (t.selectionStart || 0) - (t.value.length - v.length));
+      t.value = v;
+      try { t.setSelectionRange(pos, pos); } catch (_) {}
+    }, true);
+
     $('#rateGrid').addEventListener('input', (e) => {
       const c = e.target.dataset.cur;
       if (!c) return;
@@ -2573,7 +2638,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
       if (!lines.length) return msg('Вставь хотя бы одну строку.', 'err');
       let added = 0, merged = 0, dup = 0, noSum = 0;
       // имя, разделитель, [символ валюты] сумма [валюта]: «Hades $20», «Hades 1 500 грн», «Hades — 300 ₪»
-      const re = /^(.*?)[\s,;:=\-–—]+(₴|\$|€|₪|₽)?\s*(\d{1,3}(?:[  ]\d{3})+|\d+)(?:[.,](\d+))?\s*(₴|грн\.?|грив[а-яё]*|uah|\$|usd|дол[а-яё.]*|€|eur|евро|₪|ils|шек[а-яё.]*|₽|руб[а-яё.]*|rub|р\.?)?$/i;
+      const re = /^(.*?)[\s,;:=\-–—]+(₴|\$|€|₪|₽)?\s*(\d{1,3}(?:[  .']\d{3})+|\d+)(?:[.,](\d{1,2}))?\s*(₴|грн\.?|грив[а-яё]*|uah|\$|usd|дол[а-яё.]*|€|eur|евро|₪|ils|шек[а-яё.]*|₽|руб[а-яё.]*|rub|р\.?)?$/i;
       const fallback = $('#cur').value;
       lines.forEach((line) => {
         let name = line, amount = 0, cur = fallback;
@@ -2581,7 +2646,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
           const m = line.match(re);
           if (m && m[1].trim()) {
             name = m[1].trim();
-            amount = parseFloat(m[3].replace(/[  ]/g, '') + (m[4] ? '.' + m[4] : ''));
+            amount = parseFloat(m[3].replace(/[  .']/g, '') + (m[4] ? '.' + m[4] : '')); // «1 500», «1.500» и «1'500» — тысячи
             cur = curFrom(m[2]) || curFrom(m[5]) || fallback;
           } else noSum++;
         }

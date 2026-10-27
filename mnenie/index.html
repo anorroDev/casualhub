@@ -2675,7 +2675,7 @@ function renderAuthModal() {
 function exportBackup() {
   const data = {
     version: 2,
-    appName: 'Оценщик всего',
+    appName: 'Мнение Казуала',
     exportedAt: new Date().toISOString(),
     ratings: state.ratings,
     categories: serializeCats(),
@@ -2686,9 +2686,12 @@ function exportBackup() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `rate-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `mnenie-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  // ссылка должна быть на странице и жить, пока браузер начинает загрузку (Safari и Firefox иначе ничего не скачивают)
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(url);
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
   toast('Резервная копия сохранена в файл JSON');
 }
 function handleBackupImport(e) {
@@ -2700,8 +2703,10 @@ function handleBackupImport(e) {
     try {
       const data = JSON.parse(reader.result);
       if (!data || (!Array.isArray(data.ratings) && !Array.isArray(data.categories))) {
-        toast('Файл не содержит корректных данных Оценщика'); return;
+        toast('В этом файле нет копии Мнения'); return;
       }
+      const n = Array.isArray(data.ratings) ? data.ratings.filter(r => r && !r.example).length : 0;
+      if (!confirm(`Заменить оценки и категории на этом устройстве данными из файла? В файле ${n} ${plural(n, 'оценка', 'оценки', 'оценок')}.`)) return;
       if (Array.isArray(data.ratings)) {
         state.ratings = data.ratings.map(r => normalizeRating(r.id, r)).filter(Boolean);
         saveLocalRatings();
