@@ -41,7 +41,7 @@
 
 ## Технологии
 
-- Чистые HTML, CSS и JavaScript — по одному самодостаточному файлу на страницу, без фреймворков и сборки.
+- Чистые HTML, CSS и JavaScript без фреймворков и сборки. Код каждой страницы лежит в отдельных `.js` рядом с её `index.html`: встроенные `<script>` запрещены политикой безопасности (CSP в `_headers`), поэтому новый код добавляется только файлами.
 - Данные хранятся локально в браузере: `localStorage` (оценки, категории, журнал, профили, настройки) и `IndexedDB` (гифки и музыка колеса).
 - Друзья работают через **Cloudflare Pages Functions** и базу **D1**: онлайн-аккаунты (пароли хранятся хешем PBKDF2), заявки и копии оценок, которые видны только друзьям. Без базы сайт работает как раньше, только без друзей.
 - Шрифты [Handjet](https://fonts.google.com/specimen/Handjet) и [Onest](https://fonts.google.com/specimen/Onest) подключаются через Google Fonts.
@@ -52,14 +52,20 @@
 ```
 .
 ├── index.html              # Главная Казуал Хаба
+├── hub.head.js, hub.account.js, hub.js  # её код: тема до отрисовки, кнопка профиля, всё остальное
 ├── mnenie/
-│   └── index.html          # Мнение Казуала: оценки и рейтинги
+│   ├── index.html          # Мнение Казуала: оценки и рейтинги
+│   └── head.js, app.js, reveal.js, motion.js  # тема, основной код, появление разделов, анимации
+├── profile/
+│   └── index.html, head.js, app.js  # Профиль
 ├── friends.js              # Друзья во вкладке «Мои» и общий аккаунт
+├── online.js               # Кто на сайте, кнопка «Друзья» в шапке
+├── avatar-sync.js, whatsnew.js  # Общий аватар и окно «Что нового»
 ├── favicon.svg             # Иконка сайта
 ├── functions/api/[[path]].js  # Сервер друзей (Pages Functions)
 ├── schema.sql              # Схема базы D1
 ├── koleso/
-│   └── index.html          # Колесо Казуала
+│   └── index.html, head.js, app.js, motion.js  # Колесо Казуала
 ├── _headers                # Заголовки безопасности (Cloudflare Pages)
 ├── _redirects              # SPA-фолбэк
 └── wrangler.toml           # Конфигурация Cloudflare Pages

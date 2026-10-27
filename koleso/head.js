@@ -1,0 +1,9 @@
+/* тема ставится до первой отрисовки, чтобы при обновлении страница не мелькала */
+try { var cp = JSON.parse(localStorage.getItem('ocenshik.prefs.v1') || 'null'); if (cp && cp.theme && cp.theme !== 'auto') document.documentElement.setAttribute('data-theme', cp.theme); } catch (e) {}
+/* направление сдвига между страницами: главная → Мнение → Колесо */
+addEventListener('pagereveal', function (e) {
+  if (!e.viewTransition) return;
+  var rank = function (u) { try { var p = new URL(u, location.href).pathname; return p.indexOf('/profile') === 0 ? 3 : p.indexOf('/koleso') === 0 ? 2 : p.indexOf('/mnenie') === 0 ? 1 : 0; } catch (x) { return 0; } };
+  var from = window.navigation && navigation.activation && navigation.activation.from;
+  e.viewTransition.types.add(from && rank(from.url) > rank(location.href) ? 'back' : 'forward');
+});
