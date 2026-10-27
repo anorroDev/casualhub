@@ -304,8 +304,8 @@ function registerUser(username, email, password, avatar, color, handle) {
     toast('Этот email уже привязан к другому аккаунту'); return false;
   }
 
-  if (password.length < 6) {
-    toast('Пароль должен содержать минимум 6 символов'); return false;
+  if (password.length < 8) {
+    toast('Пароль должен содержать минимум 8 символов'); return false;
   }
 
   const u = {
@@ -824,7 +824,7 @@ function renderAuthModal() {
         <div class="auth-field">
           <label for="inputRegPass">Пароль</label>
           <div class="pwd-wrap">
-            <input type="password" id="inputRegPass" autocomplete="new-password" placeholder="Минимум 6 символов" required minlength="6">
+            <input type="password" id="inputRegPass" autocomplete="new-password" placeholder="Минимум 8 символов" required minlength="8">
             <button type="button" class="pwd-toggle" id="btnToggleRegPass" aria-label="Показать/скрыть пароль">${EYE_OPEN_SVG}</button>
           </div>
           <div class="pwd-meter" id="regPwdMeter">

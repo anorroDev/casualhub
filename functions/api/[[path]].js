@@ -227,7 +227,7 @@ const routes = {
     if (!EMAIL_RE.test(mail) || mail.length > 120) return fail(400, 'Нужна почта, например name@mail.com.');
     if (!NAME_RE.test(name)) return fail(400, NAME_HINT);
     if (wanted && !HANDLE_RE.test(wanted)) return fail(400, HANDLE_HINT);
-    if (pass.length < 6 || pass.length > 200) return fail(400, 'Пароль: от 6 символов.');
+    if (weakPass(pass)) return fail(400, WEAK_PASS);
     // в лимит идут только настоящие регистрации и проверки занятых почт и юзернеймов, опечатки в форме не считаются
     await hit(env, ipKey, 'register');
     if (await env.DB.prepare('SELECT 1 FROM users WHERE email = ?').bind(mail).first()) return fail(409, 'На эту почту уже есть аккаунт.');
@@ -323,7 +323,7 @@ const routes = {
     }
     if (password) {
       const pass = String(password);
-      if (pass.length < 6 || pass.length > 200) return fail(400, 'Пароль: от 6 символов.');
+      if (weakPass(pass)) return fail(400, WEAK_PASS);
       const salt = randHex(16);
       await env.DB.prepare('UPDATE users SET pass_hash = ?, salt = ? WHERE id = ?').bind(await hashPass(pass, salt), salt, me.id).run();
       // все остальные устройства выходят из аккаунта: если пароль утёк, старые сессии больше не работают
@@ -521,7 +521,9 @@ const routes = {
 
   // исполнители по имени: имя и фото. Сначала Genius; если он отказал (например, 429 — слишком много запросов
   // с общих адресов Cloudflare) или ничего не нашёл, ищем на Deezer, ему ключ не нужен
-  async 'GET /genius/artist'({ env, request }) {
+  async 'GET /genius/artist'({ env, request, me }) {
+    // поиск идёт с нашим ключом Genius: частые запросы одного человека могли бы заблокировать ключ для всех
+    if (burst('genius:' + me.id, 40, 60e3)) return tooMany(1);
     const q = (new URL(request.url).searchParams.get('q') || '').trim().slice(0, 80);
     if (q.length < 2) return json({ artists: [] });
     let artists = [], why = env.GENIUS_TOKEN ? '' : 'Genius не подключён.';
@@ -544,7 +546,8 @@ const routes = {
     return json({ artists });
   },
   // картинка с Genius в виде data URL: браузер не может скачать её напрямую из-за CORS
-  async 'GET /genius/img'({ env, request }) {
+  async 'GET /genius/img'({ env, request, me }) {
+    if (burst('geniusimg:' + me.id, 40, 60e3)) return tooMany(1);
     const u = new URL(request.url).searchParams.get('u') || '';
     if (!GENIUS_IMG.test(u)) return fail(400, 'Это не картинка Genius.');
     const res = await geniusFetch(env, u, 604800);
@@ -677,6 +680,10 @@ const routes = {
   },
 };
 
+// новые пароли: от 8 символов и не из самых частых (старые, покороче, продолжают работать при входе)
+const COMMON_PASS = new Set(['12345678', '123456789', '1234567890', '87654321', '11111111', '00000000', '12341234', '11223344', 'password', 'password1', 'qwertyui', 'qwerty123', 'qwertyuiop', '1q2w3e4r', '1qaz2wsx', 'zaq12wsx', 'abcd1234', 'iloveyou', 'sunshine', 'football', 'baseball', 'princess', 'superman', 'starwars', 'whatever', 'trustno1', 'asdfghjk', 'йцукенгш', 'пароль123', 'casualhub', 'mnenie123']);
+const weakPass = (p) => p.length < 8 || p.length > 200 || COMMON_PASS.has(p.toLowerCase()) || /^(.)\1+$/.test(p);
+const WEAK_PASS = 'Пароль: от 8 символов и не из самых простых вроде «12345678» или «password».';
 const NAME_HINT = 'Ник: от 2 до 24 символов, буквы, цифры, пробел, точка, дефис или подчёркивание.';
 const HANDLE_HINT = 'Юзернейм: от 3 до 20 символов, латинские буквы, цифры, «_» и «.» (точка не в начале и не в конце).';
 const MAX_PHOTOS = 1200; // фото, превью, аватар и баннер вместе

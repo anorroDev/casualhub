@@ -931,7 +931,7 @@ ${ICON.chev}
       const em = String(email || '').trim().toLowerCase();
       const pass = String(password || '').trim();
       // локальные проверки отдаём исходной функции, она сама покажет подсказку
-      const localBad = nick.length < 2 || !EMAIL_RE.test(em) || state.users.some((u) => u.email && u.email.toLowerCase() === em) || pass.length < 6;
+      const localBad = nick.length < 2 || !EMAIL_RE.test(em) || state.users.some((u) => u.email && u.email.toLowerCase() === em) || pass.length < 8;
       if (localBad) return orig.register.apply(this, arguments);
       if (!NICK_RE.test(nick)) { toast('Ник: буквы, цифры, пробел, точка, дефис или подчёркивание, до 24 символов'); return false; }
       const h = String(handle || '').trim().replace(/^@+/, '').toLowerCase();
@@ -1041,7 +1041,7 @@ ${ICON.chev}
       if (handle != null && !HANDLE_RE.test(h)) { toast('Юзернейм: от 3 до 20 символов, латинские буквы, цифры, «_» и «.»'); return false; }
       if ((nickChanged || pass || emailChanged || handleChanged) && nick.length >= 2) {
         if (nickChanged && !NICK_RE.test(nick)) { toast('Ник: буквы, цифры, пробел, точка, дефис или подчёркивание, до 24 символов'); return false; }
-        if (pass && pass.length < 6) { toast('Пароль должен содержать минимум 6 символов'); return false; }
+        if (pass && pass.length < 8) { toast('Новый пароль: минимум 8 символов'); return false; }
         if ((pass || emailChanged) && !current) { toast('Чтобы сменить почту или пароль, впиши текущий пароль'); return false; }
         try {
           const r = await api('/account', 'PUT', { username: nickChanged ? nick : undefined, handle: handleChanged ? h : undefined, password: pass || undefined, email: emailChanged ? em : undefined, current: current || undefined });
