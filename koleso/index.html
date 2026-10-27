@@ -767,6 +767,8 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
   font-size: clamp(40px, calc(150vw / max(var(--len, 6), 6)), 150px);
 }
 .fx-word { display: inline-block; white-space: nowrap; }
+/* слово длиннее экрана переносится по буквам, а не уходит за край */
+.fx-word.long { display: inline; white-space: normal; }
 .fx-ch { display: inline-block; transform: translate(var(--dx), var(--dy)) rotate(var(--r)) scale(0); }
 .fx-ch.in { animation: fx-ch .6s cubic-bezier(.3, 1.5, .5, 1) forwards; animation-delay: var(--d); }
 @keyframes fx-ch { to { transform: none; } }
@@ -1661,7 +1663,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
       const chars = Array.from(it.name);
       name.style.setProperty('--len', String(Math.min(chars.length, 24)));
       let k = 0;
-      name.innerHTML = it.name.split(/(\s+)/).map((w) => /^\s+$/.test(w) ? w : `<span class="fx-word">${Array.from(w).map((c) => {
+      name.innerHTML = it.name.split(/(\s+)/).map((w) => /^\s+$/.test(w) ? w : `<span class="fx-word${Array.from(w).length > 12 ? ' long' : ''}">${Array.from(w).map((c) => {
         const a = Math.random() * TAU, dist = 160 + Math.random() * 220;
         return `<span class="fx-ch" style="--dx:${Math.round(Math.cos(a) * dist)}px;--dy:${Math.round(Math.sin(a) * dist)}px;--r:${Math.round((Math.random() - .5) * 400)}deg;--d:${(k++ * Math.min(70, 900 / chars.length)).toFixed(0)}ms">${esc(c)}</span>`;
       }).join('')}</span>`).join('');
