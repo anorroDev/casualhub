@@ -538,10 +538,14 @@ const routes = {
     const u = new URL(request.url).searchParams.get('u') || '';
     if (!GENIUS_IMG.test(u)) return fail(400, 'Это не картинка Genius.');
     const res = await geniusFetch(env, u, 604800);
-    const type = (res.headers.get('content-type') || '').split(';')[0];
-    if (!res.ok || !/^image\/(jpeg|png|webp|gif)$/.test(type)) return fail(502, 'Картинка не загрузилась.');
+    if (!res.ok) return fail(502, `Картинка не загрузилась (${res.status}).`);
     const buf = await res.arrayBuffer();
     if (buf.byteLength > 3e6) return fail(413, 'Картинка слишком большая.');
+    // тип берём по первым байтам: CDN иногда отдаёт картинку как application/octet-stream
+    const h = new Uint8Array(buf.slice(0, 12));
+    const type = h[0] === 0xff && h[1] === 0xd8 ? 'image/jpeg' : h[0] === 0x89 && h[1] === 0x50 ? 'image/png'
+      : h[0] === 0x47 && h[1] === 0x49 ? 'image/gif' : h[8] === 0x57 && h[9] === 0x45 ? 'image/webp' : '';
+    if (!type) return fail(502, 'Это не картинка.');
     return json({ data: `data:${type};base64,${b64(buf)}` });
   },
   // фото оценки: кладёт и удаляет хозяин, смотрят хозяин и друзья

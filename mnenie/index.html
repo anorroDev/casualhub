@@ -3374,10 +3374,19 @@ async function pickGenius(i) {
   const a = geniusItems[i], name = (form.artist || '').trim();
   if (!a || !keyOf(name)) return;
   try {
-    const r = await window.casualApi.get('/genius/img?u=' + encodeURIComponent(a.image));
-    if (!r || typeof r.data !== 'string') throw new Error('img');
-    const blob = await (await fetch(r.data)).blob();
-    const d = await artistAvaFromFile(new File([blob], 'artist.jpg', { type: blob.type || 'image/jpeg' }));
+    // картинки Genius отдаются с разрешением CORS, поэтому сначала качаем напрямую, а через наш сервер — если не вышло
+    let blob = null;
+    try {
+      const res = await fetch(a.image, { mode: 'cors', referrerPolicy: 'no-referrer' });
+      if (res.ok) blob = await res.blob();
+    } catch (_) {}
+    if (!blob || !blob.size) {
+      const r = await window.casualApi.get('/genius/img?u=' + encodeURIComponent(a.image));
+      if (!r || typeof r.data !== 'string') throw new Error('img');
+      blob = await (await fetch(r.data)).blob();
+    }
+    const type = /^image\//.test(blob.type) ? blob.type : 'image/jpeg';
+    const d = await artistAvaFromFile(new File([blob], 'artist.jpg', { type }));
     if (!d) return;
     geniusItems = [];
     artistSetAva(name, d);
