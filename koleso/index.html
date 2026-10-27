@@ -1003,8 +1003,9 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
       <button type="button" class="btn ghost" id="wClose">Закрыть</button>
     </div>
     <div class="sheet-actions w-share">
-      <button type="button" class="btn ghost" id="wImg">🖼 Картинка с итогом</button>
-      <button type="button" class="btn ghost" id="wCopy">📋 Скопировать текст</button>
+      <button type="button" class="btn ghost" id="wCopyImg">📋 Скопировать картинку</button>
+      <button type="button" class="btn ghost" id="wImg">🖼 Сохранить картинку</button>
+      <button type="button" class="btn ghost" id="wCopy">📝 Скопировать текст</button>
     </div>
     <p class="field-msg" id="wMsg" role="status"></p>
   </div>
@@ -1894,6 +1895,22 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
       wMsg('Картинка сохранена.');
     } catch (e) { wMsg('Не получилось сделать картинку.'); }
   }
+  // картинка с итогом прямо в буфер обмена: вставляется в чат через Ctrl+V или «Вставить»
+  async function copyImage() {
+    if (!lastWinner) return;
+    if (!navigator.clipboard || !navigator.clipboard.write || typeof ClipboardItem === 'undefined') {
+      wMsg('Этот браузер не умеет копировать картинки, сохраняю файл…');
+      return shareImage();
+    }
+    wMsg('Рисую картинку…');
+    try {
+      // картинка отдаётся обещанием сразу: Safari копирует, только пока не прошло нажатие
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': resultImage(lastWinner) })]);
+      wMsg('Картинка скопирована, можно вставить в чат.');
+    } catch (e) {
+      wMsg('Не получилось скопировать картинку. Нажми «Сохранить картинку».');
+    }
+  }
   async function copyResult() {
     if (!lastWinner) return;
     const text = resultText(lastWinner);
@@ -2694,6 +2711,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     });
 
     $('#wImg').addEventListener('click', shareImage);
+    $('#wCopyImg').addEventListener('click', copyImage);
     $('#wCopy').addEventListener('click', copyResult);
     $('#wAgain').addEventListener('click', () => { restoreAll(); if (S.pick === 'one') spin(); });
     $('#wClose').addEventListener('click', hideWinner);
