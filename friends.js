@@ -988,7 +988,7 @@ ${ICON.chev}
         saveUsers();
         renderUserBar();
         renderBoard();
-        toast(`Вы вошли как ${u.name}`);
+        toast(`Вход выполнен: ${u.name}`);
         closeAuthModal();
         await syncSession();
         return true;
@@ -1002,7 +1002,7 @@ ${ICON.chev}
         if (ok) await linkCurrent(pass);
         return ok;
       }
-      toast(local ? 'Неверный пароль. Попробуйте еще раз' : 'Неверная почта, юзернейм или пароль');
+      toast(local ? 'Неверный пароль, попробуй ещё раз' : 'Неверная почта, юзернейм или пароль');
       return false;
     };
   }

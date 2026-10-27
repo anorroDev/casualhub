@@ -186,7 +186,7 @@ let editSelectedAvatar = '';
 let editSelectedColor = '';
 
 function calcPasswordStrength(pass) {
-  if (!pass) return { score: 0, text: 'Введите пароль', color: 'transparent', width: '0%' };
+  if (!pass) return { score: 0, text: 'Впиши пароль', color: 'transparent', width: '0%' };
   let score = 0;
   if (pass.length >= 4) score += 1;
   if (pass.length >= 8) score += 1;
@@ -195,14 +195,14 @@ function calcPasswordStrength(pass) {
   if (/[^A-Za-z0-9]/.test(pass)) score += 1;
 
   if (score <= 1) return { score: 1, text: 'Слабый пароль', color: 'var(--bad)', width: '25%' };
-  if (score <= 3) return { score: 2, text: 'Средний пароль (добавьте цифры/знаки)', color: 'var(--mid)', width: '65%' };
+  if (score <= 3) return { score: 2, text: 'Средний пароль: добавь цифры или знаки', color: 'var(--mid)', width: '65%' };
   return { score: 3, text: 'Отличный надёжный пароль! 👍', color: 'var(--good)', width: '100%' };
 }
 
 function processAvatarFile(file, callback) {
   if (!file) return;
   if (!file.type || !file.type.startsWith('image/')) {
-    toast('Пожалуйста, выберите файл изображения (JPG, PNG)');
+    toast('Нужна картинка: JPG или PNG');
     return;
   }
   if (file.size > 8 * 1024 * 1024) {
@@ -294,14 +294,14 @@ function registerUser(username, email, password, avatar, color, handle) {
   email = (email || '').trim().toLowerCase();
   password = (password || '').trim();
 
-  if (username.length < 2) { toast('Имя должно быть не менее 2 символов'); return false; }
+  if (username.length < 2) { toast('Ник: минимум 2 символа'); return false; }
 
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   if (!email || !emailRegex.test(email)) {
-    toast('Введите корректный email (например, name@mail.com)'); return false;
+    toast('Нужна почта, например name@mail.com'); return false;
   }
   if (state.users.some(u => u.email && u.email.toLowerCase() === email)) {
-    toast('Этот email уже привязан к другому аккаунту'); return false;
+    toast('Эта почта уже привязана к другому аккаунту'); return false;
   }
 
   if (password.length < 8) {
@@ -332,7 +332,7 @@ function registerUser(username, email, password, avatar, color, handle) {
 function loginUser(identifier, password) {
   identifier = (identifier || '').trim().toLowerCase();
   password = (password || '').trim();
-  if (!identifier) { toast('Введите почту или @юзернейм'); return false; }
+  if (!identifier) { toast('Впиши почту или @юзернейм'); return false; }
 
   const u = state.users.find(x =>
     (x.name && x.name.toLowerCase() === identifier) ||
@@ -340,16 +340,16 @@ function loginUser(identifier, password) {
     (x.handle && x.handle === identifier.replace(/^@+/, ''))
   );
 
-  if (!u) { toast('Пользователь не найден. Зарегистрируйтесь'); return false; }
+  if (!u) { toast('Такого аккаунта нет. Зарегистрируйся'); return false; }
   if (u.pass && u.pass !== password) {
-    toast('Неверный пароль. Попробуйте еще раз'); return false;
+    toast('Неверный пароль, попробуй ещё раз'); return false;
   }
 
   state.user = u;
   saveUsers();
   renderUserBar();
   renderBoard();
-  toast(`Вы вошли как ${u.name}`);
+  toast(`Вход выполнен: ${u.name}`);
   closeAuthModal();
   return true;
 }
@@ -360,13 +360,13 @@ function updateUserProfile(username, email, password, avatar, color, handle) {
   email = (email || '').trim().toLowerCase();
   password = (password || '').trim();
 
-  if (username.length < 2) { toast('Имя должно содержать не менее 2 символов'); return false; }
+  if (username.length < 2) { toast('Ник: минимум 2 символа'); return false; }
 
   if (email) {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) { toast('Введите корректный email'); return false; }
+    if (!emailRegex.test(email)) { toast('Нужна почта, например name@mail.com'); return false; }
     if (state.users.some(u => u.id !== state.user.id && u.email && u.email.toLowerCase() === email)) {
-      toast('Этот email уже привязан к другому аккаунту'); return false;
+      toast('Эта почта уже привязана к другому аккаунту'); return false;
     }
   }
 
@@ -393,7 +393,7 @@ function updateUserProfile(username, email, password, avatar, color, handle) {
   saveUsers();
   renderUserBar();
   renderBoard();
-  toast('Профиль успешно обновлен! ✨');
+  toast('Профиль обновлён ✨');
   authActiveTab = 'profile';
   renderAuthModal();
   return true;
@@ -404,7 +404,7 @@ function logoutUser() {
   saveUsers();
   renderUserBar();
   renderBoard();
-  toast('Вы вышли из профиля');
+  toast('Выход выполнен');
   authActiveTab = 'login';
   renderAuthModal();
 }
@@ -486,7 +486,7 @@ function renderAuthModal() {
               ${CAMERA_SVG}
               Сменить аватарку
             </label>
-            <span class="auth-help" id="editAvatarStatus">${isImg ? 'Своё фото установлено ✓' : 'Нажмите на камеру, чтобы поставить своё фото'}</span>
+            <span class="auth-help" id="editAvatarStatus">${isImg ? 'Своё фото установлено ✓' : 'Нажми на камеру, чтобы поставить своё фото'}</span>
             <button type="button" class="avatar-remove-btn" id="btnRemoveEditAvatar"${isImg ? '' : ' hidden'}>✕ Удалить фото</button>
           </div>
         </div>
@@ -502,11 +502,11 @@ function renderAuthModal() {
           <span class="auth-help">По нему тебя находят друзья и по нему можно войти. Латиница, цифры, «_» и «.».</span>
         </div>` : ''}
         <div class="auth-field">
-          <label for="inputEditEmail">Электронная почта (Email)</label>
+          <label for="inputEditEmail">Почта</label>
           <input type="email" id="inputEditEmail" value="${esc(state.user.email || '')}" placeholder="name@domain.com">
         </div>
         <div class="auth-field">
-          <label for="inputEditPass">Новый пароль (оставьте пустым, если не меняете)</label>
+          <label for="inputEditPass">Новый пароль (оставь пустым, если не меняешь)</label>
           <div class="pwd-wrap">
             <input type="password" id="inputEditPass" autocomplete="new-password" placeholder="Новый пароль">
             <button type="button" class="pwd-toggle" id="btnToggleEditPass" aria-label="Показать/скрыть пароль">${EYE_OPEN_SVG}</button>
@@ -620,7 +620,7 @@ function renderAuthModal() {
           <div class="profile-titles">
             <h4 class="profile-name">${esc(state.user.name)}</h4>
             ${state.user.handle ? `<span class="profile-handle">@${esc(state.user.handle)}</span>` : ''}
-            ${state.user.email ? `<div class="profile-email-tag">✉ ${esc(state.user.email)}</div>` : '<div class="profile-meta">Email не указан</div>'}
+            ${state.user.email ? `<div class="profile-email-tag">✉ ${esc(state.user.email)}</div>` : '<div class="profile-meta">Почта не указана</div>'}
             <div class="profile-meta">В клубе с ${esc(dateStr)}</div>
           </div>
         </div>
@@ -798,7 +798,7 @@ function renderAuthModal() {
               ${CAMERA_SVG}
               Выбрать аватарку
             </label>
-            <span class="auth-help" id="regAvatarStatus">${regIsImg ? 'Фотография выбрана ✓' : 'Нажмите на камеру, чтобы поставить своё фото'}</span>
+            <span class="auth-help" id="regAvatarStatus">${regIsImg ? 'Фотография выбрана ✓' : 'Нажми на камеру, чтобы поставить своё фото'}</span>
             <button type="button" class="avatar-remove-btn" id="btnRemoveRegAvatar"${regIsImg ? '' : ' hidden'}>✕ Удалить фото</button>
           </div>
         </div>
@@ -816,9 +816,9 @@ function renderAuthModal() {
         </div>
 
         <div class="auth-field">
-          <label for="inputRegEmail">Электронная почта (Email)</label>
+          <label for="inputRegEmail">Почта</label>
           <input type="email" id="inputRegEmail" autocomplete="email" required placeholder="name@domain.com">
-          <span class="auth-help">Email нужен для входа и защиты вашего профиля.</span>
+          <span class="auth-help">По почте можно входить вместо @юзернейма. Её видишь только ты.</span>
         </div>
 
         <div class="auth-field">
@@ -829,7 +829,7 @@ function renderAuthModal() {
           </div>
           <div class="pwd-meter" id="regPwdMeter">
             <div class="pwd-meter-bar"><div class="pwd-meter-fill" id="regPwdFill"></div></div>
-            <div class="pwd-meter-info"><span id="regPwdText">Введите пароль</span></div>
+            <div class="pwd-meter-info"><span id="regPwdText">Впиши пароль</span></div>
           </div>
         </div>
 
@@ -859,7 +859,7 @@ function renderAuthModal() {
     guestBtn.addEventListener('click', () => {
       if (state.user) { authActiveTab = 'profile'; renderAuthModal(); return; }
       closeAuthModal();
-      toast('Режим гостя: оценки сохраняются на вашем устройстве');
+      toast('Режим гостя: оценки хранятся только на этом устройстве');
     });
   }
 
@@ -915,7 +915,7 @@ function renderAuthModal() {
         circle.style.backgroundImage = 'none';
         circle.style.backgroundColor = regSelectedColor;
         initialSpan.textContent = $('inputRegName').value.trim().charAt(0).toUpperCase() || '👤';
-        statusSpan.textContent = 'Нажмите на камеру, чтобы поставить своё фото';
+        statusSpan.textContent = 'Нажми на камеру, чтобы поставить своё фото';
         removeBtn.hidden = true;
       });
     }
@@ -1025,10 +1025,10 @@ function handleBackupImport(e) {
         saveLocalLog();
       }
       renderBoard(); renderCats(); renderForm(); renderLog(); renderUserBar();
-      toast('Данные успешно восстановлены из копии!');
+      toast('Данные восстановлены из копии');
       closeAuthModal();
     } catch (_) {
-      toast('Ошибка при чтении файла бэкапа');
+      toast('Не получилось прочитать файл копии');
     }
   };
   reader.readAsText(f);
