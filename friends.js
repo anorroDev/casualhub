@@ -1007,9 +1007,12 @@ ${ICON.chev}
   }
 
   if (typeof orig.logout === 'function') {
-    // выход из аккаунта сайта не отключает от друзей: сессия профиля остаётся
-    // и снова подхватывается при входе или переключении на этот профиль
+    // «Выйти» закрывает и онлайн-сессию: на чужом компьютере следующий человек не попадёт в аккаунт,
+    // просто переключившись на этот профиль. Оценки профиля на устройстве остаются, вход — по паролю.
     window.logoutUser = function () {
+      const localId = state.user && state.user.id;
+      const tok = localId ? readTokens()[localId] : null;
+      if (tok) { api('/logout', 'POST', {}, tok).catch(() => {}); setTokenFor(localId, null); }
       const r = orig.logout.apply(this, arguments);
       syncSession();
       return r;
