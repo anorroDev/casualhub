@@ -370,6 +370,10 @@ details[open] > summary .chev { transform: rotate(180deg); }
 .out-list { list-style: none; margin: 0; padding: 0; }
 .orow { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto auto; align-items: center; gap: 4px 12px; padding: 8px 0; color: var(--ink-2); }
 .orow + .orow { border-top: 1px solid var(--line); }
+/* новая строка въезжает сбоку с пружинкой (без растворения) */
+.row-in { animation: row-in .5s cubic-bezier(.34, 1.56, .64, 1) both; }
+@keyframes row-in { from { transform: translateX(-18px) scale(.97); } }
+@media (prefers-reduced-motion: reduce) { .row-in { animation: none; } }
 .onum { text-align: center; font-family: var(--font-display); font-weight: 700; font-size: 22px; line-height: 1; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .oname { min-width: 0; overflow-wrap: anywhere; text-decoration: line-through; text-decoration-color: color-mix(in srgb, var(--bad) 70%, transparent); }
 .oamt { font-size: 13px; font-variant-numeric: tabular-nums; }
@@ -1186,6 +1190,8 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     return segs.find((s) => a >= s.start && a < s.end) || segs[segs.length - 1];
   }
 
+  let shownLastOut; // последний вылетевший, который уже показан в списке
+  const freshRows = new Set(); // id строк, которые только что появились: въезжают один раз
   function addItem(name, amount, cur) {
     name = String(name).trim().slice(0, 60);
     if (!name) return 'empty';
@@ -1199,7 +1205,9 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
       }
       return 'dup';
     }
-    S.items.push(makeItem(name, amount, cur));
+    const it = makeItem(name, amount, cur);
+    S.items.push(it);
+    freshRows.add(it.id); // строка въедет в список при следующей отрисовке
     return 'added';
   }
 
@@ -1656,7 +1664,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     list.innerHTML = rows.length
       ? rows.map((i, idx) => {
           const c = ch.get(i.id), col = colorOf(i);
-          return `<li class="prow" data-id="${i.id}">
+          return `<li class="prow${freshRows.has(i.id) ? ' row-in' : ''}" data-id="${i.id}">
             ${don ? `<span class="rank">${idx + 1}</span>` : ''}
             <div class="pnm"><i class="sw" style="--c:${col.c}"></i><div class="e-text"><span class="e-name">${esc(i.name)}</span>${don ? `<span class="e-sub">${convText(i)}</span>` : ''}</div></div>
             ${don ? `<label class="amt" for="amt-${i.id}"><input class="inp" id="amt-${i.id}" data-act="amt" inputmode="decimal" value="${i.amount}" aria-label="Донат: ${esc(i.name)}, ${i.cur}"><span>${sym(i.cur)}</span></label>` : ''}
@@ -1668,12 +1676,16 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
 
     const outs = S.items.filter((i) => i.out).sort((x, y) => x.outOrder - y.outOrder);
     $('#outBox').hidden = !outs.length;
-    $('#outList').innerHTML = outs.map((i, k) => `<li class="orow">
+    // последний вылетевший въезжает в список вылетевших
+    const lastOut = outs.length ? outs[outs.length - 1].id : null;
+    if (lastOut !== shownLastOut) { if (shownLastOut !== undefined && lastOut != null) freshRows.add('o' + lastOut); shownLastOut = lastOut; }
+    $('#outList').innerHTML = outs.map((i, k) => `<li class="orow${freshRows.has('o' + i.id) ? ' row-in' : ''}">
         <span class="onum">${k + 1}</span>
         <span class="oname">${esc(i.name)}</span>
         ${don ? `<span class="oamt">${fmt(i.amount)} ${sym(i.cur)}</span>` : '<span></span>'}
         <button type="button" class="link-btn" data-act="back" data-id="${i.id}">вернуть</button>
       </li>`).join('');
+    freshRows.clear();
 
     $('#auto').checked = S.auto;
     $('#autoOpt').hidden = S.pick === 'one';

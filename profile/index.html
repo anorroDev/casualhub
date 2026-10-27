@@ -410,6 +410,10 @@ button.nick-st:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .bdg-more summary { cursor: pointer; padding: 8px 2px; font-size: 13.5px; font-weight: 700; color: var(--accent); list-style: none; }
 .bdg-more summary::-webkit-details-marker { display: none; }
 .bdg-more[open] summary { margin-bottom: 6px; }
+.bdg-i { animation: rise .7s var(--spring) backwards; animation-delay: calc(var(--k, 0) * 45ms + .2s); }
+.st-card { animation: menu-in .28s var(--spring) both; transform-origin: 50% 0; }
+.nick-st.pop { animation: st-pop .55s var(--spring); }
+@keyframes st-pop { 0% { transform: scale(.4) rotate(-20deg); } 100% { transform: none; } }
 .bdg-i.next { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
 .hist { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; align-items: end; height: 140px; }
 .hist div { display: grid; grid-template-rows: 1fr auto auto; height: 100%; gap: 4px; text-align: center; }
@@ -761,7 +765,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     // полученные сначала, из остальных выше те, до которых ближе
     return out.filter((b) => b.got).concat(out.filter((b) => !b.got).sort((a, b) => (b.pct || 0) - (a.pct || 0)));
   }
-  const badgesHTML = (list) => `<div class="bdg">${list.map((b) => `<div class="bdg-i${b.got ? '' : ' off'}${b.next ? ' next' : ''}" title="${esc(b.t)}: ${esc(b.hint)}"><span class="ic" aria-hidden="true">${b.ic}</span><span><b>${esc(b.t)}</b><small>${esc(b.sub)}</small>${b.next ? `<span class="tr"><i style="width:${b.pct.toFixed(1)}%"></i></span>` : ''}</span></div>`).join('')}</div>`;
+  const badgesHTML = (list) => `<div class="bdg">${list.map((b, k) => `<div style="--k:${Math.min(k, 14)}" class="bdg-i${b.got ? '' : ' off'}${b.next ? ' next' : ''}" title="${esc(b.t)}: ${esc(b.hint)}"><span class="ic" aria-hidden="true">${b.ic}</span><span><b>${esc(b.t)}</b><small>${esc(b.sub)}</small>${b.next ? `<span class="tr"><i style="width:${b.pct.toFixed(1)}%"></i></span>` : ''}</span></div>`).join('')}</div>`;
 
   // ---------- отрисовка ----------
   const cells = (v) => `<span class="cells" data-tier="${tierT(v)}" aria-hidden="true">${Array.from({ length: 10 }, (_, i) => `<i${v != null && i < Math.round(v) ? ' class="on"' : ''}></i>`).join('')}</span>`;
@@ -861,7 +865,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     if (token) send('PUT', '/shelf', { ratings: [], sticker: st }).catch(() => {});
     // меняем только кнопку: ник заново не анимируется
     const b = $('#stBtn');
-    if (b) { b.classList.toggle('empty', !src); b.innerHTML = src ? stMedia(src) : '＋ стикер'; }
+    if (b) { b.classList.toggle('empty', !src); b.innerHTML = src ? stMedia(src) : '＋ стикер'; b.classList.remove('pop'); void b.offsetWidth; if (src) b.classList.add('pop'); }
     closePicker();
   }
   const localHide = () => (read(HIDE_KEY) || {})[hideOwner()] || { hide: [], at: 0 };
