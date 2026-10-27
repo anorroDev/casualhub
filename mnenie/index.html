@@ -3337,29 +3337,35 @@ async function pickCover(i) {
 
 /* ---------- Фото исполнителя с Genius ---------- */
 // работает только после входа в онлайн-аккаунт: запрос идёт через наш сервер, где лежит токен Genius
-let geniusTimer = null, geniusKey = '', geniusItems = [];
-const geniusSkip = new Set();
+let geniusTimer = null, geniusKey = '', geniusItems = [], geniusPauseUntil = 0;
+const geniusSkip = new Set(), geniusSeen = new Map(); // найденное по каждому имени, чтобы не спрашивать сервер повторно
 function geniusWanted() {
   const a = (form.artist || '').trim();
   const api = window.casualApi;
   const known = artistGet(a);
-  return formMusic() && a.length >= 2 && !(known && known.ava) && !geniusSkip.has(keyOf(a)) && !!api && api.online();
+  return formMusic() && a.length >= 2 && !(known && known.ava) && !geniusSkip.has(keyOf(a)) && !!api && api.online() && Date.now() >= geniusPauseUntil;
 }
 function scheduleGenius() {
   clearTimeout(geniusTimer);
   if (!geniusWanted()) { geniusItems = []; renderGenius(); return; }
   if (keyOf(form.artist) === geniusKey) { renderGenius(); return; }
-  geniusTimer = setTimeout(findGenius, 700);
+  geniusTimer = setTimeout(findGenius, 1100); // ищем, когда имя дописано, а не на каждую букву
 }
 async function findGenius() {
   const k = keyOf(form.artist);
   if (!k || k === geniusKey) return;
   geniusKey = k;
+  if (geniusSeen.has(k)) { geniusItems = geniusSeen.get(k); renderGenius(); return; }
   try {
     const r = await window.casualApi.get('/genius/artist?q=' + encodeURIComponent(form.artist.trim()));
+    const list = ((r && r.artists) || []).filter(a => a && typeof a.image === 'string' && /^https:\/\//.test(a.image)).slice(0, 3);
+    geniusSeen.set(k, list);
     if (keyOf(form.artist) !== k) return;
-    geniusItems = ((r && r.artists) || []).filter(a => a && typeof a.image === 'string' && /^https:\/\//.test(a.image)).slice(0, 3);
-  } catch (_) { geniusItems = []; }
+    geniusItems = list;
+  } catch (_) {
+    geniusItems = [];
+    geniusPauseUntil = Date.now() + 60e3; // сервер отказал: минуту не спрашиваем
+  }
   renderGenius();
 }
 function renderGenius() {
@@ -3368,13 +3374,14 @@ function renderGenius() {
   const show = geniusItems.length > 0 && geniusWanted();
   box.hidden = !show;
   if (!show) { box.replaceChildren(); return; }
-  box.innerHTML = `<span>Фото с Genius:</span>${geniusItems.map((a, i) => `<button type="button" data-genius="${i}" title="Поставить как аватарку исполнителя"><img src="${esc(a.image)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">${esc(a.name)}</button>`).join('')}<button type="button" class="x" data-genius="skip" aria-label="Не нужно">Не нужно</button>`;
+  const src = [...new Set(geniusItems.map(a => a.source || 'Genius'))].join(' и ');
+  box.innerHTML = `<span>Фото с ${esc(src)}:</span>${geniusItems.map((a, i) => `<button type="button" data-genius="${i}" title="Поставить как аватарку исполнителя"><img src="${esc(a.image)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">${esc(a.name)}</button>`).join('')}<button type="button" class="x" data-genius="skip" aria-label="Не нужно">Не нужно</button>`;
 }
 async function pickGenius(i) {
   const a = geniusItems[i], name = (form.artist || '').trim();
   if (!a || !keyOf(name)) return;
   try {
-    // картинки Genius отдаются с разрешением CORS, поэтому сначала качаем напрямую, а через наш сервер — если не вышло
+    // картинки Genius и Deezer отдаются с разрешением CORS, поэтому сначала качаем напрямую, а через наш сервер — если не вышло
     let blob = null;
     try {
       const res = await fetch(a.image, { mode: 'cors', referrerPolicy: 'no-referrer' });
@@ -3392,7 +3399,7 @@ async function pickGenius(i) {
     artistSetAva(name, d);
     toast(`Аватарка исполнителя «${name}» поставлена`);
   } catch (_) {
-    toast('Фото с Genius не загрузилось, можно поставить своё');
+    toast('Фото исполнителя не загрузилось, можно поставить своё');
   }
 }
 

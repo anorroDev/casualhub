@@ -513,24 +513,28 @@ const routes = {
     return json({ user, ratings: arg === me.id ? s.ratings : s.ratings.map(cleanRating).filter(Boolean), deleted: s.deleted, cats: arg === me.id ? s.cats || null : undefined, profile: s.profile || null, sticker: s.sticker || null, updatedAt: shelf ? shelf.updated_at : null });
   },
 
-  // исполнители по имени: имя и фото, без заглушек Genius вместо фото
+  // исполнители по имени: имя и фото. Сначала Genius; если он отказал (например, 429 — слишком много запросов
+  // с общих адресов Cloudflare) или ничего не нашёл, ищем на Deezer, ему ключ не нужен
   async 'GET /genius/artist'({ env, request }) {
-    if (!env.GENIUS_TOKEN) return fail(503, 'Genius не подключён.');
     const q = (new URL(request.url).searchParams.get('q') || '').trim().slice(0, 80);
     if (q.length < 2) return json({ artists: [] });
-    const res = await geniusFetch(env, 'https://api.genius.com/search?q=' + encodeURIComponent(q), 86400);
-    if (res.status === 401) return fail(502, 'Genius не принял токен (401): в секрете GENIUS_TOKEN нужен Client Access Token.');
-    if (!res.ok) return fail(502, `Genius не ответил (${res.status}).`);
-    const d = await res.json();
-    const seen = new Set();
-    const artists = [];
-    for (const h of (d.response && d.response.hits) || []) {
-      const a = h && h.result && h.result.primary_artist;
-      if (!a || seen.has(a.id) || typeof a.image_url !== 'string' || /default_avatar|default_cover/.test(a.image_url)) continue;
-      seen.add(a.id);
-      artists.push({ name: String(a.name || '').slice(0, 80), image: a.image_url });
-      if (artists.length >= 4) break;
+    let artists = [], why = env.GENIUS_TOKEN ? '' : 'Genius не подключён.';
+    if (env.GENIUS_TOKEN && Date.now() >= geniusPause) {
+      try {
+        const res = await geniusFetch(env, 'https://api.genius.com/search?q=' + encodeURIComponent(q), 86400);
+        if (res.status === 429) geniusPause = Date.now() + 60e3; // минуту не дёргаем Genius
+        if (res.status === 401) why = 'Genius не принял токен (401): в секрете GENIUS_TOKEN нужен Client Access Token.';
+        else if (!res.ok) why = `Genius не ответил (${res.status}).`;
+        else artists = geniusArtists(await res.json());
+      } catch (e) { why = 'Genius не ответил.'; }
+    } else if (env.GENIUS_TOKEN) why = 'Genius просил подождать (429).';
+    if (!artists.length) {
+      try {
+        const res = await geniusFetch(env, 'https://api.deezer.com/search/artist?limit=8&q=' + encodeURIComponent(q), 86400);
+        if (res.ok) artists = deezerArtists(await res.json(), q);
+      } catch (e) {}
     }
+    if (!artists.length && why) return fail(502, why);
     return json({ artists });
   },
   // картинка с Genius в виде data URL: браузер не может скачать её напрямую из-за CORS
@@ -686,7 +690,31 @@ function readShelf(row) {
 }
 // ---------- Genius: фото исполнителей ----------
 // Токен лежит в секрете GENIUS_TOKEN и наружу не уходит. Поиск доступен только вошедшим, ответы кэшируются на сутки.
-const GENIUS_IMG = /^https:\/\/(images|assets|t2)\.genius\.com\/|^https:\/\/images\.rapgenius\.com\//;
+const GENIUS_IMG = /^https:\/\/(images|assets|t2)\.genius\.com\/|^https:\/\/images\.rapgenius\.com\/|^https:\/\/(cdn-images|e-cdns-images)\.dzcdn\.net\//;
+let geniusPause = 0; // после 429 Genius минуту не трогаем (в пределах одного экземпляра сервера)
+function geniusArtists(d) {
+  const seen = new Set();
+  const out = [];
+  for (const h of (d && d.response && d.response.hits) || []) {
+    const a = h && h.result && h.result.primary_artist;
+    if (!a || seen.has(a.id) || typeof a.image_url !== 'string' || /default_avatar|default_cover/.test(a.image_url)) continue;
+    seen.add(a.id);
+    out.push({ name: String(a.name || '').slice(0, 80), image: a.image_url, source: 'Genius' });
+    if (out.length >= 4) break;
+  }
+  return out;
+}
+// Deezer: сначала точное совпадение имени, потом самые популярные; без пустых заглушек вместо фото
+function deezerArtists(d, q) {
+  const k = (s) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+  const want = k(q);
+  return ((d && d.data) || [])
+    .filter((a) => a && typeof a.picture_big === 'string' && /^https:\/\//.test(a.picture_big) && !/\/artist\/\//.test(a.picture_big))
+    .map((a) => ({ name: String(a.name || '').slice(0, 80), image: a.picture_big, source: 'Deezer', score: (k(a.name) === want ? 1e12 : 0) + (+a.nb_fan || 0) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3)
+    .map(({ score, ...a }) => a);
+}
 async function geniusFetch(env, url, ttl) {
   const cache = caches.default;
   const key = new Request('https://genius-cache.casualhub/' + encodeURIComponent(url));
