@@ -37,7 +37,7 @@
   const css = document.createElement('style');
   css.textContent = `
 .friend-bar { margin-top: 8px; }
-.rx { margin-top: 14px; display: grid; gap: 8px; }
+.rx { margin-top: 14px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .rx-btns { display: flex; flex-wrap: wrap; gap: 6px; }
 .rx-btns button { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink-2); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; transition: transform .2s cubic-bezier(.34,1.56,.64,1), border-color .15s, background-color .15s; }
 .rx-btns button b { font-weight: 800; color: var(--ink); }
