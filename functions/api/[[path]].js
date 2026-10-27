@@ -365,7 +365,13 @@ const routes = {
       ).bind(me.id, now - ONLINE_MS).all();
       friends = results.map((x) => ({ id: x.id, at: x.last_seen }));
     }
-    return json({ online: Math.max(onlineCache.n, me ? 1 : 0), friends, window: ONLINE_MS });
+    // заявки в друзья, которые ждут ответа: красная цифра на кнопке «Друзья»
+    let incoming = 0;
+    if (me) {
+      const c = await env.DB.prepare("SELECT COUNT(*) AS n FROM friendships WHERE (a = ?1 OR b = ?1) AND status = 'pending' AND requested_by != ?1").bind(me.id).first();
+      incoming = c ? c.n : 0;
+    }
+    return json({ online: Math.max(onlineCache.n, me ? 1 : 0), friends, incoming, window: ONLINE_MS });
   },
 
   async 'GET /friends'({ env, me }) {

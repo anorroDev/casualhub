@@ -878,6 +878,7 @@ ${ICON.chev}
       if (act === 'remove') { await api('/friends/remove', 'POST', { userId: id }); F.removeArmed = ''; F.shelves.delete(id); F.msg = ''; }
       if (act === 'push') { await pushShelf(true); F.msg = 'Оценки отправлены.'; F.msgErr = false; }
       await refreshFriends();
+      if ((act === 'accept' || act === 'remove') && window.CasualOnline) window.CasualOnline.ping(); // цифры на кнопке «Друзья» сразу
     } catch (err) {
       say(err.message, true);
     }

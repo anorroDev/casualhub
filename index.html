@@ -224,6 +224,7 @@ h1, h2, p { margin: 0; }
 .mark svg g rect:nth-child(3) { animation-delay: .3s; } .mark svg g rect:nth-child(4) { animation-delay: .36s; }
 .mark svg g rect:nth-child(5) { animation-delay: .3s; } .mark svg g rect:nth-child(6) { animation-delay: .36s; }
 @keyframes px-in { from { transform: scale(0); } }
+.online-chip { cursor: default; }
 .user-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; flex: 1 1 auto; } /* прижата вправо и под логотипом: кнопку «Что нового» не двигает то, что дорисовывается левее */
 #account { display: contents; }
 .pill {
@@ -482,8 +483,11 @@ h1, h2, p { margin: 0; }
 @media (max-width: 560px) {
   .page { padding-block: 14px 26px; }
   .pill { height: 36px; padding: 0 12px; }
+  .pill.gh { display: none; } /* GitHub на телефоне не нужен, шапка помещается в строку */
   .pill.gh span, #themeBtn span, .pill.wn span { display: none; }
-  .user-bar { flex-wrap: nowrap; min-width: 0; }
+  .user-bar { flex-wrap: wrap; row-gap: 6px; min-width: 0; }
+  .oc-t, .fb-t { display: none; }
+  .pill.fr-btn { padding: 0 10px; gap: 5px; }
   #account .pill { min-width: 0; }
   .acc-name { min-width: 0; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pill.gh, #themeBtn, .pill.wn { width: 36px; padding: 0; }
@@ -507,6 +511,8 @@ h1, h2, p { margin: 0; }
   .app:hover { --lift: 0px; }
   .app:hover::before, .app:hover::after { opacity: 0; }
 }
+/* на небольших телефонах ник короче: «Что нового» остаётся в той же строке шапки */
+@media (max-width: 420px) { .acc-name { max-width: 84px; } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
   ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
@@ -524,6 +530,8 @@ h1, h2, p { margin: 0; }
       casualhub
     </a>
     <div class="user-bar">
+      <span class="pill online-chip" data-online-count title="Сколько людей сейчас на сайте: с аккаунтом и гости"><em aria-hidden="true"></em><b>—</b><span class="oc-t">&nbsp;на сайте</span></span>
+      <a class="pill fr-btn" href="/mnenie/#friends" data-friends-btn title="Друзья"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="5.5" r="2.5"/><path d="M1.5 14c.6-2.6 2.3-4 4.5-4s3.9 1.4 4.5 4"/><path d="M10.5 3.2a2.5 2.5 0 0 1 0 4.6M12.5 10.3c1 .6 1.7 1.9 2 3.7"/></svg><span class="fb-t">Друзья</span><i class="fb-n fb-on" hidden></i><i class="fb-n fb-req" hidden></i></a>
       <span id="account"></span>
       <details class="theme-pick" id="themePick">
         <summary class="pill" id="themeBtn" title="Тема оформления">Тема</summary>
@@ -844,11 +852,12 @@ h1, h2, p { margin: 0; }
   function renderOnline() {
     const O = window.CasualOnline;
     if (!O || !O.ready) return;
+    // общее число людей на сайте — в шапке, здесь только друзья, которые сейчас в сети
     const on = O.friendsOnline().filter((id) => hubFriends.has(id));
-    $('#onlineText').innerHTML = `Сейчас на сайте: <b>${O.count}</b>` + (on.length
-      ? ` · из друзей: ${on.slice(0, 5).map((id) => `<a href="/profile/?id=${encodeURIComponent(id)}">${esc(hubFriends.get(id))}</a>`).join(', ')}${on.length > 5 ? ` и ещё ${on.length - 5}` : ''}`
-      : '');
-    $('#onlineNow').hidden = false;
+    $('#onlineText').innerHTML = on.length
+      ? `Из друзей в сети: ${on.slice(0, 5).map((id) => `<a href="/profile/?id=${encodeURIComponent(id)}">${esc(hubFriends.get(id))}</a>`).join(', ')}${on.length > 5 ? ` и ещё ${on.length - 5}` : ''}`
+      : '';
+    $('#onlineNow').hidden = !on.length;
   }
   document.addEventListener('casual-online', renderOnline);
 
@@ -994,6 +1003,16 @@ h1, h2, p { margin: 0; }
   }
   applyTheme(theme, false);
   const pick = $('#themePick');
+  // меню тем не уходит за край экрана, где бы ни оказалась кнопка
+  pick.addEventListener('toggle', () => {
+    const menu = document.getElementById('themeMenu');
+    if (!pick.open || !menu) return;
+    menu.style.translate = '';
+    const box = menu.offsetParent ? menu.offsetParent.getBoundingClientRect() : { left: 0 };
+    const left = box.left + menu.offsetLeft, right = left + menu.offsetWidth;
+    const shift = left < 8 ? 8 - left : right > innerWidth - 8 ? innerWidth - 8 - right : 0;
+    if (shift) menu.style.translate = `${Math.round(shift)}px 0`;
+  });
   $('#themeMenu').addEventListener('click', (e) => {
     const b = e.target.closest('[data-theme-id]');
     if (!b) return;
