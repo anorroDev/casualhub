@@ -43,6 +43,12 @@
 .rx-btns button b { font-weight: 800; color: var(--ink); }
 .rx-btns button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
 .rx-btns button:active { transform: scale(.94); }
+/* оценки друга въезжают по очереди, нажатая реакция подпрыгивает — без растворения */
+#friendBoard .entry.fr-in { animation: fr-in .55s cubic-bezier(.34, 1.56, .64, 1) backwards; animation-delay: calc(var(--k, 0) * 35ms); }
+@keyframes fr-in { from { transform: translateY(16px) scale(.985); } }
+.rx-btns button[aria-pressed="true"] { animation: rx-pop .45s cubic-bezier(.34, 1.56, .64, 1); }
+@keyframes rx-pop { 40% { transform: scale(1.15) rotate(-3deg); } }
+@media (prefers-reduced-motion: reduce) { #friendBoard .entry.fr-in, .rx-btns button[aria-pressed="true"] { animation: none; } }
 .rx-form { display: flex; gap: 6px; }
 .rx-form input { flex: 1; min-width: 0; height: 38px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); font: inherit; font-size: 14px; }
 .rx-form button { flex: none; height: 38px; padding: 0 14px; border: 0; border-radius: 10px; background: var(--ink); color: var(--panel); font: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer; }
@@ -172,7 +178,7 @@
     F.friends = []; F.incoming = []; F.outgoing = [];
     F.shelves.clear();
   }
-  function setView(v) { F.view = v; lsSet(VIEW_KEY, v); }
+  function setView(v) { if (v !== F.view) F.animated = null; F.view = v; lsSet(VIEW_KEY, v); }
 
   // подтянуть онлайн-сессию текущего профиля сайта
   async function syncSession() {
@@ -682,7 +688,7 @@
         ${pros.length ? `<div class="e-pc-box pro"><span class="label pc-label-pro">➕ Плюсы</span><ul>${pros.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
         ${cons.length ? `<div class="e-pc-box con"><span class="label pc-label-con">➖ Минусы</span><ul>${cons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
       </div>` : '';
-    return `<li class="entry" data-rid="${esc(r.id || '')}"><details><summary><span class="sum">
+    return `<li class="entry fr-in" style="--k:${Math.min(rank, 12)}" data-rid="${esc(r.id || '')}"><details><summary><span class="sum">
 <span class="rank">${rank}</span>
 <span class="e-main">${friendPhoto(r, 'thumb')}<span class="e-text"><span class="e-name">${r.fav ? '<span class="fav-star-inline">★</span>' : ''}${esc(r.name)}</span><span class="e-sub"><span>${esc(meta)}</span><span class="rx-sum-slot">${rxSummary(reactsOf(F.view, r.id))}</span>${r.catLabel ? `<span class="tag">${esc(r.catLabel)}</span>` : ''}${r.status ? `<span class="tag status-tag">${esc(r.status)}</span>` : ''}${r.meta ? `<span class="tag meta-tag">${esc(r.meta)}</span>` : ''}</span></span></span>
 <span class="spark" aria-hidden="true">${spark}</span>
@@ -729,6 +735,9 @@ ${ICON.chev}
     el.boardStat.textContent = `${shelf.user.username}${shelf.user.handle ? ' @' + shelf.user.handle : ''}: ${shelf.ratings.length} ${plural(shelf.ratings.length, 'оценка', 'оценки', 'оценок')}` + (avg != null ? ` · средний балл ${fmt(avg)}` : '');
     fboard.classList.toggle('grid-mode', state.bmode === 'grid');
     fboard.innerHTML = list.map((r, i) => friendEntryHTML(r, i + 1)).join('');
+    // въезжают только при первом открытии доски этого друга, а не при каждом символе в поиске
+    if (F.animated === F.view) fboard.querySelectorAll('.fr-in').forEach((li) => li.classList.remove('fr-in'));
+    F.animated = F.view;
     hydratePhotos(fboard);
     fboard.hidden = !list.length;
     fnote.hidden = !!list.length;

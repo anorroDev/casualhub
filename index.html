@@ -423,6 +423,10 @@ h1, h2, p { margin: 0; }
 .feed-side { display: inline-flex; gap: 10px; align-items: baseline; }
 .feed-all:hover { color: var(--accent); }
 .feed-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+/* строки ленты въезжают по очереди */
+.feed-list > li { animation: rise .55s var(--spring) backwards; }
+.feed-list > li:nth-child(2) { animation-delay: .04s; } .feed-list > li:nth-child(3) { animation-delay: .08s; } .feed-list > li:nth-child(4) { animation-delay: .12s; }
+.feed-list > li:nth-child(5) { animation-delay: .16s; } .feed-list > li:nth-child(n+6) { animation-delay: .2s; }
 @media (min-width: 760px) { .feed-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .fd {
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 12px;
