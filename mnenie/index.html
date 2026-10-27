@@ -5110,7 +5110,7 @@ function renderPhoto() {
       + '</div>';
   } else {
     el.photoBox.innerHTML = `<label class="photo-drop" for="photoInput">${ICON.imageLg}<span><strong>Добавить фото или обложку</strong><small class="hint-desk">Выбери файл, перетащи сюда, вставь из буфера (Ctrl+V) или укажи ссылку ниже. Потом можно выбрать пропорции: 1:1, 4:3, 16:9 и другие</small><small class="hint-touch">Из галереи, с камеры или по ссылке, потом выберешь пропорции</small></span></label>
-    <div class="photo-url-row"><input type="url" id="photoUrlInput" placeholder="Или вставь прямую ссылку на картинку (https://…)"><button type="button" class="btn small ghost" data-act="photo-url-apply">Ок</button></div>`;
+    <div class="photo-url-row"><input type="url" id="photoUrlInput" aria-label="Ссылка на картинку" inputmode="url" autocapitalize="none" spellcheck="false" placeholder="Или вставь прямую ссылку на картинку (https://…)"><button type="button" class="btn small ghost" data-act="photo-url-apply">Ок</button></div>`;
   }
 }
 // перетаскивание кадра и масштаб: двигаем только картинку внутри рамки, обрезаем, когда отпустили
