@@ -1587,13 +1587,29 @@ function closeArtistEdit() {
   el.artistEditBox.replaceChildren();
 }
 
-/* ---------- Обложки из Apple Music (музыка) ---------- */
-// поиск iTunes без ключа; выбранная обложка скачивается и становится обычным фото оценки (с кадрированием и синхронизацией)
-let coverTimer = null, coverCtl = null, coverKey = '', coverItems = [];
+/* ---------- Обложки по названию ---------- */
+// музыка — iTunes прямо из браузера; игры — Steam, фильмы и сериалы — IMDb, книги — Open Library, аниме — AniList
+// через наш сервер (нужен вход). Выбранная обложка скачивается и становится обычным фото оценки
+let coverTimer = null, coverCtl = null, coverKey = '', coverItems = [], coverFrom = '';
+const COVER_SRC = { music: 'Apple Music', game: 'Steam', movie: 'IMDb', book: 'Open Library', anime: 'AniList' };
+function coverKind() {
+  const c = currentCat();
+  if (!c) return '';
+  if (isMusicCat(c)) return 'music';
+  const k = `${keyOf(c.name)} ${c.id}`;
+  if (/игр|game/.test(k)) return 'game';
+  if (/фильм|сериал|кино|film|movie|series/.test(k)) return 'movie';
+  if (/книг|литератур|book/.test(k)) return 'book';
+  if (/аниме|манг|anime|manga/.test(k)) return 'anime';
+  return '';
+}
 function coverQuery() {
-  if (!formMusic() || form.photo || !canPhoto() || photoBusy) return '';
+  const kind = coverKind();
+  if (!kind || form.photo || !canPhoto() || photoBusy) return '';
+  if (kind !== 'music' && !(window.casualApi && window.casualApi.online())) return '';
   const t = form.name.trim();
-  return t.length < 2 ? '' : `${(form.artist || '').trim()} ${t}`.trim();
+  if (t.length < 2) return '';
+  return kind === 'music' ? `${(form.artist || '').trim()} ${t}`.trim() : t;
 }
 function scheduleCovers() {
   clearTimeout(coverTimer);
@@ -1602,11 +1618,28 @@ function scheduleCovers() {
 }
 async function findCovers() {
   const q = coverQuery();
-  const key = q + '|' + (form.status || '');
+  const kind = coverKind();
+  const key = kind + '|' + q + '|' + (form.status || '');
   if (!q || key === coverKey) return;
   coverKey = key;
   if (coverCtl) coverCtl.abort();
   const ctl = coverCtl = new AbortController();
+  if (kind !== 'music') {
+    try {
+      const r = await window.casualApi.get(`/covers?kind=${kind}&q=${encodeURIComponent(q)}`);
+      if (ctl !== coverCtl) return;
+      coverItems = ((r && r.items) || []).filter(c => c && /^https:\/\//.test(c.art)).map(c => ({
+        title: String(c.title || ''), artist: '', kind: String(c.sub || ''), year: String(c.year || ''), genre: '',
+        art: c.art, alt: /^https:\/\//.test(c.alt || '') ? c.alt : '', thumb: /^https:\/\//.test(c.thumb || '') ? c.thumb : c.art, tall: !!c.tall, via: 'server'
+      }));
+    } catch (_) {
+      if (ctl !== coverCtl) return;
+      coverItems = [];
+    }
+    coverFrom = kind;
+    renderCovers();
+    return;
+  }
   const ent = form.status === 'Альбом' ? 'album' : form.status === 'Сингл' ? 'song' : 'album,song';
   try {
     const res = await fetch(`https://itunes.apple.com/search?media=music&entity=${ent}&limit=15&country=US&term=${encodeURIComponent(q)}`, { signal: ctl.signal });
@@ -1619,11 +1652,13 @@ async function findCovers() {
       year: String(r.releaseDate || '').slice(0, 4),
       genre: String(r.primaryGenreName || ''),
       art: r.artworkUrl100.replace(/\/\d+x\d+bb\./, '/600x600bb.')
-    })).filter(c => /^https:\/\/[\w.-]+\.mzstatic\.com\//.test(c.art) && !seen.has(c.art) && seen.add(c.art)).slice(0, 8);
+    })).filter(c => /^https:\/\/[\w.-]+\.mzstatic\.com\//.test(c.art) && !seen.has(c.art) && seen.add(c.art)).slice(0, 8)
+      .map(c => Object.assign(c, { thumb: c.art.replace('/600x600bb.', '/200x200bb.') }));
   } catch (e) {
     if (e && e.name === 'AbortError') return;
     coverItems = [];
   }
+  coverFrom = 'music';
   if (ctl === coverCtl) renderCovers();
 }
 function renderCovers() {
@@ -1632,15 +1667,34 @@ function renderCovers() {
   const show = coverItems.length > 0 && !!coverQuery();
   box.hidden = !show;
   if (!show) { box.replaceChildren(); return; }
-  box.innerHTML = `<span class="label">Обложки из Apple Music</span><div class="cover-list">${coverItems.map((c, i) => `<button type="button" class="cover-opt" data-cover="${i}" title="${esc(c.artist)} — ${esc(c.title)}"><img src="${esc(c.art.replace('/600x600bb.', '/200x200bb.'))}" alt="" loading="lazy" decoding="async"><span>${esc(c.title)}</span><small>${esc([c.kind, c.year].filter(Boolean).join(' · '))}</small></button>`).join('')}</div>`;
+  box.innerHTML = `<span class="label">Обложки из ${esc(COVER_SRC[coverFrom] || 'интернета')}</span><div class="cover-list">${coverItems.map((c, i) => `<button type="button" class="cover-opt${c.tall ? ' tall' : ''}" data-cover="${i}" title="${esc([c.artist, c.title].filter(Boolean).join(' — '))}"><img src="${esc(c.thumb || c.art)}"${c.alt ? ` data-alt="${esc(c.alt)}"` : ''} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"><span>${esc(c.title)}</span><small>${esc([c.kind, c.year].filter(Boolean).join(' · '))}</small></button>`).join('')}</div>`;
 }
+// у старых игр Steam нет вертикальной обложки: показываем шапку магазина
+document.addEventListener('error', e => {
+  const img = e.target;
+  if (img instanceof HTMLImageElement && img.dataset.alt && img.closest('#coverSugg') && img.src !== img.dataset.alt) {
+    const c = coverItems[+img.closest('[data-cover]').dataset.cover];
+    if (c) { c.art = c.alt; c.tall = false; img.closest('.cover-opt').classList.remove('tall'); }
+    img.src = img.dataset.alt;
+  }
+}, true);
 async function pickCover(i) {
   const c = coverItems[i];
   if (!c || photoBusy) return;
   try {
-    const res = await fetch(c.art);
-    if (!res.ok) throw new Error('http');
-    const blob = await res.blob();
+    let blob = null;
+    if (c.via === 'server') {
+      // браузеру чужие сайты скачивать нельзя (CSP), поэтому картинку берёт наш сервер
+      for (const u of [c.art, c.alt].filter(Boolean)) {
+        try { const r = await window.casualApi.get('/fetch-img?u=' + encodeURIComponent(u)); blob = r && r.data ? dataUrlToBlob(r.data) : null; } catch (_) { blob = null; }
+        if (blob) break;
+      }
+      if (!blob) throw new Error('img');
+    } else {
+      const res = await fetch(c.art);
+      if (!res.ok) throw new Error('http');
+      blob = await res.blob();
+    }
     await setPhotoFromFile(new File([blob], 'cover.jpg', { type: blob.type || 'image/jpeg' }), false);
     if (!form.photo) throw new Error('photo');
     if (!(form.meta || '').trim()) { form.meta = [c.year, c.genre].filter(Boolean).join(', '); if (el.meta) el.meta.value = form.meta; }

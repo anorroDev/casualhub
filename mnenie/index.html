@@ -202,6 +202,7 @@ a.theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
 .cover-opt:hover { border-color: var(--accent); }
 .cover-opt:active { transform: scale(.95); }
 .cover-opt img { width: 100%; aspect-ratio: 1; border-radius: 8px; object-fit: cover; background: var(--cell); }
+.cover-opt.tall img { aspect-ratio: 2 / 3; }
 .cover-opt span { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 12px; font-weight: 600; line-height: 1.25; }
 .cover-opt small { font-size: 11px; color: var(--ink-3); }
 .artist-sugg { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; font-size: 12.5px; color: var(--ink-3); }
@@ -504,7 +505,7 @@ html.booting .layout, html.booting .mnav, html.booting .offline-bar { visibility
 <link rel="icon" type="image/svg+xml" href="/mnenie/favicon.svg">
 <script src="/mnenie/head.js"></script>
 <script src="/whatsnew.js"></script>
-<script src="/online.js" defer></script>
+<script src="/online.js" defer></script><script src="/friends-panel.js" defer></script>
 <script src="/avatar-sync.js"></script>
 <title>Мнение Казуала</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">

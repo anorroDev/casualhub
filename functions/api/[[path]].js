@@ -409,7 +409,7 @@ const routes = {
   async 'PUT /shelf'({ env, request, me }) {
     // обычный сайт шлёт оценки раз в несколько секунд; больше — это флуд записями
     if (burst('shelf:' + me.id, 40, 60e3)) return tooMany(1);
-    const { ratings, deleted, cats, profile, sticker } = await readBody(request);
+    const { ratings, deleted, cats, profile, sticker, layout } = await readBody(request);
     if (!Array.isArray(ratings)) return fail(400, 'Нужен список оценок.');
     const row = await env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(me.id).first();
     const old = readShelf(row);
@@ -456,7 +456,11 @@ const routes = {
     if (sticker && Number.isFinite(+sticker.at) && (sticker.src === '' || STICKER_RE.test(String(sticker.src))) && (!old.sticker || +sticker.at > +old.sticker.at)) {
       stickerOut = { src: String(sticker.src), at: +sticker.at };
     }
+    // оформление профиля (витрины и какие блоки видны): остаётся более свежий выбор
+    let layoutOut = old.layout;
+    if (layout && typeof layout === 'object' && Number.isFinite(+layout.at) && (!old.layout || +layout.at > +old.layout.at)) layoutOut = cleanLayout(layout);
     const shelfData = { ratings: merged, deleted: tomb };
+    if (layoutOut) shelfData.layout = layoutOut;
     if (stickerOut) shelfData.sticker = stickerOut;
     if (catsOut) shelfData.cats = catsOut;
     if (profileOut) shelfData.profile = profileOut;
@@ -489,7 +493,7 @@ const routes = {
     const s = readShelf(shelf);
     // свои категории видит только хозяин
     // друзьям — только очищенные оценки (вдруг в базе лежит что-то записанное до проверки типов)
-    return json({ user, ratings: arg === me.id ? s.ratings : s.ratings.map(cleanRating).filter(Boolean), deleted: s.deleted, cats: arg === me.id ? s.cats || null : undefined, profile: s.profile || null, sticker: s.sticker || null, updatedAt: shelf ? shelf.updated_at : null });
+    return json({ user, ratings: arg === me.id ? s.ratings : s.ratings.map(cleanRating).filter(Boolean), deleted: s.deleted, cats: arg === me.id ? s.cats || null : undefined, profile: s.profile || null, sticker: s.sticker || null, layout: s.layout || null, updatedAt: shelf ? shelf.updated_at : null });
   },
 
   // исполнители по имени: имя и фото. Сначала Genius; если он отказал (например, 429 — слишком много запросов
@@ -536,6 +540,21 @@ const routes = {
   },
   // картинка по ссылке для фото оценки: скачиваем сразу, чтобы фото не пропало, когда чужая ссылка протухнет
   // или сайт запретит показывать картинку у нас. Браузер сам скачать не может: CORS чужих сайтов и наш CSP
+  // обложки по названию: игры — Steam, фильмы и сериалы — IMDb, книги — Open Library, аниме и манга — AniList.
+  // Ключи не нужны, ответы кэшируются на сутки. Выбранную обложку Мнение скачивает через /fetch-img
+  async 'GET /covers'({ request, me }) {
+    if (burst('covers:' + me.id, 40, 60e3)) return tooMany(1);
+    const sp = new URL(request.url).searchParams;
+    const kind = sp.get('kind') || '';
+    const q = (sp.get('q') || '').trim().slice(0, 100);
+    if (q.length < 2 || !Object.prototype.hasOwnProperty.call(COVER_FIND, kind)) return json({ items: [] });
+    try {
+      const items = (await COVER_FIND[kind](q)).filter((c) => c.title && /^https:\/\//.test(c.art)).slice(0, 8);
+      return json({ items });
+    } catch (e) {
+      return fail(502, 'Поиск обложек сейчас не отвечает');
+    }
+  },
   async 'GET /fetch-img'({ request, me }) {
     if (burst('fetchimg:' + me.id, 30, 60e3)) return tooMany(1);
     let u;
@@ -721,6 +740,23 @@ const NAME_HINT = 'Ник: от 2 до 24 символов, буквы, цифр
 const HANDLE_HINT = 'Юзернейм: от 3 до 20 символов, латинские буквы, цифры, «_» и «.» (точка не в начале и не в конце).';
 const MAX_PHOTOS = 1200; // фото, превью, аватар и баннер вместе
 const MAX_PHOTO = 1900000; // символов в data URL, предел строки в D1 около 2 МБ
+// оформление профиля: до 6 витрин (топ-3/5/10 из темы, лучшие по баллу или выбранные вручную) и видимость блоков
+const LAYOUT_SECTIONS = ['stats', 'titles', 'podium', 'all', 'badges', 'friends', 'hist', 'cats'];
+function cleanLayout(l) {
+  const one = (x) => String(x == null ? '' : x).replace(SPOOF_RE, '');
+  const showcases = (Array.isArray(l.showcases) ? l.showcases : []).filter((s) => s && typeof s === 'object').slice(0, 6).map((s) => ({
+    id: /^[\w-]{1,40}$/.test(String(s.id)) ? String(s.id) : 'sc' + Math.random().toString(36).slice(2, 8),
+    title: one(s.title).slice(0, 60),
+    cat: one(s.cat).slice(0, 60),
+    n: [3, 5, 10].includes(+s.n) ? +s.n : 5,
+    mode: s.mode === 'pick' ? 'pick' : 'auto',
+    ids: (Array.isArray(s.ids) ? s.ids : []).filter((id) => typeof id === 'string' && RID_RE.test(id)).slice(0, 10),
+    style: s.style === 'list' ? 'list' : 'posters',
+  }));
+  const sections = {};
+  if (l.sections && typeof l.sections === 'object') for (const k of LAYOUT_SECTIONS) if (typeof l.sections[k] === 'boolean') sections[k] = l.sections[k];
+  return { showcases, sections, at: +l.at };
+}
 const STICKER_RE = /^hub\/(?!.*\.\.)[\w\-\/.]{1,100}\.(png|gif|webp|webm|jpe?g)$/; // путь картинки из каталога колеса
 // 🔥 огонь, 💀 жесть, 🙅 не согласен, 😂 ору, 😍 обожаю, 👍 согласен, 👎 мимо, 🤔 спорно, 😭 до слёз, 🤡 клоунада, 🗿 база, 🐐 легенда
 const REACTIONS = ['fire', 'skull', 'nope', 'lol', 'love', 'like', 'dislike', 'think', 'cry', 'clown', 'moai', 'goat'];
@@ -765,6 +801,53 @@ async function geniusFetch(env, url, ttl) {
   await cache.put(key, copy.clone());
   return copy;
 }
+// ---------- поиск обложек ----------
+async function cachedJson(url, init, ttl) {
+  const cache = caches.default;
+  const key = new Request('https://covers-cache.casualhub/' + encodeURIComponent(url + '|' + ((init && init.body) || '')));
+  const hitRes = await cache.match(key);
+  if (hitRes) return hitRes.json();
+  const res = await fetch(url, { ...(init || {}), headers: { 'user-agent': 'CasualHub/1.0 (+https://casualhub.pages.dev)', accept: 'application/json', ...((init && init.headers) || {}) } });
+  if (!res.ok) throw new Error('covers ' + res.status);
+  const data = await res.json();
+  await cache.put(key, new Response(JSON.stringify(data), { headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=' + ttl } }));
+  return data;
+}
+const STEAM_ART = (id, file) => `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${id}/${file}`;
+const IMDB_KIND = { movie: 'Фильм', tvMovie: 'Фильм', video: 'Фильм', tvSeries: 'Сериал', tvMiniSeries: 'Мини-сериал', short: 'Короткий метр', tvSpecial: 'Спецвыпуск' };
+const ANI_KIND = { TV: 'Аниме', TV_SHORT: 'Аниме', MOVIE: 'Аниме-фильм', OVA: 'OVA', ONA: 'ONA', SPECIAL: 'Спецвыпуск', MANGA: 'Манга', ONE_SHOT: 'Манга', NOVEL: 'Ранобэ' };
+const COVER_FIND = {
+  // Steam: вертикальная обложка 600×900, у старых игр её может не быть — тогда шапка магазина
+  async game(q) {
+    const d = await cachedJson('https://store.steampowered.com/api/storesearch/?l=english&cc=US&term=' + encodeURIComponent(q), null, 86400);
+    return (d.items || []).filter((i) => i && Number.isInteger(i.id) && !/\b(soundtrack|ost|artbook|dlc)\b/i.test(i.name || ''))
+      .map((i) => ({ title: String(i.name || '').slice(0, 140), sub: 'Игра', year: '', art: STEAM_ART(i.id, 'library_600x900.jpg'), alt: STEAM_ART(i.id, 'header.jpg'), tall: true }));
+  },
+  async movie(q) {
+    const d = await cachedJson(`https://v3.sg.media-imdb.com/suggestion/x/${encodeURIComponent(q.toLowerCase())}.json`, null, 86400);
+    return (d.d || []).filter((i) => i && i.i && typeof i.i.imageUrl === 'string' && IMDB_KIND[i.qid]).map((i) => {
+      const art = i.i.imageUrl.replace(/\._V1_[^/]*\.jpg$/, '._V1_QL80_UX600_.jpg');
+      return { title: String(i.l || '').slice(0, 140), sub: IMDB_KIND[i.qid], year: i.y ? String(i.y) : '', art, thumb: art.replace('UX600', 'UX240'), tall: true };
+    });
+  },
+  async book(q) {
+    const d = await cachedJson('https://openlibrary.org/search.json?limit=12&fields=title,author_name,first_publish_year,cover_i&q=' + encodeURIComponent(q), null, 86400);
+    return (d.docs || []).filter((b) => b && Number.isInteger(b.cover_i)).map((b) => ({
+      title: String(b.title || '').slice(0, 140), sub: (b.author_name || []).slice(0, 2).join(', ').slice(0, 80), year: b.first_publish_year ? String(b.first_publish_year) : '',
+      art: `https://covers.openlibrary.org/b/id/${b.cover_i}-L.jpg`, thumb: `https://covers.openlibrary.org/b/id/${b.cover_i}-M.jpg`, tall: true,
+    }));
+  },
+  async anime(q) {
+    const body = JSON.stringify({ query: 'query($s:String){Page(perPage:10){media(search:$s,sort:SEARCH_MATCH,isAdult:false){type format title{romaji english}startDate{year}coverImage{extraLarge large}}}}', variables: { s: q } });
+    const d = await cachedJson('https://graphql.anilist.co', { method: 'POST', body, headers: { 'content-type': 'application/json' } }, 86400);
+    const list = (d && d.data && d.data.Page && d.data.Page.media) || [];
+    // сначала аниме, потом манга: категория обычно про аниме
+    return list.filter((m) => m && m.coverImage && (m.coverImage.extraLarge || m.coverImage.large)).sort((x, y) => (x.type === 'MANGA') - (y.type === 'MANGA')).map((m) => ({
+      title: String((m.title && (m.title.english || m.title.romaji)) || '').slice(0, 140), sub: ANI_KIND[m.format] || (m.type === 'MANGA' ? 'Манга' : 'Аниме'),
+      year: m.startDate && m.startDate.year ? String(m.startDate.year) : '', art: m.coverImage.extraLarge || m.coverImage.large, thumb: m.coverImage.large || m.coverImage.extraLarge, tall: true,
+    }));
+  },
+};
 // тип картинки по первым байтам (заголовкам чужих сайтов верить нельзя)
 function imageType(buf) {
   const h = new Uint8Array(buf.slice(0, 16));

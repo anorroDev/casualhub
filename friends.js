@@ -838,33 +838,35 @@ ${ICON.chev}
           <button type="submit" class="btn small primary">Подключить</button>
         </form></div>`;
     } else {
-      const row = (u, acts, sub) => `<div class="fr-row"><span>${whoHTML(u)}${sub ? `<small>${sub}</small>` : ''}</span><span class="fr-acts">${acts}</span></div>`;
+      // аватарка с рамкой из общего окна друзей (friends-panel.js), без него — как раньше, только ник
+      const UI = window.CasualFriendsUI;
+      const row = (u, acts, sub) => `<div class="fr-row">${UI ? UI.whoHTML(u, sub) : `<span>${whoHTML(u)}${sub ? `<small>${sub}</small>` : ''}</span>`}<span class="fr-acts">${acts}</span></div>`;
       const btn = (act, id, label, cls) => `<button type="button" class="btn small ${cls || 'ghost'}" data-fr="${act}" data-id="${esc(id)}">${label}</button>`;
       const when = (t) => (t ? 'оценки обновлены ' + new Date(t).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'оценок пока нет');
       const seenOf = (u) => `<span data-seen="${esc(u.id)}" data-last="${+u.lastSeen || ''}" data-post=" · "></span>`;
       body = `
         <div class="fr-sec">
-          <span class="label">Добавить друга</span>
-          <form class="fr-form" data-fr-form="request">
-            <input name="handle" placeholder="@юзернейм друга" maxlength="21" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+          <button type="button" class="btn small ${F.addOpen ? 'ghost' : 'primary'} fr-add" data-fr="add" aria-expanded="${!!F.addOpen}">${F.addOpen ? 'Скрыть' : '＋ Добавить друга'}</button>
+          ${F.addOpen ? `<form class="fr-form" data-fr-form="request">
+            <input name="handle" placeholder="@юзернейм друга" maxlength="21" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-label="Юзернейм друга">
             <button type="submit" class="btn small primary">Отправить заявку</button>
-          </form>
+          </form>` : ''}
         </div>
         ${F.incoming.length ? `<div class="fr-sec"><span class="label">Заявки тебе</span><div class="fr-list">${F.incoming.map((u) => row(u, btn('accept', u.id, 'Принять', 'primary') + btn('remove', u.id, 'Отклонить'))).join('')}</div></div>` : ''}
         <div class="fr-sec"><span class="label">Друзья</span>
           ${F.friends.length ? `<div class="fr-list">${F.friends.map((u) => row(u, `<a class="btn small ghost" href="/profile/?id=${encodeURIComponent(u.id)}" style="text-decoration:none">Профиль</a>` + btn('show', u.id, 'Оценки') + (F.removeArmed === u.id ? btn('remove', u.id, 'Точно убрать?', 'danger-solid') : btn('arm', u.id, 'Убрать', 'ghost danger')), seenOf(u) + when(u.updatedAt))).join('')}</div>`
-            : '<p class="fr-muted">Пока никого. Отправь заявку по @юзернейму, друг увидит её у себя в этом окне.</p>'}
+            : '<p class="fr-muted">Пока никого. Нажми «Добавить друга» и введи его @юзернейм, друг увидит заявку у себя.</p>'}
         </div>
         ${F.outgoing.length ? `<div class="fr-sec"><span class="label">Ты отправил</span><div class="fr-list">${F.outgoing.map((u) => row(u, btn('remove', u.id, 'Отменить'), 'ждёт ответа')).join('')}</div></div>` : ''}
         <div class="fr-sec">
           <p class="fr-muted">${F.pushedAt ? `Друзья видят ${F.pushedCount} ${plural(F.pushedCount, 'твою оценку', 'твои оценки', 'твоих оценок')}, отправлено ${new Date(F.pushedAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}.` : 'Твои оценки отправляются друзьям сами после каждого сохранения.'}</p>
           <div class="sheet-actions"><button type="button" class="btn small ghost" data-fr="push">Отправить оценки сейчас</button></div>
         </div>
-        <div class="fr-sec"><label class="fr-toggle"><input type="checkbox" data-fr-online${F.me.hideOnline ? '' : ' checked'}> Показывать друзьям, что я в сети</label>
-          <p class="fr-muted">Если выключить, друзья не увидят, что ты в сети и когда был(а) последний раз. Общий счётчик на главной тебя всё равно посчитает, но без имени.</p></div>`;
+        <div class="fr-sec"><label class="fr-toggle"><input type="checkbox" data-fr-online${F.me.hideOnline ? '' : ' checked'}> Показывать друзьям, что я в сети</label></div>`;
     }
     card.innerHTML = head + msg + body;
     if (window.CasualOnline) window.CasualOnline.paint(card);
+    if (window.CasualFriendsUI) window.CasualFriendsUI.hydrate(card);
   }
 
   function openSheet() {
@@ -895,6 +897,7 @@ ${ICON.chev}
         const r = await api('/friends/request', 'POST', { handle: fd.get('handle') });
         F.msg = r.status === 'accepted' ? `${r.user.username} (@${r.user.handle}) теперь в друзьях.` : `Заявка отправлена: ${r.user.username} (@${r.user.handle}).`;
         F.msgErr = false;
+        F.addOpen = false;
         await refreshFriends();
       }
     } catch (err) {
@@ -927,6 +930,13 @@ ${ICON.chev}
     }
     if (act === 'auth-login' || act === 'auth-reg') { closeSheet(); return openAuthModal(act === 'auth-reg' ? 'reg' : 'login'); }
     if (act === 'arm') { F.removeArmed = id; return renderSheet(); }
+    if (act === 'add') {
+      F.addOpen = !F.addOpen;
+      renderSheet();
+      const inp = card.querySelector('input[name="handle"]');
+      if (inp) inp.focus();
+      return;
+    }
     if (act === 'show') {
       closeSheet();
       if (state.sfilter !== 'mine') state.sfilter = 'mine';

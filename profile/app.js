@@ -49,6 +49,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     id: r.id, name: String(r.name || 'Без названия'), cat: r.catName || r.catLabel || r.cat || 'Без категории',
     total: typeof r.total === 'number' ? r.total : null, scores: Array.isArray(r.scores) ? r.scores : [],
     status: r.status || '', fav: !!r.fav, meta: r.meta || '', photo: r.photo || null, note: !!String(r.note || '').trim(),
+    text: String(r.note || '').trim().slice(0, 4000), pros: String(r.pros || '').slice(0, 1000), cons: String(r.cons || '').slice(0, 1000),
     created: +new Date(r.createdAt || r.date || 0) || 0,
     at: +new Date(r.updatedAt || r.date || r.createdAt || 0) || 0,
   });
@@ -276,7 +277,271 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   const keepHide = (h) => { try { const all = read(HIDE_KEY) || {}; all[hideOwner()] = h; localStorage.setItem(HIDE_KEY, JSON.stringify(all)); } catch (e) {} };
   const visibleOf = (list, hide) => { const set = new Set(hide || []); return set.size ? list.filter((r) => !set.has(keyOf(r.cat))) : list; };
 
+  // ---------- витрины и блоки профиля: что видно в профиле, решает хозяин; хранится в аккаунте ----------
+  const LAYOUT_KEY = 'casualhub.profileLayout.v1'; // { id профиля: { showcases, sections, at } }
+  const SECTIONS = [['stats', 'Цифры'], ['titles', 'Звания'], ['podium', 'Любимое'], ['all', 'Все оценки'], ['badges', 'Значки'], ['friends', 'Друзья'], ['hist', 'Оценки 1–10'], ['cats', 'Категории']];
+  const SC_MAX = 6;
+  const localLayout = () => (read(LAYOUT_KEY) || {})[hideOwner()] || null;
+  const keepLayout = (l) => { try { const all = read(LAYOUT_KEY) || {}; all[hideOwner()] = l; localStorage.setItem(LAYOUT_KEY, JSON.stringify(all)); } catch (e) {} };
+  const secOn = (p, k) => !(p.layout && p.layout.sections && p.layout.sections[k] === false);
+  const hid = (p, k) => (secOn(p, k) ? '' : ' hidden');
+  const catTitle = (p, key) => { const r = (p.allRatings || p.ratings).find((x) => keyOf(x.cat) === key); return r ? r.cat : key; };
+  const autoTitle = (p, sc) => `Топ-${sc.n}: ${sc.cat ? catTitle(p, sc.cat) : 'всё подряд'}`;
+  function scItems(p, sc) {
+    const pool = p.ratings.filter((r) => !sc.cat || keyOf(r.cat) === sc.cat);
+    if (sc.mode === 'pick') { const byId = new Map(pool.map((r) => [r.id, r])); return (sc.ids || []).map((id) => byId.get(id)).filter(Boolean).slice(0, sc.n); }
+    return pool.filter((r) => r.total != null).sort((a, b) => b.total - a.total || b.at - a.at).slice(0, sc.n);
+  }
+  function showcasesHTML(p, d) {
+    const out = ((p.layout && p.layout.showcases) || []).map((sc) => {
+      const items = scItems(p, sc);
+      if (!items.length && p.kind !== 'me') return '';
+      return `<section class="card rise show" style="--d:${d++}">
+        <div class="head"><h2 class="h2">${esc(sc.title || autoTitle(p, sc))}</h2><span class="label">${esc(sc.cat ? catTitle(p, sc.cat) : 'все темы')} · ${sc.mode === 'pick' ? 'мой выбор' : 'лучшие по баллу'}</span></div>
+        ${items.length ? `<div class="sc-row ${sc.style === 'list' ? 'as-list' : 'as-posters'}">${items.map((r, k) => `<a class="sc-it" href="${rateLink(p, r)}" title="${esc(r.name)}" data-tier="${tierT(r.total)}">
+          <div class="pic" data-photo="${r.photo ? esc(r.id) : ''}"><span class="place">${k + 1}</span><span class="ltr">${letter(r.name)}</span></div>
+          <strong>${esc(r.name)}</strong>${badge(r.total)}</a>`).join('')}</div>`
+          : '<p class="muted">Пока пусто: в этой теме нет подходящих оценок. Витрину можно изменить кнопкой «Витрины и блоки».</p>'}
+      </section>`;
+    }).join('');
+    return out ? `<div class="shows">${out}</div>` : '';
+  }
+
+  // окно «Витрины и блоки»: включить или выключить блоки, добавить, изменить, переставить витрины
+  let lyP = null, lyEdit = null; // lyEdit — витрина, которую сейчас добавляют или меняют
+  function saveLayout(p) {
+    p.layout = { ...p.layout, at: Date.now() };
+    keepLayout(p.layout);
+    if (token) send('PUT', '/shelf', { ratings: [], layout: p.layout }).catch(() => {});
+    render(p);
+  }
+  function layoutEditor(p) {
+    lyP = p;
+    if (!p.layout) p.layout = { showcases: [], sections: {}, at: 0 };
+    let box = $('#lyPick');
+    if (!box) {
+      box = document.createElement('div');
+      box.className = 'st-pick'; box.id = 'lyPick'; box.hidden = true;
+      box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('aria-labelledby', 'lyTitle');
+      box.innerHTML = '<div class="st-card ly-card"><div class="st-head"><h2 id="lyTitle">Витрины и блоки</h2><button type="button" class="st-x" data-ly="close" aria-label="Закрыть">✕</button></div><div class="ly-body" id="lyBody"></div></div>';
+      document.body.appendChild(box);
+      box.addEventListener('click', onLayoutClick);
+      box.addEventListener('input', onLayoutInput);
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !box.hidden) { if (lyEdit) { lyEdit = null; drawLayout(); } else closeLayout(); } });
+    }
+    lyEdit = null;
+    box.hidden = false;
+    document.body.style.overflow = 'hidden';
+    drawLayout();
+    box.querySelector('.st-x').focus({ preventScroll: true });
+  }
+  function closeLayout() {
+    const box = $('#lyPick');
+    if (!box) return;
+    box.hidden = true;
+    document.body.style.overflow = '';
+    const b = $('#layoutBtn');
+    if (b) b.focus({ preventScroll: true });
+  }
+  const lyCats = (p) => [...new Map((p.allRatings || p.ratings).map((r) => [keyOf(r.cat), r.cat])).entries()];
+  function drawLayout() {
+    const p = lyP, body = $('#lyBody');
+    if (!p || !body) return;
+    $('#lyTitle').textContent = lyEdit ? (lyEdit.isNew ? 'Новая витрина' : 'Витрина') : 'Витрины и блоки';
+    if (lyEdit) { body.innerHTML = scFormHTML(p, lyEdit); return; }
+    const scs = p.layout.showcases || [];
+    body.innerHTML = `<span class="label">Что видно в профиле</span>
+      <div class="chips ly-secs">${SECTIONS.map(([k, t]) => `<button type="button" class="chip" data-sec="${k}" aria-pressed="${secOn(p, k)}">${esc(t)}</button>`).join('')}</div>
+      <p class="ly-hint">Нажми на блок, чтобы скрыть его или вернуть. Скрытые блоки не видны ни тебе, ни друзьям.</p>
+      <span class="label">Витрины · ${scs.length} из ${SC_MAX}</span>
+      ${scs.length ? `<div class="ly-list">${scs.map((sc, i) => `<div class="ly-row"><span><b>${esc(sc.title || autoTitle(p, sc))}</b><small>${esc(sc.cat ? catTitle(p, sc.cat) : 'все темы')} · топ-${sc.n} · ${sc.mode === 'pick' ? 'выбор вручную' : 'лучшие по баллу'} · ${sc.style === 'list' ? 'список' : 'постеры'}</small></span>
+        <button type="button" class="mini" data-ly="up" data-i="${i}" aria-label="Выше"${i ? '' : ' disabled'}>↑</button><button type="button" class="mini" data-ly="down" data-i="${i}" aria-label="Ниже"${i < scs.length - 1 ? '' : ' disabled'}>↓</button><button type="button" class="mini" data-ly="edit" data-i="${i}" aria-label="Изменить витрину">✎</button><button type="button" class="mini del" data-ly="del" data-i="${i}" aria-label="Удалить витрину">✕</button></div>`).join('')}</div>`
+        : '<p class="ly-hint">Витрина — это твой топ, например «Топ-5 игр» или «Любимые фильмы». Она появится в профиле под цифрами.</p>'}
+      ${scs.length < SC_MAX ? '<button type="button" class="btn primary" data-ly="add">＋ Добавить витрину</button>' : ''}`;
+  }
+  function pickListHTML(p, sc) {
+    const q = keyOf(sc.q || '');
+    const pool = (p.allRatings || p.ratings).filter((r) => (!sc.cat || keyOf(r.cat) === sc.cat) && (!q || keyOf(r.name).includes(q)))
+      .sort((a, b) => (b.total ?? -1) - (a.total ?? -1) || a.name.localeCompare(b.name, 'ru')).slice(0, 80);
+    return pool.length ? pool.map((r) => { const i = sc.ids.indexOf(r.id); return `<button type="button" class="ly-it" data-pick="${esc(r.id)}" aria-pressed="${i >= 0}"><i>${i >= 0 ? i + 1 : ''}</i><span>${esc(r.name)}</span>${badge(r.total)}</button>`; }).join('')
+      : '<p class="ly-hint">В этой теме ничего не нашлось.</p>';
+  }
+  function scFormHTML(p, sc) {
+    const seg = (key, opts) => `<div class="seg" role="group">${opts.map(([v, t]) => `<button type="button" data-f="${key}" data-v="${v}" aria-pressed="${String(sc[key]) === String(v)}">${t}</button>`).join('')}</div>`;
+    return `<label class="ly-f"><span class="label">Название</span><input id="scTitle" type="text" maxlength="60" value="${esc(sc.title)}" placeholder="${esc(autoTitle(p, sc))}" autocomplete="off"></label>
+      <div class="ly-f"><span class="label">Тема</span><div class="chips">${[['', 'Все темы'], ...lyCats(p)].map(([k, t]) => `<button type="button" class="chip" data-f="cat" data-v="${esc(k)}" aria-pressed="${sc.cat === k}">${esc(t)}</button>`).join('')}</div></div>
+      <div class="ly-f"><span class="label">Сколько</span>${seg('n', [[3, 'Топ-3'], [5, 'Топ-5'], [10, 'Топ-10']])}</div>
+      <div class="ly-f"><span class="label">Что попадёт</span>${seg('mode', [['auto', 'Лучшие по баллу'], ['pick', 'Выберу сам']])}</div>
+      <div class="ly-f"><span class="label">Вид</span>${seg('style', [['posters', 'Постеры'], ['list', 'Список']])}</div>
+      ${sc.mode === 'pick' ? `<div class="ly-f"><span class="label" id="scPicked">В витрине ${sc.ids.length} из ${sc.n} · порядок как нажимаешь</span>
+        <input id="scQ" class="search" type="search" placeholder="Найти оценку…" value="${esc(sc.q || '')}" autocomplete="off">
+        <div class="ly-pickl" id="scPickList">${pickListHTML(p, sc)}</div></div>` : ''}
+      ${sc.err ? `<p class="ly-err" role="alert">${esc(sc.err)}</p>` : ''}
+      <div class="ly-acts"><button type="button" class="btn primary" data-ly="save">Сохранить витрину</button><button type="button" class="btn ghost" data-ly="cancel">Отмена</button></div>`;
+  }
+  function onLayoutInput(e) {
+    if (!lyEdit) return;
+    if (e.target.id === 'scTitle') lyEdit.title = e.target.value;
+    if (e.target.id === 'scQ') { lyEdit.q = e.target.value; $('#scPickList').innerHTML = pickListHTML(lyP, lyEdit); }
+  }
+  function onLayoutClick(e) {
+    const p = lyP, L = p.layout, box = $('#lyPick');
+    if (e.target === box) return closeLayout();
+    const sec = e.target.closest('[data-sec]');
+    if (sec) { L.sections = { ...(L.sections || {}), [sec.dataset.sec]: !secOn(p, sec.dataset.sec) }; saveLayout(p); return drawLayout(); }
+    const f = e.target.closest('[data-f]');
+    if (f && lyEdit) {
+      const k = f.dataset.f;
+      const v = k === 'n' ? +f.dataset.v : f.dataset.v;
+      if (k === 'cat' && lyEdit.cat !== v) lyEdit.ids = [];
+      lyEdit[k] = v;
+      if (k === 'n') lyEdit.ids = lyEdit.ids.slice(0, v);
+      lyEdit.err = '';
+      return drawLayout();
+    }
+    const pk = e.target.closest('[data-pick]');
+    if (pk && lyEdit) {
+      const id = pk.dataset.pick, i = lyEdit.ids.indexOf(id);
+      if (i >= 0) lyEdit.ids.splice(i, 1);
+      else if (lyEdit.ids.length < lyEdit.n) lyEdit.ids.push(id);
+      else { lyEdit.err = `В топ-${lyEdit.n} больше не помещается: убери что-нибудь или выбери топ побольше`; return drawLayout(); }
+      lyEdit.err = '';
+      $('#scPickList').innerHTML = pickListHTML(p, lyEdit);
+      $('#scPicked').textContent = `В витрине ${lyEdit.ids.length} из ${lyEdit.n} · порядок как нажимаешь`;
+      const errEl = $('#lyBody .ly-err'); if (errEl) errEl.remove();
+      return;
+    }
+    const b = e.target.closest('[data-ly]');
+    if (!b) return;
+    const act = b.dataset.ly, i = +b.dataset.i;
+    const scs = (L.showcases || []).slice();
+    if (act === 'close') return closeLayout();
+    if (act === 'add') { lyEdit = { id: 'sc' + Date.now().toString(36), title: '', cat: '', n: 5, mode: 'auto', ids: [], style: 'posters', q: '', isNew: true }; return drawLayout(); }
+    if (act === 'edit') { lyEdit = { ...scs[i], ids: [...(scs[i].ids || [])], q: '' }; return drawLayout(); }
+    if (act === 'cancel') { lyEdit = null; return drawLayout(); }
+    if (act === 'save') {
+      if (lyEdit.mode === 'pick' && !lyEdit.ids.length) { lyEdit.err = 'Выбери хотя бы одну оценку'; return drawLayout(); }
+      const sc = { id: lyEdit.id, title: (lyEdit.title || '').trim().slice(0, 60), cat: lyEdit.cat, n: lyEdit.n, mode: lyEdit.mode, ids: lyEdit.mode === 'pick' ? lyEdit.ids.slice(0, lyEdit.n) : [], style: lyEdit.style };
+      const at = scs.findIndex((x) => x.id === sc.id);
+      if (at >= 0) scs[at] = sc; else scs.push(sc);
+      L.showcases = scs.slice(0, SC_MAX);
+      lyEdit = null;
+      saveLayout(p);
+      return drawLayout();
+    }
+    if (act === 'del') { scs.splice(i, 1); L.showcases = scs; saveLayout(p); return drawLayout(); }
+    if (act === 'up' || act === 'down') {
+      const j = act === 'up' ? i - 1 : i + 1;
+      if (j < 0 || j >= scs.length) return;
+      [scs[i], scs[j]] = [scs[j], scs[i]];
+      L.showcases = scs;
+      saveLayout(p);
+      return drawLayout();
+    }
+  }
+
+  // ---------- отдельная страница «Все оценки» (/profile/?all=1): список, плитка, тир-лист или подробно ----------
+  const ALL = new URLSearchParams(location.search).has('all');
+  const ALL_KEY = 'casualhub.allView.v1';
+  const AST = (() => {
+    const v = read(ALL_KEY) || {};
+    return { view: ['list', 'grid', 'tier', 'full'].includes(v.view) ? v.view : 'grid', sort: ['score', 'date', 'name'].includes(v.sort) ? v.sort : 'score', cats: [], q: '', limit: 60 };
+  })();
+  const keepAll = () => { try { localStorage.setItem(ALL_KEY, JSON.stringify({ view: AST.view, sort: AST.sort })); } catch (e) {} };
+  const TIERS = [['S', 9.2, '9,2–10'], ['A', 8.2, '8,2–9,1'], ['B', 7, '7–8,1'], ['C', 5, '5–6,9'], ['D', -1, 'ниже 5']];
+  const allHref = (p) => (p.kind === 'me' || !p.uid ? '/profile/?all=1' : `/profile/?id=${encodeURIComponent(p.uid)}&all=1`);
+  const cellsV = (v) => `<span class="cells" data-tier="${tierV(v)}" aria-hidden="true">${Array.from({ length: 10 }, (_, i) => `<i${i < v ? ' class="on"' : ''}></i>`).join('')}</span>`;
+  const lines = (s) => String(s || '').split(/\r?\n/).map((x) => x.replace(/^[+\-•*]\s*/, '').trim()).filter(Boolean);
+  let allP = null;
+  function renderAll(p) {
+    allP = p;
+    document.title = `Все оценки · ${p.name} · Казуал Хаб`;
+    if (!$('#allBody')) {
+      app.innerHTML = `<section class="card rise all-top"><a class="btn ghost" href="${p.kind === 'me' || !p.uid ? '/profile/' : '/profile/?id=' + encodeURIComponent(p.uid)}">← Профиль</a>
+        <div><h1 class="h2">Все оценки</h1><p class="muted"><span id="allWho"></span> · <span id="allCount"></span></p></div></section>
+        <section class="card rise all-card" style="--d:1">
+          <div class="chips" id="allCats"></div>
+          <div class="tools">
+            <input class="search" id="allQ" type="search" placeholder="Найти по названию…" aria-label="Найти оценку" autocomplete="off">
+            <div class="seg" id="allSort" role="group" aria-label="Сортировка"><button type="button" data-sort="score">По баллу</button><button type="button" data-sort="date">Новые</button><button type="button" data-sort="name">А–Я</button></div>
+            <div class="seg" id="allView" role="group" aria-label="Вид"><button type="button" data-view="list">Список</button><button type="button" data-view="grid">Плитка</button><button type="button" data-view="tier">Тир-лист</button><button type="button" data-view="full">Подробно</button></div>
+          </div>
+          <div id="allBody"></div>
+          <button type="button" class="btn ghost more" id="allMore" hidden>Показать ещё</button>
+        </section>`;
+      $('#allCats').addEventListener('click', (e) => {
+        const b = e.target.closest('[data-acat]');
+        if (!b) return;
+        const k = b.dataset.acat;
+        AST.cats = k === '*' ? [] : AST.cats.includes(k) ? AST.cats.filter((x) => x !== k) : [...AST.cats, k];
+        AST.limit = 60;
+        drawAll();
+      });
+      $('#allQ').addEventListener('input', (e) => { AST.q = e.target.value; AST.limit = 60; drawAll(); });
+      $('#allSort').addEventListener('click', (e) => { const b = e.target.closest('[data-sort]'); if (b) { AST.sort = b.dataset.sort; keepAll(); drawAll(); } });
+      $('#allView').addEventListener('click', (e) => { const b = e.target.closest('[data-view]'); if (b) { AST.view = b.dataset.view; AST.limit = 60; keepAll(); drawAll(); } });
+      $('#allMore').addEventListener('click', () => { AST.limit += 60; drawAll(); });
+    }
+    $('#allWho').textContent = p.name;
+    drawAll();
+  }
+  function drawAll() {
+    const p = allP, rs = p.ratings;
+    const cats = [...new Map(rs.map((r) => [keyOf(r.cat), r.cat])).entries()];
+    AST.cats = AST.cats.filter((k) => cats.some(([c]) => c === k));
+    $('#allCats').innerHTML = cats.length > 1 ? [`<button type="button" class="chip" data-acat="*" aria-pressed="${!AST.cats.length}">Все <b>${rs.length}</b></button>`]
+      .concat(cats.map(([k, t]) => `<button type="button" class="chip" data-acat="${esc(k)}" aria-pressed="${AST.cats.includes(k)}">${esc(t)} <b>${rs.filter((r) => keyOf(r.cat) === k).length}</b></button>`)).join('') : '';
+    $('#allSort').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.sort === AST.sort)));
+    $('#allView').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === AST.view)));
+    $('#allSort').hidden = AST.view === 'tier';
+    const q = keyOf(AST.q);
+    const list = rs.filter((r) => (!AST.cats.length || AST.cats.includes(keyOf(r.cat))) && (!q || keyOf(r.name + ' ' + r.meta).includes(q)));
+    list.sort(AST.sort === 'date' ? (a, b) => b.at - a.at : AST.sort === 'name' ? (a, b) => a.name.localeCompare(b.name, 'ru') : (a, b) => (b.total ?? -1) - (a.total ?? -1) || b.at - a.at);
+    $('#allCount').textContent = `${list.length} ${plural(list.length, 'оценка', 'оценки', 'оценок')}`;
+    const body = $('#allBody');
+    const more = $('#allMore');
+    more.hidden = true;
+    if (!list.length) { body.innerHTML = `<p class="muted">${rs.length ? 'Ничего не нашлось.' : 'Оценок пока нет.'}</p>`; return; }
+    const pic = (r, cls) => `<div class="${cls || 'pic'}" data-photo="${r.photo ? esc(r.id) : ''}"><span class="ltr">${letter(r.name)}</span></div>`;
+    if (AST.view === 'tier') {
+      const rated = list.filter((r) => r.total != null).sort((a, b) => b.total - a.total || b.at - a.at);
+      const rows = TIERS.map(([t, min, range], i) => {
+        const items = rated.filter((r) => r.total >= min && (i === 0 || r.total < TIERS[i - 1][1]));
+        return `<div class="tl-row" data-t="${t}"><div class="tl-lab"><b>${t}</b><small>${range}</small></div><div class="tl-items">${items.length
+          ? items.map((r) => `<a class="tl-it" href="${rateLink(p, r)}" title="${esc(r.name)} · ${fmt(r.total)}" data-tier="${tierT(r.total)}">${pic(r)}<span>${esc(r.name)}</span><b>${fmt(r.total)}</b></a>`).join('')
+          : '<span class="tl-empty">—</span>'}</div></div>`;
+      }).join('');
+      const unrated = list.length - rated.length;
+      body.innerHTML = `<div class="tl">${rows}</div>${unrated ? `<p class="muted">Без балла: ${unrated}. В тир-лист они не попадают.</p>` : ''}`;
+    } else {
+      const shown = list.slice(0, AST.limit);
+      more.hidden = list.length <= AST.limit;
+      if (AST.view === 'list') {
+        body.innerHTML = `<div class="list">${shown.map((r) => `<a class="item" href="${rateLink(p, r)}" title="Открыть оценку «${esc(r.name)}»" data-tier="${tierT(r.total)}">
+          <span class="th" data-photo="${r.photo ? esc(r.id) : ''}">${letter(r.name)}</span>
+          <span class="nm">${r.fav ? `<span class="fav">${ICON.star}</span> ` : ''}${esc(r.name)}</span>${badge(r.total)}
+          <span class="meta">${cells(r.total)}<span>${esc(r.cat)}${r.status ? ' · ' + esc(r.status) : ''}</span></span></a>`).join('')}</div>`;
+      } else if (AST.view === 'grid') {
+        body.innerHTML = `<div class="tiles">${shown.map((r) => `<a class="tile" href="${rateLink(p, r)}" title="${esc(r.name)}" data-tier="${tierT(r.total)}">${pic(r)}
+          <strong>${r.fav ? `<span class="fav">${ICON.star}</span> ` : ''}${esc(r.name)}</strong><div class="row"><small>${esc(r.cat)}</small>${badge(r.total)}</div></a>`).join('')}</div>`;
+      } else {
+        body.innerHTML = `<div class="full">${shown.map((r) => {
+          const pros = lines(r.pros), cons = lines(r.cons);
+          return `<article class="fr-card" data-tier="${tierT(r.total)}">
+            <header><div class="th" data-photo="${r.photo ? esc(r.id) : ''}">${letter(r.name)}</div>
+              <div class="fr-t"><a href="${rateLink(p, r)}">${r.fav ? `<span class="fav">${ICON.star}</span> ` : ''}${esc(r.name)}</a><small>${esc([r.cat, r.status, r.meta].filter(Boolean).join(' · '))}</small></div>${badge(r.total)}</header>
+            ${r.scores.length ? `<ul class="crit">${r.scores.map((s) => `<li><span>${esc(s.name)}${s.w && s.w !== 1 ? ` <small>×${String(s.w).replace('.', ',')}</small>` : ''}</span>${cellsV(+s.v || 0)}<b>${+s.v || '—'}</b>${s.note ? `<em>${esc(s.note)}</em>` : ''}</li>`).join('')}</ul>` : ''}
+            ${pros.length || cons.length ? `<div class="fr-pc">${pros.length ? `<div><span class="label">Плюсы</span><ul>${pros.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}${cons.length ? `<div><span class="label">Минусы</span><ul>${cons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}</div>` : ''}
+            ${r.text ? `<p class="fr-note">${esc(r.text)}</p>` : ''}
+          </article>`;
+        }).join('')}</div>`;
+      }
+    }
+    hydratePhotos(p, body);
+  }
+
   function render(p) {
+    if (ALL) return renderAll(p);
     const rs = p.ratings;
     const rated = rs.filter((r) => r.total != null);
     const avg = rated.length ? rated.reduce((a, r) => a + r.total, 0) / rated.length : null;
@@ -313,14 +578,14 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
           <div class="name-row"><h1 class="name" aria-label="${esc(p.name)}">${nameHTML}</h1>${stickerSlot(p)}</div>
           <p class="sub">${esc(p.sub)}</p>
           ${!isMe && p.uid ? `<p class="sub" data-seen="${esc(p.uid)}" data-last="${+p.lastSeen || ''}"></p>` : ''}
-          <div class="titles">${titlesOf(rs).map((t) => `<span class="title-chip" data-tier="${t.tier}"><i></i>${esc(t.t)}</span>`).join('')}</div>
+          <div class="titles"${hid(p, 'titles')}>${titlesOf(rs).map((t) => `<span class="title-chip" data-tier="${t.tier}"><i></i>${esc(t.t)}</span>`).join('')}</div>
           <div class="hero-acts">${isMe
-            ? `<a class="btn primary" href="/mnenie/">Оценить что-нибудь</a><a class="btn ghost" href="/mnenie/#profile">Настроить профиль</a>`
+            ? `<a class="btn primary" href="/mnenie/">Оценить что-нибудь</a><button type="button" class="btn ghost" id="layoutBtn">Витрины и блоки</button><a class="btn ghost" href="/mnenie/#profile">Настроить профиль</a>`
             : `<a class="btn ghost" href="/profile/">Мой профиль</a>${p.common && p.common.length ? '<a class="btn primary" href="#taste">Сравнить вкусы</a>' : ''}`}</div>
         </div>
       </section>
 
-      <div class="stats">
+      <div class="stats"${hid(p, 'stats')}>
         <button type="button" class="stat rise" data-jump="allSec" style="--d:${d++}"><b data-count="${rs.length}">${rs.length}</b><span>${plural(rs.length, 'оценка', 'оценки', 'оценок')}</span></button>
         <div class="stat tiered rise" data-tier="${tierT(avg)}" style="--d:${d++}"><b>${avg != null ? fmt(avg) : '—'}</b><span>средний балл</span></div>
         <button type="button" class="stat rise" data-jump="best" style="--d:${d++}"><b data-count="${masters}">${masters}</b><span>${plural(masters, 'шедевр', 'шедевра', 'шедевров')} 8,5+</span></button>
@@ -330,9 +595,11 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
           : `<button type="button" class="stat rise" data-jump="friendsSec" style="--d:${d++}"><b>${p.friends ? `<span data-count="${p.friends.length}">${p.friends.length}</span>` : '—'}</b><span>${p.friends ? plural(p.friends.length, 'друг', 'друга', 'друзей') : 'друзья'}</span></button>`}
       </div>
 
+      ${showcasesHTML(p, d)}
+
       <div class="grid">
         <div class="col">
-          ${top3.length ? `<section class="card rise" style="--d:${d++}">
+          ${top3.length && secOn(p, 'podium') ? `<section class="card rise" style="--d:${d++}">
             <div class="head"><h2 class="h2">Любимое</h2><span class="label">топ по баллу</span></div>
             <div class="podium">${top3.map((r, k) => `<a class="pod p${k + 1}" href="${rateLink(p, r)}" title="Открыть оценку «${esc(r.name)}»" data-tier="${tierT(r.total)}">
               <div class="pic" data-photo="${r.photo ? esc(r.id) : ''}"><span class="place">${k + 1}</span><span class="ltr">${letter(r.name)}</span></div>
@@ -340,8 +607,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
               <div class="row"><small>${esc(r.cat)}</small>${badge(r.total)}</div></a>`).join('')}</div>
           </section>` : ''}
 
-          <section class="card rise" id="allSec" style="--d:${d++}">
-            <div class="head"><h2 class="h2">Все оценки</h2><span class="label" id="listStat"></span>${isMe && p.allRatings && p.allRatings.length ? `<button type="button" class="btn ghost topics-btn" id="topicsBtn" aria-expanded="${ST.topics}" aria-controls="topics">Что показывать${p.hide && p.hide.length ? ` · скрыто ${p.hide.length}` : ''}</button>` : ''}</div>
+          <section class="card rise" id="allSec"${hid(p, 'all')} style="--d:${d++}">
+            <div class="head"><h2 class="h2">Все оценки</h2><span class="label" id="listStat"></span><a class="btn ghost topics-btn" href="${allHref(p)}">Открыть все</a>${isMe && p.allRatings && p.allRatings.length ? `<button type="button" class="btn ghost topics-btn" id="topicsBtn" aria-expanded="${ST.topics}" aria-controls="topics">Что показывать${p.hide && p.hide.length ? ` · скрыто ${p.hide.length}` : ''}</button>` : ''}</div>
             ${isMe && p.allRatings && p.allRatings.length ? `<div class="topics" id="topics"${ST.topics ? '' : ' hidden'}>
               <span class="label">Что видно в профиле</span>
               <div class="chips" style="margin:0">${[...new Map(p.allRatings.map((r) => [keyOf(r.cat), r.cat])).entries()].map(([k, name]) => `<button type="button" class="chip" data-topic="${esc(k)}" aria-pressed="${!(p.hide || []).includes(k)}">${esc(name)} <b>${p.allRatings.filter((r) => keyOf(r.cat) === k).length}</b></button>`).join('')}</div>
@@ -360,7 +627,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         </div>
 
         <div class="col">
-          ${p.badges ? `<section class="card rise" id="badgesSec" style="--d:${d++}">
+          ${p.badges ? `<section class="card rise" id="badgesSec"${hid(p, 'badges')} style="--d:${d++}">
             <div class="head"><h2 class="h2">Значки</h2><span class="label">${p.badges.filter((b) => b.got).length} из ${p.badges.length}</span></div>
             ${(() => { const shown = p.badges.filter((b) => b.got).length + 4; return badgesHTML(p.badges.slice(0, shown)) + (p.badges.length > shown ? `<details class="bdg-more"><summary>Все значки · ещё ${p.badges.length - shown}</summary>${badgesHTML(p.badges.slice(shown))}</details>` : ''); })()}
           </section>` : ''}
@@ -373,20 +640,20 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
               : '<p class="muted">Общих оценок пока нет. Оцените одно и то же, и здесь появится, насколько совпадают ваши вкусы.</p>'}
           </section>` : ''}
 
-          ${p.friends ? `<section class="card rise" style="--d:${d++}">
+          ${p.friends ? `<section class="card rise"${hid(p, 'friends')} style="--d:${d++}">
             <div class="head" id="friendsSec"><h2 class="h2">Друзья</h2><span class="label">${p.friends.length}</span></div>
             ${p.friends.length ? `<div class="frs">${p.friends.map((f) => `<a class="fr" href="/profile/?id=${encodeURIComponent(f.id)}">
                 <span class="av" data-uid="${esc(f.id)}" style="background-color:${colorOf(f.username)}">${letter(f.username)}</span>
                 <span class="tx"><b>${esc(f.username)} <i class="on-dot" data-on="${esc(f.id)}" data-last="${+f.lastSeen || ''}"></i></b><small><span data-seen="${esc(f.id)}" data-last="${+f.lastSeen || ''}" data-post=" · "></span>${f.handle ? '@' + esc(f.handle) + ' · ' : ''}${f.updatedAt ? 'оценки обновлены ' + ago(f.updatedAt) : 'оценок пока нет'}</small></span>${ICON.go}</a>`).join('')}</div>`
               : '<p class="muted">Пока никого. Добавить друга по @юзернейму можно в Мнении Казуала, кнопка «Друзья».</p>'}
             ${p.incoming ? `<p class="note">${p.incoming} ${plural(p.incoming, 'заявка', 'заявки', 'заявок')} в друзья ${plural(p.incoming, 'ждёт', 'ждут', 'ждут')} ответа. <a href="/mnenie/">Открыть в Мнении</a></p>` : ''}
-          </section>` : (isMe ? `<section class="card rise" style="--d:${d++}"><div class="head"><h2 class="h2">Друзья</h2></div><p class="muted">${esc(p.friendsHint || '')}</p></section>` : '')}
+          </section>` : (isMe ? `<section class="card rise"${hid(p, 'friends')} style="--d:${d++}"><div class="head"><h2 class="h2">Друзья</h2></div><p class="muted">${esc(p.friendsHint || '')}</p></section>` : '')}
 
-          ${cats.size ? `<section class="card rise" style="--d:${d++}">
+          ${cats.size ? `<section class="card rise"${hid(p, 'hist')} style="--d:${d++}">
             <div class="head"><h2 class="h2">Оценки 1–10</h2><span class="label">${rated.length} с баллом</span></div>
             <div class="hist">${hist.map((n, k) => `<div data-tier="${tierV(k + 1)}"><span class="bar${n ? '' : ' zero'}" style="height:${n ? Math.max(6, (n / hmax) * 100) : 3}%;--d:${k}"></span><small>${n || ''}</small><em>${k + 1}</em></div>`).join('')}</div>
           </section>
-          <section class="card rise" id="catsSec" style="--d:${d++}">
+          <section class="card rise" id="catsSec"${hid(p, 'cats')} style="--d:${d++}">
             <div class="head"><h2 class="h2">Категории</h2></div>
             <div class="catl">${[...cats.entries()].sort((a, b) => b[1].n - a[1].n).map(([name, c]) => { const av = c.k ? c.sum / c.k : null; return `<button type="button" class="cat" data-catgo="${esc(name)}" title="Показать оценки «${esc(name)}»"><b>${esc(name)}</b><small>${c.n} · ${av != null ? 'в среднем ' + fmt(av) : 'без балла'}</small><span class="tr" data-tier="${tierT(av)}"><i style="width:${(c.n / rs.length) * 100}%"></i></span></button>`; }).join('')}</div>
           </section>` : ''}
@@ -395,6 +662,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
 
     if (rs.length) wireList(p);
     wireJumps(p);
+    if (isMe) { const lb = $('#layoutBtn'); if (lb) lb.addEventListener('click', () => layoutEditor(p)); }
     if (isMe) { wireBanner(p); wireAvatar(p); wireTopics(p); const sb = $('#stBtn'); if (sb) sb.addEventListener('click', () => stickerPicker(p)); }
     hydrateFriendAvatars(p);
     if (window.CasualOnline) window.CasualOnline.paint(app);
@@ -422,7 +690,9 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       if (j) {
         const to = j.dataset.jump;
         if (to === 'best') { ST.sort = 'score'; ST.cat = 'all'; ST.limit = 24; render(p); }
-        jumpTo(document.getElementById(to === 'best' ? 'allSec' : to));
+        const target = document.getElementById(to === 'best' ? 'allSec' : to);
+        if ((!target || target.hidden) && (to === 'best' || to === 'allSec' || to === 'catsSec')) { location.href = allHref(p); return; }
+        jumpTo(target);
         return;
       }
       const c = e.target.closest('[data-catgo]');
@@ -779,7 +1049,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       kind: 'me', name: meServer && meServer.username ? meServer.username : user ? user.name : 'Гость', avatar: shownAvatar(user), color: user && user.color,
       sub: user ? [meServer && meServer.handle ? '@' + meServer.handle : '', since ? 'в Казуал Хабе с ' + since : ''].filter(Boolean).join(' · ') || 'твой профиль' : 'Гостевой профиль: оценки хранятся в этом браузере',
       createdAt: user ? born : null,
-      ratings: [], allRatings: myRatings(), hide: localHide().hide, uid: meServer && meServer.id, banner: localBanner(), sticker: localSticker().src,
+      ratings: [], allRatings: myRatings(), hide: localHide().hide, uid: meServer && meServer.id, banner: localBanner(), sticker: localSticker().src, layout: localLayout(),
     };
     p.ratings = visibleOf(p.allRatings, p.hide);
     if (!user) p.friendsHint = 'Друзья появятся, когда войдёшь в аккаунт. Это можно сделать в Мнении Казуала.';
@@ -803,6 +1073,10 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         const ss = s.sticker, ls = localSticker();
         if (ss && +ss.at > (+ls.at || 0)) { if (ss.src !== p.sticker) { p.sticker = ss.src; changed = true; } keepSticker(ss); }
         else if (ls.at && (!ss || +ls.at > +ss.at)) send('PUT', '/shelf', { ratings: [], sticker: ls }).catch(() => {});
+        // витрины и блоки: тоже побеждает более свежий выбор
+        const sl = s.layout, ll = localLayout();
+        if (sl && +sl.at > ((ll && +ll.at) || 0)) { p.layout = sl; keepLayout(sl); changed = true; }
+        else if (ll && ll.at && (!sl || +ll.at > +sl.at)) send('PUT', '/shelf', { ratings: [], layout: ll }).catch(() => {});
         if (!changed) return;
         p.ratings = visibleOf(p.allRatings, p.hide);
         render(p);
@@ -849,7 +1123,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       const match = common.length ? Math.max(0, Math.min(100, Math.round(100 - (common.reduce((a, c) => a + Math.abs(c.diff), 0) / common.length) * 10))) : 0;
       render({
         kind: 'friend', name: s.user.username, sub: [s.user.handle ? '@' + s.user.handle : '', s.updatedAt ? 'оценки обновлены ' + ago(s.updatedAt) : 'оценок пока нет'].filter(Boolean).join(' · '),
-        ratings, uid: s.user.id, common, match, createdAt: s.user.createdAt, lastSeen: s.user.lastSeen, sticker: s.sticker && s.sticker.src, friendCount: s.user.friends != null ? s.user.friends : null,
+        ratings, uid: s.user.id, common, match, layout: s.layout || null, createdAt: s.user.createdAt, lastSeen: s.user.lastSeen, sticker: s.sticker && s.sticker.src, friendCount: s.user.friends != null ? s.user.friends : null,
       });
       document.title = `${s.user.username} · Казуал Хаб`;
       api(`/photo/${encodeURIComponent(s.user.id)}/banner`).then((d) => { if (d.data) showBanner(d.data); }, () => {});

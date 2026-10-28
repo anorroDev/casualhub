@@ -54,5 +54,6 @@ export function readShelf(row) {
   const cats = d.cats && Array.isArray(d.cats.items) && Number.isFinite(+d.cats.at) ? d.cats : null;
   const profile = d.profile && Array.isArray(d.profile.hide) && Number.isFinite(+d.profile.at) ? d.profile : null;
   const sticker = d.sticker && typeof d.sticker.src === 'string' && Number.isFinite(+d.sticker.at) ? d.sticker : null;
-  return { ratings: Array.isArray(d.ratings) ? d.ratings : [], deleted: Array.isArray(d.deleted) ? d.deleted : [], cats, profile, sticker };
+  const layout = d.layout && Array.isArray(d.layout.showcases) && Number.isFinite(+d.layout.at) ? d.layout : null;
+  return { ratings: Array.isArray(d.ratings) ? d.ratings : [], deleted: Array.isArray(d.deleted) ? d.deleted : [], cats, profile, sticker, layout };
 }
