@@ -246,10 +246,20 @@
 
   // Перерисовка колеса. Без своих сегментов (обычная перерисовка после изменений) колесо не прыгает,
   // а плавно перетекает: выбывший или удалённый участник сужается до нуля, новый вырастает из нуля.
+  // кадр анимации, который не замирает в фоне: на виду — обычный кадр экрана, во свёрнутой вкладке (Alt+Tab) — таймер.
+  // Прокрутка считается по часам, поэтому в фоне колесо докручивается и останавливается вовремя, вылет и победа тоже срабатывают
+  function bgFrame(fn) {
+    const h = { done: false, id: 0, to: 0 };
+    const go = () => { if (h.done) return; h.done = true; cancelAnimationFrame(h.id); clearTimeout(h.to); fn(performance.now()); };
+    h.id = requestAnimationFrame(go);
+    h.to = setTimeout(go, document.hidden ? 0 : 120);
+    return h;
+  }
+  function bgCancel(h) { if (h && h.done === false) { h.done = true; cancelAnimationFrame(h.id); clearTimeout(h.to); } }
   let shownSegs = null, tweenRaf = 0;
   function draw(segs, hl) {
     if (segs || hl || S.spinning || reduced || !shownSegs || !size) {
-      if (tweenRaf) { cancelAnimationFrame(tweenRaf); tweenRaf = 0; }
+      if (tweenRaf) { bgCancel(tweenRaf); tweenRaf = 0; }
       const out = segs || segments();
       paint(out, hl);
       shownSegs = out;
@@ -272,8 +282,8 @@
     });
     const w0 = new Map(prev.map((x) => [x.item.id, x.end - x.start]));
     const w1 = new Map(next.map((x) => [x.item.id, x.end - x.start]));
-    const t0 = performance.now(), D = 650;
-    if (tweenRaf) cancelAnimationFrame(tweenRaf);
+    const t0 = performance.now(), D = 400;
+    if (tweenRaf) bgCancel(tweenRaf);
     const frame = (now) => {
       const t = Math.min(1, (now - t0) / D);
       const k = t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
@@ -287,10 +297,10 @@
       }
       paint(cur);
       shownSegs = cur;
-      if (t < 1) tweenRaf = requestAnimationFrame(frame);
+      if (t < 1) tweenRaf = bgFrame(frame);
       else { tweenRaf = 0; shownSegs = next; paint(next); }
     };
-    tweenRaf = requestAnimationFrame(frame);
+    tweenRaf = bgFrame(frame);
   }
 
   function paint(segs, hl) {
@@ -471,7 +481,7 @@
       const cur = segAt(S.rot, segs);
       if (cur !== last) { last = cur; tick(); $('#ticker').textContent = cur.item.name; }
       canvas.style.transform = `rotate(${S.rot - from}rad)`;
-      if (t < 1) requestAnimationFrame(frame);
+      if (t < 1) bgFrame(frame);
       else {
         drawRot = null;
         canvas.style.transform = '';
@@ -480,7 +490,7 @@
         land(pick, segs);
       }
     };
-    requestAnimationFrame(frame);
+    bgFrame(frame);
   }
 
   function land(pick, segs) {
@@ -488,12 +498,13 @@
     setStatus(`Вылетает: <b>${esc(pick.item.name)}</b>`, baseSub(), 'bad');
     // на последнем вылете звучит победная, её запускает showWinner
     if (alive().length > 2) playOut();
-    const t0 = performance.now(), D = reduced ? 400 : 1100;
+    // лот уходит за секунду: 0,6 с мигает под стрелкой, 0,4 с его сектор сужается до нуля
+    const t0 = performance.now(), D = reduced ? 400 : 600;
     const pulse = (now) => {
       const t = (now - t0) / D;
       if (t < 1) {
         draw(segs, { id: pick.item.id, a: 0.5 * Math.abs(Math.sin(t * Math.PI * 3)) });
-        requestAnimationFrame(pulse);
+        bgFrame(pulse);
         return;
       }
       pick.item.out = true;
@@ -512,7 +523,7 @@
         if (S.auto) autoTimer = setTimeout(spin, reduced ? 600 : 1100);
       }
     };
-    requestAnimationFrame(pulse);
+    bgFrame(pulse);
   }
 
   // обычный режим: на кого показала стрелка, тот и победил, никто не выбывает
@@ -523,7 +534,7 @@
       const t = (now - t0) / D;
       if (t < 1) {
         draw(segs, { id: pick.item.id, a: 0.5 * Math.abs(Math.sin(t * Math.PI * 3)) });
-        requestAnimationFrame(pulse);
+        bgFrame(pulse);
         return;
       }
       S.rot = mod(S.rot, TAU);
@@ -534,7 +545,7 @@
       setStatus(`Победитель: <b>${esc(pick.item.name)}</b>`, winSub(pick.item), 'good');
       showWinner(pick.item);
     };
-    requestAnimationFrame(pulse);
+    bgFrame(pulse);
   }
 
   // ---------- UI ----------
@@ -630,6 +641,8 @@
       ? 'Строка: имя, сумма и валюта, например «Hades $20» или «Celeste 1 500 грн». Без валюты берётся выбранная в форме.'
       : 'Одно имя на строку.';
     $('#sampleNote').hidden = !S.sample;
+    // «Экспорт» в шапке колеса: пока есть победитель — и после закрытия его карточки, и после перезагрузки страницы
+    $('#exportRes').hidden = !winnerNow();
 
     const a = alive(), ch = chances();
     // в донатном режиме топ по сумме (в валюте банка), сверху самый крупный
@@ -823,6 +836,8 @@
 
   // ---------- итог розыгрыша: текст и картинка ----------
   let lastWinner = null;
+  // текущий победитель: на выбывание — последний оставшийся, в «Одном победителе» — тот, кто выпал последним
+  const winnerNow = () => (S.pick === 'one' ? (lastWinner && S.items.includes(lastWinner) ? lastWinner : null) : (S.items.length > 1 && alive().length === 1 ? alive()[0] : null));
   function resultData(it) {
     const don = S.mode === 'donate';
     const money = (i) => (don ? `${fmt(i.amount)} ${sym(i.cur)}` : '');
@@ -1241,6 +1256,7 @@
     const box = $('#mplayer-' + ch);
     box.hidden = false;
     box.querySelector('.mp-title').textContent = p.title;
+    paintPlayers();
   }
   const hideFrame = (ch) => { $('#mplayer-' + ch).hidden = true; };
 
@@ -1296,7 +1312,7 @@
     const p = presetOf(v);
     if (p) {
       if (EMB.failed) return false;
-      Object.assign(c, { active: true, type: p.src, loop: !!opts.loop, onFail: opts.onFail || null, start: p.start || 0 });
+      Object.assign(c, { active: true, paused: false, type: p.src, loop: !!opts.loop, onFail: opts.onFail || null, start: p.start || 0 });
       startPreset(ch, p);
       renderMusic();
       return true;
@@ -1304,6 +1320,7 @@
     const rec = A.find((a) => a.id === v);
     if (!rec) return false;
     const el = new Audio(rec.url);
+    showFrame(ch, { title: rec.name });
     // тишина в начале файла пропускается; по кругу тоже с первой секунды со звуком (см. channelEnded)
     el.loop = !!opts.loop && !(rec.start > 0);
     if (rec.start > 0) el.currentTime = rec.start;
@@ -1312,7 +1329,7 @@
     const fail = opts.onFail || null;
     // заблокированный автозапуск своего файла: на победе вместо него стандартная фанфара
     el.play().catch(() => { if (c.el === el) { stopChannel(ch); if (fail) fail(); } });
-    Object.assign(c, { active: true, type: 'file', el, loop: !!opts.loop, onFail: null, start: rec.start || 0 });
+    Object.assign(c, { active: true, paused: false, type: 'file', el, loop: !!opts.loop, onFail: null, start: rec.start || 0 });
     renderMusic();
     return true;
   }
@@ -1325,20 +1342,70 @@
     try { if (c.type === 'sp' && EMB.sp[ch]) EMB.sp[ch].pause(); } catch (e) {}
     c.type = null;
     c.onFail = null;
+    c.paused = false;
     hideFrame(ch);
     if (was) renderMusic();
   }
-  // песня победы сейчас играет: { pos, dur } в секундах (dur 0 — длина пока неизвестна), иначе null
-  function winTrack() {
-    const c = CH.win;
+  // что играет в канале: { pos, dur } в секундах (dur 0 — длина пока неизвестна), иначе null
+  function trackOf(ch) {
+    const c = CH[ch];
     if (!c.active) return null;
     try {
-      if (c.type === 'file' && c.el) return { pos: c.el.currentTime || 0, dur: c.el.duration || 0 };
-      if (c.type === 'yt' && EMB.yt.win && EMB.yt.win.getDuration) return { pos: EMB.yt.win.getCurrentTime() || 0, dur: EMB.yt.win.getDuration() || 0 };
+      if (c.type === 'file' && c.el) return { pos: c.el.currentTime || 0, dur: Number.isFinite(c.el.duration) ? c.el.duration : 0 };
+      if (c.type === 'yt' && EMB.yt[ch] && EMB.yt[ch].getDuration) return { pos: EMB.yt[ch].getCurrentTime() || 0, dur: EMB.yt[ch].getDuration() || 0 };
       if (c.type === 'sp') return { pos: (c.pos || 0) / 1000, dur: (c.dur || 0) / 1000 };
     } catch (e) {}
     return { pos: 0, dur: 0 };
   }
+  const winTrack = () => trackOf('win');
+  // перемотка на секунду sec (не раньше начала звука и не дальше конца)
+  function seekChannel(ch, sec) {
+    const c = CH[ch], tr = trackOf(ch);
+    if (!tr) return;
+    const to = Math.max(c.start || 0, tr.dur ? Math.min(tr.dur - 0.5, sec) : sec);
+    try {
+      if (c.type === 'file' && c.el) c.el.currentTime = to;
+      else if (c.type === 'yt' && EMB.yt[ch]) EMB.yt[ch].seekTo(to, true);
+      else if (c.type === 'sp' && EMB.sp[ch]) { EMB.sp[ch].seek(to); c.pos = to * 1000; }
+    } catch (e) {}
+    paintPlayers();
+  }
+  // пауза и продолжение с того же места
+  function togglePause(ch) {
+    const c = CH[ch];
+    if (!c.active) return;
+    c.paused = !c.paused;
+    try {
+      if (c.type === 'file' && c.el) { if (c.paused) c.el.pause(); else c.el.play().catch(() => {}); }
+      else if (c.type === 'yt' && EMB.yt[ch]) { if (c.paused) EMB.yt[ch].pauseVideo(); else EMB.yt[ch].playVideo(); }
+      else if (c.type === 'sp' && EMB.sp[ch]) { if (c.paused) EMB.sp[ch].pause(); else EMB.sp[ch].resume(); }
+    } catch (e) {}
+    paintPlayers();
+  }
+  const mmss = (t) => { t = Math.max(0, Math.floor(t || 0)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
+  // пульт под треком: время, полоса перемотки, значок паузы; обновляется и когда вкладка свёрнута
+  let seeking = null;
+  function paintPlayers() {
+    for (const ch of ['bg', 'win']) {
+      const box = document.getElementById('mplayer-' + ch);
+      if (!box || box.hidden) continue;
+      const tr = trackOf(ch) || { pos: 0, dur: 0 };
+      const range = box.querySelector('.mp-seek');
+      range.disabled = !tr.dur;
+      if (seeking !== ch) range.value = tr.dur ? Math.round((tr.pos / tr.dur) * 1000) : 0;
+      box.querySelector('[data-mp-pos]').textContent = mmss(seeking === ch && tr.dur ? (range.value / 1000) * tr.dur : tr.pos);
+      box.querySelector('[data-mp-dur]').textContent = tr.dur ? mmss(tr.dur) : '—';
+      const pp = box.querySelector('.mp-pp');
+      const paused = !!CH[ch].paused;
+      if (pp.dataset.state !== String(paused)) {
+        pp.dataset.state = String(paused);
+        pp.innerHTML = paused ? ICON.play : ICON.pause;
+        pp.setAttribute('aria-label', paused ? 'Продолжить' : 'Пауза');
+        pp.title = paused ? 'Продолжить' : 'Пауза';
+      }
+    }
+  }
+  setInterval(() => { if (CH.bg.active || CH.win.active) paintPlayers(); }, 400);
   function channelEnded(ch) {
     const c = CH[ch];
     if (!c.active) return;
@@ -1386,9 +1453,9 @@
         .concat(rec ? [[rec.id, '📁 ' + rec.name]] : [])
         .concat([['__upload', rec ? '📁 Загрузить другой файл…' : '📁 Загрузить свой файл…']])
         .concat(slot === 'bg' ? [['', '🔇 Без музыки']] : []);
-      const label = on ? (slot === 'bg' ? 'Пауза' : 'Стоп') : (slot === 'bg' ? 'Включить' : 'Послушать');
+      const label = on ? (slot === 'bg' ? 'Выключить' : 'Стоп') : (slot === 'bg' ? 'Включить' : 'Послушать');
       return `<div class="mcard${on ? ' on' : ''}">
-        <div class="mc-head"><strong>${title}</strong><button type="button" class="mplay${on ? ' on' : ''}" data-mplay="${slot}"${has ? '' : ' disabled'} aria-label="${label}: ${title}">${on ? (slot === 'bg' ? ICON.pause : ICON.stop) : ICON.play}${label}</button></div>
+        <div class="mc-head"><strong>${title}</strong><button type="button" class="mplay${on ? ' on' : ''}" data-mplay="${slot}"${has ? '' : ' disabled'} aria-label="${label}: ${title}">${on ? ICON.stop : ICON.play}${label}</button></div>
         <small>${when}</small>
         <select class="inp mpick" data-mpick="${slot}" aria-label="Трек: ${title}">${opts.map(([val, t]) => `<option value="${esc(val)}"${val === (v || '') ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>
       </div>`;
@@ -1445,8 +1512,9 @@
 
     $('#mslots').addEventListener('click', (e) => {
       const pl = e.target.closest('[data-mplay]');
-      if (!pl || S.spinning) return;
+      if (!pl) return;
       const slot = pl.dataset.mplay;
+      if (S.spinning && slot === 'win' && !CH.win.active) return; // трек победы занят: колесо может вот-вот выдать победителя
       if (slot === 'bg') {
         if (CH.bg.active) { stopChannel('bg'); S.bgOn = false; musicNote(); }
         else { S.bgOn = true; startBg(true); }
@@ -1457,6 +1525,28 @@
       if (CH.win.active) { stopChannel('win'); resumeBg(); return; }
       pauseBgForWin();
       if (!playChannel('win', { force: true })) resumeBg();
+    });
+    // пульт трека: −10 с, пауза, +10 с и перемотка ползунком (работают и пока колесо крутится)
+    document.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-mp]');
+      if (!b) return;
+      const ch = b.dataset.ch, tr = trackOf(ch);
+      if (!tr) return;
+      if (b.dataset.mp === 'toggle') togglePause(ch);
+      else seekChannel(ch, tr.pos + (b.dataset.mp === 'fwd' ? 10 : -10));
+    });
+    document.addEventListener('input', (e) => {
+      const r = e.target.closest('.mp-seek');
+      if (!r) return;
+      seeking = r.dataset.ch;
+      paintPlayers();
+    });
+    document.addEventListener('change', (e) => {
+      const r = e.target.closest('.mp-seek');
+      if (!r) return;
+      const ch = r.dataset.ch, tr = trackOf(ch);
+      seeking = null;
+      if (tr && tr.dur) seekChannel(ch, (r.value / 1000) * tr.dur);
     });
     // трек из списка
     $('#mslots').addEventListener('change', (e) => {
@@ -1809,6 +1899,8 @@
     $('#wCopy').addEventListener('click', copyResult);
     $('#wAgain').addEventListener('click', () => { restoreAll(); if (S.pick === 'one') spin(); });
     $('#wClose').addEventListener('click', hideWinner);
+    // та же карточка, что после победы (картинка: скопировать или скачать, текст), только без музыки и салюта
+    $('#exportRes').addEventListener('click', () => { const w = winnerNow(); if (!w) return; lastWinner = w; wMsg(''); openWinnerCard(w); });
     $('#winner').addEventListener('click', (e) => { if (e.target.id === 'winner') hideWinner(); });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') hideWinner(); });
 

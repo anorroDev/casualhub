@@ -487,9 +487,23 @@ fieldset:disabled { opacity: .6; }
 .ms-acts { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; flex: 1 1 260px; min-width: 0; max-width: 100%; }
 .mpick { flex: 1 1 150px; width: auto; height: 36px; padding: 0 8px; font-size: 13px; cursor: pointer; }
 .ms-text small { font-size: 12px; color: var(--ink-3); }
-.mplayer { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; margin-top: 8px; padding: 8px 12px; background: var(--accent-soft); border-radius: 10px; }
+.mplayer { display: grid; gap: 8px; margin-top: 8px; padding: 10px 12px; background: var(--accent-soft); border-radius: 12px; animation: mp-in .45s cubic-bezier(.34, 1.56, .64, 1); }
+@keyframes mp-in { from { transform: translateY(-6px) scale(.97); } }
+.mp-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 10px; min-width: 0; }
 .mplayer .label { margin: 0; color: var(--accent); }
-.mp-title { font-weight: 600; font-size: 14px; }
+.mp-title { font-weight: 600; font-size: 14px; min-width: 0; overflow-wrap: anywhere; }
+/* пульт трека: назад, пауза, вперёд и перемотка — работают и пока колесо крутится */
+.mp-ctl { display: grid; grid-template-columns: auto auto auto auto minmax(0, 1fr) auto; align-items: center; gap: 6px; }
+.mp-btn { display: grid; place-items: center; min-width: 38px; height: 34px; padding: 0 8px; border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); border-radius: 999px; background: var(--panel); color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 800; cursor: pointer; transition: transform .2s cubic-bezier(.34, 1.56, .64, 1), background-color .15s; }
+.mp-btn:hover { background: var(--panel-2); }
+.mp-btn:active { transform: scale(.9); }
+.mp-pp { min-width: 42px; background: var(--accent); color: var(--on-accent, #fff); border-color: var(--accent); }
+.mp-pp:hover { background: var(--accent); }
+.mp-time { font-size: 12px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--ink-2); min-width: 32px; text-align: center; }
+.mp-seek { width: 100%; min-width: 0; height: 22px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.mp-seek:disabled { cursor: default; opacity: .5; }
+@media (max-width: 420px) { .mp-ctl { grid-template-columns: auto auto auto minmax(0, 1fr); } .mp-ctl .mp-time { display: none; } }
+@media (prefers-reduced-motion: reduce) { .mplayer { animation: none; } }
 /* players stay alive but off screen: display:none would stop them */
 .mp-offscreen { position: fixed; left: -10000px; top: 0; width: 220px; height: 220px; overflow: hidden; pointer-events: none; }
 
@@ -817,6 +831,11 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
 @supports (-webkit-touch-callout: none) { input, textarea, select { font-size: max(16px, 1em) !important; } }
 /* на телефоне переключатели под палец: не ниже 40px */
 @media (pointer: coarse) { .seg button, .seg > button { min-height: 40px; } }
+/* кнопки в шапке колеса: «Экспорт» (когда есть победитель) и «Вернуть всех» */
+.card-head .head-acts { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.exp-btn:not([hidden]) { animation: exp-in .5s cubic-bezier(.34, 1.56, .64, 1); }
+@keyframes exp-in { from { transform: translateY(-8px) scale(.85); } }
+@media (prefers-reduced-motion: reduce) { .exp-btn:not([hidden]) { animation: none; } }
 /* на телефоне у счётчика и «Друзей» без подписей, шапка может уйти во вторую строку */
 .online-chip { cursor: default; }
 @media (max-width: 560px) { .oc-t, .fb-t { display: none; } .masthead-right > .user-bar { flex-wrap: wrap; justify-content: flex-end; row-gap: 6px; } }
@@ -843,7 +862,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
         <a class="theme-btn" id="githubLink" href="https://github.com/anorroDev/casualhub" target="_blank" rel="noopener" title="Код сайта на GitHub"><svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a>
         <span class="theme-btn online-chip" data-online-count title="Сколько людей сейчас на сайте: с аккаунтом и гости"><em aria-hidden="true"></em><b>—</b><span class="oc-t">&nbsp;на сайте</span></span>
         <a class="theme-btn fr-btn" href="/mnenie/#friends" data-friends-btn title="Друзья"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="5.5" r="2.5"/><path d="M1.5 14c.6-2.6 2.3-4 4.5-4s3.9 1.4 4.5 4"/><path d="M10.5 3.2a2.5 2.5 0 0 1 0 4.6M12.5 10.3c1 .6 1.7 1.9 2 3.7"/></svg><span class="fb-t">Друзья</span><i class="fb-n fb-on" hidden></i><i class="fb-n fb-req" hidden></i></a>
-        <button type="button" class="theme-btn howto-btn" id="howtoBtn" title="Как пользоваться" aria-controls="howto" aria-expanded="false"><span aria-hidden="true">❓</span><span class="hb-t">Помощь</span></button>
+        <button type="button" class="theme-btn howto-btn" id="howtoBtn" title="Как пользоваться"><span aria-hidden="true">❓</span><span class="hb-t">Помощь</span></button>
         <details class="theme-pick" id="themePick">
           <summary class="theme-btn" id="themeBtn" title="Тема оформления">🌓 Тема: Авто</summary>
           <div class="theme-menu" id="themeMenu" role="group" aria-label="Тема оформления"></div>
@@ -863,18 +882,10 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     <section class="card stage" id="stage" aria-labelledby="stageTitle">
       <div class="card-head">
         <h2 class="eyebrow"><span class="dot" aria-hidden="true"></span><span id="stageTitle">Колесо</span></h2>
-        <button type="button" class="btn text" id="restart">Вернуть всех</button>
+        <span class="head-acts"><button type="button" class="btn text exp-btn" id="exportRes" hidden title="Картинка или текст с итогом: скопировать или скачать">📤 Экспорт</button>
+        <button type="button" class="btn text" id="restart">Вернуть всех</button></span>
       </div>
 
-      <div class="howto" id="howto" hidden>
-        <div class="howto-head"><span class="howto-wave" aria-hidden="true">👋</span><span>Впервые тут? Всё просто:</span></div>
-        <ol>
-          <li><b>1</b><span>Впиши участников во вкладке «Участники»: по одному или сразу списком</span></li>
-          <li><b>2</b><span>Жми «Крутить» в центре колеса</span></li>
-          <li><b>3</b><span>На выбывание: на кого показала стрелка — вылетает, последний побеждает. «Один победитель» — выигрывает сразу тот, на ком остановилось</span></li>
-        </ol>
-        <button type="button" class="howto-x">Понятно 👍</button>
-      </div>
       <div class="readout">
         <span class="label">Под стрелкой</span>
         <strong id="ticker">—</strong>
@@ -943,8 +954,28 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
         </div>
         <input type="file" id="audioFile" accept="audio/*,.mp3,.ogg,.wav,.m4a" hidden>
         <div class="mslots" id="mslots"></div>
-        <div class="mplayer" id="mplayer-bg" hidden><span class="label">Фоном играет</span><span class="mp-title"></span></div>
-        <div class="mplayer" id="mplayer-win" hidden><span class="label">Победа играет</span><span class="mp-title"></span></div>
+        <div class="mplayer" id="mplayer-bg" hidden>
+          <div class="mp-top"><span class="label">Фоном играет</span><span class="mp-title"></span></div>
+          <div class="mp-ctl">
+            <button type="button" class="mp-btn" data-mp="back" data-ch="bg" aria-label="Назад на 10 секунд" title="Назад на 10 с">−10</button>
+            <button type="button" class="mp-btn mp-pp" data-mp="toggle" data-ch="bg" aria-label="Пауза" title="Пауза"></button>
+            <button type="button" class="mp-btn" data-mp="fwd" data-ch="bg" aria-label="Вперёд на 10 секунд" title="Вперёд на 10 с">+10</button>
+            <span class="mp-time" data-mp-pos>0:00</span>
+            <input type="range" class="mp-seek" data-ch="bg" min="0" max="1000" step="1" value="0" aria-label="Перемотка трека">
+            <span class="mp-time" data-mp-dur>—</span>
+          </div>
+        </div>
+        <div class="mplayer" id="mplayer-win" hidden>
+          <div class="mp-top"><span class="label">Победа играет</span><span class="mp-title"></span></div>
+          <div class="mp-ctl">
+            <button type="button" class="mp-btn" data-mp="back" data-ch="win" aria-label="Назад на 10 секунд" title="Назад на 10 с">−10</button>
+            <button type="button" class="mp-btn mp-pp" data-mp="toggle" data-ch="win" aria-label="Пауза" title="Пауза"></button>
+            <button type="button" class="mp-btn" data-mp="fwd" data-ch="win" aria-label="Вперёд на 10 секунд" title="Вперёд на 10 с">+10</button>
+            <span class="mp-time" data-mp-pos>0:00</span>
+            <input type="range" class="mp-seek" data-ch="win" min="0" max="1000" step="1" value="0" aria-label="Перемотка трека">
+            <span class="mp-time" data-mp-dur>—</span>
+          </div>
+        </div>
         <!-- сами плееры YouTube и Spotify работают за пределами экрана, их не видно -->
         <div class="mp-offscreen" aria-hidden="true">
           <div id="yt-bg"></div><div id="sp-bg"></div>

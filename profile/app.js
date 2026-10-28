@@ -33,8 +33,13 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const d = Math.round(h / 24); if (d < 30) return `${d} ${plural(d, 'день', 'дня', 'дней')} назад`;
     return new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
   };
+  // значки шапки профиля: карандаш у ника, витрины и блоки, колокольчик подписки
+  const ICON_PEN = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 2.5l2.5 2.5L6 12.5H3.5V10z"/><path d="M9.5 4l2.5 2.5"/></svg>';
+  const ICON_LAYOUT = '<svg viewBox="0 0 16 16" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1.2"/><rect x="9" y="2" width="5" height="5" rx="1.2"/><rect x="2" y="9" width="5" height="5" rx="1.2"/><rect x="9" y="9" width="5" height="5" rx="1.2"/></svg>';
+  const ICON_BELL = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>';
+  const ICON_BELL_ON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9"/><path d="M10 19a2 2 0 0 0 4 0" fill="none"/><path d="M3 5.5c.6-1.4 1.5-2.5 2.6-3.3M21 5.5c-.6-1.4-1.5-2.5-2.6-3.3" fill="none"/></svg>';
   const ICON = {
-    go: '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg>',
+    go:'<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 3l5 5-5 5"/></svg>',
     star: '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M8 1.5l1.9 4 4.3.5-3.2 2.9.9 4.3L8 11 4.1 13.2l.9-4.3L1.8 6l4.3-.5z" fill="currentColor"/></svg>',
   };
 
@@ -584,7 +589,10 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       ${pros.length || cons.length ? `<div class="fr-pc">${pros.length ? `<div><span class="label">Плюсы</span><ul>${pros.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}${cons.length ? `<div><span class="label">Минусы</span><ul>${cons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}</div>` : ''}
       ${r.text ? `<p class="fr-note">${esc(r.text)}</p>` : ''}
       <div class="rd-foot"><span>${when ? dayFmt(when) : ''}</span><a class="btn ghost" href="${rateLink(p, r)}">Открыть в Мнении</a></div>
+      ${p.uid && token ? '<div class="rd-cm" id="rdComments"></div>' : ''}
     </article>`;
+    // ветка комментариев под оценкой: та же, что в Мнении у этой оценки
+    if (p.uid && token && window.CasualComments) window.CasualComments.mount(rdBox.querySelector('#rdComments'), { uid: p.uid, target: 'r.' + r.id, token, title: 'Комментарии к оценке', placeholder: 'Что думаешь об этой оценке?' });
     rdBox.hidden = false;
     document.body.style.overflow = 'hidden';
     rdBox.querySelector('.rd-x').focus({ preventScroll: true });
@@ -644,6 +652,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
           <p class="ban-hint">Лучше широкая, примерно 3 к 1. Картинку можно и просто перетащить на баннер.</p>
           <span class="label">Готовые</span>
           <div class="ban-presets" id="banPresets"></div>
+          ${token && p.uid ? '<span class="label">Прошлые баннеры</span><div class="hist-grid hg-ban" id="banHist"></div>' : ''}
           <button type="button" class="btn ghost" id="banPos"${p.banner ? '' : ' hidden'}>Выбрать видимую часть</button>
           <button type="button" class="btn ghost" id="banRemove"${p.banner ? '' : ' hidden'}>Убрать баннер</button>
           <p class="ban-msg" id="banMsg" role="status"></p>
@@ -652,13 +661,13 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         <div class="who">
           <div class="name-row">${isMe && p.editingName
             ? `<form class="name-edit" id="nameEditForm"><input id="profileNameInput" type="text" value="${esc(p.name)}" minlength="2" maxlength="24" aria-label="Ник"><button type="submit" class="btn primary">Сохранить</button><button type="button" class="btn ghost" id="profileNameCancel">Отмена</button></form>`
-            : `<h1 class="name" id="profileName" aria-label="${esc(p.name)}"${isMe ? ' role="button" tabindex="0" title="Нажми, чтобы изменить ник"' : ''}>${nameHTML}</h1>`}${stickerSlot(p)}</div>
+            : `<h1 class="name" id="profileName" aria-label="${esc(p.name)}"${isMe ? ' role="button" tabindex="0" title="Нажми, чтобы изменить ник"' : ''}>${nameHTML}</h1>`}${isMe && !p.editingName ? `<button type="button" class="name-ic" id="profileEditBtn" title="Изменить ник" aria-label="Изменить ник">${ICON_PEN}</button>` : ''}${!isMe && p.uid && token ? bellHTML(p.followed) : ''}${stickerSlot(p)}</div>
           <p class="sub">${esc(p.sub)}</p>
           ${!isMe && p.uid ? `<p class="sub" data-seen="${esc(p.uid)}" data-last="${+p.lastSeen || ''}"></p>` : ''}
           <div class="titles"${hid(p, 'titles')}>${titlesOf(rs).map((t) => `<span class="title-chip" data-tier="${t.tier}"><i></i>${esc(t.t)}</span>`).join('')}</div>
           <div class="hero-acts">${isMe
-            ? `<a class="btn primary" href="/mnenie/">Оценить что-нибудь</a><button type="button" class="btn ghost" id="layoutBtn">Витрины и блоки</button><button type="button" class="btn ghost" id="profileEditBtn">Настроить профиль</button>`
-            : `${p.uid && token ? `<button type="button" class="btn ${p.followed ? 'ghost' : 'primary'}" id="followBtn" aria-pressed="${!!p.followed}" title="Новые оценки друга будут видны в Журнале Мнения">${p.followed ? '🔔 Ты подписан' : '🔔 Подписаться на оценки'}</button>` : ''}<a class="btn ghost" href="/profile/">Мой профиль</a>${p.common && p.common.length ? '<a class="btn primary" href="#taste">Сравнить вкусы</a>' : ''}`}</div>
+            ? `<a class="btn primary" href="/mnenie/">Оценить что-нибудь</a><button type="button" class="btn ghost ic-btn" id="layoutBtn" title="Витрины и блоки: что показывать в профиле" aria-label="Витрины и блоки">${ICON_LAYOUT}</button>`
+            : `<a class="btn ghost" href="/profile/">Мой профиль</a>${p.common && p.common.length ? '<a class="btn primary" href="#taste">Сравнить вкусы</a>' : ''}`}</div>
         </div>
       </section>
 
@@ -735,8 +744,15 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
             <div class="catl">${[...cats.entries()].sort((a, b) => b[1].n - a[1].n).map(([name, c]) => { const av = c.k ? c.sum / c.k : null; return `<button type="button" class="cat" data-catgo="${esc(name)}" title="Показать оценки «${esc(name)}»"><b>${esc(name)}</b><small>${c.n} · ${av != null ? 'в среднем ' + fmt(av) : 'без балла'}</small><span class="tr" data-tier="${tierT(av)}"><i style="width:${(c.n / rs.length) * 100}%"></i></span></button>`; }).join('')}</div>
           </section>` : ''}
         </div>
-      </div>`;
+      </div>
+      ${p.uid && token ? `<section class="card rise wall" id="wallSec" style="--d:${d++}" aria-label="Комментарии в профиле"></section>` : ''}`;
 
+    // стена профиля в самом низу, как в Steam: пишут хозяин и его друзья
+    if (p.uid && token && window.CasualComments) window.CasualComments.mount($('#wallSec'), {
+      uid: p.uid, target: 'wall', token, title: isMe ? 'Комментарии в твоём профиле' : `Комментарии в профиле ${p.name}`,
+      placeholder: isMe ? 'Напиши что-нибудь у себя на стене…' : `Напиши что-нибудь ${p.name}…`,
+      empty: isMe ? 'Пока никто ничего не написал. Друзья могут оставить тут комментарий.' : 'Пока пусто. Напиши первым!',
+    });
     if (rs.length) wireList(p);
     wireJumps(p);
     if (isMe) { const lb = $('#layoutBtn'); if (lb) lb.addEventListener('click', () => layoutEditor(p)); wireProfileName(p); }
@@ -973,11 +989,16 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   function wireAvatar(p) {
     const wrap = $('#avaWrap'), inp = $('#avaFile');
     if (!wrap || !inp) return;
-    wrap.addEventListener('click', (e) => { if (e.target !== inp) inp.click(); });
-    wrap.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); inp.click(); } });
-    inp.addEventListener('change', async () => {
+    // с аккаунтом нажатие открывает меню: загрузить новую или вернуть одну из прошлых; без аккаунта — сразу выбор файла
+    const pick = () => (token && p.uid ? histMenu(wrap, 'avatar', p, { upload: () => inp.click(), use: (d) => setAvatar(dataToBlob(d)) }) : inp.click());
+    wrap.addEventListener('click', (e) => { if (e.target !== inp && !e.target.closest('.hist-menu')) pick(); });
+    wrap.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && !e.target.closest('.hist-menu')) { e.preventDefault(); pick(); } });
+    inp.addEventListener('change', () => {
       const f = inp.files && inp.files[0];
       inp.value = '';
+      if (f) setAvatar(f);
+    });
+    async function setAvatar(f) {
       if (!f) return;
       if (!/^image\//.test(f.type)) { toast('Нужна картинка: JPG, PNG, WebP или GIF'); return; }
       const animated = /^image\/(gif|webp)$/.test(f.type) && f.size <= AVA_ANIM_MAX;
@@ -1014,7 +1035,70 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       } finally {
         wrap.classList.remove('busy');
       }
+    }
+  }
+
+  // ---------- история аватарок и баннеров: сервер хранит 8 прошлых, вернуть любую — одно нажатие ----------
+  // data URL в Blob без fetch (fetch data: под CSP запрещён)
+  function dataToBlob(d) {
+    const s = bare(d), comma = s.indexOf(',');
+    const type = (s.slice(0, comma).match(/^data:([^;]+)/) || [])[1] || 'image/png';
+    const bin = atob(s.slice(comma + 1));
+    const u = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+    return new Blob([u], { type });
+  }
+  let histOpen = null;
+  function closeHist() { if (histOpen) { histOpen.remove(); histOpen = null; } }
+  document.addEventListener('click', (e) => { if (histOpen && !histOpen.contains(e.target) && !e.target.closest('#avaWrap, #banBtn')) closeHist(); });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeHist(); });
+  // меню «Загрузить новую + история» у аватарки; у баннера история встраивается в его меню (histInto)
+  function histMenu(anchor, kind, p, act) {
+    if (histOpen) { closeHist(); return; }
+    const m = document.createElement('div');
+    m.className = 'hist-menu';
+    m.setAttribute('role', 'dialog');
+    m.setAttribute('aria-label', 'Аватар');
+    m.innerHTML = `<button type="button" class="btn primary" data-h="up">📷 Загрузить новую</button><span class="label">Прошлые аватарки</span><div class="hist-grid hg-ava" data-hist></div>`;
+    // меню живёт в body (внутри аватарки на него действовали бы её стили) и стоит под аватаркой; при прокрутке закрывается
+    document.body.appendChild(m);
+    const r = anchor.getBoundingClientRect();
+    m.style.left = Math.max(12, Math.min(r.left, innerWidth - m.offsetWidth - 12)) + 'px';
+    m.style.top = Math.min(r.bottom + 10, innerHeight - m.offsetHeight - 12) + 'px';
+    histOpen = m;
+    addEventListener('scroll', closeHist, { once: true, passive: true });
+    m.querySelector('[data-h="up"]').addEventListener('click', (e) => { e.stopPropagation(); closeHist(); act.upload(); });
+    histInto(m.querySelector('[data-hist]'), kind, p, (d) => { closeHist(); act.use(d); });
+  }
+  async function histInto(box, kind, p, use) {
+    box.innerHTML = '<p class="hist-empty">Загружаю…</p>';
+    let items = [];
+    try { items = (await api('/photo-history/' + kind)).items || []; } catch (e) {}
+    if (!box.isConnected) return;
+    if (!items.length) { box.innerHTML = `<p class="hist-empty">Пока пусто: прошлые ${kind === 'avatar' ? 'аватарки' : 'баннеры'} появятся тут, когда поставишь новые.</p>`; return; }
+    box.innerHTML = items.map((x) => `<span class="hist-it" data-id="${esc(x.id)}"><button type="button" class="hist-pic" data-use title="Вернуть (${esc(dayFmt(x.at))})" aria-label="Вернуть картинку от ${esc(dayFmt(x.at))}"></button><button type="button" class="hist-x" data-del aria-label="Удалить из истории" title="Удалить из истории">✕</button></span>`).join('');
+    const data = new Map();
+    box.querySelectorAll('.hist-it').forEach((it) => {
+      api(`/photo/${encodeURIComponent(p.uid)}/${encodeURIComponent(it.dataset.id)}`).then((d) => {
+        if (!d.data) { it.remove(); return; }
+        data.set(it.dataset.id, d.data);
+        const b = it.querySelector('.hist-pic');
+        b.style.backgroundImage = `url("${bare(d.data)}")`;
+        if (kind === 'banner') { const ps = posOf(d.data); b.style.backgroundPosition = `${ps.x}% ${ps.y}%`; }
+      }, () => it.remove());
     });
+    // onclick, а не addEventListener: меню баннера открывают много раз, обработчик должен быть один
+    box.onclick = async (e) => {
+      e.stopPropagation();
+      const it = e.target.closest('.hist-it');
+      if (!it) return;
+      if (e.target.closest('[data-del]')) {
+        try { await send('DELETE', '/photo/' + encodeURIComponent(it.dataset.id)); it.classList.add('gone'); setTimeout(() => it.remove(), calm ? 0 : 250); } catch (err) { toast('Не получилось удалить'); }
+        return;
+      }
+      const d = data.get(it.dataset.id);
+      if (d) use(d);
+    };
   }
 
   // аватарки друзей: каждый ставит свою в профиле, сервер отдаёт её друзьям
@@ -1038,6 +1122,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         $('#banPresets').innerHTML = PRESETS.map((pr, k) => `<button type="button" data-k="${k}" title="${esc(pr.name)}" aria-label="Баннер «${esc(pr.name)}»" style="background-image:url('${paint(pr.draw, 300, 100)}')"></button>`).join('');
       }
       if (on) say('');
+      // история: при каждом открытии меню свежая (новый баннер только что ушёл в неё)
+      if (on && $('#banHist')) histInto($('#banHist'), 'banner', p, (d) => { open(false); apply(d); });
     };
     // выбор видимой части: тянем картинку внутри баннера, «Готово» сохраняет положение
     let posing = null;
@@ -1247,13 +1333,22 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         try { const all = read('casualhub.followSeen.v1') || {}; all[p.uid] = Date.now(); localStorage.setItem('casualhub.followSeen.v1', JSON.stringify(all)); } catch (e) {}
       }
       p.followed = on;
-      btn.className = 'btn ' + (on ? 'ghost' : 'primary');
-      btn.setAttribute('aria-pressed', String(on));
-      btn.textContent = on ? '🔔 Ты подписан' : '🔔 Подписаться на оценки';
+      btn.outerHTML = bellHTML(on);
+      const nb = $('#followBtn');
+      if (nb) {
+        nb.addEventListener('click', () => toggleFollow(p, nb));
+        if (on && !calm) nb.classList.add('ring'); // колокольчик качается, как на YouTube
+        toast(on ? '🔔 Подписка есть: новые оценки друга появятся в Журнале Мнения' : 'Подписка отменена');
+      }
+      return;
     } catch (e) {
-      btn.textContent = 'Не получилось, попробуй ещё раз';
+      toast('Не получилось, попробуй ещё раз');
     }
     btn.disabled = false;
+  }
+  // колокольчик подписки рядом с ником друга: пустой — не подписан, залитый — подписан
+  function bellHTML(on) {
+    return `<button type="button" class="bell${on ? ' on' : ''}" id="followBtn" aria-pressed="${!!on}" title="${on ? 'Ты подписан. Нажми, чтобы отписаться' : 'Подписаться: новые оценки друга будут видны в Журнале Мнения'}" aria-label="${on ? 'Отписаться от оценок' : 'Подписаться на оценки'}">${on ? ICON_BELL_ON : ICON_BELL}</button>`;
   }
 
   // ---------- профиль друга ----------

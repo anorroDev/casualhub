@@ -770,7 +770,7 @@
 <span class="badge" data-tier="${tierT(t)}">${t != null ? fmt(t) : '—'}</span>
 ${ICON.chev}
 </span></summary>
-<div class="e-body">${friendPhoto(r, 'body', uid)}<ul class="bd">${bd}</ul>${pc}${r.note ? `<div class="e-note"><span class="label">Заметки</span><p>${esc(r.note)}</p></div>` : ''}<div class="rx" data-rx="${esc(r.id || '')}">${rxBlock(uid, r.id)}</div></div>
+<div class="e-body">${friendPhoto(r, 'body', uid)}<ul class="bd">${bd}</ul>${pc}${r.note ? `<div class="e-note"><span class="label">Заметки</span><p>${esc(r.note)}</p></div>` : ''}<div class="rx" data-rx="${esc(r.id || '')}">${rxBlock(uid, r.id)}</div><div class="cm-slot" data-cm-uid="${esc(uid)}" data-cm-rid="${esc(r.id || '')}"></div></div>
 </details></li>`;
   }
 
@@ -862,8 +862,31 @@ ${ICON.chev}
     fnote.textContent = all.length ? 'Ничего не нашлось.' : 'Друзья пока ничего не оценили.';
   }
 
+  // ветка комментариев под оценкой (comments.js): место под неё есть у каждой оценки — своей и друга,
+  // а грузится она, только когда оценку развернули
+  function decorateComments() {
+    if (!F.me || !F.token || !window.CasualComments) return;
+    el.board.querySelectorAll('.entry[data-id] .e-body').forEach((body) => {
+      if (body.querySelector('.cm-slot')) return;
+      const li = body.closest('.entry[data-id]');
+      body.insertAdjacentHTML('beforeend', `<div class="cm-slot" data-cm-uid="${esc(F.me.id)}" data-cm-rid="${esc(li.dataset.id)}"></div>`);
+    });
+    mountOpenComments(document);
+  }
+  function mountOpenComments(root) {
+    if (!F.token || !window.CasualComments) return;
+    root.querySelectorAll('details[open] .cm-slot:not([data-on])').forEach((slot) => {
+      if (!slot.dataset.cmRid || !slot.dataset.cmUid) return;
+      slot.dataset.on = '1';
+      const mine = F.me && slot.dataset.cmUid === F.me.id;
+      window.CasualComments.mount(slot, { uid: slot.dataset.cmUid, target: 'r.' + slot.dataset.cmRid, token: F.token, title: mine ? 'Комментарии к твоей оценке' : 'Комментарии', placeholder: mine ? 'Ответь друзьям…' : 'Что думаешь об этой оценке?' });
+    });
+  }
+  document.addEventListener('toggle', (e) => { if (e.target.open && e.target.closest && e.target.closest('.entry')) mountOpenComments(e.target); }, true);
+
   function afterBoard() {
     try { decorateOwn(); } catch (e) {}
+    try { decorateComments(); } catch (e) {}
     const mine = state.sfilter === 'mine'; // кнопка «Друзья»: оценки друзей, своих здесь нет
     bar.hidden = !mine;
     if (!mine) {

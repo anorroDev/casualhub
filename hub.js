@@ -217,6 +217,15 @@
         <span class="fd-text"><b>${who}: ${esc(what)}</b><span>«${esc(x.name)}»${x.text ? ' · ' + esc(x.text) : ''} · ${ago(it.at)}</span></span>
         <span class="fd-score none">открыть</span></a></li>`;
     }
+    // друг написал мне: на стене профиля или под моей оценкой
+    if (it.kind === 'comment') {
+      const x = it.comment;
+      const href = x.rid ? `/mnenie/#r=${encodeURIComponent(x.rid)}` : '/profile/#wallSec';
+      return `<li><a class="fd" href="${href}" title="${x.rid ? 'Открыть оценку' : 'Открыть стену профиля'}">
+        <span class="fd-pic rx" style="--fc:${colorOf(it.user.id)}">💬</span>
+        <span class="fd-text"><b>${who}: ${x.rid ? `комментарий к «${esc(x.name)}»` : 'написал на твоей стене'}</b><span>${esc(x.text)} · ${ago(it.at)}</span></span>
+        <span class="fd-score none">открыть</span></a></li>`;
+    }
     if (it.kind !== 'rating') return '';
     const r = it.rating;
     const pic = r.photo && r.photo.url ? `<img src="${esc(r.photo.url)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fallback="${esc(String(r.name).charAt(0))}">`

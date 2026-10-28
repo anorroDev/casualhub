@@ -1444,7 +1444,7 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
         <a class="theme-btn" id="githubLink" href="https://github.com/anorroDev/casualhub" target="_blank" rel="noopener" title="Код сайта на GitHub"><svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a>
         <span class="theme-btn online-chip" data-online-count title="Сколько людей сейчас на сайте: с аккаунтом и гости"><em aria-hidden="true"></em><b>—</b><span class="oc-t">&nbsp;на сайте</span></span>
         <a class="theme-btn fr-btn" href="/mnenie/#friends" data-friends-btn title="Друзья"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="5.5" r="2.5"/><path d="M1.5 14c.6-2.6 2.3-4 4.5-4s3.9 1.4 4.5 4"/><path d="M10.5 3.2a2.5 2.5 0 0 1 0 4.6M12.5 10.3c1 .6 1.7 1.9 2 3.7"/></svg><span class="fb-t">Друзья</span><i class="fb-n fb-on" hidden></i><i class="fb-n fb-req" hidden></i></a>
-        <button type="button" class="theme-btn howto-btn" id="howtoBtn" title="Как пользоваться" aria-controls="howto" aria-expanded="false"><span aria-hidden="true">❓</span><span class="hb-t">Помощь</span></button>
+        <button type="button" class="theme-btn howto-btn" id="howtoBtn" title="Как пользоваться"><span aria-hidden="true">❓</span><span class="hb-t">Помощь</span></button>
         <details class="theme-pick" id="themePick">
           <summary class="theme-btn" id="themeBtn" title="Тема оформления">🌓 Тема</summary>
           <div class="theme-menu" id="themeMenu" role="group" aria-label="Тема оформления"></div>
@@ -1469,15 +1469,6 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
       <div class="rater-head">
         <h2 class="eyebrow"><span class="dot" aria-hidden="true"></span><span id="raterTitle">Новая оценка</span></h2>
         <button type="button" class="btn text" id="headBtn">Очистить</button>
-      </div>
-      <div class="howto" id="howto" hidden>
-        <div class="howto-head"><span class="howto-wave" aria-hidden="true">👋</span><span>Впервые тут? Всё просто:</span></div>
-        <ol>
-          <li><b>1</b><span>Выбери категорию и напиши, что оцениваешь: игру, фильм, кафе — что угодно</span></li>
-          <li><b>2</b><span>Нажимай на клетки от 1 до 10 у пунктов ниже. Чем больше клеток, тем лучше</span></li>
-          <li><b>3</b><span>Жми «Сохранить» внизу — оценка появится в рейтинге</span></li>
-        </ol>
-        <button type="button" class="howto-x">Понятно 👍</button>
       </div>
 
       <div class="field">
@@ -1715,6 +1706,7 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
 
 <script src="/themes.js"></script>
 <script src="/fx.js"></script>
+<script src="/comments.js"></script>
 <script src="/howto.js"></script>
 <script src="/mnenie/app.js"></script>
 <script src="/friends.js"></script>

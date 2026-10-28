@@ -53,6 +53,10 @@ async function ensureSchema(env) {
     // ссылки на отзыв: случайный код → чья оценка; одна ссылка на оценку
     env.DB.prepare('CREATE TABLE IF NOT EXISTS shares (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, rid TEXT NOT NULL, created_at INTEGER NOT NULL)'),
     env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS shares_owner_rid ON shares(owner_id, rid)'),
+    // комментарии: на стене профиля (target = 'wall') и под оценкой (target = 'r.<id оценки>')
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS comments (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, target TEXT NOT NULL, from_id TEXT NOT NULL, text TEXT NOT NULL, at INTEGER NOT NULL)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS comments_owner ON comments(owner_id, target, at)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS comments_from ON comments(from_id)'),
   ]);
   const { results } = await env.DB.prepare('PRAGMA table_info(users)').all();
   if (!results.some((c) => c.name === 'email')) await env.DB.prepare('ALTER TABLE users ADD COLUMN email TEXT').run();
@@ -150,7 +154,10 @@ const LIMITS = {
   register: { max: 10, win: 60 * 60e3 },  // регистраций (и попыток на занятые почту/ник) с одного адреса
   friendReq: { max: 40, win: 10 * 60e3 }, // заявок в друзья (перебор ников)
   react: { max: 120, win: 10 * 60e3 },    // реакций и комментариев
+  comment: { max: 60, win: 10 * 60e3 },   // комментариев на стенах и под оценками
 };
+const CM_MAX = 500; // символов в одном комментарии
+const CM_TARGET_RE = /^(wall|r\.[\w.-]{1,80})$/;
 const clientIp = (request) => request.headers.get('CF-Connecting-IP') || 'local';
 async function overLimit(env, key, kind) {
   const row = await env.DB.prepare('SELECT count, reset_at FROM attempts WHERE key = ?').bind(key).first();
@@ -506,7 +513,8 @@ const routes = {
     if (gone.length) {
       // вместе с фото уходит и его превью «<id>.t»
       await env.DB.batch(gone.flatMap((id) => [`${me.id}:${id}`, `${me.id}:${id}.t`].map((k) => env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(k))
-        .concat(env.DB.prepare('DELETE FROM shares WHERE owner_id = ? AND rid = ?').bind(me.id, id)))); // и ссылка на отзыв закрывается
+        .concat(env.DB.prepare('DELETE FROM shares WHERE owner_id = ? AND rid = ?').bind(me.id, id)) // и ссылка на отзыв закрывается
+        .concat(env.DB.prepare('DELETE FROM comments WHERE owner_id = ? AND target = ?').bind(me.id, 'r.' + id)))); // и ветка комментариев под ней
     }
     return json({ ok: true, updatedAt: now, count: merged.length, catsAt: catsOut ? catsOut.at : null });
   },
@@ -642,7 +650,8 @@ const routes = {
   async 'PUT /photo/:rid'({ env, request, me, arg }) {
     if (burst('photo:' + me.id, 80, 60e3)) return tooMany(1);
     const { data } = await readBody(request);
-    if (typeof data !== 'string' || !/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/]+=*$/.test(data)) return fail(400, 'Нужна картинка.');
+    // у баннера в конце бывает «#pos=x,y» — какая часть картинки видна
+    if (typeof data !== 'string' || !/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/]+=*(#pos=\d{1,3},\d{1,3})?$/.test(data)) return fail(400, 'Нужна картинка.');
     if (data.length > MAX_PHOTO) return fail(413, 'Фото слишком большое.');
     const key = `${me.id}:${arg}`;
     if (!(await env.DB.prepare('SELECT 1 FROM photos WHERE key = ?').bind(key).first())) {
@@ -650,12 +659,15 @@ const routes = {
       if (c && c.n >= MAX_PHOTOS) return fail(413, `Слишком много фото в аккаунте (больше ${MAX_PHOTOS}). Удали старые оценки с фото.`);
     }
     const now = Date.now();
+    // аватар и баннер: прежняя картинка уходит в историю (последние 8), её можно вернуть одним нажатием
+    if (HIST_KINDS.has(arg)) await toHistory(env, me.id, arg, data);
     await env.DB.prepare(
       'INSERT INTO photos (key, user_id, data, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at'
     ).bind(key, me.id, data, now).run();
     return json({ ok: true, updatedAt: now });
   },
   async 'DELETE /photo/:rid'({ env, me, arg }) {
+    if (HIST_KINDS.has(arg)) await toHistory(env, me.id, arg, null); // убранный аватар или баннер тоже остаётся в истории
     await env.DB.prepare('DELETE FROM photos WHERE key = ? OR key = ?').bind(`${me.id}:${arg}`, `${me.id}:${arg}.t`).run();
     return json({ ok: true });
   },
@@ -774,14 +786,75 @@ const routes = {
         items.push({ kind: 'react', at: x.at, user: people.get(x.from_id), react: { rid: x.rid, name: String(nameOf.get(x.rid)).slice(0, 120), emoji: x.emoji || null, text: x.text || '' } });
       }
     }
+    // друзья написали мне: на стене профиля или под моей оценкой
+    const { results: mineCm } = await env.DB.prepare(`SELECT target, from_id, text, at FROM comments WHERE owner_id = ? AND from_id IN (${marks}) ORDER BY at DESC LIMIT 15`).bind(me.id, ...ids).all();
+    if (mineCm.length) {
+      const myShelf = readShelf(await env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(me.id).first());
+      const nameOf = new Map(myShelf.ratings.map((r) => [r.id, r.name]));
+      for (const x of mineCm) {
+        const rid = x.target === 'wall' ? null : x.target.slice(2);
+        if (rid && !nameOf.has(rid)) continue;
+        items.push({ kind: 'comment', at: x.at, user: people.get(x.from_id), comment: { rid, name: rid ? String(nameOf.get(rid)).slice(0, 120) : '', text: String(x.text).slice(0, 200) } });
+      }
+    }
     items.sort((a, b) => b.at - a.at);
     return json({ friends: fr.length, items: items.slice(0, 40) });
   },
 
+  // ---------- комментарии: стена профиля («wall») и ветка под оценкой («r.<id оценки>»); видят хозяин и его друзья ----------
+  async 'GET /comments/:uid/:target'({ env, me, arg }) {
+    const [uid, target] = arg;
+    if (!(await canSee(env, me, uid))) return fail(403, 'Комментарии видны только друзьям.');
+    const { results } = await env.DB.prepare(
+      'SELECT c.id, c.from_id, c.text, c.at, u.username, u.uname FROM comments c LEFT JOIN users u ON u.id = c.from_id WHERE c.owner_id = ? AND c.target = ? ORDER BY c.at DESC LIMIT 200'
+    ).bind(uid, target).all();
+    return json({
+      items: results.reverse().map((x) => ({
+        id: x.id, text: x.text, at: x.at,
+        from: { id: x.from_id, username: x.username || 'удалённый аккаунт', handle: x.uname || '' },
+        canDelete: x.from_id === me.id || uid === me.id,
+      })),
+    });
+  },
+  async 'POST /comments/:uid/:target'({ env, request, me, arg }) {
+    const [uid, target] = arg;
+    if (!(await canSee(env, me, uid))) return fail(403, 'Писать можно только себе и друзьям.');
+    if (burst('cm:' + me.id, 12, 60e3)) return tooMany(1);
+    const wait = await overLimit(env, 'cm:' + me.id, 'comment');
+    if (wait) return tooMany(wait);
+    const body = await readBody(request);
+    // переносы строк оставляем (не больше двух подряд), остальное — как в реакциях: без невидимых и «переворачивающих» символов
+    const text = String(body.text || '').replace(SPOOF_RE, '').replace(/\r\n?/g, '\n').replace(/[ \t\f\v ]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim().slice(0, CM_MAX);
+    if (!text) return fail(400, 'Напиши что-нибудь.');
+    const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM comments WHERE owner_id = ?').bind(uid).first();
+    if (n && n.n >= 5000) return fail(413, 'У этого профиля слишком много комментариев.');
+    await hit(env, 'cm:' + me.id, 'comment');
+    const id = randHex(10), now = Date.now();
+    await env.DB.prepare('INSERT INTO comments (id, owner_id, target, from_id, text, at) VALUES (?, ?, ?, ?, ?, ?)').bind(id, uid, target, me.id, text, now).run();
+    return json({ item: { id, text, at: now, from: pubUser(me), canDelete: true } });
+  },
+  // удалить может автор комментария и хозяин профиля, на чьей стене или оценке он написан
+  async 'DELETE /comment/:id'({ env, me, arg }) {
+    await env.DB.prepare('DELETE FROM comments WHERE id = ? AND (from_id = ? OR owner_id = ?)').bind(arg, me.id, me.id).run();
+    return json({ ok: true });
+  },
+  // сколько комментариев под оценками человека: число 💬 у строк рейтинга
+  async 'GET /comments-count/:uid'({ env, me, arg }) {
+    if (!(await canSee(env, me, arg))) return fail(403, 'Комментарии видны только друзьям.');
+    const { results } = await env.DB.prepare("SELECT target, COUNT(*) AS n FROM comments WHERE owner_id = ? AND target != 'wall' GROUP BY target").bind(arg).all();
+    return json({ counts: Object.fromEntries(results.map((x) => [x.target.slice(2), x.n])) });
+  },
+
   // ?meta=1 — только когда фото менялось (телефон не качает аватар заново, если он тот же);
   // ?thumb=1 — маленькое превью «<id>.t», а если его ещё нет, то полное фото
+  // история аватарок или баннеров: только список (что есть и когда), сами картинки грузятся по одной
+  async 'GET /photo-history/:kind'({ env, me, arg }) {
+    const { results } = await env.DB.prepare('SELECT key, updated_at FROM photos WHERE user_id = ? AND key LIKE ? ORDER BY key DESC LIMIT ?').bind(me.id, `${me.id}:${arg}.h.%`, HIST_MAX).all();
+    return json({ items: results.map((r) => ({ id: r.key.slice(me.id.length + 1), at: r.updated_at })) });
+  },
   async 'GET /photo/:uid/:rid'({ env, request, me, arg }) {
     const [uid, rid] = arg;
+    if (HIST_RE.test(rid) && uid !== me.id) return json({ data: null }); // историю аватарок и баннеров видит только хозяин
     if (!(await canSee(env, me, uid))) return fail(403, 'Фото видны только друзьям.');
     const q = new URL(request.url).searchParams;
     if (q.has('meta')) {
@@ -802,6 +875,23 @@ const weakPass = (p) => p.length < 8 || p.length > 200 || COMMON_PASS.has(p.toLo
 const WEAK_PASS = 'Пароль: от 8 символов и не из самых простых вроде «12345678» или «password».';
 const NAME_HINT = 'Ник: от 2 до 24 символов, буквы, цифры, пробел, точка, дефис или подчёркивание.';
 const HANDLE_HINT = 'Юзернейм: от 3 до 20 символов, латинские буквы, цифры, «_» и «.» (точка не в начале и не в конце).';
+// история аватарок и баннеров: ключ «<id>:avatar.h.<время>», хранятся 8 последних
+const HIST_KINDS = new Set(['avatar', 'banner']);
+const HIST_RE = /\.h\.\d+$/;
+const HIST_MAX = 8;
+async function toHistory(env, uid, kind, next) {
+  const old = await env.DB.prepare('SELECT data FROM photos WHERE key = ?').bind(`${uid}:${kind}`).first();
+  if (!old || !old.data || old.data === next) return;
+  const now = Date.now(), hk = `${uid}:${kind}.h.${now}`;
+  // та же картинка уже лежит в истории — она просто поднимается наверх, без копии
+  const same = await env.DB.prepare('SELECT key FROM photos WHERE user_id = ? AND key LIKE ? AND data = ?').bind(uid, `${uid}:${kind}.h.%`, old.data).first();
+  if (same) await env.DB.prepare('UPDATE photos SET key = ?, updated_at = ? WHERE key = ?').bind(hk, now, same.key).run();
+  else await env.DB.prepare('INSERT OR REPLACE INTO photos (key, user_id, data, updated_at) VALUES (?, ?, ?, ?)').bind(hk, uid, old.data, now).run();
+  // картинку вернули из истории: теперь она текущая, в истории ей больше не место
+  if (next) await env.DB.prepare('DELETE FROM photos WHERE user_id = ? AND key LIKE ? AND data = ?').bind(uid, `${uid}:${kind}.h.%`, next).run();
+  const { results } = await env.DB.prepare('SELECT key FROM photos WHERE user_id = ? AND key LIKE ? ORDER BY key DESC LIMIT -1 OFFSET ?').bind(uid, `${uid}:${kind}.h.%`, HIST_MAX).all();
+  if (results.length) await env.DB.batch(results.map((r) => env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(r.key)));
+}
 const MAX_PHOTOS = 1200; // фото, превью, аватар и баннер вместе
 const MAX_PHOTO = 1900000; // символов в data URL, предел строки в D1 около 2 МБ
 // оформление профиля: до 6 витрин (топ-3/5/10 из темы, лучшие по баллу или выбранные вручную) и видимость блоков
@@ -1029,6 +1119,10 @@ export async function onRequest({ request, env, params }) {
   if (!routes[key] && segs.length === 2 && segs[0] === 'photo' && RID_RE.test(segs[1])) { key = `${request.method} /photo/:rid`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'photo' && RID_RE.test(segs[2])) { key = `${request.method} /photo/:uid/:rid`; arg = [segs[1], segs[2]]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'react' && RID_RE.test(segs[2])) { key = `${request.method} /react/:uid/:rid`; arg = [segs[1], segs[2]]; }
+  if (!routes[key] && segs.length === 3 && segs[0] === 'comments' && CM_TARGET_RE.test(segs[2])) { key = `${request.method} /comments/:uid/:target`; arg = [segs[1], segs[2]]; }
+  if (!routes[key] && segs.length === 2 && segs[0] === 'comment' && /^[0-9a-f]{20}$/.test(segs[1])) { key = `${request.method} /comment/:id`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 2 && segs[0] === 'comments-count') { key = `${request.method} /comments-count/:uid`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 2 && segs[0] === 'photo-history' && HIST_KINDS.has(segs[1])) { key = `${request.method} /photo-history/:kind`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'reacts') { key = `${request.method} /reacts/:id`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'share' && SHARE_RE.test(segs[1])) { key = `${request.method} /share/:id`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'share' && segs[2] === 'img' && SHARE_RE.test(segs[1])) { key = `${request.method} /share/:id/img`; arg = segs[1]; }

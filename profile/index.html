@@ -311,6 +311,39 @@ button, input { font: inherit; color: inherit; }
 .name-row .name { min-width: 0; }
 .name-row .name[role="button"] { cursor: text; }
 .name-row .name[role="button"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 6px; border-radius: 6px; }
+/* карандаш у своего ника и колокольчик подписки у ника друга — значки вместо кнопок с надписью */
+.name-ic, .bell { flex: none; align-self: center; display: grid; place-items: center; width: 42px; height: 42px; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: var(--panel-2); color: var(--ink-2); cursor: pointer; transition: transform .25s var(--spring), background-color .15s, color .15s, border-color .15s; }
+.name-ic:hover, .bell:hover { color: var(--ink); border-color: var(--accent); transform: translateY(-2px); }
+.name-ic:active, .bell:active { transform: scale(.9); }
+.name-ic:focus-visible, .bell:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.bell { width: 46px; height: 46px; }
+.bell.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent, #fff); box-shadow: 0 8px 20px -10px var(--accent); }
+.bell svg { transform-origin: 50% 12%; }
+.bell.ring svg { animation: bell-ring .9s ease-in-out; }
+@keyframes bell-ring { 0%, 100% { transform: rotate(0); } 15% { transform: rotate(18deg); } 30% { transform: rotate(-15deg); } 45% { transform: rotate(11deg); } 60% { transform: rotate(-7deg); } 75% { transform: rotate(3deg); } }
+.ic-btn { width: 42px; padding: 0; display: inline-grid; place-items: center; }
+@media (prefers-reduced-motion: reduce) { .bell.ring svg { animation: none; } }
+/* история аватарок (меню у аватарки) и баннеров (в меню «Баннер») */
+.hist-menu { position: fixed; z-index: 80; width: min(300px, calc(100vw - 32px)); display: grid; gap: 10px; padding: 12px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 24px 48px -20px rgba(0, 0, 0, .5); cursor: default; animation: hist-in .4s var(--spring); }
+@keyframes hist-in { from { transform: translateY(-8px) scale(.96); } }
+.hist-menu .label { margin: 0; }
+.hist-grid { display: grid; gap: 8px; }
+.hist-grid.hg-ava { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.hist-grid.hg-ban { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.hist-it { position: relative; display: block; }
+.hist-it.gone { animation: hist-out .25s ease-in forwards; }
+@keyframes hist-out { to { transform: scale(0); } }
+.hist-pic { display: block; width: 100%; padding: 0; border: 2px solid var(--line); background: var(--panel-2) center / cover no-repeat; cursor: pointer; transition: transform .2s var(--spring), border-color .15s; }
+.hist-grid.hg-ava .hist-pic { aspect-ratio: 1; border-radius: 50%; }
+.hist-grid.hg-ban .hist-pic { aspect-ratio: 3 / 1; border-radius: 8px; }
+.hist-pic:hover { transform: scale(1.06); border-color: var(--accent); }
+.hist-x { position: absolute; top: -6px; right: -6px; width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: var(--ink); color: var(--panel); font-size: 11px; cursor: pointer; opacity: .85; }
+.hist-x:hover { opacity: 1; background: var(--bad); color: #fff; }
+.hist-empty { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--ink-3); }
+@media (prefers-reduced-motion: reduce) { .hist-menu, .hist-it.gone { animation: none; } }
+/* стена комментариев внизу профиля и ветка в карточке оценки */
+.wall { margin-top: 18px; }
+.rd-cm { margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--line); }
 .name-edit { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; width: min(100%, 560px); }
 .name-edit input { min-width: 0; flex: 1 1 260px; height: 54px; padding: 0 14px; border: 1px solid var(--accent); border-radius: 12px; background: var(--panel); color: var(--ink); font: 800 clamp(30px, 5vw, 52px)/1 var(--font-display); box-shadow: 0 0 0 3px var(--accent-soft); }
 .name-edit .btn { height: 38px; }
@@ -745,6 +778,7 @@ button.stat:focus-visible, a.item:focus-visible, a.pod:focus-visible, button.cat
 <script src="/themes.js"></script>
 <script src="/fx.js"></script>
 <script src="/howto.js"></script>
+<script src="/comments.js"></script>
 <script src="/profile/app.js"></script>
 </body>
 </html>

@@ -1,95 +1,124 @@
-/* Казуал Хаб: подсказки для новичков на всех страницах.
-   Карточка «Впервые тут? Всё просто» с тремя шагами висит, пока не нажали «Понятно 👍».
-   Открыть её снова можно всегда: кнопкой «❓ Помощь» в шапке, круглой «❓» в углу (она появляется, когда шапка
-   уехала за экран) или клавишей «?». Если карточка есть в разметке страницы (Мнение, Колесо), берётся она,
-   иначе карточка создаётся здесь. */
+/* Казуал Хаб: подсказки для новичков на всех страницах — отдельным окном поверх размытой страницы.
+   При первом заходе на страницу окно «Впервые тут? Всё просто» открывается само и открывается снова при каждом заходе,
+   пока не нажали «Понятно 👍» (✕, Esc и клик мимо закрывают только до следующего раза).
+   Открыть его можно всегда: «❓ Помощь» в шапке (в меню ☰), круглая «❓» в углу, когда шапка уехала, или клавиша «?». */
 (() => {
   const KEY = 'casualhub.howto.v1';
   const path = location.pathname;
   const PAGE = path.startsWith('/mnenie') ? 'mnenie' : path.startsWith('/koleso') ? 'koleso' : path.startsWith('/profile') ? 'profile' : 'hub';
-  // шаги для страниц, где карточки нет в разметке
   const STEPS = {
-    hub: [
-      '<b>Мнение</b> — оценивай игры, фильмы, еду, что угодно по шкале от 1 до 10, рейтинг соберётся сам',
-      '<b>Колесо</b> — впиши варианты или участников и крути: кто вылетит, кто победит',
-      'Вверху кнопка аккаунта: <b>войди</b>, чтобы оценки были на всех твоих устройствах и их видели друзья. Там же <b>«Друзья»</b> и <b>тема</b>',
-    ],
-    profile: [
-      'Тут вся твоя статистика: сколько оценок, средний балл, лучшие и значки за достижения',
-      'Нажми на аватарку или баннер, чтобы поставить свою картинку, а <b>«＋ стикер»</b> под ником — чтобы добавить стикер из колеса',
-      'Ниже все твои оценки: их можно искать и сортировать. Числа сверху кликаются и ведут к нужному разделу',
-    ],
+    hub: {
+      title: 'Казуал Хаб',
+      steps: [
+        '<b>Мнение</b> — оценивай игры, фильмы, еду, что угодно по шкале от 1 до 10, рейтинг соберётся сам',
+        '<b>Колесо</b> — впиши варианты или участников и крути: кто вылетит, кто победит',
+        'Вверху кнопка аккаунта: <b>войди</b>, чтобы оценки были на всех твоих устройствах и их видели друзья. В меню <b>☰</b> — друзья, тема и эта подсказка',
+      ],
+    },
+    mnenie: {
+      title: 'Мнение Казуала',
+      steps: [
+        'Выбери <b>категорию</b> и напиши, что оцениваешь: игру, фильм, кафе — что угодно',
+        'Нажимай на <b>клетки от 1 до 10</b> у пунктов ниже. Чем больше клеток, тем лучше',
+        'Жми <b>«Сохранить»</b> внизу — оценка появится в рейтинге. Друзья смогут поставить реакцию и написать комментарий',
+      ],
+    },
+    koleso: {
+      title: 'Колесо Казуала',
+      steps: [
+        'Впиши участников во вкладке <b>«Участники»</b>: по одному или сразу списком',
+        'Жми <b>«Крутить»</b> в центре колеса. Музыку можно ставить на паузу и перематывать прямо во время прокрутки',
+        '<b>На выбывание</b>: на кого показала стрелка — вылетает, последний побеждает. <b>«Один победитель»</b> — выигрывает сразу тот, на ком остановилось',
+      ],
+    },
+    profile: {
+      title: 'Профиль',
+      steps: [
+        'Тут вся твоя статистика: сколько оценок, средний балл, лучшие и значки за достижения',
+        'Нажми на <b>ник</b>, чтобы его поменять, на <b>аватарку</b> или <b>баннер</b> — чтобы поставить картинку (прошлые сохраняются в истории), а <b>«＋ стикер»</b> — чтобы добавить стикер из колеса',
+        'В самом низу — <b>комментарии</b>: друзья могут писать тебе на стену, а ты им',
+      ],
+    },
   };
-  // вкладка на телефоне, где живёт карточка
-  const HOME = { mnenie: 'rate', koleso: 'wheel' };
+  const conf = STEPS[PAGE];
+  const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   const css = document.createElement('style');
   css.textContent = `
-.howto { position: relative; display: grid; gap: 12px; margin: 0 0 18px; padding: 16px 16px 14px; border-radius: 18px; background: linear-gradient(135deg, var(--accent-soft), color-mix(in srgb, var(--accent-soft) 60%, var(--panel))); border: 2px solid var(--accent); box-shadow: 0 14px 34px -18px color-mix(in srgb, var(--accent) 70%, transparent); text-align: left; animation: howto-in .6s cubic-bezier(.34, 1.56, .64, 1) both, howto-nudge 2.4s ease-in-out 1.2s 3; }
-.howto[hidden] { display: none; }
-.howto.again { animation: howto-in .6s cubic-bezier(.34, 1.56, .64, 1) both; }
-@keyframes howto-in { from { transform: translateY(-14px) scale(.96); } }
-@keyframes howto-nudge { 0%, 30%, 60%, 100% { transform: none; } 15% { transform: translateY(-5px); } 45% { transform: translateY(-2px); } }
-.howto-head { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 800; line-height: 1.2; color: var(--ink); }
-.howto-wave { display: inline-block; font-size: 26px; transform-origin: 70% 80%; animation: howto-wave 1.6s ease-in-out .6s 3; }
+.howto-modal { position: fixed; inset: 0; z-index: 95; display: grid; place-items: center; padding: 16px; padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
+  background: color-mix(in srgb, var(--bg) 45%, transparent); -webkit-backdrop-filter: blur(10px) saturate(1.1); backdrop-filter: blur(10px) saturate(1.1); overscroll-behavior: contain; }
+.howto-modal[hidden] { display: none; }
+.howto { position: relative; width: min(100%, 480px); max-height: calc(100dvh - 32px); overflow-y: auto; display: grid; gap: 14px; padding: 20px 18px 16px; border-radius: 22px;
+  background: linear-gradient(160deg, var(--panel), color-mix(in srgb, var(--accent-soft) 70%, var(--panel))); border: 2px solid var(--accent);
+  box-shadow: 0 30px 70px -24px rgba(0, 0, 0, .55), 0 14px 34px -18px color-mix(in srgb, var(--accent) 70%, transparent); text-align: left; }
+.howto-modal.in .howto { animation: howto-in .55s cubic-bezier(.34, 1.56, .64, 1) both; }
+.howto-modal.out .howto { animation: howto-out .28s cubic-bezier(.5, 0, .75, 0) both; }
+@keyframes howto-in { from { transform: translateY(40px) scale(.9); } }
+@keyframes howto-out { to { transform: translateY(60px) scale(.92); } }
+.howto-head { display: flex; align-items: center; gap: 10px; padding-right: 34px; font-size: 18px; font-weight: 800; line-height: 1.2; color: var(--ink); }
+.howto-head small { display: block; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+.howto-wave { flex: none; display: inline-block; font-size: 30px; transform-origin: 70% 80%; animation: howto-wave 1.6s ease-in-out .5s 3; }
 @keyframes howto-wave { 0%, 60%, 100% { transform: rotate(0); } 10%, 30% { transform: rotate(16deg); } 20%, 40% { transform: rotate(-10deg); } }
-.howto ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
-.howto li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 11px; align-items: center; font-size: 15px; line-height: 1.4; color: var(--ink); animation: howto-step .5s cubic-bezier(.34, 1.56, .64, 1) backwards; }
-.howto li:nth-child(2) { animation-delay: .12s; }
-.howto li:nth-child(3) { animation-delay: .24s; }
-@keyframes howto-step { from { transform: translateX(-14px); } }
-.howto li > b { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--on-accent, #fff); font-size: 14px; font-weight: 800; box-shadow: 0 4px 10px -4px var(--accent); }
+.howto ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
+.howto li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; align-items: center; font-size: 15px; line-height: 1.42; color: var(--ink); }
+.howto-modal.in .howto li { animation: howto-step .5s cubic-bezier(.34, 1.56, .64, 1) backwards; }
+.howto-modal.in .howto li:nth-child(1) { animation-delay: .12s; }
+.howto-modal.in .howto li:nth-child(2) { animation-delay: .22s; }
+.howto-modal.in .howto li:nth-child(3) { animation-delay: .32s; }
+@keyframes howto-step { from { transform: translateX(-18px); } }
+.howto li > b { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: var(--on-accent, #fff); font-size: 15px; font-weight: 800; box-shadow: 0 4px 10px -4px var(--accent); }
 .howto li span b { font-weight: 800; }
-.howto-x { justify-self: end; height: 40px; padding: 0 20px; border-radius: 999px; border: 0; background: var(--accent); color: var(--on-accent, #fff); font: inherit; font-size: 14.5px; font-weight: 800; cursor: pointer; transition: transform .2s cubic-bezier(.34, 1.56, .64, 1); }
-.howto-x:hover { transform: translateY(-2px) scale(1.03); }
-.howto-x:active { transform: scale(.95); }
-.howto-page { width: min(100%, 640px); margin: 4px auto 18px; }
+.howto-acts { display: flex; justify-content: flex-end; gap: 8px; }
+.howto-ok { height: 44px; padding: 0 22px; border-radius: 999px; border: 0; background: var(--accent); color: var(--on-accent, #fff); font: inherit; font-size: 15px; font-weight: 800; cursor: pointer; transition: transform .2s cubic-bezier(.34, 1.56, .64, 1); }
+.howto-ok:hover { transform: translateY(-2px) scale(1.03); }
+.howto-ok:active { transform: scale(.95); }
+.howto-close { position: absolute; top: 12px; right: 12px; width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--panel-2); color: var(--ink-2); font: inherit; font-size: 15px; cursor: pointer; }
+.howto-close:hover { color: var(--ink); }
 .howto-btn { gap: 5px; }
-@media (max-width: 560px) { .hb-t { display: none; } .howto-x { justify-self: stretch; } }
+@media (max-width: 560px) { .hb-t { display: none; } .howto-ok { flex: 1; } }
 .howto-fab { position: fixed; right: max(14px, env(safe-area-inset-right, 0px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 16px + var(--fab-lift, 0px)); z-index: 60; display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; border: 2px solid var(--accent); background: var(--panel); color: var(--ink); font: inherit; font-size: 21px; line-height: 1; cursor: pointer; box-shadow: 0 10px 26px -12px color-mix(in srgb, var(--accent) 80%, transparent); transform: translateY(calc(100% + 40px + var(--fab-lift, 0px))) scale(.6); transition: transform .45s cubic-bezier(.34, 1.56, .64, 1), bottom .25s; }
 .howto-fab.on { transform: none; }
 .howto-fab.on:hover { transform: translateY(-3px) scale(1.06); }
 .howto-fab.on:active { transform: scale(.92); }
-@media (prefers-reduced-motion: reduce) { .howto, .howto li, .howto-wave, .howto.again { animation: none; } .howto-fab { transition: none; } }`;
+body.howto-lock { overflow: hidden; }
+@media (prefers-reduced-motion: reduce) { .howto-modal.in .howto, .howto-modal.out .howto, .howto-modal.in .howto li, .howto-wave { animation: none; } .howto-fab { transition: none; } }`;
   document.head.appendChild(css);
 
   const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { return {}; } };
   const mark = (v) => { try { const m = read(); m[PAGE] = v; localStorage.setItem(KEY, JSON.stringify(m)); } catch (e) {} };
-  const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  function makeBox() {
-    const box = document.createElement('div');
-    box.className = 'howto howto-page';
-    box.id = 'howto';
-    box.hidden = true;
-    box.innerHTML = `<div class="howto-head"><span class="howto-wave" aria-hidden="true">👋</span><span>Впервые тут? Всё просто:</span></div>
-      <ol>${STEPS[PAGE].map((s, i) => `<li><b>${i + 1}</b><span>${s}</span></li>`).join('')}</ol>
-      <button type="button" class="howto-x">Понятно 👍</button>`;
-    // главная: под заголовком, перед карточками; профиль: над содержимым (сам профиль перерисовывается и карточку бы стёр)
-    const anchor = PAGE === 'profile' ? document.getElementById('app') : (document.querySelector('.page > .apps') || document.querySelector('main'));
-    if (anchor) anchor.parentNode.insertBefore(box, anchor); else document.body.prepend(box);
-    return box;
-  }
   function makeHeaderBtn() {
     const pick = document.getElementById('themePick');
     if (!pick) return null;
     const b = document.createElement('button');
     b.type = 'button';
     b.id = 'howtoBtn';
-    // кнопка в том же стиле, что и соседние в шапке
+    // кнопка в том же стиле, что и соседние в шапке; меню ☰ (header-menu.js) забирает её к себе
     const twin = pick.querySelector('summary');
     b.className = (twin && /\bpill\b/.test(twin.className) ? 'pill' : 'theme-btn') + ' howto-btn';
     b.title = 'Как пользоваться';
-    b.setAttribute('aria-controls', 'howto');
     b.innerHTML = '<span aria-hidden="true">❓</span><span class="hb-t">Помощь</span>';
     pick.parentNode.insertBefore(b, pick);
     return b;
   }
 
   function init() {
-    const box = document.getElementById('howto') || (STEPS[PAGE] ? makeBox() : null);
-    if (!box) return;
+    if (!conf) return;
+    // старая встроенная карточка (если страница ещё со старой разметкой) не нужна
+    const old = document.getElementById('howto');
+    if (old) old.remove();
+    const modal = document.createElement('div');
+    modal.className = 'howto-modal';
+    modal.hidden = true;
+    modal.innerHTML = `<div class="howto" id="howto" role="dialog" aria-modal="true" aria-labelledby="howtoTitle">
+      <button type="button" class="howto-close" aria-label="Закрыть">✕</button>
+      <div class="howto-head"><span class="howto-wave" aria-hidden="true">👋</span><span id="howtoTitle"><small>${conf.title}</small>Впервые тут? Всё просто:</span></div>
+      <ol>${conf.steps.map((s, i) => `<li><b>${i + 1}</b><span>${s}</span></li>`).join('')}</ol>
+      <div class="howto-acts"><button type="button" class="howto-ok">Понятно 👍</button></div>
+    </div>`;
+    document.body.appendChild(modal);
     const btn = document.getElementById('howtoBtn') || makeHeaderBtn();
+    if (btn) { btn.setAttribute('aria-haspopup', 'dialog'); btn.removeAttribute('aria-controls'); btn.removeAttribute('aria-expanded'); }
     const fab = document.createElement('button');
     fab.type = 'button';
     fab.className = 'howto-fab';
@@ -99,39 +128,60 @@
     fab.tabIndex = -1;
     document.body.appendChild(fab);
 
-    const shown = () => !box.hidden && box.offsetHeight > 0;
-    const sync = () => { if (btn) btn.setAttribute('aria-expanded', String(shown())); };
-    box.hidden = !!read()[PAGE];
-    sync();
+    let back = null, closing = 0;
     function open() {
-      mark(false);
-      box.hidden = false;
-      if (!box.offsetHeight && HOME[PAGE]) { const tab = document.querySelector(`[data-section="${HOME[PAGE]}"]`); if (tab) tab.click(); }
-      box.classList.remove('again'); void box.offsetWidth; box.classList.add('again');
-      box.scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'center' });
-      sync(); later();
+      clearTimeout(closing);
+      back = document.activeElement;
+      modal.classList.remove('out');
+      modal.hidden = false;
+      modal.classList.remove('in'); void modal.offsetWidth; modal.classList.add('in');
+      document.body.classList.add('howto-lock');
+      modal.querySelector('.howto-ok').focus({ preventScroll: true });
+      later();
     }
-    function close() { mark(true); box.hidden = true; sync(); later(); }
-    box.querySelector('.howto-x').addEventListener('click', close);
-    // «❓ Помощь»: подсказку не видно — показать, видно — спрятать
-    if (btn) btn.addEventListener('click', () => (shown() ? close() : open()));
-    fab.addEventListener('click', open);
-    addEventListener('keydown', (e) => {
-      if (e.key !== '?' || e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return;
+    function close(forever) {
+      if (modal.hidden) return;
+      if (forever) mark(true);
+      modal.classList.remove('in');
+      modal.classList.add('out');
+      const done = () => { modal.hidden = true; modal.classList.remove('out'); document.body.classList.remove('howto-lock'); later(); };
+      if (calm) done(); else closing = setTimeout(done, 260);
+      if (back && back.isConnected && back !== document.body) back.focus({ preventScroll: true });
+    }
+    modal.querySelector('.howto-ok').addEventListener('click', () => close(true));
+    modal.querySelector('.howto-close').addEventListener('click', () => close(false));
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(false); });
+    document.addEventListener('keydown', (e) => {
+      if (!modal.hidden && e.key === 'Escape') { e.preventDefault(); close(false); return; }
+      // Tab не уходит из окна, пока оно открыто
+      if (!modal.hidden && e.key === 'Tab') {
+        const f = [...modal.querySelectorAll('button')];
+        const i = f.indexOf(document.activeElement);
+        if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); } else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
+        return;
+      }
+      if (e.key !== '?' || !modal.hidden || e.ctrlKey || e.metaKey || e.altKey || /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName) || e.target.isContentEditable) return;
       e.preventDefault();
       open();
     });
+    if (btn) btn.addEventListener('click', () => open());
+    fab.addEventListener('click', () => open());
+    // первый заход (и каждый следующий, пока не нажали «Понятно»): окно открывается само, когда страница показалась
+    // не поверх другого открытого окна (вход, карточка оценки): считаем только те, что реально видно
+    const otherOpen = () => [...document.querySelectorAll('[role="dialog"], dialog[open]')].some((d) => d.id !== 'howto' && d.getClientRects().length && getComputedStyle(d).visibility !== 'hidden');
+    if (!read()[PAGE]) setTimeout(() => { if (modal.hidden && !otherOpen()) open(); }, calm ? 200 : 900);
 
-    // круглая «❓» видна, когда кнопка в шапке и сама подсказка ушли за экран; держится над нижними панелями (кнопка «Сохранить» и т. п.)
+    // круглая «❓» видна, когда шапка (кнопка «Помощь» или меню ☰) уехала за экран; держится над нижними панелями
     let q = false;
     function place() {
       q = false;
       const vh = innerHeight;
+      const head = document.querySelector('header, .top, .masthead');
       const off = (el) => { if (!el) return true; const r = el.getBoundingClientRect(); return !r.height || r.bottom < 0 || r.top > vh; };
-      const want = off(btn) && (box.hidden || off(box));
+      const want = modal.hidden && off(head);
       let lift = 0;
       if (want) {
-        for (const el of document.querySelectorAll('.scorebar, .mnav, [data-fab-avoid]')) {
+        for (const el of document.querySelectorAll('.scorebar, [data-fab-avoid]')) {
           const r = el.getBoundingClientRect();
           if (r.height && r.bottom >= vh - 2 && r.top < vh && r.right > innerWidth - 80) lift = Math.max(lift, vh - r.top);
         }
@@ -145,6 +195,7 @@
     addEventListener('resize', later);
     addEventListener('click', () => setTimeout(later, 80));
     place();
+    window.CasualHowto = { open, close: () => close(false) };
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();
