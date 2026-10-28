@@ -1,6 +1,6 @@
 /* Казуал Хаб: подсказки для новичков на всех страницах — отдельным окном поверх размытой страницы.
-   При первом заходе на страницу окно «Впервые тут? Всё просто» открывается само и открывается снова при каждом заходе,
-   пока не нажали «Понятно 👍» (✕, Esc и клик мимо закрывают только до следующего раза).
+   При первом заходе на страницу окно «Впервые тут? Всё просто» открывается само один раз и только у гостя без аккаунта.
+   Закрыли его любым способом («Понятно 👍», ✕, Esc, клик мимо) — на этой странице оно само больше не появляется.
    Открыть его можно всегда: «❓ Помощь» в шапке (в меню ☰), круглая «❓» в углу, когда шапка уехала, или клавиша «?». */
 (() => {
   const KEY = 'casualhub.howto.v1';
@@ -149,10 +149,11 @@ body.howto-lock { overflow: hidden; }
       if (back && back.isConnected && back !== document.body) back.focus({ preventScroll: true });
     }
     modal.querySelector('.howto-ok').addEventListener('click', () => close(true));
-    modal.querySelector('.howto-close').addEventListener('click', () => close(false));
-    modal.addEventListener('click', (e) => { if (e.target === modal) close(false); });
+    // любое закрытие — «понял»: иначе окно всплывало на каждом заходе, пока не нажмёшь именно «Понятно»
+    modal.querySelector('.howto-close').addEventListener('click', () => close(true));
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(true); });
     document.addEventListener('keydown', (e) => {
-      if (!modal.hidden && e.key === 'Escape') { e.preventDefault(); close(false); return; }
+      if (!modal.hidden && e.key === 'Escape') { e.preventDefault(); close(true); return; }
       // Tab не уходит из окна, пока оно открыто
       if (!modal.hidden && e.key === 'Tab') {
         const f = [...modal.querySelectorAll('button')];
@@ -169,7 +170,9 @@ body.howto-lock { overflow: hidden; }
     // первый заход (и каждый следующий, пока не нажали «Понятно»): окно открывается само, когда страница показалась
     // не поверх другого открытого окна (вход, карточка оценки): считаем только те, что реально видно
     const otherOpen = () => [...document.querySelectorAll('[role="dialog"], dialog[open]')].some((d) => d.id !== 'howto' && d.getClientRects().length && getComputedStyle(d).visibility !== 'hidden');
-    if (!read()[PAGE]) setTimeout(() => { if (modal.hidden && !otherOpen()) open(); }, calm ? 200 : 900);
+    // само окно — только новичкам: гостю без аккаунта и только пока на этой странице его ещё не закрывали
+    const hasAccount = (() => { try { const u = JSON.parse(localStorage.getItem('ocenshik.user.v1') || 'null'); return !!(u && u.name); } catch (e) { return false; } })();
+    if (!read()[PAGE] && !hasAccount) setTimeout(() => { if (modal.hidden && !otherOpen()) open(); }, calm ? 200 : 900);
 
     // круглая «❓» видна, когда шапка (кнопка «Помощь» или меню ☰) уехала за экран; держится над нижними панелями
     let q = false;
