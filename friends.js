@@ -592,7 +592,10 @@
       .concat(F.friends.map((f) => `<button type="button" class="sub-chip" data-fview="${esc(f.id)}" aria-pressed="${F.view === f.id}" title="${esc(atOf(f))}"><i class="on-dot" data-on="${esc(f.id)}" data-last="${+f.lastSeen || ''}"></i> ${esc(f.username)}</button>`));
     const n = F.incoming.length;
     const needLink = F.online && state.user && !F.me;
-    chips.push(`<button type="button" class="sub-chip" data-fopen="1">👥 Друзья${n ? ` <b>+${n}</b>` : ''}${needLink ? ' <b>· подключить</b>' : ''}</button>`);
+    // окно друзей открывает кнопка «Друзья» в шапке (там же видны заявки), вторая кнопка здесь не нужна;
+    // остаётся только подсказка, если аккаунт ещё не подключён
+    if (needLink) chips.push(`<button type="button" class="sub-chip" data-fopen="1">👥 Подключить друзей</button>`);
+    else if (n) chips.push(`<button type="button" class="sub-chip" data-fopen="1">Заявки <b>+${n}</b></button>`);
     bar.innerHTML = chips.join('');
     if (window.CasualOnline) window.CasualOnline.paint(bar);
   }

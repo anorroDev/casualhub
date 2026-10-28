@@ -540,7 +540,82 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     hydratePhotos(p, body);
   }
 
+  // ---------- карточка оценки: открывается окном прямо в профиле, без перехода в Мнение ----------
+  const WORDS = ['—', 'Ужас', 'Провал', 'Плохо', 'Слабо', 'Средне', 'Нормально', 'Неплохо', 'Хорошо', 'Отлично', 'Шедевр'];
+  const fullPhotoCache = new Map();
+  // в окне фото крупное: своё берём из оценки, у друга — целиком с сервера (в списках лежат превью)
+  const photoFull = (p, r) => {
+    if (!r.photo) return Promise.resolve(null);
+    if (r.photo.data && /^data:image\//.test(r.photo.data)) return Promise.resolve(r.photo.data);
+    if (r.photo.url && /^https:\/\//.test(r.photo.url)) return Promise.resolve(r.photo.url);
+    if (!token || !p.uid) return Promise.resolve(null);
+    const k = p.uid + ':' + r.id;
+    if (!fullPhotoCache.has(k)) fullPhotoCache.set(k, api(`/photo/${encodeURIComponent(p.uid)}/${encodeURIComponent(r.id)}`).then((d) => d.data || null, () => null));
+    return fullPhotoCache.get(k);
+  };
+  let curP = null, rdBox = null, rdBack = null;
+  function openRating(p, r) {
+    if (!rdBox) {
+      rdBox = document.createElement('div');
+      rdBox.className = 'st-pick rd-pick'; rdBox.hidden = true;
+      rdBox.setAttribute('role', 'dialog'); rdBox.setAttribute('aria-modal', 'true'); rdBox.setAttribute('aria-labelledby', 'rdTitle');
+      document.body.appendChild(rdBox);
+      rdBox.addEventListener('click', (e) => { if (e.target === rdBox || e.target.closest('[data-rd="close"]')) closeRating(); });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !rdBox.hidden) closeRating(); });
+    }
+    rdBack = document.activeElement;
+    const word = r.total != null ? WORDS[Math.max(1, Math.min(10, Math.round(r.total)))] : 'Без балла';
+    const n = r.scores.filter((s) => +s.v > 0).length;
+    const pros = lines(r.pros), cons = lines(r.cons);
+    const when = r.created || r.at;
+    rdBox.innerHTML = `<article class="rd-card" data-tier="${tierT(r.total)}">
+      <button type="button" class="st-x rd-x" data-rd="close" aria-label="Закрыть">✕</button>
+      ${r.photo ? `<div class="rd-pic" id="rdPic"><span class="ltr">${letter(r.name)}</span></div>` : ''}
+      <div class="rd-top">
+        <div class="rd-name"><span class="label">${esc(r.cat)}</span><h2 id="rdTitle">${r.fav ? `<span class="fav">${ICON.star}</span> ` : ''}${esc(r.name)}</h2>
+          <p>${esc([word, n ? `${n} ${plural(n, 'критерий', 'критерия', 'критериев')}` : '', r.status, r.meta].filter(Boolean).join(' · '))}</p></div>
+        <div class="rd-score"><b>${r.total != null ? fmt(r.total) : '—'}</b><small>из 10</small></div>
+      </div>
+      ${r.scores.length ? `<ul class="rd-crit">${r.scores.map((s) => { const v = Math.max(0, Math.min(10, Math.round(+s.v || 0))); return `<li data-tier="${tierV(v)}">
+        <div class="rd-ct"><b>${esc(s.name)}${s.w && s.w !== 1 ? ` <small>×${String(s.w).replace('.', ',')}</small>` : ''}</b><span>${v || '—'}</span></div>
+        ${s.desc ? `<small class="rd-desc">${esc(s.desc)}</small>` : ''}
+        <div class="rd-bar" aria-hidden="true">${Array.from({ length: 10 }, (_, i) => `<i${i < v ? ' class="on"' : ''}></i>`).join('')}</div>
+        ${s.note ? `<em>${esc(s.note)}</em>` : ''}</li>`; }).join('')}</ul>` : ''}
+      ${pros.length || cons.length ? `<div class="fr-pc">${pros.length ? `<div><span class="label">Плюсы</span><ul>${pros.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}${cons.length ? `<div><span class="label">Минусы</span><ul>${cons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}</div>` : ''}
+      ${r.text ? `<p class="fr-note">${esc(r.text)}</p>` : ''}
+      <div class="rd-foot"><span>${when ? dayFmt(when) : ''}</span><a class="btn ghost" href="${rateLink(p, r)}">Открыть в Мнении</a></div>
+    </article>`;
+    rdBox.hidden = false;
+    document.body.style.overflow = 'hidden';
+    rdBox.querySelector('.rd-x').focus({ preventScroll: true });
+    photoFull(p, r).then((src) => {
+      const box = rdBox.querySelector('#rdPic');
+      if (!src || !box) return;
+      const img = new Image(); img.alt = ''; img.decoding = 'async';
+      img.onload = () => { box.textContent = ''; box.appendChild(img); };
+      img.src = src;
+    });
+  }
+  function closeRating() {
+    if (!rdBox) return;
+    rdBox.hidden = true;
+    document.body.style.overflow = '';
+    if (rdBack && rdBack.isConnected) rdBack.focus({ preventScroll: true });
+  }
+  // любая ссылка на оценку в профиле (список, «Любимое», витрины, все оценки) открывает карточку;
+  // с Ctrl, Shift или средней кнопкой ссылка по-прежнему открывается в Мнении
+  document.addEventListener('click', (e) => {
+    const a = e.target.closest('#app a[href^="/mnenie/#"]');
+    if (!a || !curP || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const id = new URLSearchParams((a.getAttribute('href').split('#')[1]) || '').get('r');
+    const r = id && curP.ratings.find((x) => x.id === id);
+    if (!r) return;
+    e.preventDefault();
+    openRating(curP, r);
+  });
+
   function render(p) {
+    curP = p;
     if (ALL) return renderAll(p);
     const rs = p.ratings;
     const rated = rs.filter((r) => r.total != null);
