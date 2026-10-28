@@ -16,9 +16,7 @@
           if (days) days.querySelectorAll('.rel').forEach((rel) => {
             const v = rel.querySelector('.rel-v'), n = rel.querySelectorAll('p').length;
             if (!v || !n || v.querySelector('.rel-n')) return;
-            const a = n % 100, b = n % 10;
-            const word = a > 10 && a < 20 ? '+' : b === 1 ? '+' : b > 1 && b < 5 ? '+' : '+';
-            v.insertAdjacentHTML('beforeend', `<small class="rel-n"><b>${n}</b>${word}</small>`);
+            v.insertAdjacentHTML('beforeend', `<small class="rel-n"><b>+${n}</b></small>`);
           });
           const top = days && days.querySelector('.rel-v');
           // версия и число пунктов в ней: патч дня дополняется, и точка «новое» загорается снова
@@ -55,7 +53,7 @@
 .wn-body .rel { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 10px; padding: 12px 0; }
 .wn-body .rel + .rel { border-top: 1px solid var(--line); }
 .wn-body .rel-v { padding-top: 1px; font-family: var(--font-display); font-weight: 700; font-size: 22px; line-height: 1; color: var(--ink-3); white-space: nowrap; }
-.wn-body .rel-n { display: grid; justify-items: start; gap: 1px; margin-top: 8px; font-family: inherit; font-size: 11px; font-weight: 600; line-height: 1.1; letter-spacing: 0; color: var(--ink-3); }
+.wn-body .rel-n { display: inline-flex; align-items: baseline; gap: 2px; margin-top: 8px; font-family: inherit; font-size: 11px; font-weight: 600; line-height: 1.1; letter-spacing: 0; color: var(--ink-3); white-space: nowrap; }
 .wn-body .rel-n b { font-family: var(--font-display); font-size: 17px; font-weight: 800; color: var(--ink-2); }
 .wn-body .rel h4 { margin: 0; font-size: 15px; font-weight: 700; line-height: 1.3; }
 .wn-body .rel p { max-width: 62ch; margin: 3px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); text-wrap: pretty; }
