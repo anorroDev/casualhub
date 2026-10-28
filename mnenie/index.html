@@ -317,6 +317,12 @@ a.user-pill { color: inherit; text-decoration: none; }
 .board-bar { position: relative; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; margin-top: 12px; }
 .board-tools { display: flex; align-items: center; gap: 6px; margin-left: auto; }
 .board-tools .board-more > summary { height: 36px; padding: 0 12px; }
+/* фильтр по жанрам: кнопка рядом с «Фильтрами», жанры строкой под панелью */
+.board-tools .genre-btn { height: 36px; padding: 0 12px; white-space: nowrap; }
+.genre-btn.on { border-color: var(--accent); color: var(--ink); }
+.genre-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.genre-chips[hidden] { display: none; }
+.genre-reset { opacity: .75; }
 .icon-seg button { width: 34px; padding: 0; display: grid; place-items: center; }
 .icon-seg button svg { display: block; }
 @media (pointer: coarse) { .icon-seg button { width: 40px; } }
@@ -1574,6 +1580,7 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
           </div>
           <a class="btn small ghost" id="allRatingsLink" href="/profile/?all=1" title="Все оценки на отдельной странице: список, плитка, тир-лист, подробно">Все оценки</a>
           <div class="board-tools">
+          <button type="button" class="btn small ghost genre-btn" id="genreBtn" aria-controls="genreChips" aria-expanded="false" hidden>🎭 Жанры</button>
           <details class="board-more" id="boardMore">
             <summary class="btn small ghost">Фильтры<b id="boardMoreHint"></b></summary>
             <div class="board-more-body">
@@ -1603,6 +1610,7 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
           </div>
           </div>
         </div>
+        <div class="chips genre-chips" id="genreChips" role="group" aria-label="Жанры" hidden></div>
         <div class="search" id="searchWrap" hidden>
           <input id="search" type="search" placeholder="Поиск по названию, тегам, заметкам или автору…" aria-label="Найти в рейтинге" autocomplete="off" enterkeyhint="search">
         </div>

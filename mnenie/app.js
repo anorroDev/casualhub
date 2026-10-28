@@ -1163,6 +1163,7 @@ const state = {
   db: null, downloads: null, assets: null,
   mode: 'loading',          // loading | db | local
   canWrite: true, loaded: false, catsLoaded: false,
+  genres: [], genreOpen: false, // фильтр по жанрам в рейтинге и тир-листе
   users: [], user: null,
   ratings: [],
   cats: clone(STARTERS),
@@ -1957,6 +1958,24 @@ function renderTierBoard(list) {
     </div>`;
   }).join('');
 }
+// жанры и теги из описания «2010, фантастика, боевик»: всё через запятую, кроме года
+function genresOf(r) {
+  return [...new Set(String((r && r.meta) || '').split(/\s*[,;]\s*/).map(s => s.trim().toLowerCase()).filter(s => s && s.length <= 24 && !/^\d{4}$/.test(s)))];
+}
+// выбранные жанры нужны все сразу
+const hasGenres = (r) => !state.genres.length || (gs => state.genres.every(g => gs.includes(g)))(genresOf(r));
+function genreChipsHTML(pool) {
+  const n = new Map();
+  pool.forEach(r => genresOf(r).forEach(g => n.set(g, (n.get(g) || 0) + 1)));
+  state.genres.forEach(g => { if (!n.has(g)) n.set(g, 0); });
+  const list = [...n.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'ru'));
+  return { any: list.length > 0, html: list.map(([g, k]) => `<button type="button" class="chip-btn" data-genre="${esc(g)}" aria-pressed="${state.genres.includes(g)}">${esc(g)} <b>${k}</b></button>`).join('')
+    + (state.genres.length ? '<button type="button" class="chip-btn genre-reset" data-genre="*">✕ Сбросить</button>' : '') };
+}
+function toggleGenre(g) {
+  state.genres = g === '*' ? [] : state.genres.includes(g) ? state.genres.filter(x => x !== g) : [...state.genres, g];
+  renderBoard(); // заодно перерисует тир-лист в статистике
+}
 function applySubFilter(list) {
   switch (state.sfilter) {
     case 'fav': return list.filter(r => r.fav);
@@ -2035,7 +2054,19 @@ function renderBoard() {
     moreHint.textContent = parts.length ? ' · ' + parts.join(' · ') : '';
   }
   const catPool = state.filter === 'all' ? state.ratings : state.ratings.filter(r => catKey(r) === state.filter);
-  const pool = applySubFilter(catPool);
+  const subPool = applySubFilter(catPool);
+  // кнопка «🎭 Жанры» и строка жанров под панелью рейтинга
+  const gBtn = document.getElementById('genreBtn'), gBox = document.getElementById('genreChips');
+  if (gBtn && gBox) {
+    const g = genreChipsHTML(subPool);
+    gBtn.hidden = !g.any;
+    gBtn.setAttribute('aria-expanded', String(!!state.genreOpen));
+    gBtn.classList.toggle('on', state.genres.length > 0);
+    gBtn.textContent = '🎭 Жанры' + (state.genres.length ? ' · ' + state.genres.length : '');
+    gBox.hidden = !state.genreOpen || !g.any;
+    gBox.innerHTML = g.html;
+  }
+  const pool = subPool.filter(hasGenres);
   const rated = pool.filter(r => r.total != null);
   const avg = rated.length ? round1(rated.reduce((a, r) => a + r.total, 0) / rated.length) : null;
   el.boardStat.textContent = !state.loaded ? 'Загружаю рейтинг…'
@@ -3424,6 +3455,11 @@ el.sortGroup.addEventListener('click', e => {
   state.sort = b.dataset.sort;
   syncSort(); savePrefs(); renderBoard();
 });
+{
+  const gBtn = document.getElementById('genreBtn'), gBox = document.getElementById('genreChips');
+  if (gBtn) gBtn.addEventListener('click', () => { state.genreOpen = !state.genreOpen; renderBoard(); });
+  if (gBox) gBox.addEventListener('click', e => { const b = e.target.closest('[data-genre]'); if (b) toggleGenre(b.dataset.genre); });
+}
 el.filters.addEventListener('click', e => {
   const b = e.target.closest('button[data-filter]');
   if (!b) return;
@@ -4565,7 +4601,7 @@ function tierPool() {
   const cats = state.tierOpts.cats;
   // примеры показываем, только пока своих оценок нет
   const base = state.ratings.some(r => !r.example) ? state.ratings.filter(r => !r.example) : state.ratings;
-  return base.filter(r => r.total != null && (!cats || cats.includes(catKey(r)))).sort(byScore);
+  return base.filter(r => r.total != null && (!cats || cats.includes(catKey(r))) && hasGenres(r)).sort(byScore);
 }
 function tierBuckets(list) {
   const b = TL_TIERS.map(t => ({ t, items: [] }));
@@ -4579,6 +4615,8 @@ function renderTierView() {
   const sel = state.tierOpts.cats;
   const list = tierPool();
   const mode = state.tierOpts.mode;
+  const base = state.ratings.some(r => !r.example) ? state.ratings.filter(r => !r.example) : state.ratings;
+  const gs2 = genreChipsHTML(base.filter(r => r.total != null && (!sel || sel.includes(catKey(r)))));
   const chip = (id, name, n, on) => `<button type="button" class="chip-btn" data-tlcat="${esc(id)}" aria-pressed="${on}">${esc(name)}${n != null ? ` <b>${n}</b>` : ''}</button>`;
   const item = (r) => {
     const pUrl = resolvePhotoUrl(r.photo);
@@ -4591,6 +4629,7 @@ function renderTierView() {
   };
   box.innerHTML = `<div class="tl-tools">
       <div class="tl-opt"><span class="label">Категории</span><div class="chips tl-cats">${chip('all', 'Все', null, !sel)}${gs.map(g => chip(g.id, g.name, g.n, !!sel && sel.includes(g.id))).join('')}</div></div>
+      ${gs2.any ? `<div class="tl-opt"><span class="label">Жанры</span><div class="chips tl-cats">${gs2.html}</div></div>` : ''}
       <div class="tl-opt"><span class="label">Вид</span><div class="seg" id="tlMode" role="group" aria-label="Вид тир-листа">
         <button type="button" data-tlmode="icons" aria-pressed="${mode === 'icons'}">Иконки</button>
         <button type="button" data-tlmode="scores" aria-pressed="${mode === 'scores'}">С оценками</button>
@@ -4984,6 +5023,8 @@ if (el.randomBtn) {
     renderStats();
   });
   if (tv) tv.addEventListener('click', e => {
+    const gb = e.target.closest('[data-genre]');
+    if (gb) { toggleGenre(gb.dataset.genre); return; }
     const c = e.target.closest('[data-tlcat]');
     if (c) {
       const id = c.dataset.tlcat;

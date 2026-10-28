@@ -629,7 +629,7 @@ button.stat:focus-visible, a.item:focus-visible, a.pod:focus-visible, button.cat
 /* значок Letterboxd (три кружка) в углу обложки импортированной оценки */
 .lb-mark { position: absolute; right: 7px; bottom: 7px; z-index: 2; display: inline-flex; align-items: center; padding: 5px 6px; border-radius: 99px; background: rgba(20, 24, 28, .85); box-shadow: 0 1px 5px rgba(0, 0, 0, .4); line-height: 0; }
 .lb-mark i { width: 10px; height: 10px; border-radius: 50%; background: #ff8000; }
-.tl-it .lb-mark, .as-list .lb-mark { right: 4px; bottom: 4px; padding: 3px 4px; }
+.tl-it .lb-mark, .as-list .lb-mark { right: 4px; bottom: 4px; padding: 3px 4px; display: inline-flex; overflow: visible; }
 .tl-it .lb-mark i, .as-list .lb-mark i { width: 7px; height: 7px; }
 .lb-mark i:nth-child(2) { background: #00e054; margin-left: -2px; }
 .lb-mark i:nth-child(3) { background: #40bcf4; margin-left: -2px; }
@@ -638,6 +638,11 @@ button.stat:focus-visible, a.item:focus-visible, a.pod:focus-visible, button.cat
 .item .th .lb-mark i, .fr-card .th .lb-mark i { width: 6px; height: 6px; }
 .item .th img, .fr-card .th img { position: absolute; inset: 0; }
 .lb-src { white-space: nowrap; }
+/* фильтр по жанрам */
+.genre-btn[data-on] { border-color: var(--accent); color: var(--ink); }
+.genre-chips { margin: -4px 0 12px; }
+.genre-chips[hidden] { display: none; }
+.genre-reset { color: var(--ink-3); }
 /* узкий телефон: у кнопки профиля только аватарка — шапка помещается в одну строку вместе с «Друзьями» */
 @media (max-width: 400px) { .top .acct-btn .acct-name { display: none; } .top .acct-btn { padding: 0 9px; } }
 .lb-src .lb-mark { position: static; margin-right: 5px; padding: 3px 4px; vertical-align: -1px; box-shadow: none; }

@@ -417,7 +417,7 @@
     : p && typeof p.id === 'string' && p.id.startsWith('data:image/') ? p.id : '');
   const photoLink = (p) => {
     const u = p && (p.url || p.id);
-    return typeof u === 'string' && /^https:///.test(u) && u.length < 2000 ? u : '';
+    return typeof u === 'string' && /^https:\/\//.test(u) && u.length < 2000 ? u : '';
   };
   // быстрый отпечаток строки (FNV-1a), чтобы не отправлять одно и то же фото дважды
   function fp(s) {
