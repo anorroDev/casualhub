@@ -84,7 +84,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const nodes = [...root.querySelectorAll('[data-photo]')];
     if (!nodes.length) return;
     const load = (n) => {
-      const r = p.ratings.find((x) => x.id === n.dataset.photo);
+      const r = p.ratings.find((x) => x.id === n.dataset.photo) || (p.allRatings || []).find((x) => x.id === n.dataset.photo);
       if (!r) return;
       photoOf(p, r).then((src) => {
         if (!src) return;
@@ -390,7 +390,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const p = lyP, body = $('#lyBody');
     if (!p || !body) return;
     $('#lyTitle').textContent = lyEdit ? (lyEdit.isNew ? 'Новая витрина' : 'Витрина') : 'Витрины и блоки';
-    if (lyEdit) { body.innerHTML = scFormHTML(p, lyEdit); return; }
+    if (lyEdit) { body.innerHTML = scFormHTML(p, lyEdit); hydratePhotos(p, body); return; }
     const scs = p.layout.showcases || [];
     body.innerHTML = `<span class="label">Что видно в профиле</span>
       <div class="chips ly-secs">${SECTIONS.map(([k, t]) => `<button type="button" class="chip" data-sec="${k}" aria-pressed="${secOn(p, k)}">${esc(t)}</button>`).join('')}</div>
@@ -405,26 +405,50 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const q = keyOf(sc.q || '');
     const pool = (p.allRatings || p.ratings).filter((r) => (!sc.cat || keyOf(r.cat) === sc.cat) && (!q || keyOf(r.name).includes(q)))
       .sort((a, b) => (b.total ?? -1) - (a.total ?? -1) || a.name.localeCompare(b.name, 'ru')).slice(0, 80);
-    return pool.length ? pool.map((r) => { const i = sc.ids.indexOf(r.id); return `<button type="button" class="ly-it" data-pick="${esc(r.id)}" aria-pressed="${i >= 0}"><i>${i >= 0 ? i + 1 : ''}</i><span>${esc(r.name)}</span>${badge(r.total)}</button>`; }).join('')
+    return pool.length ? pool.map((r) => { const i = sc.ids.indexOf(r.id); return `<button type="button" class="ly-it" data-pick="${esc(r.id)}" aria-pressed="${i >= 0}" data-tier="${tierT(r.total)}" title="${esc(r.name)}">
+        <span class="pic" data-photo="${r.photo ? esc(r.id) : ''}"><span class="ltr">${letter(r.name)}</span>${lbm(r)}</span><i class="ly-n">${i >= 0 ? i + 1 : ''}</i>${badge(r.total)}<span class="nm">${esc(r.name)}</span></button>`; }).join('')
       : '<p class="ly-hint">В этой теме ничего не нашлось.</p>';
+  }
+  // превью витрины прямо в окне: обложки по порядку, свободные места пунктиром; в «Выберу сам» нажатие на обложку убирает её
+  function scPreviewHTML(p, sc) {
+    const all = p.allRatings || p.ratings;
+    const items = sc.mode === 'pick' ? sc.ids.map((id) => all.find((r) => r.id === id)).filter(Boolean) : scItems(p, sc);
+    const slot = (r, k) => (r
+      ? `<${sc.mode === 'pick' ? `button type="button" data-pick="${esc(r.id)}" title="Убрать «${esc(r.name)}» из витрины"` : 'span'} class="sc-slot" data-tier="${tierT(r.total)}"><span class="pic" data-photo="${r.photo ? esc(r.id) : ''}"><span class="place">${k + 1}</span><span class="ltr">${letter(r.name)}</span>${sc.mode === 'pick' ? '<em aria-hidden="true">✕</em>' : ''}</span><small>${esc(r.name)}</small></${sc.mode === 'pick' ? 'button' : 'span'}>`
+      : `<span class="sc-slot free"><span class="pic"><span class="place">${k + 1}</span><span class="plus">＋</span></span><small>${sc.mode === 'pick' ? 'выбери ниже' : 'пусто'}</small></span>`);
+    return `<div class="sc-prev" id="scPrev"><div class="sc-prev-h"><b>${esc((sc.title || '').trim() || autoTitle(p, sc))}</b><small>${esc(sc.cat ? catTitle(p, sc.cat) : 'все темы')} · ${sc.mode === 'pick' ? 'мой выбор' : 'лучшие по баллу'} · ${items.length} из ${sc.n}</small></div>
+      <div class="sc-prev-row n${sc.n}">${Array.from({ length: sc.n }, (_, k) => slot(items[k], k)).join('')}</div></div>`;
+  }
+  // после выбора: номера на обложках и превью обновляются на месте, без перерисовки всей сетки
+  function syncPicks(p, sc) {
+    const grid = $('#scPickList');
+    if (grid) {
+      grid.classList.toggle('full', sc.ids.length >= sc.n);
+      grid.querySelectorAll('.ly-it').forEach((b) => { const i = sc.ids.indexOf(b.dataset.pick); b.setAttribute('aria-pressed', String(i >= 0)); b.querySelector('.ly-n').textContent = i >= 0 ? i + 1 : ''; });
+    }
+    const prev = $('#scPrev');
+    if (prev) { prev.outerHTML = scPreviewHTML(p, sc); hydratePhotos(p, $('#scPrev')); }
+    const lab = $('#scPicked');
+    if (lab) lab.textContent = `Выбрано ${sc.ids.length} из ${sc.n} · порядок как нажимаешь`;
   }
   function scFormHTML(p, sc) {
     const seg = (key, opts) => `<div class="seg" role="group">${opts.map(([v, t]) => `<button type="button" data-f="${key}" data-v="${v}" aria-pressed="${String(sc[key]) === String(v)}">${t}</button>`).join('')}</div>`;
-    return `<label class="ly-f"><span class="label">Название</span><input id="scTitle" type="text" maxlength="60" value="${esc(sc.title)}" placeholder="${esc(autoTitle(p, sc))}" autocomplete="off"></label>
+    return `${scPreviewHTML(p, sc)}
+      <label class="ly-f"><span class="label">Название</span><input id="scTitle" type="text" maxlength="60" value="${esc(sc.title)}" placeholder="${esc(autoTitle(p, sc))}" autocomplete="off"></label>
       <div class="ly-f"><span class="label">Тема</span><div class="chips">${[['', 'Все темы'], ...lyCats(p)].map(([k, t]) => `<button type="button" class="chip" data-f="cat" data-v="${esc(k)}" aria-pressed="${sc.cat === k}">${esc(t)}</button>`).join('')}</div></div>
       <div class="ly-f"><span class="label">Сколько</span>${seg('n', [[3, 'Топ-3'], [5, 'Топ-5'], [10, 'Топ-10']])}</div>
       <div class="ly-f"><span class="label">Что попадёт</span>${seg('mode', [['auto', 'Лучшие по баллу'], ['pick', 'Выберу сам']])}</div>
       <div class="ly-f"><span class="label">Вид</span>${seg('style', [['posters', 'Постеры'], ['list', 'Список']])}</div>
-      ${sc.mode === 'pick' ? `<div class="ly-f"><span class="label" id="scPicked">В витрине ${sc.ids.length} из ${sc.n} · порядок как нажимаешь</span>
-        <input id="scQ" class="search" type="search" placeholder="Найти оценку…" value="${esc(sc.q || '')}" autocomplete="off">
-        <div class="ly-pickl" id="scPickList">${pickListHTML(p, sc)}</div></div>` : ''}
+      ${sc.mode === 'pick' ? `<div class="ly-f"><span class="label" id="scPicked">Выбрано ${sc.ids.length} из ${sc.n} · порядок как нажимаешь</span>
+        <input id="scQ" class="search" type="search" placeholder="Найти по названию…" value="${esc(sc.q || '')}" autocomplete="off">
+        <div class="ly-pickl${sc.ids.length >= sc.n ? ' full' : ''}" id="scPickList">${pickListHTML(p, sc)}</div></div>` : ''}
       ${sc.err ? `<p class="ly-err" role="alert">${esc(sc.err)}</p>` : ''}
       <div class="ly-acts"><button type="button" class="btn primary" data-ly="save">Сохранить витрину</button><button type="button" class="btn ghost" data-ly="cancel">Отмена</button></div>`;
   }
   function onLayoutInput(e) {
     if (!lyEdit) return;
-    if (e.target.id === 'scTitle') lyEdit.title = e.target.value;
-    if (e.target.id === 'scQ') { lyEdit.q = e.target.value; $('#scPickList').innerHTML = pickListHTML(lyP, lyEdit); }
+    if (e.target.id === 'scTitle') { lyEdit.title = e.target.value; const h = $('#scPrev .sc-prev-h b'); if (h) h.textContent = lyEdit.title.trim() || autoTitle(lyP, lyEdit); }
+    if (e.target.id === 'scQ') { lyEdit.q = e.target.value; $('#scPickList').innerHTML = pickListHTML(lyP, lyEdit); hydratePhotos(lyP, $('#scPickList')); }
   }
   function onLayoutClick(e) {
     const p = lyP, L = p.layout, box = $('#lyPick');
@@ -448,8 +472,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       else if (lyEdit.ids.length < lyEdit.n) lyEdit.ids.push(id);
       else { lyEdit.err = `В топ-${lyEdit.n} больше не помещается: убери что-нибудь или выбери топ побольше`; return drawLayout(); }
       lyEdit.err = '';
-      $('#scPickList').innerHTML = pickListHTML(p, lyEdit);
-      $('#scPicked').textContent = `В витрине ${lyEdit.ids.length} из ${lyEdit.n} · порядок как нажимаешь`;
+      syncPicks(p, lyEdit);
       const errEl = $('#lyBody .ly-err'); if (errEl) errEl.remove();
       return;
     }
