@@ -627,6 +627,19 @@ const routes = {
       return fail(502, 'Поиск обложек сейчас не отвечает');
     }
   },
+  // подробности выбранной обложки: русское название и основные жанры (фильмы — Wikidata по коду IMDb, игры — Steam)
+  async 'GET /covers/info'({ request, me }) {
+    if (burst('cinfo:' + me.id, 60, 60e3)) return tooMany(1);
+    const sp = new URL(request.url).searchParams;
+    const kind = sp.get('kind') || '', id = sp.get('id') || '';
+    try {
+      if (kind === 'movie' && /^tt\d{5,10}$/.test(id)) return json(await filmInfo(id));
+      if (kind === 'game' && /^\d{1,9}$/.test(id)) return json(await gameInfo(id));
+    } catch (e) {
+      return fail(502, 'Подробности сейчас не отвечают');
+    }
+    return json({ ru: '', genres: [] });
+  },
   async 'GET /fetch-img'({ request, me }) {
     if (burst('fetchimg:' + me.id, 30, 60e3)) return tooMany(1);
     let u;
@@ -1024,13 +1037,14 @@ async function latinTitles(q, kind) {
 // таблица TR (кириллица → латиница) объявлена в начале файла
 const translit = (s) => String(s).replace(/[а-яё]/gi, (c) => { const t = TR[c.toLowerCase()] || ''; return c === c.toLowerCase() ? t : t.charAt(0).toUpperCase() + t.slice(1); });
 async function aniList(q) {
-  const body = JSON.stringify({ query: 'query($s:String){Page(perPage:10){media(search:$s,sort:SEARCH_MATCH,isAdult:false){type format title{romaji english}startDate{year}coverImage{extraLarge large}}}}', variables: { s: q } });
+  const body = JSON.stringify({ query: 'query($s:String){Page(perPage:10){media(search:$s,sort:SEARCH_MATCH,isAdult:false){type format title{romaji english}startDate{year}genres coverImage{extraLarge large}}}}', variables: { s: q } });
   const d = await cachedJson('https://graphql.anilist.co', { method: 'POST', body, headers: { 'content-type': 'application/json' } }, 86400);
   const list = (d && d.data && d.data.Page && d.data.Page.media) || [];
   // сначала аниме, потом манга: категория обычно про аниме
   return list.filter((m) => m && m.coverImage && (m.coverImage.extraLarge || m.coverImage.large)).sort((x, y) => (x.type === 'MANGA') - (y.type === 'MANGA')).map((m) => ({
     title: String((m.title && (m.title.english || m.title.romaji)) || '').slice(0, 140), sub: ANI_KIND[m.format] || (m.type === 'MANGA' ? 'Манга' : 'Аниме'),
     year: m.startDate && m.startDate.year ? String(m.startDate.year) : '', art: m.coverImage.extraLarge || m.coverImage.large, thumb: m.coverImage.large || m.coverImage.extraLarge, tall: true,
+    genres: genresRu(m.genres),
   }));
 }
 const KITSU_KIND = { TV: 'Аниме', movie: 'Аниме-фильм', OVA: 'OVA', ONA: 'ONA', special: 'Спецвыпуск', music: 'Клип' };
@@ -1046,7 +1060,39 @@ async function jikan(q) {
   return (d.data || []).filter((a) => a && a.images && a.images.jpg && a.images.jpg.large_image_url).map((a) => ({
     title: String(a.title_english || a.title || '').slice(0, 140), sub: a.type === 'Movie' ? 'Аниме-фильм' : 'Аниме', year: a.year ? String(a.year) : '',
     art: a.images.jpg.large_image_url, thumb: a.images.jpg.image_url || a.images.jpg.large_image_url, tall: true,
+    genres: genresRu((a.genres || []).map((g) => g && g.name)),
   }));
+}
+// жанры по-русски, только основные: из меток Wikidata («научно-фантастический фильм», «фильм-триллер»)
+// и английских названий AniList / MyAnimeList (Sci-Fi, Slice of Life). Порядок — от самых определяющих
+const GENRE_RULES = [
+  ['мультфильм', /анимац|мультфильм|мультипликац|аниме|animation/], ['ужасы', /ужас|хоррор|сплэттер|horror/], ['фантастика', /фантаст|sci-?fi|mecha/],
+  ['фэнтези', /фэнтез|fantasy/], ['супергерои', /супергер/], ['комедия', /комеди|юмор|comedy/], ['боевик', /боевик|экшн|^action$/],
+  ['триллер', /триллер|саспенс|thriller|suspense/], ['криминал', /криминал|ограблен|гангстер|crime/], ['детектив', /детектив|тайна|нуар|mystery/],
+  ['мелодрама', /мелодрам|романтич|romance/], ['приключения', /приключен|adventure/], ['психологический', /психолог|psychological/],
+  ['сверхъестественное', /сверхъестеств|supernatural/], ['повседневность', /повседневн|slice of life/], ['военный', /военн/],
+  ['вестерн', /вестерн/], ['мюзикл', /мюзикл|музыкальн|^music$/], ['исторический', /историч/], ['биография', /биограф/],
+  ['документальный', /документ/], ['спорт', /спортивн|^sports?$/], ['семейный', /семейн|детск/], ['драма', /(?<!мело)драм|drama/],
+];
+function genresRu(list) {
+  const got = new Set();
+  for (const g of list || []) {
+    const t = String(g || '').toLowerCase();
+    for (const [name, re] of GENRE_RULES) if (re.test(t)) got.add(name);
+  }
+  return GENRE_RULES.map(([name]) => name).filter((n) => got.has(n)).slice(0, 3);
+}
+async function filmInfo(imdb) {
+  const q = `SELECT ?ru (GROUP_CONCAT(DISTINCT ?g; separator="|") AS ?gs) WHERE { ?f wdt:P345 "${imdb}". OPTIONAL { ?f rdfs:label ?ru FILTER(lang(?ru) = "ru") } OPTIONAL { ?f wdt:P136 ?gg. ?gg rdfs:label ?g FILTER(lang(?g) = "ru") } } GROUP BY ?ru LIMIT 1`;
+  const d = await cachedJson('https://query.wikidata.org/sparql?format=json&query=' + encodeURIComponent(q), { headers: { accept: 'application/sparql-results+json' } }, 7 * 86400);
+  const b = ((d && d.results && d.results.bindings) || [])[0] || {};
+  return { ru: b.ru ? String(b.ru.value).slice(0, 140) : '', genres: genresRu(b.gs ? String(b.gs.value).split('|') : []) };
+}
+async function gameInfo(appid) {
+  const d = await cachedJson(`https://store.steampowered.com/api/appdetails?appids=${appid}&l=russian&cc=US&filters=basic,genres`, null, 7 * 86400);
+  const g = (d && d[appid] && d[appid].success && d[appid].data) || {};
+  const genres = (g.genres || []).map((x) => String((x && x.description) || '').toLowerCase()).filter(Boolean).slice(0, 3);
+  return { ru: typeof g.name === 'string' ? g.name.slice(0, 140) : '', genres };
 }
 const STEAM_ART = (id, file) => `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${id}/${file}`;
 const IMDB_KIND = { movie: 'Фильм', tvMovie: 'Фильм', video: 'Фильм', tvSeries: 'Сериал', tvMiniSeries: 'Мини-сериал', short: 'Короткий метр', tvSpecial: 'Спецвыпуск' };
@@ -1056,13 +1102,13 @@ const COVER_FIND = {
   async game(q) {
     const d = await cachedJson('https://store.steampowered.com/api/storesearch/?l=english&cc=US&term=' + encodeURIComponent(q), null, 86400);
     return (d.items || []).filter((i) => i && Number.isInteger(i.id) && !/\b(soundtrack|ost|artbook|dlc)\b/i.test(i.name || ''))
-      .map((i) => ({ title: String(i.name || '').slice(0, 140), sub: 'Игра', year: '', art: STEAM_ART(i.id, 'library_600x900.jpg'), alt: STEAM_ART(i.id, 'header.jpg'), tall: true }));
+      .map((i) => ({ id: String(i.id), title: String(i.name || '').slice(0, 140), sub: 'Игра', year: '', art: STEAM_ART(i.id, 'library_600x900.jpg'), alt: STEAM_ART(i.id, 'header.jpg'), tall: true }));
   },
   async movie(q) {
     const d = await cachedJson(`https://v3.sg.media-imdb.com/suggestion/x/${encodeURIComponent(q.toLowerCase())}.json`, null, 86400);
     return (d.d || []).filter((i) => i && i.i && typeof i.i.imageUrl === 'string' && IMDB_KIND[i.qid]).map((i) => {
       const art = i.i.imageUrl.replace(/\._V1_[^/]*\.jpg$/, '._V1_QL80_UX600_.jpg');
-      return { title: String(i.l || '').slice(0, 140), sub: IMDB_KIND[i.qid], year: i.y ? String(i.y) : '', art, thumb: art.replace('UX600', 'UX240'), tall: true };
+      return { id: /^tt\d{5,10}$/.test(i.id) ? i.id : '', title: String(i.l || '').slice(0, 140), sub: IMDB_KIND[i.qid], year: i.y ? String(i.y) : '', art, thumb: art.replace('UX600', 'UX240'), tall: true };
     });
   },
   async book(q) {

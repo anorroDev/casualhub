@@ -54,6 +54,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     id: r.id, name: String(r.name || 'Без названия'), cat: r.catName || r.catLabel || r.cat || 'Без категории',
     total: typeof r.total === 'number' ? r.total : null, scores: Array.isArray(r.scores) ? r.scores : [],
     status: r.status || '', fav: !!r.fav, meta: r.meta || '', photo: r.photo || null, note: !!String(r.note || '').trim(),
+    lb: r.src === 'letterboxd' || (Array.isArray(r.scores) && r.scores.some((s) => s && s.id === 'lb-score')),
     text: String(r.note || '').trim().slice(0, 4000), pros: String(r.pros || '').slice(0, 1000), cons: String(r.cons || '').slice(0, 1000),
     created: +new Date(r.createdAt || r.date || 0) || 0,
     at: +new Date(r.updatedAt || r.date || r.createdAt || 0) || 0,
@@ -68,6 +69,9 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   const photoOf = (p, r) => {
     if (!r.photo) return Promise.resolve(null);
     if (r.photo.data && /^data:image\//.test(r.photo.data)) return Promise.resolve(r.photo.data);
+    // фото-ссылка (например, постер из IMDb после импорта из Letterboxd) показывается как есть
+    const link = r.photo.url || (typeof r.photo.id === 'string' && /^https:\/\//.test(r.photo.id) ? r.photo.id : '');
+    if (link) return Promise.resolve(link);
     if (!token || !p.uid) return Promise.resolve(null);
     const k = p.uid + ':' + r.id;
     if (!photoCache.has(k)) photoCache.set(k, api(`/photo/${encodeURIComponent(p.uid)}/${encodeURIComponent(r.id)}?thumb=1`).then((d) => d.data || null, () => null)); // превью: в профиле картинки маленькие
@@ -85,7 +89,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         img.onload = () => {
           // номер места на пьедестале остаётся, убираем только букву-заглушку
           const ltr = n.querySelector('.ltr');
-          if (ltr) ltr.remove(); else n.textContent = '';
+          if (ltr) ltr.remove(); else [...n.childNodes].forEach((c) => { if (c.nodeType === 3) c.remove(); }); // значок Letterboxd остаётся
           n.appendChild(img);
         };
         img.src = src;
@@ -181,6 +185,10 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   const cells = (v) => `<span class="cells" data-tier="${tierT(v)}" aria-hidden="true">${Array.from({ length: 10 }, (_, i) => `<i${v != null && i < Math.round(v) ? ' class="on"' : ''}></i>`).join('')}</span>`;
   const badge = (t, cls) => `<span class="badge${cls ? ' ' + cls : ''}" data-tier="${tierT(t)}">${t != null ? fmt(t) : '—'}</span>`;
   const letter = (s) => esc([...String(s).trim()][0] || '?');
+  // значок Letterboxd на обложке у импортированных оценок
+  const LB_MARK = '<span class="lb-mark" title="Импортировано из Letterboxd" aria-label="Из Letterboxd"><i></i><i></i><i></i></span>';
+  const lbm = (r) => (r.lb ? LB_MARK : '');
+
 
   const ST = { cat: 'all', sort: 'score', q: '', limit: 24, topics: false };
 
@@ -304,7 +312,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       return `<section class="card rise show" style="--d:${d++}">
         <div class="head"><h2 class="h2">${esc(sc.title || autoTitle(p, sc))}</h2><span class="label">${esc(sc.cat ? catTitle(p, sc.cat) : 'все темы')} · ${sc.mode === 'pick' ? 'мой выбор' : 'лучшие по баллу'}</span></div>
         ${items.length ? `<div class="sc-row ${sc.style === 'list' ? 'as-list' : 'as-posters'}">${items.map((r, k) => `<a class="sc-it" href="${rateLink(p, r)}" title="${esc(r.name)}" data-tier="${tierT(r.total)}">
-          <div class="pic" data-photo="${r.photo ? esc(r.id) : ''}"><span class="place">${k + 1}</span><span class="ltr">${letter(r.name)}</span></div>
+          <div class="pic" data-photo="${r.photo ? esc(r.id) : ''}"><span class="place">${k + 1}</span><span class="ltr">${letter(r.name)}</span>${lbm(r)}</div>
           <strong>${esc(r.name)}</strong>${badge(r.total)}</a>`).join('')}</div>`
           : '<p class="muted">Пока пусто: в этой теме нет подходящих оценок. Витрину можно изменить кнопкой «Витрины и блоки».</p>'}
       </section>`;
@@ -507,7 +515,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const more = $('#allMore');
     more.hidden = true;
     if (!list.length) { body.innerHTML = `<p class="muted">${rs.length ? 'Ничего не нашлось.' : 'Оценок пока нет.'}</p>`; return; }
-    const pic = (r, cls) => `<div class="${cls || 'pic'}" data-photo="${r.photo ? esc(r.id) : ''}"><span class="ltr">${letter(r.name)}</span></div>`;
+    const pic = (r, cls) => `<div class="${cls || 'pic'}" data-photo="${r.photo ? esc(r.id) : ''}"><span class="ltr">${letter(r.name)}</span>${lbm(r)}</div>`;
     if (AST.view === 'tier') {
       const rated = list.filter((r) => r.total != null).sort((a, b) => b.total - a.total || b.at - a.at);
       const rows = TIERS.map(([t, min, range], i) => {
@@ -523,7 +531,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       more.hidden = list.length <= AST.limit;
       if (AST.view === 'list') {
         body.innerHTML = `<div class="list">${shown.map((r) => `<a class="item" href="${rateLink(p, r)}" title="Открыть оценку «${esc(r.name)}»" data-tier="${tierT(r.total)}">
-          <span class="th" data-photo="${r.photo ? esc(r.id) : ''}">${letter(r.name)}</span>
+          <span class="th" data-photo="${r.photo ? esc(r.id) : ''}">${letter(r.name)}${lbm(r)}</span>
           <span class="nm">${r.fav ? `<span class="fav">${ICON.star}</span> ` : ''}${esc(r.name)}</span>${badge(r.total)}
           <span class="meta">${cells(r.total)}<span>${esc(r.cat)}${r.status ? ' · ' + esc(r.status) : ''}</span></span></a>`).join('')}</div>`;
       } else if (AST.view === 'grid') {
@@ -533,7 +541,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         body.innerHTML = `<div class="full">${shown.map((r) => {
           const pros = lines(r.pros), cons = lines(r.cons);
           return `<article class="fr-card" data-tier="${tierT(r.total)}">
-            <header><div class="th" data-photo="${r.photo ? esc(r.id) : ''}">${letter(r.name)}</div>
+            <header><div class="th" data-photo="${r.photo ? esc(r.id) : ''}">${letter(r.name)}${lbm(r)}</div>
               <div class="fr-t"><a href="${rateLink(p, r)}">${r.fav ? `<span class="fav">${ICON.star}</span> ` : ''}${esc(r.name)}</a><small>${esc([r.cat, r.status, r.meta].filter(Boolean).join(' · '))}</small></div>${badge(r.total)}</header>
             ${r.scores.length ? `<ul class="crit">${r.scores.map((s) => `<li><span>${esc(s.name)}${s.w && s.w !== 1 ? ` <small>×${String(s.w).replace('.', ',')}</small>` : ''}</span>${cellsV(+s.v || 0)}<b>${+s.v || '—'}</b>${s.note ? `<em>${esc(s.note)}</em>` : ''}</li>`).join('')}</ul>` : ''}
             ${pros.length || cons.length ? `<div class="fr-pc">${pros.length ? `<div><span class="label">Плюсы</span><ul>${pros.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}${cons.length ? `<div><span class="label">Минусы</span><ul>${cons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}</div>` : ''}
@@ -553,6 +561,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     if (!r.photo) return Promise.resolve(null);
     if (r.photo.data && /^data:image\//.test(r.photo.data)) return Promise.resolve(r.photo.data);
     if (r.photo.url && /^https:\/\//.test(r.photo.url)) return Promise.resolve(r.photo.url);
+    if (typeof r.photo.id === 'string' && /^https:\/\//.test(r.photo.id)) return Promise.resolve(r.photo.id);
     if (!token || !p.uid) return Promise.resolve(null);
     const k = p.uid + ':' + r.id;
     if (!fullPhotoCache.has(k)) fullPhotoCache.set(k, api(`/photo/${encodeURIComponent(p.uid)}/${encodeURIComponent(r.id)}`).then((d) => d.data || null, () => null));
@@ -575,10 +584,10 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const when = r.created || r.at;
     rdBox.innerHTML = `<article class="rd-card" data-tier="${tierT(r.total)}">
       <button type="button" class="st-x rd-x" data-rd="close" aria-label="Закрыть">✕</button>
-      ${r.photo ? `<div class="rd-pic" id="rdPic"><span class="ltr">${letter(r.name)}</span></div>` : ''}
+      ${r.photo ? `<div class="rd-pic" id="rdPic"><span class="ltr">${letter(r.name)}</span>${lbm(r)}</div>` : ''}
       <div class="rd-top">
         <div class="rd-name"><span class="label">${esc(r.cat)}</span><h2 id="rdTitle">${r.fav ? `<span class="fav">${ICON.star}</span> ` : ''}${esc(r.name)}</h2>
-          <p>${esc([word, n ? `${n} ${plural(n, 'критерий', 'критерия', 'критериев')}` : '', r.status, r.meta].filter(Boolean).join(' · '))}</p></div>
+          <p>${esc([word, n ? `${n} ${plural(n, 'критерий', 'критерия', 'критериев')}` : '', r.status, r.meta].filter(Boolean).join(' · '))}${r.lb ? ' <span class="lb-src">· <span class="lb-mark"><i></i><i></i><i></i></span>из Letterboxd</span>' : ''}</p></div>
         <div class="rd-score"><b>${r.total != null ? fmt(r.total) : '—'}</b><small>из 10</small></div>
       </div>
       ${r.scores.length ? `<ul class="rd-crit">${r.scores.map((s) => { const v = Math.max(0, Math.min(10, Math.round(+s.v || 0))); return `<li data-tier="${tierV(v)}">
@@ -600,7 +609,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       const box = rdBox.querySelector('#rdPic');
       if (!src || !box) return;
       const img = new Image(); img.alt = ''; img.decoding = 'async';
-      img.onload = () => { box.textContent = ''; box.appendChild(img); };
+      img.onload = () => { const l = box.querySelector('.ltr'); if (l) l.remove(); box.appendChild(img); };
       img.src = src;
     });
   }
@@ -688,7 +697,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
           ${top3.length && secOn(p, 'podium') ? `<section class="card rise" style="--d:${d++}">
             <div class="head"><h2 class="h2">Любимое</h2><span class="label">топ по баллу</span></div>
             <div class="podium">${top3.map((r, k) => `<a class="pod p${k + 1}" href="${rateLink(p, r)}" title="Открыть оценку «${esc(r.name)}»" data-tier="${tierT(r.total)}">
-              <div class="pic" data-photo="${r.photo ? esc(r.id) : ''}"><span class="place">${k + 1}</span><span class="ltr">${letter(r.name)}</span></div>
+              <div class="pic" data-photo="${r.photo ? esc(r.id) : ''}"><span class="place">${k + 1}</span><span class="ltr">${letter(r.name)}</span>${lbm(r)}</div>
               <strong>${esc(r.name)}</strong>
               <div class="row"><small>${esc(r.cat)}</small>${badge(r.total)}</div></a>`).join('')}</div>
           </section>` : ''}
@@ -833,7 +842,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       $('#listStat').textContent = `${list.length} ${plural(list.length, 'оценка', 'оценки', 'оценок')}`;
       const shown = list.slice(0, ST.limit);
       $('#list').innerHTML = shown.length ? shown.map((r) => `<a class="item" href="${rateLink(p, r)}" title="Открыть оценку «${esc(r.name)}»" data-tier="${tierT(r.total)}">
-          <span class="th" data-photo="${r.photo ? esc(r.id) : ''}">${letter(r.name)}</span>
+          <span class="th" data-photo="${r.photo ? esc(r.id) : ''}">${letter(r.name)}${lbm(r)}</span>
           <span class="nm" title="${esc(r.name)}">${r.fav ? `<span class="fav">${ICON.star}</span> ` : ''}${esc(r.name)}</span>
           ${badge(r.total)}
           <span class="meta">${cells(r.total)}<span>${esc(r.cat)}${r.status ? ' · ' + esc(r.status) : ''}</span></span>

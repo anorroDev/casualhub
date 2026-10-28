@@ -38,6 +38,15 @@ function openAuthFromHash() {
     Promise.resolve(ready).catch(() => {}).then(() => { if (window.CasualLetterboxd) window.CasualLetterboxd.open(); });
     return;
   }
+  // «Обновить обложки и названия» из меню ☰ на других страницах
+  if (h === '#refresh') {
+    history.replaceState(null, '', location.pathname + location.search);
+    Promise.resolve(ready).catch(() => {}).then(async () => {
+      for (let i = 0; i < 20 && !(window.casualApi && window.casualApi.online()); i++) await new Promise(r => setTimeout(r, 150)); // ждём вход в аккаунт
+      if (window.CasualRefresh) window.CasualRefresh.open();
+    });
+    return;
+  }
   // ссылки с главной и из профиля: #r=<оценка>, #friend=<друг>&r=<оценка>, #friends, #rating
   const q = new URLSearchParams(h.slice(1));
   if (!q.has('r') && !q.has('friend') && h !== '#friends' && h !== '#rating') return;

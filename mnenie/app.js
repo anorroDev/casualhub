@@ -75,6 +75,10 @@ const CAT_TEMPLATES = [
 ];
 
 const MAX_CATS = 24;
+// оценка из Letterboxd, ещё не переоценённая по критериям: один балл «Оценка с Letterboxd»
+const LB_SCORE = 'lb-score';
+const lbOnly = (r) => !!r && Array.isArray(r.scores) && r.scores.length > 0 && r.scores.every(s => s.id === LB_SCORE);
+const fromLb = (r) => !!r && (r.src === 'letterboxd' || (Array.isArray(r.scores) && r.scores.some(s => s.id === LB_SCORE)));
 const MAX_CRIT = 15;
 const DRAFT_KEY = 'ocenshik.draft.v2';
 const PREFS_KEY = 'ocenshik.prefs.v1';
@@ -1340,7 +1344,9 @@ function renderCrit() {
     const rows = formRows();
     el.critTip.textContent = !cat && rows.length
       ? `Категории «${form.extraCatName || 'без названия'}» больше нет, критерии взяты из сохранённой оценки.`
-      : 'Нажми или потяни по шкале. Критерий без оценки не попадёт в итог.';
+      : cat && form.extra.some(x => x.id === LB_SCORE) && rows.length > 1
+        ? 'Это оценка из Letterboxd. Оцени по критериям — при сохранении они заменят «Оценку с Letterboxd».'
+        : 'Нажми или потяни по шкале. Критерий без оценки не попадёт в итог.';
     el.critArea.innerHTML = rows.length
       ? `<ul class="crit-list">${rows.map(critRowHTML).join('')}</ul>`
       : `<p class="empty-cat">${state.catsLoaded ? 'Выбери категорию выше или создай новую.' : 'Загружаю категории…'}</p>`;
@@ -1609,8 +1615,9 @@ function closeArtistEdit() {
 // через наш сервер (нужен вход). Выбранная обложка скачивается и становится обычным фото оценки
 let coverTimer = null, coverCtl = null, coverKey = '', coverItems = [], coverFrom = '';
 const COVER_SRC = { music: 'Apple Music', game: 'Steam', movie: 'IMDb', book: 'Open Library', anime: 'AniList' };
-function coverKind() {
-  const c = currentCat();
+function coverKind() { return catKind(currentCat()); }
+// какие обложки подходят категории: по её названию
+function catKind(c) {
   if (!c) return '';
   if (isMusicCat(c)) return 'music';
   const k = `${keyOf(c.name)} ${c.id}`;
@@ -1646,6 +1653,7 @@ async function findCovers() {
       const r = await window.casualApi.get(`/covers?kind=${kind}&q=${encodeURIComponent(q)}`);
       if (ctl !== coverCtl) return;
       coverItems = ((r && r.items) || []).filter(c => c && /^https:\/\//.test(c.art)).map(c => ({
+        id: String(c.id || ''), genres: Array.isArray(c.genres) ? c.genres.map(String).slice(0, 3) : [],
         title: String(c.title || ''), artist: '', kind: String(c.sub || ''), year: String(c.year || ''), genre: '',
         art: c.art, alt: /^https:\/\//.test(c.alt || '') ? c.alt : '', thumb: /^https:\/\//.test(c.thumb || '') ? c.thumb : c.art, tall: !!c.tall, via: 'server'
       }));
@@ -1714,13 +1722,36 @@ async function pickCover(i) {
     }
     await setPhotoFromFile(new File([blob], 'cover.jpg', { type: blob.type || 'image/jpeg' }), false);
     if (!form.photo) throw new Error('photo');
-    if (!(form.meta || '').trim()) { form.meta = [c.year, c.genre].filter(Boolean).join(', '); if (el.meta) el.meta.value = form.meta; }
+    await fillFromCover(c);
     coverItems = [];
     renderCovers();
     scheduleDraft();
     toast('Обложка добавлена, можно выбрать пропорции');
   } catch (_) {
     toast('Обложка не загрузилась, попробуй другую');
+  }
+}
+
+// выбрали обложку — подставляем название и год с основными жанрами. Искали по-русски — берём русское название
+// (фильмы — из Wikidata, игры — из Steam), а если его нет, оставляем то, что написано
+async function fillFromCover(c) {
+  const kind = coverFrom;
+  let info = { ru: '', genres: c.genres && c.genres.length ? c.genres : c.genre ? [c.genre] : [] };
+  if (c.id && (kind === 'movie' || kind === 'game') && window.casualApi && window.casualApi.online()) {
+    try { info = Object.assign(info, await window.casualApi.get(`/covers/info?kind=${kind}&id=${encodeURIComponent(c.id)}`)); } catch (_) {}
+  }
+  const typed = form.name.trim();
+  const name = /[а-яё]/i.test(typed) ? String(info.ru || '').trim() : c.title.trim();
+  if (name && name !== typed) {
+    form.name = name.slice(0, 140);
+    el.name.value = form.name;
+    updateNameState();
+  }
+  const meta = (form.meta || '').trim();
+  // описание заполняем, только если там пусто или один год — своё не затираем
+  if (!meta || /^(18|19|20)\d{2}$/.test(meta)) {
+    form.meta = [c.year || meta, ...(info.genres || []).map(g => String(g).toLowerCase())].filter(Boolean).join(', ').slice(0, 80);
+    if (el.meta) el.meta.value = form.meta;
   }
 }
 
@@ -2112,7 +2143,7 @@ function loadIntoForm(r) {
     if (s.w && s.w !== 1) form.weights[s.id] = s.w;
     if (!ids.has(s.id)) form.extra.push({ id: s.id, name: s.name, desc: s.desc || '' });
   }
-  form.ownOnly = !!cat && r.scores.length > 0 && !r.scores.some(s => ids.has(s.id));
+  form.ownOnly = !!cat && r.scores.length > 0 && !r.scores.some(s => ids.has(s.id)) && !lbOnly(r);
   state.editCat = false;
   state.catDelConfirm = false;
   renderForm();
@@ -2125,9 +2156,30 @@ function loadIntoForm(r) {
 // а категория становилась, например, «Музыкой». Такие оценки (ни одного общего критерия с категорией)
 // получают свою категорию с прежними критериями; название берётся из подходящего шаблона.
 function repairOverwrittenCats() {
+  // раньше сюда попадали фильмы из Letterboxd и уезжали в категорию «Фильмы (прежние критерии)»
+  // с одним критерием «Оценка с Letterboxd» — возвращаем их обратно и убираем такую категорию
+  const lbCats = state.cats.filter(c => c.criteria.length && c.criteria.every(k => k.id === LB_SCORE));
+  let healed = 0;
+  for (const c of lbCats) {
+    const base = keyOf(c.name.replace(/(\s*\(прежние критерии\))+$/u, ''));
+    const home = state.cats.find(x => x !== c && !lbCats.includes(x) && keyOf(x.name) === base);
+    if (!home) {
+      const st = STARTERS.find(s => s.id === 'films');
+      c.name = c.name.replace(/(\s*\(прежние критерии\))+$/u, '') || st.name;
+      c.criteria = st.criteria.map(k => ({ ...k, id: newId('c') }));
+      state.ratings.forEach(r => { if (r.cat === c.id) r.catName = c.name; });
+      healed++;
+      continue;
+    }
+    state.ratings.forEach(r => { if (r.cat === c.id) { r.cat = home.id; r.catName = home.name; } });
+    state.cats = state.cats.filter(x => x !== c);
+    if (form.cat === c.id) form.cat = home.id;
+    healed++;
+  }
+  if (healed) { saveLocalCats(); saveLocalRatings(); }
   const byId = new Map(state.cats.map(c => [c.id, c]));
   const broken = state.ratings.filter(r => {
-    if (r.example || !r.scores || !r.scores.length) return false;
+    if (r.example || !r.scores || !r.scores.length || lbOnly(r)) return false;
     const cat = byId.get(r.cat);
     if (!cat) return false;
     const ids = new Set(cat.criteria.map(k => k.id));
@@ -2325,7 +2377,9 @@ async function save() {
   const name = composeName(artist, title).slice(0, 140);
   const rows = formRows();
   if (!rows.length) { toast('Сначала выбери категорию'); return; }
-  const scores = collectScores(rows);
+  let scores = collectScores(rows);
+  // переоценили фильм из Letterboxd по критериям: его общий балл больше не нужен
+  if (scores.some(s => s.id !== LB_SCORE)) scores = scores.filter(s => s.id !== LB_SCORE);
   const t = totalOf(scores);
   if (t == null) {
     el.total.classList.remove('nudge'); void el.total.offsetWidth; el.total.classList.add('nudge');
@@ -2352,6 +2406,8 @@ async function save() {
     createdAt: (target && target.createdAt) || now,
     updatedAt: now
   };
+  if (fromLb(target)) doc.src = 'letterboxd'; // значок Letterboxd остаётся и после переоценки
+  if (target && target.lbName) doc.lbName = target.lbName;
   if (artist) {
     doc.artist = artist;
     doc.title = title;
@@ -2455,6 +2511,8 @@ function normalizeRating(id, d) {
     note: str(d.note).slice(0, 4000), example: d.example === true,
     author: (d.author && typeof d.author === 'object') ? { id: str(d.author.id), name: str(d.author.name), avatar: str(d.author.avatar), color: str(d.author.color) } : null,
     photo: normPhoto(d.photo),
+    ...(d.src === 'letterboxd' ? { src: 'letterboxd' } : {}),
+    ...(str(d.lbName).trim() ? { lbName: str(d.lbName).slice(0, 140) } : {}), // название в Letterboxd, если оценку переименовали
     ...(str(d.artist).trim() ? { artist: str(d.artist).slice(0, 80), title: str(d.title).slice(0, 140), artistAva: str(d.artistAva).slice(0, 40) } : {}),
     createdAt: str(d.createdAt), updatedAt: str(d.updatedAt)
   };

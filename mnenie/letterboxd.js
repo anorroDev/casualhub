@@ -141,6 +141,8 @@
 .lb-list li span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lb-list li small { color: var(--ink-3); margin-left: 6px; }
 .lb-list li.dup { opacity: .55; }
+.lb-catpick { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 700; }
+.lb-catpick select { flex: 1; min-width: 0; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); color: var(--ink); font: inherit; font-weight: 600; }
 .lb-opt { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
 .lb-opt input { width: 18px; height: 18px; accent-color: var(--accent); }
 .lb-acts { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -157,7 +159,18 @@
       if (b.dataset.lb === 'back') drawStart();
       if (b.dataset.lb === 'go') runImport();
     });
-    sheet.addEventListener('change', (e) => { if (e.target.id === 'lbFile') readFiles([...e.target.files]); });
+    sheet.addEventListener('change', (e) => {
+      if (e.target.id === 'lbFile') readFiles([...e.target.files]);
+      // другая категория: заново смотрим, какие фильмы в ней уже есть
+      if (e.target.id === 'lbCat' && plan) {
+        const cat = state.cats.find((c) => c.id === e.target.value);
+        if (!cat) return;
+        plan.cat = cat;
+        const have = new Set(state.ratings.filter((r) => !r.example && catKey(r) === keyOf(cat.name)).flatMap((r) => [r.nameKey, r.lbName ? keyOf(r.lbName) : ''].filter(Boolean)));
+        plan.items.forEach((x) => { x.dup = have.has(keyOf(x.name)); });
+        drawPlan();
+      }
+    });
     sheet.addEventListener('dragover', (e) => { const d = e.target.closest('.lb-drop'); if (d) { e.preventDefault(); d.classList.add('drag'); } });
     sheet.addEventListener('dragleave', (e) => { const d = e.target.closest('.lb-drop'); if (d) d.classList.remove('drag'); });
     sheet.addEventListener('drop', (e) => { const d = e.target.closest('.lb-drop'); if (!d) return; e.preventDefault(); d.classList.remove('drag'); readFiles([...(e.dataTransfer.files || [])]); });
@@ -207,7 +220,7 @@
       const { rated, unrated } = collect(parts);
       if (!rated.length) return drawStart(unrated ? `Нашлось ${unrated} ${plural(unrated, 'фильм', 'фильма', 'фильмов')} без оценки: импортировать нечего. Нужны фильмы со звёздами.` : 'В файле не нашлось оценок.');
       const cat = filmCat();
-      const have = new Set(state.ratings.filter((r) => !r.example && catKey(r) === keyOf(cat.name)).map((r) => r.nameKey));
+      const have = new Set(state.ratings.filter((r) => !r.example && catKey(r) === keyOf(cat.name)).flatMap((r) => [r.nameKey, r.lbName ? keyOf(r.lbName) : ''].filter(Boolean)));
       plan = { cat, items: rated.map((x) => ({ ...x, dup: have.has(keyOf(x.name)) })).sort((a, b) => (b.date || '').localeCompare(a.date || '')), unrated };
       drawPlan();
     } catch (e) {
@@ -216,7 +229,8 @@
   }
   function drawPlan() {
     const fresh = plan.items.filter((x) => !x.dup), dups = plan.items.length - fresh.length, withReview = fresh.filter((x) => x.review).length;
-    body().innerHTML = `<div class="lb-sum">
+    body().innerHTML = `<label class="lb-catpick">В категорию <select id="lbCat">${state.cats.filter((c) => !isMusicCat(c)).map((c) => `<option value="${esc(c.id)}"${c.id === plan.cat.id ? ' selected' : ''}>${esc(c.name)}</option>`).join('')}</select></label>
+      <div class="lb-sum">
         <div><b>${fresh.length}</b><small>${plural(fresh.length, 'новый фильм', 'новых фильма', 'новых фильмов')}</small></div>
         <div><b>${dups}</b><small>уже в рейтинге</small></div>
         <div><b>${plan.unrated}</b><small>без оценки</small></div>
@@ -224,7 +238,7 @@
       <ul class="lb-list">${plan.items.slice(0, 60).map((x) => `<li class="${x.dup ? 'dup' : ''}"><span>${esc(x.name)}${x.year ? `<small>${esc(x.year)}</small>` : ''}${x.dup ? '<small>уже есть</small>' : ''}</span><span class="badge" data-tier="${tierT(scoreOf(x.rating))}">${scoreOf(x.rating)}</span></li>`).join('')}</ul>
       ${plan.items.length > 60 ? `<p class="lb-note">И ещё ${plan.items.length - 60}.</p>` : ''}
       ${withReview ? `<label class="lb-opt"><input type="checkbox" id="lbReviews" checked> Рецензии — в заметки (${withReview})</label>` : ''}
-      <p class="lb-note">Попадут в «${esc(plan.cat.name)}» с одним критерием «Оценка с Letterboxd»: подробных критериев там нет, их можно дооценить позже.</p>
+      <p class="lb-note">Попадут в «${esc(plan.cat.name)}» с одним баллом «Оценка с Letterboxd». Любой фильм потом можно переоценить по критериям: открой его и нажми «Изменить». Обложки подтянутся сами после импорта.</p>
       <div class="lb-acts">${fresh.length ? `<button type="button" class="btn primary" data-lb="go">Импортировать ${fresh.length}</button>` : ''}<button type="button" class="btn ghost" data-lb="back">Другой файл</button></div>`;
   }
   async function runImport() {
@@ -239,7 +253,7 @@
       const v = scoreOf(x.rating), at = isoOf(x.date);
       return {
         id: newId('r'), cat: cat.id, catName: cat.name, name: x.name.slice(0, 140), nameKey: keyOf(x.name),
-        scores: [{ id: SCORE_ID, name: 'Оценка с Letterboxd', v }], total: v, fav: false, status: 'Завершено',
+        scores: [{ id: SCORE_ID, name: 'Оценка с Letterboxd', v }], total: v, fav: false, status: 'Завершено', src: 'letterboxd',
         meta: [x.year, x.tags].filter(Boolean).join(', ').slice(0, 80), pros: '', cons: '',
         note: reviews ? x.review.slice(0, 4000) : '', example: false, author, createdAt: at, updatedAt: at,
       };
@@ -258,9 +272,75 @@
       <p class="lb-note">Они в рейтинге, в категории «${esc(cat.name)}». Если войти в аккаунт, оценки увидят и друзья.</p>
       <div class="lb-acts"><button type="button" class="btn primary" data-lb="close">Отлично</button></div>`;
     if (typeof toast === 'function') toast(`Импорт из Letterboxd: ${docs.length} ${plural(docs.length, 'оценка', 'оценки', 'оценок')}`);
+    // постеры подтягиваются сами (нужен вход в аккаунт)
+    setTimeout(() => fillPosters(true), 2500);
   }
+
+  // ---------- постеры для импортированных фильмов: ищем в IMDb через наш сервер (нужен вход) и ставим ссылкой ----------
+  // Адреса постеров IMDb постоянные, поэтому картинку не скачиваем. Ищем по названию и сверяем год, чужой постер не ставим.
+  // Идём медленно (лимит поиска на сервере — 40 в минуту), неудачные не повторяем неделю.
+  const TRIED_KEY = 'ocenshik.posterTried.v1'; // { id оценки: когда искали }
+  const readTried = () => { try { return JSON.parse(localStorage.getItem(TRIED_KEY) || '{}') || {}; } catch (e) { return {}; } };
+  const keepTried = (t) => { try { localStorage.setItem(TRIED_KEY, JSON.stringify(t)); } catch (e) {} };
+  const flat = (s) => String(s || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  let filling = false;
+  function posterTodo() {
+    const tried = readTried(), now = Date.now();
+    return state.ratings.filter((r) => r && !r.example && !r.photo && (r.src === 'letterboxd' || r.scores.some((x) => x.id === SCORE_ID)) && !(tried[r.id] && now - tried[r.id] < 7 * 864e5));
+  }
+  function pickPoster(items, name, year) {
+    const want = flat(name);
+    const same = (c) => flat(c.title) === want;
+    const near = (c) => { const t = flat(c.title); return t && (t.includes(want) || want.includes(t)); };
+    return items.find((c) => same(c) && (!year || c.year === year))
+      || (year ? items.find((c) => near(c) && c.year === year) : null)
+      || (year ? items.find((c) => same(c) && Math.abs(+c.year - +year) === 1) : null)
+      || null;
+  }
+  async function fillPosters(announce) {
+    const api = window.casualApi;
+    if (filling || state.mode === 'db' || !api || !api.online()) return;
+    const todo = posterTodo();
+    if (!todo.length) return;
+    filling = true;
+    if (announce && typeof toast === 'function') toast(`Подтягиваю обложки для ${todo.length} ${plural(todo.length, 'фильма', 'фильмов', 'фильмов')} из Letterboxd…`);
+    const tried = readTried();
+    let found = 0, done = 0;
+    for (let i = 0; i < todo.length; i++) {
+      const r = state.ratings.find((x) => x.id === todo[i].id);
+      if (!r || r.photo) continue;
+      const year = (String(r.meta || '').match(/\b(18|19|20)\d{2}\b/) || [''])[0];
+      let items;
+      try { items = ((await api.get(`/covers?kind=movie&q=${encodeURIComponent(r.name)}`)) || {}).items || []; }
+      catch (e) {
+        if (e && e.status === 429) { await wait(65e3); i--; continue; } // упёрлись в лимит — ждём минуту и повторяем этот же фильм
+        break; // сервер не отвечает — попробуем в следующий раз
+      }
+      const pick = pickPoster(items, r.name, year);
+      tried[r.id] = Date.now();
+      if (pick && /^https:\/\//.test(pick.art) && !r.photo) {
+        r.photo = { id: pick.art, url: pick.art, data: '', w: 600, h: 900 };
+        found++;
+      }
+      done++;
+      if (done % 5 === 0) { keepTried(tried); saveLocalRatings(); renderBoard(); }
+      await wait(1600);
+    }
+    keepTried(tried);
+    if (found) { saveLocalRatings(); renderBoard(); }
+    filling = false;
+    if (announce && typeof toast === 'function') toast(found ? `Обложки: нашлось ${found} из ${done}` : 'Подходящих обложек не нашлось');
+  }
+  // при заходе в Мнение: дождались входа в аккаунт — подтягиваем, если есть фильмы без постеров
+  (async () => {
+    for (let k = 0; k < 20; k++) {
+      await wait(2000);
+      if (window.casualApi && window.casualApi.online()) { if (posterTodo().length) fillPosters(true); return; }
+    }
+  })();
 
   // кнопки «Импорт из Letterboxd» в окне аккаунта и ссылка /mnenie/#letterboxd
   document.addEventListener('click', (e) => { if (e.target.closest('[data-lb-open]')) { e.preventDefault(); open(); } });
-  window.CasualLetterboxd = { open, parseCSV, unzip, collect };
+  window.CasualLetterboxd = { open, parseCSV, unzip, collect, fillPosters, pickPoster };
 })();

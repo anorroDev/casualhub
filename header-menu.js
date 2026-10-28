@@ -1,9 +1,9 @@
 /* Казуал Хаб: шапка без россыпи кнопок.
-   На виду остаются главная, «Мнение», «Колесо», профиль и кнопка ☰. В меню ☰ уезжают «на сайте», «Друзья», «Помощь»,
-   «Тема» и GitHub. «Что нового» на широком экране стоит в самом углу страницы, на узком — тоже в меню.
+   На виду остаются главная, «Мнение», «Колесо», «Друзья», профиль и кнопка ☰. В меню ☰ уезжают «Помощь»,
+   «Тема», импорт из Letterboxd, «Обновить обложки и названия» и GitHub. «Что нового» на широком экране стоит в самом углу страницы, на узком — тоже в меню.
    Кнопки переносятся целиком, поэтому их обработчики и счётчики (online.js, whatsnew.js) продолжают работать. */
 (() => {
-  const MOVE = '[data-friends-btn], #howtoBtn, .howto-btn, .theme-pick, a[href*="github.com"]';
+  const MOVE = '#howtoBtn, .howto-btn, .theme-pick, a[href*="github.com"]';
   const css = document.createElement('style');
   css.textContent = `
 .hm-wrap { position: relative; display: inline-flex; flex: none; }
@@ -25,7 +25,11 @@
 .hm-panel > a, .hm-panel > button, .hm-panel > span, .hm-panel .theme-pick > summary { width: 100% !important; min-width: 0 !important; height: auto !important; min-height: 40px; padding: 8px 12px !important; gap: 8px !important; border-radius: 11px !important; font-size: 13.5px !important; line-height: 1.2 !important; align-items: center; }
 .hm-t { margin-left: 2px; }
 /* на узком экране «Мнение» и «Колесо» — только значки, чтобы шапка помещалась в одну строку */
-@media (max-width: 480px) { .hm-nav .hm-t, .hm-nav .t { display: none !important; } .hm-nav { padding: 0 11px !important; } }
+@media (max-width: 480px) { .hm-nav .hm-t, .hm-nav .t, .hm-fr .fb-t { display: none !important; } .hm-nav, .hm-fr { padding: 0 11px !important; } }
+/* узкий телефон: «← Хаб» только стрелкой, чтобы «Друзья», профиль и ☰ поместились в одну строку */
+@media (max-width: 400px) { #homeLink, #backLink, header .pill[href="/"] { width: 36px; min-width: 36px; padding: 0 !important; font-size: 0 !important; justify-content: center; } }
+/* у гостя на главной «Регистрация» на телефоне не помещается — она есть в окне «Войти» */
+@media (max-width: 480px) { #account a[href="/mnenie/#reg"] { display: none !important; } }
 /* сколько людей на сайте: слева в шапке, только кружок и число (подпись — во всплывающей подсказке) */
 .oc-mini { flex: none; min-width: 0 !important; padding: 0 11px !important; gap: 7px !important; }
 .oc-mini .oc-t { display: none !important; }
@@ -69,6 +73,13 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
       if (account) bar.insertBefore(a, account); else bar.appendChild(a);
     });
 
+    // «Друзья» — рядом с профилем, слева от него
+    const fr = bar.querySelector('[data-friends-btn]');
+    if (fr) {
+      fr.classList.add('hm-fr');
+      if (account) bar.insertBefore(fr, account); else bar.appendChild(fr);
+    }
+
     // счётчик «на сайте» — слева: сразу после логотипа или кнопки главной
     const oc = header.querySelector('[data-online-count]');
     const home = header.querySelector('a[href="/"]');
@@ -104,8 +115,16 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     lb.title = 'Перенести оценки фильмов из Letterboxd';
     lb.innerHTML = '<span aria-hidden="true">🎬</span><span class="hm-t">Импорт из Letterboxd</span>';
     panel.appendChild(lb);
+    // обложки, русские названия и жанры для уже сохранённых оценок (mnenie/refresh.js ловит data-refresh-open)
+    const upd = document.createElement('a');
+    upd.className = cls + ' hm-upd';
+    upd.href = '/mnenie/#refresh';
+    upd.setAttribute('data-refresh-open', '');
+    upd.title = 'Подтянуть обложки, названия и жанры к оценкам';
+    upd.innerHTML = '<span aria-hidden="true">🔄</span><span class="hm-t">Обновить обложки и названия</span>';
+    panel.appendChild(upd);
     // одинаковый порядок пунктов на всех страницах
-    ['[data-friends-btn]', '#howtoBtn, .howto-btn', '.theme-pick', '.hm-lb', 'a[href*="github.com"]'].forEach((sel) => { const el = panel.querySelector(`:scope > :is(${sel})`); if (el) panel.appendChild(el); });
+    ['#howtoBtn, .howto-btn', '.theme-pick', '.hm-lb', '.hm-upd', 'a[href*="github.com"]'].forEach((sel) => { const el = panel.querySelector(`:scope > :is(${sel})`); if (el) panel.appendChild(el); });
 
     // «Что нового»: в самом углу страницы, на узком экране — в меню
     const wn = bar.querySelector('[data-whatsnew]');
@@ -150,12 +169,8 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
       if (e.target.closest('a, button')) setTimeout(() => open(false), 0);
     });
 
-    // точка на ☰: заявки в друзья или непрочитанное «Что нового» внутри меню
-    const sync = () => {
-      const req = panel.querySelector('.fb-req:not([hidden])');
-      const news = panel.querySelector('.wn-dot');
-      dot.hidden = !(req || news);
-    };
+    // точка на ☰: непрочитанное «Что нового» внутри меню (заявки в друзья видны на самой кнопке «Друзья»)
+    const sync = () => { dot.hidden = !panel.querySelector('.wn-dot'); };
     new MutationObserver(sync).observe(panel, { subtree: true, childList: true, attributes: true, attributeFilter: ['hidden'] });
     sync();
   }
