@@ -1213,7 +1213,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       const save = async () => {
         const value = input.value.trim();
         if (!value || value.length < 2 || value.length > 24) { toast('Ник должен быть от 2 до 24 символов'); input.focus(); return; }
-        save.disabled = true;
+        const sb = form.querySelector('[type="submit"]'); if (sb.disabled) return; sb.disabled = true; // двойное нажатие не отправляет ник дважды
         try {
           if (token) {
             const d = await send('PUT', '/account', { username: value });
@@ -1232,7 +1232,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
           toast('Ник обновлён');
         } catch (e) {
           toast(e && e.error ? e.error : 'Не получилось сохранить ник');
-          save.disabled = false;
+          sb.disabled = false;
           input.focus();
         }
       };

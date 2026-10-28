@@ -30,6 +30,25 @@
   ['pointerup', 'pointercancel', 'dragstart'].forEach((t) => addEventListener(t, release, { passive: true }));
   addEventListener('blur', release);
 
+  // наведение мышью: карточки, чипы и строки списков чуть приподнимаются (свойство translate — не мешает их transition и transform)
+  if (matchMedia('(hover: hover)').matches) {
+    const LIFT = '.chip-btn, button.cat, button.stat, a.pod, a.item, .fr-row, .cm-item, .kpi-card, .app, .feed .fd, .mcard, .rel';
+    const lifted = new WeakMap();
+    addEventListener('pointerover', (e) => {
+      const el = e.target.closest && e.target.closest(LIFT);
+      if (!el || lifted.has(el) || el.disabled) return;
+      lifted.set(el, el.animate([{ translate: '0 0' }, { translate: '0 -3px' }], { duration: 220, easing: SPRING, fill: 'forwards' }));
+      const out = (ev) => {
+        if (ev.relatedTarget && el.contains(ev.relatedTarget)) return;
+        el.removeEventListener('pointerout', out);
+        const a = lifted.get(el); lifted.delete(el);
+        if (a) a.cancel();
+        el.animate([{ translate: '0 -3px' }, { translate: '0 0' }], { duration: 260, easing: SPRING });
+      };
+      el.addEventListener('pointerout', out);
+    }, { passive: true });
+  }
+
   // блоки, которые при загрузке были ниже экрана, въезжают снизу, когда до них долистали
   const REVEAL = '.kpi-card, .stat-block, .rel, .log-day, .card:not(.rise), .app, .fx-reveal';
   const seen = new WeakSet();

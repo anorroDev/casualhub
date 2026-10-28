@@ -631,17 +631,24 @@ const routes = {
     if (burst('fetchimg:' + me.id, 30, 60e3)) return tooMany(1);
     let u;
     try { u = new URL(new URL(request.url).searchParams.get('u') || ''); } catch (e) { return fail(400, 'Это не ссылка'); }
-    if (!/^https?:$/.test(u.protocol) || /^(localhost|[\d.]+|\[[\da-f:.]+\])$/i.test(u.hostname) || /\.(local|localhost|internal|lan|home)$/i.test(u.hostname)) {
-      return fail(400, 'Такую ссылку открыть нельзя');
-    }
+    if (!publicUrl(u)) return fail(400, 'Такую ссылку открыть нельзя');
+    // переадресации проходим сами и проверяем каждую: иначе публичная ссылка могла бы увести на внутренний адрес
     let res;
     try {
-      res = await fetch(u.href, { redirect: 'follow', headers: { 'user-agent': 'Mozilla/5.0 (compatible; CasualHub/1.0; +https://casualhub.pages.dev)', accept: 'image/avif,image/webp,image/*;q=0.9,*/*;q=0.5' } });
+      for (let hop = 0; ; hop++) {
+        res = await fetch(u.href, { redirect: 'manual', headers: { 'user-agent': 'Mozilla/5.0 (compatible; CasualHub/1.0; +https://casualhub.pages.dev)', accept: 'image/avif,image/webp,image/*;q=0.9,*/*;q=0.5' } });
+        if (res.status < 300 || res.status >= 400) break;
+        const loc = res.headers.get('location');
+        if (!loc || hop >= 4) return fail(502, 'Сайт с картинкой слишком долго перенаправляет');
+        u = new URL(loc, u);
+        if (!publicUrl(u)) return fail(400, 'Такую ссылку открыть нельзя');
+      }
     } catch (e) { return fail(502, 'Сайт с картинкой не ответил'); }
     if (!res.ok) return fail(502, `Сайт с картинкой её не отдал (${res.status})`);
     if (+res.headers.get('content-length') > 6e6) return fail(413, 'Картинка больше 6 МБ');
-    const buf = await res.arrayBuffer();
-    if (buf.byteLength > 6e6) return fail(413, 'Картинка больше 6 МБ');
+    // читаем по кусочкам и обрываем на 6 МБ: размер в заголовке может врать или отсутствовать
+    const buf = await readCapped(res, 6e6);
+    if (!buf) return fail(413, 'Картинка больше 6 МБ');
     const type = imageType(buf);
     if (!type) return fail(415, 'По ссылке страница, а не картинка. Открой саму картинку и скопируй её адрес');
     return json({ data: `data:${type};base64,${b64(buf)}` });
@@ -1074,6 +1081,32 @@ const COVER_FIND = {
   },
 };
 // тип картинки по первым байтам (заголовкам чужих сайтов верить нельзя)
+// ссылка наружу: только http(s), без внутренних имён и голых IP-адресов (в том числе записанных хитро: 0x7f.1, 2130706433), стандартные порты
+function publicUrl(u) {
+  if (!/^https?:$/.test(u.protocol) || u.username || u.password) return false;
+  if (u.port && u.port !== '80' && u.port !== '443') return false;
+  const h = u.hostname.toLowerCase();
+  if (!h.includes('.') || /^[\d.]+$|^0x|^\[|:/.test(h)) return false;
+  if (/(^|\.)(localhost|local|localdomain|internal|intranet|lan|home|corp|arpa)$/.test(h)) return false;
+  return true;
+}
+async function readCapped(res, max) {
+  if (!res.body) return new ArrayBuffer(0);
+  const reader = res.body.getReader();
+  const parts = [];
+  let n = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    n += value.byteLength;
+    if (n > max) { try { await reader.cancel(); } catch (e) {} return null; }
+    parts.push(value);
+  }
+  const out = new Uint8Array(n);
+  let o = 0;
+  for (const p of parts) { out.set(p, o); o += p.byteLength; }
+  return out.buffer;
+}
 function imageType(buf) {
   const h = new Uint8Array(buf.slice(0, 16));
   if (h[0] === 0xff && h[1] === 0xd8) return 'image/jpeg';
