@@ -1,6 +1,8 @@
 // Казуал Хаб: онлайн-аккаунты, друзья и оценки друзей.
 // Cloudflare Pages Functions, база D1 подключена как binding DB (см. schema.sql и README).
 
+import { clip, numOrNull, SAFE_URL, cleanRating, readShelf, stampOf, RID_RE } from '../_lib/shelf.js';
+
 const enc = new TextEncoder();
 const ITER = 10000; // PBKDF2: больше не даёт бесплатный тариф по времени CPU
 const SESSION_DAYS = 30;
@@ -48,6 +50,9 @@ async function ensureSchema(env) {
     env.DB.prepare('CREATE TABLE IF NOT EXISTS attempts (key TEXT PRIMARY KEY, count INTEGER NOT NULL, reset_at INTEGER NOT NULL)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS reactions (owner_id TEXT NOT NULL, rid TEXT NOT NULL, from_id TEXT NOT NULL, emoji TEXT, text TEXT, at INTEGER NOT NULL, PRIMARY KEY (owner_id, rid, from_id))'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS reactions_from ON reactions(from_id)'),
+    // ссылки на отзыв: случайный код → чья оценка; одна ссылка на оценку
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS shares (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, rid TEXT NOT NULL, created_at INTEGER NOT NULL)'),
+    env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS shares_owner_rid ON shares(owner_id, rid)'),
   ]);
   const { results } = await env.DB.prepare('PRAGMA table_info(users)').all();
   if (!results.some((c) => c.name === 'email')) await env.DB.prepare('ALTER TABLE users ADD COLUMN email TEXT').run();
@@ -117,48 +122,6 @@ function burst(key, max, winMs) {
   b.n++;
   if (BURST.size > 20000) for (const [k, v] of BURST) if (v.reset <= now) BURST.delete(k);
   return b.n > max ? Math.ceil((b.reset - now) / 1000) : 0;
-}
-
-// ---------- чужие оценки: только ожидаемые типы, чтобы в страницу друга не попал код ----------
-const clip = (v, n) => String(v == null ? '' : v).slice(0, n);
-const numOrNull = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : (typeof v === 'string' && v.trim() !== '' && Number.isFinite(+v) ? +v : null));
-const SAFE_URL = /^https?:\/\/[^\s"'<>()\\]{1,1500}$/;
-// любое значение: строки, числа, да/нет и вложенные объекты/списки неглубоко; функции и прочее отбрасываются
-function plain(v, depth) {
-  if (v == null || typeof v === 'boolean') return v;
-  if (typeof v === 'number') return Number.isFinite(v) ? v : null;
-  if (typeof v === 'string') return v.slice(0, 20000);
-  if (depth > 3) return null;
-  if (Array.isArray(v)) return v.slice(0, 400).map((x) => plain(x, depth + 1));
-  if (typeof v === 'object') {
-    const o = {};
-    let k = 0;
-    for (const key of Object.keys(v)) { if (k++ > 80) break; if (key === '__proto__' || key === 'constructor') continue; o[key.slice(0, 60)] = plain(v[key], depth + 1); }
-    return o;
-  }
-  return null;
-}
-function cleanRating(r) {
-  if (!r || typeof r !== 'object' || Array.isArray(r) || typeof r.id !== 'string' || !r.id || r.id.length > 120) return null;
-  const o = plain(r, 0);
-  for (const k of ['name', 'meta', 'note', 'catLabel', 'catName', 'status', 'pros', 'cons', 'artist']) if (o[k] != null) o[k] = clip(o[k], k === 'note' || k === 'pros' || k === 'cons' ? 8000 : 300);
-  o.total = numOrNull(o.total);
-  if (o.total != null) o.total = Math.max(0, Math.min(10, o.total));
-  o.fav = !!o.fav;
-  o.scores = Array.isArray(o.scores) ? o.scores.filter((x) => x && typeof x === 'object' && !Array.isArray(x)).slice(0, 60).map((x) => ({
-    ...x, name: clip(x.name, 120), v: Math.max(0, Math.min(10, numOrNull(x.v) || 0)), note: x.note != null ? clip(x.note, 2000) : undefined,
-    w: x.w != null ? numOrNull(x.w) : undefined,
-  })) : [];
-  if (o.photo != null) {
-    const p = o.photo && typeof o.photo === 'object' ? o.photo : {};
-    const url = typeof p.url === 'string' && SAFE_URL.test(p.url) ? p.url : '';
-    const remote = typeof p.remote === 'string' ? clip(p.remote, 80) : p.remote === true;
-    o.photo = url || remote ? { ...(url ? { url } : {}), ...(remote ? { remote } : {}), w: Math.max(0, numOrNull(p.w) || 0), h: Math.max(0, numOrNull(p.h) || 0) } : null;
-    if (!o.photo) delete o.photo;
-  }
-  // artistAva — отпечаток фото исполнителя (короткая строка), не адрес
-  if (o.artistAva != null && !(typeof o.artistAva === 'string' && /^[\w.-]{0,80}$/.test(o.artistAva))) delete o.artistAva;
-  return o;
 }
 
 async function currentUser(env, request) {
@@ -500,7 +463,8 @@ const routes = {
     const gone = tomb.filter((d) => !oldDel.has(d.id) && !live.has(d.id)).map((d) => d.id).slice(0, 100);
     if (gone.length) {
       // вместе с фото уходит и его превью «<id>.t»
-      await env.DB.batch(gone.flatMap((id) => [`${me.id}:${id}`, `${me.id}:${id}.t`].map((k) => env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(k))));
+      await env.DB.batch(gone.flatMap((id) => [`${me.id}:${id}`, `${me.id}:${id}.t`].map((k) => env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(k))
+        .concat(env.DB.prepare('DELETE FROM shares WHERE owner_id = ? AND rid = ?').bind(me.id, id)))); // и ссылка на отзыв закрывается
     }
     return json({ ok: true, updatedAt: now, count: merged.length, catsAt: catsOut ? catsOut.at : null });
   },
@@ -612,6 +576,45 @@ const routes = {
     return json({ items: results.map((x) => ({ rid: x.rid, from: { id: x.from_id, username: x.username, handle: x.uname }, emoji: x.emoji || null, text: x.text || '', at: x.at })) });
   },
 
+  // ---------- ссылки на отзыв ----------
+  // Ссылка открывает оценку всем, у кого она есть, без входа. Код случайный (12 знаков), угадать нельзя;
+  // хозяин может закрыть ссылку, а удалённая оценка по ссылке больше не показывается.
+  async 'POST /share'({ env, request, me }) {
+    if (burst('share:' + me.id, 30, 600e3)) return tooMany(10);
+    const { rid } = await readBody(request);
+    if (typeof rid !== 'string' || !RID_RE.test(rid)) return fail(400, 'Нет такой оценки.');
+    const s = readShelf(await env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(me.id).first());
+    const r = s.ratings.find((x) => x && x.id === rid && !x.example);
+    if (!r) return fail(404, 'Оценка ещё не дошла до сервера. Подожди пару секунд и попробуй снова.');
+    const had = await env.DB.prepare('SELECT id FROM shares WHERE owner_id = ? AND rid = ?').bind(me.id, rid).first();
+    if (had) return json({ id: had.id });
+    const c = await env.DB.prepare('SELECT COUNT(*) AS n FROM shares WHERE owner_id = ?').bind(me.id).first();
+    if (c && c.n >= 500) return fail(413, 'Слишком много открытых ссылок. Закрой старые.');
+    const id = shareId();
+    await env.DB.prepare('INSERT INTO shares (id, owner_id, rid, created_at) VALUES (?, ?, ?, ?)').bind(id, me.id, rid, Date.now()).run();
+    return json({ id });
+  },
+  async 'GET /shares'({ env, me }) {
+    const { results } = await env.DB.prepare('SELECT id, rid FROM shares WHERE owner_id = ? LIMIT 500').bind(me.id).all();
+    return json({ items: results });
+  },
+  async 'DELETE /share/:id'({ env, me, arg }) {
+    await env.DB.prepare('DELETE FROM shares WHERE id = ? AND owner_id = ?').bind(arg, me.id).run();
+    return json({ ok: true });
+  },
+  // картинка отзыва (для страницы /r/<код> и превью в чатах): только если ссылка есть и оценка жива
+  async 'GET /share/:id/img'({ env, request, arg }) {
+    if (burst('shareimg:' + clientIp(request), 240, 60e3)) return new Response(null, { status: 429 });
+    const sh = await env.DB.prepare('SELECT owner_id, rid FROM shares WHERE id = ?').bind(arg).first();
+    if (!sh) return new Response(null, { status: 404 });
+    const row = (await env.DB.prepare('SELECT data FROM photos WHERE key = ?').bind(`${sh.owner_id}:${sh.rid}.t`).first())
+      || (await env.DB.prepare('SELECT data FROM photos WHERE key = ?').bind(`${sh.owner_id}:${sh.rid}`).first());
+    const m = row && /^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/]+=*)$/.exec(row.data);
+    if (!m) return new Response(null, { status: 404 });
+    const bin = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0));
+    return new Response(bin, { headers: { 'content-type': m[1], 'cache-control': 'public, max-age=600', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'" } });
+  },
+
   // лента: свежие оценки друзей
   async 'GET /feed'({ env, me }) {
     const { results: fr } = await env.DB.prepare(
@@ -688,19 +691,8 @@ const NAME_HINT = 'Ник: от 2 до 24 символов, буквы, цифр
 const HANDLE_HINT = 'Юзернейм: от 3 до 20 символов, латинские буквы, цифры, «_» и «.» (точка не в начале и не в конце).';
 const MAX_PHOTOS = 1200; // фото, превью, аватар и баннер вместе
 const MAX_PHOTO = 1900000; // символов в data URL, предел строки в D1 около 2 МБ
-const RID_RE = /^[\w.-]{1,80}$/;
 const STICKER_RE = /^hub\/(?!.*\.\.)[\w\-\/.]{1,100}\.(png|gif|webp|webm|jpe?g)$/; // путь картинки из каталога колеса
 const REACTIONS = ['fire', 'skull', 'nope']; // 🔥 огонь, 💀 жесть, 🙅 не согласен
-const stampOf = (r) => +new Date(r.updatedAt || r.createdAt || 0) || 0;
-function readShelf(row) {
-  if (!row) return { ratings: [], deleted: [] };
-  const d = JSON.parse(row.data);
-  if (Array.isArray(d)) return { ratings: d, deleted: [] }; // старый формат: просто список
-  const cats = d.cats && Array.isArray(d.cats.items) && Number.isFinite(+d.cats.at) ? d.cats : null;
-  const profile = d.profile && Array.isArray(d.profile.hide) && Number.isFinite(+d.profile.at) ? d.profile : null;
-  const sticker = d.sticker && typeof d.sticker.src === 'string' && Number.isFinite(+d.sticker.at) ? d.sticker : null;
-  return { ratings: Array.isArray(d.ratings) ? d.ratings : [], deleted: Array.isArray(d.deleted) ? d.deleted : [], cats, profile, sticker };
-}
 // ---------- Genius: фото исполнителей ----------
 // Токен лежит в секрете GENIUS_TOKEN и наружу не уходит. Поиск доступен только вошедшим, ответы кэшируются на сутки.
 const GENIUS_IMG = /^https:\/\/(images|assets|t2)\.genius\.com\/|^https:\/\/images\.rapgenius\.com\/|^https:\/\/(cdn-images|e-cdns-images)\.dzcdn\.net\//;
@@ -755,7 +747,13 @@ async function canSee(env, me, uid) {
   return !!row && row.status === 'accepted';
 }
 
-const PUBLIC = new Set(['POST /register', 'POST /login', 'POST /logout', 'POST /ping']);
+const PUBLIC = new Set(['POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img']);
+// код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности
+const SHARE_RE = /^[A-Za-z0-9]{12}$/;
+function shareId() {
+  const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  return [...crypto.getRandomValues(new Uint8Array(24))].filter((b) => b < 248).slice(0, 12).map((b) => abc[b % 62]).join('').padEnd(12, 'x');
+}
 const ONLINE_MS = 150e3; // «в сети» — заходил за последние 2,5 минуты
 const onlineCache = { n: 0, at: 0 };
 
@@ -772,6 +770,8 @@ export async function onRequest({ request, env, params }) {
   if (!routes[key] && segs.length === 3 && segs[0] === 'photo' && RID_RE.test(segs[2])) { key = `${request.method} /photo/:uid/:rid`; arg = [segs[1], segs[2]]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'react' && RID_RE.test(segs[2])) { key = `${request.method} /react/:uid/:rid`; arg = [segs[1], segs[2]]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'reacts') { key = `${request.method} /reacts/:id`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 2 && segs[0] === 'share' && SHARE_RE.test(segs[1])) { key = `${request.method} /share/:id`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 3 && segs[0] === 'share' && segs[2] === 'img' && SHARE_RE.test(segs[1])) { key = `${request.method} /share/:id/img`; arg = segs[1]; }
   const handler = routes[key];
   if (!handler) return fail(404, 'Нет такого адреса.');
   // флуд с одного адреса гасится до базы данных

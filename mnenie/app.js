@@ -1786,13 +1786,19 @@ function entryHTML(r, rank, showCat) {
       </div>`
     : '';
   const inCmp = state.cmpIds.includes(r.id);
+  // ссылкой делятся только своими настоящими оценками и только с онлайн-аккаунтом
+  const shareOk = !r.example && !!window.CasualShare && window.CasualShare.ready() && (!r.author || !state.user || r.author.id === state.user.id);
+  const shared = shareOk && window.CasualShare.has(r.id);
   const confirming = state.confirmDel === r.id;
   const actions = confirming
     ? `<span class="confirm-q">Удалить «${esc(r.name)}» из рейтинга?</span><button type="button" class="btn small danger-solid" data-act="del-yes">Удалить</button><button type="button" class="btn small ghost" data-act="del-no">Отмена</button>`
     : (state.canWrite ? `<button type="button" class="btn small ghost" data-act="edit">${ICON.edit}Изменить</button>` : '')
       + (state.canWrite ? `<button type="button" class="btn small ghost" data-act="fav-card" title="В избранное">${r.fav ? '★ В избранном' : '☆ В избранное'}</button>` : '')
       + `<button type="button" class="btn small ghost${inCmp ? ' primary' : ''}" data-act="cmp">${inCmp ? '⚖️ Выбрано' : '⚖️ Сравнить'}</button>`
-      + `<button type="button" class="btn small ghost" data-act="share">${ICON.share}Экспорт</button>`
+      + (shareOk ? (shared
+        ? `<button type="button" class="btn small ghost primary" data-act="link" title="Скопировать ссылку на отзыв">🔗 Скопировать ссылку</button><button type="button" class="btn small ghost" data-act="unlink" title="По ссылке отзыв больше не откроется">Закрыть ссылку</button>`
+        : `<button type="button" class="btn small ghost" data-act="link" title="Ссылка, по которой отзыв увидит кто угодно, даже без аккаунта">🔗 Поделиться ссылкой</button>`) : '')
+      + `<button type="button" class="btn small ghost" data-act="share">${ICON.share}Картинка или текст</button>`
       + (state.canWrite ? `<button type="button" class="btn small ghost danger" data-act="del">${ICON.trash}Удалить</button>` : '');
   const pUrl = resolvePhotoUrl(r.photo);
   const aUrl = pUrl ? '' : artistAvaUrl(r);
@@ -2891,6 +2897,21 @@ function shareView() {
       .filter(s => s.v > 0 || s.note)
   });
 }
+// ссылка на отзыв: на телефоне — системное «Поделиться», на компьютере — в буфер обмена
+async function shareLink(r, b) {
+  if (!window.CasualShare || !window.CasualShare.ready()) { toast('Ссылки работают после входа в аккаунт'); return; }
+  b.disabled = true;
+  let url = '';
+  try { url = await window.CasualShare.link(r.id); }
+  catch (err) { b.disabled = false; toast(err.message || 'Не получилось сделать ссылку'); return; }
+  renderBoard();
+  if (matchMedia('(pointer: coarse)').matches && navigator.share) {
+    try { await navigator.share({ title: r.name, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
+  }
+  let ok = false;
+  try { await navigator.clipboard.writeText(url); ok = true; } catch (e) {}
+  toast(ok ? 'Ссылка на отзыв скопирована, отправь её кому хочешь' : url);
+}
 function openShare(d, trigger) {
   share.trigger = trigger || null;
   share.data = d;
@@ -3299,6 +3320,11 @@ el.board.addEventListener('click', e => {
     case 'fav-card': r.fav = !r.fav; saveLocalRatings(); renderBoard(); toast(r.fav ? `★ В избранном: ${r.name}` : `Убрано из избранного`); break;
     case 'cmp': toggleCompare(r.id); break;
     case 'share': openShare(exportFromRating(r), b); break;
+    case 'link': shareLink(r, b); break;
+    case 'unlink':
+      b.disabled = true;
+      window.CasualShare.revoke(r.id).then(() => { renderBoard(); toast('Ссылка закрыта: по ней отзыв больше не откроется'); }, (err) => { b.disabled = false; toast(err.message || 'Не получилось закрыть ссылку'); });
+      break;
     case 'journal': openJournalFor(id); break;
     case 'del': state.confirmDel = id; pendingFocus = sel + '"del-yes"]'; renderBoard(); break;
     case 'del-no': state.confirmDel = null; pendingFocus = sel + '"del"]'; renderBoard(); break;

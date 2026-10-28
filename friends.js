@@ -118,6 +118,33 @@
 
   // для Мнения: запросы к серверу от имени вошедшего (фото исполнителей с Genius)
   window.casualApi = { get: (path) => api(path), online: () => !!(F.me && F.token) };
+  // ссылки на отзыв: код ссылки у каждой своей оценки, у которой она открыта
+  F.shares = new Map(); // id оценки -> код ссылки
+  async function loadShares() {
+    if (!F.me) return;
+    try { F.shares = new Map(((await api('/shares')).items || []).map((x) => [x.rid, x.id])); } catch (e) {}
+    try { renderBoard(); } catch (e) {}
+  }
+  window.CasualShare = {
+    ready: () => !!(F.me && F.token),
+    has: (rid) => F.shares.has(rid),
+    url: (rid) => (F.shares.has(rid) ? location.origin + '/r/' + F.shares.get(rid) : ''),
+    // создаёт ссылку (оценка сначала уходит на сервер) и возвращает адрес
+    async link(rid) {
+      if (!F.shares.has(rid)) {
+        await pushShelf(true);
+        const r = await api('/share', 'POST', { rid });
+        F.shares.set(rid, r.id);
+      }
+      return location.origin + '/r/' + F.shares.get(rid);
+    },
+    async revoke(rid) {
+      const id = F.shares.get(rid);
+      if (!id) return;
+      await api('/share/' + encodeURIComponent(id), 'DELETE');
+      F.shares.delete(rid);
+    },
+  };
   // переходы с главной и из профиля: доска друга на его оценке, окно друзей
   const waitFor = (test, ms = 8000) => new Promise((res) => {
     const t0 = Date.now();
@@ -211,6 +238,7 @@
         await pullOwnShelf(); // сначала забираем свои оценки с сервера, потом отправляем общий список
         pushShelf();
         loadReacts(F.me.id, true).then(() => decorateOwn());
+        loadShares();
       } catch (e) {}
     }
     if (F.view !== 'me' && !F.friends.some((f) => f.id === F.view)) setView('me');
