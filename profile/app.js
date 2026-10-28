@@ -650,12 +650,14 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         </div>` : ''}
         <div class="ava-wrap${isMe && user ? ' can' : ''}" id="avaWrap"${isMe && user ? ' role="button" tabindex="0" aria-label="Сменить аватар, можно и анимированный GIF" title="Сменить аватар"' : ''}><span class="ava-ring" aria-hidden="true"></span>${ava}${isMe && user ? `<span class="ava-edit" aria-hidden="true"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M2 5.5h2.5L6 3.5h4l1.5 2H14v7H2z"/><circle cx="8" cy="9" r="2.3"/></svg></span><input type="file" id="avaFile" accept="image/*" class="vh">` : ''}</div>
         <div class="who">
-          <div class="name-row"><h1 class="name" aria-label="${esc(p.name)}">${nameHTML}</h1>${stickerSlot(p)}</div>
+          <div class="name-row">${isMe && p.editingName
+            ? `<form class="name-edit" id="nameEditForm"><input id="profileNameInput" type="text" value="${esc(p.name)}" minlength="2" maxlength="24" aria-label="Ник"><button type="submit" class="btn primary">Сохранить</button><button type="button" class="btn ghost" id="profileNameCancel">Отмена</button></form>`
+            : `<h1 class="name" id="profileName" aria-label="${esc(p.name)}"${isMe ? ' role="button" tabindex="0" title="Нажми, чтобы изменить ник"' : ''}>${nameHTML}</h1>`}${stickerSlot(p)}</div>
           <p class="sub">${esc(p.sub)}</p>
           ${!isMe && p.uid ? `<p class="sub" data-seen="${esc(p.uid)}" data-last="${+p.lastSeen || ''}"></p>` : ''}
           <div class="titles"${hid(p, 'titles')}>${titlesOf(rs).map((t) => `<span class="title-chip" data-tier="${t.tier}"><i></i>${esc(t.t)}</span>`).join('')}</div>
           <div class="hero-acts">${isMe
-            ? `<a class="btn primary" href="/mnenie/">Оценить что-нибудь</a><button type="button" class="btn ghost" id="layoutBtn">Витрины и блоки</button><a class="btn ghost" href="/mnenie/#profile">Настроить профиль</a>`
+            ? `<a class="btn primary" href="/mnenie/">Оценить что-нибудь</a><button type="button" class="btn ghost" id="layoutBtn">Витрины и блоки</button><button type="button" class="btn ghost" id="profileEditBtn">Настроить профиль</button>`
             : `${p.uid && token ? `<button type="button" class="btn ${p.followed ? 'ghost' : 'primary'}" id="followBtn" aria-pressed="${!!p.followed}" title="Новые оценки друга будут видны в Журнале Мнения">${p.followed ? '🔔 Ты подписан' : '🔔 Подписаться на оценки'}</button>` : ''}<a class="btn ghost" href="/profile/">Мой профиль</a>${p.common && p.common.length ? '<a class="btn primary" href="#taste">Сравнить вкусы</a>' : ''}`}</div>
         </div>
       </section>
@@ -737,7 +739,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
 
     if (rs.length) wireList(p);
     wireJumps(p);
-    if (isMe) { const lb = $('#layoutBtn'); if (lb) lb.addEventListener('click', () => layoutEditor(p)); }
+    if (isMe) { const lb = $('#layoutBtn'); if (lb) lb.addEventListener('click', () => layoutEditor(p)); wireProfileName(p); }
     const fb = $('#followBtn');
     if (fb) fb.addEventListener('click', () => toggleFollow(p, fb));
     if (isMe) { wireBanner(p); wireAvatar(p); wireTopics(p); const sb = $('#stBtn'); if (sb) sb.addEventListener('click', () => stickerPicker(p)); }
@@ -1115,6 +1117,52 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     banner.addEventListener('dragover', (e) => { e.preventDefault(); banner.classList.add('drag'); });
     banner.addEventListener('dragleave', () => banner.classList.remove('drag'));
     banner.addEventListener('drop', (e) => { e.preventDefault(); banner.classList.remove('drag'); open(true); fromFile(e.dataTransfer.files && e.dataTransfer.files[0]); });
+  }
+
+  function wireProfileName(p) {
+    const form = $('#nameEditForm'), name = $('#profileName');
+    if (form) {
+      const input = $('#profileNameInput');
+      const cancel = $('#profileNameCancel');
+      const save = async () => {
+        const value = input.value.trim();
+        if (!value || value.length < 2 || value.length > 24) { toast('Ник должен быть от 2 до 24 символов'); input.focus(); return; }
+        save.disabled = true;
+        try {
+          if (token) {
+            const d = await send('PUT', '/account', { username: value });
+            if (d.user && user) user.name = d.user.username || value;
+          } else if (user) {
+            user.name = value;
+          }
+          if (user) {
+            const users = (read('ocenshik.users.v1') || []).map((u) => u.id === user.id ? { ...u, name: value } : u);
+            localStorage.setItem('ocenshik.user.v1', JSON.stringify(user));
+            localStorage.setItem('ocenshik.users.v1', JSON.stringify(users));
+          }
+          p.name = value;
+          p.editingName = false;
+          render(p);
+          toast('Ник обновлён');
+        } catch (e) {
+          toast(e && e.error ? e.error : 'Не получилось сохранить ник');
+          save.disabled = false;
+          input.focus();
+        }
+      };
+      form.addEventListener('submit', (e) => { e.preventDefault(); save(); });
+      cancel.addEventListener('click', () => { p.editingName = false; render(p); });
+      input.focus({ preventScroll: true });
+      input.select();
+      return;
+    }
+    const edit = $('#profileEditBtn');
+    const start = () => { p.editingName = true; render(p); };
+    if (edit) edit.addEventListener('click', start);
+    if (name) {
+      name.addEventListener('click', start);
+      name.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); start(); } });
+    }
   }
 
   function message(title, text, actions) {
