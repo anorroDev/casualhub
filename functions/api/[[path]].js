@@ -937,7 +937,15 @@ function cleanLayout(l) {
   const order = (Array.isArray(l.order) ? l.order : []).filter((k) => typeof k === 'string' && WKEY.test(k)).slice(0, 30);
   const size = {};
   if (l.size && typeof l.size === 'object') for (const [k, v] of Object.entries(l.size).slice(0, 30)) if (WKEY.test(k) && ['s', 'm', 'l', 'f'].includes(v)) size[k] = v;
-  const out = { showcases, sections, order, size, at: +l.at };
+  const grid = {};
+  if (l.grid && typeof l.grid === 'object') {
+    for (const [k, v] of Object.entries(l.grid).slice(0, 30)) {
+      if (!WKEY.test(k) || !v || typeof v !== 'object') continue;
+      const x = Math.round(+v.x), y = Math.round(+v.y), w = Math.round(+v.w);
+      if (x >= 0 && x <= 11 && w >= 1 && w <= 12 && y >= 0 && y <= 20000) grid[k] = { x, y, w };
+    }
+  }
+  const out = { showcases, sections, order, size, grid, at: +l.at };
   if (Array.isArray(l.titles)) out.titles = l.titles.filter((t) => typeof t === 'string' && /^[\w:-]{1,40}$/.test(t)).slice(0, 4);
   return out;
 }

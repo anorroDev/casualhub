@@ -1003,6 +1003,8 @@ details[open] .chev { transform: rotate(180deg); }
 .e-note p { margin-top: 4px; font-size: 14px; white-space: pre-line; overflow-wrap: anywhere; }
 .e-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
 .e-main-acts, .e-icons { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+/* комментарии под оценкой: отделены от кнопок линией и воздухом */
+.e-body > .cm-slot[data-on] { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
 .e-icons { margin-left: auto; gap: 6px; }
 .btn.small.act-edit { padding: 0 16px; }
 .btn.act-del { background: color-mix(in srgb, var(--bad) 12%, var(--panel)); border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); color: var(--bad-ink); }

@@ -238,7 +238,9 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   }
   function titlesRowHTML(p, rs) {
     const cat = titleCatalog(p, rs), shown = titlesShown(p, cat);
-    const chip = (t) => `<span class="title-chip" data-tier="${t.tier}"><i></i>${esc(t.t)}${EDIT ? `<button type="button" class="t-x" data-tx="${esc(t.id)}" aria-label="Убрать звание «${esc(t.t)}»" title="Убрать">✕</button>` : ''}</span>`;
+    const chip = (t) => (EDIT
+      ? `<span class="title-chip" data-tier="${t.tier}" data-tid="${esc(t.id)}" tabindex="0" title="Перетащи, чтобы поменять порядок (или стрелками)"><i></i>${esc(t.t)}<button type="button" class="t-x" data-tx="${esc(t.id)}" aria-label="Убрать звание «${esc(t.t)}»" title="Убрать">✕</button></span>`
+      : `<span class="title-chip" data-tier="${t.tier}"><i></i>${esc(t.t)}</span>`);
     if (!EDIT) return `<div class="titles"${hid(p, 'titles')}>${shown.map(chip).join('')}</div>`;
     const on = secOn(p, 'titles');
     return `<div class="t-wrap"><div class="titles edit${on ? '' : ' off'}" id="titlesRow">${shown.map(chip).join('')}<button type="button" class="title-add" id="titleAdd" aria-expanded="${tpOpen}" aria-controls="titlePop">＋ Звание</button><button type="button" class="title-eye" id="titleEye" aria-pressed="${!on}" title="${on ? 'Скрыть звания' : 'Показать звания'}" aria-label="${on ? 'Скрыть звания' : 'Показать звания'}">${on ? WIC.eye : WIC.eyeOff}</button></div>
@@ -383,13 +385,12 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   // ---------- витрины и блоки профиля: что видно в профиле, решает хозяин; хранится в аккаунте ----------
   const LAYOUT_KEY = 'casualhub.profileLayout.v1'; // { id профиля: { showcases, sections, at } }
   const SC_MAX = 6;
-  // блоки профиля — виджеты на сетке из 6 колонок: размер ⅓, ½, ⅔ или во всю ширину
+  // блоки профиля — виджеты на сетке из 12 колонок: блок стоит там, куда его поставили, ширина — от 3 до 12 колонок
   const WG_NAME = { stats: 'Цифры', podium: 'Любимое', all: 'Все оценки', badges: 'Ачивки', taste: 'Вкусы', friends: 'Друзья', hist: 'Оценки 1–10', cats: 'Категории' };
-  const WG_SIZE = { stats: 'f', podium: 'l', all: 'l', badges: 's', taste: 's', friends: 's', hist: 's', cats: 's' };
-  const SZ_LABEL = { s: '⅓', m: '½', l: '⅔', f: '↔' };
-  const SZ_WORD = { s: 'треть ширины', m: 'половина ширины', l: 'две трети ширины', f: 'во всю ширину' };
-  const wgSizes = (k) => (k === 'stats' || k === 'all' ? ['m', 'l', 'f'] : ['s', 'm', 'l', 'f']);
-  const wgSize = (p, k) => { const s = p.layout && p.layout.size && p.layout.size[k]; return wgSizes(k).includes(s) ? s : WG_SIZE[k] || (k.startsWith('sc:') ? 'f' : 's'); };
+  const COLS = 12, ROW = 8; // колонки и шаг строк сетки в пикселях
+  const WG_W = { stats: 12, podium: 8, all: 8, badges: 4, taste: 4, friends: 4, hist: 4, cats: 4 };
+  const OLD_W = { s: 4, m: 6, l: 8, f: 12 }; // размеры из прошлой версии (⅓, ½, ⅔, во всю ширину)
+  const wgMin = (k) => (k === 'stats' ? 6 : k === 'all' || k === 'podium' || k.startsWith('sc:') ? 4 : 3);
   const WIC = {
     move: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg>',
     eye: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
@@ -398,6 +399,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     trash: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5"/></svg>',
   };
   let EDIT = false, tpOpen = false; // режим редактирования профиля; открыт ли список званий
+  let lySnap = null, lyDirty = false; // раскладка до правок (для «Отмены») и есть ли несохранённые правки
   const localLayout = () => (read(LAYOUT_KEY) || {})[hideOwner()] || null;
   const keepLayout = (l) => { try { const all = read(LAYOUT_KEY) || {}; all[hideOwner()] = l; localStorage.setItem(LAYOUT_KEY, JSON.stringify(all)); } catch (e) {} };
   const secOn = (p, k) => !(p.layout && p.layout.sections && p.layout.sections[k] === false);
@@ -423,13 +425,33 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
 
   // окно витрины: добавить новую или изменить; блоки двигают и скрывают прямо в профиле
   let lyP = null, lyEdit = null, lyPush = 0; // lyEdit — витрина, которую сейчас добавляют или меняют
-  // в аккаунт уходит с задержкой: при перетаскивании блоков правок много подряд
+  // в режиме редактирования правка — черновик: в браузер и аккаунт она уходит только по «Сохранить»
   function saveLayout(p, noRender) {
-    p.layout = { ...p.layout, at: Date.now() };
-    keepLayout(p.layout);
-    if (token) { clearTimeout(lyPush); const l = p.layout; lyPush = setTimeout(() => send('PUT', '/shelf', { ratings: [], layout: l }).catch(() => {}), 1200); }
+    if (EDIT) { lyDirty = true; markDirty(); } else commitLayout(p);
     if (!noRender) render(p);
   }
+  function commitLayout(p) {
+    p.layout = { ...p.layout, at: Date.now() };
+    keepLayout(p.layout);
+    if (token) { clearTimeout(lyPush); const l = p.layout; lyPush = setTimeout(() => send('PUT', '/shelf', { ratings: [], layout: l }).catch(() => {}), 300); }
+  }
+  const markDirty = () => { const t = $('#edHint'); if (t) { t.textContent = 'Есть несохранённые изменения'; t.classList.add('dirty'); } };
+  function startEdit(p) {
+    if (!p.layout) p.layout = { showcases: [], sections: {}, at: 0 };
+    lySnap = JSON.stringify(p.layout); lyDirty = false;
+    EDIT = true; tpOpen = false;
+    render(p);
+  }
+  // «Сохранить» или «Отмена»: раскладка до правок возвращается целиком (и витрины тоже)
+  function endEdit(p, keep) {
+    const had = lyDirty;
+    if (keep && had) commitLayout(p);
+    if (!keep && lySnap) p.layout = JSON.parse(lySnap);
+    EDIT = false; tpOpen = false; lySnap = null; lyDirty = false;
+    render(p);
+    toast(keep ? (had ? 'Профиль сохранён' : 'Изменений не было') : had ? 'Изменения отменены' : 'Редактирование закрыто');
+  }
+  addEventListener('beforeunload', (e) => { if (EDIT && lyDirty) { e.preventDefault(); e.returnValue = ''; } });
   function openScForm(p, id) {
     const scs = (p.layout && p.layout.showcases) || [];
     const sc = id && scs.find((x) => x.id === id);
@@ -564,8 +586,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     }
   }
 
-  // ---------- режим редактирования профиля: блоки-виджеты двигают за ✥, скрывают глазом, меняют размер ----------
-  // порядок: сохранённый, а новые блоки (например, только что добавленная витрина) встают на своё обычное место
+  // ---------- режим редактирования профиля: блок тащат за ✥ куда угодно, ширину тянут за край, глаз скрывает ----------
+  // ключи блоков в обычном порядке: с него раскладываются блоки, у которых ещё нет места на сетке
   function wgOrder(p, keys) {
     const rank = (k) => ['stats', 'sc', 'podium', 'all', 'badges', 'taste', 'friends', 'hist', 'cats'].indexOf(k.startsWith('sc:') ? 'sc' : k);
     const out = ((p.layout && p.layout.order) || []).filter((k, i, a) => keys.includes(k) && a.indexOf(k) === i);
@@ -573,88 +595,241 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     return out;
   }
   function wgHTML(p, k, html) {
-    const sz = wgSize(p, k), on = secOn(p, k);
-    if (!EDIT) return `<div class="wg" data-wg="${esc(k)}" data-size="${sz}"${on ? '' : ' hidden'}>${html}</div>`;
+    const on = secOn(p, k);
+    if (!EDIT) return `<div class="wg" data-wg="${esc(k)}"${on ? '' : ' hidden'}>${html}</div>`;
     const sc = k.startsWith('sc:') && ((p.layout && p.layout.showcases) || []).find((x) => 'sc:' + x.id === k);
     const name = esc(sc ? sc.title || autoTitle(p, sc) : WG_NAME[k]);
-    return `<div class="wg" data-wg="${esc(k)}" data-size="${sz}"${on ? '' : ' data-off'}>
-      <button type="button" class="wg-btn wg-move" title="Зажми и перетащи. Стрелками на клавиатуре тоже можно" aria-label="Переместить блок «${name}»">${WIC.move}</button>
-      <span class="wg-tools">${sc ? `<button type="button" class="wg-btn" data-wga="scedit" title="Изменить витрину" aria-label="Изменить витрину «${name}»">${WIC.pen}</button><button type="button" class="wg-btn danger" data-wga="scdel" title="Удалить витрину" aria-label="Удалить витрину «${name}»">${WIC.trash}</button>` : ''}<button type="button" class="wg-btn wg-size" data-wga="size" title="Размер: ${SZ_WORD[sz]}. Нажми, чтобы сменить" aria-label="Размер блока «${name}»: ${SZ_WORD[sz]}">${SZ_LABEL[sz]}</button><button type="button" class="wg-btn" data-wga="eye" aria-pressed="${!on}" title="${on ? 'Скрыть блок' : 'Показать блок'}" aria-label="${on ? 'Скрыть' : 'Показать'} блок «${name}»">${on ? WIC.eye : WIC.eyeOff}</button></span>
+    return `<div class="wg" data-wg="${esc(k)}"${on ? '' : ' data-off'}>
+      <button type="button" class="wg-btn wg-move" title="Зажми и перетащи куда угодно. Стрелками на клавиатуре тоже можно" aria-label="Переместить блок «${name}»">${WIC.move}</button>
+      <span class="wg-tools">${sc ? `<button type="button" class="wg-btn" data-wga="scedit" title="Изменить витрину" aria-label="Изменить витрину «${name}»">${WIC.pen}</button><button type="button" class="wg-btn danger" data-wga="scdel" title="Удалить витрину" aria-label="Удалить витрину «${name}»">${WIC.trash}</button>` : ''}<button type="button" class="wg-btn" data-wga="eye" aria-pressed="${!on}" title="${on ? 'Скрыть блок' : 'Показать блок'}" aria-label="${on ? 'Скрыть' : 'Показать'} блок «${name}»">${on ? WIC.eye : WIC.eyeOff}</button></span>
+      <button type="button" class="wg-rs" title="Тяни, чтобы поменять ширину. Стрелками тоже можно" aria-label="Ширина блока «${name}»"><i></i></button>
       ${html}</div>`;
   }
   const editBarHTML = (p) => `<div class="ed-bar" id="edBar" role="toolbar" aria-label="Редактирование профиля">
-    <span class="ed-tx"><b>Редактирование профиля</b><small>Зажми ✥ и тащи блок · глаз скрывает · ⅓ ½ ⅔ — размер</small></span>
-    ${((p.layout && p.layout.showcases) || []).length < SC_MAX ? '<button type="button" class="btn ghost" data-ed="add">＋ Витрина</button>' : ''}
-    <button type="button" class="btn primary" data-ed="done">Готово</button></div>`;
-  // кладка без дыр: строки сетки по 4px, каждый блок занимает столько строк, сколько его высота
-  let wgRO = null;
-  const spanOf = (w) => { w.style.gridRowEnd = 'span ' + Math.max(1, Math.ceil(w.offsetHeight / 4)); };
-  function sizeBoard(board) {
-    if (wgRO) wgRO.disconnect();
-    const ws = [...board.children];
-    const hs = ws.map((w) => w.offsetHeight); // сначала все замеры, потом запись: одна раскладка
-    ws.forEach((w, i) => { w.style.gridRowEnd = 'span ' + Math.max(1, Math.ceil(hs[i] / 4)); });
-    if (!('ResizeObserver' in window)) return;
-    wgRO = new ResizeObserver((es) => es.forEach((e) => { if (e.target.isConnected) spanOf(e.target); }));
-    ws.forEach((w) => wgRO.observe(w));
+    <span class="ed-tx"><b>Редактирование профиля</b><small id="edHint"${lyDirty ? ' class="dirty"' : ''}>${lyDirty ? 'Есть несохранённые изменения' : 'Тащи блоки за ✥, ширину — за край, глаз скрывает'}</small></span>
+    ${((p.layout && p.layout.showcases) || []).length < SC_MAX ? '<button type="button" class="btn ghost ed-add" data-ed="add">＋ Витрина</button>' : ''}
+    <button type="button" class="btn ghost" data-ed="cancel">Отмена</button>
+    <button type="button" class="btn primary" data-ed="save">Сохранить</button></div>`;
+
+  // ---------- сетка блоков ----------
+  // широкий экран: 12 колонок, строки по 8px. Блок стоит в своей колонке, а по высоте всплывает вверх,
+  // пока не упрётся в блок выше (как виджеты на телефоне): дыр не остаётся, а соседи расступаются.
+  // узкий экран: те же блоки списком в 2 колонки или в одну — по порядку сверху вниз и слева направо
+  let BL = null; // { p, items: [{ k, el, x, y, w, h, i, fresh }], drag }
+  const mqWide = matchMedia('(min-width: 980px)'), mqTwo = matchMedia('(min-width: 640px)');
+  const hit = (a, b) => a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+  // сверху вниз: каждый блок всплывает, пока не упрётся, а налезающий сдвигается под мешающий;
+  // lead — блок, который сейчас тащат: при равной высоте он встаёт первым, а мешающие ему блоки
+  // сначала пробуют отойти вбок на свободное место и только потом уезжают вниз
+  function compact(list, lead) {
+    const placed = [];
+    const free = (it, x, y) => !placed.some((o) => hit({ x, y, w: it.w, h: it.h }, o));
+    const rise = (it) => { while (it.y > 0 && free(it, it.x, it.y - 1)) it.y--; };
+    const key = (it) => (it === lead && it.sy != null ? it.sy : it.y);
+    list.slice().sort((a, b) => key(a) - key(b) || (a === lead ? -1 : b === lead ? 1 : a.x - b.x)).forEach((it) => {
+      it.y = Math.max(0, Math.round(it.y));
+      rise(it);
+      if (lead && it !== lead && !free(it, it.x, it.y)) {
+        const xs = [...Array(COLS - it.w + 1).keys()].sort((a, b) => Math.abs(a - it.x) - Math.abs(b - it.x));
+        const fx = xs.find((x) => free(it, x, it.y));
+        if (fx != null) { it.x = fx; rise(it); }
+      }
+      let c;
+      while ((c = placed.find((o) => hit(it, o)))) it.y = c.y + c.h;
+      placed.push(it);
+    });
+    return placed;
   }
-  function saveOrder(p, board) {
-    const now = [...board.children].map((c) => c.dataset.wg).filter(Boolean);
-    const old = p.layout.order || [];
-    // блоки, которых сейчас нет на странице, остаются там, где были
-    old.forEach((k, i) => { if (now.includes(k)) return; const prev = old.slice(0, i).reverse().find((x) => now.includes(x)); now.splice(prev ? now.indexOf(prev) + 1 : 0, 0, k); });
-    p.layout.order = now.slice(0, 30);
+  // новый блок: первое свободное место сверху и слева
+  function firstFit(placed, it) {
+    for (let y = 0; ; y++) for (let x = 0; x <= COLS - it.w; x++) if (!placed.some((o) => hit({ x, y, w: it.w, h: it.h }, o))) return { x, y };
+  }
+  function boardItems(p, board) {
+    const g = (p.layout && p.layout.grid) || {}, sz = (p.layout && p.layout.size) || {};
+    return [...board.children].map((el, i) => {
+      const k = el.dataset.wg, s = g[k];
+      const w = Math.max(wgMin(k), Math.min(COLS, Math.round(s ? s.w : OLD_W[sz[k]] || WG_W[k] || (k.startsWith('sc:') ? 12 : 4))));
+      return s ? { k, el, i, w, x: Math.max(0, Math.min(COLS - w, Math.round(s.x))), y: Math.max(0, +s.y || 0), h: 1, fresh: false } : { k, el, i, w, x: 0, y: Infinity, h: 1, fresh: true };
+    });
+  }
+  // плавный переезд: блок рисуется на новом месте, но стартует со старого
+  function flip(items, before) {
+    if (calm || !before) return;
+    items.forEach((it) => {
+      const a = before.get(it.el);
+      if (!a || it === (BL && BL.drag)) return;
+      const b = it.el.getBoundingClientRect(), dx = a.left - b.left, dy = a.top - b.top;
+      if (Math.abs(dx) + Math.abs(dy) < 1) return;
+      it.el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 240, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+    });
+  }
+  const rects = (items) => new Map(items.map((it) => [it.el, it.el.getBoundingClientRect()]));
+  function layoutBoard(lead, animate) {
+    if (!BL) return;
+    const its = BL.items.filter((it) => !it.el.hidden && it.el.isConnected);
+    const before = animate ? rects(its) : null;
+    if (mqWide.matches) {
+      // пока блок тащат, соседи каждый раз считаются от мест до начала перетаскивания: не «уползают» по пути
+      if (lead) its.forEach((q) => { if (q !== lead && q.bx != null) { q.x = q.bx; q.y = q.by; } });
+      // блок отпускают на верхнюю половину соседа — встаёт на его место, сосед уступает
+      if (lead) { const up = its.filter((q) => q !== lead && hit(lead, q) && lead.y < q.y + q.h / 2); lead.sy = up.length ? Math.min(...up.map((q) => q.y)) - 0.5 : null; }
+      its.forEach((it) => { it.el.style.order = ''; it.el.style.gridColumn = `${(it.fresh ? 0 : it.x) + 1} / span ${it.w}`; });
+      const hs = its.map((it) => it.el.offsetHeight); // сначала все замеры, потом запись: одна раскладка
+      its.forEach((it, n) => { it.h = Math.max(1, Math.ceil(hs[n] / ROW)); });
+      const placed = compact(its.filter((it) => !it.fresh), lead);
+      its.filter((it) => it.fresh).sort((a, b) => a.i - b.i).forEach((it) => { Object.assign(it, firstFit(placed, it), { fresh: false }); placed.push(it); });
+      its.forEach((it) => { it.el.style.gridColumn = `${it.x + 1} / span ${it.w}`; it.el.style.gridRow = `${it.y + 1} / span ${it.h}`; });
+    } else {
+      // узко: порядок — сверху вниз и слева направо, широкие блоки (от 7 колонок) — на обе колонки
+      seqOf(its).forEach((it, n) => { it.el.style.order = n; it.el.style.gridColumn = mqTwo.matches && it.w >= 7 ? 'span 2' : ''; it.el.style.gridRow = ''; });
+      const hs = its.map((it) => it.el.offsetHeight);
+      its.forEach((it, n) => { it.el.style.gridRow = 'span ' + Math.max(1, Math.ceil(hs[n] / ROW)); });
+    }
+    flip(its, before);
+  }
+  // места блоков до начала перетаскивания (или забыть их)
+  const base = (on) => BL.items.forEach((q) => { q.bx = on ? q.x : null; q.by = on ? q.y : null; });
+  const seqOf = (its) => its.slice().sort((a, b) => a.y - b.y || a.x - b.x || a.i - b.i);
+  let wgRO = null, wgRaf = 0;
+  const relayout = () => { if (!BL || BL.drag || wgRaf) return; wgRaf = requestAnimationFrame(() => { wgRaf = 0; layoutBoard(null, false); }); };
+  mqWide.addEventListener('change', relayout);
+  mqTwo.addEventListener('change', relayout);
+  function sizeBoard(p, board) {
+    if (wgRO) wgRO.disconnect();
+    BL = { p, items: boardItems(p, board), drag: null };
+    layoutBoard(null, false);
+    if (!('ResizeObserver' in window)) return;
+    wgRO = new ResizeObserver(relayout); // высота блока поменялась (картинки, список) — соседи подстраиваются
+    BL.items.forEach((it) => wgRO.observe(it.el));
+  }
+  // места блоков — в черновик раскладки (на сервер уйдут по «Сохранить»)
+  function keepGrid(p) {
+    const grid = {};
+    BL.items.forEach((it) => { if (!it.fresh) grid[it.k] = { x: it.x, y: it.y, w: it.w }; });
+    p.layout.grid = { ...(p.layout.grid || {}), ...grid };
     saveLayout(p, true);
   }
-  // перетаскивание: блок едет за пальцем или мышью, на его месте — пунктирная рамка, соседи раздвигаются
-  function startDrag(e, wg, p) {
+  // перетаскивание за ✥: копия блока едет за пальцем, а сам блок пунктиром показывает, куда встанет
+  function dragMove(e, it, p) {
     e.preventDefault();
-    const board = wg.parentElement, r = wg.getBoundingClientRect();
-    const ph = document.createElement('div');
-    ph.className = 'wg wg-ph'; ph.dataset.size = wg.dataset.size; ph.style.height = r.height + 'px'; ph.style.gridRowEnd = wg.style.gridRowEnd;
-    const ghost = wg.cloneNode(true);
+    const board = $('#wboard'), r = it.el.getBoundingClientRect();
+    const ghost = it.el.cloneNode(true);
     ghost.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
     ghost.classList.add('wg-ghost');
-    Object.assign(ghost.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
+    Object.assign(ghost.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px', gridColumn: '', gridRow: '', order: '' });
     document.body.appendChild(ghost);
-    wg.replaceWith(ph);
+    it.el.classList.add('wg-lift');
     document.body.classList.add('wg-dragging');
-    const ox = e.clientX - r.left, oy = e.clientY - r.top;
-    let x = e.clientX, y = e.clientY, raf = 0, moved = 0, retry = 0;
-    // рамка-место встаёт до или после блока под пальцем
-    const place = (now) => {
-      clearTimeout(retry);
-      // соседи только что подвинулись: не дёргаем их туда-обратно, а пробуем чуть позже
-      if (!now && performance.now() - moved < 130) { retry = setTimeout(() => place(false), 140); return; }
-      const t = document.elementFromPoint(x, y);
-      const over = t && t.closest('#wboard > .wg');
-      if (!over || over === ph) return;
-      const or = over.getBoundingClientRect();
-      const before = y < or.top + or.height / 2;
-      if (before ? over.previousElementSibling === ph : over.nextElementSibling === ph) return;
-      board.insertBefore(ph, before ? over : over.nextElementSibling);
-      moved = performance.now();
-    };
-    const tick = () => {
+    BL.drag = it;
+    base(true);
+    const wide = mqWide.matches, ox = e.clientX - r.left, oy = e.clientY - r.top;
+    let x = e.clientX, y = e.clientY, raf = 0, ty = it.y, moved = false;
+    const frame = () => {
       raf = 0;
-      ghost.style.left = x - ox + 'px'; ghost.style.top = y - oy + 'px';
+      const gl = x - ox, gt = y - oy;
+      ghost.style.left = gl + 'px'; ghost.style.top = gt + 'px';
       const edge = 70;
-      if (y < edge || y > innerHeight - edge) { scrollBy(0, y < edge ? -14 : 14); raf = requestAnimationFrame(tick); }
-      place(false);
+      if (y < edge || y > innerHeight - edge) { scrollBy(0, y < edge ? -14 : 14); raf = requestAnimationFrame(frame); }
+      const br = board.getBoundingClientRect();
+      if (wide) {
+        // клетка под левым верхним углом копии
+        const step = (br.width + parseFloat(getComputedStyle(board).columnGap)) / COLS;
+        const nx = Math.max(0, Math.min(COLS - it.w, Math.round((gl - br.left) / step)));
+        const ny = Math.max(0, Math.round((gt - br.top) / ROW));
+        if (nx === it.x && ny === ty) return;
+        it.x = nx; ty = ny; it.y = ny; moved = true;
+        layoutBoard(it, true);
+      } else {
+        // узко: блок встаёт до или после блока под пальцем
+        const t = document.elementFromPoint(x, y), over = t && t.closest('#wboard > .wg');
+        const o = over && BL.items.find((q) => q.el === over);
+        if (!o || o === it) return;
+        const seq = seqOf(BL.items.filter((q) => !q.el.hidden)).filter((q) => q !== it);
+        const or = over.getBoundingClientRect(), at = seq.indexOf(o) + (y < or.top + or.height / 2 ? 0 : 1);
+        seq.splice(at, 0, it);
+        if (seq.every((q, n) => q.y === n)) return;
+        seq.forEach((q, n) => { q.y = n; });
+        moved = true;
+        layoutBoard(it, true);
+      }
     };
-    const move = (ev) => { x = ev.clientX; y = ev.clientY; if (!raf) raf = requestAnimationFrame(tick); };
+    const move = (ev) => { x = ev.clientX; y = ev.clientY; if (!raf) raf = requestAnimationFrame(frame); };
     const up = () => {
       removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
+      if (raf) { cancelAnimationFrame(raf); frame(); } // последний сдвиг (быстрый рывок) тоже учитываем
       cancelAnimationFrame(raf);
-      place(true);
-      ph.replaceWith(wg); ghost.remove();
+      const end = ghost.getBoundingClientRect();
+      ghost.remove();
+      it.el.classList.remove('wg-lift');
       document.body.classList.remove('wg-dragging');
-      if (wgRO) wgRO.observe(wg);
-      spanOf(wg);
-      saveOrder(p, board);
-      wg.querySelector('.wg-move').focus({ preventScroll: true });
+      BL.drag = null;
+      base(false);
+      // блок «приземляется» с места, где его отпустили
+      if (!calm) { const b = it.el.getBoundingClientRect(); it.el.animate([{ transform: `translate(${end.left - b.left}px, ${end.top - b.top}px)` }, { transform: 'none' }], { duration: 220, easing: 'cubic-bezier(.2, .8, .2, 1)' }); }
+      if (moved) keepGrid(p);
+      it.el.querySelector('.wg-move').focus({ preventScroll: true });
     };
     addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+  }
+  // ширина: тянем за правый край, шаг — одна колонка
+  function dragSize(e, it, p) {
+    e.preventDefault();
+    const board = $('#wboard');
+    it.el.classList.add('wg-sizing');
+    document.body.classList.add('wg-dragging', 'wg-ew');
+    BL.drag = it;
+    base(true);
+    let x = e.clientX, raf = 0, moved = false;
+    const frame = () => {
+      raf = 0;
+      const br = board.getBoundingClientRect(), step = (br.width + parseFloat(getComputedStyle(board).columnGap)) / COLS;
+      const left = br.left + it.x * step;
+      const nw = Math.max(wgMin(it.k), Math.min(COLS - it.x, Math.round((x - left) / step)));
+      if (nw === it.w) return;
+      it.w = nw; moved = true;
+      layoutBoard(it, true);
+    };
+    const move = (ev) => { x = ev.clientX; if (!raf) raf = requestAnimationFrame(frame); };
+    const up = () => {
+      removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
+      if (raf) { cancelAnimationFrame(raf); frame(); }
+      it.el.classList.remove('wg-sizing');
+      document.body.classList.remove('wg-dragging', 'wg-ew');
+      BL.drag = null;
+      base(false);
+      layoutBoard(null, true);
+      if (moved) keepGrid(p);
+    };
+    addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+  }
+  // клавиатура: ✥ стрелками двигает блок, край стрелками меняет ширину
+  function keyBoard(e, p) {
+    const mv = e.target.closest('.wg-move'), rs = e.target.closest('.wg-rs');
+    if (!mv && !rs) return;
+    const dir = { ArrowLeft: 'l', ArrowRight: 'r', ArrowUp: 'u', ArrowDown: 'd' }[e.key];
+    if (!dir) return;
+    e.preventDefault();
+    const it = BL.items.find((q) => q.el === e.target.closest('.wg'));
+    const vis = BL.items.filter((q) => !q.el.hidden && q !== it);
+    if (rs) {
+      if (dir !== 'l' && dir !== 'r') return;
+      it.w = Math.max(wgMin(it.k), Math.min(COLS - it.x, it.w + (dir === 'r' ? 1 : -1)));
+    } else if (!mqWide.matches) {
+      const seq = seqOf(vis), at = seqOf([...vis, it]).indexOf(it) + (dir === 'u' || dir === 'l' ? -1 : 1);
+      seq.splice(Math.max(0, Math.min(seq.length, at)), 0, it);
+      seq.forEach((q, n) => { q.y = n; });
+    } else if (dir === 'l' || dir === 'r') {
+      it.x = Math.max(0, Math.min(COLS - it.w, it.x + (dir === 'r' ? 1 : -1)));
+    } else {
+      // вверх — встать перед ближайшим блоком сверху, вниз — после ближайшего снизу (в тех же колонках)
+      const cols = (o) => o.x < it.x + it.w && it.x < o.x + o.w;
+      const near = dir === 'u' ? vis.filter((o) => cols(o) && o.y < it.y).sort((a, b) => b.y - a.y)[0] : vis.filter((o) => cols(o) && o.y > it.y).sort((a, b) => a.y - b.y)[0];
+      if (!near) return;
+      it.y = dir === 'u' ? near.y : near.y + 1;
+    }
+    layoutBoard(it, true);
+    keepGrid(p);
+    e.target.scrollIntoView({ block: 'nearest' });
   }
   function onWgClick(e, p) {
     const b = e.target.closest('[data-wga]');
@@ -668,25 +843,61 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       b.setAttribute('aria-pressed', String(!on));
       b.title = on ? 'Скрыть блок' : 'Показать блок';
       saveLayout(p, true);
-    } else if (a === 'size') {
-      const opts = wgSizes(k), nx = opts[(opts.indexOf(wgSize(p, k)) + 1) % opts.length];
-      L.size = { ...(L.size || {}), [k]: nx };
-      wg.dataset.size = nx;
-      b.textContent = SZ_LABEL[nx];
-      b.title = `Размер: ${SZ_WORD[nx]}. Нажми, чтобы сменить`;
-      saveLayout(p, true);
     } else if (a === 'scedit') openScForm(p, k.slice(3));
     else if (a === 'scdel') {
       L.showcases = (L.showcases || []).filter((x) => 'sc:' + x.id !== k);
       saveLayout(p);
-      toast('Витрина удалена');
+      toast('Витрина убрана. Вернуть можно кнопкой «Отмена»');
     }
+  }
+  // звания под ником: перетаскиваются за сам чип (или стрелками), крестик убирает, «＋ Звание» добавляет
+  function dragTitle(e, chip, p) {
+    if (e.button > 0 || e.target.closest('.t-x')) return;
+    e.preventDefault();
+    const row = chip.parentElement, sx = e.clientX, sy = e.clientY;
+    let on = false;
+    const move = (ev) => {
+      if (!on && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return;
+      if (!on) { on = true; chip.classList.add('t-lift'); document.body.classList.add('wg-dragging'); }
+      const t = document.elementFromPoint(ev.clientX, ev.clientY), o = t && t.closest('#titlesRow .title-chip');
+      if (!o || o === chip) return;
+      const r = o.getBoundingClientRect();
+      const before = rects([...row.querySelectorAll('.title-chip')].map((el) => ({ el })));
+      row.insertBefore(chip, ev.clientX < r.left + r.width / 2 ? o : o.nextSibling);
+      flip([...row.querySelectorAll('.title-chip')].map((el) => ({ el })), before);
+    };
+    const up = () => {
+      removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
+      if (!on) { chip.focus({ preventScroll: true }); return; }
+      chip.classList.remove('t-lift');
+      document.body.classList.remove('wg-dragging');
+      keepTitles(p);
+    };
+    addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+  }
+  function keepTitles(p) {
+    const ids = [...$('#titlesRow').querySelectorAll('.title-chip')].map((c) => c.dataset.tid);
+    const cur = titlesShown(p, titleCatalog(p, p.ratings)).map((t) => t.id);
+    if (ids.join() === cur.join()) return;
+    p.layout.titles = ids;
+    saveLayout(p, true);
   }
   function wireTitles(p) {
     const row = $('#titlesRow'), pop = $('#titlePop');
     if (!row) return;
     const shownIds = () => titlesShown(p, titleCatalog(p, p.ratings)).map((t) => t.id);
     const setSel = (ids) => { p.layout.titles = ids.slice(0, TITLE_MAX); saveLayout(p); };
+    row.addEventListener('pointerdown', (e) => { const c = e.target.closest('.title-chip'); if (c) dragTitle(e, c, p); });
+    row.addEventListener('keydown', (e) => {
+      const c = e.target.closest('.title-chip');
+      if (!c || e.target !== c || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
+      e.preventDefault();
+      const sib = e.key === 'ArrowLeft' ? c.previousElementSibling : c.nextElementSibling;
+      if (!sib || !sib.classList.contains('title-chip')) return;
+      if (e.key === 'ArrowLeft') sib.before(c); else sib.after(c);
+      c.focus();
+      keepTitles(p);
+    });
     row.addEventListener('click', (e) => {
       const x = e.target.closest('[data-tx]');
       if (x) { setSel(shownIds().filter((id) => id !== x.dataset.tx)); return; }
@@ -706,39 +917,31 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   function wireBoard(p) {
     const board = $('#wboard');
     if (!board) return;
-    sizeBoard(board);
+    sizeBoard(p, board);
     if (!EDIT) return;
     board.addEventListener('click', (e) => onWgClick(e, p));
-    board.addEventListener('pointerdown', (e) => { const h = e.target.closest('.wg-move'); if (h && (e.button === 0 || e.pointerType !== 'mouse')) startDrag(e, h.closest('.wg'), p); });
-    // ✥ со стрелками: блок на место раньше или позже
-    board.addEventListener('keydown', (e) => {
-      const h = e.target.closest('.wg-move');
+    board.addEventListener('pointerdown', (e) => {
+      if (e.button > 0) return;
+      const h = e.target.closest('.wg-move, .wg-rs');
       if (!h) return;
-      const back = e.key === 'ArrowUp' || e.key === 'ArrowLeft', fwd = e.key === 'ArrowDown' || e.key === 'ArrowRight';
-      if (!back && !fwd) return;
-      e.preventDefault();
-      const wg = h.closest('.wg');
-      if (back && wg.previousElementSibling) wg.previousElementSibling.before(wg);
-      else if (fwd && wg.nextElementSibling) wg.nextElementSibling.after(wg);
-      else return;
-      h.focus({ preventScroll: true });
-      saveOrder(p, board);
+      const it = BL.items.find((q) => q.el === h.closest('.wg'));
+      if (h.classList.contains('wg-move')) dragMove(e, it, p); else dragSize(e, it, p);
     });
+    board.addEventListener('keydown', (e) => keyBoard(e, p));
     $('#edBar').addEventListener('click', (e) => {
       const b = e.target.closest('[data-ed]');
       if (!b) return;
-      if (b.dataset.ed === 'add') { openScForm(p, null); return; }
-      EDIT = false; tpOpen = false;
-      render(p);
-      toast('Готово: профиль сохранён');
+      if (b.dataset.ed === 'add') openScForm(p, null);
+      else endEdit(p, b.dataset.ed === 'save');
     });
     wireTitles(p);
   }
-  // Esc: сначала закрывает список званий, потом выходит из редактирования (если не открыто окно поверх)
+  // Esc: закрывает список званий; без правок — выходит из редактирования, с правками — просит сохранить или отменить
   document.addEventListener('keydown', (e) => {
     if (e.key !== 'Escape' || !EDIT || !curP || document.querySelector('.st-pick:not([hidden])')) return;
-    if (tpOpen) tpOpen = false; else EDIT = false;
-    render(curP);
+    if (tpOpen) { tpOpen = false; render(curP); }
+    else if (!lyDirty) endEdit(curP, false);
+    else toast('Сохрани или отмени изменения кнопками внизу');
   });
 
   // ---------- отдельная страница «Все оценки» (/profile/?all=1): список, плитка, тир-лист или подробно ----------
@@ -1194,7 +1397,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
           ${!isMe && p.uid ? `<p class="sub" data-seen="${esc(p.uid)}" data-last="${+p.lastSeen || ''}"></p>` : ''}
           ${titlesRowHTML(p, rs)}
           <div class="hero-acts">${isMe
-            ? `<a class="btn primary" href="/mnenie/">Оценить что-нибудь</a><button type="button" class="btn ghost ic-btn" id="layoutBtn" aria-pressed="${EDIT}" title="${EDIT ? 'Закончить редактирование' : 'Редактировать профиль: блоки, витрины, звания'}" aria-label="Редактировать профиль">${ICON_LAYOUT}</button>`
+            ? `<a class="btn primary" href="/mnenie/">Оценить что-нибудь</a><button type="button" class="btn ghost ic-btn" id="layoutBtn" aria-pressed="${EDIT}" title="${EDIT ? 'Сохрани или отмени изменения внизу' : 'Редактировать профиль: блоки, витрины, звания'}" aria-label="Редактировать профиль">${ICON_LAYOUT}</button>`
             : `<a class="btn ghost" href="/profile/">Мой профиль</a>${p.common && p.common.length ? '<a class="btn primary" href="#taste">Сравнить вкусы</a>' : ''}`}</div>
         </div>
       </section>
@@ -1214,10 +1417,9 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     if (isMe) {
       const lb = $('#layoutBtn');
       if (lb) lb.addEventListener('click', () => {
-        EDIT = !EDIT; tpOpen = false;
-        if (!p.layout) p.layout = { showcases: [], sections: {}, at: 0 };
-        render(p);
-        if (!EDIT) toast('Готово: профиль сохранён');
+        if (!EDIT) startEdit(p);
+        else if (!lyDirty) endEdit(p, false);
+        else toast('Сохрани или отмени изменения кнопками внизу');
       });
       wireProfileName(p);
     }

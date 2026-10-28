@@ -565,16 +565,13 @@ button.stat:focus-visible, a.item:focus-visible, a.pod:focus-visible, button.cat
 .as-list .sc-it::before { content: counter(sc); text-align: center; font-family: var(--font-display); font-weight: 800; font-size: 22px; color: var(--ink-2); }
 .as-list .sc-it .place { display: none; }
 .card[hidden], .stats[hidden], .titles[hidden] { display: none !important; }
-/* блоки профиля — виджеты: сетка из 6 колонок, строки по 4px (высоту в строках считает скрипт — кладка без дыр) */
-.wboard { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-auto-rows: 4px; grid-auto-flow: row dense; column-gap: 20px; margin-top: 16px; }
-.wg { position: relative; align-self: start; min-width: 0; padding-bottom: 16px; container-type: inline-size; grid-column: span 2; }
+/* блоки профиля — виджеты: на широком экране 12 колонок и строки по 8px, место и высоту в строках ставит скрипт */
+.wboard { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); grid-auto-rows: 8px; column-gap: 20px; margin-top: 16px; }
+.wg { position: relative; align-self: start; min-width: 0; padding-bottom: 18px; container-type: inline-size; grid-column: span 12; }
 .wg[hidden] { display: none; }
-.wg[data-size="m"] { grid-column: span 3; }
-.wg[data-size="l"] { grid-column: span 4; }
-.wg[data-size="f"] { grid-column: span 6; }
 .wg > .stats { margin-top: 0; }
-@media (max-width: 979px) { .wboard { grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; } .wg, .wg[data-size="m"] { grid-column: span 1; } .wg[data-size="l"], .wg[data-size="f"] { grid-column: span 2; } }
-@media (max-width: 640px) { .wboard { grid-template-columns: minmax(0, 1fr); } .wg[data-size] { grid-column: span 1; } }
+@media (max-width: 979px) { .wboard { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: row dense; column-gap: 16px; } .wg { grid-column: span 1; } }
+@media (max-width: 639px) { .wboard { grid-template-columns: minmax(0, 1fr); } .wg { grid-column: auto; } }
 @container (max-width: 640px) { .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @container (max-width: 380px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .podium { gap: 8px; } }
 /* режим редактирования профиля */
@@ -588,8 +585,19 @@ button.stat:focus-visible, a.item:focus-visible, a.pod:focus-visible, button.cat
 .wg-tools { position: absolute; z-index: 3; top: -12px; right: -6px; display: flex; gap: 6px; }
 .wg-tools .wg-btn { position: static; }
 .wg-btn.danger:hover, .wg-btn.danger:focus-visible { border-color: var(--bad); color: var(--bad); }
-.wg-ph::before { content: ''; position: absolute; inset: 0 0 16px; border: 2px dashed var(--accent); border-radius: 22px; background: color-mix(in srgb, var(--accent) 8%, transparent); }
-.wg-ghost { position: fixed; z-index: 120; pointer-events: none; rotate: 1.2deg; scale: 1.02; opacity: .95; filter: drop-shadow(0 26px 40px rgba(0, 0, 0, .45)); }
+.wg-ghost { position: fixed; z-index: 120; margin: 0; pointer-events: none; rotate: 1.2deg; scale: 1.02; opacity: .95; filter: drop-shadow(0 26px 40px rgba(0, 0, 0, .45)); }
+/* блок, который тащат: на его будущем месте пунктирная рамка */
+.wg.wg-lift > * { visibility: hidden; }
+.wg.wg-lift::before { content: ''; position: absolute; inset: 0 0 18px; border: 2px dashed var(--accent); border-radius: 22px; background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.wg.wg-sizing > :is(.card, .stats) { outline-style: solid !important; outline-color: var(--accent) !important; }
+/* правый край: тянуть, чтобы поменять ширину (только на широком экране) */
+.wg-rs { display: none; }
+.prof-edit .wg-rs { position: absolute; z-index: 3; top: 50%; right: -9px; translate: 0 -50%; width: 18px; height: 56px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); cursor: ew-resize; touch-action: none; box-shadow: 0 8px 18px -10px rgba(0, 0, 0, .7); }
+.wg-rs i { width: 4px; height: 24px; border-radius: 2px; background: repeating-linear-gradient(var(--ink-3) 0 3px, transparent 3px 6px); }
+.wg-rs:hover, .wg-rs:focus-visible { border-color: var(--accent); }
+.wg-rs:hover i, .wg-rs:focus-visible i { background: repeating-linear-gradient(var(--accent) 0 3px, transparent 3px 6px); }
+@media (max-width: 979px) { .prof-edit .wg-rs { display: none; } }
+body.wg-ew, body.wg-ew * { cursor: ew-resize !important; }
 .wg-ghost > :is(.card, .stats) { outline: 2px solid var(--accent) !important; }
 body.wg-dragging, body.wg-dragging * { cursor: grabbing !important; user-select: none; }
 body.prof-edit #app { padding-bottom: 96px; }
@@ -599,8 +607,12 @@ body.prof-edit #app { padding-bottom: 96px; }
 .ed-tx b { font-size: 14.5px; }
 .ed-tx small { font-size: 12px; color: var(--ink-2); }
 .ed-bar .btn { flex: none; height: 40px; padding: 0 16px; }
-@media (max-width: 520px) { .ed-tx small { display: none; } .ed-tx b { font-size: 13.5px; } }
-@media (max-width: 640px) { .wg-size { display: none; } } /* в одну колонку размер ничего не меняет */
+.ed-tx small.dirty { color: var(--mid); font-weight: 700; }
+@media (max-width: 560px) { .ed-bar { flex-wrap: wrap; } .ed-tx { flex-basis: 100%; } .ed-bar .btn { flex: 1; padding: 0 10px; } .ed-tx small { display: none; } .ed-tx small.dirty { display: block; } }
+/* звания в режиме редактирования: чип можно тащить */
+.titles.edit .title-chip { cursor: grab; touch-action: none; user-select: none; }
+.titles.edit .title-chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.title-chip.t-lift { opacity: .55; outline: 2px dashed var(--accent); outline-offset: 2px; }
 /* звания: выбор из открытых */
 .t-wrap { position: relative; }
 .titles.edit { align-items: center; padding: 6px; margin: -6px; border-radius: 14px; outline: 2px dashed color-mix(in srgb, var(--accent) 50%, transparent); }
