@@ -65,7 +65,7 @@
   const PRESETS = [
     // start — секунда, где начинается звук: тишина в начале ролика пропускается (замерено по громкости дорожки)
     { id: 'vika', title: 'VI KA — Гимн Папича (Arthas)', src: 'yt', key: 'SXe1aTEJU2w', start: 0.6 },
-    { id: 'mk', title: 'Mortal Kombat — Techno Syndrome', src: 'yt', key: 'Sr1bLLvsbh0', start: 0.4 },
+    { id: 'mk', title: 'Mortal Kombat — Techno Syndrome', src: 'yt', key: 'kWO2AuJT67w', start: 0.4 },
     { id: 'serious', title: 'Serious Sam — The Grand Cathedral', src: 'yt', key: '0IVRoqDWwIk', start: 5.5 },
     { id: 'chopin', title: 'Шопен — Вальс до-диез минор, оп. 64 № 2', src: 'yt', key: 'SUT_0c2QVzo', start: 5 },
     { id: 'eva', title: 'Evangelion — E05 (ReMaster TV Original)', src: 'yt', key: '7dVDG6IqtV8', alt: ['ELcLRK8LZ-o'], start: 0 },
