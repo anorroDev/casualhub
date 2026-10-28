@@ -1,6 +1,6 @@
 /* Казуал Хаб: шапка без россыпи кнопок.
    На виду остаются главная, «Мнение», «Колесо», «Друзья», профиль и кнопка ☰. В меню ☰ уезжают «Помощь»,
-   «Тема», импорт из Letterboxd, «Обновить обложки и названия» и GitHub. «Что нового» на широком экране стоит в самом углу страницы, на узком — тоже в меню.
+   «Тема», «⚙️ Настройки» (окно с импортом из Letterboxd и обновлением обложек) и GitHub. «Что нового» на широком экране стоит в самом углу страницы, на узком — тоже в меню.
    Кнопки переносятся целиком, поэтому их обработчики и счётчики (online.js, whatsnew.js) продолжают работать. */
 (() => {
   const MOVE = '#howtoBtn, .howto-btn, .theme-pick, a[href*="github.com"]';
@@ -36,6 +36,25 @@
 header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
 .wn-corner { position: absolute; top: 14px; right: 16px; z-index: 60; }
 .wn-corner [data-whatsnew] { box-shadow: 0 10px 24px -14px rgba(0, 0, 0, .6); }
+/* окно «Настройки» */
+.hs-sheet { position: fixed; inset: 0; z-index: 110; display: grid; place-items: center; padding: 16px; background: rgba(8, 10, 14, .6); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+.hs-sheet[hidden] { display: none; }
+.hs-card { width: min(480px, 100%); max-height: calc(100dvh - 32px); display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 12px; padding: 18px; border: 1px solid var(--line, #2b2e38); border-radius: 20px; background: var(--panel, #1b1d24); color: var(--ink, #f3f4f6); box-shadow: 0 30px 70px -28px rgba(0, 0, 0, .7); animation: hm-in .24s cubic-bezier(.34, 1.56, .64, 1); }
+.hs-head { display: flex; align-items: center; gap: 10px; }
+.hs-head h2 { flex: 1; margin: 0; font-size: 19px; }
+.hs-x { flex: none; width: 36px; height: 36px; border: 1px solid var(--line, #2b2e38); border-radius: 50%; background: transparent; color: inherit; font-size: 15px; cursor: pointer; }
+.hs-body { overflow: auto; display: grid; gap: 16px; align-content: start; }
+.hs-sec { display: grid; gap: 6px; }
+.hs-lab { font-size: 11.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3, #8b8f9c); }
+.hs-it { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line, #2b2e38); border-radius: 14px; background: var(--panel-2, #23262f); color: var(--ink, #f3f4f6); text-decoration: none; transition: border-color .15s, transform .15s; }
+.hs-it:hover { border-color: var(--accent, #3550E8); transform: translateY(-1px); }
+.hs-ic { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 20px; background: color-mix(in srgb, var(--accent, #3550E8) 16%, transparent); }
+.hs-t { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.hs-t b { font-size: 14.5px; }
+.hs-t small { font-size: 12.5px; color: var(--ink-2, #b9bdc8); line-height: 1.3; }
+.hs-go { flex: none; font-size: 22px; color: var(--ink-3, #8b8f9c); }
+.hs-note { margin: 0; font-size: 12.5px; color: var(--ink-3, #8b8f9c); }
+@media (prefers-reduced-motion: reduce) { .hs-card { animation: none; } }
 `;
   document.head.appendChild(css);
   const MENU_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h11"/></svg>';
@@ -44,6 +63,44 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     '/koleso/': '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="#3550E8"/><path d="M8 8V1.5A6.5 6.5 0 0 1 14.5 8z" fill="#EAA92C"/><path d="M8 8h6.5A6.5 6.5 0 0 1 8 14.5z" fill="#2EAD60"/><circle cx="8" cy="8" r="1.8" fill="#fff"/></svg>',
   };
   const NAMES = { '/mnenie/': 'Мнение', '/koleso/': 'Колесо' };
+  // окно «Настройки»: разделы и пункты. Новая настройка — ещё один пункт здесь.
+  // href — куда вести со страниц, где пункт сам не работает; attr — атрибут, по которому его ловит Мнение
+  const SETTINGS = [
+    { title: 'Импорт', items: [
+      { icon: '🎬', name: 'Импорт из Letterboxd', desc: 'Перенести оценки фильмов из архива Letterboxd', href: '/mnenie/#letterboxd', attr: 'data-lb-open' },
+    ] },
+    { title: 'Обложки и названия', items: [
+      { icon: '🔄', name: 'Обновить обложки и названия', desc: 'Подтянуть к сохранённым оценкам обложки, русские названия, год и жанры', href: '/mnenie/#refresh', attr: 'data-refresh-open' },
+    ] },
+  ];
+  const escH = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  let setBox = null;
+  function openSettings() {
+    if (!setBox) {
+      setBox = document.createElement('div');
+      setBox.className = 'hs-sheet';
+      setBox.hidden = true;
+      setBox.innerHTML = `<div class="hs-card" role="dialog" aria-modal="true" aria-labelledby="hsTitle">
+        <div class="hs-head"><h2 id="hsTitle">⚙️ Настройки</h2><button type="button" class="hs-x" data-hs="close" aria-label="Закрыть">✕</button></div>
+        <div class="hs-body">${SETTINGS.map((sec) => `<section class="hs-sec"><span class="hs-lab">${escH(sec.title)}</span>
+          ${sec.items.map((it) => `<a class="hs-it" href="${escH(it.href)}" ${it.attr}><span class="hs-ic" aria-hidden="true">${it.icon}</span><span class="hs-t"><b>${escH(it.name)}</b><small>${escH(it.desc)}</small></span><span class="hs-go" aria-hidden="true">›</span></a>`).join('')}</section>`).join('')}
+          <p class="hs-note">Скоро здесь появятся и другие настройки.</p></div></div>`;
+      document.body.appendChild(setBox);
+      setBox.addEventListener('click', (e) => {
+        // пункт: окно закрывается, а сам пункт открывает своё окно (в Мнении) или ведёт туда
+        if (e.target === setBox || e.target.closest('[data-hs="close"], .hs-it')) closeSettings();
+      });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && setBox && !setBox.hidden) closeSettings(); });
+    }
+    setBox.hidden = false;
+    document.documentElement.style.overflow = 'hidden';
+    setBox.querySelector('.hs-x').focus({ preventScroll: true });
+  }
+  function closeSettings() {
+    if (!setBox || setBox.hidden) return;
+    setBox.hidden = true;
+    document.documentElement.style.overflow = '';
+  }
 
   function build() {
     const header = document.querySelector('header');
@@ -107,24 +164,16 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
       if (!el.matches('.theme-pick') && !el.textContent.trim() && el.title) el.insertAdjacentHTML('beforeend', `<span class="hm-t">${el.title.replace(/\s*:.*$/, '')}</span>`);
       panel.appendChild(el);
     });
-    // импорт оценок из Letterboxd: в Мнении открывает окно (mnenie/letterboxd.js ловит data-lb-open), с других страниц ведёт туда
-    const lb = document.createElement('a');
-    lb.className = cls + ' hm-lb';
-    lb.href = '/mnenie/#letterboxd';
-    lb.setAttribute('data-lb-open', '');
-    lb.title = 'Перенести оценки фильмов из Letterboxd';
-    lb.innerHTML = '<span aria-hidden="true">🎬</span><span class="hm-t">Импорт из Letterboxd</span>';
-    panel.appendChild(lb);
-    // обложки, русские названия и жанры для уже сохранённых оценок (mnenie/refresh.js ловит data-refresh-open)
-    const upd = document.createElement('a');
-    upd.className = cls + ' hm-upd';
-    upd.href = '/mnenie/#refresh';
-    upd.setAttribute('data-refresh-open', '');
-    upd.title = 'Подтянуть обложки, названия и жанры к оценкам';
-    upd.innerHTML = '<span aria-hidden="true">🔄</span><span class="hm-t">Обновить обложки и названия</span>';
-    panel.appendChild(upd);
+    // «Настройки»: окно с импортом из Letterboxd и обновлением обложек (пункты — в SETTINGS выше)
+    const set = document.createElement('button');
+    set.type = 'button';
+    set.className = cls + ' hm-set';
+    set.title = 'Импорт оценок, обложки и названия';
+    set.innerHTML = '<span aria-hidden="true">⚙️</span><span class="hm-t">Настройки</span>';
+    set.addEventListener('click', openSettings);
+    panel.appendChild(set);
     // одинаковый порядок пунктов на всех страницах
-    ['#howtoBtn, .howto-btn', '.theme-pick', '.hm-lb', '.hm-upd', 'a[href*="github.com"]'].forEach((sel) => { const el = panel.querySelector(`:scope > :is(${sel})`); if (el) panel.appendChild(el); });
+    ['#howtoBtn, .howto-btn', '.theme-pick', '.hm-set', 'a[href*="github.com"]'].forEach((sel) => { const el = panel.querySelector(`:scope > :is(${sel})`); if (el) panel.appendChild(el); });
 
     // «Что нового»: в самом углу страницы, на узком экране — в меню
     const wn = bar.querySelector('[data-whatsnew]');
@@ -141,6 +190,8 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
       else if (wn.parentElement !== panel) panel.appendChild(wn);
     };
     placeWn();
+    if (location.hash === '#settings') { history.replaceState(null, '', location.pathname + location.search); openSettings(); }
+    window.CasualSettings = { open: openSettings, close: closeSettings };
     let rq = 0;
     addEventListener('resize', () => { cancelAnimationFrame(rq); rq = requestAnimationFrame(placeWn); });
 
