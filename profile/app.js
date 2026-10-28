@@ -33,8 +33,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const d = Math.round(h / 24); if (d < 30) return `${d} ${plural(d, 'день', 'дня', 'дней')} назад`;
     return new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
   };
-  // значки шапки профиля: карандаш у ника, витрины и блоки, колокольчик подписки
-  const ICON_PEN = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 2.5l2.5 2.5L6 12.5H3.5V10z"/><path d="M9.5 4l2.5 2.5"/></svg>';
+  // значки шапки профиля: редактирование профиля, колокольчик подписки
   const ICON_LAYOUT = '<svg viewBox="0 0 16 16" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1.2"/><rect x="9" y="2" width="5" height="5" rx="1.2"/><rect x="2" y="9" width="5" height="5" rx="1.2"/><rect x="9" y="9" width="5" height="5" rx="1.2"/></svg>';
   const ICON_BELL = '<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9"/><path d="M10 19a2 2 0 0 0 4 0"/></svg>';
   const ICON_BELL_ON = '<svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9a6 6 0 1 1 12 0c0 5 2 6.5 2 6.5H4S6 14 6 9"/><path d="M10 19a2 2 0 0 0 4 0" fill="none"/><path d="M3 5.5c.6-1.4 1.5-2.5 2.6-3.3M21 5.5c-.6-1.4-1.5-2.5-2.6-3.3" fill="none"/></svg>';
@@ -103,33 +102,43 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     nodes.forEach((n) => io.observe(n));
   };
 
-  // ---------- звания по оценкам ----------
-  function titlesOf(rs) {
-    const rated = rs.filter((r) => r.total != null);
-    const n = rated.length;
-    const avg = n ? rated.reduce((a, r) => a + r.total, 0) / n : null;
-    const out = [];
-    out.push({ t: n >= 50 ? 'Легенда оценок' : n >= 20 ? 'Критик' : n >= 5 ? 'Ценитель' : n >= 1 ? 'Осматривается' : 'Новичок', tier: n >= 20 ? 'good' : n >= 5 ? 'mid' : 'none' });
-    if (avg != null) out.push(avg >= 8.5 ? { t: 'Щедрая душа', tier: 'good' } : avg >= 7.5 ? { t: 'Добрый критик', tier: 'good' } : avg >= 5.5 ? { t: 'Взвешенный взгляд', tier: 'mid' } : { t: 'Строгий судья', tier: 'bad' });
-    const cats = new Map(); rated.forEach((r) => cats.set(r.cat, (cats.get(r.cat) || 0) + 1));
-    const top = [...cats.entries()].sort((a, b) => b[1] - a[1])[0];
-    if (top && n >= 3) out.push({ t: `Больше всего: ${top[0]}`, tier: 'none' });
-    const masters = rated.filter((r) => r.total >= 9.5).length;
-    if (masters >= 3) out.push({ t: `Нашёл ${masters} ${plural(masters, 'шедевр', 'шедевра', 'шедевров')}`, tier: 'good' });
-    return out;
-  }
-
-  // ---------- значки: стаж аккаунта, число оценок и особые ----------
+  // ---------- ачивки: стаж аккаунта, число оценок и особые ----------
   const AGE_BADGES = [
-    { days: 7, ic: '🌱', t: 'Неделя в клубе', need: 'неделя' },
-    { days: 30, ic: '🌙', t: 'Месяц в клубе', need: 'месяц' },
-    { days: 91, ic: '🍂', t: 'Три месяца', need: '3 месяца' },
-    { days: 182, ic: '🌗', t: 'Полгода', need: 'полгода' },
-    { days: 365, ic: '🏆', t: 'Год в клубе', need: 'год' },
-    { days: 730, ic: '👑', t: 'Два года', need: '2 года' },
-    { days: 1095, ic: '💎', t: 'Три года', need: '3 года' },
+    { days: 7, id: 'age7', t: 'Неделя в клубе', need: 'неделя' },
+    { days: 30, id: 'age30', t: 'Месяц в клубе', need: 'месяц' },
+    { days: 91, id: 'age91', t: 'Три месяца', need: '3 месяца' },
+    { days: 182, id: 'age182', t: 'Полгода', need: 'полгода' },
+    { days: 365, id: 'age365', t: 'Год в клубе', need: 'год' },
+    { days: 730, id: 'age730', t: 'Два года', need: '2 года' },
+    { days: 1095, id: 'age1095', t: 'Три года', need: '3 года' },
   ];
-  const COUNT_BADGES = [[1, '📝', 'Первая оценка'], [10, '🗂️', '10 оценок'], [50, '📚', '50 оценок'], [100, '🏛️', '100 оценок'], [250, '🗿', '250 оценок']];
+  const COUNT_BADGES = [[1, 'cnt1', 'Первая оценка'], [10, 'cnt10', '10 оценок'], [50, 'cnt50', '50 оценок'], [100, 'cnt100', '100 оценок'], [250, 'cnt250', '250 оценок']];
+  // эмблемы ачивок: цвета градиента и рисунок на сетке 24×24 (белая линия 2px); у семейства один цвет
+  const ACH = {
+    age7: ['#34D399', '#0F9F8C', '<path d="M12 20.5v-8"/><path d="M12 12.5c0-4.2 2.9-6.6 7-6.6 0 4.2-2.9 6.6-7 6.6z"/><path d="M12 14.5c0-3.3-2.4-5.5-6-5.5 0 3.3 2.4 5.5 6 5.5z"/>'],
+    age30: ['#34D399', '#0F9F8C', '<path d="M18.5 14.6A7.5 7.5 0 1 1 9.4 4.5a6 6 0 0 0 9.1 10.1z"/>'],
+    age91: ['#34D399', '#0F9F8C', '<path d="M5 19c0-8.3 5.2-14 14-14 0 8.8-5.7 14-14 14z"/><path d="M5 19l8.5-8.5"/>'],
+    age182: ['#34D399', '#0F9F8C', '<circle cx="12" cy="12" r="7.5"/><path d="M12 4.5a7.5 7.5 0 0 1 0 15z" fill="currentColor"/>'],
+    age365: ['#34D399', '#0F9F8C', '<path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5.5A2.5 2.5 0 0 0 8 9.6M16 6h2.5A2.5 2.5 0 0 1 16 9.6"/><path d="M12 13v4M8.5 20h7M10 17h4"/>'],
+    age730: ['#34D399', '#0F9F8C', '<path d="M4.5 16.5L3.5 8l4.8 3.6L12 5l3.7 6.6L20.5 8l-1 8.5z"/><path d="M5 20h14"/>'],
+    age1095: ['#34D399', '#0F9F8C', '<path d="M7.5 4.5h9l4 4.5L12 20 3.5 9z"/><path d="M3.5 9h17M12 20L9.2 9l1.8-4.5M12 20l2.8-11L13 4.5"/>'],
+    cnt1: ['#60A5FA', '#4F46E5', '<rect x="5.5" y="3.5" width="13" height="17" rx="2.5"/><path d="M9 12.3l2.2 2.2 4-4.6"/>'],
+    cnt10: ['#60A5FA', '#4F46E5', '<rect x="8" y="3.5" width="11.5" height="14" rx="2.3"/><path d="M5 7.5v10.2A2.8 2.8 0 0 0 7.8 20.5h8"/><path d="M11 8.5h5.5M11 12h4"/>'],
+    cnt50: ['#60A5FA', '#4F46E5', '<rect x="4" y="5" width="4" height="15" rx="1"/><rect x="10" y="5" width="4" height="15" rx="1"/><path d="M15.6 6.2l3.6-1 3.4 14-3.6 1z"/>'],
+    cnt100: ['#60A5FA', '#4F46E5', '<path d="M3.5 9L12 4.5 20.5 9z"/><path d="M6.5 11v6M10.2 11v6M13.8 11v6M17.5 11v6M4 20h16"/>'],
+    cnt250: ['#60A5FA', '#4F46E5', '<path d="M3 20l6.5-10 3.4 5 2.6-3.6L21 20z"/><path d="M15.5 11.4V3.5l4 1.9-4 1.9"/>'],
+    ruthless: ['#F87171', '#C81E1E', '<path d="M7 13.5V4.5H4.5v9z"/><path d="M7 13.5l3.6 6.5c1.4 0 2.3-1.1 2-2.4l-.7-3.6h5.3a2 2 0 0 0 2-2.4l-1.3-6A2 2 0 0 0 15.9 4.5H7"/>'],
+    generous: ['#FCD34D', '#E8890B', '<path d="M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.2a4.2 4.2 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/>'],
+    erudite: ['#C084FC', '#7C3AED', '<circle cx="12" cy="12" r="8.2"/><path d="M15.6 8.4l-2.1 5.1-5.1 2.1 2.1-5.1z" fill="currentColor"/>'],
+    writer: ['#5EEAD4', '#0D9488', '<path d="M4.5 19.5l2.6-7.6L15 4l5 5-7.9 7.9z"/><path d="M4.5 19.5l5.2-5.2"/><circle cx="11.2" cy="12.8" r="1.5"/>'],
+    photo: ['#F9A8D4', '#DB2777', '<path d="M3.5 8.5A1.5 1.5 0 0 1 5 7h2.2l1.6-2.5h6.4L16.8 7H19a1.5 1.5 0 0 1 1.5 1.5v10A1.5 1.5 0 0 1 19 20H5a1.5 1.5 0 0 1-1.5-1.5z"/><circle cx="12" cy="13.3" r="3.6"/>'],
+    collector: ['#FDE68A', '#D97706', '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8-4.3-4.1 5.9-.9z"/>'],
+    owl: ['#818CF8', '#3730A3', '<path d="M5.5 4.5L8 7.2A6 6 0 0 1 16 7.2l2.5-2.7V14a6.5 6.5 0 0 1-13 0z"/><circle cx="9.4" cy="11.3" r="2"/><circle cx="14.6" cy="11.3" r="2"/><path d="M11.2 14.6l.8 1.4.8-1.4z"/>'],
+    marathon: ['#FDBA74', '#EA580C', '<path d="M12 21c-3.9 0-6.5-2.6-6.5-6 0-3.6 3-5.6 3.6-9.2 2.6 1.5 4.4 4 4.4 6.6 1-.8 1.5-2 1.6-3.1 1.8 1.6 3.4 3.7 3.4 5.7 0 3.4-2.6 6-6.5 6z"/>'],
+    social: ['#A78BFA', '#6D28D9', '<circle cx="9" cy="8.2" r="3.2"/><path d="M3.5 19.5a5.5 5.5 0 0 1 11 0"/><path d="M15.6 5.2a3.2 3.2 0 0 1 0 6M17 13.6a5.5 5.5 0 0 1 3.5 5.9"/>'],
+    pioneer: ['#67E8F9', '#0284C7', '<path d="M12 3c3 2 4.5 5.5 4.5 9.5L14.6 16H9.4l-1.9-3.5C7.5 8.5 9 5 12 3z"/><circle cx="12" cy="9.6" r="1.6"/><path d="M7.6 12.4L5 15v3.2l4.2-2.2M16.4 12.4L19 15v3.2l-4.2-2.2M10.6 18.5L12 21l1.4-2.5"/>'],
+  };
+  const achIcon = (id) => `<span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${(ACH[id] || ACH.cnt1)[2]}</svg></span>`;
   const PIONEER_BEFORE = +new Date(2026, 11, 1); // аккаунты до 1 декабря 2026
   const dayFmt = (t) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
   // самая длинная серия дней подряд, в которые что-то оценено
@@ -149,10 +158,10 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       return { ...b, got, next, pct: Math.min(100, (have / b.goal) * 100), sub: subOf(b, got, next) };
     });
   }
-  // одиночный значок с прогрессом (сколько из скольких)
-  const goal = (ic, t, have, need, hint, word) => ({ ic, t, hint, got: have >= need, next: have < need && have > 0, pct: Math.min(100, (have / need) * 100),
+  // одиночная ачивка с прогрессом (сколько из скольких)
+  const goal = (id, t, have, need, hint, word) => ({ id, t, hint, got: have >= need, next: have < need && have > 0, pct: Math.min(100, (have / need) * 100),
     sub: have >= need ? hint : `${have} из ${need} ${word}` });
-  const flag = (ic, t, got, hint, todo) => ({ ic, t, hint, got, sub: got ? hint : todo });
+  const flag = (id, t, got, hint, todo) => ({ id, t, hint, got, sub: got ? hint : todo });
   function badgesOf(p) {
     const out = [];
     const t0 = +new Date(p.createdAt || 0);
@@ -165,24 +174,76 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     }
     const rs = p.ratings || [];
     const n = rs.length;
-    out.push(...series(COUNT_BADGES.map(([k, ic, t]) => ({ goal: k, ic, t, hint: k === 1 ? 'первая оценка' : k + ' оценок' })), n,
+    out.push(...series(COUNT_BADGES.map(([k, id, t]) => ({ goal: k, id, t, hint: k === 1 ? 'первая оценка' : k + ' оценок' })), n,
       (b, got, next) => (got ? 'есть' : next ? `ещё ${b.goal - n} ${plural(b.goal - n, 'оценка', 'оценки', 'оценок')}` : 'нужно ' + b.goal)));
     const rated = rs.filter((r) => r.total != null);
-    out.push(flag('🔪', 'Безжалостный', rated.some((r) => r.total < 2.5), 'есть оценка 1 или 2', 'поставь 1 или 2'));
-    out.push(flag('💯', 'Щедрый', rated.some((r) => r.total >= 9.95), 'есть оценка 10', 'поставь 10'));
-    out.push(goal('🧭', 'Эрудит', new Set(rs.map((r) => keyOf(r.cat))).size, 5, 'оценки в 5 категориях', 'категорий'));
-    out.push(goal('✍️', 'Писатель', rs.filter((r) => r.note).length, 10, '10 оценок с заметками', 'с заметками'));
-    out.push(goal('📸', 'Фотограф', rs.filter((r) => r.photo).length, 10, '10 оценок с фото', 'с фото'));
-    out.push(goal('⭐', 'Коллекционер', rs.filter((r) => r.fav).length, 10, '10 оценок в избранном', 'в избранном'));
-    out.push(flag('🦉', 'Ночная сова', rs.some((r) => r.created && new Date(r.created).getHours() < 5), 'оценка между 0:00 и 5:00', 'оцени что-нибудь ночью, с 0 до 5'));
-    out.push(goal('🔥', 'Марафонец', bestStreak(rs.map((r) => r.created)), 7, 'оценки 7 дней подряд', 'дней подряд'));
-    if (p.friendCount != null) out.push(goal('👥', 'Душа компании', p.friendCount, 5, '5 друзей', 'друзей'));
-    // успеть можно было только до декабря 2026: позже значок не показывается
-    if (t0 && t0 < PIONEER_BEFORE) out.push(flag('🚀', 'Перво­проходец', true, 'в клубе с первых недель', ''));
+    out.push(flag('ruthless', 'Безжалостный', rated.some((r) => r.total < 2.5), 'есть оценка 1 или 2', 'поставь 1 или 2'));
+    out.push(flag('generous', 'Щедрый', rated.some((r) => r.total >= 9.95), 'есть оценка 10', 'поставь 10'));
+    out.push(goal('erudite', 'Эрудит', new Set(rs.map((r) => keyOf(r.cat))).size, 5, 'оценки в 5 категориях', 'категорий'));
+    out.push(goal('writer', 'Писатель', rs.filter((r) => r.note).length, 10, '10 оценок с заметками', 'с заметками'));
+    out.push(goal('photo', 'Фотограф', rs.filter((r) => r.photo).length, 10, '10 оценок с фото', 'с фото'));
+    out.push(goal('collector', 'Коллекционер', rs.filter((r) => r.fav).length, 10, '10 оценок в избранном', 'в избранном'));
+    out.push(flag('owl', 'Ночная сова', rs.some((r) => r.created && new Date(r.created).getHours() < 5), 'оценка между 0:00 и 5:00', 'оцени что-нибудь ночью, с 0 до 5'));
+    out.push(goal('marathon', 'Марафонец', bestStreak(rs.map((r) => r.created)), 7, 'оценки 7 дней подряд', 'дней подряд'));
+    if (p.friendCount != null) out.push(goal('social', 'Душа компании', p.friendCount, 5, '5 друзей', 'друзей'));
+    // успеть можно было только до декабря 2026: позже ачивка не показывается
+    if (t0 && t0 < PIONEER_BEFORE) out.push(flag('pioneer', 'Перво­проходец', true, 'в клубе с первых недель', ''));
     // полученные сначала, из остальных выше те, до которых ближе
     return out.filter((b) => b.got).concat(out.filter((b) => !b.got).sort((a, b) => (b.pct || 0) - (a.pct || 0)));
   }
-  const badgesHTML = (list) => `<div class="bdg">${list.map((b, k) => `<div style="--k:${Math.min(k, 14)}" class="bdg-i${b.got ? '' : ' off'}${b.next ? ' next' : ''}" title="${esc(b.t)}: ${esc(b.hint)}"><span class="ic" aria-hidden="true">${b.ic}</span><span><b>${esc(b.t)}</b><small>${esc(b.sub)}</small>${b.next ? `<span class="tr"><i style="width:${b.pct.toFixed(1)}%"></i></span>` : ''}</span></div>`).join('')}</div>`;
+  // карточка ачивки: эмблема, у неполученной — полоса с процентами, у полученной — галочка
+  const badgesHTML = (list) => `<div class="bdg">${list.map((b, k) => {
+    const a = ACH[b.id] || ACH.cnt1;
+    const pct = Math.max(0, Math.min(99, Math.floor(b.pct || 0)));
+    return `<div style="--k:${Math.min(k, 14)};--c1:${a[0]};--c2:${a[1]}" class="bdg-i${b.got ? ' got' : ' off'}${b.next ? ' next' : ''}" title="${esc(b.t)}: ${esc(b.hint)}">${achIcon(b.id)}<span><b>${esc(b.t)}</b><small>${esc(b.sub)}</small>${!b.got && b.pct != null ? `<span class="pg" role="img" aria-label="Готово на ${pct}%"><span class="tr"><i style="width:${pct}%"></i></span><em>${pct}%</em></span>` : ''}</span>${b.got ? '<span class="ok" aria-label="Получено">✓</span>' : ''}</div>`;
+  }).join('')}</div>`;
+
+  // ---------- звания: открываются за оценки и ачивки; какие показывать под ником, выбирает хозяин ----------
+  const TITLE_MAX = 4;
+  function titleCatalog(p, rs) {
+    const rated = rs.filter((r) => r.total != null);
+    const n = rated.length;
+    const avg = n ? rated.reduce((a, r) => a + r.total, 0) / n : null;
+    const out = [];
+    const add = (id, t, tier, got, need) => out.push({ id, t, tier, got: !!got, need });
+    add('n0', 'Новичок', 'none', true, '');
+    [[1, 'Осматривается', 'none'], [5, 'Ценитель', 'mid'], [20, 'Критик', 'good'], [50, 'Легенда оценок', 'good'], [100, 'Архивариус', 'good']]
+      .forEach(([k, t, tier]) => add('n' + k, t, tier, n >= k, k === 1 ? 'первая оценка с баллом' : `${k} оценок с баллом`));
+    add('avg-gen', 'Щедрая душа', 'good', avg != null && avg >= 8.5, 'средний балл 8,5 и выше');
+    add('avg-kind', 'Добрый критик', 'good', avg != null && avg >= 7.5 && avg < 8.5, 'средний балл от 7,5 до 8,4');
+    add('avg-bal', 'Взвешенный взгляд', 'mid', avg != null && avg >= 5.5 && avg < 7.5, 'средний балл от 5,5 до 7,4');
+    add('avg-strict', 'Строгий судья', 'bad', avg != null && avg < 5.5, 'средний балл ниже 5,5');
+    const cats = new Map(); rated.forEach((r) => cats.set(r.cat, (cats.get(r.cat) || 0) + 1));
+    const top = [...cats.entries()].sort((a, b) => b[1] - a[1])[0];
+    add('top', top && n >= 3 ? `Больше всего: ${top[0]}` : 'Больше всего: …', 'none', top && n >= 3, '3 оценки с баллом');
+    const masters = rated.filter((r) => r.total >= 9.5).length;
+    add('masters', masters >= 3 ? `Нашёл ${masters} ${plural(masters, 'шедевр', 'шедевра', 'шедевров')}` : 'Охотник за шедеврами', 'good', masters >= 3, '3 оценки 9,5 и выше');
+    // каждая полученная ачивка — ещё одно звание
+    (p.badges || []).forEach((b) => add('b:' + b.id, b.t.replace(/\u00ad/g, ''), 'good', b.got, b.hint));
+    return out;
+  }
+  // если хозяин ничего не выбирал — как раньше: звание за число оценок, за средний балл, любимая тема и шедевры
+  function titlesShown(p, cat) {
+    const got = (id) => cat.find((t) => t.id === id && t.got);
+    const sel = p.layout && Array.isArray(p.layout.titles) ? p.layout.titles : null;
+    if (sel) return sel.map(got).filter(Boolean);
+    return [['n100', 'n50', 'n20', 'n5', 'n1', 'n0'].map(got).find(Boolean), ...['avg-gen', 'avg-kind', 'avg-bal', 'avg-strict', 'top', 'masters'].map(got)].filter(Boolean);
+  }
+  function titlePopHTML(cat, shown) {
+    const sel = shown.map((t) => t.id);
+    const locked = cat.filter((t) => !t.got && t.need);
+    return `<div class="t-pop-h"><b>Звания</b><small>выбрано ${sel.length} из ${TITLE_MAX}</small></div>
+      <div class="t-list">${cat.filter((t) => t.got).map((t) => `<button type="button" class="t-opt" data-tadd="${esc(t.id)}" aria-pressed="${sel.includes(t.id)}" data-tier="${t.tier}"><i></i><span>${esc(t.t)}</span>${sel.includes(t.id) ? '<em>✓</em>' : ''}</button>`).join('')}</div>
+      ${locked.length ? `<span class="label">Ещё не открыты</span><div class="t-list">${locked.map((t) => `<span class="t-opt off" data-tier="${t.tier}"><i></i><span>${esc(t.t)}<small>${esc(t.need)}</small></span></span>`).join('')}</div>` : ''}`;
+  }
+  function titlesRowHTML(p, rs) {
+    const cat = titleCatalog(p, rs), shown = titlesShown(p, cat);
+    const chip = (t) => `<span class="title-chip" data-tier="${t.tier}"><i></i>${esc(t.t)}${EDIT ? `<button type="button" class="t-x" data-tx="${esc(t.id)}" aria-label="Убрать звание «${esc(t.t)}»" title="Убрать">✕</button>` : ''}</span>`;
+    if (!EDIT) return `<div class="titles"${hid(p, 'titles')}>${shown.map(chip).join('')}</div>`;
+    const on = secOn(p, 'titles');
+    return `<div class="t-wrap"><div class="titles edit${on ? '' : ' off'}" id="titlesRow">${shown.map(chip).join('')}<button type="button" class="title-add" id="titleAdd" aria-expanded="${tpOpen}" aria-controls="titlePop">＋ Звание</button><button type="button" class="title-eye" id="titleEye" aria-pressed="${!on}" title="${on ? 'Скрыть звания' : 'Показать звания'}" aria-label="${on ? 'Скрыть звания' : 'Показать звания'}">${on ? WIC.eye : WIC.eyeOff}</button></div>
+      <div class="t-pop" id="titlePop"${tpOpen ? '' : ' hidden'}>${titlePopHTML(cat, shown)}</div></div>`;
+  }
 
   // ---------- отрисовка ----------
   const cells = (v) => `<span class="cells" data-tier="${tierT(v)}" aria-hidden="true">${Array.from({ length: 10 }, (_, i) => `<i${v != null && i < Math.round(v) ? ' class="on"' : ''}></i>`).join('')}</span>`;
@@ -321,8 +382,22 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
 
   // ---------- витрины и блоки профиля: что видно в профиле, решает хозяин; хранится в аккаунте ----------
   const LAYOUT_KEY = 'casualhub.profileLayout.v1'; // { id профиля: { showcases, sections, at } }
-  const SECTIONS = [['stats', 'Цифры'], ['titles', 'Звания'], ['podium', 'Любимое'], ['all', 'Все оценки'], ['badges', 'Значки'], ['friends', 'Друзья'], ['hist', 'Оценки 1–10'], ['cats', 'Категории']];
   const SC_MAX = 6;
+  // блоки профиля — виджеты на сетке из 6 колонок: размер ⅓, ½, ⅔ или во всю ширину
+  const WG_NAME = { stats: 'Цифры', podium: 'Любимое', all: 'Все оценки', badges: 'Ачивки', taste: 'Вкусы', friends: 'Друзья', hist: 'Оценки 1–10', cats: 'Категории' };
+  const WG_SIZE = { stats: 'f', podium: 'l', all: 'l', badges: 's', taste: 's', friends: 's', hist: 's', cats: 's' };
+  const SZ_LABEL = { s: '⅓', m: '½', l: '⅔', f: '↔' };
+  const SZ_WORD = { s: 'треть ширины', m: 'половина ширины', l: 'две трети ширины', f: 'во всю ширину' };
+  const wgSizes = (k) => (k === 'stats' || k === 'all' ? ['m', 'l', 'f'] : ['s', 'm', 'l', 'f']);
+  const wgSize = (p, k) => { const s = p.layout && p.layout.size && p.layout.size[k]; return wgSizes(k).includes(s) ? s : WG_SIZE[k] || (k.startsWith('sc:') ? 'f' : 's'); };
+  const WIC = {
+    move: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v18M3 12h18M9 6l3-3 3 3M9 18l3 3 3-3M6 9l-3 3 3 3M18 9l3 3-3 3"/></svg>',
+    eye: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
+    eyeOff: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/><path d="M4 4l16 16"/></svg>',
+    pen: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
+    trash: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5"/></svg>',
+  };
+  let EDIT = false, tpOpen = false; // режим редактирования профиля; открыт ли список званий
   const localLayout = () => (read(LAYOUT_KEY) || {})[hideOwner()] || null;
   const keepLayout = (l) => { try { const all = read(LAYOUT_KEY) || {}; all[hideOwner()] = l; localStorage.setItem(LAYOUT_KEY, JSON.stringify(all)); } catch (e) {} };
   const secOn = (p, k) => !(p.layout && p.layout.sections && p.layout.sections[k] === false);
@@ -334,30 +409,34 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     if (sc.mode === 'pick') { const byId = new Map(pool.map((r) => [r.id, r])); return (sc.ids || []).map((id) => byId.get(id)).filter(Boolean).slice(0, sc.n); }
     return pool.filter((r) => r.total != null).sort((a, b) => b.total - a.total || b.at - a.at).slice(0, sc.n);
   }
-  function showcasesHTML(p, d) {
-    const out = ((p.layout && p.layout.showcases) || []).map((sc) => {
-      const items = scItems(p, sc);
-      if (!items.length && p.kind !== 'me') return '';
-      return `<section class="card rise show" style="--d:${d++}">
+  function showcaseHTML(p, sc, d) {
+    const items = scItems(p, sc);
+    if (!items.length && p.kind !== 'me') return '';
+    return `<section class="card rise show" style="--d:${d}">
         <div class="head"><h2 class="h2">${esc(sc.title || autoTitle(p, sc))}</h2><span class="label">${esc(sc.cat ? catTitle(p, sc.cat) : 'все темы')} · ${sc.mode === 'pick' ? 'мой выбор' : 'лучшие по баллу'}</span></div>
         ${items.length ? `<div class="sc-row ${sc.style === 'list' ? 'as-list' : 'as-posters'}">${items.map((r, k) => `<a class="sc-it" href="${rateLink(p, r)}" title="${esc(r.name)}" data-tier="${tierT(r.total)}">
           <div class="pic" data-photo="${r.photo ? esc(r.id) : ''}"><span class="place">${k + 1}</span><span class="ltr">${letter(r.name)}</span>${lbm(r)}</div>
           <strong>${esc(r.name)}</strong>${badge(r.total)}</a>`).join('')}</div>`
-          : '<p class="muted">Пока пусто: в этой теме нет подходящих оценок. Витрину можно изменить кнопкой «Витрины и блоки».</p>'}
+          : '<p class="muted">Пока пусто: в этой теме нет подходящих оценок. Витрину можно изменить в режиме редактирования профиля (кнопка с квадратиками).</p>'}
       </section>`;
-    }).join('');
-    return out ? `<div class="shows">${out}</div>` : '';
   }
 
-  // окно «Витрины и блоки»: включить или выключить блоки, добавить, изменить, переставить витрины
-  let lyP = null, lyEdit = null; // lyEdit — витрина, которую сейчас добавляют или меняют
-  function saveLayout(p) {
+  // окно витрины: добавить новую или изменить; блоки двигают и скрывают прямо в профиле
+  let lyP = null, lyEdit = null, lyPush = 0; // lyEdit — витрина, которую сейчас добавляют или меняют
+  // в аккаунт уходит с задержкой: при перетаскивании блоков правок много подряд
+  function saveLayout(p, noRender) {
     p.layout = { ...p.layout, at: Date.now() };
     keepLayout(p.layout);
-    if (token) send('PUT', '/shelf', { ratings: [], layout: p.layout }).catch(() => {});
-    render(p);
+    if (token) { clearTimeout(lyPush); const l = p.layout; lyPush = setTimeout(() => send('PUT', '/shelf', { ratings: [], layout: l }).catch(() => {}), 1200); }
+    if (!noRender) render(p);
   }
-  function layoutEditor(p) {
+  function openScForm(p, id) {
+    const scs = (p.layout && p.layout.showcases) || [];
+    const sc = id && scs.find((x) => x.id === id);
+    if (!sc && scs.length >= SC_MAX) { toast(`Витрин может быть не больше ${SC_MAX}`); return; }
+    layoutEditor(p, sc ? { ...sc, ids: [...(sc.ids || [])], q: '' } : { id: 'sc' + Date.now().toString(36), title: '', cat: '', n: 5, mode: 'auto', ids: [], style: 'posters', q: '', isNew: true });
+  }
+  function layoutEditor(p, edit) {
     lyP = p;
     if (!p.layout) p.layout = { showcases: [], sections: {}, at: 0 };
     let box = $('#lyPick');
@@ -365,13 +444,13 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       box = document.createElement('div');
       box.className = 'st-pick'; box.id = 'lyPick'; box.hidden = true;
       box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('aria-labelledby', 'lyTitle');
-      box.innerHTML = '<div class="st-card ly-card"><div class="st-head"><h2 id="lyTitle">Витрины и блоки</h2><button type="button" class="st-x" data-ly="close" aria-label="Закрыть">✕</button></div><div class="ly-body" id="lyBody"></div></div>';
+      box.innerHTML = '<div class="st-card ly-card"><div class="st-head"><h2 id="lyTitle">Витрина</h2><button type="button" class="st-x" data-ly="close" aria-label="Закрыть">✕</button></div><div class="ly-body" id="lyBody"></div></div>';
       document.body.appendChild(box);
       box.addEventListener('click', onLayoutClick);
       box.addEventListener('input', onLayoutInput);
       document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !box.hidden) { if (lyEdit) { lyEdit = null; drawLayout(); } else closeLayout(); } });
     }
-    lyEdit = null;
+    lyEdit = edit;
     box.hidden = false;
     document.body.style.overflow = 'hidden';
     drawLayout();
@@ -389,17 +468,11 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   function drawLayout() {
     const p = lyP, body = $('#lyBody');
     if (!p || !body) return;
-    $('#lyTitle').textContent = lyEdit ? (lyEdit.isNew ? 'Новая витрина' : 'Витрина') : 'Витрины и блоки';
-    if (lyEdit) { body.innerHTML = scFormHTML(p, lyEdit); hydratePhotos(p, body); return; }
-    const scs = p.layout.showcases || [];
-    body.innerHTML = `<span class="label">Что видно в профиле</span>
-      <div class="chips ly-secs">${SECTIONS.map(([k, t]) => `<button type="button" class="chip" data-sec="${k}" aria-pressed="${secOn(p, k)}">${esc(t)}</button>`).join('')}</div>
-      <p class="ly-hint">Нажми на блок, чтобы скрыть его или вернуть. Скрытые блоки не видны ни тебе, ни друзьям.</p>
-      <span class="label">Витрины · ${scs.length} из ${SC_MAX}</span>
-      ${scs.length ? `<div class="ly-list">${scs.map((sc, i) => `<div class="ly-row"><span><b>${esc(sc.title || autoTitle(p, sc))}</b><small>${esc(sc.cat ? catTitle(p, sc.cat) : 'все темы')} · топ-${sc.n} · ${sc.mode === 'pick' ? 'выбор вручную' : 'лучшие по баллу'} · ${sc.style === 'list' ? 'список' : 'постеры'}</small></span>
-        <button type="button" class="mini" data-ly="up" data-i="${i}" aria-label="Выше"${i ? '' : ' disabled'}>↑</button><button type="button" class="mini" data-ly="down" data-i="${i}" aria-label="Ниже"${i < scs.length - 1 ? '' : ' disabled'}>↓</button><button type="button" class="mini" data-ly="edit" data-i="${i}" aria-label="Изменить витрину">✎</button><button type="button" class="mini del" data-ly="del" data-i="${i}" aria-label="Удалить витрину">✕</button></div>`).join('')}</div>`
-        : '<p class="ly-hint">Витрина — это твой топ, например «Топ-5 игр» или «Любимые фильмы». Она появится в профиле под цифрами.</p>'}
-      ${scs.length < SC_MAX ? '<button type="button" class="btn primary" data-ly="add">＋ Добавить витрину</button>' : ''}`;
+    // форма сохранена или отменена — окно закрывается
+    if (!lyEdit) { closeLayout(); return; }
+    $('#lyTitle').textContent = lyEdit.isNew ? 'Новая витрина' : 'Витрина';
+    body.innerHTML = scFormHTML(p, lyEdit);
+    hydratePhotos(p, body);
   }
   function pickListHTML(p, sc) {
     const q = keyOf(sc.q || '');
@@ -452,9 +525,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   }
   function onLayoutClick(e) {
     const p = lyP, L = p.layout, box = $('#lyPick');
-    if (e.target === box) return closeLayout();
-    const sec = e.target.closest('[data-sec]');
-    if (sec) { L.sections = { ...(L.sections || {}), [sec.dataset.sec]: !secOn(p, sec.dataset.sec) }; saveLayout(p); return drawLayout(); }
+    if (e.target === box) { lyEdit = null; return closeLayout(); }
     const f = e.target.closest('[data-f]');
     if (f && lyEdit) {
       const k = f.dataset.f;
@@ -478,12 +549,9 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     }
     const b = e.target.closest('[data-ly]');
     if (!b) return;
-    const act = b.dataset.ly, i = +b.dataset.i;
+    const act = b.dataset.ly;
     const scs = (L.showcases || []).slice();
-    if (act === 'close') return closeLayout();
-    if (act === 'add') { lyEdit = { id: 'sc' + Date.now().toString(36), title: '', cat: '', n: 5, mode: 'auto', ids: [], style: 'posters', q: '', isNew: true }; return drawLayout(); }
-    if (act === 'edit') { lyEdit = { ...scs[i], ids: [...(scs[i].ids || [])], q: '' }; return drawLayout(); }
-    if (act === 'cancel') { lyEdit = null; return drawLayout(); }
+    if (act === 'close' || act === 'cancel') { lyEdit = null; return closeLayout(); }
     if (act === 'save') {
       if (lyEdit.mode === 'pick' && !lyEdit.ids.length) { lyEdit.err = 'Выбери хотя бы одну оценку'; return drawLayout(); }
       const sc = { id: lyEdit.id, title: (lyEdit.title || '').trim().slice(0, 60), cat: lyEdit.cat, n: lyEdit.n, mode: lyEdit.mode, ids: lyEdit.mode === 'pick' ? lyEdit.ids.slice(0, lyEdit.n) : [], style: lyEdit.style };
@@ -492,18 +560,186 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       L.showcases = scs.slice(0, SC_MAX);
       lyEdit = null;
       saveLayout(p);
-      return drawLayout();
-    }
-    if (act === 'del') { scs.splice(i, 1); L.showcases = scs; saveLayout(p); return drawLayout(); }
-    if (act === 'up' || act === 'down') {
-      const j = act === 'up' ? i - 1 : i + 1;
-      if (j < 0 || j >= scs.length) return;
-      [scs[i], scs[j]] = [scs[j], scs[i]];
-      L.showcases = scs;
-      saveLayout(p);
-      return drawLayout();
+      return closeLayout();
     }
   }
+
+  // ---------- режим редактирования профиля: блоки-виджеты двигают за ✥, скрывают глазом, меняют размер ----------
+  // порядок: сохранённый, а новые блоки (например, только что добавленная витрина) встают на своё обычное место
+  function wgOrder(p, keys) {
+    const rank = (k) => ['stats', 'sc', 'podium', 'all', 'badges', 'taste', 'friends', 'hist', 'cats'].indexOf(k.startsWith('sc:') ? 'sc' : k);
+    const out = ((p.layout && p.layout.order) || []).filter((k, i, a) => keys.includes(k) && a.indexOf(k) === i);
+    keys.filter((k) => !out.includes(k)).forEach((k) => { const i = out.findIndex((x) => rank(x) > rank(k)); out.splice(i >= 0 ? i : out.length, 0, k); });
+    return out;
+  }
+  function wgHTML(p, k, html) {
+    const sz = wgSize(p, k), on = secOn(p, k);
+    if (!EDIT) return `<div class="wg" data-wg="${esc(k)}" data-size="${sz}"${on ? '' : ' hidden'}>${html}</div>`;
+    const sc = k.startsWith('sc:') && ((p.layout && p.layout.showcases) || []).find((x) => 'sc:' + x.id === k);
+    const name = esc(sc ? sc.title || autoTitle(p, sc) : WG_NAME[k]);
+    return `<div class="wg" data-wg="${esc(k)}" data-size="${sz}"${on ? '' : ' data-off'}>
+      <button type="button" class="wg-btn wg-move" title="Зажми и перетащи. Стрелками на клавиатуре тоже можно" aria-label="Переместить блок «${name}»">${WIC.move}</button>
+      <span class="wg-tools">${sc ? `<button type="button" class="wg-btn" data-wga="scedit" title="Изменить витрину" aria-label="Изменить витрину «${name}»">${WIC.pen}</button><button type="button" class="wg-btn danger" data-wga="scdel" title="Удалить витрину" aria-label="Удалить витрину «${name}»">${WIC.trash}</button>` : ''}<button type="button" class="wg-btn wg-size" data-wga="size" title="Размер: ${SZ_WORD[sz]}. Нажми, чтобы сменить" aria-label="Размер блока «${name}»: ${SZ_WORD[sz]}">${SZ_LABEL[sz]}</button><button type="button" class="wg-btn" data-wga="eye" aria-pressed="${!on}" title="${on ? 'Скрыть блок' : 'Показать блок'}" aria-label="${on ? 'Скрыть' : 'Показать'} блок «${name}»">${on ? WIC.eye : WIC.eyeOff}</button></span>
+      ${html}</div>`;
+  }
+  const editBarHTML = (p) => `<div class="ed-bar" id="edBar" role="toolbar" aria-label="Редактирование профиля">
+    <span class="ed-tx"><b>Редактирование профиля</b><small>Зажми ✥ и тащи блок · глаз скрывает · ⅓ ½ ⅔ — размер</small></span>
+    ${((p.layout && p.layout.showcases) || []).length < SC_MAX ? '<button type="button" class="btn ghost" data-ed="add">＋ Витрина</button>' : ''}
+    <button type="button" class="btn primary" data-ed="done">Готово</button></div>`;
+  // кладка без дыр: строки сетки по 4px, каждый блок занимает столько строк, сколько его высота
+  let wgRO = null;
+  const spanOf = (w) => { w.style.gridRowEnd = 'span ' + Math.max(1, Math.ceil(w.offsetHeight / 4)); };
+  function sizeBoard(board) {
+    if (wgRO) wgRO.disconnect();
+    const ws = [...board.children];
+    const hs = ws.map((w) => w.offsetHeight); // сначала все замеры, потом запись: одна раскладка
+    ws.forEach((w, i) => { w.style.gridRowEnd = 'span ' + Math.max(1, Math.ceil(hs[i] / 4)); });
+    if (!('ResizeObserver' in window)) return;
+    wgRO = new ResizeObserver((es) => es.forEach((e) => { if (e.target.isConnected) spanOf(e.target); }));
+    ws.forEach((w) => wgRO.observe(w));
+  }
+  function saveOrder(p, board) {
+    const now = [...board.children].map((c) => c.dataset.wg).filter(Boolean);
+    const old = p.layout.order || [];
+    // блоки, которых сейчас нет на странице, остаются там, где были
+    old.forEach((k, i) => { if (now.includes(k)) return; const prev = old.slice(0, i).reverse().find((x) => now.includes(x)); now.splice(prev ? now.indexOf(prev) + 1 : 0, 0, k); });
+    p.layout.order = now.slice(0, 30);
+    saveLayout(p, true);
+  }
+  // перетаскивание: блок едет за пальцем или мышью, на его месте — пунктирная рамка, соседи раздвигаются
+  function startDrag(e, wg, p) {
+    e.preventDefault();
+    const board = wg.parentElement, r = wg.getBoundingClientRect();
+    const ph = document.createElement('div');
+    ph.className = 'wg wg-ph'; ph.dataset.size = wg.dataset.size; ph.style.height = r.height + 'px'; ph.style.gridRowEnd = wg.style.gridRowEnd;
+    const ghost = wg.cloneNode(true);
+    ghost.querySelectorAll('[id]').forEach((n) => n.removeAttribute('id'));
+    ghost.classList.add('wg-ghost');
+    Object.assign(ghost.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
+    document.body.appendChild(ghost);
+    wg.replaceWith(ph);
+    document.body.classList.add('wg-dragging');
+    const ox = e.clientX - r.left, oy = e.clientY - r.top;
+    let x = e.clientX, y = e.clientY, raf = 0, moved = 0, retry = 0;
+    // рамка-место встаёт до или после блока под пальцем
+    const place = (now) => {
+      clearTimeout(retry);
+      // соседи только что подвинулись: не дёргаем их туда-обратно, а пробуем чуть позже
+      if (!now && performance.now() - moved < 130) { retry = setTimeout(() => place(false), 140); return; }
+      const t = document.elementFromPoint(x, y);
+      const over = t && t.closest('#wboard > .wg');
+      if (!over || over === ph) return;
+      const or = over.getBoundingClientRect();
+      const before = y < or.top + or.height / 2;
+      if (before ? over.previousElementSibling === ph : over.nextElementSibling === ph) return;
+      board.insertBefore(ph, before ? over : over.nextElementSibling);
+      moved = performance.now();
+    };
+    const tick = () => {
+      raf = 0;
+      ghost.style.left = x - ox + 'px'; ghost.style.top = y - oy + 'px';
+      const edge = 70;
+      if (y < edge || y > innerHeight - edge) { scrollBy(0, y < edge ? -14 : 14); raf = requestAnimationFrame(tick); }
+      place(false);
+    };
+    const move = (ev) => { x = ev.clientX; y = ev.clientY; if (!raf) raf = requestAnimationFrame(tick); };
+    const up = () => {
+      removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
+      cancelAnimationFrame(raf);
+      place(true);
+      ph.replaceWith(wg); ghost.remove();
+      document.body.classList.remove('wg-dragging');
+      if (wgRO) wgRO.observe(wg);
+      spanOf(wg);
+      saveOrder(p, board);
+      wg.querySelector('.wg-move').focus({ preventScroll: true });
+    };
+    addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+  }
+  function onWgClick(e, p) {
+    const b = e.target.closest('[data-wga]');
+    if (!b) return;
+    const wg = b.closest('.wg'), k = wg.dataset.wg, L = p.layout, a = b.dataset.wga;
+    if (a === 'eye') {
+      const on = !secOn(p, k);
+      L.sections = { ...(L.sections || {}), [k]: on };
+      wg.toggleAttribute('data-off', !on);
+      b.innerHTML = on ? WIC.eye : WIC.eyeOff;
+      b.setAttribute('aria-pressed', String(!on));
+      b.title = on ? 'Скрыть блок' : 'Показать блок';
+      saveLayout(p, true);
+    } else if (a === 'size') {
+      const opts = wgSizes(k), nx = opts[(opts.indexOf(wgSize(p, k)) + 1) % opts.length];
+      L.size = { ...(L.size || {}), [k]: nx };
+      wg.dataset.size = nx;
+      b.textContent = SZ_LABEL[nx];
+      b.title = `Размер: ${SZ_WORD[nx]}. Нажми, чтобы сменить`;
+      saveLayout(p, true);
+    } else if (a === 'scedit') openScForm(p, k.slice(3));
+    else if (a === 'scdel') {
+      L.showcases = (L.showcases || []).filter((x) => 'sc:' + x.id !== k);
+      saveLayout(p);
+      toast('Витрина удалена');
+    }
+  }
+  function wireTitles(p) {
+    const row = $('#titlesRow'), pop = $('#titlePop');
+    if (!row) return;
+    const shownIds = () => titlesShown(p, titleCatalog(p, p.ratings)).map((t) => t.id);
+    const setSel = (ids) => { p.layout.titles = ids.slice(0, TITLE_MAX); saveLayout(p); };
+    row.addEventListener('click', (e) => {
+      const x = e.target.closest('[data-tx]');
+      if (x) { setSel(shownIds().filter((id) => id !== x.dataset.tx)); return; }
+      const add = e.target.closest('#titleAdd');
+      if (add) { tpOpen = !tpOpen; pop.hidden = !tpOpen; add.setAttribute('aria-expanded', String(tpOpen)); return; }
+      if (e.target.closest('#titleEye')) { p.layout.sections = { ...(p.layout.sections || {}), titles: !secOn(p, 'titles') }; saveLayout(p); }
+    });
+    pop.addEventListener('click', (e) => {
+      const o = e.target.closest('[data-tadd]');
+      if (!o) return;
+      const sel = shownIds(), id = o.dataset.tadd;
+      if (sel.includes(id)) setSel(sel.filter((x) => x !== id));
+      else if (sel.length >= TITLE_MAX) toast(`Можно выбрать до ${TITLE_MAX} званий: сначала убери одно`);
+      else setSel([...sel, id]);
+    });
+  }
+  function wireBoard(p) {
+    const board = $('#wboard');
+    if (!board) return;
+    sizeBoard(board);
+    if (!EDIT) return;
+    board.addEventListener('click', (e) => onWgClick(e, p));
+    board.addEventListener('pointerdown', (e) => { const h = e.target.closest('.wg-move'); if (h && (e.button === 0 || e.pointerType !== 'mouse')) startDrag(e, h.closest('.wg'), p); });
+    // ✥ со стрелками: блок на место раньше или позже
+    board.addEventListener('keydown', (e) => {
+      const h = e.target.closest('.wg-move');
+      if (!h) return;
+      const back = e.key === 'ArrowUp' || e.key === 'ArrowLeft', fwd = e.key === 'ArrowDown' || e.key === 'ArrowRight';
+      if (!back && !fwd) return;
+      e.preventDefault();
+      const wg = h.closest('.wg');
+      if (back && wg.previousElementSibling) wg.previousElementSibling.before(wg);
+      else if (fwd && wg.nextElementSibling) wg.nextElementSibling.after(wg);
+      else return;
+      h.focus({ preventScroll: true });
+      saveOrder(p, board);
+    });
+    $('#edBar').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-ed]');
+      if (!b) return;
+      if (b.dataset.ed === 'add') { openScForm(p, null); return; }
+      EDIT = false; tpOpen = false;
+      render(p);
+      toast('Готово: профиль сохранён');
+    });
+    wireTitles(p);
+  }
+  // Esc: сначала закрывает список званий, потом выходит из редактирования (если не открыто окно поверх)
+  document.addEventListener('keydown', (e) => {
+    if (e.key !== 'Escape' || !EDIT || !curP || document.querySelector('.st-pick:not([hidden])')) return;
+    if (tpOpen) tpOpen = false; else EDIT = false;
+    render(curP);
+  });
 
   // ---------- отдельная страница «Все оценки» (/profile/?all=1): список, плитка, тир-лист или подробно ----------
   const ALL = new URLSearchParams(location.search).has('all');
@@ -635,41 +871,182 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     if (!fullPhotoCache.has(k)) fullPhotoCache.set(k, api(`/photo/${encodeURIComponent(p.uid)}/${encodeURIComponent(r.id)}`).then((d) => d.data || null, () => null));
     return fullPhotoCache.get(k);
   };
-  let curP = null, rdBox = null, rdBack = null;
+  // ---------- быстрая правка своей оценки прямо в карточке: баллы, плюсы, минусы, заметка ----------
+  const RKEY = 'ocenshik.ratings.v2';
+  // править можно свою оценку, которая лежит в этом браузере (Мнение здесь уже открывали)
+  const ownDoc = (p, id) => (p.kind === 'me' && (read(RKEY) || []).find((x) => x && x.id === id && !x.example && (!user || !x.author || x.author.id === user.id))) || null;
+  const round1 = (x) => Math.round(x * 10) / 10;
+  // итог — как в Мнении: среднее поставленных баллов с весами критериев
+  const totalOf = (scores) => {
+    let sum = 0, wSum = 0;
+    for (const s of scores) { if (!(s.v > 0)) continue; const w = typeof s.w === 'number' && s.w > 0 ? s.w : 1; sum += s.v * w; wSum += w; }
+    return wSum ? round1(sum / wSum) : null;
+  };
+  // оценка для сервера — в том же виде, что шлёт Мнение (friends.js): фото-файл отпечатком, фото-ссылка как есть
+  const fpOf = (s) => { let h = 0x811c9dc5; for (let i = 0; i < s.length; i += 7) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(36) + '.' + s.length.toString(36); };
+  const shelfCopy = (r) => {
+    const c = Object.assign({}, r), ph = r.photo;
+    const d = ph && typeof ph.data === 'string' && ph.data.startsWith('data:image/') ? ph.data : ph && typeof ph.id === 'string' && ph.id.startsWith('data:image/') ? ph.id : '';
+    const u = ph && (ph.url || ph.id);
+    const link = typeof u === 'string' && /^https:\/\//.test(u) && u.length < 2000 ? u : '';
+    c.photo = d ? { remote: fpOf(d), w: ph.w || 0, h: ph.h || 0 } : link ? { url: link, w: ph.w || 0, h: ph.h || 0 } : undefined;
+    if (!c.photo) delete c.photo;
+    delete c.hist; delete c.history;
+    const cs = read('ocenshik.cats.v2');
+    const cat = (Array.isArray(cs) ? cs : (cs && cs.items) || []).find((x) => x && x.id === r.cat);
+    c.catLabel = (cat && String(cat.name || '').trim()) || r.catName || r.catLabel || 'Без категории';
+    return c;
+  };
+  const pushOwn = (p, doc) => (token && p.uid ? send('PUT', '/shelf', { ratings: [shelfCopy(doc)] }).then(() => true, () => false) : Promise.resolve(null));
+  const RD_IC = {
+    edit: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>',
+    star: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8-4.3-4.1 5.9-.9z"/></svg>',
+    link: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></svg>',
+    share: '<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4"/><path d="M8 8l4-4 4 4"/><path d="M5 13v5.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V13"/></svg>',
+  };
+  let curP = null, rdBox = null, rdBack = null, rdCur = null, rdEd = null;
+  function rdReplace(p, nr) {
+    for (const arr of [p.allRatings, p.ratings]) { const k = arr ? arr.findIndex((x) => x.id === nr.id) : -1; if (k >= 0) arr[k] = nr; }
+  }
+  // правка оценки в браузере: сохраняем, перерисовываем профиль и карточку, отправляем в аккаунт
+  function rdCommit(p, doc, msg) {
+    const all = read(RKEY) || [];
+    const k = all.findIndex((x) => x && x.id === doc.id);
+    if (k < 0) { toast('Эта оценка не нашлась в браузере. Поправь её в Мнении'); return; }
+    all[k] = doc;
+    try { localStorage.setItem(RKEY, JSON.stringify(all)); } catch (e) { toast('Браузер не дал сохранить: мало места'); return; }
+    const nr = norm(doc);
+    rdReplace(p, nr);
+    render(p);
+    openRating(p, nr);
+    pushOwn(p, doc).then((ok) => toast(ok === false ? msg + '. В аккаунт уйдёт, когда откроешь Мнение' : msg));
+  }
+  function rdSave() {
+    const { p, r } = rdCur;
+    const doc = ownDoc(p, r.id);
+    if (!doc || !rdEd) return;
+    const scores = (doc.scores || []).map((s, k) => Object.assign({}, s, { v: rdEd.v[k] != null ? rdEd.v[k] : s.v }));
+    const next = { pros: rdEd.pros.trim().slice(0, 1000), cons: rdEd.cons.trim().slice(0, 1000), note: rdEd.note.trim().slice(0, 4000) };
+    const same = scores.every((s, k) => (+s.v || 0) === (+doc.scores[k].v || 0)) && next.pros === (doc.pros || '') && next.cons === (doc.cons || '') && next.note === (doc.note || '');
+    rdEd = null;
+    if (same) { openRating(p, r); return; }
+    rdCommit(p, Object.assign(doc, next, { scores, total: totalOf(scores), updatedAt: new Date().toISOString() }), 'Оценка сохранена');
+  }
+  function rdFav() {
+    const { p, r } = rdCur;
+    const doc = ownDoc(p, r.id);
+    if (!doc) return;
+    doc.fav = !doc.fav; // как в Мнении: избранное не считается правкой оценки
+    rdCommit(p, doc, doc.fav ? '★ В избранном' : 'Убрано из избранного');
+  }
+  // ссылка на отзыв (страница /r/<код>): та же, что делает Мнение
+  async function rdLink(b) {
+    const { p, r } = rdCur;
+    b.disabled = true;
+    let id = '';
+    try { id = (await send('POST', '/share', { rid: r.id })).id; } catch (st) {
+      // оценка ещё не дошла до сервера: отправляем её и пробуем ещё раз
+      const doc = st === 404 && ownDoc(p, r.id);
+      if (doc) { try { await send('PUT', '/shelf', { ratings: [shelfCopy(doc)] }); id = (await send('POST', '/share', { rid: r.id })).id; } catch (e) {} }
+    }
+    b.disabled = false;
+    if (!id) { toast('Не получилось сделать ссылку, попробуй ещё раз'); return; }
+    const url = location.origin + '/r/' + id;
+    b.classList.add('on');
+    if (matchMedia('(pointer: coarse)').matches && navigator.share) {
+      try { await navigator.share({ title: r.name, url }); return; } catch (e) { if (e && e.name === 'AbortError') return; }
+    }
+    let ok = false;
+    try { await navigator.clipboard.writeText(url); ok = true; } catch (e) {}
+    toast(ok ? 'Ссылка на отзыв скопирована, отправь её кому хочешь' : url);
+  }
+  // нажатие на деление: балл; нажатие на последнее закрашенное — сброс
+  function rdCell(k, v) {
+    if (!rdEd) return;
+    rdEd.v[k] = rdEd.v[k] === v ? 0 : v;
+    const nv = rdEd.v[k];
+    const li = rdBox.querySelector(`.rd-crit li[data-k="${k}"]`);
+    if (li) {
+      li.dataset.tier = tierV(nv);
+      li.querySelector('.rd-ct span').textContent = nv || '—';
+      li.querySelectorAll('.rd-bar button').forEach((b, i) => { b.classList.toggle('on', i < nv); b.setAttribute('aria-pressed', String(i < nv)); });
+    }
+    const doc = ownDoc(rdCur.p, rdCur.r.id);
+    const t = totalOf(((doc && doc.scores) || []).map((s, i) => ({ v: rdEd.v[i], w: s.w })));
+    rdBox.querySelector('.rd-card').dataset.tier = tierT(t);
+    rdBox.querySelector('.rd-score b').textContent = t != null ? fmt(t) : '—';
+  }
   function openRating(p, r) {
     if (!rdBox) {
       rdBox = document.createElement('div');
       rdBox.className = 'st-pick rd-pick'; rdBox.hidden = true;
       rdBox.setAttribute('role', 'dialog'); rdBox.setAttribute('aria-modal', 'true'); rdBox.setAttribute('aria-labelledby', 'rdTitle');
       document.body.appendChild(rdBox);
-      rdBox.addEventListener('click', (e) => { if (e.target === rdBox || e.target.closest('[data-rd="close"]')) closeRating(); });
+      rdBox.addEventListener('click', (e) => {
+        // во время правки мимо карточки не закрываем: так не потерять поставленные баллы
+        if ((e.target === rdBox && !rdEd) || e.target.closest('[data-rd="close"]')) { closeRating(); return; }
+        const c = e.target.closest('.rd-bar.ed button');
+        if (c) { rdCell(+c.dataset.k, +c.dataset.v); return; }
+        const b = e.target.closest('button[data-rd]');
+        if (!b || !rdCur) return;
+        const act = b.dataset.rd;
+        if (act === 'edit') {
+          const doc = ownDoc(rdCur.p, rdCur.r.id);
+          if (!doc) return;
+          rdEd = { v: (doc.scores || []).map((s) => Math.max(0, Math.min(10, Math.round(+s.v || 0)))), pros: doc.pros || '', cons: doc.cons || '', note: doc.note || '' };
+          openRating(rdCur.p, rdCur.r);
+          const first = rdBox.querySelector('.rd-bar.ed button');
+          if (first) first.focus({ preventScroll: true });
+        } else if (act === 'cancel') { rdEd = null; openRating(rdCur.p, rdCur.r); }
+        else if (act === 'save') rdSave();
+        else if (act === 'fav') rdFav();
+        else if (act === 'link') rdLink(b);
+      });
+      rdBox.addEventListener('input', (e) => { const f = e.target.dataset && e.target.dataset.f; if (f && rdEd) rdEd[f] = e.target.value; });
       document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !rdBox.hidden) closeRating(); });
     }
-    rdBack = document.activeElement;
-    const word = r.total != null ? WORDS[Math.max(1, Math.min(10, Math.round(r.total)))] : 'Без балла';
+    if (rdBox.hidden) { rdBack = document.activeElement; rdEd = null; }
+    rdCur = { p, r };
+    const own = ownDoc(p, r.id);
+    const ed = own && rdEd;
+    const scores = ed ? (own.scores || []) : r.scores;
+    const total = ed ? totalOf(scores.map((s, k) => ({ v: rdEd.v[k], w: s.w }))) : r.total;
+    const word = total != null ? WORDS[Math.max(1, Math.min(10, Math.round(total)))] : 'Без балла';
     const n = r.scores.filter((s) => +s.v > 0).length;
     const pros = lines(r.pros), cons = lines(r.cons);
     const when = r.created || r.at;
-    rdBox.innerHTML = `<article class="rd-card" data-tier="${tierT(r.total)}">
+    const tools = !own ? '' : ed
+      ? `<div class="rd-tools"><span class="rd-hint">Нажми на деление, чтобы поставить балл. Ещё раз на последнее закрашенное — сбросить</span><span class="rd-tb"><button type="button" class="btn ghost" data-rd="cancel">Отмена</button><button type="button" class="btn primary" data-rd="save">Сохранить</button></span></div>`
+      : `<div class="rd-tools"><button type="button" class="btn primary rd-edit" data-rd="edit">${RD_IC.edit}Изменить</button><span class="rd-ib">
+        <button type="button" class="rd-i fav${r.fav ? ' on' : ''}" data-rd="fav" aria-pressed="${r.fav}" title="${r.fav ? 'Убрать из избранного' : 'В избранное'}" aria-label="${r.fav ? 'Убрать из избранного' : 'В избранное'}">${RD_IC.star}</button>
+        ${token && p.uid ? `<button type="button" class="rd-i" data-rd="link" title="Поделиться ссылкой: отзыв увидит кто угодно, даже без аккаунта" aria-label="Поделиться ссылкой">${RD_IC.link}</button>` : ''}
+        <a class="rd-i" href="/mnenie/#r=${encodeURIComponent(r.id)}&amp;share=1" title="Картинка или текст: откроется в Мнении" aria-label="Картинка или текст">${RD_IC.share}</a></span></div>`;
+    rdBox.innerHTML = `<article class="rd-card${ed ? ' editing' : ''}" data-tier="${tierT(total)}">
       <button type="button" class="st-x rd-x" data-rd="close" aria-label="Закрыть">✕</button>
       ${r.photo ? `<div class="rd-pic" id="rdPic"><span class="ltr">${letter(r.name)}</span>${lbm(r)}</div>` : ''}
       <div class="rd-top">
         <div class="rd-name"><span class="label">${esc(r.cat)}</span><h2 id="rdTitle">${r.fav ? `<span class="fav">${ICON.star}</span> ` : ''}${esc(r.name)}</h2>
           <p>${esc([word, n ? `${n} ${plural(n, 'критерий', 'критерия', 'критериев')}` : '', r.status, r.meta].filter(Boolean).join(' · '))}${r.lb ? ' <span class="lb-src">· <span class="lb-mark"><i></i><i></i><i></i></span>из Letterboxd</span>' : ''}</p></div>
-        <div class="rd-score"><b>${r.total != null ? fmt(r.total) : '—'}</b><small>из 10</small></div>
+        <div class="rd-score"><b>${total != null ? fmt(total) : '—'}</b><small>из 10</small></div>
       </div>
-      ${r.scores.length ? `<ul class="rd-crit">${r.scores.map((s) => { const v = Math.max(0, Math.min(10, Math.round(+s.v || 0))); return `<li data-tier="${tierV(v)}">
+      ${tools}
+      ${scores.length ? `<ul class="rd-crit">${scores.map((s, k) => { const v = ed ? rdEd.v[k] : Math.max(0, Math.min(10, Math.round(+s.v || 0))); return `<li data-tier="${tierV(v)}" data-k="${k}">
         <div class="rd-ct"><b>${esc(s.name)}${s.w && s.w !== 1 ? ` <small>×${String(s.w).replace('.', ',')}</small>` : ''}</b><span>${v || '—'}</span></div>
         ${s.desc ? `<small class="rd-desc">${esc(s.desc)}</small>` : ''}
-        <div class="rd-bar" aria-hidden="true">${Array.from({ length: 10 }, (_, i) => `<i${i < v ? ' class="on"' : ''}></i>`).join('')}</div>
+        ${ed ? `<div class="rd-bar ed" role="group" aria-label="${esc(s.name)}: балл">${Array.from({ length: 10 }, (_, i) => `<button type="button" data-k="${k}" data-v="${i + 1}"${i < v ? ' class="on"' : ''} aria-pressed="${i < v}" aria-label="${i + 1}"></button>`).join('')}</div>`
+          : `<div class="rd-bar" aria-hidden="true">${Array.from({ length: 10 }, (_, i) => `<i${i < v ? ' class="on"' : ''}></i>`).join('')}</div>`}
         ${s.note ? `<em>${esc(s.note)}</em>` : ''}</li>`; }).join('')}</ul>` : ''}
-      ${pros.length || cons.length ? `<div class="fr-pc">${pros.length ? `<div><span class="label">Плюсы</span><ul>${pros.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}${cons.length ? `<div><span class="label">Минусы</span><ul>${cons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}</div>` : ''}
-      ${r.text ? `<p class="fr-note">${esc(r.text)}</p>` : ''}
+      ${ed ? `<div class="rd-fields">
+        <label><span class="label">Плюсы</span><textarea data-f="pros" rows="2" maxlength="1000" placeholder="Каждый плюс с новой строки">${esc(rdEd.pros)}</textarea></label>
+        <label><span class="label">Минусы</span><textarea data-f="cons" rows="2" maxlength="1000" placeholder="Каждый минус с новой строки">${esc(rdEd.cons)}</textarea></label>
+        <label><span class="label">Заметка</span><textarea data-f="note" rows="3" maxlength="4000" placeholder="Что думаешь в целом">${esc(rdEd.note)}</textarea></label></div>`
+      : `${pros.length || cons.length ? `<div class="fr-pc">${pros.length ? `<div><span class="label">Плюсы</span><ul>${pros.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}${cons.length ? `<div><span class="label">Минусы</span><ul>${cons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}</div>` : ''}
+      ${r.text ? `<p class="fr-note">${esc(r.text)}</p>` : ''}`}
       <div class="rd-foot"><span>${when ? dayFmt(when) : ''}</span><a class="btn ghost" href="${rateLink(p, r)}">Открыть в Мнении</a></div>
-      ${p.uid && token ? '<div class="rd-cm" id="rdComments"></div>' : ''}
+      ${p.uid && token && !ed ? '<div class="rd-cm" id="rdComments"></div>' : ''}
     </article>`;
     // ветка комментариев под оценкой: та же, что в Мнении у этой оценки
-    if (p.uid && token && window.CasualComments) window.CasualComments.mount(rdBox.querySelector('#rdComments'), { uid: p.uid, target: 'r.' + r.id, token, title: 'Комментарии к оценке', placeholder: 'Что думаешь об этой оценке?' });
+    if (p.uid && token && !ed && window.CasualComments) window.CasualComments.mount(rdBox.querySelector('#rdComments'), { uid: p.uid, target: 'r.' + r.id, token, title: 'Комментарии к оценке', placeholder: 'Что думаешь об этой оценке?' });
     rdBox.hidden = false;
     document.body.style.overflow = 'hidden';
     rdBox.querySelector('.rd-x').focus({ preventScroll: true });
@@ -684,6 +1061,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   function closeRating() {
     if (!rdBox) return;
     rdBox.hidden = true;
+    rdEd = null;
     document.body.style.overflow = '';
     if (rdBack && rdBack.isConnected) rdBack.focus({ preventScroll: true });
   }
@@ -710,8 +1088,10 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const hist = Array.from({ length: 10 }, (_, i) => rated.filter((r) => Math.min(10, Math.max(1, Math.round(r.total))) === i + 1).length);
     const hmax = Math.max(1, ...hist);
     const top3 = rated.slice().sort((a, b) => b.total - a.total || b.at - a.at).slice(0, 3);
-    let d = 0;
+    let d = 1; // 0 — у шапки, она появляется первой
     const isMe = p.kind === 'me';
+    if (!isMe) EDIT = false;
+    document.body.classList.toggle('prof-edit', EDIT);
     p.friendCount = p.kind === 'me' ? (p.friends ? p.friends.length : null) : p.friendCount;
     p.badges = user || p.kind !== 'me' ? badgesOf(p) : null;
     const ava = p.avatar && /^(data:image\/|https?:\/\/)/.test(p.avatar)
@@ -720,35 +1100,9 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     let i = 0;
     const nameHTML = calm ? esc(p.name) : [...p.name].map((c) => (c === ' ' ? ' ' : `<span class="ch" style="--i:${i++}">${esc(c)}</span>`)).join('');
 
-    app.innerHTML = `
-      <section class="card hero rise" style="--d:${d++}">
-        <div class="banner${p.banner ? '' : ' def'}" id="banner"${p.banner ? ` style="background-image:url('${esc(p.banner)}');background-position:${posOf(p.banner).x}% ${posOf(p.banner).y}%"` : ''}><span class="ban-blur top" aria-hidden="true"></span><span class="ban-blur bot" aria-hidden="true"></span>${isMe ? `<button type="button" class="ban-btn" id="banBtn" aria-expanded="false" aria-controls="banMenu"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="1.5" y="3" width="13" height="10" rx="2"/><circle cx="5.5" cy="6.5" r="1.3"/><path d="M14.5 11l-4-3.5-6 5.5"/></svg><span>Баннер</span></button>` : ''}</div>
-        ${isMe ? `<div class="ban-menu" id="banMenu" role="dialog" aria-label="Баннер профиля" hidden>
-          <span class="label">Своя картинка</span>
-          <label class="btn ghost ban-up">Загрузить картинку<input type="file" id="banFile" accept="image/*" class="vh"></label>
-          <p class="ban-hint">Лучше широкая, примерно 3 к 1. Картинку можно и просто перетащить на баннер.</p>
-          <span class="label">Готовые</span>
-          <div class="ban-presets" id="banPresets"></div>
-          ${token && p.uid ? '<span class="label">Прошлые баннеры</span><div class="hist-grid hg-ban" id="banHist"></div>' : ''}
-          <button type="button" class="btn ghost" id="banPos"${p.banner ? '' : ' hidden'}>Выбрать видимую часть</button>
-          <button type="button" class="btn ghost" id="banRemove"${p.banner ? '' : ' hidden'}>Убрать баннер</button>
-          <p class="ban-msg" id="banMsg" role="status"></p>
-        </div>` : ''}
-        <div class="ava-wrap${isMe && user ? ' can' : ''}" id="avaWrap"${isMe && user ? ' role="button" tabindex="0" aria-label="Сменить аватар, можно и анимированный GIF" title="Сменить аватар"' : ''}><span class="ava-ring" aria-hidden="true"></span>${ava}${isMe && user ? `<span class="ava-edit" aria-hidden="true"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M2 5.5h2.5L6 3.5h4l1.5 2H14v7H2z"/><circle cx="8" cy="9" r="2.3"/></svg></span><input type="file" id="avaFile" accept="image/*" class="vh">` : ''}</div>
-        <div class="who">
-          <div class="name-row">${isMe && p.editingName
-            ? `<form class="name-edit" id="nameEditForm"><input id="profileNameInput" type="text" value="${esc(p.name)}" minlength="2" maxlength="24" aria-label="Ник"><button type="submit" class="btn primary">Сохранить</button><button type="button" class="btn ghost" id="profileNameCancel">Отмена</button></form>`
-            : `<h1 class="name" id="profileName" aria-label="${esc(p.name)}"${isMe ? ' role="button" tabindex="0" title="Нажми, чтобы изменить ник"' : ''}>${nameHTML}</h1>`}${isMe && !p.editingName ? `<button type="button" class="name-ic" id="profileEditBtn" title="Изменить ник" aria-label="Изменить ник">${ICON_PEN}</button>` : ''}${!isMe && p.uid && token ? bellHTML(p.followed) : ''}${stickerSlot(p)}</div>
-          <p class="sub">${esc(p.sub)}</p>
-          ${!isMe && p.uid ? `<p class="sub" data-seen="${esc(p.uid)}" data-last="${+p.lastSeen || ''}"></p>` : ''}
-          <div class="titles"${hid(p, 'titles')}>${titlesOf(rs).map((t) => `<span class="title-chip" data-tier="${t.tier}"><i></i>${esc(t.t)}</span>`).join('')}</div>
-          <div class="hero-acts">${isMe
-            ? `<a class="btn primary" href="/mnenie/">Оценить что-нибудь</a><button type="button" class="btn ghost ic-btn" id="layoutBtn" title="Витрины и блоки: что показывать в профиле" aria-label="Витрины и блоки">${ICON_LAYOUT}</button>`
-            : `<a class="btn ghost" href="/profile/">Мой профиль</a>${p.common && p.common.length ? '<a class="btn primary" href="#taste">Сравнить вкусы</a>' : ''}`}</div>
-        </div>
-      </section>
-
-      <div class="stats"${hid(p, 'stats')}>
+    // ---------- блоки профиля: каждый — виджет на сетке; порядок, размер и видимость выбирает хозяин ----------
+    const W = {};
+    W.stats = `<div class="stats">
         <button type="button" class="stat rise" data-jump="allSec" style="--d:${d++}"><b data-count="${rs.length}">${rs.length}</b><span>${plural(rs.length, 'оценка', 'оценки', 'оценок')}</span></button>
         <div class="stat tiered rise" data-tier="${tierT(avg)}" style="--d:${d++}"><b>${avg != null ? fmt(avg) : '—'}</b><span>средний балл</span></div>
         <button type="button" class="stat rise" data-jump="best" style="--d:${d++}"><b data-count="${masters}">${masters}</b><span>${plural(masters, 'шедевр', 'шедевра', 'шедевров')} 8,5+</span></button>
@@ -756,21 +1110,16 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         ${p.common
           ? `<button type="button" class="stat rise" data-jump="taste" style="--d:${d++}"><b data-count="${p.common.length}">${p.common.length}</b><span>${plural(p.common.length, 'общая оценка', 'общие оценки', 'общих оценок')}</span></button>`
           : `<button type="button" class="stat rise" data-jump="friendsSec" style="--d:${d++}"><b>${p.friends ? `<span data-count="${p.friends.length}">${p.friends.length}</span>` : '—'}</b><span>${p.friends ? plural(p.friends.length, 'друг', 'друга', 'друзей') : 'друзья'}</span></button>`}
-      </div>
-
-      ${showcasesHTML(p, d)}
-
-      <div class="grid">
-        <div class="col">
-          ${top3.length && secOn(p, 'podium') ? `<section class="card rise" style="--d:${d++}">
+      </div>`;
+    ((p.layout && p.layout.showcases) || []).forEach((sc) => { const h = showcaseHTML(p, sc, d++); if (h) W['sc:' + sc.id] = h; });
+    if (top3.length) W.podium = `<section class="card rise" style="--d:${d++}">
             <div class="head"><h2 class="h2">Любимое</h2><span class="label">топ по баллу</span></div>
             <div class="podium">${top3.map((r, k) => `<a class="pod p${k + 1}" href="${rateLink(p, r)}" title="Открыть оценку «${esc(r.name)}»" data-tier="${tierT(r.total)}">
               <div class="pic" data-photo="${r.photo ? esc(r.id) : ''}"><span class="place">${k + 1}</span><span class="ltr">${letter(r.name)}</span>${lbm(r)}</div>
               <strong>${esc(r.name)}</strong>
               <div class="row"><small>${esc(r.cat)}</small>${badge(r.total)}</div></a>`).join('')}</div>
-          </section>` : ''}
-
-          <section class="card rise" id="allSec"${hid(p, 'all')} style="--d:${d++}">
+          </section>`;
+    W.all = `<section class="card rise" id="allSec" style="--d:${d++}">
             <div class="head"><h2 class="h2">Все оценки</h2><span class="label" id="listStat"></span>
               <div class="head-pill">${isMe && p.allRatings && p.allRatings.length ? `<button type="button" class="hp-btn hp-down" id="topicsBtn" aria-expanded="${ST.topics}" aria-controls="topics" title="Что показывать в профиле${p.hide && p.hide.length ? ` · скрыто тем: ${p.hide.length}` : ''}" aria-label="Что показывать в профиле"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>${p.hide && p.hide.length ? `<i class="hp-n">${p.hide.length}</i>` : ''}</button><span class="hp-sep" aria-hidden="true"></span>` : ''}<a class="hp-btn" href="${allHref(p)}" title="Открыть все оценки" aria-label="Открыть все оценки"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 4.5h6v6M11.5 4.5l-7 7"/></svg></a></div></div>
             ${isMe && p.allRatings && p.allRatings.length ? `<div class="topics" id="topics"${ST.topics ? '' : ' hidden'}>
@@ -789,42 +1138,69 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
             <div class="list" id="list"></div>
             <button type="button" class="btn ghost more" id="more" hidden>Показать ещё</button>`
             : `<div class="empty"><p class="muted"><strong>${isMe ? 'Тут появятся твои оценки.' : 'У друга пока нет оценок.'}</strong> ${isMe ? 'Оцени игру, фильм или любимую кофейню в Мнении Казуала, и профиль оживёт.' : 'Как только он что-нибудь оценит, оценки появятся здесь.'}</p>${isMe ? '<a class="btn primary" href="/mnenie/">Оценить первое</a>' : ''}</div>`}
-          </section>
-        </div>
-
-        <div class="col">
-          ${p.badges ? `<section class="card rise" id="badgesSec"${hid(p, 'badges')} style="--d:${d++}">
-            <div class="head"><h2 class="h2">Значки</h2><span class="label">${p.badges.filter((b) => b.got).length} из ${p.badges.length}</span></div>
-            ${(() => { const shown = p.badges.filter((b) => b.got).length + 4; return badgesHTML(p.badges.slice(0, shown)) + (p.badges.length > shown ? `<details class="bdg-more"><summary>Все значки · ещё ${p.badges.length - shown}</summary>${badgesHTML(p.badges.slice(shown))}</details>` : ''); })()}
-          </section>` : ''}
-          ${p.common ? `<section class="card rise" id="taste" style="--d:${d++}">
+          </section>`;
+    if (p.badges) {
+      const got = p.badges.filter((b) => b.got).length, pc = Math.round((got / Math.max(1, p.badges.length)) * 100), shown = got + 4;
+      W.badges = `<section class="card rise" id="badgesSec" style="--d:${d++}">
+            <div class="head"><h2 class="h2">Ачивки</h2><span class="label">${got} из ${p.badges.length}</span></div>
+            <div class="ach-sum" role="img" aria-label="Открыто ${pc}% ачивок"><span class="tr"><i style="width:${pc}%"></i></span><b>${pc}%</b></div>
+            ${badgesHTML(p.badges.slice(0, shown))}${p.badges.length > shown ? `<details class="bdg-more"><summary>Все ачивки · ещё ${p.badges.length - shown}</summary>${badgesHTML(p.badges.slice(shown))}</details>` : ''}
+          </section>`;
+    }
+    if (p.common) W.taste = `<section class="card rise" id="taste" style="--d:${d++}">
             <div class="head"><h2 class="h2">Вкусы</h2><span class="label">ты и ${esc(p.name)}</span></div>
             ${p.common.length ? `<div class="match"><div class="ring" data-tier="${tierT(p.match / 10)}" style="--p:${p.match}"><b>${p.match}%</b></div>
               <p class="muted">${p.match >= 80 ? 'Вы смотрите на мир почти одинаково.' : p.match >= 60 ? 'Во многом сходитесь, но есть о чём поспорить.' : 'Вкусы расходятся: отличный повод для спора.'} Общих оценок: <b>${p.common.length}</b>.</p></div>
               <div class="cmp-head"><span>Что</span><span>ты</span><span>${esc([...p.name][0] || '')}</span><span></span></div>
               <div class="cmp">${p.common.slice(0, 12).map((c) => `<div class="cmp-row"><span title="${esc(c.name)}">${esc(c.name)}</span>${badge(c.mine)}${badge(c.theirs)}<em>${c.diff ? (c.diff > 0 ? '+' : '') + fmt(c.diff) : '='}</em></div>`).join('')}</div>`
               : '<p class="muted">Общих оценок пока нет. Оцените одно и то же, и здесь появится, насколько совпадают ваши вкусы.</p>'}
-          </section>` : ''}
-
-          ${p.friends ? `<section class="card rise"${hid(p, 'friends')} style="--d:${d++}">
+          </section>`;
+    if (p.friends || isMe) W.friends = p.friends ? `<section class="card rise" style="--d:${d++}">
             <div class="head" id="friendsSec"><h2 class="h2">Друзья</h2><span class="label">${p.friends.length}</span></div>
             ${p.friends.length ? `<div class="frs">${p.friends.map((f) => `<a class="fr" href="/profile/?id=${encodeURIComponent(f.id)}">
                 <span class="av" data-uid="${esc(f.id)}" style="background-color:${colorOf(f.username)}">${letter(f.username)}</span>
                 <span class="tx"><b>${esc(f.username)} <i class="on-dot" data-on="${esc(f.id)}" data-last="${+f.lastSeen || ''}"></i></b><small><span data-seen="${esc(f.id)}" data-last="${+f.lastSeen || ''}" data-post=" · "></span>${f.handle ? '@' + esc(f.handle) : ''}${isMe ? `${f.handle ? ' · ' : ''}${f.updatedAt ? 'оценки обновлены ' + ago(f.updatedAt) : 'оценок пока нет'}` : ''}</small></span>${ICON.go}</a>`).join('')}</div>`
               : `<p class="muted">${isMe ? 'Пока никого. Добавить друга можно кнопкой «Друзья» в меню вверху.' : 'Пока никого.'}</p>`}
             ${p.incoming ? `<p class="note">${p.incoming} ${plural(p.incoming, 'заявка', 'заявки', 'заявок')} в друзья ${plural(p.incoming, 'ждёт', 'ждут', 'ждут')} ответа. <a href="/mnenie/">Открыть в Мнении</a></p>` : ''}
-          </section>` : (isMe ? `<section class="card rise"${hid(p, 'friends')} style="--d:${d++}"><div class="head"><h2 class="h2">Друзья</h2></div><p class="muted">${esc(p.friendsHint || '')}</p></section>` : '')}
-
-          ${cats.size ? `<section class="card rise"${hid(p, 'hist')} style="--d:${d++}">
+          </section>` : (isMe ? `<section class="card rise" style="--d:${d++}"><div class="head"><h2 class="h2">Друзья</h2></div><p class="muted">${esc(p.friendsHint || '')}</p></section>` : '');
+    if (cats.size) { W.hist = `<section class="card rise" style="--d:${d++}">
             <div class="head"><h2 class="h2">Оценки 1–10</h2><span class="label">${rated.length} с баллом</span></div>
             <div class="hist">${hist.map((n, k) => `<div data-tier="${tierV(k + 1)}"><span class="bar${n ? '' : ' zero'}" style="height:${n ? Math.max(6, (n / hmax) * 100) : 3}%;--d:${k}"></span><small>${n || ''}</small><em>${k + 1}</em></div>`).join('')}</div>
-          </section>
-          <section class="card rise" id="catsSec"${hid(p, 'cats')} style="--d:${d++}">
+          </section>`; W.cats = `<section class="card rise" id="catsSec" style="--d:${d++}">
             <div class="head"><h2 class="h2">Категории</h2></div>
             <div class="catl">${[...cats.entries()].sort((a, b) => b[1].n - a[1].n).map(([name, c]) => { const av = c.k ? c.sum / c.k : null; return `<button type="button" class="cat" data-catgo="${esc(name)}" title="Показать оценки «${esc(name)}»"><b>${esc(name)}</b><small>${c.n} · ${av != null ? 'в среднем ' + fmt(av) : 'без балла'}</small><span class="tr" data-tier="${tierT(av)}"><i style="width:${(c.n / rs.length) * 100}%"></i></span></button>`; }).join('')}</div>
-          </section>` : ''}
+          </section>`; }
+
+    app.innerHTML = `
+      <section class="card hero rise" style="--d:0">
+        <div class="banner${p.banner ? '' : ' def'}" id="banner"${p.banner ? ` style="background-image:url('${esc(p.banner)}');background-position:${posOf(p.banner).x}% ${posOf(p.banner).y}%"` : ''}><span class="ban-blur top" aria-hidden="true"></span><span class="ban-blur bot" aria-hidden="true"></span>${isMe ? `<button type="button" class="ban-btn" id="banBtn" aria-expanded="false" aria-controls="banMenu"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="1.5" y="3" width="13" height="10" rx="2"/><circle cx="5.5" cy="6.5" r="1.3"/><path d="M14.5 11l-4-3.5-6 5.5"/></svg><span>Баннер</span></button>` : ''}</div>
+        ${isMe ? `<div class="ban-menu" id="banMenu" role="dialog" aria-label="Баннер профиля" hidden>
+          <span class="label">Своя картинка</span>
+          <label class="btn ghost ban-up">Загрузить картинку<input type="file" id="banFile" accept="image/*" class="vh"></label>
+          <p class="ban-hint">Лучше широкая, примерно 3 к 1. Картинку можно и просто перетащить на баннер.</p>
+          <span class="label">Готовые</span>
+          <div class="ban-presets" id="banPresets"></div>
+          ${token && p.uid ? '<span class="label">Прошлые баннеры</span><div class="hist-grid hg-ban" id="banHist"></div>' : ''}
+          <button type="button" class="btn ghost" id="banPos"${p.banner ? '' : ' hidden'}>Выбрать видимую часть</button>
+          <button type="button" class="btn ghost" id="banRemove"${p.banner ? '' : ' hidden'}>Убрать баннер</button>
+          <p class="ban-msg" id="banMsg" role="status"></p>
+        </div>` : ''}
+        <div class="ava-wrap${isMe && user ? ' can' : ''}" id="avaWrap"${isMe && user ? ' role="button" tabindex="0" aria-label="Сменить аватар, можно и анимированный GIF" title="Сменить аватар"' : ''}><span class="ava-ring" aria-hidden="true"></span>${ava}${isMe && user ? `<span class="ava-edit" aria-hidden="true"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M2 5.5h2.5L6 3.5h4l1.5 2H14v7H2z"/><circle cx="8" cy="9" r="2.3"/></svg></span><input type="file" id="avaFile" accept="image/*" class="vh">` : ''}</div>
+        <div class="who">
+          <div class="name-row">${isMe && p.editingName
+            ? `<form class="name-edit" id="nameEditForm"><input id="profileNameInput" type="text" value="${esc(p.name)}" minlength="2" maxlength="24" aria-label="Ник"><button type="submit" class="btn primary">Сохранить</button><button type="button" class="btn ghost" id="profileNameCancel">Отмена</button></form>`
+            : `<h1 class="name" id="profileName" aria-label="${esc(p.name)}"${isMe ? ' role="button" tabindex="0" title="Нажми, чтобы изменить ник"' : ''}>${nameHTML}</h1>`}${!isMe && p.uid && token ? bellHTML(p.followed) : ''}${stickerSlot(p)}</div>
+          <p class="sub">${esc(p.sub)}</p>
+          ${!isMe && p.uid ? `<p class="sub" data-seen="${esc(p.uid)}" data-last="${+p.lastSeen || ''}"></p>` : ''}
+          ${titlesRowHTML(p, rs)}
+          <div class="hero-acts">${isMe
+            ? `<a class="btn primary" href="/mnenie/">Оценить что-нибудь</a><button type="button" class="btn ghost ic-btn" id="layoutBtn" aria-pressed="${EDIT}" title="${EDIT ? 'Закончить редактирование' : 'Редактировать профиль: блоки, витрины, звания'}" aria-label="Редактировать профиль">${ICON_LAYOUT}</button>`
+            : `<a class="btn ghost" href="/profile/">Мой профиль</a>${p.common && p.common.length ? '<a class="btn primary" href="#taste">Сравнить вкусы</a>' : ''}`}</div>
         </div>
-      </div>
+      </section>
+
+      <div class="wboard" id="wboard">${wgOrder(p, Object.keys(W)).map((k) => wgHTML(p, k, W[k])).join('')}</div>
+      ${EDIT ? editBarHTML(p) : ''}
       ${p.uid && token ? `<section class="card rise wall" id="wallSec" style="--d:${d++}" aria-label="Комментарии в профиле"></section>` : ''}`;
 
     // стена профиля в самом низу, как в Steam: пишут хозяин и его друзья
@@ -835,7 +1211,17 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     });
     if (rs.length) wireList(p);
     wireJumps(p);
-    if (isMe) { const lb = $('#layoutBtn'); if (lb) lb.addEventListener('click', () => layoutEditor(p)); wireProfileName(p); }
+    if (isMe) {
+      const lb = $('#layoutBtn');
+      if (lb) lb.addEventListener('click', () => {
+        EDIT = !EDIT; tpOpen = false;
+        if (!p.layout) p.layout = { showcases: [], sections: {}, at: 0 };
+        render(p);
+        if (!EDIT) toast('Готово: профиль сохранён');
+      });
+      wireProfileName(p);
+    }
+    wireBoard(p);
     const fb = $('#followBtn');
     if (fb) fb.addEventListener('click', () => toggleFollow(p, fb));
     if (isMe) { wireBanner(p); wireAvatar(p); wireTopics(p); const sb = $('#stBtn'); if (sb) sb.addEventListener('click', () => stickerPicker(p)); }
@@ -866,7 +1252,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         const to = j.dataset.jump;
         if (to === 'best') { ST.sort = 'score'; ST.cat = 'all'; ST.limit = 24; render(p); }
         const target = document.getElementById(to === 'best' ? 'allSec' : to);
-        if ((!target || target.hidden) && (to === 'best' || to === 'allSec' || to === 'catsSec')) { location.href = allHref(p); return; }
+        if ((!target || !target.offsetParent) && (to === 'best' || to === 'allSec' || to === 'catsSec')) { location.href = allHref(p); return; }
         jumpTo(target);
         return;
       }
@@ -1325,9 +1711,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       input.select();
       return;
     }
-    const edit = $('#profileEditBtn');
     const start = () => { p.editingName = true; render(p); };
-    if (edit) edit.addEventListener('click', start);
     if (name) {
       name.addEventListener('click', start);
       name.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); start(); } });

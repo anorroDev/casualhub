@@ -321,6 +321,8 @@ a.user-pill { color: inherit; text-decoration: none; }
 .board-tools .genre-btn { height: 36px; padding: 0 12px; white-space: nowrap; }
 .genre-btn.on { border-color: var(--accent); color: var(--ink); }
 .genre-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
+.board-more-body .genre-chips { margin: 0; max-height: 168px; overflow: auto; }
+.board-more-body .genre-chips .chip-btn { height: 30px; padding: 0 10px; font-size: 13px; }
 .genre-chips[hidden] { display: none; }
 .genre-reset { opacity: .75; }
 .icon-seg button { width: 34px; padding: 0; display: grid; place-items: center; }
@@ -1000,6 +1002,16 @@ details[open] .chev { transform: rotate(180deg); }
 .e-note { margin-top: 14px; padding: 11px 13px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
 .e-note p { margin-top: 4px; font-size: 14px; white-space: pre-line; overflow-wrap: anywhere; }
 .e-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+.e-main-acts, .e-icons { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.e-icons { margin-left: auto; gap: 6px; }
+.btn.small.act-edit { padding: 0 16px; }
+.btn.act-del { background: color-mix(in srgb, var(--bad) 12%, var(--panel)); border-color: color-mix(in srgb, var(--bad) 45%, var(--line)); color: var(--bad-ink); }
+.btn.act-del:hover { background: color-mix(in srgb, var(--bad) 22%, var(--panel)); }
+.btn.small.ib { width: 36px; padding: 0; color: var(--ink-2); }
+.btn.ib:hover { color: var(--ink); border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.btn.ib.on { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: color-mix(in srgb, var(--accent) 14%, var(--panel)); }
+.btn.ib.fav.on { color: var(--mid); border-color: color-mix(in srgb, var(--mid) 55%, var(--line)); background: color-mix(in srgb, var(--mid) 14%, var(--panel)); }
+.btn.ib.fav.on path { fill: currentColor; }
 .confirm-q { flex: 1 1 100%; font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
 .no-match { margin-top: 16px; color: var(--ink-2); font-size: 14px; }
 @media (max-width: 440px) {
@@ -1139,6 +1151,7 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
   .seg button { height: 38px; padding: 0 12px; }
   .chip-btn { height: 38px; }
   .btn.small, .btn.text { height: 40px; }
+  .btn.small.ib { width: 40px; }
   .lg-add { height: 36px; }
   .opt { height: 40px; }
   .slider { height: 46px; }
@@ -1580,7 +1593,6 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
           </div>
           <a class="btn small ghost" id="allRatingsLink" href="/profile/?all=1" title="Все оценки на отдельной странице: список, плитка, тир-лист, подробно">Все оценки</a>
           <div class="board-tools">
-          <button type="button" class="btn small ghost genre-btn" id="genreBtn" aria-controls="genreChips" aria-expanded="false" hidden>🎭 Жанры</button>
           <details class="board-more" id="boardMore">
             <summary class="btn small ghost">Фильтры<b id="boardMoreHint"></b></summary>
             <div class="board-more-body">
@@ -1601,6 +1613,10 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
                   <button type="button" class="sub-chip" data-sfilter="bad" aria-pressed="false">до 5 слабые</button>
                 </div>
               </div>
+              <div id="genreSec" hidden>
+                <span class="label">Жанры</span>
+                <div class="chips genre-chips" id="genreChips" role="group" aria-label="Жанры"></div>
+              </div>
               <button type="button" class="btn small ghost" id="randomBtn">🎲 Случайная оценка</button>
             </div>
           </details>
@@ -1610,7 +1626,6 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
           </div>
           </div>
         </div>
-        <div class="chips genre-chips" id="genreChips" role="group" aria-label="Жанры" hidden></div>
         <div class="search" id="searchWrap" hidden>
           <input id="search" type="search" placeholder="Поиск по названию, тегам, заметкам или автору…" aria-label="Найти в рейтинге" autocomplete="off" enterkeyhint="search">
         </div>

@@ -60,6 +60,7 @@ function openAuthFromHash() {
     const id = q.get('r');
     for (let i = 0; i < 24 && !state.ratings.some(x => x.id === id); i++) await new Promise(r => setTimeout(r, 250));
     goToRating(id);
+    if (q.get('share')) { const r = state.ratings.find(x => x.id === id); if (r) openShare(exportFromRating(r)); }
     // страница ещё раскладывается после загрузки: доводим прокрутку до оценки ещё раз
     for (const ms of [700, 1400]) setTimeout(() => {
       const li = el.board.querySelector(`.entry[data-id="${CSS.escape(id)}"]`);

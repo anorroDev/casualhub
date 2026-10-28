@@ -93,6 +93,11 @@ const ICON = {
   trash: svg('<path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5"/>', 16),
   edit: svg('<path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/>', 16),
   share: svg('<path d="M12 15V4"/><path d="M8 8l4-4 4 4"/><path d="M5 13v5.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V13"/>', 16),
+  shareLg: svg('<path d="M12 15V4"/><path d="M8 8l4-4 4 4"/><path d="M5 13v5.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V13"/>', 18),
+  star: svg('<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8-4.3-4.1 5.9-.9z"/>', 18),
+  link: svg('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>', 18),
+  unlink: svg('<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/><path d="M4 4l16 16"/>', 18),
+  scale: svg('<path d="M12 4v16M8 20h8M5 7h14"/><path d="M5 7l-2.5 6a2.5 2.5 0 0 0 5 0z"/><path d="M19 7l-2.5 6a2.5 2.5 0 0 0 5 0z"/>', 18),
   up: svg('<path d="M6 15l6-6 6 6"/>', 16, 2),
   down: svg('<path d="M6 9l6 6 6-6"/>', 16, 2),
   plus: svg('<path d="M12 5v14M5 12h14"/>', 15, 2),
@@ -1893,16 +1898,19 @@ function entryHTML(r, rank, showCat) {
   const shareOk = !r.example && !!window.CasualShare && window.CasualShare.ready() && (!r.author || !state.user || r.author.id === state.user.id);
   const shared = shareOk && window.CasualShare.has(r.id);
   const confirming = state.confirmDel === r.id;
+  // слева две главные кнопки (изменить и удалить), справа — значки: избранное, сравнение, ссылка, картинка
+  const ib = (act, icon, label, on, cls) => `<button type="button" class="btn small ghost ib${cls ? ' ' + cls : ''}${on ? ' on' : ''}" data-act="${act}" title="${label}" aria-label="${label}"${on != null ? ` aria-pressed="${!!on}"` : ''}>${icon}</button>`;
   const actions = confirming
     ? `<span class="confirm-q">Удалить «${esc(r.name)}» из рейтинга?</span><button type="button" class="btn small danger-solid" data-act="del-yes">Удалить</button><button type="button" class="btn small ghost" data-act="del-no">Отмена</button>`
-    : (state.canWrite ? `<button type="button" class="btn small ghost" data-act="edit">${ICON.edit}Изменить</button>` : '')
-      + (state.canWrite ? `<button type="button" class="btn small ghost" data-act="fav-card" title="В избранное">${r.fav ? '★ В избранном' : '☆ В избранное'}</button>` : '')
-      + `<button type="button" class="btn small ghost${inCmp ? ' primary' : ''}" data-act="cmp">${inCmp ? '⚖️ Выбрано' : '⚖️ Сравнить'}</button>`
+    : (state.canWrite ? `<span class="e-main-acts"><button type="button" class="btn small primary act-edit" data-act="edit">${ICON.edit}Изменить</button><button type="button" class="btn small act-del" data-act="del">${ICON.trash}Удалить</button></span>` : '')
+      + '<span class="e-icons">'
+      + (state.canWrite ? ib('fav-card', ICON.star, r.fav ? 'Убрать из избранного' : 'В избранное', r.fav, 'fav') : '')
+      + ib('cmp', ICON.scale, inCmp ? 'Выбрано для сравнения' : 'Сравнить', inCmp)
       + (shareOk ? (shared
-        ? `<button type="button" class="btn small ghost primary" data-act="link" title="Скопировать ссылку на отзыв">🔗 Скопировать ссылку</button><button type="button" class="btn small ghost" data-act="unlink" title="По ссылке отзыв больше не откроется">Закрыть ссылку</button>`
-        : `<button type="button" class="btn small ghost" data-act="link" title="Ссылка, по которой отзыв увидит кто угодно, даже без аккаунта">🔗 Поделиться ссылкой</button>`) : '')
-      + `<button type="button" class="btn small ghost" data-act="share">${ICON.share}Картинка или текст</button>`
-      + (state.canWrite ? `<button type="button" class="btn small ghost danger" data-act="del">${ICON.trash}Удалить</button>` : '');
+        ? ib('link', ICON.link, 'Скопировать ссылку на отзыв', true) + ib('unlink', ICON.unlink, 'Закрыть ссылку: по ней отзыв больше не откроется')
+        : ib('link', ICON.link, 'Поделиться ссылкой: отзыв увидит кто угодно, даже без аккаунта')) : '')
+      + ib('share', ICON.shareLg, 'Картинка или текст')
+      + '</span>';
   const pUrl = resolvePhotoUrl(r.photo);
   const aUrl = pUrl ? '' : artistAvaUrl(r);
   return `<li class="entry${state.flashId === r.id ? ' flash' : ''}" data-id="${esc(r.id)}">
@@ -2050,20 +2058,17 @@ function renderBoard() {
     const parts = [
       { date: 'новые', name: 'А–Я' }[state.sort],
       { master: '8.5+', good: '7.5+', mid: '5–7.4', bad: 'до 5' }[state.sfilter],
+      state.genres.length ? (state.genres.length === 1 ? state.genres[0] : 'жанров: ' + state.genres.length) : '',
     ].filter(Boolean);
     moreHint.textContent = parts.length ? ' · ' + parts.join(' · ') : '';
   }
   const catPool = state.filter === 'all' ? state.ratings : state.ratings.filter(r => catKey(r) === state.filter);
   const subPool = applySubFilter(catPool);
-  // кнопка «🎭 Жанры» и строка жанров под панелью рейтинга
-  const gBtn = document.getElementById('genreBtn'), gBox = document.getElementById('genreChips');
-  if (gBtn && gBox) {
+  // жанры — раздел в окне «Фильтры»
+  const gSec = document.getElementById('genreSec'), gBox = document.getElementById('genreChips');
+  if (gSec && gBox) {
     const g = genreChipsHTML(subPool);
-    gBtn.hidden = !g.any;
-    gBtn.setAttribute('aria-expanded', String(!!state.genreOpen));
-    gBtn.classList.toggle('on', state.genres.length > 0);
-    gBtn.textContent = '🎭 Жанры' + (state.genres.length ? ' · ' + state.genres.length : '');
-    gBox.hidden = !state.genreOpen || !g.any;
+    gSec.hidden = !g.any;
     gBox.innerHTML = g.html;
   }
   const pool = subPool.filter(hasGenres);
@@ -3456,9 +3461,9 @@ el.sortGroup.addEventListener('click', e => {
   syncSort(); savePrefs(); renderBoard();
 });
 {
-  const gBtn = document.getElementById('genreBtn'), gBox = document.getElementById('genreChips');
-  if (gBtn) gBtn.addEventListener('click', () => { state.genreOpen = !state.genreOpen; renderBoard(); });
-  if (gBox) gBox.addEventListener('click', e => { const b = e.target.closest('[data-genre]'); if (b) toggleGenre(b.dataset.genre); });
+  const gBox = document.getElementById('genreChips');
+  // окно «Фильтры» не закрывается: чипы перерисовываются, и щелчок иначе выглядел бы как щелчок мимо окна
+  if (gBox) gBox.addEventListener('click', e => { const b = e.target.closest('[data-genre]'); if (!b) return; e.stopPropagation(); toggleGenre(b.dataset.genre); });
 }
 el.filters.addEventListener('click', e => {
   const b = e.target.closest('button[data-filter]');

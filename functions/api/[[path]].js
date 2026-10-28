@@ -927,9 +927,19 @@ function cleanLayout(l) {
     ids: (Array.isArray(s.ids) ? s.ids : []).filter((id) => typeof id === 'string' && RID_RE.test(id)).slice(0, 10),
     style: s.style === 'list' ? 'list' : 'posters',
   }));
+  // блоки профиля: видимость, порядок и размер (витрины — ключи sc:<id>), выбранные звания
+  const WKEY = /^(stats|podium|all|badges|taste|friends|hist|cats|sc:[\w-]{1,40})$/;
   const sections = {};
-  if (l.sections && typeof l.sections === 'object') for (const k of LAYOUT_SECTIONS) if (typeof l.sections[k] === 'boolean') sections[k] = l.sections[k];
-  return { showcases, sections, at: +l.at };
+  if (l.sections && typeof l.sections === 'object') {
+    for (const k of LAYOUT_SECTIONS) if (typeof l.sections[k] === 'boolean') sections[k] = l.sections[k];
+    Object.keys(l.sections).filter((k) => /^sc:[\w-]{1,40}$/.test(k) && typeof l.sections[k] === 'boolean').slice(0, 12).forEach((k) => { sections[k] = l.sections[k]; });
+  }
+  const order = (Array.isArray(l.order) ? l.order : []).filter((k) => typeof k === 'string' && WKEY.test(k)).slice(0, 30);
+  const size = {};
+  if (l.size && typeof l.size === 'object') for (const [k, v] of Object.entries(l.size).slice(0, 30)) if (WKEY.test(k) && ['s', 'm', 'l', 'f'].includes(v)) size[k] = v;
+  const out = { showcases, sections, order, size, at: +l.at };
+  if (Array.isArray(l.titles)) out.titles = l.titles.filter((t) => typeof t === 'string' && /^[\w:-]{1,40}$/.test(t)).slice(0, 4);
+  return out;
 }
 const STICKER_RE = /^hub\/(?!.*\.\.)[\w\-\/.]{1,100}\.(png|gif|webp|webm|jpe?g)$/; // путь картинки из каталога колеса
 // 🔥 огонь, 💀 жесть, 🙅 не согласен, 😂 ору, 😍 обожаю, 👍 согласен, 👎 мимо, 🤔 спорно, 😭 до слёз, 🤡 клоунада, 🗿 база, 🐐 легенда

@@ -24,6 +24,10 @@
 /* в меню все пункты — строки одной ширины с подписью, даже если на телефоне в шапке они были круглыми значками */
 .hm-panel > a, .hm-panel > button, .hm-panel > span, .hm-panel .theme-pick > summary { width: 100% !important; min-width: 0 !important; height: auto !important; min-height: 40px; padding: 8px 12px !important; gap: 8px !important; border-radius: 11px !important; font-size: 13.5px !important; line-height: 1.2 !important; align-items: center; }
 .hm-t { margin-left: 2px; }
+.hm-panel > .hm-all { border: 1.5px solid transparent !important; background: linear-gradient(var(--panel, #1b1d24), var(--panel, #1b1d24)) padding-box, linear-gradient(120deg, var(--accent, #3550E8), #E85FA5 55%, #F5B942) border-box !important; color: var(--ink, #f3f4f6) !important; font-weight: 700 !important; min-height: 46px; margin-bottom: 4px !important; text-decoration: none; transition: box-shadow .2s, transform .2s; }
+.hm-panel > .hm-all:hover, .hm-panel > .hm-all:focus-visible { transform: translateY(-1px); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #3550E8) 20%, transparent), 0 10px 24px -14px #E85FA5; }
+.hm-all svg { color: var(--accent, #3550E8); flex: none; }
+.hm-all .hm-go { margin-left: auto; font-size: 18px; line-height: 1; opacity: .55; }
 /* на узком экране «Мнение» и «Колесо» — только значки, чтобы шапка помещалась в одну строку */
 @media (max-width: 480px) { .hm-nav .hm-t, .hm-nav .t, .hm-fr .fb-t { display: none !important; } .hm-nav, .hm-fr { padding: 0 11px !important; } }
 /* узкий телефон: «← Хаб» только стрелкой, чтобы «Друзья», профиль и ☰ поместились в одну строку */
@@ -174,6 +178,13 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     panel.appendChild(set);
     // одинаковый порядок пунктов на всех страницах
     ['#howtoBtn, .howto-btn', '.theme-pick', '.hm-set', 'a[href*="github.com"]'].forEach((sel) => { const el = panel.querySelector(`:scope > :is(${sel})`); if (el) panel.appendChild(el); });
+    // «Все оценки» — самый первый пункт, в цветной рамке
+    const all = document.createElement('a');
+    all.className = cls + ' hm-all';
+    all.href = '/profile/?all=1';
+    all.title = 'Все твои оценки: список, плитки и тир-лист';
+    all.innerHTML = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1.3"/><rect x="9" y="2" width="5" height="5" rx="1.3"/><rect x="2" y="9" width="5" height="5" rx="1.3"/><rect x="9" y="9" width="5" height="5" rx="1.3"/></svg><span class="hm-t">Все оценки</span><span class="hm-go" aria-hidden="true">›</span>';
+    panel.prepend(all);
 
     // «Что нового»: в самом углу страницы, на узком экране — в меню
     const wn = bar.querySelector('[data-whatsnew]');
