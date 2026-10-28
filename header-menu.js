@@ -3,7 +3,7 @@
    «Тема» и GitHub. «Что нового» на широком экране стоит в самом углу страницы, на узком — тоже в меню.
    Кнопки переносятся целиком, поэтому их обработчики и счётчики (online.js, whatsnew.js) продолжают работать. */
 (() => {
-  const MOVE = '[data-online-count], [data-friends-btn], #howtoBtn, .howto-btn, .theme-pick, a[href*="github.com"]';
+  const MOVE = '[data-friends-btn], #howtoBtn, .howto-btn, .theme-pick, a[href*="github.com"]';
   const css = document.createElement('style');
   css.textContent = `
 .hm-wrap { position: relative; display: inline-flex; flex: none; }
@@ -24,6 +24,12 @@
 /* в меню все пункты — строки одной ширины с подписью, даже если на телефоне в шапке они были круглыми значками */
 .hm-panel > a, .hm-panel > button, .hm-panel > span, .hm-panel .theme-pick > summary { width: 100% !important; min-width: 0 !important; height: auto !important; min-height: 40px; padding: 8px 12px !important; gap: 8px !important; border-radius: 11px !important; font-size: 13.5px !important; line-height: 1.2 !important; align-items: center; }
 .hm-t { margin-left: 2px; }
+/* на узком экране «Мнение» и «Колесо» — только значки, чтобы шапка помещалась в одну строку */
+@media (max-width: 480px) { .hm-nav .hm-t, .hm-nav .t { display: none !important; } .hm-nav { padding: 0 11px !important; } }
+/* сколько людей на сайте: слева в шапке, только кружок и число (подпись — во всплывающей подсказке) */
+.oc-mini { flex: none; min-width: 0 !important; padding: 0 11px !important; gap: 7px !important; }
+.oc-mini .oc-t { display: none !important; }
+header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
 .wn-corner { position: absolute; top: 14px; right: 16px; z-index: 60; }
 .wn-corner [data-whatsnew] { box-shadow: 0 10px 24px -14px rgba(0, 0, 0, .6); }
 `;
@@ -57,10 +63,25 @@
         a.innerHTML = ICON[href];
       }
       a.classList.remove('ic');
+      a.classList.add('hm-nav');
       if (!a.textContent.trim()) a.insertAdjacentHTML('beforeend', `<span class="hm-t">${NAMES[href]}</span>`);
       a.title = NAMES[href] + ' Казуала';
       if (account) bar.insertBefore(a, account); else bar.appendChild(a);
     });
+
+    // счётчик «на сайте» — слева: сразу после логотипа или кнопки главной
+    const oc = header.querySelector('[data-online-count]');
+    const home = header.querySelector('a[href="/"]');
+    if (oc) {
+      oc.classList.add('oc-mini');
+      if (home && home.parentElement) home.after(oc); else bar.prepend(oc);
+      // в Мнении и Колесе кнопку главной прижимает влево отступ справа от неё: переносим его на счётчик
+      if (home && home.parentElement === oc.parentElement && parseFloat(getComputedStyle(home).marginRight) > 24) {
+        home.style.marginRight = '0';
+        oc.style.marginRight = 'auto';
+        oc.style.marginLeft = '8px';
+      }
+    }
 
     // меню ☰
     const wrap = document.createElement('div');
@@ -76,7 +97,7 @@
       panel.appendChild(el);
     });
     // одинаковый порядок пунктов на всех страницах
-    ['[data-online-count]', '[data-friends-btn]', '#howtoBtn, .howto-btn', '.theme-pick', 'a[href*="github.com"]'].forEach((sel) => { const el = panel.querySelector(`:scope > :is(${sel})`); if (el) panel.appendChild(el); });
+    ['[data-friends-btn]', '#howtoBtn, .howto-btn', '.theme-pick', 'a[href*="github.com"]'].forEach((sel) => { const el = panel.querySelector(`:scope > :is(${sel})`); if (el) panel.appendChild(el); });
 
     // «Что нового»: в самом углу страницы, на узком экране — в меню
     const wn = bar.querySelector('[data-whatsnew]');
