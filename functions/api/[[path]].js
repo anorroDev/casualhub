@@ -534,6 +534,27 @@ const routes = {
     if (!type) return fail(502, 'Это не картинка.');
     return json({ data: `data:${type};base64,${b64(buf)}` });
   },
+  // картинка по ссылке для фото оценки: скачиваем сразу, чтобы фото не пропало, когда чужая ссылка протухнет
+  // или сайт запретит показывать картинку у нас. Браузер сам скачать не может: CORS чужих сайтов и наш CSP
+  async 'GET /fetch-img'({ request, me }) {
+    if (burst('fetchimg:' + me.id, 30, 60e3)) return tooMany(1);
+    let u;
+    try { u = new URL(new URL(request.url).searchParams.get('u') || ''); } catch (e) { return fail(400, 'Это не ссылка'); }
+    if (!/^https?:$/.test(u.protocol) || /^(localhost|[\d.]+|\[[\da-f:.]+\])$/i.test(u.hostname) || /\.(local|localhost|internal|lan|home)$/i.test(u.hostname)) {
+      return fail(400, 'Такую ссылку открыть нельзя');
+    }
+    let res;
+    try {
+      res = await fetch(u.href, { redirect: 'follow', headers: { 'user-agent': 'Mozilla/5.0 (compatible; CasualHub/1.0; +https://casualhub.pages.dev)', accept: 'image/avif,image/webp,image/*;q=0.9,*/*;q=0.5' } });
+    } catch (e) { return fail(502, 'Сайт с картинкой не ответил'); }
+    if (!res.ok) return fail(502, `Сайт с картинкой её не отдал (${res.status})`);
+    if (+res.headers.get('content-length') > 6e6) return fail(413, 'Картинка больше 6 МБ');
+    const buf = await res.arrayBuffer();
+    if (buf.byteLength > 6e6) return fail(413, 'Картинка больше 6 МБ');
+    const type = imageType(buf);
+    if (!type) return fail(415, 'По ссылке страница, а не картинка. Открой саму картинку и скопируй её адрес');
+    return json({ data: `data:${type};base64,${b64(buf)}` });
+  },
   // фото оценки: кладёт и удаляет хозяин, смотрят хозяин и друзья
   async 'PUT /photo/:rid'({ env, request, me, arg }) {
     if (burst('photo:' + me.id, 80, 60e3)) return tooMany(1);
@@ -743,6 +764,16 @@ async function geniusFetch(env, url, ttl) {
   copy.headers.set('cache-control', 'public, max-age=' + ttl);
   await cache.put(key, copy.clone());
   return copy;
+}
+// тип картинки по первым байтам (заголовкам чужих сайтов верить нельзя)
+function imageType(buf) {
+  const h = new Uint8Array(buf.slice(0, 16));
+  if (h[0] === 0xff && h[1] === 0xd8) return 'image/jpeg';
+  if (h[0] === 0x89 && h[1] === 0x50 && h[2] === 0x4e && h[3] === 0x47) return 'image/png';
+  if (h[0] === 0x47 && h[1] === 0x49 && h[2] === 0x46) return 'image/gif';
+  if (h[0] === 0x52 && h[1] === 0x49 && h[8] === 0x57 && h[9] === 0x45) return 'image/webp';
+  if (String.fromCharCode(...h.slice(4, 12)) === 'ftypavif') return 'image/avif';
+  return '';
 }
 const b64 = (buf) => {
   const u = new Uint8Array(buf);

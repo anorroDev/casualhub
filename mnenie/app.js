@@ -1708,7 +1708,7 @@ async function pickGenius(i) {
     if (!blob || !blob.size) {
       const r = await window.casualApi.get('/genius/img?u=' + encodeURIComponent(a.image));
       if (!r || typeof r.data !== 'string') throw new Error('img');
-      blob = await (await fetch(r.data)).blob();
+      blob = dataUrlToBlob(r.data);
     }
     const type = /^image\//.test(blob.type) ? blob.type : 'image/jpeg';
     const d = await artistAvaFromFile(new File([blob], 'artist.jpg', { type }));
@@ -3635,16 +3635,38 @@ function handleAssetError(e) {
   }[code];
   toast(msg || 'Фото не загрузилось. Попробуй ещё раз');
 }
+// data: и blob: читаем без fetch: CSP сайта (connect-src) запрещает fetch для таких адресов
+function dataUrlToBlob(d) {
+  const i = String(d || '').indexOf(',');
+  if (!d.startsWith('data:') || i < 0) return null;
+  const head = d.slice(5, i), body = d.slice(i + 1);
+  const bin = head.endsWith(';base64') ? atob(body) : decodeURIComponent(body);
+  const u = new Uint8Array(bin.length);
+  for (let k = 0; k < bin.length; k++) u[k] = bin.charCodeAt(k);
+  return new Blob([u], { type: head.split(';')[0] || 'application/octet-stream' });
+}
+function imgBitmap(src) {
+  return new Promise((res, rej) => {
+    const im = new Image();
+    im.onload = () => createImageBitmap(im).then(res, rej);
+    im.onerror = rej;
+    im.src = src;
+  });
+}
 async function loadPhotoBitmap(p) {
   try {
     let blob = p.kind === 'new' ? p.blob : null;
     if (!blob) {
       const src = p.data || (p.id && (p.id.startsWith('data:') || p.id.startsWith('blob:')) ? p.id : '/_blob/' + p.id);
-      const res = await fetch(src);
-      if (!res.ok) return null;
-      blob = await res.blob();
+      if (src.startsWith('data:')) blob = dataUrlToBlob(src);
+      else if (src.startsWith('blob:')) return await imgBitmap(src);
+      else {
+        const res = await fetch(src);
+        if (!res.ok) return null;
+        blob = await res.blob();
+      }
     }
-    return await createImageBitmap(blob);
+    return blob ? await createImageBitmap(blob) : null;
   } catch (_) {
     return null;
   }
@@ -3665,20 +3687,52 @@ el.photoBox.addEventListener('click', e => {
     renderPhoto();
     commitCrop();
   }
-  if (e.target.closest('button[data-act="photo-url-apply"]')) {
-    const inp = document.getElementById('photoUrlInput');
-    const url = inp ? inp.value.trim() : '';
-    if (!url || (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('data:image/'))) {
-      toast('Введи корректную ссылку на изображение (https://…)');
-      return;
-    }
+  if (e.target.closest('button[data-act="photo-url-apply"]')) applyPhotoUrl();
+});
+// Фото по ссылке: картинку сразу скачиваем (через наш сервер) и храним как своё фото.
+// Раньше в оценке оставалась только чужая ссылка, а такие ссылки (особенно скопированные на телефоне) часто
+// временные или запрещают показ на других сайтах, и фото через какое-то время пропадало.
+let urlPhotoBusy = false;
+async function applyPhotoUrl() {
+  const inp = document.getElementById('photoUrlInput');
+  const url = inp ? inp.value.trim() : '';
+  if (!url || (!/^https?:\/\//i.test(url) && !url.startsWith('data:image/'))) {
+    toast('Введи корректную ссылку на изображение (https://…)');
+    return;
+  }
+  if (urlPhotoBusy || photoBusy) return;
+  if (url.startsWith('data:image/')) {
+    const b = dataUrlToBlob(url);
+    if (b) await setPhotoFromFile(new File([b], 'photo', { type: b.type }), true);
+    return;
+  }
+  const api = window.casualApi;
+  if (!api || !api.online()) {
     revokeFormPhoto();
     form.photo = { kind: 'saved', id: url, data: url, w: 0, h: 0 };
     renderPhoto();
     scheduleDraft();
-    toast('Ссылка на обложку добавлена');
+    toast('Ссылка добавлена, но такие фото могут пропасть. Войди в аккаунт, и картинка по ссылке будет сохраняться целиком');
+    return;
   }
-});
+  urlPhotoBusy = true;
+  const btn = el.photoBox.querySelector('[data-act="photo-url-apply"]');
+  if (btn) { btn.disabled = true; btn.textContent = '…'; }
+  toast('Скачиваю картинку…');
+  try {
+    const r = await api.get('/fetch-img?u=' + encodeURIComponent(url));
+    const b = r && typeof r.data === 'string' ? dataUrlToBlob(r.data) : null;
+    if (!b) throw new Error('Картинка не загрузилась');
+    urlPhotoBusy = false;
+    await setPhotoFromFile(new File([b], 'photo', { type: b.type }), false);
+    if (form.photo) toast('Картинка сохранена, можно выбрать пропорции');
+  } catch (e) {
+    toast(`${e && e.message ? e.message.replace(/\.$/, '') : 'Картинка не загрузилась'}. Можно сохранить её на устройство и загрузить файлом`);
+  } finally {
+    urlPhotoBusy = false;
+    if (btn && btn.isConnected) { btn.disabled = false; btn.textContent = 'Ок'; }
+  }
+}
 const hasFiles = e => !!(e.dataTransfer && [...e.dataTransfer.types].includes('Files'));
 el.rater.addEventListener('dragover', e => {
   if (!canPhoto() || !hasFiles(e)) return;
