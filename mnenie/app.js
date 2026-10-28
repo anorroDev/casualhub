@@ -697,6 +697,7 @@ function renderAuthModal() {
           <button type="button" class="btn ghost small" id="btnExportBackup">💾 Скачать копию (JSON)</button>
           <label class="btn ghost small" for="fileImportBackup" style="cursor:pointer;">📥 Восстановить из файла</label>
           <input type="file" id="fileImportBackup" accept=".json" class="vh">
+          <button type="button" class="btn ghost small" data-lb-open>🎬 Импорт из Letterboxd</button>
         </div>
       </div>
     `;
@@ -862,6 +863,7 @@ function renderAuthModal() {
         <button type="button" class="btn ghost small" id="btnExportBackup">💾 Скачать базу (JSON)</button>
         <label class="btn ghost small" for="fileImportBackup" style="cursor:pointer;">📥 Загрузить базу</label>
         <input type="file" id="fileImportBackup" accept=".json" class="vh">
+        <button type="button" class="btn ghost small" data-lb-open>🎬 Импорт из Letterboxd</button>
       </div>
     </div>
   `;

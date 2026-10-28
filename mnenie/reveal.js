@@ -32,6 +32,12 @@ function openAuthFromHash() {
     Promise.resolve(ready).then(() => openAuthModal(tab === 'profile' ? (state.user ? 'edit' : undefined) : tab));
     return;
   }
+  // ссылка для друзей с Letterboxd: /mnenie/#letterboxd сразу открывает импорт
+  if (h === '#letterboxd') {
+    history.replaceState(null, '', location.pathname + location.search);
+    Promise.resolve(ready).catch(() => {}).then(() => { if (window.CasualLetterboxd) window.CasualLetterboxd.open(); });
+    return;
+  }
   // ссылки с главной и из профиля: #r=<оценка>, #friend=<друг>&r=<оценка>, #friends, #rating
   const q = new URLSearchParams(h.slice(1));
   if (!q.has('r') && !q.has('friend') && h !== '#friends' && h !== '#rating') return;
