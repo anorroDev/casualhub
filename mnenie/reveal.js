@@ -28,7 +28,8 @@ function openAuthFromHash() {
   if (/^#(login|reg|profile)$/.test(h)) {
     const tab = h.slice(1);
     history.replaceState(null, '', location.pathname + location.search);
-    Promise.resolve(ready).then(() => openAuthModal(tab === 'profile' ? undefined : tab));
+    // «Настроить профиль» из профиля сразу открывает настройки (без входа — окно входа)
+    Promise.resolve(ready).then(() => openAuthModal(tab === 'profile' ? (state.user ? 'edit' : undefined) : tab));
     return;
   }
   // ссылки с главной и из профиля: #r=<оценка>, #friend=<друг>&r=<оценка>, #friends, #rating

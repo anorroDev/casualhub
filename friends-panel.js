@@ -32,6 +32,20 @@
 .fr-who > span { min-width: 0; overflow-wrap: anywhere; }
 .fr-row .fr-who > span b { font-weight: 700; }
 .fr-add { justify-self: start; }
+.fr-sugg { display: grid; gap: 4px; max-height: 300px; overflow: auto; }
+.fr-sugg[hidden] { display: none; }
+.fr-sug { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 10px 6px 6px; border: 1px solid var(--line, #2b2e38); border-radius: 12px; background: var(--panel-2, var(--panel, #23262f)); color: var(--ink, #f3f4f6); font: inherit; text-align: left; cursor: pointer; transition: border-color .15s; }
+.fr-sug:hover:not(:disabled) { border-color: var(--accent, #3550E8); }
+.fr-sug:disabled { cursor: default; opacity: .7; }
+.fr-sug .fp-ava { width: 36px; height: 36px; }
+.fr-sug > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.fr-sug b { font-weight: 700; }
+.fr-sug i { font-style: normal; font-weight: 600; color: var(--ink-3, #8b8f9c); margin-left: 6px; }
+.fr-sug em { flex: none; font-style: normal; font-size: 12.5px; font-weight: 700; color: var(--accent, #3550E8); }
+.fr-sug:disabled em { color: var(--ink-3, #8b8f9c); font-weight: 600; }
+a.fr-who { color: inherit; text-decoration: none; margin: -4px; padding: 4px; border-radius: 10px; transition: background-color .15s; }
+a.fr-who:hover { background: color-mix(in srgb, var(--ink, #fff) 6%, transparent); }
+a.fr-who:hover b { text-decoration: underline; }
 .fp-sheet { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg, #0d0f14) 70%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); overscroll-behavior: contain; }
 .fp-sheet[hidden] { display: none; }
 .fp-card { width: min(560px, 100%); max-height: min(720px, calc(100dvh - 32px)); overflow: auto; overscroll-behavior: contain; display: grid; gap: 14px; padding: 18px; background: var(--panel, #1b1d24); color: var(--ink, #f3f4f6); border: 1px solid var(--line, #2b2e38); border-radius: 20px; box-shadow: 0 30px 70px -30px rgba(0, 0, 0, .6); animation: fp-pop .3s cubic-bezier(.34, 1.56, .64, 1); font-family: inherit; }
@@ -92,8 +106,45 @@
       });
     });
   }
-  const whoHTML = (u, sub) => `<div class="fr-who">${avaHTML(u)}<span><b>${esc(u.username)}</b>${u.handle ? `<i>@${esc(u.handle)}</i>` : ''}${sub ? `<small>${sub}</small>` : ''}</span></div>`;
-  window.CasualFriendsUI = { avaHTML, whoHTML, hydrate };
+  // href — у друзей: нажатие на строку открывает профиль
+  const whoHTML = (u, sub, href) => {
+    const inner = `${avaHTML(u)}<span><b>${esc(u.username)}</b>${u.handle ? `<i>@${esc(u.handle)}</i>` : ''}${sub ? `<small>${sub}</small>` : ''}</span>`;
+    return href ? `<a class="fr-who link" href="${esc(href)}" title="Открыть профиль ${esc(u.username)}">${inner}</a>` : `<div class="fr-who">${inner}</div>`;
+  };
+  // подсказки под строкой «Добавить друга»: ищем по части ника или @юзернейма, выбор — onPick({ handle, id, rel })
+  const REL = { '': '＋ Добавить', friend: 'уже в друзьях', sent: 'заявка отправлена', incoming: 'Принять заявку' };
+  function wireSearch(form, onPick) {
+    const inp = form.querySelector('input[name="handle"]');
+    if (!inp) return;
+    const list = document.createElement('div');
+    list.className = 'fr-sugg';
+    list.hidden = true;
+    form.after(list);
+    let timer = 0, seq = 0;
+    inp.addEventListener('input', () => {
+      clearTimeout(timer);
+      const q = inp.value.trim().replace(/^@+/, '');
+      if (q.length < 2) { seq++; list.hidden = true; list.replaceChildren(); return; }
+      timer = setTimeout(async () => {
+        const my = ++seq;
+        let users = [];
+        try { users = ((await api('/users/search?q=' + encodeURIComponent(q))) || {}).users || []; } catch (e) { users = null; }
+        if (my !== seq) return;
+        list.innerHTML = !users ? '<p class="fr-muted">Поиск сейчас не отвечает, можно ввести @юзернейм полностью.</p>'
+          : users.length ? users.map((u) => `<button type="button" class="fr-sug" data-sug="${esc(u.handle)}" data-uid="${esc(u.id)}" data-rel="${esc(u.rel || '')}"${u.rel === 'friend' || u.rel === 'sent' ? ' disabled' : ''}>${avaHTML(u)}<span><b>${esc(u.username)}</b><i>@${esc(u.handle)}</i></span><em>${REL[u.rel || ''] || ''}</em></button>`).join('')
+          : '<p class="fr-muted">Никого не нашлось. Попробуй начало @юзернейма или часть ника.</p>';
+        list.hidden = false;
+        hydrate(list);
+      }, 280);
+    });
+    list.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-sug]');
+      if (!b || b.disabled) return;
+      b.disabled = true;
+      onPick({ handle: b.dataset.sug, id: b.dataset.uid, rel: b.dataset.rel });
+    });
+  }
+  window.CasualFriendsUI = { avaHTML, whoHTML, hydrate, wireSearch };
 
   // ---------- своё окно (вне Мнения) ----------
   const COPY = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="12" height="12" rx="2"/><path d="M5 15V5a2 2 0 0 1 2-2h10"/></svg>';
@@ -162,23 +213,22 @@
       body = '<div class="fr-sec"><p class="fr-muted"><strong>Сервер друзей сейчас не отвечает.</strong> Попробуй открыть окно ещё раз чуть позже.</p></div>';
     } else {
       const btn = (act, id, label, cls) => `<button type="button" class="fp-btn ${cls || ''}" data-fp="${act}" data-id="${esc(id)}">${label}</button>`;
-      const row = (u, acts, sub) => `<div class="fr-row">${whoHTML(u, sub)}<span class="fr-acts">${acts}</span></div>`;
+      const row = (u, acts, sub, href) => `<div class="fr-row">${whoHTML(u, sub, href)}<span class="fr-acts">${acts}</span></div>`;
       const when = (t) => (t ? 'оценки обновлены ' + new Date(t).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'оценок пока нет');
       const seenOf = (u) => `<span data-seen="${esc(u.id)}" data-last="${+u.lastSeen || ''}" data-post=" · "></span>`;
       body = `
         <div class="fr-sec">
           <button type="button" class="fp-btn ${S.addOpen ? '' : 'primary'} fr-add" data-fp="add" aria-expanded="${S.addOpen}">${S.addOpen ? 'Скрыть' : '＋ Добавить друга'}</button>
           ${S.addOpen ? `<form class="fr-form" data-fp-form="request">
-            <input name="handle" placeholder="@юзернейм друга" maxlength="21" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-label="Юзернейм друга">
+            <input name="handle" placeholder="Ник или @юзернейм друга" maxlength="24" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-label="Ник или юзернейм друга">
             <button type="submit" class="fp-btn primary">Отправить заявку</button>
           </form>` : ''}
         </div>
         ${S.incoming.length ? `<div class="fr-sec"><span class="label">Заявки тебе</span><div class="fr-list">${S.incoming.map((u) => row(u, btn('accept', u.id, 'Принять', 'primary') + btn('remove', u.id, 'Отклонить'))).join('')}</div></div>` : ''}
         <div class="fr-sec"><span class="label">Друзья${S.friends.length ? ' · ' + S.friends.length : ''}</span>
           ${S.friends.length ? `<div class="fr-list">${S.friends.map((u) => row(u,
-            `<a class="fp-btn" href="/profile/?id=${encodeURIComponent(u.id)}">Профиль</a><a class="fp-btn" href="/mnenie/#friend=${encodeURIComponent(u.id)}">Оценки</a>`
-            + (S.armed === u.id ? btn('remove', u.id, 'Точно убрать?', 'danger-solid') : btn('arm', u.id, 'Убрать', 'danger')),
-            seenOf(u) + when(u.updatedAt))).join('')}</div>`
+            S.armed === u.id ? btn('remove', u.id, 'Точно удалить?', 'danger-solid') : btn('arm', u.id, 'Удалить', 'danger'),
+            seenOf(u) + when(u.updatedAt), `/profile/?id=${encodeURIComponent(u.id)}`)).join('')}</div>`
             : '<p class="fr-muted">Пока никого. Нажми «Добавить друга» и введи его @юзернейм, друг увидит заявку у себя.</p>'}
         </div>
         ${S.outgoing.length ? `<div class="fr-sec"><span class="label">Ты отправил</span><div class="fr-list">${S.outgoing.map((u) => row(u, btn('remove', u.id, 'Отменить'), 'ждёт ответа')).join('')}</div></div>` : ''}
@@ -187,6 +237,25 @@
     card.innerHTML = head + msg + body;
     if (window.CasualOnline) window.CasualOnline.paint(card);
     hydrate(card);
+    const rf = card.querySelector('[data-fp-form="request"]');
+    if (rf) wireSearch(rf, pickPerson);
+  }
+  // выбрали человека в подсказках: прислал заявку — принимаем, иначе отправляем свою
+  async function pickPerson(u) {
+    try {
+      if (u.rel === 'incoming') { await api('/friends/accept', 'POST', { userId: u.id }); S.msg = 'Заявка принята, теперь вы друзья.'; }
+      else {
+        const r = await api('/friends/request', 'POST', { handle: u.handle });
+        S.msg = r.status === 'accepted' ? `${r.user.username} (@${r.user.handle}) теперь в друзьях.` : `Заявка отправлена: ${r.user.username} (@${r.user.handle}).`;
+      }
+      S.err = false;
+      S.addOpen = false;
+      await load();
+      if (window.CasualOnline) window.CasualOnline.ping();
+    } catch (err) {
+      S.msg = err.message; S.err = true;
+      draw();
+    }
   }
   async function onClick(e) {
     if (e.target === sheet) return close();

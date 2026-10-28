@@ -438,15 +438,11 @@ function renderUserBar() {
       : `background-color: ${esc(state.user.color || '#3550E8')};`;
     const avContent = isImg ? '' : esc(state.user.name.charAt(0).toUpperCase());
     el.userBar.innerHTML = `
-      <div class="user-pill" id="userPill" role="button" tabindex="0" title="Открыть профиль">
+      <a class="user-pill" id="userPill" href="/profile/" title="Мой профиль">
         <span class="user-avatar" style="${avStyle}">${avContent}</span>
         <span class="user-name">${esc(state.user.name)}</span>
-      </div>`;
-    const pill = $('userPill');
-    if (pill) {
-      pill.addEventListener('click', () => openAuthModal('profile'));
-      pill.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAuthModal('profile'); } });
-    }
+      </a>`;
+    // кнопка справа вверху на всех страницах ведёт в профиль; настройки аккаунта — в профиле, «Настроить профиль»
   } else {
     el.userBar.innerHTML = `<button type="button" class="btn ghost small" id="authBtn"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="5.5" r="3"/><path d="M2.5 14c.8-2.8 3-4.2 5.5-4.2s4.7 1.4 5.5 4.2"/></svg>Войти<span class="ab-more"> / Профиль</span></button>`;
     const btn = $('authBtn');
@@ -463,6 +459,9 @@ function clearAuthDraft(part) { try { const d = authDraft(); delete d[part]; loc
 // в форме что-то введено — клик мимо окна его не закрывает (туда же попадает клик по подсказке браузера)
 function authHasInput() { return [...el.authBody.querySelectorAll('input:not([type="file"]):not([type="checkbox"])')].some(i => i.value.trim()); }
 function openAuthModal(tab) {
+  // настройки открываются с текущими аватаром и цветом профиля
+  if (tab === 'edit' && state.user) { editSelectedAvatar = state.user.avatar || ''; editSelectedColor = state.user.color || '#3550E8'; }
+  if (tab === 'edit' && !state.user) tab = 'login';
   if (tab) authActiveTab = tab;
   else if (state.user) authActiveTab = 'profile';
   else authActiveTab = 'login';

@@ -204,6 +204,7 @@ a.theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
 .cover-opt img { width: 100%; aspect-ratio: 1; border-radius: 8px; object-fit: cover; background: var(--cell); }
 .cover-opt.tall img { aspect-ratio: 2 / 3; }
 #allRatingsLink { text-decoration: none; }
+a.user-pill { color: inherit; text-decoration: none; }
 .cover-opt span { overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 12px; font-weight: 600; line-height: 1.25; }
 .cover-opt small { font-size: 11px; color: var(--ink-3); }
 .artist-sugg { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; font-size: 12.5px; color: var(--ink-3); }
@@ -1448,8 +1449,8 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
           <summary class="theme-btn" id="themeBtn" title="Тема оформления">🌓 Тема</summary>
           <div class="theme-menu" id="themeMenu" role="group" aria-label="Тема оформления"></div>
         </details>
-        <div id="userBar" class="user-bar"></div>
         <button type="button" class="theme-btn" id="whatsNewBtn" data-whatsnew title="Что нового на сайте"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.5l1.6 3.6 3.9.4-2.9 2.6.8 3.9L8 10l-3.4 2 .8-3.9-2.9-2.6 3.9-.4z"/></svg><span class="wn-text">Что нового</span></button>
+        <div id="userBar" class="user-bar"></div>
       </div>
     </div>
   </header>

@@ -1043,23 +1043,27 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       if (!p.banner || posing) return;
       open(false);
       const img = new Image();
-      img.src = bare(p.banner);
-      try { await img.decode(); } catch (e) { return; }
+      // ждём загрузку картинки: decode() в фоновых вкладках может не завершиться
+      try { await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = bare(p.banner); if (img.complete && img.naturalWidth) res(); }); } catch (e) { return; }
+      if (posing || !p.banner) return;
       const ps = posOf(p.banner);
       posing = { x: ps.x, y: ps.y, iw: img.naturalWidth, ih: img.naturalHeight, drag: null };
       banner.classList.add('posing');
       banner.insertAdjacentHTML('beforeend', '<div class="ban-pos" id="banPosBar"><span>Потяни картинку, чтобы выбрать, что видно</span><button type="button" class="btn small" id="banPosDone">Готово</button></div>');
-      $('#banPosDone').addEventListener('click', (e) => {
-        e.stopPropagation();
-        const d = `${bare(p.banner)}#pos=${Math.round(posing.x)},${Math.round(posing.y)}`;
-        posing = null;
-        banner.classList.remove('posing', 'grabbing');
-        const bar = $('#banPosBar'); if (bar) bar.remove();
-        apply(d);
-      });
+      $('#banPosDone').addEventListener('click', (e) => { e.stopPropagation(); finishPos(); });
+    };
+    // выбор видимой части закончен: положение сохраняется вместе с картинкой
+    const finishPos = () => {
+      if (!posing) return;
+      const d = `${bare(p.banner)}#pos=${Math.round(posing.x)},${Math.round(posing.y)}`;
+      posing = null;
+      banner.classList.remove('posing', 'grabbing');
+      const bar = $('#banPosBar'); if (bar) bar.remove();
+      apply(d);
     };
     banner.addEventListener('pointerdown', (e) => {
-      if (!posing || e.target.closest('#banPosBar')) return;
+      // кнопка «Баннер» и меню лежат на баннере: их нажатие не таскает картинку
+      if (!posing || e.target.closest('#banPosBar, #banBtn, #banMenu')) return;
       posing.drag = { x: e.clientX, y: e.clientY, px: posing.x, py: posing.y };
       try { banner.setPointerCapture(e.pointerId); } catch (_) {}
       banner.classList.add('grabbing');
@@ -1080,12 +1084,12 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       showBanner(d);
       const kept = keepBanner(d);
       if (!kept && token) say('Баннер большой, поэтому хранится только в аккаунте.');
+      if (d && pose) startPos(); // новую картинку сразу можно подвинуть, и без входа тоже
       if (!token) { say(kept ? (d ? 'Баннер стоит. Войди в аккаунт, чтобы его видели друзья.' : 'Баннер убран.') : 'Браузер не дал сохранить баннер: мало места.', !kept); return; }
       banner.classList.add('busy');
       (d ? send('PUT', '/photo/banner', { data: d }) : send('DELETE', '/photo/banner'))
         .then(() => say(d ? 'Готово, друзья тоже увидят этот баннер.' : 'Баннер убран.'), () => say('Баннер стоит здесь, но в аккаунт не сохранился. Попробуй ещё раз позже.', true))
         .finally(() => banner.classList.remove('busy'));
-      if (d && pose) startPos();
     };
     const fromFile = async (f) => {
       if (!f || !/^image\//.test(f.type)) { say('Нужна картинка: JPG, PNG, WebP или GIF.', true); return; }
@@ -1100,7 +1104,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         if (bmp.close) bmp.close();
       } catch (e) { say('Не получилось открыть эту картинку.', true); }
     };
-    btn.addEventListener('click', () => { if (!posing) open(menu.hidden); });
+    // «Баннер» работает и во время выбора видимой части: положение сохраняется, меню открывается — можно сразу сменить картинку
+    btn.addEventListener('click', () => { if (posing) { finishPos(); open(true); return; } open(menu.hidden); });
     $('#banFile').addEventListener('change', (e) => { fromFile(e.target.files && e.target.files[0]); e.target.value = ''; });
     $('#banPresets').addEventListener('click', (e) => { const b = e.target.closest('[data-k]'); if (b) apply(paint(PRESETS[+b.dataset.k].draw), true); });
     $('#banPos').addEventListener('click', () => startPos());

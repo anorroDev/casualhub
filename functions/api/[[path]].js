@@ -363,6 +363,21 @@ const routes = {
     });
   },
 
+  // поиск людей для заявки: по началу @юзернейма или по части ника, без себя; видно, кто уже в друзьях
+  async 'GET /users/search'({ env, request, me }) {
+    if (burst('usearch:' + me.id, 60, 60e3)) return tooMany(1);
+    const q = cleanHandle(new URL(request.url).searchParams.get('q')).slice(0, 24);
+    if (q.length < 2) return json({ users: [] });
+    const like = q.replace(/[\\%_]/g, '\\$&');
+    const { results } = await env.DB.prepare(
+      `SELECT u.id, u.username, u.uname, f.status, f.requested_by FROM users u
+         LEFT JOIN friendships f ON (f.a = ?3 AND f.b = u.id) OR (f.b = ?3 AND f.a = u.id)
+        WHERE u.id <> ?3 AND (u.uname LIKE ?1 ESCAPE '\\' OR u.nkey LIKE ?2 ESCAPE '\\')
+        ORDER BY CASE WHEN u.uname = ?4 THEN 0 WHEN u.uname LIKE ?1 ESCAPE '\\' THEN 1 ELSE 2 END, u.uname
+        LIMIT 8`
+    ).bind(like + '%', '%' + like + '%', me.id, q).all();
+    return json({ users: (results || []).map((r) => ({ ...pubUser(r), rel: r.status === 'accepted' ? 'friend' : r.status ? (r.requested_by === me.id ? 'sent' : 'incoming') : '' })) });
+  },
   async 'POST /friends/request'({ env, request, me }) {
     const wait = await overLimit(env, 'freq:' + me.id, 'friendReq');
     if (wait) return tooMany(wait);

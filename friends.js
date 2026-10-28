@@ -980,7 +980,7 @@ ${ICON.chev}
     } else {
       // аватарка с рамкой из общего окна друзей (friends-panel.js), без него — как раньше, только ник
       const UI = window.CasualFriendsUI;
-      const row = (u, acts, sub) => `<div class="fr-row">${UI ? UI.whoHTML(u, sub) : `<span>${whoHTML(u)}${sub ? `<small>${sub}</small>` : ''}</span>`}<span class="fr-acts">${acts}</span></div>`;
+      const row = (u, acts, sub, href) => `<div class="fr-row">${UI ? UI.whoHTML(u, sub, href) : `<span>${whoHTML(u)}${sub ? `<small>${sub}</small>` : ''}</span>`}<span class="fr-acts">${acts}</span></div>`;
       const btn = (act, id, label, cls) => `<button type="button" class="btn small ${cls || 'ghost'}" data-fr="${act}" data-id="${esc(id)}">${label}</button>`;
       const when = (t) => (t ? 'оценки обновлены ' + new Date(t).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'оценок пока нет');
       const seenOf = (u) => `<span data-seen="${esc(u.id)}" data-last="${+u.lastSeen || ''}" data-post=" · "></span>`;
@@ -988,13 +988,13 @@ ${ICON.chev}
         <div class="fr-sec">
           <button type="button" class="btn small ${F.addOpen ? 'ghost' : 'primary'} fr-add" data-fr="add" aria-expanded="${!!F.addOpen}">${F.addOpen ? 'Скрыть' : '＋ Добавить друга'}</button>
           ${F.addOpen ? `<form class="fr-form" data-fr-form="request">
-            <input name="handle" placeholder="@юзернейм друга" maxlength="21" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-label="Юзернейм друга">
+            <input name="handle" placeholder="Ник или @юзернейм друга" maxlength="24" required autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" aria-label="Ник или юзернейм друга">
             <button type="submit" class="btn small primary">Отправить заявку</button>
           </form>` : ''}
         </div>
         ${F.incoming.length ? `<div class="fr-sec"><span class="label">Заявки тебе</span><div class="fr-list">${F.incoming.map((u) => row(u, btn('accept', u.id, 'Принять', 'primary') + btn('remove', u.id, 'Отклонить'))).join('')}</div></div>` : ''}
         <div class="fr-sec"><span class="label">Друзья</span>
-          ${F.friends.length ? `<div class="fr-list">${F.friends.map((u) => row(u, `<a class="btn small ghost" href="/profile/?id=${encodeURIComponent(u.id)}" style="text-decoration:none">Профиль</a>` + btn('show', u.id, 'Оценки') + (F.removeArmed === u.id ? btn('remove', u.id, 'Точно убрать?', 'danger-solid') : btn('arm', u.id, 'Убрать', 'ghost danger')), seenOf(u) + when(u.updatedAt))).join('')}</div>`
+          ${F.friends.length ? `<div class="fr-list">${F.friends.map((u) => row(u, F.removeArmed === u.id ? btn('remove', u.id, 'Точно удалить?', 'danger-solid') : btn('arm', u.id, 'Удалить', 'ghost danger'), seenOf(u) + when(u.updatedAt), `/profile/?id=${encodeURIComponent(u.id)}`)).join('')}</div>`
             : '<p class="fr-muted">Пока никого. Нажми «Добавить друга» и введи его @юзернейм, друг увидит заявку у себя.</p>'}
         </div>
         ${F.outgoing.length ? `<div class="fr-sec"><span class="label">Ты отправил</span><div class="fr-list">${F.outgoing.map((u) => row(u, btn('remove', u.id, 'Отменить'), 'ждёт ответа')).join('')}</div></div>` : ''}
@@ -1007,6 +1007,22 @@ ${ICON.chev}
     card.innerHTML = head + msg + body;
     if (window.CasualOnline) window.CasualOnline.paint(card);
     if (window.CasualFriendsUI) window.CasualFriendsUI.hydrate(card);
+    // подсказки по части ника: выбрал человека — заявка уходит сразу (или принимается его заявка)
+    const rf = card.querySelector('[data-fr-form="request"]');
+    if (rf && window.CasualFriendsUI && window.CasualFriendsUI.wireSearch) window.CasualFriendsUI.wireSearch(rf, async (u) => {
+      try {
+        if (u.rel === 'incoming') { await api('/friends/accept', 'POST', { userId: u.id }); F.msg = 'Заявка принята, теперь вы друзья.'; }
+        else {
+          const r = await api('/friends/request', 'POST', { handle: u.handle });
+          F.msg = r.status === 'accepted' ? `${r.user.username} (@${r.user.handle}) теперь в друзьях.` : `Заявка отправлена: ${r.user.username} (@${r.user.handle}).`;
+        }
+        F.msgErr = false;
+        F.addOpen = false;
+        await refreshFriends();
+        if (window.CasualOnline) window.CasualOnline.ping();
+      } catch (err) { say(err.message, true); }
+      redraw();
+    });
   }
 
   function openSheet() {
