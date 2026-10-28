@@ -454,6 +454,14 @@ function renderUserBar() {
   }
 }
 
+// черновик входа и регистрации: введённое не пропадает, если окно закрыли или нажали мимо.
+// Пароль не храним — его запоминает сам браузер
+const AUTH_DRAFT_KEY = 'ocenshik.authDraft.v1';
+function authDraft() { try { return JSON.parse(localStorage.getItem(AUTH_DRAFT_KEY) || '{}') || {}; } catch (_) { return {}; } }
+function saveAuthDraft(part, data) { try { const d = authDraft(); d[part] = Object.assign({}, d[part], data); localStorage.setItem(AUTH_DRAFT_KEY, JSON.stringify(d)); } catch (_) {} }
+function clearAuthDraft(part) { try { const d = authDraft(); delete d[part]; localStorage.setItem(AUTH_DRAFT_KEY, JSON.stringify(d)); } catch (_) {} }
+// в форме что-то введено — клик мимо окна его не закрывает (туда же попадает клик по подсказке браузера)
+function authHasInput() { return [...el.authBody.querySelectorAll('input:not([type="file"]):not([type="checkbox"])')].some(i => i.value.trim()); }
 function openAuthModal(tab) {
   if (tab) authActiveTab = tab;
   else if (state.user) authActiveTab = 'profile';
@@ -738,6 +746,7 @@ function renderAuthModal() {
 
   // Not logged in: Show Login / Registration
   el.authTitle.textContent = authActiveTab === 'login' ? 'Вход в аккаунт' : 'Создать аккаунт';
+  const dr = authDraft(), dl = dr.login || {}, dg = dr.reg || {};
   const regIsImg = regSelectedAvatar && (regSelectedAvatar.startsWith('data:image/') || regSelectedAvatar.startsWith('http://') || regSelectedAvatar.startsWith('https://'));
 
   el.authBody.innerHTML = `
@@ -750,7 +759,7 @@ function renderAuthModal() {
       <form class="auth-form" id="formLogin">
         <div class="auth-field">
           <label for="inputLoginIdent">Почта или @юзернейм</label>
-          <input type="text" id="inputLoginIdent" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required placeholder="name@domain.com или @юзернейм">
+          <input type="text" id="inputLoginIdent" name="username" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" required placeholder="name@domain.com или @юзернейм" value="${esc(dl.ident || '')}">
         </div>
         <div class="auth-field">
           <label for="inputLoginPass">Пароль</label>
@@ -813,19 +822,19 @@ function renderAuthModal() {
 
         <div class="auth-field">
           <label for="inputRegName">Ник</label>
-          <input type="text" id="inputRegName" autocomplete="nickname" required placeholder="Например, Алекс" minlength="2" maxlength="24">
+          <input type="text" id="inputRegName" name="nickname" autocomplete="nickname" required placeholder="Например, Алекс" minlength="2" maxlength="24" value="${esc(dg.name || '')}">
           <span class="auth-help">Так тебя видят все, может совпадать с чужим. Буквы, цифры, пробел, точка, дефис или подчёркивание.</span>
         </div>
 
         <div class="auth-field">
           <label for="inputRegHandle">Юзернейм</label>
-          <div class="handle-wrap"><span>@</span><input type="text" id="inputRegHandle" autocomplete="username" required placeholder="aleks" minlength="3" maxlength="21" autocapitalize="none" autocorrect="off" spellcheck="false"></div>
+          <div class="handle-wrap"><span>@</span><input type="text" id="inputRegHandle" name="casual-handle" autocomplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" required placeholder="aleks" minlength="3" maxlength="21" autocapitalize="none" autocorrect="off" spellcheck="false" value="${esc(dg.handle || '')}"></div>
           <span class="auth-help">Твой @ для друзей и для входа, у каждого свой. Латиница, цифры, «_» и «.», потом можно сменить.</span>
         </div>
 
         <div class="auth-field">
           <label for="inputRegEmail">Почта</label>
-          <input type="email" id="inputRegEmail" autocomplete="email" required placeholder="name@domain.com">
+          <input type="email" id="inputRegEmail" name="email" autocomplete="username" required placeholder="name@domain.com" value="${esc(dg.email || '')}">
           <span class="auth-help">По почте можно входить вместо @юзернейма. Её видишь только ты.</span>
         </div>
 
@@ -883,8 +892,10 @@ function renderAuthModal() {
         toggleBtn.innerHTML = isPwd ? EYE_CLOSED_SVG : EYE_OPEN_SVG;
       });
     }
+    $('inputLoginIdent').addEventListener('input', e => saveAuthDraft('login', { ident: e.target.value.trim().slice(0, 120) }));
     formLogin.addEventListener('submit', e => {
       e.preventDefault();
+      saveAuthDraft('login', { ident: $('inputLoginIdent').value.trim().slice(0, 120) }); // логин запоминается и после входа
       loginUser($('inputLoginIdent').value, $('inputLoginPass').value);
     });
   }
@@ -930,14 +941,18 @@ function renderAuthModal() {
 
     // юзернейм подсказывается из ника, пока его не поправили руками
     const handleInput = $('inputRegHandle');
-    let handleTouched = false;
-    handleInput.addEventListener('input', () => { handleTouched = !!handleInput.value; });
+    let handleTouched = !!dg.handleTouched;
+    const keepReg = () => saveAuthDraft('reg', { name: $('inputRegName').value.slice(0, 24), handle: handleInput.value.slice(0, 21), email: $('inputRegEmail').value.trim().slice(0, 120), handleTouched });
+    handleInput.addEventListener('input', () => { handleTouched = !!handleInput.value; keepReg(); });
+    $('inputRegEmail').addEventListener('input', keepReg);
     $('inputRegName').addEventListener('input', () => {
       if (!regSelectedAvatar) {
         initialSpan.textContent = $('inputRegName').value.trim().charAt(0).toUpperCase() || '👤';
       }
       if (!handleTouched) handleInput.value = suggestHandle($('inputRegName').value);
+      keepReg();
     });
+    if (!regSelectedAvatar && dg.name) initialSpan.textContent = dg.name.trim().charAt(0).toUpperCase() || '👤';
 
     const passInput = $('inputRegPass');
     const toggleBtn = $('btnToggleRegPass');
@@ -966,7 +981,8 @@ function renderAuthModal() {
     formReg.addEventListener('submit', e => {
       e.preventDefault();
       const finalAvatar = regSelectedAvatar || $('inputRegName').value.trim().charAt(0).toUpperCase();
-      registerUser($('inputRegName').value, $('inputRegEmail').value, $('inputRegPass').value, finalAvatar, regSelectedColor, $('inputRegHandle').value);
+      Promise.resolve(registerUser($('inputRegName').value, $('inputRegEmail').value, $('inputRegPass').value, finalAvatar, regSelectedColor, $('inputRegHandle').value))
+        .then(ok => { if (ok) { clearAuthDraft('reg'); saveAuthDraft('login', { ident: $('inputRegEmail') ? $('inputRegEmail').value.trim() : '' }); } }, () => {});
     });
   }
 
@@ -3414,7 +3430,10 @@ el.dropExamples.addEventListener('click', async () => {
 
 /* ---------- Events: export sheet ---------- */
 el.authClose.addEventListener('click', closeAuthModal);
-el.authModal.addEventListener('click', e => { if (e.target === el.authModal) closeAuthModal(); });
+// клик мимо окна закрывает его, только если в форме ничего не введено и нажатие началось тоже мимо окна
+let authDownOut = false;
+el.authModal.addEventListener('pointerdown', e => { authDownOut = e.target === el.authModal; });
+el.authModal.addEventListener('click', e => { if (e.target === el.authModal && authDownOut && !authHasInput()) closeAuthModal(); });
 window.addEventListener('keydown', e => { if (e.key === 'Escape' && !el.authModal.hidden) closeAuthModal(); });
 el.sheetClose.addEventListener('click', closeShare);
 el.sheet.addEventListener('click', e => { if (e.target === el.sheet) closeShare(); });
@@ -4869,13 +4888,6 @@ if (el.layoutGroup) {
 }
 if (el.subFilters) {
   el.subFilters.addEventListener('click', e => {
-    // друзья на виду: переключаемся на «Мои», где их доски, и открываем окно друзей
-    if (e.target.closest('#friendsOpen')) {
-      state.sfilter = 'mine';
-      renderBoard();
-      if (window.CasualFriends) window.CasualFriends.openSheet();
-      return;
-    }
     const b = e.target.closest('button[data-sfilter]');
     if (!b) return;
     // повторное нажатие на уровень снимает фильтр

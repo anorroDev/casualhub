@@ -656,7 +656,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
           <div class="titles"${hid(p, 'titles')}>${titlesOf(rs).map((t) => `<span class="title-chip" data-tier="${t.tier}"><i></i>${esc(t.t)}</span>`).join('')}</div>
           <div class="hero-acts">${isMe
             ? `<a class="btn primary" href="/mnenie/">Оценить что-нибудь</a><button type="button" class="btn ghost" id="layoutBtn">Витрины и блоки</button><a class="btn ghost" href="/mnenie/#profile">Настроить профиль</a>`
-            : `<a class="btn ghost" href="/profile/">Мой профиль</a>${p.common && p.common.length ? '<a class="btn primary" href="#taste">Сравнить вкусы</a>' : ''}`}</div>
+            : `${p.uid && token ? `<button type="button" class="btn ${p.followed ? 'ghost' : 'primary'}" id="followBtn" aria-pressed="${!!p.followed}" title="Новые оценки друга будут видны в Журнале Мнения">${p.followed ? '🔔 Ты подписан' : '🔔 Подписаться на оценки'}</button>` : ''}<a class="btn ghost" href="/profile/">Мой профиль</a>${p.common && p.common.length ? '<a class="btn primary" href="#taste">Сравнить вкусы</a>' : ''}`}</div>
         </div>
       </section>
 
@@ -738,6 +738,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     if (rs.length) wireList(p);
     wireJumps(p);
     if (isMe) { const lb = $('#layoutBtn'); if (lb) lb.addEventListener('click', () => layoutEditor(p)); }
+    const fb = $('#followBtn');
+    if (fb) fb.addEventListener('click', () => toggleFollow(p, fb));
     if (isMe) { wireBanner(p); wireAvatar(p); wireTopics(p); const sb = $('#stBtn'); if (sb) sb.addEventListener('click', () => stickerPicker(p)); }
     hydrateFriendAvatars(p);
     if (window.CasualOnline) window.CasualOnline.paint(app);
@@ -1180,6 +1182,27 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     }
   }
 
+  // ---------- подписка на оценки друга: новые оценки появятся в Журнале Мнения с кружком ----------
+  async function toggleFollow(p, btn) {
+    btn.disabled = true;
+    try {
+      const cur = (await api('/follow')).ids || [];
+      const on = !cur.includes(p.uid);
+      const ids = on ? cur.concat(p.uid) : cur.filter((x) => x !== p.uid);
+      await send('PUT', '/follow', { ids, at: Date.now() });
+      if (on) { // уже стоящие оценки новыми не считаем
+        try { const all = read('casualhub.followSeen.v1') || {}; all[p.uid] = Date.now(); localStorage.setItem('casualhub.followSeen.v1', JSON.stringify(all)); } catch (e) {}
+      }
+      p.followed = on;
+      btn.className = 'btn ' + (on ? 'ghost' : 'primary');
+      btn.setAttribute('aria-pressed', String(on));
+      btn.textContent = on ? '🔔 Ты подписан' : '🔔 Подписаться на оценки';
+    } catch (e) {
+      btn.textContent = 'Не получилось, попробуй ещё раз';
+    }
+    btn.disabled = false;
+  }
+
   // ---------- профиль друга ----------
   async function showFriend(id) {
     if (!token) {
@@ -1188,7 +1211,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     }
     app.innerHTML = '<section class="card state"><p class="muted">Загружаю профиль…</p></section>';
     try {
-      const s = await api(`/shelf/${encodeURIComponent(id)}`);
+      const [s, fol] = await Promise.all([api(`/shelf/${encodeURIComponent(id)}`), api('/follow').catch(() => ({ ids: [] }))]);
       const ratings = visibleOf((s.ratings || []).filter((r) => r && !r.example).map(norm), s.profile && s.profile.hide);
       const mine = new Map(myRatings().filter((r) => r.total != null).map((r) => [keyOf(r.name), r]));
       const common = ratings.filter((r) => r.total != null && mine.has(keyOf(r.name))).map((r) => {
@@ -1198,7 +1221,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       const match = common.length ? Math.max(0, Math.min(100, Math.round(100 - (common.reduce((a, c) => a + Math.abs(c.diff), 0) / common.length) * 10))) : 0;
       render({
         kind: 'friend', name: s.user.username, sub: [s.user.handle ? '@' + s.user.handle : '', s.updatedAt ? 'оценки обновлены ' + ago(s.updatedAt) : 'оценок пока нет'].filter(Boolean).join(' · '),
-        ratings, uid: s.user.id, common, match, layout: s.layout || null, createdAt: s.user.createdAt, lastSeen: s.user.lastSeen, sticker: s.sticker && s.sticker.src, friendCount: s.user.friends != null ? s.user.friends : null,
+        ratings, uid: s.user.id, common, match, layout: s.layout || null, followed: (fol.ids || []).includes(s.user.id), createdAt: s.user.createdAt, lastSeen: s.user.lastSeen, sticker: s.sticker && s.sticker.src, friendCount: s.user.friends != null ? s.user.friends : null,
       });
       document.title = `${s.user.username} · Казуал Хаб`;
       api(`/photo/${encodeURIComponent(s.user.id)}/banner`).then((d) => { if (d.data) showBanner(d.data); }, () => {});

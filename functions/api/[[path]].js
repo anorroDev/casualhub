@@ -460,6 +460,7 @@ const routes = {
     let layoutOut = old.layout;
     if (layout && typeof layout === 'object' && Number.isFinite(+layout.at) && (!old.layout || +layout.at > +old.layout.at)) layoutOut = cleanLayout(layout);
     const shelfData = { ratings: merged, deleted: tomb };
+    if (old.follow) shelfData.follow = old.follow; // подписки меняются только через /follow
     if (layoutOut) shelfData.layout = layoutOut;
     if (stickerOut) shelfData.sticker = stickerOut;
     if (catsOut) shelfData.cats = catsOut;
@@ -494,6 +495,27 @@ const routes = {
     // свои категории видит только хозяин
     // друзьям — только очищенные оценки (вдруг в базе лежит что-то записанное до проверки типов)
     return json({ user, ratings: arg === me.id ? s.ratings : s.ratings.map(cleanRating).filter(Boolean), deleted: s.deleted, cats: arg === me.id ? s.cats || null : undefined, profile: s.profile || null, sticker: s.sticker || null, layout: s.layout || null, updatedAt: shelf ? shelf.updated_at : null });
+  },
+
+  // подписки на оценки друзей: список id, хранится в своей полке, виден только хозяину
+  async 'GET /follow'({ env, me }) {
+    const s = readShelf(await env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(me.id).first());
+    return json(s.follow || { ids: [], at: 0 });
+  },
+  async 'PUT /follow'({ env, request, me }) {
+    if (burst('follow:' + me.id, 30, 60e3)) return tooMany(1);
+    const { ids, at } = await readBody(request);
+    if (!Array.isArray(ids) || !Number.isFinite(+at)) return fail(400, 'Нужен список подписок.');
+    const row = await env.DB.prepare('SELECT data, updated_at FROM shelves WHERE user_id = ?').bind(me.id).first();
+    let d = row ? JSON.parse(row.data) : { ratings: [], deleted: [] };
+    if (Array.isArray(d)) d = { ratings: d, deleted: [] };
+    if (d.follow && +d.follow.at > +at) return json(d.follow); // на другом устройстве выбор свежее
+    d.follow = { ids: [...new Set(ids.filter((x) => typeof x === 'string' && /^[\w-]{1,64}$/.test(x)))].slice(0, 200), at: +at };
+    // время обновления полки не трогаем: друзья не должны видеть «оценки обновлены» из-за подписки
+    await env.DB.prepare(
+      'INSERT INTO shelves (user_id, data, updated_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET data = excluded.data'
+    ).bind(me.id, JSON.stringify(d), row ? row.updated_at : Date.now()).run();
+    return json(d.follow);
   },
 
   // исполнители по имени: имя и фото. Сначала Genius; если он отказал (например, 429 — слишком много запросов

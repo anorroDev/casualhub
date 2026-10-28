@@ -24,7 +24,7 @@
     sessionUser: undefined,
     online: null, // null: ещё не знаем, false: сервера нет, true: работает
     friends: [], incoming: [], outgoing: [],
-    view: lsGet(VIEW_KEY) || 'me',
+    view: lsGet(VIEW_KEY) && lsGet(VIEW_KEY) !== 'me' ? lsGet(VIEW_KEY) : 'all',
     shelves: new Map(),
     loading: new Set(),
     msg: '', msgErr: false,
@@ -85,6 +85,22 @@
 .friend-bar .sub-chip .on-dot { margin-right: 2px; }
 .fr-msg.err { color: var(--bad-ink); font-weight: 600; }
 .fr-muted { font-size: 13px; color: var(--ink-2); text-wrap: pretty; }
+.fol-dot { position: absolute; top: 4px; right: -12px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent); pointer-events: none; }
+.fol-dot[hidden] { display: none; }
+.mnav button { position: relative; }
+.mnav .fol-dot { top: 6px; right: calc(50% - 20px); width: 9px; height: 9px; }
+.fol-box { display: grid; gap: 8px; margin: 4px 0 18px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel-2); }
+.fol-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.fol-head small { color: var(--ink-3); font-size: 12px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fol-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; max-height: 340px; overflow: auto; }
+.fol-it { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--ink); font: inherit; text-align: left; cursor: pointer; transition: border-color .15s, transform .2s cubic-bezier(.34,1.56,.64,1); }
+.fol-it:hover { border-color: var(--accent); }
+.fol-it:active { transform: scale(.98); }
+.fol-it.fresh { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); box-shadow: inset 3px 0 0 var(--accent); }
+.fol-t { min-width: 0; display: grid; gap: 2px; font-size: 13.5px; }
+.fol-t b { font-weight: 700; }
+.fol-name { font-weight: 600; overflow-wrap: anywhere; }
+.fol-t small { color: var(--ink-3); font-size: 12px; }
 @media (pointer: coarse) { .fr-form input { font-size: 16px; } }
 `;
   document.head.appendChild(css);
@@ -219,7 +235,7 @@
       F.shelves.clear();
       F.linkError = '';
       F.pushedAt = null;
-      if (F.sessionUser !== undefined && F.view !== 'me') setView('me');
+      if (F.sessionUser !== undefined && F.view !== 'all') setView('all');
     }
     F.token = uid ? readTokens()[uid] || null : null;
     F.me = null;
@@ -244,8 +260,9 @@
         loadShares();
       } catch (e) {}
     }
-    if (F.view !== 'me' && !F.friends.some((f) => f.id === F.view)) setView('me');
+    if (F.view !== 'all' && !F.friends.some((f) => f.id === F.view)) setView('all');
     redraw();
+    if (F.me) loadFollow().then(() => checkFollow(true));
   }
 
   // свои оценки с сервера: на новом устройстве появятся все, на старом добавятся недостающие.
@@ -372,7 +389,7 @@
     try {
       const r = await api('/friends');
       F.friends = r.friends; F.incoming = r.incoming; F.outgoing = r.outgoing;
-      if (F.view !== 'me' && !F.friends.some((f) => f.id === F.view)) setView('me');
+      if (F.view !== 'all' && !F.friends.some((f) => f.id === F.view)) setView('all');
     } catch (e) { say(e.message, true); }
     redraw();
   }
@@ -387,7 +404,7 @@
       F.shelves.set(id, { error: e.message, ratings: [] });
     }
     F.loading.delete(id);
-    if (F.view === id) renderBoard();
+    if (state.sfilter === 'mine' && (F.view === id || F.view === 'all')) renderBoard();
   }
 
   // свои оценки: те же, что показывает фильтр «Мои», без примеров и без фото
@@ -588,7 +605,7 @@
 
   // ---------- полоса «Я / друзья» и чужой рейтинг ----------
   function renderBar() {
-    const chips = [`<button type="button" class="sub-chip" data-fview="me" aria-pressed="${F.view === 'me'}">Я</button>`]
+    const chips = [`<button type="button" class="sub-chip" data-fview="all" aria-pressed="${F.view === 'all'}">Все друзья</button>`]
       .concat(F.friends.map((f) => `<button type="button" class="sub-chip" data-fview="${esc(f.id)}" aria-pressed="${F.view === f.id}" title="${esc(atOf(f))}"><i class="on-dot" data-on="${esc(f.id)}" data-last="${+f.lastSeen || ''}"></i> ${esc(f.username)}</button>`));
     const n = F.incoming.length;
     const needLink = F.online && state.user && !F.me;
@@ -601,17 +618,17 @@
   }
 
   // фото друга: ссылка показывается сразу, загруженное фото подтягивается с сервера, когда карточка на экране
-  function friendPhoto(r, kind) {
+  function friendPhoto(r, kind, uid) {
     const p = r.photo;
     // без своего фото у трека друга видна аватарка исполнителя
-    if (!p) return kind === 'thumb' && r.artist && r.artistAva && F.view && F.view !== 'me' && typeof artistRid === 'function'
-      ? `<img class="e-thumb ava f-photo" data-fphoto="${esc(F.view + '|' + artistRid(r.artist))}" alt="" decoding="async">` : '';
+    if (!p) return kind === 'thumb' && r.artist && r.artistAva && uid && typeof artistRid === 'function'
+      ? `<img class="e-thumb ava f-photo" data-fphoto="${esc(uid + '|' + artistRid(r.artist))}" alt="" decoding="async">` : '';
     const cls = kind === 'thumb' ? 'e-thumb' : 'e-photo';
     const size = kind === 'body' && p.w && p.h ? ` width="${+p.w}" height="${+p.h}"` : '';
     const alt = kind === 'body' ? `Фото: ${esc(r.name)}` : '';
     if (photoLink(p)) return `<img class="${cls}" src="${esc(photoLink(p))}" alt="${alt}" loading="lazy" decoding="async" referrerpolicy="no-referrer"${size}>`;
-    if (!p.remote || !F.view || F.view === 'me') return '';
-    return `<img class="${cls} f-photo" data-fphoto="${esc(F.view + '|' + r.id + (kind === 'thumb' ? '|t' : ''))}" alt="${alt}" decoding="async"${size}>`;
+    if (!p.remote || !uid) return '';
+    return `<img class="${cls} f-photo" data-fphoto="${esc(uid + '|' + r.id + (kind === 'thumb' ? '|t' : ''))}" alt="${alt}" decoding="async"${size}>`;
   }
   const photoCache = new Map(); // "uid|rid" -> Promise<data URL | ''>
   let photoObs = null;
@@ -699,25 +716,27 @@
   }
   fboard.addEventListener('click', (e) => {
     const b = e.target.closest('[data-rx-emoji]');
-    if (!b || !F.view || F.view === 'me') return;
+    const uid = b && b.closest('.entry') && b.closest('.entry').dataset.uid;
+    if (!b || !uid) return;
     const rid = b.closest('.rx').dataset.rx;
-    const mine = reactsOf(F.view, rid).find((x) => F.me && x.from.id === F.me.id) || {};
+    const mine = reactsOf(uid, rid).find((x) => F.me && x.from.id === F.me.id) || {};
     const k = b.dataset.rxEmoji;
     if (mine.emoji !== k) rxBurst(b, rxIcon(k));
-    sendReact(F.view, rid, mine.emoji === k ? null : k, mine.text || '');
+    sendReact(uid, rid, mine.emoji === k ? null : k, mine.text || '');
   });
   fboard.addEventListener('submit', (e) => {
     const form = e.target.closest('[data-rx-form]');
-    if (!form || !F.view || F.view === 'me') return;
+    const uid = form && form.closest('.entry') && form.closest('.entry').dataset.uid;
+    if (!form || !uid) return;
     e.preventDefault();
     const rid = form.closest('.rx').dataset.rx;
-    const mine = reactsOf(F.view, rid).find((x) => F.me && x.from.id === F.me.id) || {};
-    sendReact(F.view, rid, mine.emoji || null, form.querySelector('input').value.trim());
+    const mine = reactsOf(uid, rid).find((x) => F.me && x.from.id === F.me.id) || {};
+    sendReact(uid, rid, mine.emoji || null, form.querySelector('input').value.trim());
     form.querySelector('input').blur();
   });
   // свои оценки в рейтинге: что сказали друзья
   function decorateOwn() {
-    if (!F.me || state.sfilter === 'mine' && F.view !== 'me') return;
+    if (!F.me || state.sfilter === 'mine') return;
     const list = F.reacts.get(F.me.id);
     if (!list || !list.length) return;
     el.board.querySelectorAll('.entry[data-id]').forEach((li) => {
@@ -730,7 +749,7 @@
     });
   }
 
-  function friendEntryHTML(r, rank) {
+  function friendEntryHTML(r, rank, uid, who) {
     const t = typeof r.total === 'number' && Number.isFinite(r.total) ? r.total : null;
     const scores = (Array.isArray(r.scores) ? r.scores : []).filter((s) => s && typeof s === 'object').map((s) => ({ ...s, v: Math.max(0, Math.min(10, +s.v || 0)) }));
     const n = scores.filter((s) => s.v > 0).length;
@@ -744,14 +763,14 @@
         ${pros.length ? `<div class="e-pc-box pro"><span class="label pc-label-pro">➕ Плюсы</span><ul>${pros.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
         ${cons.length ? `<div class="e-pc-box con"><span class="label pc-label-con">➖ Минусы</span><ul>${cons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
       </div>` : '';
-    return `<li class="entry fr-in" style="--k:${Math.min(rank, 12)}" data-rid="${esc(r.id || '')}"><details><summary><span class="sum">
+    return `<li class="entry fr-in" style="--k:${Math.min(rank, 12)}" data-rid="${esc(r.id || '')}" data-uid="${esc(uid)}"><details><summary><span class="sum">
 <span class="rank">${rank}</span>
-<span class="e-main">${friendPhoto(r, 'thumb')}<span class="e-text"><span class="e-name">${r.fav ? '<span class="fav-star-inline">★</span>' : ''}${esc(r.name)}</span><span class="e-sub"><span>${esc(meta)}</span><span class="rx-sum-slot">${rxSummary(reactsOf(F.view, r.id))}</span>${r.catLabel ? `<span class="tag">${esc(r.catLabel)}</span>` : ''}${r.status ? `<span class="tag status-tag">${esc(r.status)}</span>` : ''}${r.meta ? `<span class="tag meta-tag">${esc(r.meta)}</span>` : ''}</span></span></span>
+<span class="e-main">${friendPhoto(r, 'thumb', uid)}<span class="e-text"><span class="e-name">${r.fav ? '<span class="fav-star-inline">★</span>' : ''}${esc(r.name)}</span><span class="e-sub">${who ? `<span class="tag author-tag">${esc(who)}</span>` : ''}<span>${esc(meta)}</span><span class="rx-sum-slot">${rxSummary(reactsOf(uid, r.id))}</span>${r.catLabel ? `<span class="tag">${esc(r.catLabel)}</span>` : ''}${r.status ? `<span class="tag status-tag">${esc(r.status)}</span>` : ''}${r.meta ? `<span class="tag meta-tag">${esc(r.meta)}</span>` : ''}</span></span></span>
 <span class="spark" aria-hidden="true">${spark}</span>
 <span class="badge" data-tier="${tierT(t)}">${t != null ? fmt(t) : '—'}</span>
 ${ICON.chev}
 </span></summary>
-<div class="e-body">${friendPhoto(r, 'body')}<ul class="bd">${bd}</ul>${pc}${r.note ? `<div class="e-note"><span class="label">Заметки</span><p>${esc(r.note)}</p></div>` : ''}<div class="rx" data-rx="${esc(r.id || '')}">${rxBlock(F.view, r.id)}</div></div>
+<div class="e-body">${friendPhoto(r, 'body', uid)}<ul class="bd">${bd}</ul>${pc}${r.note ? `<div class="e-note"><span class="label">Заметки</span><p>${esc(r.note)}</p></div>` : ''}<div class="rx" data-rx="${esc(r.id || '')}">${rxBlock(uid, r.id)}</div></div>
 </details></li>`;
   }
 
@@ -764,6 +783,13 @@ ${ICON.chev}
     el.noMatch.hidden = true;
     el.empty.hidden = true;
     el.exampleBar.hidden = true;
+    if (!F.me) {
+      fboard.hidden = true; fnote.hidden = false;
+      fnote.textContent = 'Оценки друзей видны после входа в аккаунт.';
+      el.boardStat.textContent = 'Друзья';
+      return;
+    }
+    if (F.view === 'all') return showAllFriends();
     const friend = F.friends.find((f) => f.id === F.view);
     const shelf = F.shelves.get(F.view);
     if (!shelf) {
@@ -790,7 +816,7 @@ ${ICON.chev}
     const avg = rated.length ? Math.round(rated.reduce((s, r) => s + r.total, 0) / rated.length * 10) / 10 : null;
     el.boardStat.textContent = `${shelf.user.username}${shelf.user.handle ? ' @' + shelf.user.handle : ''}: ${shelf.ratings.length} ${plural(shelf.ratings.length, 'оценка', 'оценки', 'оценок')}` + (avg != null ? ` · средний балл ${fmt(avg)}` : '');
     fboard.classList.toggle('grid-mode', state.bmode === 'grid');
-    fboard.innerHTML = list.map((r, i) => friendEntryHTML(r, i + 1)).join('');
+    fboard.innerHTML = list.map((r, i) => friendEntryHTML(r, i + 1, F.view)).join('');
     // въезжают только при первом открытии доски этого друга, а не при каждом символе в поиске
     if (F.animated === F.view) fboard.querySelectorAll('.fr-in').forEach((li) => li.classList.remove('fr-in'));
     F.animated = F.view;
@@ -800,22 +826,133 @@ ${ICON.chev}
     fnote.textContent = shelf.ratings.length ? 'Ничего не нашлось.' : `${shelf.user.username} пока ничего не оценил.`;
   }
 
+  // все друзья сразу: общая лента, у каждой оценки видно, чья она
+  function showAllFriends() {
+    if (!F.friends.length) {
+      fboard.hidden = true; fnote.hidden = false;
+      fnote.textContent = 'Пока нет друзей. Добавь друга кнопкой «Друзья» вверху страницы.';
+      el.boardStat.textContent = 'Друзья';
+      return;
+    }
+    F.friends.forEach((f) => { if (!F.shelves.has(f.id)) loadShelf(f.id); });
+    const ready = F.friends.filter((f) => { const s = F.shelves.get(f.id); return s && !s.error; });
+    if (!ready.length) {
+      fboard.hidden = true; fnote.hidden = false;
+      fnote.textContent = F.friends.some((f) => F.loading.has(f.id) || !F.shelves.has(f.id)) ? 'Загружаю оценки друзей…' : 'Оценки друзей сейчас не загрузились.';
+      el.boardStat.textContent = 'Друзья';
+      return;
+    }
+    const q = keyOf(state.query || '');
+    const all = [];
+    ready.forEach((f) => (F.shelves.get(f.id).ratings || []).forEach((r) => all.push({ r, uid: f.id, who: f.username })));
+    const list = all.filter(({ r }) => !q || keyOf([r.name, r.meta, r.note, r.catLabel].join(' ')).includes(q))
+      .sort((a, b) => state.sort === 'name' ? String(a.r.name).localeCompare(String(b.r.name), 'ru')
+        : state.sort === 'date' ? (stampSafe(b.r) - stampSafe(a.r))
+        : ((b.r.total ?? -1) - (a.r.total ?? -1)));
+    const rated = all.filter(({ r }) => r.total != null);
+    const avg = rated.length ? Math.round(rated.reduce((s, x) => s + x.r.total, 0) / rated.length * 10) / 10 : null;
+    el.boardStat.textContent = `Друзья: ${all.length} ${plural(all.length, 'оценка', 'оценки', 'оценок')}` + (avg != null ? ` · средний балл ${fmt(avg)}` : '');
+    fboard.classList.toggle('grid-mode', state.bmode === 'grid');
+    fboard.innerHTML = list.map((x, i) => friendEntryHTML(x.r, i + 1, x.uid, x.who)).join('');
+    if (F.animated === 'all') fboard.querySelectorAll('.fr-in').forEach((li) => li.classList.remove('fr-in'));
+    F.animated = 'all';
+    hydratePhotos(fboard);
+    fboard.hidden = !list.length;
+    fnote.hidden = !!list.length;
+    fnote.textContent = all.length ? 'Ничего не нашлось.' : 'Друзья пока ничего не оценили.';
+  }
+
   function afterBoard() {
     try { decorateOwn(); } catch (e) {}
-    const mine = state.sfilter === 'mine';
-    // во «Моих» уже есть строка друзей со своей кнопкой «Друзья» — вторая не нужна
-    const fo = document.getElementById('friendsOpen');
-    if (fo) fo.hidden = mine;
+    const mine = state.sfilter === 'mine'; // кнопка «Друзья»: оценки друзей, своих здесь нет
     bar.hidden = !mine;
-    if (!mine || F.view === 'me') {
+    if (!mine) {
       fboard.hidden = true;
       fnote.hidden = true;
-      if (mine) renderBar();
       return;
     }
     renderBar();
     showFriendBoard();
   }
+
+  // ---------- подписки на оценки друзей: новые оценки — кружок на «Журнале» и лента в журнале ----------
+  const SEEN_KEY = 'casualhub.followSeen.v1'; // { id друга: когда последний раз смотрели его новые оценки }
+  F.follow = []; F.followFeed = [];
+  async function loadFollow() {
+    try { F.follow = ((await api('/follow')) || {}).ids || []; } catch (e) { return; }
+    // подписка с другого устройства: старые оценки не считаем новыми
+    const seen = readJSON(SEEN_KEY, {});
+    let ch = false;
+    F.follow.forEach((id) => { if (!seen[id]) { seen[id] = Date.now(); ch = true; } });
+    if (ch) lsSet(SEEN_KEY, JSON.stringify(seen));
+  }
+  async function checkFollow(force) {
+    const ids = F.me ? F.follow.filter((id) => F.friends.some((f) => f.id === id)) : [];
+    if (!ids.length) { F.followFeed = []; paintFollow(); renderFollowFeed(); return; }
+    await Promise.all(ids.map((id) => loadShelf(id, force)));
+    const seen = readJSON(SEEN_KEY, {});
+    const items = [];
+    for (const id of ids) {
+      const sh = F.shelves.get(id), fr = F.friends.find((f) => f.id === id);
+      if (!sh || !sh.ratings || !fr) continue;
+      for (const r of sh.ratings) {
+        const t = +new Date(r.createdAt || r.updatedAt || 0) || 0;
+        if (t && Date.now() - t < 30 * 864e5) items.push({ r, uid: id, who: fr.username, t, fresh: t > (+seen[id] || 0) });
+      }
+    }
+    F.followFeed = items.sort((a, b) => b.t - a.t).slice(0, 30);
+    paintFollow();
+    renderFollowFeed();
+    if (logVisible()) markFollowSeen();
+  }
+  const logVisible = () => { const pl = document.getElementById('panelLog'); return !!pl && !pl.hidden && pl.offsetParent !== null; };
+  // кружок в цвете темы на «Журнале» (и в нижнем меню телефона), пока новые оценки не просмотрены
+  function paintFollow() {
+    const n = F.followFeed.filter((x) => x.fresh && !x.seen).length;
+    [document.getElementById('tabLog'), document.querySelector('.mnav [data-section="log"]')].forEach((t) => {
+      if (!t) return;
+      let d = t.querySelector('.fol-dot');
+      if (!d) { d = document.createElement('i'); d.className = 'fol-dot'; d.setAttribute('aria-hidden', 'true'); t.appendChild(d); }
+      d.hidden = !n;
+      t.title = n ? `Новые оценки друзей: ${n}` : '';
+    });
+  }
+  function markFollowSeen() {
+    if (!F.followFeed.some((x) => x.fresh && !x.seen)) return;
+    const seen = readJSON(SEEN_KEY, {});
+    const now = Date.now();
+    F.follow.forEach((id) => { seen[id] = now; });
+    lsSet(SEEN_KEY, JSON.stringify(seen));
+    F.followFeed.forEach((x) => { x.seen = true; }); // «новое» в ленте остаётся до следующего обновления
+    paintFollow();
+  }
+  const folBox = document.createElement('div');
+  folBox.className = 'fol-box';
+  folBox.id = 'logFollow';
+  folBox.hidden = true;
+  (() => { const pl = document.getElementById('panelLog'); const head = pl && pl.querySelector('.board-head'); if (head) head.after(folBox); else if (pl) pl.prepend(folBox); })();
+  function renderFollowFeed() {
+    if (!F.me || !F.follow.some((id) => F.friends.some((f) => f.id === id))) { folBox.hidden = true; return; }
+    const names = F.friends.filter((f) => F.follow.includes(f.id)).map((f) => f.username);
+    const when = (t) => new Date(t).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+    folBox.hidden = false;
+    folBox.innerHTML = `<div class="fol-head"><span class="label">Подписки</span><small>${esc(names.slice(0, 3).join(', '))}${names.length > 3 ? ` и ещё ${names.length - 3}` : ''}</small></div>`
+      + (F.followFeed.length ? `<ul class="fol-list">${F.followFeed.map((x) => `<li><button type="button" class="fol-it${x.fresh ? ' fresh' : ''}" data-fol-uid="${esc(x.uid)}" data-fol-rid="${esc(x.r.id || '')}">
+          <span class="fol-t"><span><b>${esc(x.who)}</b> оценил(а) <span class="fol-name">${esc(x.r.name)}</span></span><small>${esc([x.r.catLabel, when(x.t)].filter(Boolean).join(' · '))}</small></span>
+          <span class="badge" data-tier="${tierT(x.r.total)}">${x.r.total != null ? fmt(x.r.total) : '—'}</span></button></li>`).join('')}</ul>`
+        : '<p class="fr-muted">За последний месяц новых оценок нет.</p>');
+  }
+  folBox.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-fol-uid]');
+    if (b) window.CasualFriends.showFriend(b.dataset.folUid, b.dataset.folRid);
+  });
+  // журнал открыли — новые оценки просмотрены, кружок гаснет
+  ['setView', 'setSection'].forEach((fn) => {
+    if (typeof window[fn] !== 'function') return;
+    const o = window[fn];
+    window[fn] = function () { const r = o.apply(this, arguments); if (logVisible()) { renderFollowFeed(); markFollowSeen(); } return r; };
+  });
+  setInterval(() => { if (!document.hidden && F.me && F.follow.length) checkFollow(true); }, 5 * 60e3);
 
   // ---------- окно «Друзья» ----------
   function say(text, err) { F.msg = text || ''; F.msgErr = !!err; if (!sheet.hidden) renderSheet(); }
@@ -969,7 +1106,7 @@ ${ICON.chev}
     const b = e.target.closest('[data-fview]');
     if (!b) return;
     setView(b.dataset.fview);
-    if (F.view !== 'me') loadShelf(F.view, true);
+    if (F.view === 'all') F.friends.forEach((f) => loadShelf(f.id, true)); else loadShelf(F.view, true);
     renderBoard();
   });
 
