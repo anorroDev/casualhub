@@ -17,7 +17,7 @@
             const v = rel.querySelector('.rel-v'), n = rel.querySelectorAll('p').length;
             if (!v || !n || v.querySelector('.rel-n')) return;
             const a = n % 100, b = n % 10;
-            const word = a > 10 && a < 20 ? 'изменений' : b === 1 ? 'изменение' : b > 1 && b < 5 ? 'изменения' : 'изменений';
+            const word = a > 10 && a < 20 ? '+' : b === 1 ? '+' : b > 1 && b < 5 ? '+' : '+';
             v.insertAdjacentHTML('beforeend', `<small class="rel-n"><b>${n}</b>${word}</small>`);
           });
           const top = days && days.querySelector('.rel-v');
