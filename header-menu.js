@@ -1,0 +1,136 @@
+/* Казуал Хаб: шапка без россыпи кнопок.
+   На виду остаются главная, «Мнение», «Колесо», профиль и кнопка ☰. В меню ☰ уезжают «на сайте», «Друзья», «Помощь»,
+   «Тема» и GitHub. «Что нового» на широком экране стоит в самом углу страницы, на узком — тоже в меню.
+   Кнопки переносятся целиком, поэтому их обработчики и счётчики (online.js, whatsnew.js) продолжают работать. */
+(() => {
+  const MOVE = '[data-online-count], [data-friends-btn], #howtoBtn, .howto-btn, .theme-pick, a[href*="github.com"]';
+  const css = document.createElement('style');
+  css.textContent = `
+.hm-wrap { position: relative; display: inline-flex; flex: none; }
+.hm-btn { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 40px; cursor: pointer; }
+.hm-btn svg { flex: none; }
+.hm-dot { position: absolute; top: 4px; right: 4px; width: 9px; height: 9px; border-radius: 50%; background: var(--bad, #E4553F); box-shadow: 0 0 0 2px var(--panel, #1b1d24); pointer-events: none; }
+.hm-dot[hidden] { display: none; }
+.hm-panel { position: fixed; right: 12px; top: 64px; z-index: 95; max-height: calc(100dvh - 80px); overflow: auto; width: min(300px, calc(100vw - 24px)); display: grid; gap: 6px; padding: 10px; background: var(--panel, #1b1d24); color: var(--ink, #f3f4f6); border: 1px solid var(--line, #2b2e38); border-radius: 16px; box-shadow: 0 24px 50px -20px rgba(0, 0, 0, .55); animation: hm-in .22s cubic-bezier(.34, 1.56, .64, 1); transform-origin: 100% 0; }
+@keyframes hm-in { from { transform: translateY(-6px) scale(.97); } }
+@media (prefers-reduced-motion: reduce) { .hm-panel { animation: none; } }
+.hm-panel[hidden] { display: none; }
+.hm-panel > * { display: flex !important; width: 100%; margin: 0 !important; justify-content: flex-start !important; text-align: left; }
+.hm-panel > [hidden] { display: none !important; }
+.hm-panel .theme-pick { display: block !important; }
+.hm-panel .theme-pick > summary { width: 100%; justify-content: flex-start; }
+.hm-panel .theme-menu { position: static !important; translate: none !important; transform: none !important; inset: auto !important; width: 100% !important; max-width: none !important; margin-top: 8px; box-shadow: none !important; }
+.hm-panel .oc-t, .hm-panel .fb-t, .hm-panel .hb-t, .hm-panel .t, .hm-panel .wn-text, .hm-panel summary > span, .hm-panel .hm-t { display: inline !important; }
+/* в меню все пункты — строки одной ширины с подписью, даже если на телефоне в шапке они были круглыми значками */
+.hm-panel > a, .hm-panel > button, .hm-panel > span, .hm-panel .theme-pick > summary { width: 100% !important; min-width: 0 !important; height: auto !important; min-height: 40px; padding: 8px 12px !important; gap: 8px !important; border-radius: 11px !important; font-size: 13.5px !important; line-height: 1.2 !important; align-items: center; }
+.hm-t { margin-left: 2px; }
+.wn-corner { position: absolute; top: 14px; right: 16px; z-index: 60; }
+.wn-corner [data-whatsnew] { box-shadow: 0 10px 24px -14px rgba(0, 0, 0, .6); }
+`;
+  document.head.appendChild(css);
+  const MENU_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h11"/></svg>';
+  const ICON = {
+    '/mnenie/': '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1.5" y="9" width="3.4" height="5.5" rx="1" fill="#E4553F"/><rect x="6.3" y="6" width="3.4" height="8.5" rx="1" fill="#EAA92C"/><rect x="11.1" y="2" width="3.4" height="12.5" rx="1" fill="#2EAD60"/></svg>',
+    '/koleso/': '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="#3550E8"/><path d="M8 8V1.5A6.5 6.5 0 0 1 14.5 8z" fill="#EAA92C"/><path d="M8 8h6.5A6.5 6.5 0 0 1 8 14.5z" fill="#2EAD60"/><circle cx="8" cy="8" r="1.8" fill="#fff"/></svg>',
+  };
+  const NAMES = { '/mnenie/': 'Мнение', '/koleso/': 'Колесо' };
+
+  function build() {
+    const header = document.querySelector('header');
+    if (!header || header.dataset.hm) return;
+    const bar = header.querySelector('.masthead-right > .user-bar') || header.querySelector('.user-bar') || header;
+    header.dataset.hm = '1';
+    // «Профиль» — последняя кнопка до ☰; с какого класса брать вид кнопок
+    const account = bar.querySelector(':scope > #account, :scope > [data-account], :scope > #userBar');
+    const twin = bar.querySelector('.pill, .theme-btn');
+    const cls = twin && /\bpill\b/.test(twin.className) ? 'pill' : 'theme-btn';
+    const here = location.pathname.replace(/index\.html$/, '');
+
+    // «Мнение» и «Колесо» всегда на виду (кроме страницы, где ты уже находишься), с подписью
+    ['/mnenie/', '/koleso/'].forEach((href) => {
+      let a = bar.querySelector(`a[href="${href}"]`);
+      if (here.startsWith(href)) return;
+      if (!a) {
+        a = document.createElement('a');
+        a.className = cls;
+        a.href = href;
+        a.innerHTML = ICON[href];
+      }
+      a.classList.remove('ic');
+      if (!a.textContent.trim()) a.insertAdjacentHTML('beforeend', `<span class="hm-t">${NAMES[href]}</span>`);
+      a.title = NAMES[href] + ' Казуала';
+      if (account) bar.insertBefore(a, account); else bar.appendChild(a);
+    });
+
+    // меню ☰
+    const wrap = document.createElement('div');
+    wrap.className = 'hm-wrap';
+    wrap.innerHTML = `<button type="button" class="${cls} hm-btn" aria-expanded="false" aria-controls="hmPanel" aria-label="Меню" title="Меню">${MENU_ICON}<i class="hm-dot" hidden></i></button><div class="hm-panel" id="hmPanel" role="menu" hidden></div>`;
+    bar.appendChild(wrap);
+    const btn = wrap.firstElementChild, panel = wrap.lastElementChild, dot = btn.querySelector('.hm-dot');
+    // меню живёт в конце страницы: так оно поверх всего (и нижней панели Мнения), а стили шапки не прячут подписи
+    document.body.appendChild(panel);
+    [...bar.querySelectorAll(MOVE)].filter((el) => !el.closest('.hm-panel') && el.parentElement && !el.closest('.theme-menu')).forEach((el) => {
+      // у кнопок-иконок в меню видна подпись
+      if (!el.matches('.theme-pick') && !el.textContent.trim() && el.title) el.insertAdjacentHTML('beforeend', `<span class="hm-t">${el.title.replace(/\s*:.*$/, '')}</span>`);
+      panel.appendChild(el);
+    });
+    // одинаковый порядок пунктов на всех страницах
+    ['[data-online-count]', '[data-friends-btn]', '#howtoBtn, .howto-btn', '.theme-pick', 'a[href*="github.com"]'].forEach((sel) => { const el = panel.querySelector(`:scope > :is(${sel})`); if (el) panel.appendChild(el); });
+
+    // «Что нового»: в самом углу страницы, на узком экране — в меню
+    const wn = bar.querySelector('[data-whatsnew]');
+    const corner = document.createElement('div');
+    corner.className = 'wn-corner';
+    document.body.appendChild(corner);
+    // в угол — только если справа от шапки хватает места, чтобы кнопка ничего не закрывала
+    const placeWn = () => {
+      if (!wn) return;
+      if (!wn.textContent.trim()) wn.insertAdjacentHTML('beforeend', '<span class="hm-t">Что нового</span>');
+      const room = document.documentElement.clientWidth - header.getBoundingClientRect().right;
+      const need = (wn.offsetWidth || 140) + 40;
+      if (room >= need) { if (wn.parentElement !== corner) corner.appendChild(wn); }
+      else if (wn.parentElement !== panel) panel.appendChild(wn);
+    };
+    placeWn();
+    let rq = 0;
+    addEventListener('resize', () => { cancelAnimationFrame(rq); rq = requestAnimationFrame(placeWn); });
+
+    const open = (on) => {
+      if (on) {
+        const r = btn.getBoundingClientRect();
+        panel.style.top = Math.round(r.bottom + 8) + 'px';
+        panel.style.right = Math.max(8, Math.round(document.documentElement.clientWidth - r.right)) + 'px';
+      }
+      panel.hidden = !on;
+      btn.setAttribute('aria-expanded', String(on));
+    };
+    addEventListener('scroll', () => { if (!panel.hidden && !panel.contains(document.activeElement)) open(false); }, { passive: true });
+    addEventListener('resize', () => { if (!panel.hidden) open(true); });
+    btn.addEventListener('click', (e) => { e.stopPropagation(); open(panel.hidden); });
+    document.addEventListener('click', (e) => {
+      if (panel.hidden || wrap.contains(e.target) || panel.contains(e.target)) return;
+      if (e.target.closest('.fp-sheet, .st-pick, #friendSheet, .sheet')) return;
+      open(false);
+    });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.hidden) { open(false); btn.focus(); } });
+    // нажали пункт меню (кроме выбора темы) — меню закрывается
+    panel.addEventListener('click', (e) => {
+      if (e.target.closest('.theme-pick > summary')) return;
+      if (e.target.closest('.theme-menu') && !e.target.closest('[data-theme-id]')) return;
+      if (e.target.closest('a, button')) setTimeout(() => open(false), 0);
+    });
+
+    // точка на ☰: заявки в друзья или непрочитанное «Что нового» внутри меню
+    const sync = () => {
+      const req = panel.querySelector('.fb-req:not([hidden])');
+      const news = panel.querySelector('.wn-dot');
+      dot.hidden = !(req || news);
+    };
+    new MutationObserver(sync).observe(panel, { subtree: true, childList: true, attributes: true, attributeFilter: ['hidden'] });
+    sync();
+  }
+  // «Помощь» дорисовывается на DOMContentLoaded (howto.js) — собираем меню после неё
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => setTimeout(build, 0));
+  else setTimeout(build, 0);
+})();

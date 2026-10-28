@@ -719,8 +719,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
             <div class="head" id="friendsSec"><h2 class="h2">Друзья</h2><span class="label">${p.friends.length}</span></div>
             ${p.friends.length ? `<div class="frs">${p.friends.map((f) => `<a class="fr" href="/profile/?id=${encodeURIComponent(f.id)}">
                 <span class="av" data-uid="${esc(f.id)}" style="background-color:${colorOf(f.username)}">${letter(f.username)}</span>
-                <span class="tx"><b>${esc(f.username)} <i class="on-dot" data-on="${esc(f.id)}" data-last="${+f.lastSeen || ''}"></i></b><small><span data-seen="${esc(f.id)}" data-last="${+f.lastSeen || ''}" data-post=" · "></span>${f.handle ? '@' + esc(f.handle) + ' · ' : ''}${f.updatedAt ? 'оценки обновлены ' + ago(f.updatedAt) : 'оценок пока нет'}</small></span>${ICON.go}</a>`).join('')}</div>`
-              : '<p class="muted">Пока никого. Добавить друга по @юзернейму можно в Мнении Казуала, кнопка «Друзья».</p>'}
+                <span class="tx"><b>${esc(f.username)} <i class="on-dot" data-on="${esc(f.id)}" data-last="${+f.lastSeen || ''}"></i></b><small><span data-seen="${esc(f.id)}" data-last="${+f.lastSeen || ''}" data-post=" · "></span>${f.handle ? '@' + esc(f.handle) : ''}${isMe ? `${f.handle ? ' · ' : ''}${f.updatedAt ? 'оценки обновлены ' + ago(f.updatedAt) : 'оценок пока нет'}` : ''}</small></span>${ICON.go}</a>`).join('')}</div>`
+              : `<p class="muted">${isMe ? 'Пока никого. Добавить друга можно кнопкой «Друзья» в меню вверху.' : 'Пока никого.'}</p>`}
             ${p.incoming ? `<p class="note">${p.incoming} ${plural(p.incoming, 'заявка', 'заявки', 'заявок')} в друзья ${plural(p.incoming, 'ждёт', 'ждут', 'ждут')} ответа. <a href="/mnenie/">Открыть в Мнении</a></p>` : ''}
           </section>` : (isMe ? `<section class="card rise"${hid(p, 'friends')} style="--d:${d++}"><div class="head"><h2 class="h2">Друзья</h2></div><p class="muted">${esc(p.friendsHint || '')}</p></section>` : '')}
 
@@ -1216,7 +1216,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     }
     app.innerHTML = '<section class="card state"><p class="muted">Загружаю профиль…</p></section>';
     try {
-      const [s, fol] = await Promise.all([api(`/shelf/${encodeURIComponent(id)}`), api('/follow').catch(() => ({ ids: [] }))]);
+      // друзья друга видны, если он не скрыл блок «Друзья»
+      const [s, fol, fr] = await Promise.all([api(`/shelf/${encodeURIComponent(id)}`), api('/follow').catch(() => ({ ids: [] })), api(`/friends/of/${encodeURIComponent(id)}`).catch(() => null)]);
       const ratings = visibleOf((s.ratings || []).filter((r) => r && !r.example).map(norm), s.profile && s.profile.hide);
       const mine = new Map(myRatings().filter((r) => r.total != null).map((r) => [keyOf(r.name), r]));
       const common = ratings.filter((r) => r.total != null && mine.has(keyOf(r.name))).map((r) => {
@@ -1226,7 +1227,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       const match = common.length ? Math.max(0, Math.min(100, Math.round(100 - (common.reduce((a, c) => a + Math.abs(c.diff), 0) / common.length) * 10))) : 0;
       render({
         kind: 'friend', name: s.user.username, sub: [s.user.handle ? '@' + s.user.handle : '', s.updatedAt ? 'оценки обновлены ' + ago(s.updatedAt) : 'оценок пока нет'].filter(Boolean).join(' · '),
-        ratings, uid: s.user.id, common, match, layout: s.layout || null, followed: (fol.ids || []).includes(s.user.id), createdAt: s.user.createdAt, lastSeen: s.user.lastSeen, sticker: s.sticker && s.sticker.src, friendCount: s.user.friends != null ? s.user.friends : null,
+        ratings, uid: s.user.id, common, match, layout: s.layout || null, followed: (fol.ids || []).includes(s.user.id),
+        friends: fr && !fr.hidden ? fr.friends || [] : null, createdAt: s.user.createdAt, lastSeen: s.user.lastSeen, sticker: s.sticker && s.sticker.src, friendCount: s.user.friends != null ? s.user.friends : null,
       });
       document.title = `${s.user.username} · Казуал Хаб`;
       api(`/photo/${encodeURIComponent(s.user.id)}/banner`).then((d) => { if (d.data) showBanner(d.data); }, () => {});

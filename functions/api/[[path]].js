@@ -378,6 +378,19 @@ const routes = {
     ).bind(like + '%', '%' + like + '%', me.id, q).all();
     return json({ users: (results || []).map((r) => ({ ...pubUser(r), rel: r.status === 'accepted' ? 'friend' : r.status ? (r.requested_by === me.id ? 'sent' : 'incoming') : '' })) });
   },
+  // друзья другого человека: видны его друзьям, если он не скрыл блок «Друзья» в профиле
+  async 'GET /friends/of/:id'({ env, me, arg }) {
+    if (!(await canSee(env, me, arg))) return fail(403, 'Друзья видны только друзьям.');
+    const s = readShelf(await env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(arg).first());
+    if (arg !== me.id && s.layout && s.layout.sections && s.layout.sections.friends === false) return json({ friends: [], hidden: true });
+    const { results } = await env.DB.prepare(
+      `SELECT u.id, u.username, u.uname FROM friendships f
+         JOIN users u ON u.id = CASE WHEN f.a = ?1 THEN f.b ELSE f.a END
+        WHERE (f.a = ?1 OR f.b = ?1) AND f.status = 'accepted'
+        ORDER BY u.uname LIMIT 300`
+    ).bind(arg).all();
+    return json({ friends: (results || []).map(pubUser) });
+  },
   async 'POST /friends/request'({ env, request, me }) {
     const wait = await overLimit(env, 'freq:' + me.id, 'friendReq');
     if (wait) return tooMany(wait);
@@ -1012,6 +1025,7 @@ export async function onRequest({ request, env, params }) {
   let key = `${request.method} ${path}`;
   let arg = null;
   if (!routes[key] && segs.length === 2 && segs[0] === 'shelf') { key = `${request.method} /shelf/:id`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 3 && segs[0] === 'friends' && segs[1] === 'of') { key = `${request.method} /friends/of/:id`; arg = segs[2]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'photo' && RID_RE.test(segs[1])) { key = `${request.method} /photo/:rid`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'photo' && RID_RE.test(segs[2])) { key = `${request.method} /photo/:uid/:rid`; arg = [segs[1], segs[2]]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'react' && RID_RE.test(segs[2])) { key = `${request.method} /react/:uid/:rid`; arg = [segs[1], segs[2]]; }
