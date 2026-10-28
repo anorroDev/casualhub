@@ -549,11 +549,17 @@ const routes = {
     const q = (sp.get('q') || '').trim().slice(0, 100);
     if (q.length < 2 || !Object.prototype.hasOwnProperty.call(COVER_FIND, kind)) return json({ items: [] });
     try {
-      let items = await COVER_FIND[kind](q);
+      // по-русски Steam и сайты аниме ничего не находят: для кириллицы сразу ищем по английскому названию
+      const ru = (kind === 'game' || kind === 'anime') && CYR.test(q);
+      let items = ru ? [] : await COVER_FIND[kind](q).catch(() => []);
       // Steam и AniList не знают русских названий: сначала ищем английское (Wikidata, русская Википедия)
-      if ((kind === 'game' || kind === 'anime') && CYR.test(q)) {
+      if (ru) {
         const found = [];
-        for (const t of await latinTitles(q, kind)) found.push(...(await COVER_FIND[kind](t).catch(() => [])));
+        const titles = await latinTitles(q, kind);
+        for (const t of titles) found.push(...(await COVER_FIND[kind](t).catch(() => [])));
+        // перевод не помог — возможно, это транслит («Элден ринг» → Elden ring)
+        const tr = translit(q);
+        if (!found.length && !titles.some((t) => t.toLowerCase() === tr.toLowerCase())) found.push(...(await COVER_FIND[kind](tr).catch(() => [])));
         items = found.concat(items);
       }
       const seen = new Set();
@@ -815,7 +821,8 @@ async function cachedJson(url, init, ttl) {
   const key = new Request('https://covers-cache.casualhub/' + encodeURIComponent(url + '|' + ((init && init.body) || '')));
   const hitRes = await cache.match(key);
   if (hitRes) return hitRes.json();
-  const res = await fetch(url, { ...(init || {}), headers: { 'user-agent': 'CasualHub/1.0 (+https://casualhub.pages.dev)', accept: 'application/json', ...((init && init.headers) || {}) } });
+  // долго молчащий сайт не держит поиск: через 6 секунд переходим к следующему источнику
+  const res = await fetch(url, { ...(init || {}), signal: AbortSignal.timeout(6000), headers: { 'user-agent': 'CasualHub/1.0 (+https://casualhub.pages.dev)', accept: 'application/json', ...((init && init.headers) || {}) } });
   if (!res.ok) throw new Error('covers ' + res.status);
   const data = await res.json();
   await cache.put(key, new Response(JSON.stringify(data), { headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=' + ttl } }));
@@ -869,6 +876,31 @@ async function latinTitles(q, kind) {
 }
 // таблица TR (кириллица → латиница) объявлена в начале файла
 const translit = (s) => String(s).replace(/[а-яё]/gi, (c) => { const t = TR[c.toLowerCase()] || ''; return c === c.toLowerCase() ? t : t.charAt(0).toUpperCase() + t.slice(1); });
+async function aniList(q) {
+  const body = JSON.stringify({ query: 'query($s:String){Page(perPage:10){media(search:$s,sort:SEARCH_MATCH,isAdult:false){type format title{romaji english}startDate{year}coverImage{extraLarge large}}}}', variables: { s: q } });
+  const d = await cachedJson('https://graphql.anilist.co', { method: 'POST', body, headers: { 'content-type': 'application/json' } }, 86400);
+  const list = (d && d.data && d.data.Page && d.data.Page.media) || [];
+  // сначала аниме, потом манга: категория обычно про аниме
+  return list.filter((m) => m && m.coverImage && (m.coverImage.extraLarge || m.coverImage.large)).sort((x, y) => (x.type === 'MANGA') - (y.type === 'MANGA')).map((m) => ({
+    title: String((m.title && (m.title.english || m.title.romaji)) || '').slice(0, 140), sub: ANI_KIND[m.format] || (m.type === 'MANGA' ? 'Манга' : 'Аниме'),
+    year: m.startDate && m.startDate.year ? String(m.startDate.year) : '', art: m.coverImage.extraLarge || m.coverImage.large, thumb: m.coverImage.large || m.coverImage.extraLarge, tall: true,
+  }));
+}
+const KITSU_KIND = { TV: 'Аниме', movie: 'Аниме-фильм', OVA: 'OVA', ONA: 'ONA', special: 'Спецвыпуск', music: 'Клип' };
+async function kitsu(q) {
+  const d = await cachedJson('https://kitsu.io/api/edge/anime?page[limit]=8&filter[text]=' + encodeURIComponent(q), { headers: { accept: 'application/vnd.api+json' } }, 86400);
+  return (d.data || []).map((x) => x && x.attributes).filter((a) => a && a.posterImage && (a.posterImage.large || a.posterImage.original)).map((a) => ({
+    title: String((a.titles && a.titles.en) || a.canonicalTitle || '').slice(0, 140), sub: KITSU_KIND[a.subtype] || 'Аниме', year: String(a.startDate || '').slice(0, 4),
+    art: a.posterImage.large || a.posterImage.original, thumb: a.posterImage.medium || a.posterImage.large, tall: true,
+  }));
+}
+async function jikan(q) {
+  const d = await cachedJson('https://api.jikan.moe/v4/anime?limit=8&sfw=true&q=' + encodeURIComponent(q), null, 86400);
+  return (d.data || []).filter((a) => a && a.images && a.images.jpg && a.images.jpg.large_image_url).map((a) => ({
+    title: String(a.title_english || a.title || '').slice(0, 140), sub: a.type === 'Movie' ? 'Аниме-фильм' : 'Аниме', year: a.year ? String(a.year) : '',
+    art: a.images.jpg.large_image_url, thumb: a.images.jpg.image_url || a.images.jpg.large_image_url, tall: true,
+  }));
+}
 const STEAM_ART = (id, file) => `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${id}/${file}`;
 const IMDB_KIND = { movie: 'Фильм', tvMovie: 'Фильм', video: 'Фильм', tvSeries: 'Сериал', tvMiniSeries: 'Мини-сериал', short: 'Короткий метр', tvSpecial: 'Спецвыпуск' };
 const ANI_KIND = { TV: 'Аниме', TV_SHORT: 'Аниме', MOVIE: 'Аниме-фильм', OVA: 'OVA', ONA: 'ONA', SPECIAL: 'Спецвыпуск', MANGA: 'Манга', ONE_SHOT: 'Манга', NOVEL: 'Ранобэ' };
@@ -893,15 +925,12 @@ const COVER_FIND = {
       art: `https://covers.openlibrary.org/b/id/${b.cover_i}-L.jpg`, thumb: `https://covers.openlibrary.org/b/id/${b.cover_i}-M.jpg`, tall: true,
     }));
   },
+  // аниме: AniList, если он не ответил (с адресов Cloudflare бывает 403/429) — Kitsu, потом Jikan (MyAnimeList)
   async anime(q) {
-    const body = JSON.stringify({ query: 'query($s:String){Page(perPage:10){media(search:$s,sort:SEARCH_MATCH,isAdult:false){type format title{romaji english}startDate{year}coverImage{extraLarge large}}}}', variables: { s: q } });
-    const d = await cachedJson('https://graphql.anilist.co', { method: 'POST', body, headers: { 'content-type': 'application/json' } }, 86400);
-    const list = (d && d.data && d.data.Page && d.data.Page.media) || [];
-    // сначала аниме, потом манга: категория обычно про аниме
-    return list.filter((m) => m && m.coverImage && (m.coverImage.extraLarge || m.coverImage.large)).sort((x, y) => (x.type === 'MANGA') - (y.type === 'MANGA')).map((m) => ({
-      title: String((m.title && (m.title.english || m.title.romaji)) || '').slice(0, 140), sub: ANI_KIND[m.format] || (m.type === 'MANGA' ? 'Манга' : 'Аниме'),
-      year: m.startDate && m.startDate.year ? String(m.startDate.year) : '', art: m.coverImage.extraLarge || m.coverImage.large, thumb: m.coverImage.large || m.coverImage.extraLarge, tall: true,
-    }));
+    for (const find of [aniList, kitsu, jikan]) {
+      try { const r = await find(q); if (r.length) return r; } catch (e) {}
+    }
+    return [];
   },
 };
 // тип картинки по первым байтам (заголовкам чужих сайтов верить нельзя)
