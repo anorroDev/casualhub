@@ -1385,11 +1385,18 @@
   const mmss = (t) => { t = Math.max(0, Math.floor(t || 0)); return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0'); };
   // пульт под треком: время, полоса перемотки, значок паузы; обновляется и когда вкладка свёрнута
   let seeking = null;
+  // то, что видит человек: позиция и длина без отрезанной тишины в начале
+  function shownTrack(ch) {
+    const tr = trackOf(ch) || { pos: 0, dur: 0 };
+    const s = CH[ch].start || 0;
+    return { pos: Math.max(0, tr.pos - s), dur: tr.dur ? Math.max(0, tr.dur - s) : 0 };
+  }
   function paintPlayers() {
     for (const ch of ['bg', 'win']) {
       const box = document.getElementById('mplayer-' + ch);
       if (!box || box.hidden) continue;
-      const tr = trackOf(ch) || { pos: 0, dur: 0 };
+      // время и ползунок считаются от начала звука: тишина в начале ролика отрезана, поэтому трек идёт с 0:00
+      const tr = shownTrack(ch);
       const range = box.querySelector('.mp-seek');
       range.disabled = !tr.dur;
       if (seeking !== ch) range.value = tr.dur ? Math.round((tr.pos / tr.dur) * 1000) : 0;
@@ -1546,7 +1553,8 @@
       if (!r) return;
       const ch = r.dataset.ch, tr = trackOf(ch);
       seeking = null;
-      if (tr && tr.dur) seekChannel(ch, (r.value / 1000) * tr.dur);
+      const sh = shownTrack(ch);
+      if (tr && sh.dur) seekChannel(ch, (CH[ch].start || 0) + (r.value / 1000) * sh.dur);
     });
     // трек из списка
     $('#mslots').addEventListener('change', (e) => {
