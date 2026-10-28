@@ -759,29 +759,6 @@ html.locked { overflow: hidden; }
 
 /* Rater */
 .rater { padding-bottom: 0; }
-/* подсказка для новичков: яркая карточка с шагами, висит, пока не нажмут «Понятно» */
-.howto { position: relative; display: grid; gap: 12px; margin: 0 0 18px; padding: 16px 16px 14px; border-radius: 18px; background: linear-gradient(135deg, var(--accent-soft), color-mix(in srgb, var(--accent-soft) 60%, var(--panel))); border: 2px solid var(--accent); box-shadow: 0 14px 34px -18px color-mix(in srgb, var(--accent) 70%, transparent); animation: howto-in .6s cubic-bezier(.34, 1.56, .64, 1) both, howto-nudge 2.4s ease-in-out 1.2s 3; }
-.howto[hidden] { display: none; }
-@keyframes howto-in { from { transform: translateY(-14px) scale(.96); } }
-@keyframes howto-nudge { 0%, 30%, 60%, 100% { transform: none; } 15% { transform: translateY(-5px); } 45% { transform: translateY(-2px); } }
-.howto-head { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 800; line-height: 1.2; color: var(--ink); }
-.howto-wave { display: inline-block; font-size: 26px; transform-origin: 70% 80%; animation: howto-wave 1.6s ease-in-out .6s 3; }
-@keyframes howto-wave { 0%, 60%, 100% { transform: rotate(0); } 10%, 30% { transform: rotate(16deg); } 20%, 40% { transform: rotate(-10deg); } }
-.howto ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
-.howto li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 11px; align-items: center; font-size: 15px; line-height: 1.4; color: var(--ink); animation: howto-step .5s cubic-bezier(.34, 1.56, .64, 1) backwards; }
-.howto li:nth-child(2) { animation-delay: .12s; }
-.howto li:nth-child(3) { animation-delay: .24s; }
-@keyframes howto-step { from { transform: translateX(-14px); } }
-.howto li b { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--on-accent, #fff); font-size: 14px; font-weight: 800; box-shadow: 0 4px 10px -4px var(--accent); }
-.howto-x { justify-self: end; height: 40px; padding: 0 20px; border-radius: 999px; border: 0; background: var(--accent); color: var(--on-accent, #fff); font: inherit; font-size: 14.5px; font-weight: 800; cursor: pointer; transition: transform .2s cubic-bezier(.34, 1.56, .64, 1); }
-.howto-x:hover { transform: translateY(-2px) scale(1.03); }
-.howto-x:active { transform: scale(.95); }
-@media (max-width: 420px) { .howto-x { justify-self: stretch; } }
-.howto-btn { gap: 5px; }
-@media (max-width: 560px) { .hb-t { display: none; } }
-.howto.again { animation: howto-in .6s cubic-bezier(.34, 1.56, .64, 1) both; }
-@media (prefers-reduced-motion: reduce) { .howto.again { animation: none; } }
-@media (prefers-reduced-motion: reduce) { .howto, .howto li, .howto-wave { animation: none; } }
 .rater-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .eyebrow { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
 .eyebrow .dot { width: 9px; height: 9px; border-radius: 2px; background: var(--accent); }
@@ -1735,6 +1712,7 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
 
 <script src="/themes.js"></script>
 <script src="/fx.js"></script>
+<script src="/howto.js"></script>
 <script src="/mnenie/app.js"></script>
 <script src="/friends.js"></script>
 <script src="/mnenie/reveal.js"></script>

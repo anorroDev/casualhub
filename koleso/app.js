@@ -108,33 +108,6 @@
     return { id, name, amount: +amount || 0, cur: CUR[cur] ? cur : S.cur, out: false, outOrder: 0, startWin: null };
   }
   const alive = () => S.items.filter((i) => !i.out);
-  // подсказка «как крутить»: висит, пока не нажали «Понятно»
-  let updateHowto = null;
-  const initHowto = () => { updateHowto = 
-  /* подсказка для новичков: прячется только кнопкой «Понятно», и тогда навсегда */
-  (() => {
-    const box = document.getElementById('howto');
-    if (!box) return;
-    const KEY = 'casualhub.howto.v1';
-    const btn = document.getElementById('howtoBtn');
-    const done = () => { try { return !!(JSON.parse(localStorage.getItem(KEY) || '{}') || {})['koleso']; } catch (e) { return false; } };
-    const update = () => { box.hidden = done(); if (btn) btn.setAttribute('aria-expanded', String(!box.hidden)); };
-    const mark = (v) => { try { const m = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; m['koleso'] = v; localStorage.setItem(KEY, JSON.stringify(m)); } catch (e) {} };
-    const sync = () => { if (btn) btn.setAttribute('aria-expanded', String(!box.hidden)); };
-    box.querySelector('.howto-x').addEventListener('click', () => { mark(true); box.hidden = true; sync(); });
-    // «❓ Помощь» в шапке: открывает подсказку снова (или прячет, если она уже открыта) и прокручивает к ней
-    if (btn) btn.addEventListener('click', () => {
-      // подсказка не видна (скрыта или на телефоне открыта другая вкладка) — показываем; видна — прячем
-      const show = box.hidden || !box.offsetHeight;
-      mark(!show); box.hidden = !show; sync();
-      if (!show) return;
-      if (!box.offsetHeight) { const tab = document.querySelector('[data-section="wheel"]'); if (tab) tab.click(); }
-      box.classList.remove('again'); void box.offsetWidth; box.classList.add('again');
-      box.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
-    });
-    update();
-    return update;
-  })(); };
   const rate = (c) => (S.rates && S.rates[c] > 0 ? S.rates[c] : DEF_RATES[c]);
   const conv = (amount, from, to) => ((+amount || 0) / rate(from)) * rate(to);
   const sym = (c) => (CUR[c] || CUR[S.cur]).sym;
@@ -657,7 +630,6 @@
       ? 'Строка: имя, сумма и валюта, например «Hades $20» или «Celeste 1 500 грн». Без валюты берётся выбранная в форме.'
       : 'Одно имя на строку.';
     $('#sampleNote').hidden = !S.sample;
-    if (updateHowto) updateHowto();
 
     const a = alive(), ch = chances();
     // в донатном режиме топ по сумме (в валюте банка), сверху самый крупный
@@ -1897,7 +1869,6 @@
     renderGifs();
     loadBaseHubs();
     gifNote();
-    initHowto();
     renderMusic();
     musicNote();
     gifsAll()
