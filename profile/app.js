@@ -867,16 +867,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   })();
 
   // ---------- темы: те же, что на других страницах ----------
-  const THEMES = [
-    { id: 'auto', name: 'Авто', sw: ['#ECEEF3', '#0D0F14'] }, { id: 'light', name: 'Светлая', sw: ['#ECEEF3', '#3550E8'] },
-    { id: 'dark', name: 'Тёмная', sw: ['#0D0F14', '#8C9BFF'] }, { id: 'neon', name: 'Неон', sw: ['#120B1F', '#FF4FD8'] },
-    { id: 'ocean', name: 'Океан', sw: ['#07131F', '#38BDF8'] }, { id: 'forest', name: 'Лес', sw: ['#0E1411', '#4CC9C0'] },
-    { id: 'sand', name: 'Песок', sw: ['#F3EDE3', '#C2571B'] }, { id: 'sakura', name: 'Сакура', sw: ['#FBEFF3', '#D6336C'] },
-    { id: 'mint', name: 'Мята', sw: ['#EAF6F1', '#0F9D76'] },
-    { id: 'lavender', name: 'Лаванда', sw: ['#F1EEFA', '#7C4DDB'] },
-    { id: 'sky', name: 'Небо', sw: ['#EAF3FB', '#1D7FD6'] },
-    { id: 'peach', name: 'Персик', sw: ['#FDF0E8', '#E8692A'] },
-  ];
+  const THEMES = window.CasualThemes.list; // общий список тем: /themes.js
   const PALETTE = '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="6.4"/><path d="M8 1.6a6.4 6.4 0 0 0 0 12.8z" fill="currentColor"/></svg>';
   const PREFS_KEY = 'ocenshik.prefs.v1';
   let theme = (read(PREFS_KEY) || {}).theme;
@@ -887,7 +878,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     if (theme === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', theme);
     $('#themeBtn').innerHTML = `${PALETTE}<span class="t">Тема: ${th.name}</span>`;
     $('#themeBtn').setAttribute('aria-label', `Тема: ${th.name}`);
-    $('#themeMenu').innerHTML = THEMES.map((t) => `<button type="button" class="theme-opt" data-theme-id="${t.id}" aria-pressed="${t.id === theme}"><i style="background:linear-gradient(135deg, ${t.sw[0]} 50%, ${t.sw[1]} 50%)"></i>${t.name}</button>`).join('');
+    $('#themeMenu').classList.add('tm-grid');
+    $('#themeMenu').innerHTML = window.CasualThemes.menuHTML(theme);
     if (save) { try { let p = read(PREFS_KEY); if (!p || typeof p !== 'object' || Array.isArray(p)) p = {}; p.theme = theme; localStorage.setItem(PREFS_KEY, JSON.stringify(p)); } catch (e) {} }
   }
   applyTheme(theme, false);

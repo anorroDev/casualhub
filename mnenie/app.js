@@ -4312,20 +4312,7 @@ el.logList.addEventListener('keydown', e => {
 
 /* ---------- Statistics, Compare & Theme ---------- */
 // темы общие с колесом: список и id должны совпадать с koleso/index.html
-const THEMES = [
-  { id: 'auto', name: 'Авто', icon: '🌓', sw: ['#ECEEF3', '#0D0F14'] },
-  { id: 'light', name: 'Светлая', icon: '☀️', sw: ['#ECEEF3', '#3550E8'] },
-  { id: 'dark', name: 'Тёмная', icon: '🌙', sw: ['#0D0F14', '#8C9BFF'] },
-  { id: 'neon', name: 'Неон', icon: '🌆', sw: ['#120B1F', '#FF4FD8'] },
-  { id: 'ocean', name: 'Океан', icon: '🌊', sw: ['#07131F', '#38BDF8'] },
-  { id: 'forest', name: 'Лес', icon: '🌲', sw: ['#0E1411', '#4CC9C0'] },
-  { id: 'sand', name: 'Песок', icon: '🏜️', sw: ['#F3EDE3', '#C2571B'] },
-  { id: 'sakura', name: 'Сакура', icon: '🌸', sw: ['#FBEFF3', '#D6336C'] },
-  { id: 'mint', name: 'Мята', icon: '🌿', sw: ['#EAF6F1', '#0F9D76'] },
-  { id: 'lavender', name: 'Лаванда', icon: '💜', sw: ['#F1EEFA', '#7C4DDB'] },
-  { id: 'sky', name: 'Небо', icon: '☁️', sw: ['#EAF3FB', '#1D7FD6'] },
-  { id: 'peach', name: 'Персик', icon: '🍑', sw: ['#FDF0E8', '#E8692A'] },
-];
+const THEMES = window.CasualThemes.list; // общий список тем: /themes.js
 function applyTheme(t) {
   const th = THEMES.find(x => x.id === t) || THEMES[0];
   state.theme = th.id;
@@ -4337,7 +4324,8 @@ function applyTheme(t) {
   }
   const menu = document.getElementById('themeMenu');
   if (menu) {
-    menu.innerHTML = THEMES.map(x => `<button type="button" class="theme-opt" data-theme-id="${x.id}" aria-pressed="${x.id === state.theme}"><i style="background:linear-gradient(135deg, ${x.sw[0]} 50%, ${x.sw[1]} 50%)"></i>${x.name}</button>`).join('');
+    menu.classList.add('tm-grid');
+    menu.innerHTML = window.CasualThemes.menuHTML(state.theme);
   }
   savePrefs();
 }

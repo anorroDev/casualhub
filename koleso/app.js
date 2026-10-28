@@ -23,20 +23,7 @@
   const DUR_MIN = 1, DUR_MAX = 30; // секунды прокрута
   const HUBS = [[24, 'Малый'], [34, 'Средний'], [44, 'Большой']];
   // те же темы, что на главной Казуал Хаба
-  const THEMES = [
-    { id: 'auto', name: 'Авто', icon: '🌓', sw: ['#ECEEF3', '#0D0F14'] },
-    { id: 'light', name: 'Светлая', icon: '☀️', sw: ['#ECEEF3', '#3550E8'] },
-    { id: 'dark', name: 'Тёмная', icon: '🌙', sw: ['#0D0F14', '#8C9BFF'] },
-    { id: 'neon', name: 'Неон', icon: '🌆', sw: ['#120B1F', '#FF4FD8'] },
-    { id: 'ocean', name: 'Океан', icon: '🌊', sw: ['#07131F', '#38BDF8'] },
-    { id: 'forest', name: 'Лес', icon: '🌲', sw: ['#0E1411', '#4CC9C0'] },
-    { id: 'sand', name: 'Песок', icon: '🏜️', sw: ['#F3EDE3', '#C2571B'] },
-    { id: 'sakura', name: 'Сакура', icon: '🌸', sw: ['#FBEFF3', '#D6336C'] },
-    { id: 'mint', name: 'Мята', icon: '🌿', sw: ['#EAF6F1', '#0F9D76'] },
-    { id: 'lavender', name: 'Лаванда', icon: '💜', sw: ['#F1EEFA', '#7C4DDB'] },
-    { id: 'sky', name: 'Небо', icon: '☁️', sw: ['#EAF3FB', '#1D7FD6'] },
-    { id: 'peach', name: 'Персик', icon: '🍑', sw: ['#FDF0E8', '#E8692A'] },
-  ];
+  const THEMES = window.CasualThemes.list; // общий список тем: /themes.js
   const THEME_IDS = THEMES.map((x) => x.id);
 
   // сектора: цвета аватаров «Оценщика» плюс лайм и графит; подпись тёмная или белая, смотря что контрастнее
@@ -223,7 +210,8 @@
     const th = THEMES.find((x) => x.id === theme);
     $('#themeBtn').innerHTML = `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="6.4"/><path d="M8 1.6a6.4 6.4 0 0 0 0 12.8z" fill="currentColor"/></svg><span>Тема: ${th.name}</span>`;
     $('#themeBtn').setAttribute('aria-label', `Тема: ${th.name}`);
-    $('#themeMenu').innerHTML = THEMES.map((x) => `<button type="button" class="theme-opt" data-theme-id="${x.id}" aria-pressed="${x.id === theme}"><i style="background:linear-gradient(135deg, ${x.sw[0]} 50%, ${x.sw[1]} 50%)"></i>${x.name}</button>`).join('');
+    $('#themeMenu').classList.add('tm-grid');
+    $('#themeMenu').innerHTML = window.CasualThemes.menuHTML(theme);
     if (fromUser) writeThemePref(theme);
   }
 
