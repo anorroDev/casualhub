@@ -549,7 +549,15 @@ const routes = {
     const q = (sp.get('q') || '').trim().slice(0, 100);
     if (q.length < 2 || !Object.prototype.hasOwnProperty.call(COVER_FIND, kind)) return json({ items: [] });
     try {
-      const items = (await COVER_FIND[kind](q)).filter((c) => c.title && /^https:\/\//.test(c.art)).slice(0, 8);
+      let items = await COVER_FIND[kind](q);
+      // Steam и AniList не знают русских названий: сначала ищем английское (Wikidata, русская Википедия)
+      if ((kind === 'game' || kind === 'anime') && CYR.test(q)) {
+        const found = [];
+        for (const t of await latinTitles(q, kind)) found.push(...(await COVER_FIND[kind](t).catch(() => [])));
+        items = found.concat(items);
+      }
+      const seen = new Set();
+      items = items.filter((c) => c.title && /^https:\/\//.test(c.art) && !seen.has(c.art) && seen.add(c.art)).slice(0, 8);
       return json({ items });
     } catch (e) {
       return fail(502, 'Поиск обложек сейчас не отвечает');
@@ -813,6 +821,54 @@ async function cachedJson(url, init, ttl) {
   await cache.put(key, new Response(JSON.stringify(data), { headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=' + ttl } }));
   return data;
 }
+// русское название → до двух английских: «Дота 2» → Dota 2, «Созданные в бездне» → Made in Abyss
+const CYR = /[а-яё]/i;
+async function latinTitles(q, kind) {
+  const want = kind === 'game' ? /video game|computer game|\bgame\b/i : /anime|manga|light novel|novel series|franchise|television series/i;
+  const out = [];
+  const add = (t) => {
+    const v = String(t || '').replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+    if (v && !CYR.test(v) && !out.some((x) => x.toLowerCase() === v.toLowerCase())) out.push(v);
+  };
+  const W = 'https://www.wikidata.org/w/api.php?format=json&';
+  const RU = 'https://ru.wikipedia.org/w/api.php?format=json&action=query&';
+  // 1) Wikidata по русским названиям и синонимам: подходящие по описанию («video game», «anime») первыми
+  try {
+    const d = await cachedJson(W + 'action=wbsearchentities&type=item&limit=7&language=ru&uselang=en&search=' + encodeURIComponent(q), null, 604800);
+    const hits = (d.search || []).filter((x) => x && x.label && !CYR.test(x.label));
+    hits.filter((x) => want.test(x.description || '')).concat(hits).slice(0, 2).forEach((x) => add(x.label));
+  } catch (e) {}
+  // 2) русская Википедия: статья часто и называется по-английски, иначе берём ссылку на английскую статью
+  if (out.length < 2) {
+    try {
+      const d = await cachedJson(RU + 'list=search&srlimit=1&srsearch=' + encodeURIComponent(q), null, 604800);
+      const t = d.query && d.query.search && d.query.search[0] && d.query.search[0].title;
+      if (t && !CYR.test(t)) add(t);
+      else if (t) {
+        const l = await cachedJson(RU + 'prop=langlinks&lllang=en&titles=' + encodeURIComponent(t), null, 604800);
+        const pg = Object.values((l.query && l.query.pages) || {})[0];
+        if (pg && pg.langlinks && pg.langlinks[0]) add(pg.langlinks[0]['*']);
+      }
+    } catch (e) {}
+  }
+  // 3) полнотекстовый поиск Wikidata, если ничего не нашлось
+  if (!out.length) {
+    try {
+      const d = await cachedJson(W + 'action=query&list=search&srlimit=5&srsearch=' + encodeURIComponent(q), null, 604800);
+      const ids = ((d.query && d.query.search) || []).map((x) => x.title).filter((x) => /^Q\d+$/.test(x)).join('|');
+      if (ids) {
+        const e = await cachedJson(W + 'action=wbgetentities&props=labels|descriptions&languages=en&ids=' + ids, null, 604800);
+        const list = Object.values(e.entities || {}).map((x) => ({ label: x.labels && x.labels.en && x.labels.en.value, desc: (x.descriptions && x.descriptions.en && x.descriptions.en.value) || '' })).filter((x) => x.label);
+        list.filter((x) => want.test(x.desc) && !/character/i.test(x.desc)).slice(0, 2).forEach((x) => add(x.label));
+      }
+    } catch (e) {}
+  }
+  // 4) ничего не нашлось: может, это транслит («Элден ринг» → Elden ring)
+  if (!out.length) add(translit(q));
+  return out.slice(0, 2);
+}
+// таблица TR (кириллица → латиница) объявлена в начале файла
+const translit = (s) => String(s).replace(/[а-яё]/gi, (c) => { const t = TR[c.toLowerCase()] || ''; return c === c.toLowerCase() ? t : t.charAt(0).toUpperCase() + t.slice(1); });
 const STEAM_ART = (id, file) => `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${id}/${file}`;
 const IMDB_KIND = { movie: 'Фильм', tvMovie: 'Фильм', video: 'Фильм', tvSeries: 'Сериал', tvMiniSeries: 'Мини-сериал', short: 'Короткий метр', tvSpecial: 'Спецвыпуск' };
 const ANI_KIND = { TV: 'Аниме', TV_SHORT: 'Аниме', MOVIE: 'Аниме-фильм', OVA: 'OVA', ONA: 'ONA', SPECIAL: 'Спецвыпуск', MANGA: 'Манга', ONE_SHOT: 'Манга', NOVEL: 'Ранобэ' };
