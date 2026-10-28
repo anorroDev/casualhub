@@ -96,8 +96,16 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
       if (!el.matches('.theme-pick') && !el.textContent.trim() && el.title) el.insertAdjacentHTML('beforeend', `<span class="hm-t">${el.title.replace(/\s*:.*$/, '')}</span>`);
       panel.appendChild(el);
     });
+    // импорт оценок из Letterboxd: в Мнении открывает окно (mnenie/letterboxd.js ловит data-lb-open), с других страниц ведёт туда
+    const lb = document.createElement('a');
+    lb.className = cls + ' hm-lb';
+    lb.href = '/mnenie/#letterboxd';
+    lb.setAttribute('data-lb-open', '');
+    lb.title = 'Перенести оценки фильмов из Letterboxd';
+    lb.innerHTML = '<span aria-hidden="true">🎬</span><span class="hm-t">Импорт из Letterboxd</span>';
+    panel.appendChild(lb);
     // одинаковый порядок пунктов на всех страницах
-    ['[data-friends-btn]', '#howtoBtn, .howto-btn', '.theme-pick', 'a[href*="github.com"]'].forEach((sel) => { const el = panel.querySelector(`:scope > :is(${sel})`); if (el) panel.appendChild(el); });
+    ['[data-friends-btn]', '#howtoBtn, .howto-btn', '.theme-pick', '.hm-lb', 'a[href*="github.com"]'].forEach((sel) => { const el = panel.querySelector(`:scope > :is(${sel})`); if (el) panel.appendChild(el); });
 
     // «Что нового»: в самом углу страницы, на узком экране — в меню
     const wn = bar.querySelector('[data-whatsnew]');
