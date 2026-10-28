@@ -194,7 +194,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
 
 
   const ST = { cat: 'all', sort: 'score', q: '', limit: 24, topics: false, genres: [], gOpen: false };
-  // фильтр по жанрам: кнопка «🎭 Жанры» раскрывает строку жанров; выбранные нужны все сразу
+  // фильтр по жанрам: кнопка «Фильтры» раскрывает строку жанров; выбранные нужны все сразу
   const hasGenres = (r, sel) => sel.every((g) => r.genres.includes(g));
   function genreUI(btn, box, pool, S) {
     const n = new Map();
@@ -204,7 +204,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     btn.hidden = !list.length;
     btn.setAttribute('aria-expanded', String(S.gOpen));
     btn.toggleAttribute('data-on', S.genres.length > 0);
-    btn.textContent = '🎭 Жанры' + (S.genres.length ? ' · ' + S.genres.length : '');
+    btn.innerHTML = '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 3h11l-4.2 5.2v4.3l-2.6 1.3V8.2z"/></svg><span>Фильтры</span>' + (S.genres.length ? `<b class="gb-n">${S.genres.length}</b>` : '');
     box.hidden = !S.gOpen || !list.length;
     box.innerHTML = list.map(([g, k]) => `<button type="button" class="chip" data-genre="${esc(g)}" aria-pressed="${S.genres.includes(g)}">${esc(g)} <b>${k}</b></button>`).join('')
       + (S.genres.length ? '<button type="button" class="chip genre-reset" data-genre="*">✕ Сбросить</button>' : '');
@@ -530,7 +530,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
             <input class="search" id="allQ" type="search" placeholder="Найти по названию…" aria-label="Найти оценку" autocomplete="off">
             <div class="seg" id="allSort" role="group" aria-label="Сортировка"><button type="button" data-sort="score">По баллу</button><button type="button" data-sort="date">Новые</button><button type="button" data-sort="name">А–Я</button></div>
             <div class="seg" id="allView" role="group" aria-label="Вид"><button type="button" data-view="list">Список</button><button type="button" data-view="grid">Плитка</button><button type="button" data-view="tier">Тир-лист</button><button type="button" data-view="full">Подробно</button></div>
-            <button type="button" class="btn ghost genre-btn" id="allGenreBtn" aria-controls="allGenres" hidden>🎭 Жанры</button>
+            <button type="button" class="btn ghost genre-btn" id="allGenreBtn" aria-controls="allGenres" hidden>Фильтры</button>
           </div>
           <div class="chips genre-chips" id="allGenres" hidden></div>
           <div id="allBody"></div>
@@ -771,7 +771,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
           </section>` : ''}
 
           <section class="card rise" id="allSec"${hid(p, 'all')} style="--d:${d++}">
-            <div class="head"><h2 class="h2">Все оценки</h2><span class="label" id="listStat"></span><a class="btn ghost topics-btn" href="${allHref(p)}">Открыть все</a>${isMe && p.allRatings && p.allRatings.length ? `<button type="button" class="btn ghost topics-btn" id="topicsBtn" aria-expanded="${ST.topics}" aria-controls="topics">Что показывать${p.hide && p.hide.length ? ` · скрыто ${p.hide.length}` : ''}</button>` : ''}</div>
+            <div class="head"><h2 class="h2">Все оценки</h2><span class="label" id="listStat"></span>
+              <div class="head-pill">${isMe && p.allRatings && p.allRatings.length ? `<button type="button" class="hp-btn hp-down" id="topicsBtn" aria-expanded="${ST.topics}" aria-controls="topics" title="Что показывать в профиле${p.hide && p.hide.length ? ` · скрыто тем: ${p.hide.length}` : ''}" aria-label="Что показывать в профиле"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6l4 4 4-4"/></svg>${p.hide && p.hide.length ? `<i class="hp-n">${p.hide.length}</i>` : ''}</button><span class="hp-sep" aria-hidden="true"></span>` : ''}<a class="hp-btn" href="${allHref(p)}" title="Открыть все оценки" aria-label="Открыть все оценки"><svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5.5 4.5h6v6M11.5 4.5l-7 7"/></svg></a></div></div>
             ${isMe && p.allRatings && p.allRatings.length ? `<div class="topics" id="topics"${ST.topics ? '' : ' hidden'}>
               <span class="label">Что видно в профиле</span>
               <div class="chips" style="margin:0">${[...new Map(p.allRatings.map((r) => [keyOf(r.cat), r.cat])).entries()].map(([k, name]) => `<button type="button" class="chip" data-topic="${esc(k)}" aria-pressed="${!(p.hide || []).includes(k)}">${esc(name)} <b>${p.allRatings.filter((r) => keyOf(r.cat) === k).length}</b></button>`).join('')}</div>
@@ -782,7 +783,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
             <div class="tools">
               <input class="search" id="q" type="search" placeholder="Найти по названию…" aria-label="Найти оценку" autocomplete="off">
               <div class="seg" id="sortSeg" role="group" aria-label="Сортировка"><button type="button" data-sort="score">По баллу</button><button type="button" data-sort="date">Новые</button><button type="button" data-sort="name">А–Я</button></div>
-              <button type="button" class="btn ghost genre-btn" id="genreBtn" aria-controls="genreChips" hidden>🎭 Жанры</button>
+              <button type="button" class="btn ghost genre-btn" id="genreBtn" aria-controls="genreChips" hidden>Фильтры</button>
             </div>
             <div class="chips genre-chips" id="genreChips" hidden></div>
             <div class="list" id="list"></div>
