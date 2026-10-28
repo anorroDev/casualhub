@@ -27,12 +27,13 @@
   padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-theme]) {
     --bg: #0D0F14; --dot: #1C2029; --panel: #161920; --panel-2: #1D2129;
     --ink: #E8EAF0; --ink-2: #A3A9B8; --ink-3: #7B8191; --line: #2A2F3A; --cell: #272C36;
     --accent: #8C9BFF; --accent-soft: #232A4F;
     --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #0D0F14;
     --glow: .3; --lift: 0 1px 0 color-mix(in srgb, #fff 5%, transparent) inset, 0 26px 52px -32px rgba(0, 0, 0, .7);
+    --on-accent: var(--on-tier);
     color-scheme: dark;
   }
 }
@@ -42,6 +43,7 @@
   --accent: #8C9BFF; --accent-soft: #232A4F;
   --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #0D0F14;
   --glow: .3; --lift: 0 1px 0 color-mix(in srgb, #fff 5%, transparent) inset, 0 26px 52px -32px rgba(0, 0, 0, .7);
+  --on-accent: var(--on-tier);
   color-scheme: dark;
 }
 :root[data-theme="neon"] {
@@ -50,6 +52,7 @@
   --accent: #FF4FD8; --accent-soft: #3D1A45;
   --good: #3EE6A8; --mid: #FFC857; --bad: #FF5C7A; --bad-ink: #FF8FA3; --on-tier: #120B1F;
   --glow: .3; --lift: 0 1px 0 color-mix(in srgb, #fff 5%, transparent) inset, 0 26px 52px -32px rgba(0, 0, 0, .7);
+  --on-accent: var(--on-tier);
   color-scheme: dark;
 }
 :root[data-theme="ocean"] {
@@ -58,6 +61,7 @@
   --accent: #38BDF8; --accent-soft: #0F3550;
   --good: #34D399; --mid: #FBBF24; --bad: #F87171; --bad-ink: #FCA5A5; --on-tier: #07131F;
   --glow: .3; --lift: 0 1px 0 color-mix(in srgb, #fff 5%, transparent) inset, 0 26px 52px -32px rgba(0, 0, 0, .7);
+  --on-accent: var(--on-tier);
   color-scheme: dark;
 }
 :root[data-theme="forest"] {
@@ -66,6 +70,7 @@
   --accent: #4CC9C0; --accent-soft: #173A38;
   --good: #7BDC6A; --mid: #E8C15A; --bad: #EE7355; --bad-ink: #FF9A80; --on-tier: #0E1411;
   --glow: .3; --lift: 0 1px 0 color-mix(in srgb, #fff 5%, transparent) inset, 0 26px 52px -32px rgba(0, 0, 0, .7);
+  --on-accent: var(--on-tier);
   color-scheme: dark;
 }
 :root[data-theme="sand"] {
@@ -110,40 +115,49 @@
   --good: #2E9E5B; --mid: #D99A12; --bad: #DE5340; --bad-ink: #B13628; --on-tier: #2E1D14;
   color-scheme: light;
 }
-/* Тёмные пары новых светлых тем: система в тёмном режиме — тема темнеет в своих цветах */
-@media (prefers-color-scheme: dark) {
-  :root[data-theme="mint"] {
-    --bg: #0B1612; --dot: #16261F; --panel: #111F19; --panel-2: #172821;
-    --ink: #E3F2EC; --ink-2: #9DBDB1; --ink-3: #6B8B80; --line: #22382F; --cell: #1E3229;
-    --accent: #3DD6A6; --accent-soft: #143A2F;
-    --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #0B1612;
-    --glow: .3; --lift: 0 1px 0 color-mix(in srgb, #fff 5%, transparent) inset, 0 26px 52px -32px rgba(0, 0, 0, .7);
-    color-scheme: dark;
-  }
-  :root[data-theme="lavender"] {
-    --bg: #110E1C; --dot: #1F1A32; --panel: #171328; --panel-2: #1E1933;
-    --ink: #ECE8FA; --ink-2: #ADA4C8; --ink-3: #837A9F; --line: #2C2645; --cell: #27213E;
-    --accent: #A98BFF; --accent-soft: #2A2150;
-    --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #110E1C;
-    --glow: .3; --lift: 0 1px 0 color-mix(in srgb, #fff 5%, transparent) inset, 0 26px 52px -32px rgba(0, 0, 0, .7);
-    color-scheme: dark;
-  }
-  :root[data-theme="sky"] {
-    --bg: #0A121C; --dot: #15212F; --panel: #0F1A27; --panel-2: #152232;
-    --ink: #E4EEF8; --ink-2: #9CB2C9; --ink-3: #6C849C; --line: #213247; --cell: #1B2B3E;
-    --accent: #5AB2FF; --accent-soft: #14304D;
-    --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #0A121C;
-    --glow: .3; --lift: 0 1px 0 color-mix(in srgb, #fff 5%, transparent) inset, 0 26px 52px -32px rgba(0, 0, 0, .7);
-    color-scheme: dark;
-  }
-  :root[data-theme="peach"] {
-    --bg: #170F0B; --dot: #2A1D16; --panel: #1F1510; --panel-2: #271B15;
-    --ink: #F6EAE2; --ink-2: #C7AE9F; --ink-3: #957B6D; --line: #3A2A21; --cell: #33251D;
-    --accent: #FF8F57; --accent-soft: #45261A;
-    --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #170F0B;
-    --glow: .3; --lift: 0 1px 0 color-mix(in srgb, #fff 5%, transparent) inset, 0 26px 52px -32px rgba(0, 0, 0, .7);
-    color-scheme: dark;
-  }
+:root[data-theme="lemon"] {
+  --bg: #FAF7E4; --dot: #E9E2BE; --panel: #FFFFFF; --panel-2: #FCFAEE;
+  --ink: #25210F; --ink-2: #5F5838; --ink-3: #6E6745; --line: #ECE5C6; --cell: #F1EBD0;
+  --accent: #A16207; --accent-soft: #FBEFC4;
+  --good: #2E9E5B; --mid: #D99A12; --bad: #DE5340; --bad-ink: #B13628; --on-tier: #25210F;
+  color-scheme: light;
+}
+/* Ещё тёмные темы: Аметист, Кофе, Вампир, Графит (чёрная, для OLED-экранов) */
+:root[data-theme="amethyst"] {
+  --bg: #110E1C; --dot: #1F1A32; --panel: #171328; --panel-2: #1E1933;
+  --ink: #ECE8FA; --ink-2: #ADA4C8; --ink-3: #837A9F; --line: #2C2645; --cell: #27213E;
+  --accent: #A98BFF; --accent-soft: #2A2150;
+  --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #110E1C;
+  --glow: .3; --lift: 0 1px 0 color-mix(in srgb, #fff 5%, transparent) inset, 0 26px 52px -32px rgba(0, 0, 0, .7);
+  --on-accent: var(--on-tier);
+  color-scheme: dark;
+}
+:root[data-theme="coffee"] {
+  --bg: #170F0B; --dot: #2A1D16; --panel: #1F1510; --panel-2: #271B15;
+  --ink: #F6EAE2; --ink-2: #C7AE9F; --ink-3: #957B6D; --line: #3A2A21; --cell: #33251D;
+  --accent: #FF8F57; --accent-soft: #45261A;
+  --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #170F0B;
+  --glow: .3; --lift: 0 1px 0 color-mix(in srgb, #fff 5%, transparent) inset, 0 26px 52px -32px rgba(0, 0, 0, .7);
+  --on-accent: var(--on-tier);
+  color-scheme: dark;
+}
+:root[data-theme="vampire"] {
+  --bg: #140A0C; --dot: #2A1519; --panel: #1D0F12; --panel-2: #251418;
+  --ink: #F7E6E8; --ink-2: #C9A3A8; --ink-3: #9A767C; --line: #3A1F24; --cell: #321A1F;
+  --accent: #FF4D5E; --accent-soft: #4A1820;
+  --good: #43C97A; --mid: #F2BA44; --bad: #FF7A5C; --bad-ink: #FFA08A; --on-tier: #140A0C;
+  --glow: .3; --lift: 0 1px 0 color-mix(in srgb, #fff 5%, transparent) inset, 0 26px 52px -32px rgba(0, 0, 0, .7);
+  --on-accent: var(--on-tier);
+  color-scheme: dark;
+}
+:root[data-theme="graphite"] {
+  --bg: #000000; --dot: #161616; --panel: #0E0E0F; --panel-2: #161618;
+  --ink: #F2F2F2; --ink-2: #A8A8AD; --ink-3: #7C7C82; --line: #26262A; --cell: #1F1F23;
+  --accent: #FFB020; --accent-soft: #3A2A0A;
+  --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #000000;
+  --glow: .3; --lift: 0 1px 0 color-mix(in srgb, #fff 5%, transparent) inset, 0 26px 52px -32px rgba(0, 0, 0, .7);
+  --on-accent: var(--on-tier);
+  color-scheme: dark;
 }
 
 /* Motion shared by all Casual Hub pages */
@@ -584,6 +598,7 @@ button.stat:focus-visible, a.item:focus-visible, a.pod:focus-visible, button.cat
 </div>
 
 <script src="/themes.js"></script>
+<script src="/fx.js"></script>
 <script src="/profile/app.js"></script>
 </body>
 </html>

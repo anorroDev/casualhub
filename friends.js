@@ -39,8 +39,11 @@
 .friend-bar { margin-top: 8px; }
 .rx { margin-top: 14px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .rx-btns { display: flex; flex-wrap: wrap; gap: 6px; }
-.rx-btns button { display: inline-flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink-2); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; transition: transform .2s cubic-bezier(.34,1.56,.64,1), border-color .15s, background-color .15s; }
+.rx-btns button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 42px; min-height: 40px; padding: 0 10px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink-2); font: inherit; font-size: 13.5px; font-weight: 600; cursor: pointer; transition: transform .2s cubic-bezier(.34,1.56,.64,1), border-color .15s, background-color .15s; }
+.rx-btns .rx-e { display: inline-block; font-size: 19px; line-height: 1; transition: transform .25s cubic-bezier(.34,1.56,.64,1); }
+.rx-btns button:hover .rx-e { transform: scale(1.25) rotate(-8deg); }
 .rx-btns button b { font-weight: 800; color: var(--ink); }
+.rx-title span { text-transform: none; letter-spacing: 0; font-size: 12.5px; color: var(--ink); }
 .rx-btns button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
 .rx-btns button:active { transform: scale(.94); }
 /* оценки друга въезжают по очереди, нажатая реакция подпрыгивает — без растворения */
@@ -625,8 +628,9 @@
     imgs.forEach((img) => photoObs.observe(img));
   }
 
-  // ---------- реакции: 🔥 / 💀 / «не согласен» и короткий комментарий ----------
-  const RX = [['fire', '🔥', 'огонь'], ['skull', '💀', 'жесть'], ['nope', '🙅', 'не согласен']];
+  // ---------- реакции: дюжина смайликов и короткий комментарий (список совпадает с REACTIONS на сервере) ----------
+  const RX = [['fire', '🔥', 'огонь'], ['lol', '😂', 'ору'], ['love', '😍', 'обожаю'], ['goat', '🐐', 'легенда'], ['like', '👍', 'согласен'], ['moai', '🗿', 'база'],
+    ['think', '🤔', 'спорно'], ['cry', '😭', 'до слёз'], ['skull', '💀', 'жесть'], ['clown', '🤡', 'клоунада'], ['dislike', '👎', 'мимо'], ['nope', '🙅', 'не согласен']];
   const rxIcon = (k) => (RX.find((x) => x[0] === k) || [])[1] || '';
   F.reacts = new Map(); // id владельца -> [{ rid, from, emoji, text, at }]
   async function loadReacts(uid, force) {
@@ -651,10 +655,30 @@
     const list = reactsOf(uid, rid);
     const mine = list.find((x) => F.me && x.from.id === F.me.id) || {};
     const others = list.filter((x) => !(F.me && x.from.id === F.me.id));
-    return `<div class="rx-title">Твоя реакция</div>
-      <div class="rx-btns">${RX.map(([k, ico, label]) => { const n = list.filter((x) => x.emoji === k).length; return `<button type="button" data-rx-emoji="${k}" aria-pressed="${mine.emoji === k}">${ico} ${label}${n ? ` <b>${n}</b>` : ''}</button>`; }).join('')}</div>
+    const picked = RX.find((x) => x[0] === mine.emoji);
+    return `<div class="rx-title">Твоя реакция${picked ? `: <span>${picked[1]} ${picked[2]}</span>` : ''}</div>
+      <div class="rx-btns">${RX.map(([k, ico, label]) => { const n = list.filter((x) => x.emoji === k).length; return `<button type="button" data-rx-emoji="${k}" aria-pressed="${mine.emoji === k}" title="${label}" aria-label="${label}${n ? ', ' + n : ''}"><span class="rx-e">${ico}</span>${n ? `<b>${n}</b>` : ''}</button>`; }).join('')}</div>
       <form class="rx-form" data-rx-form><input type="text" maxlength="140" enterkeyhint="send" placeholder="Пара слов о его оценке…" value="${esc(mine.text || '')}" aria-label="Комментарий к оценке"><button type="submit">${mine.text ? 'Изменить' : 'Отправить'}</button></form>
       ${rxComments(others)}`;
+  }
+  // выбранный смайлик разлетается веером над кнопкой и улетает вверх, уменьшаясь до нуля
+  function rxBurst(btn, ico) {
+    if (!ico || matchMedia('(prefers-reduced-motion: reduce)').matches || !btn.animate) return;
+    const r = btn.getBoundingClientRect();
+    for (let i = 0; i < 7; i++) {
+      const s = document.createElement('span');
+      s.textContent = ico;
+      s.setAttribute('aria-hidden', 'true');
+      s.style.cssText = `position:fixed;left:${r.left + r.width / 2}px;top:${r.top + r.height / 2}px;z-index:90;font-size:22px;line-height:1;pointer-events:none;translate:-50% -50%`;
+      document.body.appendChild(s);
+      const a = (i / 6) * Math.PI * 0.9 + Math.PI * 0.55, d = 46 + Math.random() * 34;
+      const x = Math.cos(a) * d * -1, y = -Math.abs(Math.sin(a)) * d - 30;
+      s.animate([
+        { transform: 'translate(0, 0) scale(.4) rotate(0deg)' },
+        { transform: `translate(${x * 0.7}px, ${y * 0.7}px) scale(1.25) rotate(${(Math.random() - 0.5) * 50}deg)`, offset: 0.45 },
+        { transform: `translate(${x}px, ${y - 40}px) scale(0) rotate(${(Math.random() - 0.5) * 90}deg)` },
+      ], { duration: 750 + Math.random() * 250, easing: 'cubic-bezier(.2, .8, .2, 1)' }).onfinish = () => s.remove();
+    }
   }
   async function sendReact(uid, rid, emoji, text) {
     const list = F.reacts.get(uid) || [];
@@ -676,6 +700,7 @@
     const rid = b.closest('.rx').dataset.rx;
     const mine = reactsOf(F.view, rid).find((x) => F.me && x.from.id === F.me.id) || {};
     const k = b.dataset.rxEmoji;
+    if (mine.emoji !== k) rxBurst(b, rxIcon(k));
     sendReact(F.view, rid, mine.emoji === k ? null : k, mine.text || '');
   });
   fboard.addEventListener('submit', (e) => {
@@ -809,7 +834,7 @@ ${ICON.chev}
         <p class="fr-muted">Аккаунт <span class="fr-nick">${esc(state.user.name)}</span> ещё не подключён к друзьям. Введи его пароль, и друзья смогут добавить тебя по @юзернейму. Друзья увидят твои оценки из вкладки «Мои», фото не отправляются.</p>
         ${F.linkError ? `<p class="fr-msg err">${esc(F.linkError)}</p>` : ''}
         <form class="fr-form" data-fr-form="link">
-          <input name="password" type="password" placeholder="Пароль от аккаунта, от 6 символов" autocomplete="current-password" required minlength="6">
+          <input name="password" type="password" placeholder="Пароль, с которым ты входишь на сайт" autocomplete="current-password" required minlength="6">
           <button type="submit" class="btn small primary">Подключить</button>
         </form></div>`;
     } else {

@@ -108,19 +108,29 @@
     return { id, name, amount: +amount || 0, cur: CUR[cur] ? cur : S.cur, out: false, outOrder: 0, startWin: null };
   }
   const alive = () => S.items.filter((i) => !i.out);
-  // подсказка «как крутить»: пока на колесе примеры или пусто
+  // подсказка «как крутить»: висит, пока не нажали «Понятно»
   let updateHowto = null;
   const initHowto = () => { updateHowto = 
-  /* подсказка для новичков: показывается, пока не видно, что человек разобрался, и прячется навсегда кнопкой «Понятно» */
+  /* подсказка для новичков: прячется только кнопкой «Понятно», и тогда навсегда */
   (() => {
     const box = document.getElementById('howto');
     if (!box) return;
     const KEY = 'casualhub.howto.v1';
+    const btn = document.getElementById('howtoBtn');
     const done = () => { try { return !!(JSON.parse(localStorage.getItem(KEY) || '{}') || {})['koleso']; } catch (e) { return false; } };
-    const update = () => { box.hidden = done() || !(S.sample || S.items.length < 2); };
-    box.querySelector('.howto-x').addEventListener('click', () => {
-      try { const m = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; m['koleso'] = true; localStorage.setItem(KEY, JSON.stringify(m)); } catch (e) {}
-      box.hidden = true;
+    const update = () => { box.hidden = done(); if (btn) btn.setAttribute('aria-expanded', String(!box.hidden)); };
+    const mark = (v) => { try { const m = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; m['koleso'] = v; localStorage.setItem(KEY, JSON.stringify(m)); } catch (e) {} };
+    const sync = () => { if (btn) btn.setAttribute('aria-expanded', String(!box.hidden)); };
+    box.querySelector('.howto-x').addEventListener('click', () => { mark(true); box.hidden = true; sync(); });
+    // «❓ Помощь» в шапке: открывает подсказку снова (или прячет, если она уже открыта) и прокручивает к ней
+    if (btn) btn.addEventListener('click', () => {
+      // подсказка не видна (скрыта или на телефоне открыта другая вкладка) — показываем; видна — прячем
+      const show = box.hidden || !box.offsetHeight;
+      mark(!show); box.hidden = !show; sync();
+      if (!show) return;
+      if (!box.offsetHeight) { const tab = document.querySelector('[data-section="wheel"]'); if (tab) tab.click(); }
+      box.classList.remove('again'); void box.offsetWidth; box.classList.add('again');
+      box.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
     });
     update();
     return update;
@@ -1501,9 +1511,12 @@
       if (slot === 'bg') S.bgOn = true;
       save();
       renderMusic();
+      // название: у пресета — из списка треков, у своего файла — как подписан в выпадающем списке
       const p = presetOf(S.music[slot]);
-      if (slot === 'bg') { startBg(true); musicNote(`«${p.title}» играет фоном.`, 'ok'); }
-      else musicNote(`«${p.title}» стоит на победе. Нажми «Послушать», чтобы проверить.`, 'ok');
+      const opt = sel.selectedOptions && sel.selectedOptions[0];
+      const title = p ? p.title : (opt ? opt.textContent.trim() : 'Свой трек');
+      if (slot === 'bg') { startBg(true); musicNote(`«${title}» играет фоном.`, 'ok'); }
+      else musicNote(`«${title}» стоит на победе. Нажми «Послушать», чтобы проверить.`, 'ok');
     });
     // громкость: сразу для того, что играет
     let volSave = 0;

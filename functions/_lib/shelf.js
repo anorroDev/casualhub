@@ -3,7 +3,9 @@
 
 export const RID_RE = /^[\w.-]{1,80}$/;
 // ---------- чужие оценки: только ожидаемые типы, чтобы в страницу друга не попал код ----------
-export const clip = (v, n) => String(v == null ? '' : v).slice(0, n);
+// управляющие символы и «переворот» направления текста (U+202E и родня): ими подделывают, как выглядит имя или ссылка
+export const SPOOF_RE = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F‪-‮⁦-⁩]/g;
+export const clip = (v, n) => String(v == null ? '' : v).replace(SPOOF_RE, '').slice(0, n);
 export const numOrNull = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : (typeof v === 'string' && v.trim() !== '' && Number.isFinite(+v) ? +v : null));
 export const SAFE_URL = /^https?:\/\/[^\s"'<>()\\]{1,1500}$/;
 // любое значение: строки, числа, да/нет и вложенные объекты/списки неглубоко; функции и прочее отбрасываются

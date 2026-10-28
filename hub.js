@@ -205,13 +205,15 @@
   const colorOf = (id) => FC[[...String(id)].reduce((a, c) => a + c.charCodeAt(0), 0) % FC.length];
   function feedItem(it) {
     const who = esc(it.user.username || 'друг');
-    const RXI = { fire: '🔥', skull: '💀', nope: '🙅' };
+    // те же реакции, что в friends.js и на сервере
+    const RXI = { fire: '🔥', skull: '💀', nope: '🙅', lol: '😂', love: '😍', like: '👍', dislike: '👎', think: '🤔', cry: '😭', clown: '🤡', moai: '🗿', goat: '🐐' };
     // друг отреагировал на мою оценку
     if (it.kind === 'react') {
       const x = it.react;
-      const what = x.emoji === 'nope' ? '🙅 «не согласен» на твою оценку' : x.emoji ? `${RXI[x.emoji]} на твою оценку` : '💬 комментарий к твоей оценке';
+      const ico = (x.emoji && RXI[x.emoji]) || '';
+      const what = x.emoji === 'nope' ? '🙅 «не согласен» на твою оценку' : ico ? `${ico} на твою оценку` : '💬 комментарий к твоей оценке';
       return `<li><a class="fd" href="/mnenie/#r=${encodeURIComponent(x.rid)}" title="Открыть твою оценку">
-        <span class="fd-pic rx" style="--fc:${colorOf(it.user.id)}">${x.emoji ? RXI[x.emoji] : '💬'}</span>
+        <span class="fd-pic rx" style="--fc:${colorOf(it.user.id)}">${ico || '💬'}</span>
         <span class="fd-text"><b>${who}: ${esc(what)}</b><span>«${esc(x.name)}»${x.text ? ' · ' + esc(x.text) : ''} · ${ago(it.at)}</span></span>
         <span class="fd-score none">открыть</span></a></li>`;
     }
@@ -219,7 +221,7 @@
     const r = it.rating;
     const pic = r.photo && r.photo.url ? `<img src="${esc(r.photo.url)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fallback="${esc(String(r.name).charAt(0))}">`
       : r.photo && r.photo.remote ? '' : esc(String(r.name).charAt(0));
-    const rx = it.reacts ? ['fire', 'skull', 'nope'].map((k) => (it.reacts[k] ? RXI[k] + it.reacts[k] : '')).concat(it.reacts.text ? ['💬' + it.reacts.text] : []).filter(Boolean).join(' ') : '';
+    const rx = it.reacts ? Object.keys(RXI).map((k) => (it.reacts[k] ? RXI[k] + it.reacts[k] : '')).concat(it.reacts.text ? ['💬' + it.reacts.text] : []).filter(Boolean).join(' ') : '';
     const meta = [`<em>${who}</em>`, r.cat && esc(r.cat), r.status && esc(r.status), rx, ago(it.at)].filter(Boolean).join(' · ');
     return `<li><a class="fd" href="/mnenie/#friend=${encodeURIComponent(it.user.id)}&r=${encodeURIComponent(r.id)}" title="Открыть оценку у ${who}">
       <span class="fd-pic" style="--fc:${colorOf(r.id || r.name)}"${r.photo && r.photo.remote ? ` data-ph="${esc(it.user.id + '|' + r.id)}"` : ''}>${pic || esc(String(r.name).charAt(0))}</span>

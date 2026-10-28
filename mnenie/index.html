@@ -77,7 +77,7 @@
 .avatar-upload-trigger:hover .avatar-preview-circle { border-color: var(--accent); }
 .avatar-camera-badge {
   position: absolute; right: -2px; bottom: -2px; width: 26px; height: 26px;
-  border-radius: 50%; background: var(--accent); color: #fff; display: grid;
+  border-radius: 50%; background: var(--accent); color: var(--on-accent, #fff); display: grid;
   place-items: center; border: 2px solid var(--panel);
   box-shadow: 0 2px 6px rgba(0,0,0,.25);
   transition: transform .15s ease, background-color .15s ease;
@@ -174,7 +174,7 @@ a.theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
 .artist-ava:active { transform: scale(.92); }
 .artist-ava.has { border-style: solid; border-color: transparent; }
 .artist-ava img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.artist-ava .ava-cam { position: absolute; right: 2px; bottom: 2px; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%; background: var(--accent); color: #fff; }
+.artist-ava .ava-cam { position: absolute; right: 2px; bottom: 2px; width: 18px; height: 18px; display: grid; place-items: center; border-radius: 50%; background: var(--accent); color: var(--on-accent, #fff); }
 .artist-ava .ava-cam svg { width: 11px; height: 11px; }
 .artist-list {
   position: absolute; left: 0; right: 0; top: calc(100% + 6px); z-index: 30; max-height: 280px; overflow: auto; margin: 0; padding: 6px; list-style: none;
@@ -447,7 +447,7 @@ a.theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
 /* Compare Modal & Tray */
 .cmp-tray {
   display: inline-flex; align-items: center; gap: 6px; height: 34px; padding: 0 12px;
-  border-radius: 999px; background: var(--accent); color: #fff; font-size: 13px; font-weight: 600;
+  border-radius: 999px; background: var(--accent); color: var(--on-accent, #fff); font-size: 13px; font-weight: 600;
   border: 0; cursor: pointer;
 }
 .cmp-card { width: min(680px, 100%); }
@@ -537,11 +537,12 @@ html.booting .layout, html.booting .mnav, html.booting .offline-bar { visibility
   --pad: 24px;
 }
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
+  :root:not([data-theme]) {
     --bg: #0D0F14; --dot: #1C2029; --panel: #161920; --panel-2: #1D2129;
     --ink: #E8EAF0; --ink-2: #A3A9B8; --ink-3: #7B8191; --line: #2A2F3A; --cell: #272C36;
     --accent: #8C9BFF; --accent-soft: #232A4F;
     --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #0D0F14;
+    --on-accent: var(--on-tier);
     color-scheme: dark;
   }
 }
@@ -550,6 +551,7 @@ html.booting .layout, html.booting .mnav, html.booting .offline-bar { visibility
   --ink: #E8EAF0; --ink-2: #A3A9B8; --ink-3: #7B8191; --line: #2A2F3A; --cell: #272C36;
   --accent: #8C9BFF; --accent-soft: #232A4F;
   --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #0D0F14;
+  --on-accent: var(--on-tier);
   color-scheme: dark;
 }
 /* Extra themes, shared with the wheel through ocenshik.prefs.v1 */
@@ -558,6 +560,7 @@ html.booting .layout, html.booting .mnav, html.booting .offline-bar { visibility
   --ink: #F3EAFF; --ink-2: #B9A8D6; --ink-3: #8978A8; --line: #33264F; --cell: #2C2047;
   --accent: #FF4FD8; --accent-soft: #3D1A45;
   --good: #3EE6A8; --mid: #FFC857; --bad: #FF5C7A; --bad-ink: #FF8FA3; --on-tier: #120B1F;
+  --on-accent: var(--on-tier);
   color-scheme: dark;
 }
 :root[data-theme="ocean"] {
@@ -565,6 +568,7 @@ html.booting .layout, html.booting .mnav, html.booting .offline-bar { visibility
   --ink: #E3F1FF; --ink-2: #9DB8D2; --ink-3: #6A85A0; --line: #1C3349; --cell: #172C42;
   --accent: #38BDF8; --accent-soft: #0F3550;
   --good: #34D399; --mid: #FBBF24; --bad: #F87171; --bad-ink: #FCA5A5; --on-tier: #07131F;
+  --on-accent: var(--on-tier);
   color-scheme: dark;
 }
 :root[data-theme="forest"] {
@@ -572,6 +576,7 @@ html.booting .layout, html.booting .mnav, html.booting .offline-bar { visibility
   --ink: #E6F0E9; --ink-2: #9DB3A5; --ink-3: #708878; --line: #26342C; --cell: #223029;
   --accent: #4CC9C0; --accent-soft: #173A38;
   --good: #7BDC6A; --mid: #E8C15A; --bad: #EE7355; --bad-ink: #FF9A80; --on-tier: #0E1411;
+  --on-accent: var(--on-tier);
   color-scheme: dark;
 }
 :root[data-theme="sand"] {
@@ -616,36 +621,45 @@ html.booting .layout, html.booting .mnav, html.booting .offline-bar { visibility
   --good: #2E9E5B; --mid: #D99A12; --bad: #DE5340; --bad-ink: #B13628; --on-tier: #2E1D14;
   color-scheme: light;
 }
-/* Тёмные пары новых светлых тем: система в тёмном режиме — тема темнеет в своих цветах */
-@media (prefers-color-scheme: dark) {
-  :root[data-theme="mint"] {
-    --bg: #0B1612; --dot: #16261F; --panel: #111F19; --panel-2: #172821;
-    --ink: #E3F2EC; --ink-2: #9DBDB1; --ink-3: #6B8B80; --line: #22382F; --cell: #1E3229;
-    --accent: #3DD6A6; --accent-soft: #143A2F;
-    --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #0B1612;
-    color-scheme: dark;
-  }
-  :root[data-theme="lavender"] {
-    --bg: #110E1C; --dot: #1F1A32; --panel: #171328; --panel-2: #1E1933;
-    --ink: #ECE8FA; --ink-2: #ADA4C8; --ink-3: #837A9F; --line: #2C2645; --cell: #27213E;
-    --accent: #A98BFF; --accent-soft: #2A2150;
-    --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #110E1C;
-    color-scheme: dark;
-  }
-  :root[data-theme="sky"] {
-    --bg: #0A121C; --dot: #15212F; --panel: #0F1A27; --panel-2: #152232;
-    --ink: #E4EEF8; --ink-2: #9CB2C9; --ink-3: #6C849C; --line: #213247; --cell: #1B2B3E;
-    --accent: #5AB2FF; --accent-soft: #14304D;
-    --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #0A121C;
-    color-scheme: dark;
-  }
-  :root[data-theme="peach"] {
-    --bg: #170F0B; --dot: #2A1D16; --panel: #1F1510; --panel-2: #271B15;
-    --ink: #F6EAE2; --ink-2: #C7AE9F; --ink-3: #957B6D; --line: #3A2A21; --cell: #33251D;
-    --accent: #FF8F57; --accent-soft: #45261A;
-    --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #170F0B;
-    color-scheme: dark;
-  }
+:root[data-theme="lemon"] {
+  --bg: #FAF7E4; --dot: #E9E2BE; --panel: #FFFFFF; --panel-2: #FCFAEE;
+  --ink: #25210F; --ink-2: #5F5838; --ink-3: #6E6745; --line: #ECE5C6; --cell: #F1EBD0;
+  --accent: #A16207; --accent-soft: #FBEFC4;
+  --good: #2E9E5B; --mid: #D99A12; --bad: #DE5340; --bad-ink: #B13628; --on-tier: #25210F;
+  color-scheme: light;
+}
+/* Ещё тёмные темы: Аметист, Кофе, Вампир, Графит (чёрная, для OLED-экранов) */
+:root[data-theme="amethyst"] {
+  --bg: #110E1C; --dot: #1F1A32; --panel: #171328; --panel-2: #1E1933;
+  --ink: #ECE8FA; --ink-2: #ADA4C8; --ink-3: #837A9F; --line: #2C2645; --cell: #27213E;
+  --accent: #A98BFF; --accent-soft: #2A2150;
+  --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #110E1C;
+  --on-accent: var(--on-tier);
+  color-scheme: dark;
+}
+:root[data-theme="coffee"] {
+  --bg: #170F0B; --dot: #2A1D16; --panel: #1F1510; --panel-2: #271B15;
+  --ink: #F6EAE2; --ink-2: #C7AE9F; --ink-3: #957B6D; --line: #3A2A21; --cell: #33251D;
+  --accent: #FF8F57; --accent-soft: #45261A;
+  --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #170F0B;
+  --on-accent: var(--on-tier);
+  color-scheme: dark;
+}
+:root[data-theme="vampire"] {
+  --bg: #140A0C; --dot: #2A1519; --panel: #1D0F12; --panel-2: #251418;
+  --ink: #F7E6E8; --ink-2: #C9A3A8; --ink-3: #9A767C; --line: #3A1F24; --cell: #321A1F;
+  --accent: #FF4D5E; --accent-soft: #4A1820;
+  --good: #43C97A; --mid: #F2BA44; --bad: #FF7A5C; --bad-ink: #FFA08A; --on-tier: #140A0C;
+  --on-accent: var(--on-tier);
+  color-scheme: dark;
+}
+:root[data-theme="graphite"] {
+  --bg: #000000; --dot: #161616; --panel: #0E0E0F; --panel-2: #161618;
+  --ink: #F2F2F2; --ink-2: #A8A8AD; --ink-3: #7C7C82; --line: #26262A; --cell: #1F1F23;
+  --accent: #FFB020; --accent-soft: #3A2A0A;
+  --good: #43C97A; --mid: #F2BA44; --bad: #F26A55; --bad-ink: #FF8E7D; --on-tier: #000000;
+  --on-accent: var(--on-tier);
+  color-scheme: dark;
 }
 /* Theme picker */
 .theme-pick { position: relative; }
@@ -745,15 +759,29 @@ html.locked { overflow: hidden; }
 
 /* Rater */
 .rater { padding-bottom: 0; }
-/* подсказка для новичков: три шага, прячется кнопкой «Понятно» */
-.howto { display: grid; gap: 10px; margin: 0 0 16px; padding: 12px 14px; border-radius: 14px; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); animation: howto-in .5s cubic-bezier(.34, 1.56, .64, 1) both; }
+/* подсказка для новичков: яркая карточка с шагами, висит, пока не нажмут «Понятно» */
+.howto { position: relative; display: grid; gap: 12px; margin: 0 0 18px; padding: 16px 16px 14px; border-radius: 18px; background: linear-gradient(135deg, var(--accent-soft), color-mix(in srgb, var(--accent-soft) 60%, var(--panel))); border: 2px solid var(--accent); box-shadow: 0 14px 34px -18px color-mix(in srgb, var(--accent) 70%, transparent); animation: howto-in .6s cubic-bezier(.34, 1.56, .64, 1) both, howto-nudge 2.4s ease-in-out 1.2s 3; }
 .howto[hidden] { display: none; }
-@keyframes howto-in { from { transform: translateY(-8px) scale(.98); } }
-.howto ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
-.howto li { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; align-items: center; font-size: 14px; line-height: 1.35; color: var(--ink); }
-.howto li b { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 13px; font-weight: 800; }
-.howto-x { justify-self: end; height: 32px; padding: 0 14px; border-radius: 999px; border: 0; background: var(--ink); color: var(--panel); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
-@media (prefers-reduced-motion: reduce) { .howto { animation: none; } }
+@keyframes howto-in { from { transform: translateY(-14px) scale(.96); } }
+@keyframes howto-nudge { 0%, 30%, 60%, 100% { transform: none; } 15% { transform: translateY(-5px); } 45% { transform: translateY(-2px); } }
+.howto-head { display: flex; align-items: center; gap: 10px; font-size: 17px; font-weight: 800; line-height: 1.2; color: var(--ink); }
+.howto-wave { display: inline-block; font-size: 26px; transform-origin: 70% 80%; animation: howto-wave 1.6s ease-in-out .6s 3; }
+@keyframes howto-wave { 0%, 60%, 100% { transform: rotate(0); } 10%, 30% { transform: rotate(16deg); } 20%, 40% { transform: rotate(-10deg); } }
+.howto ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 9px; }
+.howto li { display: grid; grid-template-columns: 30px minmax(0, 1fr); gap: 11px; align-items: center; font-size: 15px; line-height: 1.4; color: var(--ink); animation: howto-step .5s cubic-bezier(.34, 1.56, .64, 1) backwards; }
+.howto li:nth-child(2) { animation-delay: .12s; }
+.howto li:nth-child(3) { animation-delay: .24s; }
+@keyframes howto-step { from { transform: translateX(-14px); } }
+.howto li b { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: var(--accent); color: var(--on-accent, #fff); font-size: 14px; font-weight: 800; box-shadow: 0 4px 10px -4px var(--accent); }
+.howto-x { justify-self: end; height: 40px; padding: 0 20px; border-radius: 999px; border: 0; background: var(--accent); color: var(--on-accent, #fff); font: inherit; font-size: 14.5px; font-weight: 800; cursor: pointer; transition: transform .2s cubic-bezier(.34, 1.56, .64, 1); }
+.howto-x:hover { transform: translateY(-2px) scale(1.03); }
+.howto-x:active { transform: scale(.95); }
+@media (max-width: 420px) { .howto-x { justify-self: stretch; } }
+.howto-btn { gap: 5px; }
+@media (max-width: 560px) { .hb-t { display: none; } }
+.howto.again { animation: howto-in .6s cubic-bezier(.34, 1.56, .64, 1) both; }
+@media (prefers-reduced-motion: reduce) { .howto.again { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .howto, .howto li, .howto-wave { animation: none; } }
 .rater-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .eyebrow { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
 .eyebrow .dot { width: 9px; height: 9px; border-radius: 2px; background: var(--accent); }
@@ -1436,6 +1464,7 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
         <a class="theme-btn" id="githubLink" href="https://github.com/anorroDev/casualhub" target="_blank" rel="noopener" title="Код сайта на GitHub"><svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a>
         <span class="theme-btn online-chip" data-online-count title="Сколько людей сейчас на сайте: с аккаунтом и гости"><em aria-hidden="true"></em><b>—</b><span class="oc-t">&nbsp;на сайте</span></span>
         <a class="theme-btn fr-btn" href="/mnenie/#friends" data-friends-btn title="Друзья"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="5.5" r="2.5"/><path d="M1.5 14c.6-2.6 2.3-4 4.5-4s3.9 1.4 4.5 4"/><path d="M10.5 3.2a2.5 2.5 0 0 1 0 4.6M12.5 10.3c1 .6 1.7 1.9 2 3.7"/></svg><span class="fb-t">Друзья</span><i class="fb-n fb-on" hidden></i><i class="fb-n fb-req" hidden></i></a>
+        <button type="button" class="theme-btn howto-btn" id="howtoBtn" title="Как пользоваться" aria-controls="howto" aria-expanded="false"><span aria-hidden="true">❓</span><span class="hb-t">Помощь</span></button>
         <details class="theme-pick" id="themePick">
           <summary class="theme-btn" id="themeBtn" title="Тема оформления">🌓 Тема</summary>
           <div class="theme-menu" id="themeMenu" role="group" aria-label="Тема оформления"></div>
@@ -1462,12 +1491,13 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
         <button type="button" class="btn text" id="headBtn">Очистить</button>
       </div>
       <div class="howto" id="howto" hidden>
+        <div class="howto-head"><span class="howto-wave" aria-hidden="true">👋</span><span>Впервые тут? Всё просто:</span></div>
         <ol>
           <li><b>1</b><span>Выбери категорию и напиши, что оцениваешь: игру, фильм, кафе — что угодно</span></li>
           <li><b>2</b><span>Нажимай на клетки от 1 до 10 у пунктов ниже. Чем больше клеток, тем лучше</span></li>
           <li><b>3</b><span>Жми «Сохранить» внизу — оценка появится в рейтинге</span></li>
         </ol>
-        <button type="button" class="howto-x">Понятно</button>
+        <button type="button" class="howto-x">Понятно 👍</button>
       </div>
 
       <div class="field">
@@ -1704,6 +1734,7 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
 </div>
 
 <script src="/themes.js"></script>
+<script src="/fx.js"></script>
 <script src="/mnenie/app.js"></script>
 <script src="/friends.js"></script>
 <script src="/mnenie/reveal.js"></script>

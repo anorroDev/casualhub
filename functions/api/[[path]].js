@@ -1,7 +1,7 @@
 // Казуал Хаб: онлайн-аккаунты, друзья и оценки друзей.
 // Cloudflare Pages Functions, база D1 подключена как binding DB (см. schema.sql и README).
 
-import { clip, numOrNull, SAFE_URL, cleanRating, readShelf, stampOf, RID_RE } from '../_lib/shelf.js';
+import { clip, numOrNull, SAFE_URL, cleanRating, readShelf, stampOf, RID_RE, SPOOF_RE } from '../_lib/shelf.js';
 
 const enc = new TextEncoder();
 const ITER = 10000; // PBKDF2: больше не даёт бесплатный тариф по времени CPU
@@ -246,47 +246,56 @@ const routes = {
   async 'PUT /account'({ env, request, me }) {
     const { username, handle, password, email, current, hideOnline } = await readBody(request);
     const out = { ...me };
-    const mailChange = email != null && email !== '' && cleanEmail(email) !== (me.email || '');
-    if (password || mailChange) {
+    const mail = email != null && email !== '' ? cleanEmail(email) : null;
+    const mailChange = mail != null && mail !== (me.email || '');
+    const h = handle != null ? cleanHandle(handle) : null;
+    const handleChange = h != null && h !== me.handle;
+    const name = username != null ? cleanName(username) : null;
+    const nameChange = name != null && name !== me.username;
+    const pass = password ? String(password) : '';
+    // сначала все проверки, потом все записи: при ошибке в одном поле остальные не меняются наполовину
+    if (mailChange && (!EMAIL_RE.test(mail) || mail.length > 120)) return fail(400, 'Нужна почта, например name@mail.com.');
+    if (handleChange && !HANDLE_RE.test(h)) return fail(400, HANDLE_HINT);
+    if (nameChange && !NAME_RE.test(name)) return fail(400, NAME_HINT);
+    if (pass && weakPass(pass)) return fail(400, WEAK_PASS);
+    if (pass || mailChange) {
       // украденной сессии мало, чтобы угнать аккаунт: почту и пароль меняют, зная текущий пароль
       const wait = await overLimit(env, 'acc:' + me.id, 'loginAcc');
       if (wait) return tooMany(wait);
+      const cur = String(current || '');
       const row = await env.DB.prepare('SELECT pass_hash, salt FROM users WHERE id = ?').bind(me.id).first();
-      if (!row || !sameHex(await hashPass(String(current || ''), row.salt), row.pass_hash)) {
+      // паролей длиннее 200 не бывает: огромную строку даже не хешируем, чтобы ей нельзя было нагрузить сервер
+      if (!row || cur.length > 200 || !sameHex(await hashPass(cur, row.salt), row.pass_hash)) {
         await hit(env, 'acc:' + me.id, 'loginAcc');
         return fail(403, current ? 'Текущий пароль не подходит.' : 'Чтобы сменить почту или пароль, впиши текущий пароль.');
       }
+    }
+    if (mailChange) {
+      const taken = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(mail).first();
+      if (taken && taken.id !== me.id) return fail(409, 'На эту почту уже есть аккаунт.');
+    }
+    if (handleChange) {
+      const taken = await env.DB.prepare('SELECT id FROM users WHERE uname = ?').bind(h).first();
+      if (taken && taken.id !== me.id) return fail(409, `Юзернейм @${h} уже занят.`);
     }
     if (hideOnline != null) {
       await env.DB.prepare('UPDATE users SET hide_online = ? WHERE id = ?').bind(hideOnline ? 1 : 0, me.id).run();
       out.hide_online = hideOnline ? 1 : 0;
     }
     if (mailChange) {
-      const mail = cleanEmail(email);
-      if (!EMAIL_RE.test(mail) || mail.length > 120) return fail(400, 'Нужна почта, например name@mail.com.');
-      const taken = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(mail).first();
-      if (taken && taken.id !== me.id) return fail(409, 'На эту почту уже есть аккаунт.');
       await env.DB.prepare('UPDATE users SET email = ? WHERE id = ?').bind(mail, me.id).run();
       out.email = mail;
     }
-    if (handle != null && cleanHandle(handle) !== me.handle) {
-      const h = cleanHandle(handle);
-      if (!HANDLE_RE.test(h)) return fail(400, HANDLE_HINT);
-      const taken = await env.DB.prepare('SELECT id FROM users WHERE uname = ?').bind(h).first();
-      if (taken && taken.id !== me.id) return fail(409, `Юзернейм @${h} уже занят.`);
+    if (handleChange) {
       await env.DB.prepare('UPDATE users SET uname = ? WHERE id = ?').bind(h, me.id).run();
       out.handle = h;
     }
     // ник может совпадать с чужим: друзья различают людей по @юзернейму
-    if (username != null && cleanName(username) !== me.username) {
-      const name = cleanName(username);
-      if (!NAME_RE.test(name)) return fail(400, NAME_HINT);
+    if (nameChange) {
       await env.DB.prepare('UPDATE users SET username = ?, nkey = ? WHERE id = ?').bind(name, name.toLowerCase(), me.id).run();
       out.username = name;
     }
-    if (password) {
-      const pass = String(password);
-      if (weakPass(pass)) return fail(400, WEAK_PASS);
+    if (pass) {
       const salt = randHex(16);
       await env.DB.prepare('UPDATE users SET pass_hash = ?, salt = ? WHERE id = ?').bind(await hashPass(pass, salt), salt, me.id).run();
       // все остальные устройства выходят из аккаунта: если пароль утёк, старые сессии больше не работают
@@ -556,7 +565,7 @@ const routes = {
     await hit(env, 'react:' + me.id, 'react');
     const body = await readBody(request);
     const emoji = REACTIONS.includes(body.emoji) ? body.emoji : null;
-    const text = String(body.text || '').replace(/\s+/g, ' ').trim().slice(0, 140);
+    const text = String(body.text || '').replace(SPOOF_RE, '').replace(/\s+/g, ' ').trim().slice(0, 140);
     if (!emoji && !text) {
       await env.DB.prepare('DELETE FROM reactions WHERE owner_id = ? AND rid = ? AND from_id = ?').bind(uid, rid, me.id).run();
       return json({ ok: true, removed: true });
@@ -644,7 +653,7 @@ const routes = {
       const sum = new Map();
       for (const x of rx) {
         const k = x.owner_id + ':' + x.rid;
-        const o = sum.get(k) || { fire: 0, skull: 0, nope: 0, text: 0 };
+        const o = sum.get(k) || Object.fromEntries(REACTIONS.map((r) => [r, 0]).concat([['text', 0]]));
         if (x.emoji && o[x.emoji] != null) o[x.emoji]++;
         if (x.text) o.text++;
         sum.set(k, o);
@@ -692,7 +701,8 @@ const HANDLE_HINT = 'Юзернейм: от 3 до 20 символов, лати
 const MAX_PHOTOS = 1200; // фото, превью, аватар и баннер вместе
 const MAX_PHOTO = 1900000; // символов в data URL, предел строки в D1 около 2 МБ
 const STICKER_RE = /^hub\/(?!.*\.\.)[\w\-\/.]{1,100}\.(png|gif|webp|webm|jpe?g)$/; // путь картинки из каталога колеса
-const REACTIONS = ['fire', 'skull', 'nope']; // 🔥 огонь, 💀 жесть, 🙅 не согласен
+// 🔥 огонь, 💀 жесть, 🙅 не согласен, 😂 ору, 😍 обожаю, 👍 согласен, 👎 мимо, 🤔 спорно, 😭 до слёз, 🤡 клоунада, 🗿 база, 🐐 легенда
+const REACTIONS = ['fire', 'skull', 'nope', 'lol', 'love', 'like', 'dislike', 'think', 'cry', 'clown', 'moai', 'goat'];
 // ---------- Genius: фото исполнителей ----------
 // Токен лежит в секрете GENIUS_TOKEN и наружу не уходит. Поиск доступен только вошедшим, ответы кэшируются на сутки.
 const GENIUS_IMG = /^https:\/\/(images|assets|t2)\.genius\.com\/|^https:\/\/images\.rapgenius\.com\/|^https:\/\/(cdn-images|e-cdns-images)\.dzcdn\.net\//;

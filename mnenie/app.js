@@ -4853,18 +4853,28 @@ renderBoard();
 renderLog();
 ready = initStorage();
 
-// подсказка «как оценивать»: пока нет ни одной своей оценки
+// подсказка «как оценивать»: висит, пока не нажали «Понятно»
 const updateHowto = 
-/* подсказка для новичков: показывается, пока не видно, что человек разобрался, и прячется навсегда кнопкой «Понятно» */
+/* подсказка для новичков: прячется только кнопкой «Понятно», и тогда навсегда */
 (() => {
   const box = document.getElementById('howto');
   if (!box) return;
   const KEY = 'casualhub.howto.v1';
+  const btn = document.getElementById('howtoBtn');
   const done = () => { try { return !!(JSON.parse(localStorage.getItem(KEY) || '{}') || {})['mnenie']; } catch (e) { return false; } };
-  const update = () => { box.hidden = done() || !(state.loaded && !state.ratings.some((r) => !r.example)); };
-  box.querySelector('.howto-x').addEventListener('click', () => {
-    try { const m = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; m['mnenie'] = true; localStorage.setItem(KEY, JSON.stringify(m)); } catch (e) {}
-    box.hidden = true;
+  const update = () => { box.hidden = done(); if (btn) btn.setAttribute('aria-expanded', String(!box.hidden)); };
+  const mark = (v) => { try { const m = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; m['mnenie'] = v; localStorage.setItem(KEY, JSON.stringify(m)); } catch (e) {} };
+  const sync = () => { if (btn) btn.setAttribute('aria-expanded', String(!box.hidden)); };
+  box.querySelector('.howto-x').addEventListener('click', () => { mark(true); box.hidden = true; sync(); });
+  // «❓ Помощь» в шапке: открывает подсказку снова (или прячет, если она уже открыта) и прокручивает к ней
+  if (btn) btn.addEventListener('click', () => {
+    // подсказка не видна (скрыта или на телефоне открыта другая вкладка) — показываем; видна — прячем
+    const show = box.hidden || !box.offsetHeight;
+    mark(!show); box.hidden = !show; sync();
+    if (!show) return;
+    if (!box.offsetHeight) { const tab = document.querySelector('[data-section="rate"]'); if (tab) tab.click(); }
+    box.classList.remove('again'); void box.offsetWidth; box.classList.add('again');
+    box.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
   });
   update();
   return update;
