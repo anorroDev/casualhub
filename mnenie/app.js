@@ -4852,3 +4852,25 @@ renderNotice();
 renderBoard();
 renderLog();
 ready = initStorage();
+
+// подсказка «как оценивать»: пока нет ни одной своей оценки
+const updateHowto = 
+/* подсказка для новичков: показывается, пока не видно, что человек разобрался, и прячется навсегда кнопкой «Понятно» */
+(() => {
+  const box = document.getElementById('howto');
+  if (!box) return;
+  const KEY = 'casualhub.howto.v1';
+  const done = () => { try { return !!(JSON.parse(localStorage.getItem(KEY) || '{}') || {})['mnenie']; } catch (e) { return false; } };
+  const update = () => { box.hidden = done() || !(state.loaded && !state.ratings.some((r) => !r.example)); };
+  box.querySelector('.howto-x').addEventListener('click', () => {
+    try { const m = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; m['mnenie'] = true; localStorage.setItem(KEY, JSON.stringify(m)); } catch (e) {}
+    box.hidden = true;
+  });
+  update();
+  return update;
+})();
+if (updateHowto) {
+  Promise.resolve(ready).catch(() => {}).then(updateHowto);
+  const baseRender = renderBoard;
+  renderBoard = function () { const r = baseRender.apply(this, arguments); updateHowto(); return r; };
+}

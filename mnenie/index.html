@@ -745,6 +745,15 @@ html.locked { overflow: hidden; }
 
 /* Rater */
 .rater { padding-bottom: 0; }
+/* подсказка для новичков: три шага, прячется кнопкой «Понятно» */
+.howto { display: grid; gap: 10px; margin: 0 0 16px; padding: 12px 14px; border-radius: 14px; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); animation: howto-in .5s cubic-bezier(.34, 1.56, .64, 1) both; }
+.howto[hidden] { display: none; }
+@keyframes howto-in { from { transform: translateY(-8px) scale(.98); } }
+.howto ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.howto li { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; align-items: center; font-size: 14px; line-height: 1.35; color: var(--ink); }
+.howto li b { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 13px; font-weight: 800; }
+.howto-x { justify-self: end; height: 32px; padding: 0 14px; border-radius: 999px; border: 0; background: var(--ink); color: var(--panel); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+@media (prefers-reduced-motion: reduce) { .howto { animation: none; } }
 .rater-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
 .eyebrow { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
 .eyebrow .dot { width: 9px; height: 9px; border-radius: 2px; background: var(--accent); }
@@ -1136,7 +1145,10 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
   }
   .mnav button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
   .mnav button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  .mnav b { font-weight: 600; opacity: .6; font-variant-numeric: tabular-nums; }
+  .mnav b { font-weight: 600; opacity: .6; font-variant-numeric: tabular-nums; margin-left: 4px; }
+  /* на узком телефоне значок над подписью, чтобы влезли все четыре вкладки */
+  @media (max-width: 440px) { .mnav button { flex-direction: column; gap: 1px; height: 50px; font-size: 12.5px; } .mnav .mi { font-size: 16px; line-height: 1.1; } }
+  @media (max-width: 360px) { .mnav button { font-size: 11.5px; padding: 0 2px; } .mnav b { margin-left: 2px; } }
   .layout[data-section="rate"] .board, .layout[data-section="board"] .rater, .layout[data-section="stats"] .rater, .layout[data-section="log"] .rater { display: none; }
   .board .views { display: none; }
   .board .board-head { margin-top: 0; }
@@ -1437,10 +1449,10 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
   <p class="offline-bar" id="offlineBar" role="status" hidden><strong>Сохранение здесь не работает.</strong> Страница открылась без доступа к хранилищу Claude, так бывает во встроенном браузере Telegram. Оценки пропадут после закрытия, фото и скачивание недоступны. Открой ссылку в Safari или в приложении Claude.</p>
   <div id="navAnchor" aria-hidden="true"></div>
   <nav class="mnav" id="mnav" aria-label="Разделы" style="grid-template-columns: repeat(4, minmax(0, 1fr));">
-    <button type="button" data-section="rate" aria-pressed="true">Оценка</button>
-    <button type="button" data-section="board" aria-pressed="false">Рейтинг<b id="mnavCount"></b></button>
-    <button type="button" data-section="stats" aria-pressed="false">Стат.</button>
-    <button type="button" data-section="log" aria-pressed="false">Журнал</button>
+    <button type="button" data-section="rate" aria-pressed="true"><span class="mi" aria-hidden="true">✏️</span><span>Оценка</span></button>
+    <button type="button" data-section="board" aria-pressed="false"><span class="mi" aria-hidden="true">🏆</span><span>Рейтинг<b id="mnavCount"></b></span></button>
+    <button type="button" data-section="stats" aria-pressed="false"><span class="mi" aria-hidden="true">📊</span><span>Стат.</span></button>
+    <button type="button" data-section="log" aria-pressed="false"><span class="mi" aria-hidden="true">📜</span><span>Журнал</span></button>
   </nav>
 
   <main class="layout" id="layout" data-section="rate">
@@ -1448,6 +1460,14 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
       <div class="rater-head">
         <h2 class="eyebrow"><span class="dot" aria-hidden="true"></span><span id="raterTitle">Новая оценка</span></h2>
         <button type="button" class="btn text" id="headBtn">Очистить</button>
+      </div>
+      <div class="howto" id="howto" hidden>
+        <ol>
+          <li><b>1</b><span>Выбери категорию и напиши, что оцениваешь: игру, фильм, кафе — что угодно</span></li>
+          <li><b>2</b><span>Нажимай на клетки от 1 до 10 у пунктов ниже. Чем больше клеток, тем лучше</span></li>
+          <li><b>3</b><span>Жми «Сохранить» внизу — оценка появится в рейтинге</span></li>
+        </ol>
+        <button type="button" class="howto-x">Понятно</button>
       </div>
 
       <div class="field">

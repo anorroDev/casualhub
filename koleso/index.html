@@ -803,6 +803,15 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
 @supports (-webkit-touch-callout: none) { input, textarea, select { font-size: max(16px, 1em) !important; } }
 /* на телефоне переключатели под палец: не ниже 40px */
 @media (pointer: coarse) { .seg button, .seg > button { min-height: 40px; } }
+/* подсказка для новичков: три шага, прячется кнопкой «Понятно» */
+.howto { display: grid; gap: 10px; margin: 0 0 16px; padding: 12px 14px; border-radius: 14px; background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); animation: howto-in .5s cubic-bezier(.34, 1.56, .64, 1) both; }
+.howto[hidden] { display: none; }
+@keyframes howto-in { from { transform: translateY(-8px) scale(.98); } }
+.howto ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.howto li { display: grid; grid-template-columns: 26px minmax(0, 1fr); gap: 10px; align-items: center; font-size: 14px; line-height: 1.35; color: var(--ink); }
+.howto li b { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff; font-size: 13px; font-weight: 800; }
+.howto-x { justify-self: end; height: 32px; padding: 0 14px; border-radius: 999px; border: 0; background: var(--ink); color: var(--panel); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
+@media (prefers-reduced-motion: reduce) { .howto { animation: none; } }
 /* на телефоне у счётчика и «Друзей» без подписей, шапка может уйти во вторую строку */
 .online-chip { cursor: default; }
 @media (max-width: 560px) { .oc-t, .fb-t { display: none; } .masthead-right > .user-bar { flex-wrap: wrap; justify-content: flex-end; row-gap: 6px; } }
@@ -839,8 +848,8 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
   </header>
 
   <nav class="mnav" id="mnav" aria-label="Разделы">
-    <button type="button" data-section="wheel" aria-pressed="true">Колесо</button>
-    <button type="button" data-section="list" aria-pressed="false">Участники<b id="mnavCount"></b></button>
+    <button type="button" data-section="wheel" aria-pressed="true"><span class="mi" aria-hidden="true">🎡</span><span>Колесо</span></button>
+    <button type="button" data-section="list" aria-pressed="false"><span class="mi" aria-hidden="true">👥</span><span>Участники<b id="mnavCount"></b></span></button>
   </nav>
 
   <main class="layout" id="layout" data-section="wheel">
@@ -850,6 +859,14 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
         <button type="button" class="btn text" id="restart">Вернуть всех</button>
       </div>
 
+      <div class="howto" id="howto" hidden>
+        <ol>
+          <li><b>1</b><span>Впиши участников во вкладке «Участники»: по одному или сразу списком</span></li>
+          <li><b>2</b><span>Жми «Крутить» в центре колеса</span></li>
+          <li><b>3</b><span>На выбывание: на кого показала стрелка — вылетает, последний побеждает. «Один победитель» — выигрывает сразу тот, на ком остановилось</span></li>
+        </ol>
+        <button type="button" class="howto-x">Понятно</button>
+      </div>
       <div class="readout">
         <span class="label">Под стрелкой</span>
         <strong id="ticker">—</strong>

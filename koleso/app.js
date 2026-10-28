@@ -108,6 +108,23 @@
     return { id, name, amount: +amount || 0, cur: CUR[cur] ? cur : S.cur, out: false, outOrder: 0, startWin: null };
   }
   const alive = () => S.items.filter((i) => !i.out);
+  // подсказка «как крутить»: пока на колесе примеры или пусто
+  let updateHowto = null;
+  const initHowto = () => { updateHowto = 
+  /* подсказка для новичков: показывается, пока не видно, что человек разобрался, и прячется навсегда кнопкой «Понятно» */
+  (() => {
+    const box = document.getElementById('howto');
+    if (!box) return;
+    const KEY = 'casualhub.howto.v1';
+    const done = () => { try { return !!(JSON.parse(localStorage.getItem(KEY) || '{}') || {})['koleso']; } catch (e) { return false; } };
+    const update = () => { box.hidden = done() || !(S.sample || S.items.length < 2); };
+    box.querySelector('.howto-x').addEventListener('click', () => {
+      try { const m = JSON.parse(localStorage.getItem(KEY) || '{}') || {}; m['koleso'] = true; localStorage.setItem(KEY, JSON.stringify(m)); } catch (e) {}
+      box.hidden = true;
+    });
+    update();
+    return update;
+  })(); };
   const rate = (c) => (S.rates && S.rates[c] > 0 ? S.rates[c] : DEF_RATES[c]);
   const conv = (amount, from, to) => ((+amount || 0) / rate(from)) * rate(to);
   const sym = (c) => (CUR[c] || CUR[S.cur]).sym;
@@ -630,6 +647,7 @@
       ? 'Строка: имя, сумма и валюта, например «Hades $20» или «Celeste 1 500 грн». Без валюты берётся выбранная в форме.'
       : 'Одно имя на строку.';
     $('#sampleNote').hidden = !S.sample;
+    if (updateHowto) updateHowto();
 
     const a = alive(), ch = chances();
     // в донатном режиме топ по сумме (в валюте банка), сверху самый крупный
@@ -1866,6 +1884,7 @@
     renderGifs();
     loadBaseHubs();
     gifNote();
+    initHowto();
     renderMusic();
     musicNote();
     gifsAll()
