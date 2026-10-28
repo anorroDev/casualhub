@@ -525,6 +525,16 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       $('#allSort').addEventListener('click', (e) => { const b = e.target.closest('[data-sort]'); if (b) { AST.sort = b.dataset.sort; keepAll(); drawAll(); } });
       $('#allView').addEventListener('click', (e) => { const b = e.target.closest('[data-view]'); if (b) { AST.view = b.dataset.view; AST.limit = 60; keepAll(); drawAll(); } });
       $('#allMore').addEventListener('click', () => { AST.limit += 60; drawAll(); });
+      // «Свой тир-лист»: те же оценки, что сейчас на странице (темы, жанры, поиск), раскладываются по рядам вручную
+      $('#allBody').addEventListener('click', (e) => {
+        if (!e.target.closest('[data-tiermaker]') || !window.CasualTierMaker) return;
+        const p = allP, mine = p.kind === 'me' || !p.uid;
+        window.CasualTierMaker.open({
+          scope: mine ? 'me' : 'u:' + p.uid,
+          title: mine ? 'Свой тир-лист' : `Свой тир-лист: оценки ${p.name}`,
+          items: (AST.shown || []).map((r) => ({ id: r.id, name: r.name, total: r.total, img: r.photo ? () => photoOf(p, r) : '' })),
+        });
+      });
       wireGenres($('#allGenreBtn'), $('#allGenres'), AST, drawAll);
     }
     $('#allWho').textContent = p.name;
@@ -543,6 +553,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const inCats = rs.filter((r) => !AST.cats.length || AST.cats.includes(keyOf(r.cat)));
     genreUI($('#allGenreBtn'), $('#allGenres'), inCats, AST);
     const list = inCats.filter((r) => hasGenres(r, AST.genres) && (!q || keyOf(r.name + ' ' + r.meta).includes(q)));
+    AST.shown = list;
     list.sort(AST.sort === 'date' ? (a, b) => b.at - a.at : AST.sort === 'name' ? (a, b) => a.name.localeCompare(b.name, 'ru') : (a, b) => (b.total ?? -1) - (a.total ?? -1) || b.at - a.at);
     $('#allCount').textContent = `${list.length} ${plural(list.length, 'оценка', 'оценки', 'оценок')}`;
     const body = $('#allBody');
@@ -559,7 +570,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
           : '<span class="tl-empty">—</span>'}</div></div>`;
       }).join('');
       const unrated = list.length - rated.length;
-      body.innerHTML = `<div class="tl">${rows}</div>${unrated ? `<p class="muted">Без балла: ${unrated}. В тир-лист они не попадают.</p>` : ''}`;
+      body.innerHTML = `<div class="tm-open"><button type="button" class="btn ghost" data-tiermaker title="Разложить оценки по рядам самому, а не по баллу">✍️ Свой тир-лист</button></div><div class="tl">${rows}</div>${unrated ? `<p class="muted">Без балла: ${unrated}. В тир-лист они не попадают.</p>` : ''}`;
     } else {
       const shown = list.slice(0, AST.limit);
       more.hidden = list.length <= AST.limit;

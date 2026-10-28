@@ -4635,22 +4635,36 @@ function renderTierView() {
         <button type="button" data-tlmode="scores" aria-pressed="${mode === 'scores'}">С оценками</button>
         <button type="button" data-tlmode="names" aria-pressed="${mode === 'names'}">С названиями</button>
       </div></div>
-      <div class="tl-acts"><button type="button" class="btn small primary" data-tl="png">Скачать PNG</button>${window.ClipboardItem && navigator.clipboard && navigator.clipboard.write ? '<button type="button" class="btn small ghost" data-tl="copy">Скопировать картинку</button>' : ''}</div>
+      <div class="tl-acts"><button type="button" class="btn small ghost" data-tl="mine" title="Разложить оценки по рядам самому, а не по баллу">✍️ Свой тир-лист</button><button type="button" class="btn small primary" data-tl="png">Скачать PNG</button>${window.ClipboardItem && navigator.clipboard && navigator.clipboard.write ? '<button type="button" class="btn small ghost" data-tl="copy">Скопировать картинку</button>' : ''}</div>
     </div>
     ${list.length ? `<div class="tl" data-mode="${mode}">${tierBuckets(list).map(({ t, items }) => `<div class="tl-row">
       <div class="tl-head" style="--c:${t.col}"><b>${t.id}</b><small>${t.range}</small></div>
       <div class="tl-items">${items.length ? items.map(item).join('') : '<span class="tl-empty">пусто</span>'}</div>
     </div>`).join('')}</div>` : '<div class="empty"><p><strong>Тир-лист пуст.</strong> Здесь появятся оценки с баллом из выбранных категорий.</p></div>'}`;
 }
+// «Свой тир-лист» (tier-maker.js): те же оценки, что в тир-листе сейчас (категории и жанры), но и без балла тоже
+function openTierMaker() {
+  if (!window.CasualTierMaker) return;
+  const cats = state.tierOpts.cats;
+  const base = state.ratings.some(r => !r.example) ? state.ratings.filter(r => !r.example) : state.ratings;
+  const list = base.filter(r => (!cats || cats.includes(catKey(r))) && hasGenres(r)).sort((a, b) => (b.total ?? -1) - (a.total ?? -1));
+  const what = [cats ? groups().filter(g => cats.includes(g.id)).map(g => g.name).join(', ') : '', state.genres.join(', ')].filter(Boolean).join(' · ');
+  window.CasualTierMaker.open({
+    scope: 'me',
+    title: 'Свой тир-лист' + (what ? ' · ' + what : ''),
+    items: list.map(r => ({ id: r.id, name: r.name, total: r.total, img: resolvePhotoUrl(r.photo) || artistAvaUrl(r) || '', ref: r })),
+    png: (buckets) => tierExport('png', { buckets, sub: what || 'Все категории' }),
+  });
+}
 // картинка тир-листа: рисуем заново на canvas, фото берём те же, что в рейтинге
-async function tierPng() {
-  const list = tierPool();
+async function tierPng(custom) {
+  const list = custom ? custom.buckets.flatMap(b => b.items) : tierPool();
   if (!list.length) { toast('В тир-листе пока пусто'); return null; }
   const mode = state.tierOpts.mode;
   try { await document.fonts.load('800 40px Handjet'); await document.fonts.load('600 16px Onest'); } catch (_) {}
   const W = 1200, PAD = 32, HEAD = 112, TILE = 96, GAP = 10, CAP = mode === 'names' ? 38 : 0;
   const perRow = Math.floor((W - PAD * 2 - HEAD - GAP * 2) / (TILE + GAP));
-  const buckets = tierBuckets(list);
+  const buckets = custom ? custom.buckets : tierBuckets(list);
   const rows = buckets.map(b => Math.max(1, Math.ceil(b.items.length / perRow)));
   const rowH = (n) => n * (TILE + CAP) + (n - 1) * GAP + GAP * 2;
   const H = PAD + 92 + rows.reduce((a, n) => a + rowH(n) + 8, 0) + 40 + PAD;
@@ -4667,7 +4681,7 @@ async function tierPng() {
   ctx.fillStyle = '#E8EAF0'; ctx.font = '800 46px Handjet, sans-serif'; ctx.textBaseline = 'top';
   ctx.fillText('Мой тир-лист', PAD, PAD);
   const cats = state.tierOpts.cats;
-  const sub = (cats ? groups().filter(g => cats.includes(g.id)).map(g => g.name).join(', ') : 'Все категории') + ` · ${list.length} ${plural(list.length, 'оценка', 'оценки', 'оценок')}`;
+  const sub = (custom ? custom.sub : cats ? groups().filter(g => cats.includes(g.id)).map(g => g.name).join(', ') : 'Все категории') + ` · ${list.length} ${plural(list.length, 'оценка', 'оценки', 'оценок')}`;
   ctx.fillStyle = '#A3A9B8'; ctx.font = '500 16px Onest, sans-serif';
   ctx.fillText(sub.length > 110 ? sub.slice(0, 108) + '…' : sub, PAD, PAD + 54);
   let y = PAD + 92;
@@ -4687,7 +4701,7 @@ async function tierPng() {
       if (bmp) { const s2 = Math.max(TILE / bmp.width, TILE / bmp.height); ctx.drawImage(bmp, cx + (TILE - bmp.width * s2) / 2, cy + (TILE - bmp.height * s2) / 2, bmp.width * s2, bmp.height * s2); }
       else { ctx.fillStyle = '#1D2129'; ctx.fillRect(cx, cy, TILE, TILE); ctx.fillStyle = col; ctx.font = '800 50px Handjet, sans-serif'; ctx.fillText([...String(r.name).trim()][0] || '?', cx + TILE / 2, cy + TILE / 2); }
       ctx.restore();
-      if (mode === 'scores') {
+      if (mode === 'scores' && r.total != null) {
         const t = fmt(r.total);
         ctx.font = '800 22px Handjet, sans-serif';
         const bw = ctx.measureText(t).width + 14;
@@ -4709,8 +4723,8 @@ async function tierPng() {
   bmps.forEach(b => b.close && b.close());
   return await new Promise(res => cv.toBlob(res, 'image/png'));
 }
-async function tierExport(kind) {
-  const blob = await tierPng();
+async function tierExport(kind, custom) {
+  const blob = await tierPng(custom);
   if (!blob) return;
   if (kind === 'copy') {
     try { await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]); toast('Тир-лист скопирован'); }
@@ -5038,6 +5052,7 @@ if (el.randomBtn) {
     const m = e.target.closest('[data-tlmode]');
     if (m) { state.tierOpts.mode = m.dataset.tlmode; savePrefs(); renderTierView(); return; }
     const a = e.target.closest('[data-tl]');
+    if (a && a.dataset.tl === 'mine') { openTierMaker(); return; }
     if (a) { a.disabled = true; tierExport(a.dataset.tl).finally(() => { a.disabled = false; }); return; }
     const g = e.target.closest('[data-tier-goto]');
     if (g) goToRating(g.dataset.tierGoto);
