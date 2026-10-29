@@ -91,8 +91,34 @@
       if (end > 0) requestAnimationFrame(step);
     });
   }
+  // обложки, фото и аватарки, которые догрузились, когда страница уже стоит, слегка «выпрыгивают» (только масштаб)
+  addEventListener('load', (e) => {
+    const im = e.target;
+    if (!im || im.tagName !== 'IMG' || !im.isConnected || im.closest('.theme-menu, .hist-menu, #baseThumbs')) return;
+    const r = im.getBoundingClientRect();
+    if (r.width < 24 || r.bottom < 0 || r.top > innerHeight) return;
+    im.animate([{ scale: '.9' }, { scale: '1' }], { duration: 420, easing: SPRING });
+  }, true);
+  // баллы и числа подпрыгивают, когда появились на экране (один раз)
+  const POP = '.badge, .fd-score:not(.none), .kpi-val, .adm-stat b';
+  const popped = new WeakSet();
+  const pio = 'IntersectionObserver' in window ? new IntersectionObserver((ents) => ents.forEach((en) => {
+    if (!en.isIntersecting) return;
+    pio.unobserve(en.target);
+    // перерисовка списка (поиск, фильтр) не должна заново подбрасывать всё, что и так на экране: прыгают только при первом показе и при прокрутке
+    if (performance.now() > 2500 && en.time - (+en.target.dataset.fxObs || 0) < 80) return;
+    en.target.animate([{ scale: '.6', rotate: '-6deg' }, { scale: '1.08', rotate: '2deg', offset: 0.6 }, { scale: '1', rotate: '0deg' }], { duration: 520, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+  }), { rootMargin: '0px 0px -20px 0px' }) : null;
+  const popScan = () => { if (pio) document.querySelectorAll(POP).forEach((el) => { if (!popped.has(el)) { popped.add(el); el.dataset.fxObs = performance.now(); pio.observe(el); } }); };
+  // значки вкладок и пунктов меню покачиваются при нажатии
+  addEventListener('click', (e) => {
+    const ic = e.target.closest && e.target.closest('.mnav button, .adm-tabs button, .hm-panel a, .hm-panel button');
+    const g = ic && ic.querySelector('.mi, span[aria-hidden="true"], svg');
+    if (g && g.animate) g.animate([{ rotate: '0deg' }, { rotate: '-14deg', scale: '1.2' }, { rotate: '10deg' }, { rotate: '0deg', scale: '1' }], { duration: 480, easing: 'ease-out' });
+  }, { passive: true });
+
   let queued = false;
-  const later = () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; scan(); }); };
-  const start = () => { scan(); new MutationObserver(later).observe(document.body, { childList: true, subtree: true }); addEventListener('click', () => setTimeout(later, 60)); };
+  const later = () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; scan(); popScan(); }); };
+  const start = () => { scan(); popScan(); new MutationObserver(later).observe(document.body, { childList: true, subtree: true }); addEventListener('click', () => setTimeout(later, 60)); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();

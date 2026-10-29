@@ -130,7 +130,15 @@
       }
     } catch (e) {} finally { busy = false; }
   }
-  const start = () => { clearInterval(timer); ping(); timer = setInterval(ping, 60e3); };
-  document.addEventListener('visibilitychange', () => { if (document.hidden) clearInterval(timer); else start(); });
+  // объявление из админки отдельным лёгким запросом раз в 15 секунд: новое появляется у всех почти сразу, без перезагрузки
+  let annTimer = 0;
+  async function pollAnnounce() {
+    if (document.hidden) return;
+    try { const r = await fetch('/api/announce', { cache: 'no-store' }); if (r.ok) announce((await r.json()).announce); } catch (e) {}
+  }
+  const start = () => { clearInterval(timer); clearInterval(annTimer); ping(); timer = setInterval(ping, 60e3); annTimer = setInterval(pollAnnounce, 15e3); };
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { clearInterval(timer); clearInterval(annTimer); } else start(); });
+  // объявление закрыли в другой вкладке — убираем и здесь
+  addEventListener('storage', (e) => { if (e.key === ANN_KEY) { const bar = document.getElementById('siteAnnounce'); if (bar && bar.dataset.id === e.newValue) bar.remove(); } });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true }); else start();
 })();

@@ -190,13 +190,23 @@
         <ul class="adm-list">${d.users.map((u, i) => `<li class="adm-row${u.banned ? ' banned' : ''}" style="--k:${Math.min(i, 12)}" data-uid="${esc(u.id)}">
           <div class="adm-who"><b>${esc(u.username)}</b> <a href="/profile/?id=${encodeURIComponent(u.id)}">@${esc(u.handle)}</a>${u.admin ? ' <em class="adm-badge">админ</em>' : ''}${u.banned ? ` <em class="adm-badge bad">бан${u.banReason ? ': ' + esc(u.banReason) : ''}</em>` : ''}
             <small>${esc(u.email)} · с ${when(u.createdAt)} · был ${when(u.lastSeen)} · оценок ${u.ratings}</small></div>
-          ${u.admin ? '' : `<div class="adm-acts"><button type="button" class="btn ghost small" data-act="kick">Выкинуть с устройств</button><button type="button" class="btn small ${u.banned ? 'ghost' : 'danger'}" data-act="${u.banned ? 'unban' : 'ban'}">${u.banned ? 'Разбанить' : 'Забанить'}</button></div>`}
+          ${u.admin ? `<div class="adm-acts"><button type="button" class="btn ghost small" data-act="rename" data-h="${esc(u.handle)}">✎ Ник и @</button></div>` : `<div class="adm-acts"><button type="button" class="btn ghost small" data-act="rename" data-h="${esc(u.handle)}">✎ Ник и @</button><button type="button" class="btn ghost small" data-act="kick">Выкинуть с устройств</button><button type="button" class="btn small ${u.banned ? 'ghost' : 'danger'}" data-act="${u.banned ? 'unban' : 'ban'}">${u.banned ? 'Разбанить' : 'Забанить'}</button></div>`}
         </li>`).join('') || '<li class="muted">Никого не нашлось.</li>'}</ul>`;
       $('#admUq').addEventListener('submit', (e) => { e.preventDefault(); users(e.target.querySelector('input').value.trim()); });
       sec().querySelector('.adm-list').addEventListener('click', async (e) => {
         const b = e.target.closest('[data-act]');
         if (!b) return;
         const li = b.closest('[data-uid]'), id = li.dataset.uid, name = li.querySelector('.adm-who b').textContent;
+        // новый @юзернейм и ник: пустое поле — оставить как есть
+        if (b.dataset.act === 'rename') {
+          const h = prompt(`Новый @юзернейм для ${name} (латиница, цифры, «_» и «.», 3–20 символов). Пусто — не менять:`, b.dataset.h);
+          if (h === null) return;
+          const n = prompt(`Новый ник для ${name} (2–24 символа). Пусто — не менять:`, name);
+          if (n === null) return;
+          b.disabled = true;
+          try { await call('POST', `/admin/rename/${encodeURIComponent(id)}`, { handle: h.trim() === b.dataset.h ? '' : h.trim(), username: n.trim() === name ? '' : n.trim() }); users(q); } catch (x) { alert(x.message); b.disabled = false; }
+          return;
+        }
         let body = null;
         if (b.dataset.act === 'ban') {
           const reason = prompt(`Забанить ${name}? Причина (её увидит он сам при входе), можно пусто:`, '');

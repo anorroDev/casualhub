@@ -385,6 +385,11 @@ const routes = {
     return json({ ok: true });
   },
 
+  // объявление отдельно и часто: страницы спрашивают его раз в 15 секунд, поэтому новое появляется у всех почти сразу
+  async 'GET /announce'({ env, request }) {
+    if (burst('ann:' + clientIp(request), 40, 60e3)) return tooMany(1); // страница просто пропустит этот раз, плашка не пропадёт
+    return json({ announce: await currentAnnounce(env) });
+  },
   // ---------- инструменты админки: только с открытым входом в админку (пин-код на этом устройстве), каждое действие в журнале ----------
   async 'GET /admin/stats'({ env, request, me }) {
     if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
@@ -439,6 +444,27 @@ const routes = {
     else await env.DB.prepare('UPDATE users SET banned = NULL, ban_reason = NULL WHERE id = ?').bind(u.id).run();
     await adminLog(env, request, me, (on ? 'ban ' : 'unban ') + u.uname, true);
     return json({ ok: true });
+  },
+  // сменить человеку @юзернейм и/или ник: те же правила, что при смене самим человеком, юзернеймы админов другим не выдаются
+  async 'POST /admin/rename/:id'({ env, request, me, arg }) {
+    if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+    const { handle, username } = await readBody(request);
+    const u = await env.DB.prepare('SELECT id, username, uname FROM users WHERE id = ?').bind(arg).first();
+    if (!u) return fail(404, 'Нет такого аккаунта.');
+    const h = handle != null && handle !== '' ? cleanHandle(handle) : null;
+    const name = username != null && username !== '' ? cleanName(username) : null;
+    if (h != null && h !== u.uname) {
+      if (!HANDLE_RE.test(h)) return fail(400, HANDLE_HINT);
+      const own = ADMIN_HANDLES.includes(String(u.uname).toLowerCase());
+      if (ADMIN_HANDLES.includes(h) && !own) return fail(409, `Юзернейм @${h} уже занят.`);
+      const taken = await env.DB.prepare('SELECT id FROM users WHERE uname = ?').bind(h).first();
+      if (taken && taken.id !== u.id) return fail(409, `Юзернейм @${h} уже занят.`);
+    }
+    if (name != null && !NAME_RE.test(name)) return fail(400, NAME_HINT);
+    if (h != null && h !== u.uname) await env.DB.prepare('UPDATE users SET uname = ? WHERE id = ?').bind(h, u.id).run();
+    if (name != null && name !== u.username) await env.DB.prepare('UPDATE users SET username = ?, nkey = ? WHERE id = ?').bind(name, name.toLowerCase(), u.id).run();
+    await adminLog(env, request, me, `rename @${u.uname} → @${h || u.uname}${name && name !== u.username ? ' «' + name + '»' : ''}`, true);
+    return json({ ok: true, handle: h || u.uname, username: name || u.username });
   },
   // выкинуть со всех устройств (например, если пароль утёк): все сессии аккаунта удаляются
   async 'POST /admin/kick/:id'({ env, request, me, arg }) {
@@ -595,13 +621,7 @@ const routes = {
       const c = await env.DB.prepare("SELECT COUNT(*) AS n FROM friendships WHERE (a = ?1 OR b = ?1) AND status = 'pending' AND requested_by != ?1").bind(me.id).first();
       incoming = c ? c.n : 0;
     }
-    // объявление из админки: плашка для всех на сайте (читается из базы не чаще раза в 30 секунд)
-    if (announceCache.at < now - 30e3) {
-      try { const r = await env.DB.prepare("SELECT v FROM meta WHERE k = 'announce'").first(); announceCache.v = r ? JSON.parse(r.v) : null; } catch (e) { announceCache.v = null; }
-      announceCache.at = now;
-    }
-    const ann = announceCache.v && announceCache.v.text && (!announceCache.v.until || announceCache.v.until > now) ? announceCache.v : null;
-    return json({ online: Math.max(onlineCache.n, me ? 1 : 0), friends, incoming, window: ONLINE_MS, announce: ann ? { id: ann.id, text: ann.text, kind: ann.kind } : null });
+    return json({ online: Math.max(onlineCache.n, me ? 1 : 0), friends, incoming, window: ONLINE_MS, announce: await currentAnnounce(env) });
   },
 
   async 'GET /friends'({ env, me }) {
@@ -697,7 +717,7 @@ const routes = {
     if (burst('shelf:' + me.id, 40, 60e3)) return tooMany(1);
     const { ratings, deleted, cats, profile, sticker, layout } = await readBody(request);
     if (!Array.isArray(ratings)) return fail(400, 'Нужен список оценок.');
-    const row = await env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(me.id).first();
+    const row = await env.DB.prepare('SELECT data, updated_at FROM shelves WHERE user_id = ?').bind(me.id).first();
     const old = readShelf(row);
     const del = new Map(old.deleted.map((d) => [d.id, d.at]));
     for (const d of Array.isArray(deleted) ? deleted : []) {
@@ -753,10 +773,21 @@ const routes = {
     if (profileOut) shelfData.profile = profileOut;
     const data = JSON.stringify(shelfData);
     if (data.length > MAX_SHELF) return fail(413, 'Слишком много данных, убери длинные заметки.');
+    // «оценки обновлены» — это когда менялись сами оценки, а не когда человек просто открыл сайт:
+    // ничего не поменялось — не пишем вовсе; оценки поменялись — ставим время самой свежей оценки (её поставили, может, ночью без интернета)
     const now = Date.now();
-    await env.DB.prepare(
-      'INSERT INTO shelves (user_id, data, updated_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at'
-    ).bind(me.id, data, now).run();
+    let updated = row ? +row.updated_at || now : now;
+    if (!row || row.data !== data) {
+      const sameRatings = row && JSON.stringify(old.ratings) === JSON.stringify(shelfData.ratings) && JSON.stringify(old.deleted) === JSON.stringify(shelfData.deleted);
+      if (!sameRatings) {
+        const newest = Math.max(0, ...shelfData.ratings.map(stampOf), ...(shelfData.deleted || []).map((d) => +d.at || 0));
+        updated = Math.min(now, newest || now);
+        if (row && updated < +row.updated_at) updated = +row.updated_at; // время не идёт назад
+      }
+      await env.DB.prepare(
+        'INSERT INTO shelves (user_id, data, updated_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at'
+      ).bind(me.id, data, updated).run();
+    }
     // фото стираем только у оценок, удалённых в этот раз, а не у всех прежних
     const oldDel = new Set(old.deleted.map((d) => d.id));
     const live = new Set(merged.map((r) => r.id));
@@ -767,7 +798,7 @@ const routes = {
         .concat(env.DB.prepare('DELETE FROM shares WHERE owner_id = ? AND rid = ?').bind(me.id, id)) // и ссылка на отзыв закрывается
         .concat(env.DB.prepare('DELETE FROM comments WHERE owner_id = ? AND target = ?').bind(me.id, 'r.' + id)))); // и ветка комментариев под ней
     }
-    return json({ ok: true, updatedAt: now, count: merged.length, catsAt: catsOut ? catsOut.at : null });
+    return json({ ok: true, updatedAt: updated, count: merged.length, catsAt: catsOut ? catsOut.at : null });
   },
 
   async 'GET /shelf/:id'({ env, me, arg }) {
@@ -1483,7 +1514,7 @@ async function canSee(env, me, uid) {
   return !!row && row.status === 'accepted';
 }
 
-const PUBLIC = new Set(['POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img']);
+const PUBLIC = new Set(['POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce']);
 // код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности
 const SHARE_RE = /^[A-Za-z0-9]{12}$/;
 function shareId() {
@@ -1493,6 +1524,16 @@ function shareId() {
 const ONLINE_MS = 150e3; // «в сети» — заходил за последние 2,5 минуты
 const onlineCache = { n: 0, at: 0 };
 const announceCache = { v: null, at: 0 };
+// объявление из админки: читается из базы не чаще раза в 5 секунд на сервер
+async function currentAnnounce(env) {
+  const now = Date.now();
+  if (announceCache.at < now - 5e3) {
+    try { const r = await env.DB.prepare("SELECT v FROM meta WHERE k = 'announce'").first(); announceCache.v = r ? JSON.parse(r.v) : null; } catch (e) { announceCache.v = null; }
+    announceCache.at = now;
+  }
+  const a = announceCache.v;
+  return a && a.text && (!a.until || a.until > now) ? { id: a.id, text: a.text, kind: a.kind } : null;
+}
 
 export async function onRequest({ request, env, params }) {
   const segs = [].concat(params.path || []);
@@ -1507,7 +1548,7 @@ export async function onRequest({ request, env, params }) {
   if (!routes[key] && segs.length === 2 && segs[0] === 'photo' && RID_RE.test(segs[1])) { key = `${request.method} /photo/:rid`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'photo' && RID_RE.test(segs[2])) { key = `${request.method} /photo/:uid/:rid`; arg = [segs[1], segs[2]]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'react' && RID_RE.test(segs[2])) { key = `${request.method} /react/:uid/:rid`; arg = [segs[1], segs[2]]; }
-  if (!routes[key] && segs.length === 3 && segs[0] === 'admin' && ['ban', 'kick'].includes(segs[1]) && /^[0-9a-f]{24}$/.test(segs[2])) { key = `${request.method} /admin/${segs[1]}/:id`; arg = segs[2]; }
+  if (!routes[key] && segs.length === 3 && segs[0] === 'admin' && ['ban', 'kick', 'rename'].includes(segs[1]) && /^[0-9a-f]{24}$/.test(segs[2])) { key = `${request.method} /admin/${segs[1]}/:id`; arg = segs[2]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'admin' && segs[1] === 'comment' && /^[0-9a-f]{20}$/.test(segs[2])) { key = `${request.method} /admin/comment/:id`; arg = segs[2]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'comments' && CM_TARGET_RE.test(segs[2])) { key = `${request.method} /comments/:uid/:target`; arg = [segs[1], segs[2]]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'comment' && /^[0-9a-f]{20}$/.test(segs[1])) { key = `${request.method} /comment/:id`; arg = segs[1]; }
