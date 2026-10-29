@@ -38,7 +38,10 @@
 .oc-mini { flex: none; min-width: 0 !important; padding: 0 11px !important; gap: 7px !important; }
 .oc-mini .oc-t { display: none !important; }
 header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
-.wn-corner { position: absolute; top: 14px; right: 16px; z-index: 60; }
+.wn-corner { position: absolute; top: 14px; right: 16px; z-index: 60; display: flex; align-items: center; gap: 8px; }
+.wn-corner .hm-admin { box-shadow: 0 10px 24px -14px rgba(0, 0, 0, .6); }
+.hm-admin { border-color: color-mix(in srgb, #E4553F 55%, var(--line, #2b2e38)) !important; color: var(--ink, #f3f4f6) !important; }
+.hm-admin svg { color: #E4553F; flex: none; }
 .wn-corner [data-whatsnew] { box-shadow: 0 10px 24px -14px rgba(0, 0, 0, .6); }
 /* окно «Настройки» */
 .hs-sheet { position: fixed; inset: 0; z-index: 110; display: grid; place-items: center; padding: 16px; background: rgba(8, 10, 14, .6); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
@@ -104,6 +107,24 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     if (!setBox || setBox.hidden) return;
     setBox.hidden = true;
     document.documentElement.style.overflow = '';
+  }
+
+  // админы сайта: им видна кнопка «Админ». Это только кнопка, доступ к админке проверяет сервер
+  const ADMINS = ['anorro', 'yukomagod'];
+  function adminBtn(cls) {
+    let u = null, t = null, seen = null;
+    try {
+      u = JSON.parse(localStorage.getItem('ocenshik.user.v1') || 'null');
+      t = u && (JSON.parse(localStorage.getItem('casualhub.tokens.v1') || 'null') || {})[u.id];
+      seen = localStorage.getItem('casualhub.admin.v1'); // админка уже открывалась с этого аккаунта
+    } catch (e) {}
+    if (!u || !t || !(ADMINS.includes(String(u.handle || '').toLowerCase()) || seen === u.id)) return null;
+    const a = document.createElement('a');
+    a.className = cls + ' hm-admin';
+    a.href = '/admin/';
+    a.title = 'Админ-панель';
+    a.innerHTML = '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.5l5.5 2v4.2c0 3.3-2.3 5.8-5.5 6.8-3.2-1-5.5-3.5-5.5-6.8V3.5z"/><path d="M5.6 8l1.7 1.7 3.2-3.4" stroke-linecap="round"/></svg><span class="hm-t">Админ</span>';
+    return a;
   }
 
   function build() {
@@ -186,6 +207,8 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     all.innerHTML = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1.3"/><rect x="9" y="2" width="5" height="5" rx="1.3"/><rect x="2" y="9" width="5" height="5" rx="1.3"/><rect x="9" y="9" width="5" height="5" rx="1.3"/></svg><span class="hm-t">Все оценки</span><span class="hm-go" aria-hidden="true">›</span>';
     panel.prepend(all);
 
+    // «Админ» — справа от «Что нового», только у админов (кто админ на самом деле, проверяет сервер)
+    const adm = adminBtn(cls);
     // «Что нового»: в самом углу страницы, на узком экране — в меню
     const wn = bar.querySelector('[data-whatsnew]');
     const corner = document.createElement('div');
@@ -193,12 +216,17 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     document.body.appendChild(corner);
     // в угол — только если справа от шапки хватает места, чтобы кнопка ничего не закрывала
     const placeWn = () => {
-      if (!wn) return;
+      if (!wn) { if (adm && !adm.parentElement) panel.appendChild(adm); return; }
       if (!wn.textContent.trim()) wn.insertAdjacentHTML('beforeend', '<span class="hm-t">Что нового</span>');
       const room = document.documentElement.clientWidth - header.getBoundingClientRect().right;
-      const need = (wn.offsetWidth || 140) + 40;
-      if (room >= need) { if (wn.parentElement !== corner) corner.appendChild(wn); }
+      const wnW = (wn.parentElement === corner && wn.offsetWidth) || 140, admW = adm ? (adm.parentElement === corner && adm.offsetWidth) || 96 : 0;
+      const wnCorner = room >= wnW + 40;
+      if (wnCorner) { if (wn.parentElement !== corner) corner.appendChild(wn); }
       else if (wn.parentElement !== panel) panel.appendChild(wn);
+      // «Админ» — справа от «Что нового»: в углу рядом с ней, если влезает обе, иначе в меню
+      if (!adm) return;
+      if (wnCorner && room < wnW + admW + 48) { if (adm.parentElement !== panel) panel.appendChild(adm); }
+      else if (adm.previousElementSibling !== wn) wn.after(adm);
     };
     placeWn();
     if (location.hash === '#settings') { history.replaceState(null, '', location.pathname + location.search); openSettings(); }

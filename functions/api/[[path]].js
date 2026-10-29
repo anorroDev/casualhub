@@ -57,6 +57,8 @@ async function ensureSchema(env) {
     env.DB.prepare('CREATE TABLE IF NOT EXISTS comments (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, target TEXT NOT NULL, from_id TEXT NOT NULL, text TEXT NOT NULL, at INTEGER NOT NULL)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS comments_owner ON comments(owner_id, target, at)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS comments_from ON comments(from_id)'),
+    // админы: кто уже ввёл одноразовый пароль (дальше вход в админку без пароля)
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS admins (user_id TEXT PRIMARY KEY, handle TEXT NOT NULL, at INTEGER NOT NULL)'),
   ]);
   const { results } = await env.DB.prepare('PRAGMA table_info(users)').all();
   if (!results.some((c) => c.name === 'email')) await env.DB.prepare('ALTER TABLE users ADD COLUMN email TEXT').run();
@@ -155,7 +157,20 @@ const LIMITS = {
   friendReq: { max: 40, win: 10 * 60e3 }, // заявок в друзья (перебор ников)
   react: { max: 120, win: 10 * 60e3 },    // реакций и комментариев
   comment: { max: 60, win: 10 * 60e3 },   // комментариев на стенах и под оценками
+  admin: { max: 5, win: 60 * 60e3 },      // неверных одноразовых паролей админки
 };
+// ---------- админ-панель: только для двух аккаунтов; первый вход — одноразовый пароль из секрета ADMIN_CODE ----------
+// Секрет задаётся в Cloudflare (Pages → Settings → Variables and Secrets) и в код не попадает.
+const ADMIN_HANDLES = ['anorro', 'yukomagod'];
+const adminCandidate = (me) => !!me && ADMIN_HANDLES.includes(String(me.handle || '').toLowerCase());
+const isAdmin = async (env, me) => !!me && !!(await env.DB.prepare('SELECT 1 FROM admins WHERE user_id = ?').bind(me.id).first());
+// сравнение без подсказки по времени ответа: сравниваются отпечатки одинаковой длины
+async function sameSecret(a, b) {
+  const [x, y] = await Promise.all([sha256(a), sha256(b)]);
+  let d = 0;
+  for (let i = 0; i < x.length; i++) d |= x.charCodeAt(i) ^ y.charCodeAt(i);
+  return d === 0;
+}
 const CM_MAX = 500; // символов в одном комментарии
 const CM_TARGET_RE = /^(wall|r\.[\w.-]{1,80})$/;
 const clientIp = (request) => request.headers.get('CF-Connecting-IP') || 'local';
@@ -247,6 +262,31 @@ const routes = {
 
   async 'GET /me'({ me }) {
     return json({ user: ownUser(me) });
+  },
+
+  // админка: остальным отвечаем «нет такого адреса», чтобы не было видно, что она вообще есть
+  async 'GET /admin/me'({ env, me }) {
+    const admin = await isAdmin(env, me);
+    if (!admin && !adminCandidate(me)) return fail(404, 'Нет такого адреса.');
+    return json({ admin, ready: !!env.ADMIN_CODE, handle: me.handle });
+  },
+  async 'POST /admin/unlock'({ env, request, me }) {
+    if (!adminCandidate(me)) return fail(404, 'Нет такого адреса.');
+    if (await isAdmin(env, me)) return json({ ok: true });
+    if (!env.ADMIN_CODE) return fail(503, 'Одноразовый пароль ещё не задан на сервере.');
+    const accKey = 'admin:' + me.id, ipKey = 'adminip:' + clientIp(request);
+    const wait = (await overLimit(env, accKey, 'admin')) || (await overLimit(env, ipKey, 'admin'));
+    if (wait) return tooMany(wait);
+    const { code } = await readBody(request);
+    const ok = typeof code === 'string' && code.trim().length > 0 && code.length <= 200 && (await sameSecret(code.trim(), String(env.ADMIN_CODE).trim()));
+    if (!ok) {
+      await hit(env, accKey, 'admin');
+      await hit(env, ipKey, 'admin');
+      return fail(403, 'Неверный пароль.');
+    }
+    await env.DB.prepare('INSERT OR IGNORE INTO admins (user_id, handle, at) VALUES (?, ?, ?)').bind(me.id, me.handle, Date.now()).run();
+    await env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind(accKey).run();
+    return json({ ok: true });
   },
 
   // смена ника и/или пароля из профиля на сайте

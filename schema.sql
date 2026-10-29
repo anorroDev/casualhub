@@ -74,6 +74,9 @@ CREATE INDEX IF NOT EXISTS reactions_from ON reactions(from_id);
 -- Служебные отметки сервера, например «старые ники уже переведены в юзернеймы»
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
 
+-- Админы: кто уже ввёл одноразовый пароль админ-панели (секрет ADMIN_CODE)
+CREATE TABLE IF NOT EXISTS admins (user_id TEXT PRIMARY KEY, handle TEXT NOT NULL, at INTEGER NOT NULL);
+
 -- Гости на сайте для счётчика «сейчас на сайте»: случайный id браузера и время последней отметки
 CREATE TABLE IF NOT EXISTS presence (id TEXT PRIMARY KEY, at INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS presence_at ON presence(at);
