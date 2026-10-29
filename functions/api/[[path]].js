@@ -70,6 +70,9 @@ async function ensureSchema(env) {
   if (!results.some((c) => c.name === 'nkey')) await env.DB.prepare('ALTER TABLE users ADD COLUMN nkey TEXT').run();
   if (!results.some((c) => c.name === 'last_seen')) await env.DB.prepare('ALTER TABLE users ADD COLUMN last_seen INTEGER').run();
   if (!results.some((c) => c.name === 'hide_online')) await env.DB.prepare('ALTER TABLE users ADD COLUMN hide_online INTEGER').run();
+  // бан из админки: заблокированный аккаунт не входит и не может ничего менять
+  if (!results.some((c) => c.name === 'banned')) await env.DB.prepare('ALTER TABLE users ADD COLUMN banned INTEGER').run();
+  if (!results.some((c) => c.name === 'ban_reason')) await env.DB.prepare('ALTER TABLE users ADD COLUMN ban_reason TEXT').run();
   await env.DB.batch([
     env.DB.prepare('CREATE INDEX IF NOT EXISTS users_seen ON users(last_seen)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS presence (id TEXT PRIMARY KEY, at INTEGER NOT NULL)'),
@@ -145,7 +148,7 @@ async function currentUser(env, request) {
   const th = await sha256(m[1]);
   const now = Date.now();
   const u = await env.DB.prepare(
-    'SELECT u.id, u.username, u.uname AS handle, u.email, u.created_at, u.hide_online, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?'
+    'SELECT u.id, u.username, u.uname AS handle, u.email, u.created_at, u.hide_online, u.banned, u.ban_reason, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?'
   ).bind(th, now).first();
   // кто заходит, тот не вылетает: меньше 20 дней до конца сессии — продлеваем на 30 (запись раз в ~10 дней)
   if (u && u.expires_at - now < 20 * 864e5) await env.DB.prepare('UPDATE sessions SET expires_at = ? WHERE token_hash = ?').bind(now + SESSION_DAYS * 864e5, th).run();
@@ -282,7 +285,7 @@ const routes = {
     if (burst('login:all', 300, 60e3)) return tooMany(1);
     const wait = Math.max(await overLimit(env, ipKey, 'loginIp'), await overLimit(env, accKey, 'loginAcc'));
     if (wait) return tooMany(wait);
-    const COLS = 'id, username, uname, email, created_at, pass_hash, salt';
+    const COLS = 'id, username, uname, email, created_at, pass_hash, salt, banned, ban_reason';
     let u = await env.DB.prepare(`SELECT ${COLS} FROM users WHERE uname = ? OR email = ?`).bind(cleanHandle(ident), cleanEmail(ident)).first();
     if (!u) {
       const { results: same } = await env.DB.prepare(`SELECT ${COLS} FROM users WHERE nkey = ? LIMIT 2`).bind(cleanName(ident).toLowerCase()).all();
@@ -295,6 +298,8 @@ const routes = {
       await hit(env, accKey, 'loginAcc');
       return fail(401, 'Неверная почта, юзернейм или пароль.');
     }
+    // заблокированный аккаунт: пароль верный, но войти нельзя (об этом говорим только тому, кто знает пароль)
+    if (u.banned) return fail(403, 'Аккаунт заблокирован администрацией' + (u.ban_reason ? ': ' + u.ban_reason : '.'));
     await env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind(accKey).run();
     await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND expires_at < ?').bind(u.id, Date.now()).run();
     return json({ token: await newSession(env, u.id), user: ownUser(u) });
@@ -378,6 +383,112 @@ const routes = {
     if (th) await env.DB.prepare('DELETE FROM admin_sessions WHERE token_hash = ?').bind(th).run();
     await adminLog(env, request, me, 'lock', true);
     return json({ ok: true });
+  },
+
+  // ---------- инструменты админки: только с открытым входом в админку (пин-код на этом устройстве), каждое действие в журнале ----------
+  async 'GET /admin/stats'({ env, request, me }) {
+    if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+    const now = Date.now();
+    const q = (sql, ...b) => env.DB.prepare(sql).bind(...b);
+    const [users, fresh, day, online, guests, banned, comments, reacts, shares, shelves] = await env.DB.batch([
+      q('SELECT COUNT(*) AS n FROM users'),
+      q('SELECT COUNT(*) AS n FROM users WHERE created_at > ?', now - 7 * 864e5),
+      q('SELECT COUNT(*) AS n FROM users WHERE last_seen > ?', now - 864e5),
+      q('SELECT COUNT(*) AS n FROM users WHERE last_seen > ?', now - ONLINE_MS),
+      q('SELECT COUNT(*) AS n FROM presence WHERE at > ?', now - ONLINE_MS),
+      q('SELECT COUNT(*) AS n FROM users WHERE banned = 1'),
+      q('SELECT COUNT(*) AS n FROM comments'),
+      q('SELECT COUNT(*) AS n FROM reactions'),
+      q('SELECT COUNT(*) AS n FROM shares'),
+      q('SELECT data FROM shelves'),
+    ]);
+    const n = (r) => ((r.results || [])[0] || {}).n || 0;
+    let ratings = 0;
+    for (const row of shelves.results || []) { try { ratings += readShelf(row).ratings.filter((r) => r && !r.example).length; } catch (e) {} }
+    return json({ users: n(users), new7: n(fresh), active24: n(day), onlineUsers: n(online), onlineGuests: n(guests), banned: n(banned), ratings, comments: n(comments), reactions: n(reacts), shares: n(shares) });
+  },
+  async 'GET /admin/users'({ env, request, me }) {
+    if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+    const raw = String(new URL(request.url).searchParams.get('q') || '').trim().slice(0, 60);
+    const like = '%' + raw.toLowerCase().replace(/^@+/, '').replace(/[\\%_]/g, '\\$&') + '%';
+    const { results } = await env.DB.prepare(
+      `SELECT id, username, uname, email, created_at, last_seen, banned, ban_reason FROM users
+        WHERE ?1 = '' OR uname LIKE ?2 ESCAPE '\\' OR nkey LIKE ?2 ESCAPE '\\' OR email LIKE ?2 ESCAPE '\\' OR id = ?1
+        ORDER BY created_at DESC LIMIT 50`
+    ).bind(raw, like).all();
+    const ids = results.map((u) => u.id);
+    const counts = new Map();
+    if (ids.length) {
+      const { results: sh } = await env.DB.prepare(`SELECT user_id, data FROM shelves WHERE user_id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all();
+      for (const row of sh) { try { counts.set(row.user_id, readShelf(row).ratings.filter((r) => r && !r.example).length); } catch (e) {} }
+    }
+    return json({ users: results.map((u) => ({ id: u.id, username: u.username, handle: u.uname, email: u.email || '', createdAt: u.created_at, lastSeen: u.last_seen || null, banned: !!u.banned, banReason: u.ban_reason || '', ratings: counts.get(u.id) || 0, admin: ADMIN_HANDLES.includes(String(u.uname).toLowerCase()) })) });
+  },
+  // бан и разбан: заблокированный выходит со всех устройств, не может войти и ничего менять; админа забанить нельзя
+  async 'POST /admin/ban/:id'({ env, request, me, arg }) {
+    if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+    const { on, reason } = await readBody(request);
+    const u = await env.DB.prepare('SELECT id, uname FROM users WHERE id = ?').bind(arg).first();
+    if (!u) return fail(404, 'Нет такого аккаунта.');
+    if (ADMIN_HANDLES.includes(String(u.uname).toLowerCase()) || u.id === me.id) return fail(400, 'Админа забанить нельзя.');
+    const why = clip(String(reason || '').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim(), 200); // причину человек видит при входе: без разметки
+    if (on) await env.DB.batch([
+      env.DB.prepare('UPDATE users SET banned = 1, ban_reason = ? WHERE id = ?').bind(why || null, u.id),
+      env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(u.id),
+    ]);
+    else await env.DB.prepare('UPDATE users SET banned = NULL, ban_reason = NULL WHERE id = ?').bind(u.id).run();
+    await adminLog(env, request, me, (on ? 'ban ' : 'unban ') + u.uname, true);
+    return json({ ok: true });
+  },
+  // выкинуть со всех устройств (например, если пароль утёк): все сессии аккаунта удаляются
+  async 'POST /admin/kick/:id'({ env, request, me, arg }) {
+    if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+    const u = await env.DB.prepare('SELECT id, uname FROM users WHERE id = ?').bind(arg).first();
+    if (!u) return fail(404, 'Нет такого аккаунта.');
+    await env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(u.id).run();
+    await adminLog(env, request, me, 'kick ' + u.uname, true);
+    return json({ ok: true });
+  },
+  async 'GET /admin/comments'({ env, request, me }) {
+    if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+    const { results } = await env.DB.prepare(
+      `SELECT c.id, c.owner_id, c.target, c.from_id, c.text, c.at, f.username AS fname, f.uname AS fhandle, o.username AS oname, o.uname AS ohandle
+         FROM comments c LEFT JOIN users f ON f.id = c.from_id LEFT JOIN users o ON o.id = c.owner_id ORDER BY c.at DESC LIMIT 100`
+    ).all();
+    return json({ items: results.map((x) => ({ id: x.id, text: x.text, at: x.at, where: x.target === 'wall' ? 'wall' : 'rating', from: { id: x.from_id, username: x.fname || '?', handle: x.fhandle || '' }, owner: { id: x.owner_id, username: x.oname || '?', handle: x.ohandle || '' } })) });
+  },
+  async 'DELETE /admin/comment/:id'({ env, request, me, arg }) {
+    if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+    const c = await env.DB.prepare('SELECT text FROM comments WHERE id = ?').bind(arg).first();
+    await env.DB.prepare('DELETE FROM comments WHERE id = ?').bind(arg).run();
+    await adminLog(env, request, me, 'delete comment ' + (c ? String(c.text).slice(0, 50) : arg), !!c);
+    return json({ ok: true });
+  },
+  // объявление: плашка вверху у всех на сайте (приходит вместе с /ping); пустой текст — убрать
+  async 'GET /admin/announce'({ env, request, me }) {
+    if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+    const r = await env.DB.prepare("SELECT v FROM meta WHERE k = 'announce'").first();
+    let v = null; try { v = r ? JSON.parse(r.v) : null; } catch (e) {}
+    return json({ announce: v });
+  },
+  async 'PUT /admin/announce'({ env, request, me }) {
+    if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+    const { text, kind, hours } = await readBody(request);
+    const t = clip(String(text || '').replace(/\s+/g, ' ').trim(), 280);
+    if (!t) await env.DB.prepare("DELETE FROM meta WHERE k = 'announce'").run();
+    else {
+      const h = Math.max(0, Math.min(24 * 30, +hours || 0));
+      const v = { id: randHex(6), text: t, kind: ['info', 'warn', 'party'].includes(kind) ? kind : 'info', at: Date.now(), until: h ? Date.now() + h * 3600e3 : 0, by: me.handle };
+      await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('announce', ?)").bind(JSON.stringify(v)).run();
+    }
+    announceCache.at = 0;
+    await adminLog(env, request, me, t ? 'announce: ' + t.slice(0, 60) : 'announce off', true);
+    return json({ ok: true });
+  },
+  async 'GET /admin/log'({ env, request, me }) {
+    if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+    const { results } = await env.DB.prepare('SELECT l.at, l.ip, l.action, l.ok, u.uname FROM admin_log l LEFT JOIN users u ON u.id = l.user_id ORDER BY l.at DESC LIMIT 60').all();
+    return json({ items: results.map((x) => ({ at: x.at, handle: x.uname || '', action: x.action, ok: !!x.ok, ip: x.ip ? String(x.ip).replace(/(\d+\.\d+)\.\d+\.\d+$/, '$1.*.*').replace(/^([0-9a-f]+:[0-9a-f]+):.*$/i, '$1:…') : '' })) });
   },
 
   // смена ника и/или пароля из профиля на сайте
@@ -484,7 +595,13 @@ const routes = {
       const c = await env.DB.prepare("SELECT COUNT(*) AS n FROM friendships WHERE (a = ?1 OR b = ?1) AND status = 'pending' AND requested_by != ?1").bind(me.id).first();
       incoming = c ? c.n : 0;
     }
-    return json({ online: Math.max(onlineCache.n, me ? 1 : 0), friends, incoming, window: ONLINE_MS });
+    // объявление из админки: плашка для всех на сайте (читается из базы не чаще раза в 30 секунд)
+    if (announceCache.at < now - 30e3) {
+      try { const r = await env.DB.prepare("SELECT v FROM meta WHERE k = 'announce'").first(); announceCache.v = r ? JSON.parse(r.v) : null; } catch (e) { announceCache.v = null; }
+      announceCache.at = now;
+    }
+    const ann = announceCache.v && announceCache.v.text && (!announceCache.v.until || announceCache.v.until > now) ? announceCache.v : null;
+    return json({ online: Math.max(onlineCache.n, me ? 1 : 0), friends, incoming, window: ONLINE_MS, announce: ann ? { id: ann.id, text: ann.text, kind: ann.kind } : null });
   },
 
   async 'GET /friends'({ env, me }) {
@@ -1375,6 +1492,7 @@ function shareId() {
 }
 const ONLINE_MS = 150e3; // «в сети» — заходил за последние 2,5 минуты
 const onlineCache = { n: 0, at: 0 };
+const announceCache = { v: null, at: 0 };
 
 export async function onRequest({ request, env, params }) {
   const segs = [].concat(params.path || []);
@@ -1389,6 +1507,8 @@ export async function onRequest({ request, env, params }) {
   if (!routes[key] && segs.length === 2 && segs[0] === 'photo' && RID_RE.test(segs[1])) { key = `${request.method} /photo/:rid`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'photo' && RID_RE.test(segs[2])) { key = `${request.method} /photo/:uid/:rid`; arg = [segs[1], segs[2]]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'react' && RID_RE.test(segs[2])) { key = `${request.method} /react/:uid/:rid`; arg = [segs[1], segs[2]]; }
+  if (!routes[key] && segs.length === 3 && segs[0] === 'admin' && ['ban', 'kick'].includes(segs[1]) && /^[0-9a-f]{24}$/.test(segs[2])) { key = `${request.method} /admin/${segs[1]}/:id`; arg = segs[2]; }
+  if (!routes[key] && segs.length === 3 && segs[0] === 'admin' && segs[1] === 'comment' && /^[0-9a-f]{20}$/.test(segs[2])) { key = `${request.method} /admin/comment/:id`; arg = segs[2]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'comments' && CM_TARGET_RE.test(segs[2])) { key = `${request.method} /comments/:uid/:target`; arg = [segs[1], segs[2]]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'comment' && /^[0-9a-f]{20}$/.test(segs[1])) { key = `${request.method} /comment/:id`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'comments-count') { key = `${request.method} /comments-count/:uid`; arg = segs[1]; }
@@ -1410,6 +1530,7 @@ export async function onRequest({ request, env, params }) {
     if (!PUBLIC.has(key)) {
       me = await currentUser(env, request);
       if (!me) return fail(401, 'Нужно войти в онлайн-аккаунт.');
+      if (me.banned) return fail(403, 'Аккаунт заблокирован администрацией' + (me.ban_reason ? ': ' + me.ban_reason : '.'));
     }
     return await handler({ env, request, me, arg });
   } catch (e) {

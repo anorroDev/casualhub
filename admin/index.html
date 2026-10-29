@@ -285,6 +285,42 @@ button, input { font: inherit; color: inherit; }
 .adm-tile small { font-size: 12.5px; color: var(--ink-3); }
 .adm-tile em { justify-self: start; font-style: normal; font-size: 11px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; padding: 3px 8px; border-radius: 99px; background: var(--cell); color: var(--ink-3); }
 @media (prefers-reduced-motion: reduce) { .adm-lock.shake { animation: none; } }
+/* разделы админки: вкладки, статистика, списки людей и комментариев, объявление, журнал */
+.btn.small { height: 34px; padding: 0 12px; font-size: 13px; }
+.btn.danger { background: var(--bad); color: #fff; border-color: var(--bad); }
+.btn.danger:hover { background: color-mix(in srgb, var(--bad) 85%, #000); }
+.adm-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 14px 0; }
+.adm-tabs button { display: inline-flex; align-items: center; gap: 7px; height: 40px; padding: 0 16px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink-2); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; transition: transform .2s var(--spring), background-color .15s, color .15s; }
+.adm-tabs button:hover { color: var(--ink); transform: translateY(-2px); }
+.adm-tabs button[aria-selected="true"] { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+.adm-sec { min-height: 200px; }
+.adm-stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; }
+.adm-stat { display: grid; gap: 4px; padding: 16px; border-radius: 16px; background: var(--panel-2); border: 1px solid var(--line); animation: adm-up .5s var(--spring) backwards; animation-delay: calc(var(--k, 0) * 40ms); }
+.adm-stat b { font: 800 30px/1 var(--font-display); color: var(--ink); }
+.adm-stat small { font-size: 12.5px; color: var(--ink-3); }
+@keyframes adm-up { from { transform: translateY(14px) scale(.97); } }
+.adm-search { display: flex; gap: 8px; margin-bottom: 14px; }
+.adm-search .adm-in { flex: 1; min-width: 0; text-align: left; letter-spacing: 0; height: 44px; font-size: 15px; }
+.adm-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.adm-row { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 14px; border-radius: 14px; background: var(--panel-2); border: 1px solid var(--line); animation: adm-up .45s var(--spring) backwards; animation-delay: calc(var(--k, 0) * 30ms); }
+.adm-row.banned { border-color: color-mix(in srgb, var(--bad) 50%, var(--line)); }
+.adm-row.gone { animation: adm-gone .3s ease-in forwards; }
+@keyframes adm-gone { to { transform: translateX(40px) scale(.9); } }
+.adm-who { min-width: 0; flex: 1 1 260px; display: grid; gap: 3px; overflow-wrap: anywhere; }
+.adm-who b { color: var(--ink); }
+.adm-who a { color: var(--accent); font-weight: 600; text-decoration: none; }
+.adm-who small { font-size: 12.5px; color: var(--ink-3); }
+.adm-who small.inl { display: inline; }
+.adm-text { margin: 4px 0 0; font-size: 14px; color: var(--ink); white-space: pre-wrap; }
+.adm-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.adm-badge { font-style: normal; font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
+.adm-badge.bad { background: color-mix(in srgb, var(--bad) 18%, transparent); color: var(--bad); }
+.adm-ann { display: grid; gap: 10px; max-width: 640px; }
+.adm-ann textarea { height: auto; padding: 12px 14px; text-align: left; letter-spacing: 0; font-size: 15px; resize: vertical; }
+.adm-ann select { height: 44px; text-align: left; letter-spacing: 0; font-size: 14px; }
+.adm-ann-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.adm-ann-row > * { flex: 1 1 180px; }
+@media (prefers-reduced-motion: reduce) { .adm-stat, .adm-row, .adm-row.gone { animation: none; } }
 </style>
 <script src="/whatsnew.js"></script><script src="/online.js" defer></script><script src="/friends-panel.js" defer></script><script src="/header-menu.js" defer></script>
 </head>

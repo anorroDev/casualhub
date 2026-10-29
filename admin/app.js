@@ -40,7 +40,15 @@
     const first = form.querySelector('input');
     if (first) first.focus();
     // в пин-коде только цифры
-    form.querySelectorAll('input[data-pin]').forEach((i) => i.addEventListener('input', () => { i.value = i.value.replace(/\D/g, '').slice(0, 8); }));
+    // буквы молча не пропадают: говорим, что тут нужны цифры (частая ошибка — вводить сюда пароль от аккаунта)
+    form.querySelectorAll('input[data-pin]').forEach((i) => i.addEventListener('input', () => {
+      const clean = i.value.replace(/\D/g, '').slice(0, 8);
+      if (clean !== i.value && /\D/.test(i.value)) {
+        err.textContent = 'В пин-коде только цифры 0–9. Это не пароль от аккаунта, а свой короткий код из цифр.';
+        box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake');
+      } else if (err.textContent.startsWith('В пин-коде только цифры')) err.textContent = '';
+      i.value = clean;
+    }));
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const btn = form.querySelector('button[type="submit"]');
@@ -132,23 +140,122 @@
     app.innerHTML = `<div class="adm">
       <section class="card rise adm-hero" style="--d:0">
         <span class="adm-ic">${SHIELD(32)}</span>
-        <div><span class="adm-tag">Админ</span><h1>Админ-панель</h1><p class="muted">Ты вошёл как @${esc(me.handle)}. Вход действует 12 часов на этом устройстве. Пока здесь пусто: инструменты будут появляться по мере надобности.</p></div>
+        <div><span class="adm-tag">Админ</span><h1>Админ-панель</h1><p class="muted">Ты вошёл как @${esc(me.handle)}. Вход действует 12 часов на этом устройстве. Все действия записываются в журнал.</p></div>
         <button type="button" class="btn ghost adm-out" id="admOut" title="Закрыть админку: в следующий раз снова спросит пин-код">${LOCK(16)}Выйти из админки</button>
       </section>
-      <section class="card rise" style="--d:1">
-        <div class="head"><h2 class="h2">Разделы</h2><span class="label">скоро</span></div>
-        <div class="adm-grid">
-          <div class="adm-tile"><em>скоро</em><b>Пользователи</b><small>Аккаунты, ники и баны</small></div>
-          <div class="adm-tile"><em>скоро</em><b>Комментарии</b><small>Жалобы и удаление</small></div>
-          <div class="adm-tile"><em>скоро</em><b>Статистика</b><small>Сколько людей и оценок</small></div>
-          <div class="adm-tile"><em>скоро</em><b>Объявления</b><small>Сообщение всем на сайте</small></div>
-        </div>
-      </section>
+      <nav class="adm-tabs rise" style="--d:1" role="tablist" aria-label="Разделы админки">${TABS.map(([id, ico, name]) => `<button type="button" role="tab" data-tab="${id}" aria-selected="${id === tab}"><span aria-hidden="true">${ico}</span>${name}</button>`).join('')}</nav>
+      <section class="card rise adm-sec" id="admSec" style="--d:2" role="tabpanel"></section>
     </div>`;
     $('#admOut').addEventListener('click', async () => {
       try { await call('POST', '/admin/lock'); } catch (e) {}
       pinForm();
     });
+    document.querySelector('.adm-tabs').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-tab]');
+      if (!b) return;
+      tab = b.dataset.tab;
+      document.querySelectorAll('.adm-tabs [data-tab]').forEach((x) => x.setAttribute('aria-selected', String(x === b)));
+      showTab();
+    });
+    showTab();
+  }
+
+  // ---------- разделы админки ----------
+  const TABS = [['stats', '📊', 'Статистика'], ['users', '👥', 'Пользователи'], ['comments', '💬', 'Комментарии'], ['announce', '📢', 'Объявление'], ['log', '📜', 'Журнал']];
+  let tab = 'stats';
+  const sec = () => $('#admSec');
+  const when = (t) => (t ? new Date(t).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—');
+  const fail = (x) => { const s = sec(); if (s) s.innerHTML = `<p class="adm-err">${esc(x.message)}</p>`; if (x.status === 404) pinForm(); };
+  function showTab() {
+    const s = sec();
+    if (!s) return;
+    s.innerHTML = '<p class="muted">Загружаю…</p>';
+    ({ stats, users, comments, announce, log })[tab]();
+  }
+  async function stats() {
+    try {
+      const d = await call('GET', '/admin/stats');
+      const tiles = [['Аккаунтов', d.users], ['Новых за неделю', d.new7], ['Заходили за сутки', d.active24], ['Сейчас на сайте', `${d.onlineUsers} + ${d.onlineGuests} гостей`], ['Оценок', d.ratings], ['Комментариев', d.comments], ['Реакций', d.reactions], ['Ссылок на отзывы', d.shares], ['Забанено', d.banned]];
+      sec().innerHTML = `<div class="head"><h2 class="h2">Статистика</h2><button type="button" class="btn ghost small" id="admRe">Обновить</button></div>
+        <div class="adm-stats">${tiles.map(([k, v], i) => `<div class="adm-stat" style="--k:${i}"><b>${esc(v)}</b><small>${esc(k)}</small></div>`).join('')}</div>`;
+      $('#admRe').addEventListener('click', showTab);
+    } catch (x) { fail(x); }
+  }
+  async function users(q) {
+    q = q || '';
+    try {
+      const d = await call('GET', '/admin/users?q=' + encodeURIComponent(q));
+      sec().innerHTML = `<div class="head"><h2 class="h2">Пользователи</h2><span class="label">${d.users.length}${d.users.length === 50 ? '+' : ''}</span></div>
+        <form class="adm-search" id="admUq"><input class="adm-in" type="search" placeholder="@юзернейм, ник или почта" value="${esc(q)}" aria-label="Поиск пользователя"><button class="btn primary" type="submit">Найти</button></form>
+        <ul class="adm-list">${d.users.map((u, i) => `<li class="adm-row${u.banned ? ' banned' : ''}" style="--k:${Math.min(i, 12)}" data-uid="${esc(u.id)}">
+          <div class="adm-who"><b>${esc(u.username)}</b> <a href="/profile/?id=${encodeURIComponent(u.id)}">@${esc(u.handle)}</a>${u.admin ? ' <em class="adm-badge">админ</em>' : ''}${u.banned ? ` <em class="adm-badge bad">бан${u.banReason ? ': ' + esc(u.banReason) : ''}</em>` : ''}
+            <small>${esc(u.email)} · с ${when(u.createdAt)} · был ${when(u.lastSeen)} · оценок ${u.ratings}</small></div>
+          ${u.admin ? '' : `<div class="adm-acts"><button type="button" class="btn ghost small" data-act="kick">Выкинуть с устройств</button><button type="button" class="btn small ${u.banned ? 'ghost' : 'danger'}" data-act="${u.banned ? 'unban' : 'ban'}">${u.banned ? 'Разбанить' : 'Забанить'}</button></div>`}
+        </li>`).join('') || '<li class="muted">Никого не нашлось.</li>'}</ul>`;
+      $('#admUq').addEventListener('submit', (e) => { e.preventDefault(); users(e.target.querySelector('input').value.trim()); });
+      sec().querySelector('.adm-list').addEventListener('click', async (e) => {
+        const b = e.target.closest('[data-act]');
+        if (!b) return;
+        const li = b.closest('[data-uid]'), id = li.dataset.uid, name = li.querySelector('.adm-who b').textContent;
+        let body = null;
+        if (b.dataset.act === 'ban') {
+          const reason = prompt(`Забанить ${name}? Причина (её увидит он сам при входе), можно пусто:`, '');
+          if (reason === null) return;
+          body = { on: true, reason };
+        } else if (b.dataset.act === 'unban') body = { on: false };
+        else if (!confirm(`Выкинуть ${name} со всех устройств? Ему придётся войти заново.`)) return;
+        b.disabled = true;
+        try { await call('POST', `/admin/${body ? 'ban' : 'kick'}/${encodeURIComponent(id)}`, body || {}); users(q); } catch (x) { alert(x.message); b.disabled = false; }
+      });
+    } catch (x) { fail(x); }
+  }
+  async function comments() {
+    try {
+      const d = await call('GET', '/admin/comments');
+      sec().innerHTML = `<div class="head"><h2 class="h2">Комментарии</h2><span class="label">последние ${d.items.length}</span></div>
+        <ul class="adm-list">${d.items.map((c, i) => `<li class="adm-row" style="--k:${Math.min(i, 12)}" data-cid="${esc(c.id)}">
+          <div class="adm-who"><b>${esc(c.from.username)}</b> <small class="inl">@${esc(c.from.handle)} → ${c.where === 'wall' ? 'стена' : 'оценка'} @${esc(c.owner.handle)} · ${when(c.at)}</small><p class="adm-text">${esc(c.text)}</p></div>
+          <div class="adm-acts"><button type="button" class="btn small danger" data-del>Удалить</button></div></li>`).join('') || '<li class="muted">Комментариев пока нет.</li>'}</ul>`;
+      sec().querySelector('.adm-list').addEventListener('click', async (e) => {
+        const b = e.target.closest('[data-del]');
+        if (!b || !confirm('Удалить этот комментарий?')) return;
+        const li = b.closest('[data-cid]');
+        b.disabled = true;
+        try { await call('DELETE', '/admin/comment/' + encodeURIComponent(li.dataset.cid)); li.classList.add('gone'); setTimeout(() => li.remove(), 300); } catch (x) { alert(x.message); b.disabled = false; }
+      });
+    } catch (x) { fail(x); }
+  }
+  async function announce() {
+    try {
+      const { announce: a } = await call('GET', '/admin/announce');
+      const live = a && a.text && (!a.until || a.until > Date.now());
+      sec().innerHTML = `<div class="head"><h2 class="h2">Объявление</h2><span class="label">${live ? 'висит' + (a.until ? ' до ' + when(a.until) : '') : 'нет'}</span></div>
+        <p class="muted">Плашка вверху у всех на сайте. Каждый может её закрыть; новое объявление покажется снова.</p>
+        <form class="adm-ann" id="admAnn">
+          <textarea class="adm-in" maxlength="280" rows="3" placeholder="Например: «Завтра вечером сайт ненадолго выключится»">${live ? esc(a.text) : ''}</textarea>
+          <div class="adm-ann-row">
+            <select class="adm-in" name="kind" aria-label="Вид"><option value="info">📢 Обычное</option><option value="warn">⚠️ Важное</option><option value="party">🎉 Праздник</option></select>
+            <select class="adm-in" name="hours" aria-label="Сколько висит"><option value="0">Пока не уберу</option><option value="1">1 час</option><option value="24">Сутки</option><option value="168">Неделю</option></select>
+          </div>
+          <div class="adm-ann-row"><button type="submit" class="btn primary">Показать всем</button>${live ? '<button type="button" class="btn ghost" id="admAnnOff">Убрать</button>' : ''}</div>
+          <p class="adm-err" id="admAnnMsg" role="status"></p>
+        </form>`;
+      const f = $('#admAnn');
+      if (live) f.kind.value = a.kind || 'info';
+      const save = async (text) => {
+        try { await call('PUT', '/admin/announce', { text, kind: f.kind.value, hours: +f.hours.value }); announce(); } catch (x) { $('#admAnnMsg').textContent = x.message; }
+      };
+      f.addEventListener('submit', (e) => { e.preventDefault(); const t = f.querySelector('textarea').value.trim(); if (t) save(t); });
+      const off = $('#admAnnOff');
+      if (off) off.addEventListener('click', () => save(''));
+    } catch (x) { fail(x); }
+  }
+  async function log() {
+    try {
+      const d = await call('GET', '/admin/log');
+      sec().innerHTML = `<div class="head"><h2 class="h2">Журнал</h2><span class="label">последние ${d.items.length}</span></div>
+        <ul class="adm-list adm-log">${d.items.map((x) => `<li class="adm-row${x.ok ? '' : ' banned'}"><div class="adm-who"><b>${x.ok ? '✔' : '✖'} ${esc(x.action)}</b><small>@${esc(x.handle || '?')} · ${when(x.at)} · ${esc(x.ip)}</small></div></li>`).join('') || '<li class="muted">Пусто.</li>'}</ul>`;
+    } catch (x) { fail(x); }
   }
 
   // ---------- тема: тот же выбор, что на остальных страницах (меню ☰ → «Тема») ----------

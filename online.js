@@ -60,6 +60,42 @@
     ping: () => ping(),
   };
 
+  // объявление из админки: плашка вверху страницы, пока его не закрыли (закрытое не всплывает снова, пока не появится новое)
+  const ANN_KEY = 'casualhub.announceSeen.v1';
+  function announce(a) {
+    let bar = document.getElementById('siteAnnounce');
+    let seenId = '';
+    try { seenId = localStorage.getItem(ANN_KEY) || ''; } catch (e) {}
+    if (!a || !a.text || a.id === seenId) { if (bar) bar.remove(); return; }
+    if (bar && bar.dataset.id === a.id) return;
+    if (!document.getElementById('annCss')) {
+      const css = document.createElement('style');
+      css.id = 'annCss';
+      css.textContent = `.site-ann { position: relative; z-index: 50; display: flex; align-items: center; gap: 10px; max-width: 1180px; margin: 10px auto 0; padding: 10px 12px 10px 16px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--ann) 45%, transparent); background: color-mix(in srgb, var(--ann) 14%, var(--panel, #161920)); color: var(--ink, #e8eaf0); font: 600 14px/1.4 var(--font-body, system-ui, sans-serif); animation: ann-in .5s cubic-bezier(.34, 1.56, .64, 1); }
+.site-ann[data-kind="info"] { --ann: var(--accent, #3550E8); } .site-ann[data-kind="warn"] { --ann: var(--mid, #EAA92C); } .site-ann[data-kind="party"] { --ann: var(--good, #2EAD60); }
+.site-ann span { flex: 1; min-width: 0; overflow-wrap: anywhere; } .site-ann i { font-style: normal; font-size: 18px; }
+.site-ann button { flex: none; width: 30px; height: 30px; border: 0; border-radius: 50%; background: color-mix(in srgb, var(--ann) 20%, transparent); color: inherit; font: inherit; cursor: pointer; }
+@keyframes ann-in { from { transform: translateY(-14px) scale(.97); } }
+@media (max-width: 1220px) { .site-ann { margin: 10px 16px 0; } }
+@media (prefers-reduced-motion: reduce) { .site-ann { animation: none; } }`;
+      document.head.appendChild(css);
+    }
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.id = 'siteAnnounce';
+      bar.className = 'site-ann';
+      bar.setAttribute('role', 'status');
+      document.body.prepend(bar);
+    }
+    bar.dataset.id = a.id;
+    bar.dataset.kind = a.kind || 'info';
+    // текст объявления — только как текст, без разметки
+    bar.innerHTML = '<i aria-hidden="true"></i><span></span><button type="button" aria-label="Закрыть объявление">✕</button>';
+    bar.querySelector('i').textContent = a.kind === 'warn' ? '⚠️' : a.kind === 'party' ? '🎉' : '📢';
+    bar.querySelector('span').textContent = a.text;
+    bar.querySelector('button').addEventListener('click', () => { try { localStorage.setItem(ANN_KEY, a.id); } catch (e) {} bar.remove(); });
+  }
+
   let timer = 0, busy = false;
   async function ping() {
     if (busy || document.hidden) return;
@@ -89,6 +125,7 @@
           if (r) { r.hidden = !st.incoming; if (st.incoming) bump(r, st.incoming); }
           el.title = 'Друзья' + (on ? ` · в сети: ${on}` : '') + (st.incoming ? ` · заявок: ${st.incoming}` : '');
         });
+        announce(d.announce);
         document.dispatchEvent(new CustomEvent('casual-online', { detail: { online: st.online, friends: [...st.friends.keys()] } }));
       }
     } catch (e) {} finally { busy = false; }
