@@ -715,6 +715,22 @@ const routes = {
     if (!artists.length && why) return fail(502, why);
     return json({ artists });
   },
+  // имена исполнителей для подсказки при вводе: Deezer прощает опечатки («deathmerie» → deathmarried)
+  async 'GET /music/artists'({ request, me }) {
+    if (burst('martists:' + me.id, 60, 60e3)) return tooMany(1);
+    const q = (new URL(request.url).searchParams.get('q') || '').trim().slice(0, 80);
+    if (q.length < 2) return json({ artists: [] });
+    try {
+      const d = await cachedJson('https://api.deezer.com/search/artist?limit=8&q=' + encodeURIComponent(q), null, 86400);
+      // у исполнителей без фото Deezer отдаёт заглушку с адресом «…/artist//…»
+      const artists = (d.data || []).filter((a) => a && a.name).map((a) => ({
+        name: String(a.name).slice(0, 80),
+        img: DZ_IMG.test(a.picture_medium || '') && !/\/artist\/\//.test(a.picture_medium) ? a.picture_medium : '',
+        fans: +a.nb_fan || 0,
+      }));
+      return json({ artists });
+    } catch (e) { return json({ artists: [] }); }
+  },
   // картинка с Genius в виде data URL: браузер не может скачать её напрямую из-за CORS
   async 'GET /genius/img'({ env, request, me }) {
     if (burst('geniusimg:' + me.id, 40, 60e3)) return tooMany(1);

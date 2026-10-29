@@ -1641,7 +1641,7 @@ function renderArtist() {
   const ava = a && a.ava ? a.ava : '';
   const letter = (form.artist || '').trim().charAt(0).toUpperCase();
   el.artistAva.classList.toggle('has', !!ava);
-  el.artistAva.innerHTML = ava ? `<img src="${esc(ava)}" alt="">` : `${letter ? esc(letter) : '♪'}<span class="ava-cam">${CAMERA_SVG}</span>`;
+  el.artistAva.innerHTML = ava ? `<img src="${esc(ava)}" alt="">` : (letter ? esc(letter) : '♪');
   const known = !!keyOf(form.artist) && artistList().some(x => x.key === keyOf(form.artist));
   el.artistEdit.hidden = !known || !!artistEditing;
   scheduleGenius();
@@ -1654,13 +1654,51 @@ function hideArtistList() {
   el.artist.removeAttribute('aria-activedescendant');
   artistPick = -1;
 }
+// имена исполнителей из интернета: Deezer (через наш сервер, прощает опечатки) и Apple Music. Выбрал — имя подставилось как есть
+let artistNetTimer = 0, artistNetKey = '', artistNet = [];
+const artistNetSeen = new Map();
+function scheduleArtistNet() {
+  clearTimeout(artistNetTimer);
+  if (!formMusic() || (form.artist || '').trim().length < 2) { artistNet = []; artistNetKey = ''; return; }
+  artistNetTimer = setTimeout(findArtistNet, 450);
+}
+async function findArtistNet() {
+  const q = (form.artist || '').trim(), k = keyOf(q);
+  if (!k || k === artistNetKey) return;
+  artistNetKey = k;
+  let list = artistNetSeen.get(k);
+  if (!list) {
+    const api = window.casualApi;
+    const dz = api && api.online() ? api.get('/music/artists?q=' + encodeURIComponent(q)).then(r => (r && r.artists) || [], () => []) : Promise.resolve([]);
+    const it = fetch(`https://itunes.apple.com/search?entity=musicArtist&limit=6&country=US&term=${encodeURIComponent(q)}`)
+      .then(r => r.json()).then(d => (d.results || []).map(a => ({ name: String(a.artistName || ''), img: '' })), () => []);
+    const [a, b] = await Promise.all([dz, it]);
+    const seen = new Set();
+    list = [];
+    for (const x of a.concat(b)) {
+      const nk = keyOf(x.name);
+      if (!nk || seen.has(nk)) continue;
+      seen.add(nk);
+      list.push({ name: x.name.trim().slice(0, 80), img: /^https:\/\//.test(x.img || '') ? x.img : '' });
+    }
+    list = list.slice(0, 6);
+    artistNetSeen.set(k, list);
+  }
+  if (keyOf(form.artist) !== k) return;
+  artistNet = list;
+  if (document.activeElement === el.artist) showArtistList();
+}
 function showArtistList() {
   const q = keyOf(el.artist.value);
   const all = artistList();
   const list = all.filter(a => !q || a.key.includes(q)).slice(0, 8);
-  if (!list.length || (list.length === 1 && list[0].key === q)) { hideArtistList(); return; }
-  artistPick = Math.min(artistPick, list.length - 1);
-  el.artistList.innerHTML = list.map((a, i) => `<li role="option" id="artOpt${i}" data-artist="${esc(a.name)}" aria-selected="${i === artistPick}">${artistMiniHTML(a)}<span>${esc(a.name)}</span>${a.n ? `<small>${a.n} ${plural(a.n, 'оценка', 'оценки', 'оценок')}</small>` : ''}</li>`).join('');
+  // из интернета — только те, кого ещё нет среди своих и кто не совпадает с написанным
+  const mine = new Set(all.map(a => a.key));
+  const net = q && keyOf(form.artist) === artistNetKey ? artistNet.filter(a => !mine.has(keyOf(a.name)) && keyOf(a.name) !== q) : [];
+  if ((!list.length && !net.length) || (list.length === 1 && list[0].key === q && !net.length)) { hideArtistList(); return; }
+  artistPick = Math.min(artistPick, list.length + net.length - 1);
+  el.artistList.innerHTML = list.map((a, i) => `<li role="option" id="artOpt${i}" data-artist="${esc(a.name)}" aria-selected="${i === artistPick}">${artistMiniHTML(a)}<span>${esc(a.name)}</span>${a.n ? `<small>${a.n} ${plural(a.n, 'оценка', 'оценки', 'оценок')}</small>` : ''}</li>`).join('')
+    + (net.length ? `<li class="artist-sep" role="presentation">Нашлось в Deezer и Apple Music</li>` + net.map((a, j) => { const i = list.length + j; return `<li role="option" id="artOpt${i}" data-artist="${esc(a.name)}" aria-selected="${i === artistPick}"><span class="artist-mini">${a.img ? `<img src="${esc(a.img)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : esc((a.name.charAt(0) || '?').toUpperCase())}</span><span>${esc(a.name)}</span></li>`; }).join('') : '');
   el.artistList.hidden = false;
   el.artist.setAttribute('aria-expanded', 'true');
   if (artistPick >= 0) el.artist.setAttribute('aria-activedescendant', 'artOpt' + artistPick); else el.artist.removeAttribute('aria-activedescendant');
@@ -1917,8 +1955,8 @@ function renderGenius() {
   box.innerHTML = `<span>Фото с ${esc(src)}:</span>${geniusItems.map((a, i) => `<button type="button" data-genius="${i}" title="Поставить как аватарку исполнителя"><img src="${esc(a.image)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">${esc(a.name)}</button>`).join('')}<button type="button" class="x" data-genius="skip" aria-label="Не нужно">Не нужно</button>`;
 }
 async function pickGenius(i) {
-  const a = geniusItems[i], name = (form.artist || '').trim();
-  if (!a || !keyOf(name)) return;
+  const a = geniusItems[i];
+  if (!a || !keyOf(form.artist)) return;
   try {
     // картинки Genius и Deezer отдаются с разрешением CORS, поэтому сначала качаем напрямую, а через наш сервер — если не вышло
     let blob = null;
@@ -1932,6 +1970,9 @@ async function pickGenius(i) {
       blob = dataUrlToBlob(r.data);
     }
     const type = /^image\//.test(blob.type) ? blob.type : 'image/jpeg';
+    // выбрали фото — подставляем и точное имя исполнителя оттуда же («deathmerie» → deathmarried)
+    const name = String(a.name || '').trim().slice(0, 80) || form.artist.trim();
+    if (keyOf(name) !== keyOf(form.artist)) { form.artist = name; el.artist.value = name; updateNameState(); scheduleDraft(); scheduleCovers(); }
     if (!(await setArtistAvaFile(name, new File([blob], 'artist.jpg', { type }), `Аватарка исполнителя «${name}» поставлена`))) return;
     geniusItems = [];
     renderGenius();
@@ -5049,7 +5090,7 @@ if (el.favBtn) {
   });
 }
 if (el.artist) {
-  el.artist.addEventListener('input', () => { form.artist = el.artist.value; artistPick = -1; showArtistList(); renderArtist(); updateNameState(); scheduleDraft(); scheduleCovers(); });
+  el.artist.addEventListener('input', () => { form.artist = el.artist.value; artistPick = -1; showArtistList(); renderArtist(); updateNameState(); scheduleDraft(); scheduleCovers(); scheduleArtistNet(); });
   el.artist.addEventListener('focus', () => showArtistList());
   el.artist.addEventListener('blur', () => setTimeout(hideArtistList, 120));
   el.artist.addEventListener('keydown', e => {
