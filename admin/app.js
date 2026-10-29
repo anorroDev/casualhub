@@ -22,6 +22,43 @@
     app.innerHTML = `<section class="card rise adm-lock"><span class="adm-ic">${SHIELD(30)}</span><h1 class="h2">${esc(title)}</h1><p class="muted">${text}</p>${actions || ''}</section>`;
   }
 
+  // уже админ, но вход в админку истёк (он живёт 12 часов и только на этом устройстве): подтверди паролем от аккаунта
+  function relock(handle) {
+    app.innerHTML = `<section class="card rise adm-lock" id="admLock">
+      <span class="adm-ic">${SHIELD(30)}</span>
+      <h1 class="h2">Подтверди, что это ты</h1>
+      <p class="muted">@${esc(handle)}, вход в админку действует 12 часов. Введи пароль от своего аккаунта, чтобы открыть её снова.</p>
+      <form id="admForm">
+        <label class="vh" for="admCode">Пароль от аккаунта</label>
+        <input class="adm-in" id="admCode" type="password" autocomplete="current-password" maxlength="200" placeholder="Пароль от аккаунта" required>
+        <p class="adm-err" id="admErr" role="alert"></p>
+        <button type="submit" class="btn primary">Открыть админку</button>
+      </form>
+    </section>`;
+    wireForm(handle, (v) => ({ password: v }));
+  }
+  function wireForm(handle, bodyOf) {
+    const form = $('#admForm'), input = $('#admCode'), err = $('#admErr'), box = $('#admLock');
+    input.focus();
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = form.querySelector('button');
+      if (btn.disabled || !input.value.trim()) return;
+      btn.disabled = true; err.textContent = '';
+      try {
+        await call('POST', '/admin/unlock', bodyOf(input.value));
+        input.value = '';
+        remember();
+        panel(handle);
+      } catch (x) {
+        err.textContent = x.message;
+        input.select();
+        box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake');
+        btn.disabled = false;
+      }
+    });
+  }
+
   function lock(ready, handle) {
     if (!ready) {
       message('Админ-панель', 'Одноразовый пароль ещё не задан на сервере. Его нужно добавить в настройках Cloudflare (секрет <b>ADMIN_CODE</b>), а потом обновить эту страницу.');
@@ -38,24 +75,7 @@
         <button type="submit" class="btn primary">Войти</button>
       </form>
     </section>`;
-    const form = $('#admForm'), input = $('#admCode'), err = $('#admErr'), box = $('#admLock');
-    input.focus();
-    form.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const btn = form.querySelector('button');
-      if (btn.disabled || !input.value.trim()) return;
-      btn.disabled = true; err.textContent = '';
-      try {
-        await call('POST', '/admin/unlock', { code: input.value });
-        remember();
-        panel(handle);
-      } catch (x) {
-        err.textContent = x.message;
-        input.select();
-        box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake');
-        btn.disabled = false;
-      }
-    });
+    wireForm(handle, (v) => ({ code: v }));
   }
 
   // сама панель: пока пусто, разделы появятся позже
@@ -64,7 +84,8 @@
     app.innerHTML = `<div class="adm">
       <section class="card rise adm-hero" style="--d:0">
         <span class="adm-ic">${SHIELD(32)}</span>
-        <div><span class="adm-tag">Админ</span><h1>Админ-панель</h1><p class="muted">Ты вошёл как @${esc(handle)}. Пока здесь пусто: инструменты будут появляться по мере надобности.</p></div>
+        <div><span class="adm-tag">Админ</span><h1>Админ-панель</h1><p class="muted">Ты вошёл как @${esc(handle)}. Вход действует 12 часов на этом устройстве. Пока здесь пусто: инструменты будут появляться по мере надобности.</p>
+          <button type="button" class="btn ghost" id="admOut">Выйти из админки</button></div>
       </section>
       <section class="card rise" style="--d:1">
         <div class="head"><h2 class="h2">Разделы</h2><span class="label">скоро</span></div>
@@ -76,7 +97,44 @@
         </div>
       </section>
     </div>`;
+    $('#admOut').addEventListener('click', async () => {
+      try { await call('POST', '/admin/lock'); } catch (e) {}
+      relock(handle);
+    });
   }
+
+  // ---------- тема: тот же выбор, что на остальных страницах (меню ☰ → «Тема») ----------
+  (() => {
+    const pick = $('#themePick'), btn = $('#themeBtn'), menu = $('#themeMenu');
+    if (!pick || !btn || !menu || !window.CasualThemes) return;
+    const THEMES = window.CasualThemes.list;
+    const PALETTE = '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="6.4"/><path d="M8 1.6a6.4 6.4 0 0 0 0 12.8z" fill="currentColor"/></svg>';
+    const PREFS_KEY = 'ocenshik.prefs.v1';
+    const apply = (id, save) => {
+      const th = THEMES.find((t) => t.id === id) || THEMES[0];
+      if (th.id === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', th.id);
+      btn.innerHTML = `${PALETTE}<span class="t">Тема: ${esc(th.name)}</span>`;
+      btn.setAttribute('aria-label', `Тема: ${th.name}`);
+      menu.classList.add('tm-grid');
+      menu.innerHTML = window.CasualThemes.menuHTML(th.id);
+      if (save) { try { let p = read(PREFS_KEY); if (!p || typeof p !== 'object' || Array.isArray(p)) p = {}; p.theme = th.id; localStorage.setItem(PREFS_KEY, JSON.stringify(p)); } catch (e) {} }
+    };
+    apply((read(PREFS_KEY) || {}).theme || 'auto', false);
+    menu.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-theme-id]');
+      if (!b) return;
+      apply(b.dataset.themeId, true);
+      pick.open = false;
+    });
+    // меню тем не уходит за край экрана
+    pick.addEventListener('toggle', () => {
+      if (!pick.open) return;
+      menu.style.translate = '';
+      const r = menu.getBoundingClientRect();
+      const shift = r.left < 8 ? 8 - r.left : r.right > innerWidth - 8 ? innerWidth - 8 - r.right : 0;
+      if (shift) menu.style.translate = `${Math.round(shift)}px 0`;
+    });
+  })();
 
   async function start() {
     if (!token) {
@@ -91,7 +149,7 @@
       if (r) r.addEventListener('click', start);
       return;
     }
-    if (st.admin) { remember(); panel(st.handle); } else lock(st.ready, st.handle);
+    if (st.admin && st.active) { remember(); panel(st.handle); } else if (st.admin) { remember(); relock(st.handle); } else lock(st.ready, st.handle);
   }
   start();
 })();

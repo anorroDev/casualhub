@@ -26,7 +26,7 @@ async function freeHandle(env, base, selfId) {
   for (let i = 0; i < 12; i++) {
     const h = i ? base.slice(0, 15) + '_' + Math.floor(1000 + Math.random() * 9000) : base;
     const row = await env.DB.prepare('SELECT id FROM users WHERE uname = ?').bind(h).first();
-    if (!row || row.id === selfId) return h;
+    if ((!row || row.id === selfId) && !ADMIN_HANDLES.includes(h)) return h; // юзернеймы админов не выдаются никому
   }
   return 'user_' + randHex(6);
 }
@@ -59,6 +59,10 @@ async function ensureSchema(env) {
     env.DB.prepare('CREATE INDEX IF NOT EXISTS comments_from ON comments(from_id)'),
     // админы: кто уже ввёл одноразовый пароль (дальше вход в админку без пароля)
     env.DB.prepare('CREATE TABLE IF NOT EXISTS admins (user_id TEXT PRIMARY KEY, handle TEXT NOT NULL, at INTEGER NOT NULL)'),
+    // вход в админку на 12 часов, привязан к сессии; журнал входов и действий админов
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS admin_sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, until INTEGER NOT NULL)'),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS admin_log (at INTEGER NOT NULL, user_id TEXT NOT NULL, ip TEXT, action TEXT NOT NULL, ok INTEGER NOT NULL)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS admin_log_at ON admin_log(at)'),
   ]);
   const { results } = await env.DB.prepare('PRAGMA table_info(users)').all();
   if (!results.some((c) => c.name === 'email')) await env.DB.prepare('ALTER TABLE users ADD COLUMN email TEXT').run();
@@ -162,8 +166,28 @@ const LIMITS = {
 // ---------- админ-панель: только для двух аккаунтов; первый вход — одноразовый пароль из секрета ADMIN_CODE ----------
 // Секрет задаётся в Cloudflare (Pages → Settings → Variables and Secrets) и в код не попадает.
 const ADMIN_HANDLES = ['anorro', 'yukomagod'];
-const adminCandidate = (me) => !!me && ADMIN_HANDLES.includes(String(me.handle || '').toLowerCase());
+// ADMIN_IDS (необязательный секрет или переменная): id аккаунтов админов через запятую. Если задан, кандидатом
+// считается только аккаунт из списка — юзернейм можно сменить, а id нет
+const adminIds = (env) => String(env.ADMIN_IDS || '').split(',').map((s) => s.trim()).filter(Boolean);
+const adminCandidate = (me, env) => {
+  if (!me || !ADMIN_HANDLES.includes(String(me.handle || '').toLowerCase())) return false;
+  const ids = adminIds(env || {});
+  return !ids.length || ids.includes(me.id);
+};
+// юзернеймы админов заняты навсегда: никто другой не зарегистрирует их и не сменит на них свой (кроме аккаунтов из ADMIN_IDS)
+const reservedHandle = (env, h, me) => ADMIN_HANDLES.includes(String(h || '').toLowerCase()) && !(me && adminIds(env).includes(me.id));
 const isAdmin = async (env, me) => !!me && !!(await env.DB.prepare('SELECT 1 FROM admins WHERE user_id = ?').bind(me.id).first());
+// вход в админку живёт 12 часов и привязан к этой сессии: украденный токен без пароля админку не откроет
+const ADMIN_TTL = 12 * 3600e3;
+const tokenHashOf = async (request) => { const m = (request.headers.get('authorization') || '').match(/^Bearer ([0-9a-f]{64})$/); return m ? sha256(m[1]) : null; };
+async function adminActive(env, request, me) {
+  if (!(await isAdmin(env, me)) || !adminCandidate(me, env)) return false;
+  const th = await tokenHashOf(request);
+  return !!(th && (await env.DB.prepare('SELECT 1 FROM admin_sessions WHERE token_hash = ? AND user_id = ? AND until > ?').bind(th, me.id, Date.now()).first()));
+}
+// каждое действие в админке и каждая попытка входа записываются: кто, когда, с какого адреса
+const adminLog = (env, request, me, action, ok) => env.DB.prepare('INSERT INTO admin_log (at, user_id, ip, action, ok) VALUES (?, ?, ?, ?, ?)')
+  .bind(Date.now(), me ? me.id : '', clientIp(request), String(action).slice(0, 80), ok ? 1 : 0).run().catch(() => {});
 // сравнение без подсказки по времени ответа: сравниваются отпечатки одинаковой длины
 async function sameSecret(a, b) {
   const [x, y] = await Promise.all([sha256(a), sha256(b)]);
@@ -212,6 +236,7 @@ const routes = {
     if (!EMAIL_RE.test(mail) || mail.length > 120) return fail(400, 'Нужна почта, например name@mail.com.');
     if (!NAME_RE.test(name)) return fail(400, NAME_HINT);
     if (wanted && !HANDLE_RE.test(wanted)) return fail(400, HANDLE_HINT);
+    if (wanted && reservedHandle(env, wanted, null)) return fail(409, `Юзернейм @${wanted} уже занят.`);
     if (weakPass(pass)) return fail(400, WEAK_PASS);
     // в лимит идут только настоящие регистрации и проверки занятых почт и юзернеймов, опечатки в форме не считаются
     await hit(env, ipKey, 'register');
@@ -256,7 +281,7 @@ const routes = {
 
   async 'POST /logout'({ env, request }) {
     const m = (request.headers.get('authorization') || '').match(/^Bearer ([0-9a-f]{64})$/);
-    if (m) await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sha256(m[1])).run();
+    if (m) { const th = await sha256(m[1]); await env.DB.batch([env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(th), env.DB.prepare('DELETE FROM admin_sessions WHERE token_hash = ?').bind(th)]); } // и вход в админку тоже закрывается
     return json({ ok: true });
   },
 
@@ -265,27 +290,51 @@ const routes = {
   },
 
   // админка: остальным отвечаем «нет такого адреса», чтобы не было видно, что она вообще есть
-  async 'GET /admin/me'({ env, me }) {
+  async 'GET /admin/me'({ env, request, me }) {
+    if (!adminCandidate(me, env)) return fail(404, 'Нет такого адреса.');
     const admin = await isAdmin(env, me);
-    if (!admin && !adminCandidate(me)) return fail(404, 'Нет такого адреса.');
-    return json({ admin, ready: !!env.ADMIN_CODE, handle: me.handle });
+    return json({ admin, active: admin && (await adminActive(env, request, me)), ready: !!env.ADMIN_CODE, handle: me.handle });
   },
+  // вход в админку: первый раз — одноразовый пароль ADMIN_CODE, потом раз в 12 часов — пароль от своего аккаунта
   async 'POST /admin/unlock'({ env, request, me }) {
-    if (!adminCandidate(me)) return fail(404, 'Нет такого адреса.');
-    if (await isAdmin(env, me)) return json({ ok: true });
-    if (!env.ADMIN_CODE) return fail(503, 'Одноразовый пароль ещё не задан на сервере.');
+    if (!adminCandidate(me, env)) return fail(404, 'Нет такого адреса.');
+    if (burst('adminunlock:all', 20, 60e3)) return tooMany(1); // общий потолок на сервер: перебор с многих адресов
     const accKey = 'admin:' + me.id, ipKey = 'adminip:' + clientIp(request);
     const wait = (await overLimit(env, accKey, 'admin')) || (await overLimit(env, ipKey, 'admin'));
     if (wait) return tooMany(wait);
-    const { code } = await readBody(request);
-    const ok = typeof code === 'string' && code.trim().length > 0 && code.length <= 200 && (await sameSecret(code.trim(), String(env.ADMIN_CODE).trim()));
+    const { code, password } = await readBody(request);
+    const admin = await isAdmin(env, me);
+    let ok = false;
+    if (!admin) {
+      if (!env.ADMIN_CODE) return fail(503, 'Одноразовый пароль ещё не задан на сервере.');
+      ok = typeof code === 'string' && code.trim().length > 0 && code.length <= 200 && (await sameSecret(code.trim(), String(env.ADMIN_CODE).trim()));
+    } else {
+      const pass = String(password || '');
+      const row = await env.DB.prepare('SELECT pass_hash, salt FROM users WHERE id = ?').bind(me.id).first();
+      ok = !!row && pass.length > 0 && pass.length <= 200 && sameHex(await hashPass(pass, row.salt), row.pass_hash);
+    }
+    await adminLog(env, request, me, admin ? 'unlock:password' : 'unlock:code', ok);
     if (!ok) {
       await hit(env, accKey, 'admin');
       await hit(env, ipKey, 'admin');
-      return fail(403, 'Неверный пароль.');
+      return fail(403, admin ? 'Неверный пароль от аккаунта.' : 'Неверный одноразовый пароль.');
     }
-    await env.DB.prepare('INSERT OR IGNORE INTO admins (user_id, handle, at) VALUES (?, ?, ?)').bind(me.id, me.handle, Date.now()).run();
-    await env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind(accKey).run();
+    const th = await tokenHashOf(request);
+    const now = Date.now();
+    await env.DB.batch([
+      env.DB.prepare('INSERT OR IGNORE INTO admins (user_id, handle, at) VALUES (?, ?, ?)').bind(me.id, me.handle, now),
+      env.DB.prepare('INSERT OR REPLACE INTO admin_sessions (token_hash, user_id, until) VALUES (?, ?, ?)').bind(th, me.id, now + ADMIN_TTL),
+      env.DB.prepare('DELETE FROM admin_sessions WHERE until < ?').bind(now),
+      env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind(accKey),
+    ]);
+    return json({ ok: true, until: now + ADMIN_TTL });
+  },
+  // выйти из админки (аккаунт остаётся админом, но в следующий раз нужен пароль)
+  async 'POST /admin/lock'({ env, request, me }) {
+    if (!adminCandidate(me, env)) return fail(404, 'Нет такого адреса.');
+    const th = await tokenHashOf(request);
+    if (th) await env.DB.prepare('DELETE FROM admin_sessions WHERE token_hash = ?').bind(th).run();
+    await adminLog(env, request, me, 'lock', true);
     return json({ ok: true });
   },
 
@@ -303,6 +352,8 @@ const routes = {
     // сначала все проверки, потом все записи: при ошибке в одном поле остальные не меняются наполовину
     if (mailChange && (!EMAIL_RE.test(mail) || mail.length > 120)) return fail(400, 'Нужна почта, например name@mail.com.');
     if (handleChange && !HANDLE_RE.test(h)) return fail(400, HANDLE_HINT);
+    // свой прежний юзернейм админ вернуть может (он записан в таблице админов), остальные — нет
+    if (handleChange && reservedHandle(env, h, me) && !(await env.DB.prepare('SELECT 1 FROM admins WHERE user_id = ? AND handle = ?').bind(me.id, h).first())) return fail(409, `Юзернейм @${h} уже занят.`);
     if (nameChange && !NAME_RE.test(name)) return fail(400, NAME_HINT);
     if (pass && weakPass(pass)) return fail(400, WEAK_PASS);
     if (pass || mailChange) {
@@ -348,6 +399,7 @@ const routes = {
       // все остальные устройства выходят из аккаунта: если пароль утёк, старые сессии больше не работают
       const m = (request.headers.get('authorization') || '').match(/^Bearer ([0-9a-f]{64})$/);
       await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?').bind(me.id, m ? await sha256(m[1]) : '').run();
+      await env.DB.prepare('DELETE FROM admin_sessions WHERE user_id = ?').bind(me.id).run(); // после смены пароля в админку заново
     }
     return json({ user: ownUser(out) });
   },

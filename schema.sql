@@ -76,6 +76,10 @@ CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
 
 -- Админы: кто уже ввёл одноразовый пароль админ-панели (секрет ADMIN_CODE)
 CREATE TABLE IF NOT EXISTS admins (user_id TEXT PRIMARY KEY, handle TEXT NOT NULL, at INTEGER NOT NULL);
+-- Вход в админку на 12 часов (привязан к сессии) и журнал входов и действий админов
+CREATE TABLE IF NOT EXISTS admin_sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, until INTEGER NOT NULL);
+CREATE TABLE IF NOT EXISTS admin_log (at INTEGER NOT NULL, user_id TEXT NOT NULL, ip TEXT, action TEXT NOT NULL, ok INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS admin_log_at ON admin_log(at);
 
 -- Гости на сайте для счётчика «сейчас на сайте»: случайный id браузера и время последней отметки
 CREATE TABLE IF NOT EXISTS presence (id TEXT PRIMARY KEY, at INTEGER NOT NULL);
