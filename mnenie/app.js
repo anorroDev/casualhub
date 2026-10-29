@@ -182,6 +182,7 @@ function migrateCats(items) {
 // фото оценок — в IndexedDB (photo-store.js), в localStorage — только ссылка { ref: 'ph_…' }. Аватарку автора в каждую
 // оценку тоже не копируем: своя показывается из профиля (renderAuthorMini). Так оценки занимают килобайты, а не мегабайты
 const photoKeys = new Set(); // фото, которые уже точно лежат в IndexedDB
+const photoBad = new Set();  // фото, которые в IndexedDB записать не вышло: они хранятся прямо в оценке
 function photoDataOf(p) {
   if (!p) return '';
   if (typeof p.data === 'string' && p.data.startsWith('data:image/')) return p.data;
@@ -190,9 +191,18 @@ function photoDataOf(p) {
 function slimForStore(r) {
   const ph = r.photo, d = photoDataOf(ph);
   let photo = ph;
-  if (d && state.photoStore) {
-    const key = window.CasualPhotos.keyOf(d);
-    if (!photoKeys.has(key)) { photoKeys.add(key); window.CasualPhotos.put(key, d).then((ok) => { if (!ok) photoKeys.delete(key); }); }
+  const key = d && state.photoStore ? window.CasualPhotos.keyOf(d) : '';
+  // фото не легло в IndexedDB (кончилось место и т. п.): оставляем его в самой оценке, иначе после перезагрузки осталась бы ссылка в никуда
+  if (key && !photoBad.has(key)) {
+    if (!photoKeys.has(key)) {
+      photoKeys.add(key);
+      window.CasualPhotos.put(key, d).then((ok) => {
+        if (ok) return;
+        photoKeys.delete(key);
+        photoBad.add(key);
+        try { saveLocalRatings(); } catch (e) {} // сразу пересохраняем: уже записанная ссылка заменится самим фото
+      });
+    }
     photo = { ref: key, w: ph.w || 0, h: ph.h || 0 };
   } else if (ph && ph.ref && !ph.data) photo = { ref: ph.ref, w: ph.w || 0, h: ph.h || 0 };
   const a = r.author;
@@ -2903,7 +2913,8 @@ function draftPhoto(p) {
   const d = photoDataOf(p);
   if (!d || !state.photoStore) return { kind: 'saved', id: p.id, w: p.w, h: p.h };
   const key = window.CasualPhotos.keyOf(d);
-  if (!photoKeys.has(key)) { photoKeys.add(key); window.CasualPhotos.put(key, d); }
+  if (photoBad.has(key)) return { kind: 'saved', id: p.id, w: p.w, h: p.h }; // в IndexedDB не легло — черновик хранит само фото
+  if (!photoKeys.has(key)) { photoKeys.add(key); window.CasualPhotos.put(key, d).then((ok) => { if (!ok) { photoKeys.delete(key); photoBad.add(key); } }); }
   return { kind: 'saved', ref: key, w: p.w, h: p.h };
 }
 function loadDraft() {
