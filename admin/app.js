@@ -190,7 +190,7 @@
         <ul class="adm-list">${d.users.map((u, i) => `<li class="adm-row${u.banned ? ' banned' : ''}" style="--k:${Math.min(i, 12)}" data-uid="${esc(u.id)}">
           <div class="adm-who"><b>${esc(u.username)}</b> <a href="/profile/?id=${encodeURIComponent(u.id)}">@${esc(u.handle)}</a>${u.admin ? ' <em class="adm-badge">админ</em>' : ''}${u.banned ? ` <em class="adm-badge bad">бан${u.banReason ? ': ' + esc(u.banReason) : ''}</em>` : ''}
             <small>${esc(u.email)} · с ${when(u.createdAt)} · был ${when(u.lastSeen)} · оценок ${u.ratings}</small></div>
-          ${u.admin ? `<div class="adm-acts"><button type="button" class="btn ghost small" data-act="rename" data-h="${esc(u.handle)}">✎ Ник и @</button></div>` : `<div class="adm-acts"><button type="button" class="btn ghost small" data-act="rename" data-h="${esc(u.handle)}">✎ Ник и @</button><button type="button" class="btn ghost small" data-act="kick">Выкинуть с устройств</button><button type="button" class="btn small ${u.banned ? 'ghost' : 'danger'}" data-act="${u.banned ? 'unban' : 'ban'}">${u.banned ? 'Разбанить' : 'Забанить'}</button></div>`}
+          ${u.admin ? `<div class="adm-acts"><button type="button" class="btn ghost small" data-act="rename" data-h="${esc(u.handle)}" data-m="${esc(u.email)}">✎ Ник, @ и почта</button></div>` : `<div class="adm-acts"><button type="button" class="btn ghost small" data-act="rename" data-h="${esc(u.handle)}" data-m="${esc(u.email)}">✎ Ник, @ и почта</button><button type="button" class="btn ghost small" data-act="kick">Выкинуть с устройств</button><button type="button" class="btn small danger" data-act="delete" data-h="${esc(u.handle)}">🗑 Удалить</button><button type="button" class="btn small ${u.banned ? 'ghost' : 'danger'}" data-act="${u.banned ? 'unban' : 'ban'}">${u.banned ? 'Разбанить' : 'Забанить'}</button></div>`}
         </li>`).join('') || '<li class="muted">Никого не нашлось.</li>'}</ul>`;
       $('#admUq').addEventListener('submit', (e) => { e.preventDefault(); users(e.target.querySelector('input').value.trim()); });
       sec().querySelector('.adm-list').addEventListener('click', async (e) => {
@@ -203,8 +203,19 @@
           if (h === null) return;
           const n = prompt(`Новый ник для ${name} (2–24 символа). Пусто — не менять:`, name);
           if (n === null) return;
+          const curMail = b.dataset.m || '';
+          const mm = prompt(`Почта ${name} (на неё приходит код для входа). Пусто — не менять:`, curMail);
+          if (mm === null) return;
           b.disabled = true;
-          try { await call('POST', `/admin/rename/${encodeURIComponent(id)}`, { handle: h.trim() === b.dataset.h ? '' : h.trim(), username: n.trim() === name ? '' : n.trim() }); users(q); } catch (x) { alert(x.message); b.disabled = false; }
+          try { await call('POST', `/admin/rename/${encodeURIComponent(id)}`, { handle: h.trim() === b.dataset.h ? '' : h.trim(), username: n.trim() === name ? '' : n.trim(), email: mm.trim() === curMail ? '' : mm.trim() }); users(q); } catch (x) { alert(x.message); b.disabled = false; }
+          return;
+        }
+        // удаление насовсем: нужно вписать его юзернейм, чтобы не удалить по ошибке
+        if (b.dataset.act === 'delete') {
+          const typed = prompt(`Удалить аккаунт ${name} насовсем? Пропадут все его оценки, фото, друзья, реакции, комментарии и ссылки. Вернуть будет нельзя.\n\nЧтобы удалить, впиши его юзернейм: ${b.dataset.h}`, '');
+          if (typed === null) return;
+          b.disabled = true;
+          try { await call('POST', `/admin/delete/${encodeURIComponent(id)}`, { confirm: typed.trim() }); li.classList.add('gone'); setTimeout(() => users(q), 300); } catch (x) { alert(x.message); b.disabled = false; }
           return;
         }
         let body = null;

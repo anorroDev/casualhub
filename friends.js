@@ -194,6 +194,87 @@
     },
   };
 
+  // ---------- код из письма: регистрация и вход на новом устройстве ----------
+  // ключ устройства: случайный, живёт в этом браузере; подтверждённое кодом устройство сервер помнит 30 дней
+  const DEVICE_KEY = 'casualhub.device.v1';
+  function deviceId() {
+    let d = lsGet(DEVICE_KEY);
+    if (!/^[0-9a-f]{32}$/.test(d || '')) { d = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join(''); lsSet(DEVICE_KEY, d); }
+    return d;
+  }
+  // сервер ответил «нужен код»: окно для кода; вернёт обычный ответ { token, user } или null, если закрыли
+  function finishCode(r) {
+    if (!r || !r.verify) return Promise.resolve(r);
+    return new Promise((resolve) => {
+      if (!document.getElementById('codeCss')) {
+        const css = document.createElement('style');
+        css.id = 'codeCss';
+        css.textContent = `.code-modal { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg, #0D0F14) 50%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); }
+.code-card { width: min(100%, 400px); display: grid; gap: 12px; padding: 22px 20px 18px; border-radius: 22px; background: var(--panel, #161920); color: var(--ink, #e8eaf0); border: 2px solid var(--accent, #3550E8); box-shadow: 0 30px 70px -24px rgba(0,0,0,.55); text-align: center; animation: code-in .5s cubic-bezier(.34,1.56,.64,1); }
+.code-card.shake { animation: code-shake .4s; }
+@keyframes code-in { from { transform: translateY(40px) scale(.9); } }
+@keyframes code-shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
+.code-card h3 { margin: 0; font-size: 20px; }
+.code-card p { margin: 0; font-size: 14px; color: var(--ink-2, #a3a9b8); line-height: 1.45; }
+.code-card input { height: 56px; padding: 0 12px; border: 1px solid var(--line, #2a2f3a); border-radius: 14px; background: var(--panel-2, #1d2129); color: var(--ink, #e8eaf0); font: 800 28px/1 ui-monospace, monospace; letter-spacing: .4em; text-indent: .4em; text-align: center; }
+.code-card input:focus { outline: none; border-color: var(--accent, #3550E8); box-shadow: 0 0 0 3px var(--accent-soft, #232A4F); }
+.code-card .code-err { min-height: 18px; color: var(--bad, #F26A55); font-size: 13px; font-weight: 600; }
+.code-card label { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; color: var(--ink-2, #a3a9b8); }
+.code-acts { display: grid; gap: 8px; }
+.code-acts button { height: 44px; border-radius: 999px; border: 1px solid var(--line, #2a2f3a); background: var(--panel-2, #1d2129); color: var(--ink, #e8eaf0); font: inherit; font-weight: 700; cursor: pointer; }
+.code-acts .go { background: var(--accent, #3550E8); border-color: var(--accent, #3550E8); color: var(--on-accent, #fff); }
+.code-acts button:disabled { opacity: .55; cursor: default; }
+@media (prefers-reduced-motion: reduce) { .code-card, .code-card.shake { animation: none; } }`;
+        document.head.appendChild(css);
+      }
+      const m = document.createElement('div');
+      m.className = 'code-modal';
+      m.innerHTML = `<form class="code-card" role="dialog" aria-modal="true" aria-labelledby="codeTitle" novalidate>
+        <h3 id="codeTitle">📩 Код из письма</h3>
+        <p>Мы отправили 6 цифр на <b></b>. Код действует 15 минут. Письмо может попасть в «Спам».</p>
+        <input inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="••••••" aria-label="Код из письма">
+        <label><input type="checkbox" checked> Запомнить это устройство на 30 дней</label>
+        <div class="code-err" role="alert"></div>
+        <div class="code-acts"><button type="submit" class="go">Подтвердить</button><button type="button" data-c="again">Прислать код ещё раз</button><button type="button" data-c="cancel">Отмена</button></div>
+      </form>`;
+      m.querySelector('p b').textContent = r.email || 'твою почту';
+      document.body.appendChild(m);
+      const form = m.querySelector('form'), inp = m.querySelector('input[inputmode]'), err = m.querySelector('.code-err');
+      const keep = m.querySelector('input[type="checkbox"]'), again = m.querySelector('[data-c="again"]'), go = m.querySelector('.go');
+      inp.focus();
+      const done = (v) => { m.remove(); resolve(v); };
+      const shake = (t) => { err.textContent = t; form.classList.remove('shake'); void form.offsetWidth; form.classList.add('shake'); };
+      // «прислать ещё раз» доступно через 45 секунд
+      let left = 45, tick = 0;
+      const cool = () => { clearInterval(tick); left = 45; again.disabled = true; again.textContent = `Прислать ещё раз (${left})`; tick = setInterval(() => { left--; if (left <= 0) { clearInterval(tick); again.disabled = false; again.textContent = 'Прислать код ещё раз'; } else again.textContent = `Прислать ещё раз (${left})`; }, 1000); };
+      cool();
+      inp.addEventListener('input', () => { inp.value = inp.value.replace(/\D/g, '').slice(0, 6); err.textContent = ''; if (inp.value.length === 6) form.requestSubmit(); });
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (go.disabled) return;
+        if (inp.value.length !== 6) { shake('Нужно 6 цифр из письма'); return; }
+        go.disabled = true;
+        try {
+          const out = await api('/code/verify', 'POST', { ticket: r.ticket, code: inp.value, device: keep.checked ? deviceId() : undefined }, null);
+          clearInterval(tick);
+          done(out);
+        } catch (x) {
+          go.disabled = false;
+          inp.select();
+          shake(x.message);
+          if (x.status === 410 || x.status === 429 && /заново/.test(x.message)) { go.disabled = true; again.disabled = true; }
+        }
+      });
+      again.addEventListener('click', async () => {
+        again.disabled = true;
+        try { await api('/code/resend', 'POST', { ticket: r.ticket }, null); err.textContent = ''; toast('Новый код отправлен'); cool(); }
+        catch (x) { shake(x.message); again.disabled = false; }
+      });
+      m.querySelector('[data-c="cancel"]').addEventListener('click', () => { clearInterval(tick); done(null); });
+      m.addEventListener('keydown', (e) => { if (e.key === 'Escape') { clearInterval(tick); done(null); } });
+    });
+  }
+
   // ---------- сервер ----------
   async function api(path, method = 'GET', data, token = F.token) {
     const headers = { 'content-type': 'application/json' };
@@ -244,7 +325,7 @@
     if (F.online && !F.token && state.user && !F.autoLinkTried.has(state.user.id)
         && String(state.user.pass || '').length >= 6) {
       F.autoLinkTried.add(state.user.id);
-      if (await linkCurrent(state.user.pass)) return;
+      if (await linkCurrent(state.user.pass, true)) return;
     }
     if (F.online && F.token) {
       try {
@@ -339,7 +420,7 @@
   }
 
   // привязать текущий профиль сайта к онлайн-аккаунту с тем же ником
-  async function linkCurrent(pass) {
+  async function linkCurrent(pass, auto) {
     if (!state.user) return false;
     const nick = state.user.name;
     const localId = state.user.id;
@@ -350,7 +431,11 @@
     const mail = String(state.user.email || '').trim().toLowerCase();
     let r = null;
     try {
-      r = await api('/login', 'POST', { login: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail) ? mail : nick, password: pass }, null);
+      r = await api('/login', 'POST', { login: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail) ? mail : nick, password: pass, device: deviceId() }, null);
+      // новое устройство: нужен код из письма. Само при загрузке страницы окно не открываем — только по кнопке
+      if (r && r.verify && auto) { F.linkError = 'Подтверди вход кодом из письма: нажми «Подключить» в окне «Друзья».'; return false; }
+      r = await finishCode(r);
+      if (!r) return false;
     } catch (e) {
       if (e.status !== 401) { F.linkError = e.message; return false; }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) {
@@ -359,6 +444,9 @@
       }
       try {
         r = await api('/register', 'POST', { username: nick, handle: state.user.handle || undefined, password: pass, email: mail }, null);
+        if (r && r.verify && auto) { F.linkError = 'Подтверди почту кодом из письма: нажми «Подключить» в окне «Друзья».'; return false; }
+        r = await finishCode(r);
+        if (!r) return false;
       } catch (e2) {
         F.linkError = e2.status === 409
           ? `${e2.message} Если аккаунт твой, проверь пароль, иначе поменяй ник или почту в профиле.`
@@ -1190,7 +1278,8 @@ ${ICON.chev}
       const h = String(handle || '').trim().replace(/^@+/, '').toLowerCase();
       if (!HANDLE_RE.test(h)) { toast(h ? 'Юзернейм: от 3 до 20 символов, латинские буквы, цифры, «_» и «.»' : 'Придумай юзернейм: по нему тебя найдут друзья'); return false; }
       let r;
-      try { r = await api('/register', 'POST', { username: nick, handle: h, password: pass, email: em }, null); }
+      // аккаунт появится после кода из письма; закрыли окно с кодом — регистрации нет
+      try { r = await finishCode(await api('/register', 'POST', { username: nick, handle: h, password: pass, email: em }, null)); if (!r) return false; }
       catch (e) {
         if (e.status === 0 || e.status === 503) return orig.register.call(this, nick, email, password, avatar, color, h);
         toast(e.status === 409 && /почт/.test(e.message) ? `${e.message} Если это твой аккаунт, войди на вкладке «Вход».` : e.message);
@@ -1218,7 +1307,8 @@ ${ICON.chev}
       const low = ident.toLowerCase();
       const local = state.users.find((x) => (x.email && x.email.toLowerCase() === low) || (x.handle && x.handle === low.replace(/^@+/, '')) || (x.name && x.name.toLowerCase() === low));
       let r = null, err = null;
-      try { r = await api('/login', 'POST', { login: ident, password: pass }, null); } // сервер ищет и по почте, и по нику
+      // сервер ищет и по почте, и по нику; на новом устройстве — ещё код из письма
+      try { r = await finishCode(await api('/login', 'POST', { login: ident, password: pass, device: deviceId() }, null)); if (!r) return false; }
       catch (e) { err = e; }
       if (r) {
         let u = state.users.find((x) => x.serverId === r.user.id) || (local && (!local.serverId || local.serverId === r.user.id) ? local : null);

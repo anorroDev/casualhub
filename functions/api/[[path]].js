@@ -63,6 +63,10 @@ async function ensureSchema(env) {
     env.DB.prepare('CREATE TABLE IF NOT EXISTS admin_sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, until INTEGER NOT NULL)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS admin_log (at INTEGER NOT NULL, user_id TEXT NOT NULL, ip TEXT, action TEXT NOT NULL, ok INTEGER NOT NULL)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS admin_log_at ON admin_log(at)'),
+    // коды на почту (регистрация и вход) и подтверждённые устройства
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS email_codes (ticket TEXT PRIMARY KEY, kind TEXT NOT NULL, email TEXT NOT NULL, user_id TEXT, data TEXT, code_hash TEXT NOT NULL, expires INTEGER NOT NULL, tries INTEGER NOT NULL, sent_at INTEGER NOT NULL, sends INTEGER NOT NULL)'),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS trusted_devices (hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, until INTEGER NOT NULL)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS trusted_devices_user ON trusted_devices(user_id)'),
   ]);
   const { results } = await env.DB.prepare('PRAGMA table_info(users)').all();
   if (!results.some((c) => c.name === 'email')) await env.DB.prepare('ALTER TABLE users ADD COLUMN email TEXT').run();
@@ -169,6 +173,8 @@ const LIMITS = {
   friendReq: { max: 40, win: 10 * 60e3 }, // заявок в друзья (перебор ников)
   react: { max: 120, win: 10 * 60e3 },    // реакций и комментариев
   comment: { max: 60, win: 10 * 60e3 },   // комментариев на стенах и под оценками
+  mailIp: { max: 20, win: 60 * 60e3 },    // писем с кодом с одного адреса в час
+  mailTo: { max: 6, win: 60 * 60e3 },     // писем с кодом на одну почту в час
   admin: { max: 5, win: 60 * 60e3 },      // неверных одноразовых паролей и пин-кодов админки
 };
 // ---------- админ-панель: только для двух аккаунтов ----------
@@ -240,6 +246,78 @@ const tooMany = (min) => new Response(JSON.stringify({ error: `Слишком м
   headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'retry-after': String(min * 60) },
 });
 
+// ---------- код на почту (регистрация и вход) ----------
+// Почта включается секретами в Cloudflare: BREVO_API_KEY (или RESEND_API_KEY) и MAIL_FROM — адрес отправителя.
+// Пока их нет, регистрация и вход работают как раньше, без кода.
+const CODE_TTL = 15 * 60e3; // код живёт 15 минут
+const CODE_TRIES = 5;       // неверных вводов на один код
+const DEVICE_DAYS = 30;     // подтверждённое устройство помнится 30 дней
+const mailReady = (env) => !!(((env.BREVO_API_KEY || env.RESEND_API_KEY) && env.MAIL_FROM) || env.MAIL_DEV === '1');
+// проверка на своём компьютере: MAIL_DEV=1 и адрес 127.0.0.1 — письмо не уходит, код кладётся в локальную базу для тестов
+const devMail = (env, request) => env.MAIL_DEV === '1' && ['127.0.0.1', 'localhost'].includes(new URL(request.url).hostname);
+async function deliverCode(env, request, to, code, kind) {
+  if (devMail(env, request)) { await env.DB.prepare('INSERT OR REPLACE INTO meta (k, v) VALUES (?, ?)').bind('devcode:' + to, code).run(); return true; }
+  if (!((env.BREVO_API_KEY || env.RESEND_API_KEY) && env.MAIL_FROM)) return false;
+  return sendCode(env, to, code, kind);
+}
+const sixDigits = () => String(crypto.getRandomValues(new Uint32Array(1))[0] % 1e6).padStart(6, '0');
+const maskEmail = (m) => { const [a, d] = String(m).split('@'); return (a.length <= 2 ? a[0] + '*' : a.slice(0, 2) + '***') + '@' + d; };
+async function mailLimit(env, request, mail) {
+  if (burst('mail:all', 60, 60e3)) return tooMany(1);
+  const w = Math.max(await overLimit(env, 'mailip:' + clientIp(request), 'mailIp'), await overLimit(env, 'mailto:' + mail, 'mailTo'));
+  if (w) return tooMany(w);
+  await hit(env, 'mailip:' + clientIp(request), 'mailIp');
+  await hit(env, 'mailto:' + mail, 'mailTo');
+  return null;
+}
+async function sendCode(env, to, code, kind) {
+  const what = kind === 'reg' ? 'регистрации' : 'входа';
+  const subject = `${code} — код для ${what} в Казуал Хабе`;
+  const text = `Твой код для ${what} в Казуал Хабе: ${code}\n\nОн действует 15 минут. Если это был не ты, просто ничего не делай: без кода в аккаунт не войти.\n\ncasualhub.pages.dev`;
+  const html = `<div style="font-family:Arial,sans-serif;max-width:440px;margin:0 auto;padding:24px;color:#14161C"><h2 style="margin:0 0 12px">Казуал Хаб</h2><p>Твой код для ${what}:</p><p style="font-size:34px;font-weight:800;letter-spacing:8px;margin:12px 0;padding:14px 18px;background:#ECEEF3;border-radius:12px;text-align:center">${code}</p><p style="color:#565C6B;font-size:14px">Код действует 15 минут. Если это был не ты, просто ничего не делай: без кода в аккаунт не войти.</p></div>`;
+  try {
+    let r;
+    if (env.BREVO_API_KEY) {
+      r = await fetch('https://api.brevo.com/v3/smtp/email', { method: 'POST', headers: { 'api-key': String(env.BREVO_API_KEY).trim(), 'content-type': 'application/json', accept: 'application/json' },
+        body: JSON.stringify({ sender: { email: String(env.MAIL_FROM).trim(), name: 'Казуал Хаб' }, to: [{ email: to }], subject, textContent: text, htmlContent: html }) });
+    } else {
+      r = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { authorization: 'Bearer ' + String(env.RESEND_API_KEY).trim(), 'content-type': 'application/json' },
+        body: JSON.stringify({ from: `Казуал Хаб <${String(env.MAIL_FROM).trim()}>`, to: [to], subject, text, html }) });
+    }
+    if (!r.ok) console.error('mail', r.status, (await r.text()).slice(0, 300));
+    return r.ok;
+  } catch (e) { console.error('mail', e); return false; }
+}
+// начать проверку кодом: письмо уходит, клиент получает билет и показывает поле для кода
+async function startCode(env, request, kind, mail, data, userId) {
+  const lim = await mailLimit(env, request, mail);
+  if (lim) return lim;
+  const ticket = randHex(16), code = sixDigits(), now = Date.now();
+  if (!(await deliverCode(env, request, mail, code, kind))) return fail(502, 'Не получилось отправить письмо с кодом. Проверь почту или попробуй позже.');
+  await env.DB.batch([
+    env.DB.prepare('INSERT INTO email_codes (ticket, kind, email, user_id, data, code_hash, expires, tries, sent_at, sends) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, 1)')
+      .bind(ticket, kind, mail, userId, data ? JSON.stringify(data) : null, await sha256(code + ':' + ticket), now + CODE_TTL, now),
+    env.DB.prepare('DELETE FROM email_codes WHERE expires < ?').bind(now),
+  ]);
+  return json({ verify: kind, ticket, email: maskEmail(mail) });
+}
+async function createUser(env, d) {
+  const id = randHex(12), now = Date.now();
+  await env.DB.prepare('INSERT INTO users (id, username, uname, pass_hash, salt, created_at, email, nkey) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+    .bind(id, d.name, d.uname, d.passHash, d.salt, now, d.mail, d.name.toLowerCase()).run();
+  return { token: await newSession(env, id), user: ownUser({ id, username: d.name, uname: d.uname, email: d.mail, created_at: now }) };
+}
+// устройство — случайный ключ из браузера; на сервере хранится только его отпечаток вместе с id аккаунта
+const deviceHash = (device, uid) => sha256(String(device) + ':' + uid);
+async function trustedDevice(env, device, uid) {
+  if (!/^[0-9a-f]{32}$/.test(String(device || ''))) return false;
+  return !!(await env.DB.prepare('SELECT 1 FROM trusted_devices WHERE hash = ? AND until > ?').bind(await deviceHash(device, uid), Date.now()).first());
+}
+async function trustDevice(env, device, uid) {
+  if (!/^[0-9a-f]{32}$/.test(String(device || ''))) return;
+  await env.DB.prepare('INSERT OR REPLACE INTO trusted_devices (hash, user_id, until) VALUES (?, ?, ?)').bind(await deviceHash(device, uid), uid, Date.now() + DEVICE_DAYS * 864e5).run();
+}
+
 async function link(env, x, y) {
   const [a, b] = pair(x, y);
   return env.DB.prepare('SELECT status, requested_by FROM friendships WHERE a = ? AND b = ?').bind(a, b).first();
@@ -267,17 +345,63 @@ const routes = {
     if (await env.DB.prepare('SELECT 1 FROM users WHERE email = ?').bind(mail).first()) return fail(409, 'На эту почту уже есть аккаунт.');
     if (wanted && await env.DB.prepare('SELECT 1 FROM users WHERE uname = ?').bind(wanted).first()) return fail(409, `Юзернейм @${wanted} уже занят.`);
     const uname = wanted || await freeHandle(env, toHandle(name)); // старые версии сайта юзернейм не присылают
-    const id = randHex(12);
     const salt = randHex(16);
-    const now = Date.now();
-    await env.DB.prepare('INSERT INTO users (id, username, uname, pass_hash, salt, created_at, email, nkey) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .bind(id, name, uname, await hashPass(pass, salt), salt, now, mail, name.toLowerCase()).run();
-    return json({ token: await newSession(env, id), user: ownUser({ id, username: name, uname, email: mail, created_at: now }) });
+    const passHash = await hashPass(pass, salt);
+    // почта подключена: аккаунт появится только после кода из письма (так никто не заведёт аккаунт на чужую почту)
+    if (mailReady(env)) return startCode(env, request, 'reg', mail, { name, uname, mail, passHash, salt }, null);
+    return json(await createUser(env, { name, uname, mail, passHash, salt }));
+  },
+  // код из письма: подтверждает регистрацию или вход
+  async 'POST /code/verify'({ env, request }) {
+    const { ticket, code, device } = await readBody(request);
+    if (!/^[0-9a-f]{32}$/.test(String(ticket || ''))) return fail(400, 'Начни заново: код устарел.');
+    const row = await env.DB.prepare('SELECT * FROM email_codes WHERE ticket = ?').bind(ticket).first();
+    if (!row || row.expires < Date.now()) { if (row) await env.DB.prepare('DELETE FROM email_codes WHERE ticket = ?').bind(ticket).run(); return fail(410, 'Код устарел. Запроси новый.'); }
+    if (row.tries >= CODE_TRIES) { await env.DB.prepare('DELETE FROM email_codes WHERE ticket = ?').bind(ticket).run(); return fail(429, 'Слишком много неверных кодов. Начни заново.'); }
+    const c = String(code || '').replace(/\D/g, '');
+    if (c.length !== 6 || !sameHex(await sha256(c + ':' + ticket), row.code_hash)) {
+      await env.DB.prepare('UPDATE email_codes SET tries = tries + 1 WHERE ticket = ?').bind(ticket).run();
+      const left = CODE_TRIES - row.tries - 1;
+      return fail(403, left > 0 ? `Неверный код. Осталось попыток: ${left}.` : 'Неверный код. Попытки кончились, начни заново.');
+    }
+    await env.DB.prepare('DELETE FROM email_codes WHERE ticket = ?').bind(ticket).run();
+    let out;
+    if (row.kind === 'reg') {
+      const d = JSON.parse(row.data);
+      // пока человек шёл за письмом, почту или юзернейм мог занять кто-то другой
+      if (await env.DB.prepare('SELECT 1 FROM users WHERE email = ?').bind(d.mail).first()) return fail(409, 'На эту почту уже есть аккаунт.');
+      if (await env.DB.prepare('SELECT 1 FROM users WHERE uname = ?').bind(d.uname).first()) return fail(409, `Юзернейм @${d.uname} уже занят. Выбери другой и зарегистрируйся заново.`);
+      out = await createUser(env, d);
+      await trustDevice(env, device, out.user.id);
+    } else {
+      const u = await env.DB.prepare('SELECT id, username, uname, email, created_at, banned, ban_reason FROM users WHERE id = ?').bind(row.user_id).first();
+      if (!u) return fail(404, 'Аккаунт не найден.');
+      if (u.banned) return fail(403, 'Аккаунт заблокирован администрацией' + (u.ban_reason ? ': ' + u.ban_reason : '.'));
+      await trustDevice(env, device, u.id);
+      out = { token: await newSession(env, u.id), user: ownUser(u) };
+    }
+    return json(out);
+  },
+  // прислать код ещё раз (не чаще раза в 45 секунд и не больше 5 писем на один вход)
+  async 'POST /code/resend'({ env, request }) {
+    const { ticket } = await readBody(request);
+    if (!/^[0-9a-f]{32}$/.test(String(ticket || ''))) return fail(400, 'Начни заново.');
+    const row = await env.DB.prepare('SELECT * FROM email_codes WHERE ticket = ?').bind(ticket).first();
+    if (!row || row.expires < Date.now()) return fail(410, 'Код устарел. Начни заново.');
+    const wait = Math.ceil((row.sent_at + 45e3 - Date.now()) / 1000);
+    if (wait > 0) return fail(429, `Новый код можно запросить через ${wait} с.`);
+    if (row.sends >= 5) return fail(429, 'Писем уже слишком много. Начни заново чуть позже.');
+    const lim = await mailLimit(env, request, row.email);
+    if (lim) return lim;
+    const code = sixDigits();
+    if (!(await deliverCode(env, request, row.email, code, row.kind))) return fail(502, 'Не получилось отправить письмо. Попробуй позже.');
+    await env.DB.prepare('UPDATE email_codes SET code_hash = ?, tries = 0, sent_at = ?, sends = sends + 1, expires = ? WHERE ticket = ?').bind(await sha256(code + ':' + ticket), Date.now(), Date.now() + CODE_TTL, ticket).run();
+    return json({ ok: true, email: maskEmail(row.email) });
   },
 
   // вход по почте или по нику
   async 'POST /login'({ env, request }) {
-    const { login, username, password } = await readBody(request);
+    const { login, username, password, device } = await readBody(request);
     const ident = String(login || username || '').trim();
     const ipKey = 'login-ip:' + clientIp(request);
     const accKey = 'login-acc:' + ident.toLowerCase().slice(0, 120);
@@ -302,6 +426,8 @@ const routes = {
     if (u.banned) return fail(403, 'Аккаунт заблокирован администрацией' + (u.ban_reason ? ': ' + u.ban_reason : '.'));
     await env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind(accKey).run();
     await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND expires_at < ?').bind(u.id, Date.now()).run();
+    // второй шаг: код на почту, если это устройство ещё не подтверждалось (подтверждённое помнится 30 дней)
+    if (mailReady(env) && EMAIL_RE.test(u.email || '') && !(await trustedDevice(env, device, u.id))) return startCode(env, request, 'login', u.email, null, u.id);
     return json({ token: await newSession(env, u.id), user: ownUser(u) });
   },
 
@@ -448,11 +574,23 @@ const routes = {
   // сменить человеку @юзернейм и/или ник: те же правила, что при смене самим человеком, юзернеймы админов другим не выдаются
   async 'POST /admin/rename/:id'({ env, request, me, arg }) {
     if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
-    const { handle, username } = await readBody(request);
-    const u = await env.DB.prepare('SELECT id, username, uname FROM users WHERE id = ?').bind(arg).first();
+    const { handle, username, email } = await readBody(request);
+    const u = await env.DB.prepare('SELECT id, username, uname, email FROM users WHERE id = ?').bind(arg).first();
     if (!u) return fail(404, 'Нет такого аккаунта.');
     const h = handle != null && handle !== '' ? cleanHandle(handle) : null;
     const name = username != null && username !== '' ? cleanName(username) : null;
+    // почта: если в ней опечатка, человеку не дойдёт код для входа — админ может её поправить
+    const mail = email != null && email !== '' ? cleanEmail(email) : null;
+    if (mail != null && mail !== (u.email || '')) {
+      if (!EMAIL_RE.test(mail) || mail.length > 120) return fail(400, 'Нужна почта, например name@mail.com.');
+      const taken = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(mail).first();
+      if (taken && taken.id !== u.id) return fail(409, 'На эту почту уже есть аккаунт.');
+      await env.DB.batch([
+        env.DB.prepare('UPDATE users SET email = ? WHERE id = ?').bind(mail, u.id),
+        env.DB.prepare('DELETE FROM trusted_devices WHERE user_id = ?').bind(u.id), // новая почта — устройства подтверждаются заново
+      ]);
+      await adminLog(env, request, me, `email @${u.uname}`, true);
+    }
     if (h != null && h !== u.uname) {
       if (!HANDLE_RE.test(h)) return fail(400, HANDLE_HINT);
       const own = ADMIN_HANDLES.includes(String(u.uname).toLowerCase());
@@ -465,6 +603,31 @@ const routes = {
     if (name != null && name !== u.username) await env.DB.prepare('UPDATE users SET username = ?, nkey = ? WHERE id = ?').bind(name, name.toLowerCase(), u.id).run();
     await adminLog(env, request, me, `rename @${u.uname} → @${h || u.uname}${name && name !== u.username ? ' «' + name + '»' : ''}`, true);
     return json({ ok: true, handle: h || u.uname, username: name || u.username });
+  },
+  // удалить чужой аккаунт насовсем: сам аккаунт и всё его — оценки, фото, друзья, реакции, комментарии, ссылки, сессии.
+  // Для подтверждения нужно прислать его @юзернейм; админа удалить нельзя
+  async 'POST /admin/delete/:id'({ env, request, me, arg }) {
+    if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+    const { confirm } = await readBody(request);
+    const u = await env.DB.prepare('SELECT id, uname, username FROM users WHERE id = ?').bind(arg).first();
+    if (!u) return fail(404, 'Нет такого аккаунта.');
+    if (ADMIN_HANDLES.includes(String(u.uname).toLowerCase()) || u.id === me.id) return fail(400, 'Админа удалить нельзя.');
+    if (cleanHandle(confirm) !== u.uname) return fail(400, `Чтобы удалить, впиши его юзернейм @${u.uname}.`);
+    const id = u.id;
+    await env.DB.batch([
+      'DELETE FROM sessions WHERE user_id = ?1',
+      'DELETE FROM shelves WHERE user_id = ?1',
+      'DELETE FROM photos WHERE user_id = ?1',
+      'DELETE FROM friendships WHERE a = ?1 OR b = ?1',
+      'DELETE FROM reactions WHERE owner_id = ?1 OR from_id = ?1',
+      'DELETE FROM comments WHERE owner_id = ?1 OR from_id = ?1',
+      'DELETE FROM shares WHERE owner_id = ?1',
+      'DELETE FROM trusted_devices WHERE user_id = ?1',
+      'DELETE FROM email_codes WHERE user_id = ?1',
+      'DELETE FROM users WHERE id = ?1',
+    ].map((q) => env.DB.prepare(q).bind(id)));
+    await adminLog(env, request, me, `delete account @${u.uname} «${u.username}»`, true);
+    return json({ ok: true });
   },
   // выкинуть со всех устройств (например, если пароль утёк): все сессии аккаунта удаляются
   async 'POST /admin/kick/:id'({ env, request, me, arg }) {
@@ -579,6 +742,7 @@ const routes = {
       const m = (request.headers.get('authorization') || '').match(/^Bearer ([0-9a-f]{64})$/);
       await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?').bind(me.id, m ? await sha256(m[1]) : '').run();
       await env.DB.prepare('DELETE FROM admin_sessions WHERE user_id = ?').bind(me.id).run(); // после смены пароля в админку заново
+      await env.DB.prepare('DELETE FROM trusted_devices WHERE user_id = ?').bind(me.id).run(); // и код на почту снова спросят на всех устройствах
     }
     return json({ user: ownUser(out) });
   },
@@ -1514,7 +1678,7 @@ async function canSee(env, me, uid) {
   return !!row && row.status === 'accepted';
 }
 
-const PUBLIC = new Set(['POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce']);
+const PUBLIC = new Set(['POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'POST /code/verify', 'POST /code/resend']);
 // код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности
 const SHARE_RE = /^[A-Za-z0-9]{12}$/;
 function shareId() {
@@ -1548,7 +1712,7 @@ export async function onRequest({ request, env, params }) {
   if (!routes[key] && segs.length === 2 && segs[0] === 'photo' && RID_RE.test(segs[1])) { key = `${request.method} /photo/:rid`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'photo' && RID_RE.test(segs[2])) { key = `${request.method} /photo/:uid/:rid`; arg = [segs[1], segs[2]]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'react' && RID_RE.test(segs[2])) { key = `${request.method} /react/:uid/:rid`; arg = [segs[1], segs[2]]; }
-  if (!routes[key] && segs.length === 3 && segs[0] === 'admin' && ['ban', 'kick', 'rename'].includes(segs[1]) && /^[0-9a-f]{24}$/.test(segs[2])) { key = `${request.method} /admin/${segs[1]}/:id`; arg = segs[2]; }
+  if (!routes[key] && segs.length === 3 && segs[0] === 'admin' && ['ban', 'kick', 'rename', 'delete'].includes(segs[1]) && /^[0-9a-f]{24}$/.test(segs[2])) { key = `${request.method} /admin/${segs[1]}/:id`; arg = segs[2]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'admin' && segs[1] === 'comment' && /^[0-9a-f]{20}$/.test(segs[2])) { key = `${request.method} /admin/comment/:id`; arg = segs[2]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'comments' && CM_TARGET_RE.test(segs[2])) { key = `${request.method} /comments/:uid/:target`; arg = [segs[1], segs[2]]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'comment' && /^[0-9a-f]{20}$/.test(segs[1])) { key = `${request.method} /comment/:id`; arg = segs[1]; }
