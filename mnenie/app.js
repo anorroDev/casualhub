@@ -179,9 +179,47 @@ function migrateCats(items) {
   try { localStorage.setItem(MIG_KEY, JSON.stringify(done)); } catch (_) {}
   return changed;
 }
+// фото оценок — в IndexedDB (photo-store.js), в localStorage — только ссылка { ref: 'ph_…' }. Аватарку автора в каждую
+// оценку тоже не копируем: своя показывается из профиля (renderAuthorMini). Так оценки занимают килобайты, а не мегабайты
+const photoKeys = new Set(); // фото, которые уже точно лежат в IndexedDB
+function photoDataOf(p) {
+  if (!p) return '';
+  if (typeof p.data === 'string' && p.data.startsWith('data:image/')) return p.data;
+  return typeof p.id === 'string' && p.id.startsWith('data:image/') ? p.id : '';
+}
+function slimForStore(r) {
+  const ph = r.photo, d = photoDataOf(ph);
+  let photo = ph;
+  if (d && state.photoStore) {
+    const key = window.CasualPhotos.keyOf(d);
+    if (!photoKeys.has(key)) { photoKeys.add(key); window.CasualPhotos.put(key, d).then((ok) => { if (!ok) photoKeys.delete(key); }); }
+    photo = { ref: key, w: ph.w || 0, h: ph.h || 0 };
+  } else if (ph && ph.ref && !ph.data) photo = { ref: ph.ref, w: ph.w || 0, h: ph.h || 0 };
+  const a = r.author;
+  const author = a && typeof a.avatar === 'string' && a.avatar.startsWith('data:') ? Object.assign({}, a, { avatar: '' }) : a;
+  return photo === ph && author === a ? r : Object.assign({}, r, { photo, author });
+}
+// фото из IndexedDB — обратно в оценки (до normalizeRating: ссылку без картинки он бы выбросил)
+async function hydratePhotos(list) {
+  if (!window.CasualPhotos) return;
+  const keys = list.filter(r => r && r.photo && window.CasualPhotos.isKey(r.photo.ref) && !r.photo.data).map(r => r.photo.ref);
+  if (!keys.length) return;
+  const got = await window.CasualPhotos.getMany(keys);
+  for (const r of list) {
+    const k = r && r.photo && r.photo.ref;
+    if (!k || !got[k]) continue;
+    photoKeys.add(k);
+    r.photo = { id: got[k], data: got[k], w: r.photo.w || 0, h: r.photo.h || 0 };
+  }
+}
+let storageWarned = 0;
 function saveLocalRatings() {
-  try { localStorage.setItem(STORAGE_KEYS.RATINGS, JSON.stringify(state.ratings)); }
-  catch (e) { console.error('Save ratings error:', e); }
+  try { localStorage.setItem(STORAGE_KEYS.RATINGS, JSON.stringify(state.ratings.map(slimForStore))); }
+  catch (e) {
+    console.error('Save ratings error:', e);
+    // молча терять оценки нельзя: говорим, но не чаще раза в минуту
+    if (Date.now() - storageWarned > 60e3) { storageWarned = Date.now(); toast('В браузере не хватает места: последние изменения не сохранились здесь. Если вошёл в аккаунт, они уже ушли на сервер'); }
+  }
 }
 function saveLocalCats() {
   try { localStorage.setItem(STORAGE_KEYS.CATS, JSON.stringify(serializeCats())); }
@@ -262,9 +300,11 @@ function shownAvatar(u) {
 }
 function renderAuthorMini(author) {
   if (!author) return '👤';
-  const isImg = author.avatar && (author.avatar.startsWith('data:image/') || author.avatar.startsWith('http://') || author.avatar.startsWith('https://'));
+  // своя аватарка в оценках не хранится (место в браузере), берём её из профиля
+  const av = !author.avatar && state.user && author.id && author.id === state.user.id ? state.user.avatar || '' : author.avatar || '';
+  const isImg = av && (av.startsWith('data:image/') || av.startsWith('http://') || av.startsWith('https://'));
   if (isImg) {
-    return `<span class="author-mini-avatar" style="background-image:url('${esc(author.avatar)}');"></span>`;
+    return `<span class="author-mini-avatar" style="background-image:url('${esc(av)}');"></span>`;
   }
   return '👤';
 }
@@ -1942,6 +1982,7 @@ function computeRanks(list) {
 function resolvePhotoUrl(p) {
   if (!p) return '';
   if (p.data) return p.data;
+  if (p.ref) return '';
   if (p.url) return p.url;
   if (p.id && (p.id.startsWith('data:') || p.id.startsWith('blob:') || p.id.startsWith('http://') || p.id.startsWith('https://'))) return p.id;
   return '/_blob/' + p.id;
@@ -2759,10 +2800,20 @@ async function initStorage() {
       }
       if (migrateCats(state.cats)) saveLocalCats();
     } catch (_) {}
+    state.photoStore = window.CasualPhotos ? await window.CasualPhotos.ready : false;
     try {
       const savedRatings = JSON.parse(localStorage.getItem(STORAGE_KEYS.RATINGS) || 'null');
       if (savedRatings && Array.isArray(savedRatings)) {
+        await hydratePhotos(savedRatings);
+        // старые оценки хранили фото прямо в себе (и дважды): переносим в IndexedDB и освобождаем место
+        const inline = savedRatings.some(r => r && (photoDataOf(r.photo) || (r.author && /^data:/.test(r.author.avatar || ''))));
         state.ratings = savedRatings.map(r => normalizeRating(r.id, r)).filter(Boolean);
+        if (inline && state.photoStore) saveLocalRatings();
+        // черновик с сохранённым фото: оно тоже в IndexedDB
+        if (form.photo && form.photo.ref && !form.photo.data) {
+          const d = await window.CasualPhotos.get(form.photo.ref);
+          if (typeof d === 'string') form.photo = { kind: 'saved', id: d, data: d, w: form.photo.w, h: form.photo.h };
+        }
       } else {
         state.ratings = clone(STARTER_RATINGS).map(r => normalizeRating(r.id, r));
         saveLocalRatings();
@@ -2802,9 +2853,17 @@ function saveDraft() {
     else localStorage.setItem(DRAFT_KEY, JSON.stringify({ v: 2, form: {
       editingId: form.editingId, cat: form.cat, name: form.name, artist: form.artist, note: form.note,
       scores: form.scores, notes: form.notes, weights: form.weights, extra: form.extra, extraCatName: form.extraCatName,
-      photo: form.photo && form.photo.kind === 'saved' ? { kind: 'saved', id: form.photo.id, w: form.photo.w, h: form.photo.h } : null
+      photo: form.photo && form.photo.kind === 'saved' ? draftPhoto(form.photo) : null
     } }));
   } catch (_) {}
+}
+// фото в черновике — ссылкой на IndexedDB, а не целой картинкой
+function draftPhoto(p) {
+  const d = photoDataOf(p);
+  if (!d || !state.photoStore) return { kind: 'saved', id: p.id, w: p.w, h: p.h };
+  const key = window.CasualPhotos.keyOf(d);
+  if (!photoKeys.has(key)) { photoKeys.add(key); window.CasualPhotos.put(key, d); }
+  return { kind: 'saved', ref: key, w: p.w, h: p.h };
 }
 function loadDraft() {
   try {
@@ -3636,6 +3695,8 @@ const PHOTO_MAX = 1600;
 let photoBusy = false;
 function normPhoto(p) {
   if (!p || typeof p !== 'object') return null;
+  // фото из IndexedDB, которое не нашлось: ссылка остаётся (на сервере фото есть), но картинки здесь нет
+  if (!p.data && window.CasualPhotos && window.CasualPhotos.isKey(p.ref)) return { id: p.ref, ref: p.ref, data: '', w: clampInt(p.w, 0, 20000), h: clampInt(p.h, 0, 20000) };
   const id = str(p.id || p.data);
   if (!id) return null;
   if (PHOTO_ID.test(id) || id.startsWith('data:image/') || id.startsWith('http://') || id.startsWith('https://') || id.startsWith('blob:')) {
@@ -3902,6 +3963,7 @@ function imgBitmap(src) {
 async function loadPhotoBitmap(p) {
   try {
     let blob = p.kind === 'new' ? p.blob : null;
+    if (!blob && p.ref && !p.data) return null;
     if (!blob) {
       const src = p.data || (p.id && (p.id.startsWith('data:') || p.id.startsWith('blob:')) ? p.id : '/_blob/' + p.id);
       if (src.startsWith('data:')) blob = dataUrlToBlob(src);

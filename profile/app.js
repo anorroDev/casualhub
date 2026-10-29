@@ -68,12 +68,19 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
 
   // ---------- фото: свои лежат прямо в оценке или в аккаунте, у друзей берём с сервера ----------
   const photoCache = new Map();
+  // своё фото из IndexedDB (photo-store.js): в оценке лежит только ссылка ph_…
+  const idbPhoto = (r) => (r.photo && window.CasualPhotos && window.CasualPhotos.isKey(r.photo.ref) ? window.CasualPhotos.get(r.photo.ref).then((d) => (typeof d === 'string' ? d : null)) : null);
   const photoOf = (p, r) => {
     if (!r.photo) return Promise.resolve(null);
     if (r.photo.data && /^data:image\//.test(r.photo.data)) return Promise.resolve(r.photo.data);
+    const own = idbPhoto(r);
+    if (own) return own.then((d) => d || serverThumb(p, r));
     // фото-ссылка (например, постер из IMDb после импорта из Letterboxd) показывается как есть
     const link = r.photo.url || (typeof r.photo.id === 'string' && /^https:\/\//.test(r.photo.id) ? r.photo.id : '');
     if (link) return Promise.resolve(link);
+    return serverThumb(p, r);
+  };
+  const serverThumb = (p, r) => {
     if (!token || !p.uid) return Promise.resolve(null);
     const k = p.uid + ':' + r.id;
     if (!photoCache.has(k)) photoCache.set(k, api(`/photo/${encodeURIComponent(p.uid)}/${encodeURIComponent(r.id)}?thumb=1`).then((d) => d.data || null, () => null)); // превью: в профиле картинки маленькие
@@ -1123,8 +1130,13 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   const photoFull = (p, r) => {
     if (!r.photo) return Promise.resolve(null);
     if (r.photo.data && /^data:image\//.test(r.photo.data)) return Promise.resolve(r.photo.data);
+    const own = idbPhoto(r);
+    if (own) return own.then((d) => d || serverFull(p, r));
     if (r.photo.url && /^https:\/\//.test(r.photo.url)) return Promise.resolve(r.photo.url);
     if (typeof r.photo.id === 'string' && /^https:\/\//.test(r.photo.id)) return Promise.resolve(r.photo.id);
+    return serverFull(p, r);
+  };
+  const serverFull = (p, r) => {
     if (!token || !p.uid) return Promise.resolve(null);
     const k = p.uid + ':' + r.id;
     if (!fullPhotoCache.has(k)) fullPhotoCache.set(k, api(`/photo/${encodeURIComponent(p.uid)}/${encodeURIComponent(r.id)}`).then((d) => d.data || null, () => null));
@@ -1148,7 +1160,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const d = ph && typeof ph.data === 'string' && ph.data.startsWith('data:image/') ? ph.data : ph && typeof ph.id === 'string' && ph.id.startsWith('data:image/') ? ph.id : '';
     const u = ph && (ph.url || ph.id);
     const link = typeof u === 'string' && /^https:\/\//.test(u) && u.length < 2000 ? u : '';
-    c.photo = d ? { remote: fpOf(d), w: ph.w || 0, h: ph.h || 0 } : link ? { url: link, w: ph.w || 0, h: ph.h || 0 } : undefined;
+    const ref = !d && ph && window.CasualPhotos && window.CasualPhotos.isKey(ph.ref) ? window.CasualPhotos.remoteOf(ph.ref) : ''; // фото в IndexedDB: отпечаток в самой ссылке
+    c.photo = d ? { remote: fpOf(d), w: ph.w || 0, h: ph.h || 0 } : link ? { url: link, w: ph.w || 0, h: ph.h || 0 } : ref ? { remote: ref, w: ph.w || 0, h: ph.h || 0 } : undefined;
     if (!c.photo) delete c.photo;
     delete c.hist; delete c.history;
     const cs = read('ocenshik.cats.v2');
@@ -1741,7 +1754,9 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         if (!cur || cur.id !== user.id) throw new Error('user');
         cur.avatar = still; user.avatar = still;
         const users = (read('ocenshik.users.v1') || []).map((u) => (u.id === cur.id ? Object.assign(u, { avatar: still }) : u));
-        const ratings = (read('ocenshik.ratings.v2') || []).map((r) => (r && r.author && r.author.id === cur.id ? Object.assign(r, { author: Object.assign({}, r.author, { avatar: still }) }) : r));
+        // в оценки картинку аватарки не копируем (место в браузере): Мнение берёт её из профиля
+        const mini = /^data:/.test(still || '') ? '' : still;
+        const ratings = (read('ocenshik.ratings.v2') || []).map((r) => (r && r.author && r.author.id === cur.id ? Object.assign(r, { author: Object.assign({}, r.author, { avatar: mini }) }) : r));
         const all = read(ANIM_KEY) || {};
         if (anim) all[cur.id] = { data: anim, sig: sigOf(still) }; else delete all[cur.id];
         try {

@@ -36,7 +36,9 @@
     if (cur && cur.id === id) { cur.avatar = still; write('ocenshik.user.v1', cur); }
     write('ocenshik.users.v1', (read('ocenshik.users.v1') || []).map((u) => (u && u.id === id ? Object.assign(u, { avatar: still }) : u)));
     const ratings = read('ocenshik.ratings.v2');
-    if (Array.isArray(ratings)) write('ocenshik.ratings.v2', ratings.map((r) => (r && r.author && r.author.id === id ? Object.assign(r, { author: Object.assign({}, r.author, { avatar: still }) }) : r)));
+    // в оценки картинку аватарки не копируем (место в браузере): Мнение берёт её из профиля
+    const mini = /^data:/.test(still || '') ? '' : still;
+    if (Array.isArray(ratings)) write('ocenshik.ratings.v2', ratings.map((r) => (r && r.author && r.author.id === id ? Object.assign(r, { author: Object.assign({}, r.author, { avatar: mini }) }) : r)));
     const all = read(ANIM_KEY) || {};
     if (anim) all[id] = { data: anim, sig: sigOf(still) }; else delete all[id];
     write(ANIM_KEY, all);

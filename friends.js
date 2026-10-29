@@ -504,8 +504,10 @@
       const copy = { ...r };
       const d = photoData(r.photo);
       const link = photoLink(r.photo);
+      // фото из IndexedDB, которого в этом браузере не нашлось: на сервере оно есть, ссылку на него не теряем
+      const ref = r.photo && !d && window.CasualPhotos && window.CasualPhotos.isKey(r.photo.ref) ? window.CasualPhotos.remoteOf(r.photo.ref) : '';
       copy.photo = d ? { remote: fp(d), w: r.photo.w || 0, h: r.photo.h || 0 }
-        : link ? { url: link, w: r.photo.w || 0, h: r.photo.h || 0 } : undefined;
+        : link ? { url: link, w: r.photo.w || 0, h: r.photo.h || 0 } : ref ? { remote: ref, w: r.photo.w || 0, h: r.photo.h || 0 } : undefined;
       if (!copy.photo) delete copy.photo;
       delete copy.hist;
       delete copy.history;
