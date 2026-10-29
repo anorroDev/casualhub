@@ -340,7 +340,17 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   const lbm = (r) => (r.lb ? LB_MARK : '');
 
 
-  const ST = { cat: 'all', sort: 'score', q: '', limit: 24, topics: false, genres: [], gOpen: false };
+  const ST = { cat: 'all', sort: 'score', q: '', limit: 24, topics: false, genres: [], gOpen: false, status: 'all' };
+  // статус над списком: «◷ В планах» и «▶ В процессе» с числом; переключатель виден, если такие оценки есть
+  const STATUS_F = [['plan', /В планах/, '◷ В планах'], ['doing', /В процессе/, '▶ В процессе']];
+  const statusOk = (r, f) => { const s = STATUS_F.find((x) => x[0] === f); return !s || s[1].test(r.status || ''); };
+  function statusSegUI(box, pool, S) {
+    const opts = STATUS_F.map(([k, re, t]) => [k, t, pool.filter((r) => re.test(r.status || '')).length]).filter((x) => x[2] || S.status === x[0]);
+    box.hidden = !opts.length;
+    if (!opts.length) { S.status = 'all'; box.replaceChildren(); return; }
+    box.innerHTML = `<button type="button" data-st="all" aria-pressed="${S.status === 'all'}">Все</button>`
+      + opts.map(([k, t, n]) => `<button type="button" data-st="${k}" aria-pressed="${S.status === k}">${t}<b>${n}</b></button>`).join('');
+  }
   // фильтр по жанрам: кнопка «Фильтры» раскрывает строку жанров; выбранные нужны все сразу
   const hasGenres = (r, sel) => sel.every((g) => r.genres.includes(g));
   function genreUI(btn, box, pool, S) {
@@ -1157,7 +1167,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   const ALL_KEY = 'casualhub.allView.v1';
   const AST = (() => {
     const v = read(ALL_KEY) || {};
-    return { view: ['list', 'grid', 'tier', 'full'].includes(v.view) ? v.view : 'grid', sort: ['score', 'date', 'name'].includes(v.sort) ? v.sort : 'score', cats: [], q: '', limit: 60, genres: [], gOpen: false };
+    return { view: ['list', 'grid', 'tier', 'full'].includes(v.view) ? v.view : 'grid', sort: ['score', 'date', 'name'].includes(v.sort) ? v.sort : 'score', cats: [], q: '', limit: 60, genres: [], gOpen: false, status: 'all' };
   })();
   const keepAll = () => { try { localStorage.setItem(ALL_KEY, JSON.stringify({ view: AST.view, sort: AST.sort })); } catch (e) {} };
   const TIERS = [['S', 9.2, '9,2–10'], ['A', 8.2, '8,2–9,1'], ['B', 7, '7–8,1'], ['C', 5, '5–6,9'], ['D', -1, 'ниже 5']];
@@ -1176,6 +1186,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
           <div class="tools">
             <input class="search" id="allQ" type="search" placeholder="Найти по названию…" aria-label="Найти оценку" autocomplete="off">
             <div class="seg" id="allSort" role="group" aria-label="Сортировка"><button type="button" data-sort="score">По баллу</button><button type="button" data-sort="date">Новые</button><button type="button" data-sort="name">А–Я</button></div>
+            <div class="seg st-seg" id="allStSeg" role="group" aria-label="Статус" hidden></div>
             <div class="seg" id="allView" role="group" aria-label="Вид"><button type="button" data-view="list">Список</button><button type="button" data-view="grid">Плитка</button><button type="button" data-view="tier">Тир-лист</button><button type="button" data-view="full">Подробно</button></div>
             <button type="button" class="btn ghost genre-btn" id="allGenreBtn" aria-controls="allGenres" hidden>Фильтры</button>
           </div>
@@ -1193,6 +1204,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       });
       $('#allQ').addEventListener('input', (e) => { AST.q = e.target.value; AST.limit = 60; drawAll(); });
       $('#allSort').addEventListener('click', (e) => { const b = e.target.closest('[data-sort]'); if (b) { AST.sort = b.dataset.sort; keepAll(); drawAll(); } });
+      $('#allStSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-st]'); if (b) { AST.status = b.dataset.st; AST.limit = 60; drawAll(); } });
       $('#allView').addEventListener('click', (e) => { const b = e.target.closest('[data-view]'); if (b) { AST.view = b.dataset.view; AST.limit = 60; keepAll(); drawAll(); } });
       $('#allMore').addEventListener('click', () => { AST.limit += 60; drawAll(); });
       // «Свой тир-лист»: те же оценки, что сейчас на странице (темы, жанры, поиск), раскладываются по рядам вручную
@@ -1222,7 +1234,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const q = keyOf(AST.q);
     const inCats = rs.filter((r) => !AST.cats.length || AST.cats.includes(keyOf(r.cat)));
     genreUI($('#allGenreBtn'), $('#allGenres'), inCats, AST);
-    const list = inCats.filter((r) => hasGenres(r, AST.genres) && (!q || keyOf(r.name + ' ' + r.meta).includes(q)));
+    statusSegUI($('#allStSeg'), inCats, AST);
+    const list = inCats.filter((r) => statusOk(r, AST.status) && hasGenres(r, AST.genres) && (!q || keyOf(r.name + ' ' + r.meta).includes(q)));
     AST.shown = list;
     list.sort(AST.sort === 'date' ? (a, b) => b.at - a.at : AST.sort === 'name' ? (a, b) => a.name.localeCompare(b.name, 'ru') : (a, b) => (b.total ?? -1) - (a.total ?? -1) || b.at - a.at);
     $('#allCount').textContent = `${list.length} ${plural(list.length, 'оценка', 'оценки', 'оценок')}`;
@@ -1543,6 +1556,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
             <div class="tools">
               <input class="search" id="q" type="search" placeholder="Найти по названию…" aria-label="Найти оценку" autocomplete="off">
               <div class="seg" id="sortSeg" role="group" aria-label="Сортировка"><button type="button" data-sort="score">По баллу</button><button type="button" data-sort="date">Новые</button><button type="button" data-sort="name">А–Я</button></div>
+              <div class="seg st-seg" id="stSeg" role="group" aria-label="Статус" hidden></div>
               <button type="button" class="btn ghost genre-btn" id="genreBtn" aria-controls="genreChips" hidden>Фильтры</button>
             </div>
             <div class="chips genre-chips" id="genreChips" hidden></div>
@@ -1706,7 +1720,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       const q = keyOf(ST.q);
       const inCat = rs.filter((r) => ST.cat === 'all' || r.cat === ST.cat);
       genreUI($('#genreBtn'), $('#genreChips'), inCat, ST);
-      let list = inCat.filter((r) => hasGenres(r, ST.genres) && (!q || keyOf(r.name + ' ' + r.meta).includes(q)));
+      statusSegUI($('#stSeg'), inCat, ST);
+      let list = inCat.filter((r) => statusOk(r, ST.status) && hasGenres(r, ST.genres) && (!q || keyOf(r.name + ' ' + r.meta).includes(q)));
       list.sort(ST.sort === 'date' ? (a, b) => b.at - a.at : ST.sort === 'name' ? (a, b) => a.name.localeCompare(b.name, 'ru') : (a, b) => (b.total ?? -1) - (a.total ?? -1) || b.at - a.at);
       $('#listStat').textContent = `${list.length} ${plural(list.length, 'оценка', 'оценки', 'оценок')}`;
       const shown = list.slice(0, ST.limit);
@@ -1721,6 +1736,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     };
     chips.addEventListener('click', (e) => { const b = e.target.closest('[data-cat]'); if (!b) return; ST.cat = b.dataset.cat; ST.limit = 24; draw(); });
     $('#sortSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-sort]'); if (!b) return; ST.sort = b.dataset.sort; draw(); });
+    $('#stSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-st]'); if (!b) return; ST.status = b.dataset.st; ST.limit = 24; draw(); });
     $('#q').addEventListener('input', (e) => { ST.q = e.target.value; ST.limit = 24; draw(); });
     $('#more').addEventListener('click', () => { ST.limit += 24; draw(); });
     wireGenres($('#genreBtn'), $('#genreChips'), ST, draw);
