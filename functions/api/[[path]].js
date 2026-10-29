@@ -820,6 +820,19 @@ const routes = {
     ).bind(like + '%', '%' + like + '%', me.id, q).all();
     return json({ users: (results || []).map((r) => ({ ...pubUser(r), rel: r.status === 'accepted' ? 'friend' : r.status ? (r.requested_by === me.id ? 'sent' : 'incoming') : '' })) });
   },
+  // профиль по имени: /u/<@юзернейм или ник>. Сначала точный @юзернейм, потом ник; одинаковых ников — список на выбор
+  async 'GET /users/resolve'({ env, request, me }) {
+    if (burst('resolve:' + me.id, 60, 60e3)) return tooMany(1);
+    const raw = String(new URL(request.url).searchParams.get('q') || '').trim().slice(0, 40);
+    if (!raw) return fail(400, 'Нужен @юзернейм или ник.');
+    const h = cleanHandle(raw);
+    const byHandle = HANDLE_RE.test(h) ? await env.DB.prepare('SELECT id, username, uname FROM users WHERE uname = ?').bind(h).first() : null;
+    if (byHandle) return json({ user: pubUser(byHandle) });
+    const { results } = await env.DB.prepare('SELECT id, username, uname FROM users WHERE nkey = ? ORDER BY created_at LIMIT 8').bind(cleanName(raw).toLowerCase()).all();
+    if (results.length === 1) return json({ user: pubUser(results[0]) });
+    if (results.length > 1) return json({ users: results.map(pubUser) });
+    return fail(404, `Нет никого с юзернеймом или ником «${clip(raw, 40)}».`);
+  },
   // друзья другого человека: видны его друзьям, если он не скрыл блок «Друзья» в профиле
   async 'GET /friends/of/:id'({ env, me, arg }) {
     if (!(await canSee(env, me, arg))) return fail(403, 'Друзья видны только друзьям.');

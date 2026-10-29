@@ -1,2 +1,4 @@
+# короткая ссылка на профиль: /u/<@юзернейм или ник> показывает /profile/ (адрес в браузере остаётся /u/…)
+/u/*  /profile/  200
 # SPA fallback rule for Cloudflare Pages
 /*    /index.html   200

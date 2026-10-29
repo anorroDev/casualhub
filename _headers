@@ -14,3 +14,8 @@
 
 /api/*
   Cache-Control: no-store
+
+# админка: не кешируется и не попадает в поиск
+/admin/*
+  Cache-Control: no-store
+  X-Robots-Tag: noindex, nofollow

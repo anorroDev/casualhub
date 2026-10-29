@@ -48,6 +48,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   const token = user && tokens[user.id];
   const api = (path) => fetch('/api' + path, { headers: { authorization: 'Bearer ' + token } }).then((r) => (r.ok ? r.json() : r.json().then((d) => Promise.reject(d), () => Promise.reject({}))));
   const wantId = new URLSearchParams(location.search).get('id');
+  // профиль по имени: /u/<@юзернейм или ник> или /profile/?u=<имя>
+  const wantName = (new URLSearchParams(location.search).get('u') || (location.pathname.startsWith('/u/') ? (() => { try { return decodeURIComponent(location.pathname.slice(3).replace(/\/+$/, '')); } catch (e) { return ''; } })() : '')).trim().slice(0, 40);
 
   // жанры и теги из описания «2010, фантастика, боевик»: всё через запятую, кроме года
   const genresOf = (meta) => [...new Set(String(meta || '').split(/\s*[,;]\s*/).map((s) => s.trim().toLowerCase()).filter((s) => s && s.length <= 24 && !/^\d{4}$/.test(s)))];
@@ -2286,6 +2288,21 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   (async () => {
     let meServer = null;
     if (token) { try { meServer = (await api('/me')).user; } catch (e) {} }
+    if (!wantId && wantName) {
+      if (!token) { message('Профиль', 'Профили открываются после входа в аккаунт.', '<a class="btn primary" href="/mnenie/#login">Войти</a><a class="btn ghost" href="/profile/">Мой профиль</a>'); return; }
+      try {
+        const d = await api('/users/resolve?q=' + encodeURIComponent(wantName));
+        if (d.user) {
+          if (meServer && d.user.id === meServer.id) showMe(meServer); else showFriend(d.user.id);
+          return;
+        }
+        // одинаковый ник у нескольких: выбрать, кого открыть
+        message('Кого открыть?', `Ник «${esc(wantName)}» у нескольких людей:`, (d.users || []).map((u) => `<a class="btn ghost" href="/profile/?id=${encodeURIComponent(u.id)}">${esc(u.username)} <small>@${esc(u.handle)}</small></a>`).join(''));
+      } catch (e) {
+        message('Не нашлось', esc(e && e.error ? e.error : 'Не получилось найти профиль.'), '<a class="btn primary" href="/profile/">Мой профиль</a>');
+      }
+      return;
+    }
     if (wantId && !(meServer && meServer.id === wantId)) showFriend(wantId);
     else showMe(meServer);
   })();

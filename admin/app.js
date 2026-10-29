@@ -190,24 +190,27 @@
         <ul class="adm-list">${d.users.map((u, i) => `<li class="adm-row${u.banned ? ' banned' : ''}" style="--k:${Math.min(i, 12)}" data-uid="${esc(u.id)}">
           <div class="adm-who"><b>${esc(u.username)}</b> <a href="/profile/?id=${encodeURIComponent(u.id)}">@${esc(u.handle)}</a>${u.admin ? ' <em class="adm-badge">админ</em>' : ''}${u.banned ? ` <em class="adm-badge bad">бан${u.banReason ? ': ' + esc(u.banReason) : ''}</em>` : ''}
             <small>${esc(u.email)} · с ${when(u.createdAt)} · был ${when(u.lastSeen)} · оценок ${u.ratings}</small></div>
-          ${u.admin ? `<div class="adm-acts"><button type="button" class="btn ghost small" data-act="rename" data-h="${esc(u.handle)}" data-m="${esc(u.email)}">✎ Ник, @ и почта</button></div>` : `<div class="adm-acts"><button type="button" class="btn ghost small" data-act="rename" data-h="${esc(u.handle)}" data-m="${esc(u.email)}">✎ Ник, @ и почта</button><button type="button" class="btn ghost small" data-act="kick">Выкинуть с устройств</button><button type="button" class="btn small danger" data-act="delete" data-h="${esc(u.handle)}">🗑 Удалить</button><button type="button" class="btn small ${u.banned ? 'ghost' : 'danger'}" data-act="${u.banned ? 'unban' : 'ban'}">${u.banned ? 'Разбанить' : 'Забанить'}</button></div>`}
+          ${u.admin ? `<div class="adm-acts"><button type="button" class="btn ghost small" data-act="set-handle" data-h="${esc(u.handle)}" title="Сменить @юзернейм">@ Юзернейм</button><button type="button" class="btn ghost small" data-act="set-nick" title="Сменить ник">✎ Ник</button><button type="button" class="btn ghost small" data-act="set-mail" data-m="${esc(u.email)}" title="Сменить почту">✉ Почта</button></div>` : `<div class="adm-acts"><button type="button" class="btn ghost small" data-act="set-handle" data-h="${esc(u.handle)}" title="Сменить @юзернейм">@ Юзернейм</button><button type="button" class="btn ghost small" data-act="set-nick" title="Сменить ник">✎ Ник</button><button type="button" class="btn ghost small" data-act="set-mail" data-m="${esc(u.email)}" title="Сменить почту">✉ Почта</button><button type="button" class="btn ghost small" data-act="kick">Выкинуть с устройств</button><button type="button" class="btn small danger" data-act="delete" data-h="${esc(u.handle)}">🗑 Удалить</button><button type="button" class="btn small ${u.banned ? 'ghost' : 'danger'}" data-act="${u.banned ? 'unban' : 'ban'}">${u.banned ? 'Разбанить' : 'Забанить'}</button></div>`}
         </li>`).join('') || '<li class="muted">Никого не нашлось.</li>'}</ul>`;
       $('#admUq').addEventListener('submit', (e) => { e.preventDefault(); users(e.target.querySelector('input').value.trim()); });
       sec().querySelector('.adm-list').addEventListener('click', async (e) => {
         const b = e.target.closest('[data-act]');
         if (!b) return;
         const li = b.closest('[data-uid]'), id = li.dataset.uid, name = li.querySelector('.adm-who b').textContent;
-        // новый @юзернейм и ник: пустое поле — оставить как есть
-        if (b.dataset.act === 'rename') {
-          const h = prompt(`Новый @юзернейм для ${name} (латиница, цифры, «_» и «.», 3–20 символов). Пусто — не менять:`, b.dataset.h);
-          if (h === null) return;
-          const n = prompt(`Новый ник для ${name} (2–24 символа). Пусто — не менять:`, name);
-          if (n === null) return;
-          const curMail = b.dataset.m || '';
-          const mm = prompt(`Почта ${name} (на неё приходит код для входа). Пусто — не менять:`, curMail);
-          if (mm === null) return;
+        // @юзернейм, ник или почта по отдельности: одно окно — одно изменение (те же правила, что у самого человека)
+        const SET = {
+          'set-handle': ['handle', `Новый @юзернейм для ${name}: латиница, цифры, «_» и «.», от 3 до 20 символов`, () => b.dataset.h],
+          'set-nick': ['username', `Новый ник для ${name}: от 2 до 24 символов`, () => name],
+          'set-mail': ['email', `Новая почта для ${name} (на неё приходит код для входа)`, () => b.dataset.m || ''],
+        }[b.dataset.act];
+        if (SET) {
+          const [field, ask, cur] = SET;
+          const v = prompt(ask + ':', cur());
+          if (v === null) return;
+          const val = v.trim().replace(field === 'handle' ? /^@+/ : /^$/, '');
+          if (!val || val === cur()) return;
           b.disabled = true;
-          try { await call('POST', `/admin/rename/${encodeURIComponent(id)}`, { handle: h.trim() === b.dataset.h ? '' : h.trim(), username: n.trim() === name ? '' : n.trim(), email: mm.trim() === curMail ? '' : mm.trim() }); users(q); } catch (x) { alert(x.message); b.disabled = false; }
+          try { await call('POST', `/admin/rename/${encodeURIComponent(id)}`, { [field]: val }); users(q); } catch (x) { alert(x.message); b.disabled = false; }
           return;
         }
         // удаление насовсем: нужно вписать его юзернейм, чтобы не удалить по ошибке
