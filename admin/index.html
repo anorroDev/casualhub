@@ -321,6 +321,40 @@ button, input { font: inherit; color: inherit; }
 .adm-ann-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .adm-ann-row > * { flex: 1 1 180px; }
 @media (prefers-reduced-motion: reduce) { .adm-stat, .adm-row, .adm-row.gone { animation: none; } }
+/* окно админки: смена @юзернейма, ника и почты, бан, удаление — в стиле сайта, поверх размытой страницы */
+body.adm-lock-scroll { overflow: hidden; }
+.adm-modal { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg) 50%, transparent); -webkit-backdrop-filter: blur(10px) saturate(1.1); backdrop-filter: blur(10px) saturate(1.1); }
+.adm-dlg { position: relative; width: min(100%, 440px); max-height: calc(100dvh - 32px); overflow-y: auto; display: grid; gap: 12px; padding: 26px 22px 20px; border-radius: 24px; background: linear-gradient(160deg, var(--panel), color-mix(in srgb, var(--accent-soft) 55%, var(--panel))); border: 2px solid var(--accent); box-shadow: 0 30px 70px -24px rgba(0, 0, 0, .55), 0 14px 34px -18px color-mix(in srgb, var(--accent) 70%, transparent); text-align: center; animation: dlg-in .5s var(--spring); }
+.adm-dlg.danger { border-color: var(--bad); background: linear-gradient(160deg, var(--panel), color-mix(in srgb, var(--bad) 10%, var(--panel))); box-shadow: 0 30px 70px -24px rgba(0, 0, 0, .55), 0 14px 34px -18px color-mix(in srgb, var(--bad) 60%, transparent); }
+.adm-modal.out .adm-dlg { animation: dlg-out .22s ease-in forwards; }
+.adm-dlg.shake { animation: adm-shake .4s; }
+@keyframes dlg-in { from { transform: translateY(40px) scale(.92); } }
+@keyframes dlg-out { to { transform: translateY(50px) scale(.92); } }
+.adm-dlg-x { position: absolute; top: 12px; right: 12px; width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--panel-2); color: var(--ink-2); font: inherit; cursor: pointer; }
+.adm-dlg-x:hover { color: var(--ink); }
+.adm-dlg-ic { justify-self: center; display: grid; place-items: center; width: 58px; height: 58px; border-radius: 18px; background: var(--accent); color: var(--on-accent, #fff); font: 800 26px/1 var(--font-body); box-shadow: 0 12px 26px -12px var(--accent); animation: dlg-ic .6s var(--spring) .05s backwards; }
+.adm-dlg.danger .adm-dlg-ic { background: var(--bad); box-shadow: 0 12px 26px -12px var(--bad); color: #fff; }
+@keyframes dlg-ic { from { transform: scale(.4) rotate(-12deg); } }
+.adm-dlg h2 { margin: 0; font: 800 clamp(26px, 5vw, 32px)/1.05 var(--font-display); color: var(--ink); }
+.adm-dlg-who { margin: -4px 0 0; font-size: 14px; font-weight: 700; color: var(--accent); overflow-wrap: anywhere; }
+.adm-dlg.danger .adm-dlg-who { color: var(--bad); }
+.adm-dlg-text { margin: 0; font-size: 14.5px; line-height: 1.45; color: var(--ink-2); overflow-wrap: anywhere; white-space: pre-wrap; }
+.adm-dlg-f { display: grid; gap: 6px; text-align: left; }
+.adm-dlg-l { font-size: 13px; font-weight: 700; color: var(--ink-2); }
+.adm-dlg-box { display: flex; align-items: center; min-height: 52px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel-2); transition: border-color .15s, box-shadow .2s; }
+.adm-dlg-box:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+.adm-dlg.danger .adm-dlg-box:focus-within { border-color: var(--bad); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 20%, transparent); }
+.adm-dlg-box i { flex: none; padding-left: 14px; font: 800 20px/1 var(--font-body); font-style: normal; color: var(--ink-3); }
+.adm-dlg-box input, .adm-dlg-box textarea { flex: 1; min-width: 0; height: 50px; padding: 0 14px; border: 0; background: none; color: var(--ink); font: 600 17px/1.3 var(--font-body); outline: none; }
+.adm-dlg-box.pre input { padding-left: 4px; }
+.adm-dlg-box textarea { height: auto; min-height: 80px; padding: 12px 14px; resize: vertical; font-size: 15px; }
+.adm-dlg-hint { margin: 0; font-size: 12.5px; line-height: 1.4; color: var(--ink-3); text-align: left; }
+.adm-dlg-err { min-height: 18px; margin: 0; font-size: 13px; font-weight: 700; color: var(--bad); text-align: left; }
+.adm-dlg-acts { display: grid; grid-template-columns: 1fr 1.4fr; gap: 8px; }
+.adm-dlg-acts .btn { height: 46px; }
+.adm-dlg-acts .btn:disabled { opacity: .5; cursor: default; transform: none; }
+@media (max-width: 420px) { .adm-dlg-acts { grid-template-columns: 1fr; } .adm-dlg-acts [data-ok] { order: -1; } }
+@media (prefers-reduced-motion: reduce) { .adm-dlg, .adm-dlg-ic, .adm-modal.out .adm-dlg { animation: none; } }
 </style>
 <script src="/whatsnew.js"></script><script src="/online.js" defer></script><script src="/friends-panel.js" defer></script><script src="/header-menu.js" defer></script>
 </head>

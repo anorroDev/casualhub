@@ -160,6 +160,91 @@
     showTab();
   }
 
+  // ---------- окно админки в стиле сайта (вместо системных prompt/confirm) ----------
+  // dialog({ icon, title, who, text, field: { value, prefix, placeholder, label, type, max, filter, check, optional }, hint, button, danger, submit })
+  // submit(значение) — запрос на сервер; ошибка показывается в окне, окно закрывается, только когда всё получилось.
+  // Возвращает true (сделано) или null (закрыли или ничего не поменялось)
+  function dialog(o) {
+    return new Promise((resolve) => {
+      const f = o.field;
+      const m = document.createElement('div');
+      m.className = 'adm-modal';
+      m.innerHTML = `<form class="adm-dlg${o.danger ? ' danger' : ''}" role="dialog" aria-modal="true" aria-labelledby="admDlgT" novalidate>
+        <button type="button" class="adm-dlg-x" data-x aria-label="Закрыть">✕</button>
+        <span class="adm-dlg-ic" aria-hidden="true"></span>
+        <h2 id="admDlgT"></h2>
+        ${o.who ? '<p class="adm-dlg-who"></p>' : ''}
+        ${o.text ? '<p class="adm-dlg-text"></p>' : ''}
+        ${f ? `<label class="adm-dlg-f">${f.label ? '<span class="adm-dlg-l"></span>' : ''}<span class="adm-dlg-box${f.prefix ? ' pre' : ''}">${f.prefix ? `<i aria-hidden="true">${esc(f.prefix)}</i>` : ''}${f.type === 'textarea' ? '<textarea rows="3"></textarea>' : `<input type="${f.type === 'email' ? 'email' : 'text'}" autocomplete="off" spellcheck="false">`}</span></label>` : ''}
+        ${o.hint ? '<p class="adm-dlg-hint"></p>' : ''}
+        <p class="adm-dlg-err" role="alert"></p>
+        <div class="adm-dlg-acts"><button type="button" class="btn ghost" data-x>Отмена</button><button type="submit" class="btn ${o.danger ? 'danger' : 'primary'}" data-ok></button></div>
+      </form>`;
+      // все тексты — через textContent: имена и ники пользователей не превращаются в разметку
+      m.querySelector('.adm-dlg-ic').textContent = o.icon || '✎';
+      m.querySelector('#admDlgT').textContent = o.title;
+      if (o.who) m.querySelector('.adm-dlg-who').textContent = o.who;
+      if (o.text) m.querySelector('.adm-dlg-text').textContent = o.text;
+      if (o.hint) m.querySelector('.adm-dlg-hint').textContent = o.hint;
+      const okBtn = m.querySelector('[data-ok]');
+      okBtn.textContent = o.button || 'Готово';
+      const inp = f ? m.querySelector('input, textarea') : null;
+      const err = m.querySelector('.adm-dlg-err'), form = m.querySelector('form');
+      if (f) {
+        if (f.label) m.querySelector('.adm-dlg-l').textContent = f.label;
+        inp.value = f.value || '';
+        inp.placeholder = f.placeholder || '';
+        if (f.max) inp.maxLength = f.max;
+      }
+      document.body.appendChild(m);
+      document.body.classList.add('adm-lock-scroll');
+      const back = document.activeElement;
+      const val = () => (inp ? inp.value : '');
+      // проверка на лету: кнопка доступна, только когда значение подходит
+      const validate = () => {
+        if (!f || !f.check) { okBtn.disabled = false; return true; }
+        const v = val();
+        const msg = !v.trim() && !f.optional ? '' : f.check(v);
+        okBtn.disabled = !!msg || (!v.trim() && !f.optional);
+        err.textContent = msg && msg.trim() && v ? msg : '';
+        return !okBtn.disabled;
+      };
+      if (inp) {
+        inp.addEventListener('input', () => {
+          let dropped = false;
+          if (f.filter) { const p = inp.selectionStart, before = inp.value; inp.value = f.filter(inp.value); if (inp.value !== before) { const k = Math.max(0, p - (before.length - inp.value.length)); inp.setSelectionRange(k, k); dropped = before.toLowerCase().replace(/^@+/, '') !== inp.value; } }
+          validate();
+          // символы не пропадают молча: говорим, какие тут можно
+          if (dropped && f.filterHint) { err.textContent = f.filterHint; form.classList.remove('shake'); void form.offsetWidth; form.classList.add('shake'); }
+        });
+        inp.focus();
+        if (inp.select) inp.select();
+      } else okBtn.focus();
+      validate();
+      const close = (v) => { m.classList.add('out'); document.body.classList.remove('adm-lock-scroll'); setTimeout(() => m.remove(), calm ? 0 : 220); if (back && back.isConnected) back.focus({ preventScroll: true }); resolve(v); };
+      m.addEventListener('click', (e) => { if (e.target === m || e.target.closest('[data-x]')) close(null); });
+      m.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); close(null); } });
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (okBtn.disabled || !validate()) return;
+        okBtn.disabled = true; err.textContent = '';
+        const label = okBtn.textContent; okBtn.textContent = 'Секунду…';
+        try {
+          const r = o.submit ? o.submit(val()) : true;
+          if (r === null) { close(null); return; } // ничего не поменялось
+          await r;
+          close(true);
+        } catch (x) {
+          err.textContent = x.message;
+          okBtn.textContent = label; okBtn.disabled = false;
+          form.classList.remove('shake'); void form.offsetWidth; form.classList.add('shake');
+          if (inp) inp.focus();
+        }
+      });
+    });
+  }
+  const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   // ---------- разделы админки ----------
   const TABS = [['stats', '📊', 'Статистика'], ['users', '👥', 'Пользователи'], ['comments', '💬', 'Комментарии'], ['announce', '📢', 'Объявление'], ['log', '📜', 'Журнал']];
   let tab = 'stats';
@@ -196,40 +281,47 @@
       sec().querySelector('.adm-list').addEventListener('click', async (e) => {
         const b = e.target.closest('[data-act]');
         if (!b) return;
-        const li = b.closest('[data-uid]'), id = li.dataset.uid, name = li.querySelector('.adm-who b').textContent;
+        const li = b.closest('[data-uid]'), id = li.dataset.uid, name = li.querySelector('.adm-who b').textContent, handle = b.dataset.h || (li.querySelector('.adm-who a') || {}).textContent || '';
+        const act = b.dataset.act;
+        const rename = (field, val) => call('POST', `/admin/rename/${encodeURIComponent(id)}`, { [field]: val });
         // @юзернейм, ник или почта по отдельности: одно окно — одно изменение (те же правила, что у самого человека)
-        const SET = {
-          'set-handle': ['handle', `Новый @юзернейм для ${name}: латиница, цифры, «_» и «.», от 3 до 20 символов`, () => b.dataset.h],
-          'set-nick': ['username', `Новый ник для ${name}: от 2 до 24 символов`, () => name],
-          'set-mail': ['email', `Новая почта для ${name} (на неё приходит код для входа)`, () => b.dataset.m || ''],
-        }[b.dataset.act];
-        if (SET) {
-          const [field, ask, cur] = SET;
-          const v = prompt(ask + ':', cur());
-          if (v === null) return;
-          const val = v.trim().replace(field === 'handle' ? /^@+/ : /^$/, '');
-          if (!val || val === cur()) return;
-          b.disabled = true;
-          try { await call('POST', `/admin/rename/${encodeURIComponent(id)}`, { [field]: val }); users(q); } catch (x) { alert(x.message); b.disabled = false; }
-          return;
-        }
+        let ok = null;
+        if (act === 'set-handle') ok = await dialog({
+          icon: '@', title: 'Новый юзернейм', who: name,
+          field: { value: b.dataset.h, prefix: '@', placeholder: 'yukomagod', max: 20, filterHint: 'В юзернейме только латинские буквы, цифры, «_» и «.» — без пробелов и кириллицы', filter: (v) => v.toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9_.]/g, ''), check: (v) => (/^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/.test(v) ? '' : 'От 3 до 20 символов: латинские буквы, цифры, «_» и «.» (точка не по краям)') },
+          hint: 'По нему человека находят друзья и открывают его профиль: casualhub.pages.dev/u/…', button: 'Сохранить',
+          submit: (v) => (v === b.dataset.h ? null : rename('handle', v)),
+        });
+        else if (act === 'set-nick') ok = await dialog({
+          icon: '✎', title: 'Новый ник', who: '@' + handle.replace(/^@/, ''),
+          field: { value: name, placeholder: 'Ник', max: 24, check: (v) => (/^[\p{L}\p{N}_.\- ]{2,24}$/u.test(v.trim()) ? '' : 'От 2 до 24 символов: буквы, цифры, пробел, точка, дефис или «_»') },
+          hint: 'Ник может совпадать с чужим, различают людей по @юзернейму.', button: 'Сохранить',
+          submit: (v) => (v.trim() === name ? null : rename('username', v.trim())),
+        });
+        else if (act === 'set-mail') ok = await dialog({
+          icon: '✉', title: 'Новая почта', who: name,
+          field: { value: b.dataset.m || '', type: 'email', placeholder: 'name@mail.com', max: 120, check: (v) => (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim()) ? '' : 'Нужна почта, например name@mail.com') },
+          hint: 'На неё приходит код для входа. После смены все устройства человека подтверждаются заново.', button: 'Сохранить',
+          submit: (v) => (v.trim().toLowerCase() === (b.dataset.m || '') ? null : rename('email', v.trim())),
+        });
         // удаление насовсем: нужно вписать его юзернейм, чтобы не удалить по ошибке
-        if (b.dataset.act === 'delete') {
-          const typed = prompt(`Удалить аккаунт ${name} насовсем? Пропадут все его оценки, фото, друзья, реакции, комментарии и ссылки. Вернуть будет нельзя.\n\nЧтобы удалить, впиши его юзернейм: ${b.dataset.h}`, '');
-          if (typed === null) return;
-          b.disabled = true;
-          try { await call('POST', `/admin/delete/${encodeURIComponent(id)}`, { confirm: typed.trim() }); li.classList.add('gone'); setTimeout(() => users(q), 300); } catch (x) { alert(x.message); b.disabled = false; }
-          return;
-        }
-        let body = null;
-        if (b.dataset.act === 'ban') {
-          const reason = prompt(`Забанить ${name}? Причина (её увидит он сам при входе), можно пусто:`, '');
-          if (reason === null) return;
-          body = { on: true, reason };
-        } else if (b.dataset.act === 'unban') body = { on: false };
-        else if (!confirm(`Выкинуть ${name} со всех устройств? Ему придётся войти заново.`)) return;
-        b.disabled = true;
-        try { await call('POST', `/admin/${body ? 'ban' : 'kick'}/${encodeURIComponent(id)}`, body || {}); users(q); } catch (x) { alert(x.message); b.disabled = false; }
+        else if (act === 'delete') ok = await dialog({
+          icon: '🗑', danger: true, title: 'Удалить аккаунт насовсем?', who: `${name} · @${b.dataset.h}`,
+          text: 'Пропадут все его оценки, фото, друзья, реакции, комментарии и ссылки на отзывы. Вернуть будет нельзя.',
+          field: { value: '', prefix: '@', placeholder: b.dataset.h, label: `Чтобы удалить, впиши его юзернейм @${b.dataset.h}`, filter: (v) => v.replace(/^@+/, ''), check: (v) => (v.toLowerCase() === b.dataset.h ? '' : ' ') },
+          button: 'Удалить навсегда',
+          submit: (v) => call('POST', `/admin/delete/${encodeURIComponent(id)}`, { confirm: v }),
+        });
+        else if (act === 'ban') ok = await dialog({
+          icon: '⛔', danger: true, title: 'Забанить?', who: name,
+          text: 'Его выкинет со всех устройств, войти он не сможет. Разбанить можно в любой момент.',
+          field: { value: '', type: 'textarea', placeholder: 'Например: спам в комментариях', max: 200, label: 'Причина — её увидит он сам при входе (можно пусто)', optional: true },
+          button: 'Забанить', submit: (v) => call('POST', `/admin/ban/${encodeURIComponent(id)}`, { on: true, reason: v.trim() }),
+        });
+        else if (act === 'unban') ok = await dialog({ icon: '✅', title: 'Разбанить?', who: name, text: 'Он снова сможет входить и пользоваться сайтом.', button: 'Разбанить', submit: () => call('POST', `/admin/ban/${encodeURIComponent(id)}`, { on: false }) });
+        else if (act === 'kick') ok = await dialog({ icon: '🚪', title: 'Выкинуть со всех устройств?', who: name, text: 'Все его входы закончатся, ему придётся войти заново. Аккаунт и оценки останутся.', button: 'Выкинуть', submit: () => call('POST', `/admin/kick/${encodeURIComponent(id)}`, {}) });
+        if (!ok) return;
+        if (act === 'delete') { li.classList.add('gone'); setTimeout(() => users(q), 300); } else users(q);
       });
     } catch (x) { fail(x); }
   }
@@ -242,10 +334,10 @@
           <div class="adm-acts"><button type="button" class="btn small danger" data-del>Удалить</button></div></li>`).join('') || '<li class="muted">Комментариев пока нет.</li>'}</ul>`;
       sec().querySelector('.adm-list').addEventListener('click', async (e) => {
         const b = e.target.closest('[data-del]');
-        if (!b || !confirm('Удалить этот комментарий?')) return;
+        if (!b) return;
         const li = b.closest('[data-cid]');
-        b.disabled = true;
-        try { await call('DELETE', '/admin/comment/' + encodeURIComponent(li.dataset.cid)); li.classList.add('gone'); setTimeout(() => li.remove(), 300); } catch (x) { alert(x.message); b.disabled = false; }
+        const ok = await dialog({ icon: '💬', danger: true, title: 'Удалить комментарий?', who: li.querySelector('.adm-who b').textContent, text: li.querySelector('.adm-text').textContent, button: 'Удалить', submit: () => call('DELETE', '/admin/comment/' + encodeURIComponent(li.dataset.cid)) });
+        if (ok) { li.classList.add('gone'); setTimeout(() => li.remove(), 300); }
       });
     } catch (x) { fail(x); }
   }
