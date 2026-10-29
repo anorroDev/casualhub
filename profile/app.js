@@ -2009,6 +2009,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     });
   }
 
+  let banCtl = null, banDocWired = false;
   function wireBanner(p) {
     const btn = $('#banBtn'), menu = $('#banMenu'), banner = $('#banner'), msg = $('#banMsg');
     if (!btn) return;
@@ -2095,8 +2096,14 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     $('#banPresets').addEventListener('click', (e) => { const b = e.target.closest('[data-k]'); if (b) apply(paint(PRESETS[+b.dataset.k].draw), true); });
     $('#banPos').addEventListener('click', () => startPos());
     $('#banRemove').addEventListener('click', () => apply(null));
-    document.addEventListener('click', (e) => { if (!menu.hidden && !menu.contains(e.target) && !btn.contains(e.target)) open(false); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !menu.hidden) { open(false); btn.focus(); } });
+    // клик мимо меню и Esc закрывают его. Обработчики на документе вешаются один раз на страницу (профиль перерисовывается
+    // много раз, и раньше каждый раз добавлялась ещё пара), а работают с текущим меню баннера
+    banCtl = { menu, btn, open };
+    if (!banDocWired) {
+      banDocWired = true;
+      document.addEventListener('click', (e) => { const c = banCtl; if (c && c.menu.isConnected && !c.menu.hidden && !c.menu.contains(e.target) && !c.btn.contains(e.target)) c.open(false); });
+      document.addEventListener('keydown', (e) => { const c = banCtl; if (c && e.key === 'Escape' && c.menu.isConnected && !c.menu.hidden) { c.open(false); c.btn.focus(); } });
+    }
     banner.addEventListener('dragover', (e) => { e.preventDefault(); banner.classList.add('drag'); });
     banner.addEventListener('dragleave', () => banner.classList.remove('drag'));
     banner.addEventListener('drop', (e) => { e.preventDefault(); banner.classList.remove('drag'); open(true); fromFile(e.dataTransfer.files && e.dataTransfer.files[0]); });

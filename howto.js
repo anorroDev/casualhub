@@ -5,7 +5,8 @@
 (() => {
   const KEY = 'casualhub.howto.v1';
   const path = location.pathname;
-  const PAGE = path.startsWith('/mnenie') ? 'mnenie' : path.startsWith('/koleso') ? 'koleso' : path.startsWith('/profile') ? 'profile' : 'hub';
+  // подсказка только на четырёх страницах сайта: на админке, странице отзыва и прочих её нет
+  const PAGE = path.startsWith('/mnenie') ? 'mnenie' : path.startsWith('/koleso') ? 'koleso' : path.startsWith('/profile') ? 'profile' : (path === '/' || path === '/index.html') ? 'hub' : '';
   const STEPS = {
     hub: {
       title: 'Казуал Хаб',
