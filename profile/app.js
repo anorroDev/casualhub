@@ -257,6 +257,80 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       <div class="t-pop" id="titlePop"${tpOpen ? '' : ' hidden'}>${titlePopHTML(cat, shown)}</div></div>`;
   }
 
+  // ---------- цифры в профиле: кубики выбирает хозяин (в режиме редактирования: ✕ убрать, ＋ добавить, перетащить) ----------
+  const STAT_MAX = 12;
+  const STAT_DEF = ['count', 'avg', 'masters', 'cats', 'friends'];
+  // вид категории по названию: для цифр «фильмы и сериалы · просмотрено», «игры · пройдено» и т. п.
+  const KINDS = [['movie', /фильм|сериал|кино|мульт|film|movie|series/, 'фильмы и сериалы'], ['anime', /аниме|манг|anime|manga/, 'аниме'], ['game', /игр|game/, 'игры'], ['book', /книг|литератур|book/, 'книги']];
+  const kindOf = (cat) => { const k = keyOf(cat); const f = KINDS.find(([, re]) => re.test(k)); return f ? f[0] : ''; };
+  const ST_RE = { done: /Завершено|Просмотрено/, doing: /В процессе/, plan: /В планах/, drop: /Брошено/ };
+  const DONE_WORD = { movie: 'просмотрено', anime: 'просмотрено', game: 'пройдено', book: 'прочитано' };
+  const stWord = (kind, s) => (s === 'done' ? DONE_WORD[kind] || 'завершено' : { doing: 'в процессе', plan: 'в планах', drop: 'брошено' }[s]);
+  // id цифры по категории — короткий отпечаток названия (в названии бывают любые символы)
+  const catHash = (s) => { let h = 0x811c9dc5; for (const ch of keyOf(s)) { h ^= ch.codePointAt(0); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(36); };
+  // все цифры, которые можно поставить в профиль: { group, id, value, label, tier?, jump?, count? }
+  function statCatalog(p) {
+    const rs = p.ratings, rated = rs.filter((r) => r.total != null), out = [], now = Date.now();
+    const add = (group, id, value, label, extra) => out.push(Object.assign({ group, id, value, label }, extra));
+    const avgOf = (list) => { const x = list.filter((r) => r.total != null); return x.length ? x.reduce((a, r) => a + r.total, 0) / x.length : null; };
+    const num = (group, id, v, label, extra) => add(group, id, v, label, Object.assign({ count: true }, extra));
+    // категории — по ключу названия (как везде в профиле: «Игры» и «Игры (прежние критерии)» — одна)
+    const cats = [...new Map(rs.map((r) => [keyOf(r.cat), r.cat])).values()], avg = avgOf(rs);
+    const masters = rated.filter((r) => r.total >= 8.5).length;
+    num('Основное', 'count', rs.length, plural(rs.length, 'оценка', 'оценки', 'оценок'), { jump: 'allSec' });
+    add('Основное', 'avg', avg != null ? fmt(avg) : '—', 'средний балл', { tier: tierT(avg) });
+    num('Основное', 'masters', masters, plural(masters, 'шедевр', 'шедевра', 'шедевров') + ' 8,5+', { jump: 'best' });
+    num('Основное', 'cats', cats.length, plural(cats.length, 'категория', 'категории', 'категорий'), { jump: 'catsSec' });
+    if (p.common) num('Основное', 'common', p.common.length, plural(p.common.length, 'общая оценка', 'общие оценки', 'общих оценок'), { jump: 'taste' });
+    else if (p.friends) num('Основное', 'friends', p.friends.length, plural(p.friends.length, 'друг', 'друга', 'друзей'), { jump: 'friendsSec' });
+    else add('Основное', 'friends', '—', 'друзья', { jump: 'friendsSec' });
+    const best = rated.length ? Math.max(...rated.map((r) => r.total)) : null;
+    add('Основное', 'best', best != null ? fmt(best) : '—', 'лучший балл', { tier: tierT(best) });
+    const cnt = (f) => rs.filter(f).length;
+    const ten = rated.filter((r) => r.total >= 9.95).length, low = rated.filter((r) => r.total < 5).length;
+    num('Основное', 'ten', ten, plural(ten, 'оценка «10»', 'оценки «10»', 'оценок «10»'));
+    num('Основное', 'low', low, plural(low, 'оценка ниже 5', 'оценки ниже 5', 'оценок ниже 5'));
+    num('Основное', 'fav', cnt((r) => r.fav), 'в избранном');
+    num('Основное', 'notes', cnt((r) => r.text || r.pros || r.cons), 'с заметками');
+    num('Основное', 'photos', cnt((r) => r.photo), 'с фото');
+    num('Основное', 'lb', cnt((r) => r.lb), 'из Letterboxd');
+    const genres = new Set(rs.flatMap((r) => r.genres)).size;
+    num('Основное', 'genres', genres, plural(genres, 'жанр', 'жанра', 'жанров'));
+    const week = cnt((r) => r.created && now - r.created < 7 * 864e5), month = cnt((r) => r.created && now - r.created < 30 * 864e5);
+    num('Основное', 'week', week, plural(week, 'оценка', 'оценки', 'оценок') + ' за неделю');
+    num('Основное', 'month', month, plural(month, 'оценка', 'оценки', 'оценок') + ' за месяц');
+    const streak = bestStreak(rs.map((r) => r.created));
+    num('Основное', 'streak', streak, plural(streak, 'день', 'дня', 'дней') + ' подряд — рекорд');
+    if (p.badges) { const got = p.badges.filter((b) => b.got).length; num('Основное', 'ach', got, `${plural(got, 'ачивка', 'ачивки', 'ачивок')} из ${p.badges.length}`, { jump: 'badgesSec' }); }
+    if (p.createdAt) { const days = Math.max(0, Math.floor((now - +new Date(p.createdAt)) / 864e5)); num('Основное', 'days', days, plural(days, 'день', 'дня', 'дней') + ' в клубе'); }
+    for (const s of ['done', 'doing', 'plan', 'drop']) num('Статусы', 's:' + s, cnt((r) => ST_RE[s].test(r.status)), 'всего ' + stWord('', s));
+    // по видам — только те, что есть в оценках
+    for (const [kind, , name] of KINDS) {
+      const list = rs.filter((r) => kindOf(r.cat) === kind);
+      if (!list.length) continue;
+      for (const s of ['done', 'doing', 'plan', 'drop']) num('Статусы', `k:${kind}:${s}`, list.filter((r) => ST_RE[s].test(r.status)).length, `${name} · ${stWord(kind, s)}`);
+    }
+    for (const c of cats) {
+      const list = rs.filter((r) => keyOf(r.cat) === keyOf(c)), h = catHash(c), a = avgOf(list);
+      num('Категории', 'c:' + h, list.length, `${c}: ${plural(list.length, 'оценка', 'оценки', 'оценок')}`);
+      add('Категории', 'ca:' + h, a != null ? fmt(a) : '—', `${c}: средний балл`, { tier: tierT(a) });
+    }
+    return out;
+  }
+  // какие цифры показаны: выбор хозяина или как раньше. У друга вместо «друзей» — «общие оценки»
+  const statIds = (p) => (p.layout && Array.isArray(p.layout.stats) && p.layout.stats.length ? p.layout.stats : STAT_DEF).map((id) => (id === 'friends' && p.common ? 'common' : id));
+  function statsHTML(p, dd) {
+    const by = new Map(statCatalog(p).map((s) => [s.id, s]));
+    const shown = statIds(p).map((id) => by.get(id)).filter(Boolean);
+    const tile = (s) => {
+      const btn = s.jump && !EDIT, tag = btn ? 'button' : 'div';
+      // счёт с нуля — только при просмотре: при правке числа не прыгают на каждом изменении
+      const val = s.count && typeof s.value === 'number' && !EDIT ? `<b data-count="${s.value}">${s.value}</b>` : `<b>${esc(String(s.value))}</b>`;
+      return `<${tag}${btn ? ' type="button"' : ''} class="stat${s.tier ? ' tiered' : ''} rise"${s.tier ? ` data-tier="${s.tier}"` : ''}${btn ? ` data-jump="${s.jump}"` : ''} data-sid="${esc(s.id)}" style="--d:${dd.v++}">${val}<span>${esc(s.label)}</span>${EDIT ? `<button type="button" class="stx-rm" data-sx="${esc(s.id)}" aria-label="Убрать «${esc(s.label)}»" title="Убрать">✕</button>` : ''}</${tag}>`;
+    };
+    return `<div class="stats${EDIT ? ' edit' : ''}" id="statsRow">${shown.map(tile).join('')}${EDIT && shown.length < STAT_MAX ? '<button type="button" class="stat st-add" id="statAdd" title="Выбрать, какие цифры показывать"><b>＋</b><span>добавить цифру</span></button>' : ''}</div>`;
+  }
+
   // ---------- отрисовка ----------
   const cells = (v) => `<span class="cells" data-tier="${tierT(v)}" aria-hidden="true">${Array.from({ length: 10 }, (_, i) => `<i${v != null && i < Math.round(v) ? ' class="on"' : ''}></i>`).join('')}</span>`;
   const badge = (t, cls) => `<span class="badge${cls ? ' ' + cls : ''}" data-tier="${tierT(t)}">${t != null ? fmt(t) : '—'}</span>`;
@@ -907,27 +981,97 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   // звания под ником: перетаскиваются за сам чип (или стрелками), крестик убирает, «＋ Звание» добавляет
   function dragTitle(e, chip, p) {
     if (e.button > 0 || e.target.closest('.t-x')) return;
+    dragInRow(e, chip, '.title-chip[data-tid]', () => keepTitles(p));
+  }
+  // перетаскивание внутри ряда (звания, кубики цифр): элемент встаёт до или после того, над кем палец
+  function dragInRow(e, item, sel, done) {
     e.preventDefault();
-    const row = chip.parentElement, sx = e.clientX, sy = e.clientY;
+    const row = item.parentElement, sx = e.clientX, sy = e.clientY;
+    const all = () => [...row.querySelectorAll(sel)].map((el) => ({ el }));
     let on = false;
     const move = (ev) => {
       if (!on && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return;
-      if (!on) { on = true; chip.classList.add('t-lift'); document.body.classList.add('wg-dragging'); }
-      const t = document.elementFromPoint(ev.clientX, ev.clientY), o = t && t.closest('#titlesRow .title-chip[data-tid]');
-      if (!o || o === chip) return;
+      if (!on) { on = true; item.classList.add('t-lift'); document.body.classList.add('wg-dragging'); }
+      const t = document.elementFromPoint(ev.clientX, ev.clientY), o = t && t.closest(sel);
+      if (!o || o === item || o.parentElement !== row) return;
       const r = o.getBoundingClientRect();
-      const before = rects([...row.querySelectorAll('.title-chip[data-tid]')].map((el) => ({ el })));
-      row.insertBefore(chip, ev.clientX < r.left + r.width / 2 ? o : o.nextSibling);
-      flip([...row.querySelectorAll('.title-chip[data-tid]')].map((el) => ({ el })), before);
+      const before = rects(all());
+      row.insertBefore(item, ev.clientX < r.left + r.width / 2 ? o : o.nextSibling);
+      flip(all(), before);
     };
     const up = () => {
       removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
-      if (!on) { chip.focus({ preventScroll: true }); return; }
-      chip.classList.remove('t-lift');
+      if (!on) { item.focus({ preventScroll: true }); return; }
+      item.classList.remove('t-lift');
       document.body.classList.remove('wg-dragging');
-      keepTitles(p);
+      done();
     };
     addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+  }
+  // ---------- цифры: ✕ убирает, ＋ открывает каталог, кубики перетаскиваются ----------
+  function setStats(p, list, noRender) {
+    p.layout.stats = list.slice(0, STAT_MAX);
+    saveLayout(p, noRender);
+  }
+  function wireStats(p) {
+    const row = $('#statsRow');
+    if (!row) return;
+    const ids = () => [...row.querySelectorAll('.stat[data-sid]')].map((el) => el.dataset.sid);
+    row.addEventListener('click', (e) => {
+      const x = e.target.closest('[data-sx]');
+      if (x) {
+        const list = ids().filter((id) => id !== x.dataset.sx);
+        if (!list.length) { toast('Хотя бы одна цифра должна остаться'); return; }
+        setStats(p, list);
+        return;
+      }
+      if (e.target.closest('#statAdd')) statPicker(p);
+    });
+    row.addEventListener('pointerdown', (e) => {
+      const t = e.target.closest('.stat[data-sid]');
+      if (!t || e.button > 0 || e.target.closest('[data-sx]')) return;
+      const was = ids().join();
+      dragInRow(e, t, '.stat[data-sid]', () => { if (ids().join() !== was) setStats(p, ids(), true); });
+    });
+  }
+  // каталог цифр: все варианты сразу со своими значениями, нажатие добавляет или убирает
+  let spBox = null, spP = null;
+  function statPicker(p) {
+    spP = p;
+    if (!spBox) {
+      spBox = document.createElement('div');
+      spBox.className = 'st-pick'; spBox.id = 'statPick'; spBox.hidden = true;
+      spBox.setAttribute('role', 'dialog'); spBox.setAttribute('aria-modal', 'true'); spBox.setAttribute('aria-labelledby', 'spTitle');
+      spBox.innerHTML = '<div class="st-card sp-card"><div class="st-head"><h2 id="spTitle">Цифры в профиле</h2><button type="button" class="st-x" data-sp-close aria-label="Закрыть">✕</button></div><div class="sp-body" id="spBody"></div></div>';
+      document.body.appendChild(spBox);
+      const close = () => { spBox.hidden = true; document.body.style.overflow = ''; const a = $('#statAdd'); if (a) a.focus({ preventScroll: true }); };
+      spBox.addEventListener('click', (e) => {
+        if (e.target === spBox || e.target.closest('[data-sp-close]')) { close(); return; }
+        const o = e.target.closest('[data-sp]');
+        if (!o) return;
+        const list = statIds(spP), id = o.dataset.sp;
+        if (list.includes(id)) {
+          if (list.length === 1) { toast('Хотя бы одна цифра должна остаться'); return; }
+          setStats(spP, list.filter((x) => x !== id));
+        } else if (list.length >= STAT_MAX) { toast(`Цифр может быть не больше ${STAT_MAX}: сначала убери одну`); return; }
+        else setStats(spP, [...list, id]);
+        drawPicker();
+      });
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !spBox.hidden) close(); });
+    }
+    drawPicker();
+    spBox.hidden = false;
+    document.body.style.overflow = 'hidden';
+    spBox.querySelector('.st-x').focus({ preventScroll: true });
+  }
+  function drawPicker() {
+    const p = spP, sel = statIds(p), cat = statCatalog(p);
+    const group = (g, hint) => {
+      const items = cat.filter((s) => s.group === g);
+      return items.length ? `<span class="label">${esc(g)}</span>${hint ? `<p class="ly-hint">${hint}</p>` : ''}<div class="sp-grid">${items.map((s) => `<button type="button" class="sp-opt" data-sp="${esc(s.id)}" aria-pressed="${sel.includes(s.id)}"${s.tier ? ` data-tier="${s.tier}"` : ''}><b>${esc(String(s.value))}</b><span>${esc(s.label)}</span></button>`).join('')}</div>` : '';
+    };
+    $('#spBody').innerHTML = `<p class="ly-hint">Выбрано ${sel.length} из ${STAT_MAX}. Нажми на цифру, чтобы добавить её в профиль или убрать. Порядок меняется перетаскиванием прямо в профиле.</p>`
+      + group('Основное') + group('Статусы', 'Сколько просмотрено, пройдено, в процессе и в планах: всего и по видам') + group('Категории');
   }
   function keepTitles(p) {
     const ids = [...$('#titlesRow').querySelectorAll('.title-chip[data-tid]')].map((c) => c.dataset.tid);
@@ -998,6 +1142,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       else endEdit(p, b.dataset.ed === 'save');
     });
     wireTitles(p);
+    wireStats(p);
   }
   // Esc: закрывает список званий; без правок — выходит из редактирования, с правками — просит сохранить или отменить
   document.addEventListener('keydown', (e) => {
@@ -1374,15 +1519,9 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
 
     // ---------- блоки профиля: каждый — виджет на сетке; порядок, размер и видимость выбирает хозяин ----------
     const W = {};
-    W.stats = `<div class="stats">
-        <button type="button" class="stat rise" data-jump="allSec" style="--d:${d++}"><b data-count="${rs.length}">${rs.length}</b><span>${plural(rs.length, 'оценка', 'оценки', 'оценок')}</span></button>
-        <div class="stat tiered rise" data-tier="${tierT(avg)}" style="--d:${d++}"><b>${avg != null ? fmt(avg) : '—'}</b><span>средний балл</span></div>
-        <button type="button" class="stat rise" data-jump="best" style="--d:${d++}"><b data-count="${masters}">${masters}</b><span>${plural(masters, 'шедевр', 'шедевра', 'шедевров')} 8,5+</span></button>
-        <button type="button" class="stat rise" data-jump="catsSec" style="--d:${d++}"><b data-count="${cats.size}">${cats.size}</b><span>${plural(cats.size, 'категория', 'категории', 'категорий')}</span></button>
-        ${p.common
-          ? `<button type="button" class="stat rise" data-jump="taste" style="--d:${d++}"><b data-count="${p.common.length}">${p.common.length}</b><span>${plural(p.common.length, 'общая оценка', 'общие оценки', 'общих оценок')}</span></button>`
-          : `<button type="button" class="stat rise" data-jump="friendsSec" style="--d:${d++}"><b>${p.friends ? `<span data-count="${p.friends.length}">${p.friends.length}</span>` : '—'}</b><span>${p.friends ? plural(p.friends.length, 'друг', 'друга', 'друзей') : 'друзья'}</span></button>`}
-      </div>`;
+    const dd = { v: d };
+    W.stats = statsHTML(p, dd);
+    d = dd.v;
     ((p.layout && p.layout.showcases) || []).forEach((sc) => { const h = showcaseHTML(p, sc, d++); if (h) W['sc:' + sc.id] = h; });
     if (top3.length) W.podium = `<section class="card rise" style="--d:${d++}">
             <div class="head"><h2 class="h2">Любимое</h2><span class="label">топ по баллу</span></div>
@@ -1517,7 +1656,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     jumpsWired = true;
     app.addEventListener('click', (e) => {
       const p = jumpP;
-      if (!p) return;
+      if (!p || EDIT) return;
       const j = e.target.closest('[data-jump]');
       if (j) {
         const to = j.dataset.jump;

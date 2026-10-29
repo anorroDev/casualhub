@@ -1099,6 +1099,8 @@ function cleanLayout(l) {
     }
   }
   const out = { showcases, sections, order, size, grid, at: +l.at };
+  // цифры в профиле: id из каталога (count, s:plan, k:movie:done, c:<отпечаток категории>…)
+  if (Array.isArray(l.stats)) out.stats = l.stats.filter((s) => typeof s === 'string' && /^[a-z]{1,10}(:[a-z0-9]{1,16}){0,2}$/.test(s)).slice(0, 12);
   if (Array.isArray(l.titles)) out.titles = l.titles.filter((t) => typeof t === 'string' && /^[\w:-]{1,40}$/.test(t)).slice(0, 4);
   return out;
 }

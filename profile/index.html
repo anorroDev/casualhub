@@ -428,8 +428,8 @@ button.nick-st:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .hero-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 
 /* Stats */
-.stats { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; margin-top: 16px; }
-.stat { padding: 16px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--lift); }
+.stats { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; margin-top: 16px; }
+.stat { position: relative; padding: 16px; border-radius: 18px; background: var(--panel); border: 1px solid var(--line); box-shadow: var(--lift); }
 .stat b { display: block; font-family: var(--font-display); font-weight: 800; font-size: 44px; line-height: .9; font-variant-numeric: tabular-nums; }
 .stat > span { display: block; margin-top: 6px; font-size: 12.5px; color: var(--ink-2); }
 .stat.tiered b { color: color-mix(in srgb, var(--tier) 78%, var(--ink)); }
@@ -575,8 +575,29 @@ button.stat:focus-visible, a.item:focus-visible, a.pod:focus-visible, button.cat
 .wg > .stats { margin-top: 0; }
 @media (max-width: 979px) { .wboard { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-auto-flow: row dense; column-gap: 16px; } .wg { grid-column: span 1; } }
 @media (max-width: 639px) { .wboard { grid-template-columns: minmax(0, 1fr); } .wg { grid-column: auto; } }
-@container (max-width: 640px) { .stats { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @container (max-width: 380px) { .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .podium { gap: 8px; } }
+/* цифры в режиме редактирования: кубики перетаскиваются, ✕ убирает, ＋ открывает каталог */
+.prof-edit .stats .stat[data-sid], .prof-edit .stats .stx-rm, .prof-edit .stats .st-add { pointer-events: auto; }
+.stats.edit .stat[data-sid] { cursor: grab; touch-action: none; user-select: none; }
+.stx-rm { position: absolute; top: 8px; right: 8px; width: 22px; height: 22px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: color-mix(in srgb, var(--ink) 12%, transparent); color: var(--ink-2); font-size: 11px; cursor: pointer; }
+.stx-rm:hover, .stx-rm:focus-visible { background: var(--bad); color: #fff; }
+.stat.st-add { display: block; text-align: left; font: inherit; border-style: dashed; border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); background: color-mix(in srgb, var(--accent) 7%, var(--panel)); color: var(--accent); cursor: pointer; box-shadow: none; }
+.stat.st-add b { color: var(--accent); }
+.stat.st-add span { color: var(--accent); }
+.stat.t-lift { opacity: .5; outline: 2px dashed var(--accent); outline-offset: 2px; }
+/* окна (каталог цифр, витрина) — поверх панели редактирования */
+body.prof-edit .st-pick { z-index: 80; }
+/* каталог цифр */
+.st-card.sp-card { width: min(760px, 100%); grid-template-rows: auto minmax(0, 1fr); max-height: min(820px, calc(100dvh - 32px)); }
+.sp-body { overflow: auto; padding-right: 4px; }
+.sp-body .label { margin-top: 6px; }
+.sp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 8px 0 16px; }
+.sp-opt { display: grid; gap: 6px; align-content: start; padding: 12px; text-align: left; border: 1px solid var(--line); border-radius: 14px; background: var(--panel-2); color: var(--ink); font: inherit; cursor: pointer; transition: border-color .15s, background-color .15s, transform .2s var(--spring); }
+.sp-opt:hover { transform: translateY(-1px); border-color: color-mix(in srgb, var(--accent) 50%, var(--line)); }
+.sp-opt b { font-family: var(--font-display); font-weight: 800; font-size: 30px; line-height: .9; font-variant-numeric: tabular-nums; }
+.sp-opt[data-tier] b { color: color-mix(in srgb, var(--tier) 78%, var(--ink)); }
+.sp-opt span { font-size: 12px; line-height: 1.3; color: var(--ink-2); }
+.sp-opt[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
 /* режим редактирования профиля */
 .prof-edit .rise, .prof-edit .name .ch, .prof-edit .bdg-i, .prof-edit .bdg-i .tr i, .prof-edit .ach-sum i, .prof-edit .hist .bar { animation: none !important; }
 .prof-edit .wg > :is(.card, .stats) { outline: 2px dashed color-mix(in srgb, var(--accent) 50%, transparent); outline-offset: 4px; border-radius: 22px; pointer-events: none; user-select: none; transition: opacity .2s, filter .2s; }
@@ -901,7 +922,7 @@ button.sc-slot:hover em, button.sc-slot:focus-visible em { opacity: 1; }
 
 @media (max-width: 760px) {
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .stats .stat:last-child { grid-column: 1 / -1; }
+  .stats .stat:last-child:nth-child(odd) { grid-column: 1 / -1; }
 }
 @media (max-width: 560px) {
   .page { padding-block: 14px 40px; }
