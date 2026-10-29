@@ -57,8 +57,8 @@ async function ensureSchema(env) {
     env.DB.prepare('CREATE TABLE IF NOT EXISTS comments (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, target TEXT NOT NULL, from_id TEXT NOT NULL, text TEXT NOT NULL, at INTEGER NOT NULL)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS comments_owner ON comments(owner_id, target, at)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS comments_from ON comments(from_id)'),
-    // админы: кто уже ввёл одноразовый пароль (дальше вход в админку без пароля)
-    env.DB.prepare('CREATE TABLE IF NOT EXISTS admins (user_id TEXT PRIMARY KEY, handle TEXT NOT NULL, at INTEGER NOT NULL)'),
+    // админы: кто уже ввёл одноразовый пароль; дальше вход в админку по своему пин-коду
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS admins (user_id TEXT PRIMARY KEY, handle TEXT NOT NULL, at INTEGER NOT NULL, pin_hash TEXT, pin_salt TEXT, pin_until INTEGER)'),
     // вход в админку на 12 часов, привязан к сессии; журнал входов и действий админов
     env.DB.prepare('CREATE TABLE IF NOT EXISTS admin_sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, until INTEGER NOT NULL)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS admin_log (at INTEGER NOT NULL, user_id TEXT NOT NULL, ip TEXT, action TEXT NOT NULL, ok INTEGER NOT NULL)'),
@@ -75,6 +75,11 @@ async function ensureSchema(env) {
     env.DB.prepare('CREATE TABLE IF NOT EXISTS presence (id TEXT PRIMARY KEY, at INTEGER NOT NULL)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS presence_at ON presence(at)'),
   ]);
+  // пин-код админки и её короткая сессия появились позже самой таблицы
+  const { results: ac } = await env.DB.prepare('PRAGMA table_info(admins)').all();
+  for (const [c, t] of [['pin_hash', 'TEXT'], ['pin_salt', 'TEXT'], ['pin_until', 'INTEGER']]) {
+    if (!ac.some((x) => x.name === c)) await env.DB.prepare(`ALTER TABLE admins ADD COLUMN ${c} ${t}`).run();
+  }
   await env.DB.prepare('CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT)').run();
   if (!(await env.DB.prepare("SELECT 1 FROM meta WHERE k = 'handles'").first())) {
     const { results: all } = await env.DB.prepare('SELECT id, username, uname, nkey FROM users').all();
@@ -161,10 +166,12 @@ const LIMITS = {
   friendReq: { max: 40, win: 10 * 60e3 }, // заявок в друзья (перебор ников)
   react: { max: 120, win: 10 * 60e3 },    // реакций и комментариев
   comment: { max: 60, win: 10 * 60e3 },   // комментариев на стенах и под оценками
-  admin: { max: 5, win: 60 * 60e3 },      // неверных одноразовых паролей админки
+  admin: { max: 5, win: 60 * 60e3 },      // неверных одноразовых паролей и пин-кодов админки
 };
-// ---------- админ-панель: только для двух аккаунтов; первый вход — одноразовый пароль из секрета ADMIN_CODE ----------
-// Секрет задаётся в Cloudflare (Pages → Settings → Variables and Secrets) и в код не попадает.
+// ---------- админ-панель: только для двух аккаунтов ----------
+// Первый вход — одноразовый пароль из секрета ADMIN_CODE (Cloudflare → Pages → Settings → Variables and Secrets),
+// сразу после него админ задаёт свой пин-код. Дальше админка открывается пин-кодом на 12 часов в этой сессии.
+// Забытый пин-код сбрасывается тем же одноразовым паролем.
 const ADMIN_HANDLES = ['anorro', 'yukomagod'];
 // ADMIN_IDS (необязательный секрет или переменная): id аккаунтов админов через запятую. Если задан, кандидатом
 // считается только аккаунт из списка — юзернейм можно сменить, а id нет
@@ -176,8 +183,11 @@ const adminCandidate = (me, env) => {
 };
 // юзернеймы админов заняты навсегда: никто другой не зарегистрирует их и не сменит на них свой (кроме аккаунтов из ADMIN_IDS)
 const reservedHandle = (env, h, me) => ADMIN_HANDLES.includes(String(h || '').toLowerCase()) && !(me && adminIds(env).includes(me.id));
-const isAdmin = async (env, me) => !!me && !!(await env.DB.prepare('SELECT 1 FROM admins WHERE user_id = ?').bind(me.id).first());
-// вход в админку живёт 12 часов и привязан к этой сессии: украденный токен без пароля админку не откроет
+const PIN_RE = /^\d{4,8}$/;
+const PIN_SET_MS = 15 * 60e3; // после одноразового пароля пин-код нужно задать за 15 минут
+const adminRow = (env, me) => (me ? env.DB.prepare('SELECT user_id, pin_hash, pin_salt, pin_until FROM admins WHERE user_id = ?').bind(me.id).first() : null);
+const isAdmin = async (env, me) => !!(await adminRow(env, me));
+// вход в админку живёт 12 часов и привязан к этой сессии: украденный токен без пин-кода админку не откроет
 const ADMIN_TTL = 12 * 3600e3;
 const tokenHashOf = async (request) => { const m = (request.headers.get('authorization') || '').match(/^Bearer ([0-9a-f]{64})$/); return m ? sha256(m[1]) : null; };
 async function adminActive(env, request, me) {
@@ -185,15 +195,26 @@ async function adminActive(env, request, me) {
   const th = await tokenHashOf(request);
   return !!(th && (await env.DB.prepare('SELECT 1 FROM admin_sessions WHERE token_hash = ? AND user_id = ? AND until > ?').bind(th, me.id, Date.now()).first()));
 }
+// открыть админку в этой сессии на 12 часов
+async function openAdmin(env, request, me) {
+  const th = await tokenHashOf(request), now = Date.now();
+  await env.DB.batch([
+    env.DB.prepare('INSERT OR REPLACE INTO admin_sessions (token_hash, user_id, until) VALUES (?, ?, ?)').bind(th, me.id, now + ADMIN_TTL),
+    env.DB.prepare('DELETE FROM admin_sessions WHERE until < ?').bind(now),
+  ]);
+  return now + ADMIN_TTL;
+}
 // каждое действие в админке и каждая попытка входа записываются: кто, когда, с какого адреса
 const adminLog = (env, request, me, action, ok) => env.DB.prepare('INSERT INTO admin_log (at, user_id, ip, action, ok) VALUES (?, ?, ?, ?, ?)')
   .bind(Date.now(), me ? me.id : '', clientIp(request), String(action).slice(0, 80), ok ? 1 : 0).run().catch(() => {});
-// сравнение без подсказки по времени ответа: сравниваются отпечатки одинаковой длины
-async function sameSecret(a, b) {
-  const [x, y] = await Promise.all([sha256(a), sha256(b)]);
-  let d = 0;
-  for (let i = 0; i < x.length; i++) d |= x.charCodeAt(i) ^ y.charCodeAt(i);
-  return d === 0;
+// сравнение без подсказки по времени ответа: сравниваются отпечатки одинаковой длины (sameHex — выше)
+const sameSecret = async (a, b) => sameHex(await sha256(a), await sha256(b));
+// попытки входа (одноразовый пароль или пин-код): общий потолок на сервер, а неверные — на аккаунт и на адрес
+async function adminTry(env, request, me) {
+  const keys = ['admin:' + me.id, 'adminip:' + clientIp(request)];
+  if (burst('adminunlock:all', 20, 60e3)) return { wait: 1, keys };
+  for (const k of keys) { const w = await overLimit(env, k, 'admin'); if (w) return { wait: w, keys }; }
+  return { wait: 0, keys };
 }
 const CM_MAX = 500; // символов в одном комментарии
 const CM_TARGET_RE = /^(wall|r\.[\w.-]{1,80})$/;
@@ -285,51 +306,72 @@ const routes = {
     return json({ ok: true });
   },
 
-  async 'GET /me'({ me }) {
-    return json({ user: ownUser(me) });
+  async 'GET /me'({ env, me }) {
+    // admin — звание «Администратор» в профиле (только у тех, кто уже вошёл в админку)
+    return json({ user: { ...ownUser(me), admin: !!(await adminRow(env, me)) } });
   },
 
   // админка: остальным отвечаем «нет такого адреса», чтобы не было видно, что она вообще есть
   async 'GET /admin/me'({ env, request, me }) {
     if (!adminCandidate(me, env)) return fail(404, 'Нет такого адреса.');
-    const admin = await isAdmin(env, me);
-    return json({ admin, active: admin && (await adminActive(env, request, me)), ready: !!env.ADMIN_CODE, handle: me.handle });
+    const row = await adminRow(env, me);
+    return json({ admin: !!row, pinSet: !!(row && row.pin_hash), active: !!row && (await adminActive(env, request, me)), ready: !!env.ADMIN_CODE, handle: me.handle });
   },
-  // вход в админку: первый раз — одноразовый пароль ADMIN_CODE, потом раз в 12 часов — пароль от своего аккаунта
+  // одноразовый пароль ADMIN_CODE: первый вход, а у админа — сброс забытого пин-кода. После него — 15 минут, чтобы задать пин-код
   async 'POST /admin/unlock'({ env, request, me }) {
     if (!adminCandidate(me, env)) return fail(404, 'Нет такого адреса.');
-    if (burst('adminunlock:all', 20, 60e3)) return tooMany(1); // общий потолок на сервер: перебор с многих адресов
-    const accKey = 'admin:' + me.id, ipKey = 'adminip:' + clientIp(request);
-    const wait = (await overLimit(env, accKey, 'admin')) || (await overLimit(env, ipKey, 'admin'));
-    if (wait) return tooMany(wait);
-    const { code, password } = await readBody(request);
-    const admin = await isAdmin(env, me);
-    let ok = false;
-    if (!admin) {
-      if (!env.ADMIN_CODE) return fail(503, 'Одноразовый пароль ещё не задан на сервере.');
-      ok = typeof code === 'string' && code.trim().length > 0 && code.length <= 200 && (await sameSecret(code.trim(), String(env.ADMIN_CODE).trim()));
-    } else {
-      const pass = String(password || '');
-      const row = await env.DB.prepare('SELECT pass_hash, salt FROM users WHERE id = ?').bind(me.id).first();
-      ok = !!row && pass.length > 0 && pass.length <= 200 && sameHex(await hashPass(pass, row.salt), row.pass_hash);
-    }
-    await adminLog(env, request, me, admin ? 'unlock:password' : 'unlock:code', ok);
+    if (!env.ADMIN_CODE) return fail(503, 'Одноразовый пароль ещё не задан на сервере.');
+    const t = await adminTry(env, request, me);
+    if (t.wait) return tooMany(t.wait);
+    const { code } = await readBody(request);
+    const ok = typeof code === 'string' && code.trim().length > 0 && code.length <= 200 && (await sameSecret(code.trim(), String(env.ADMIN_CODE).trim()));
+    await adminLog(env, request, me, 'unlock:code', ok);
     if (!ok) {
-      await hit(env, accKey, 'admin');
-      await hit(env, ipKey, 'admin');
-      return fail(403, admin ? 'Неверный пароль от аккаунта.' : 'Неверный одноразовый пароль.');
+      for (const k of t.keys) await hit(env, k, 'admin');
+      return fail(403, 'Неверный одноразовый пароль.');
     }
-    const th = await tokenHashOf(request);
     const now = Date.now();
     await env.DB.batch([
       env.DB.prepare('INSERT OR IGNORE INTO admins (user_id, handle, at) VALUES (?, ?, ?)').bind(me.id, me.handle, now),
-      env.DB.prepare('INSERT OR REPLACE INTO admin_sessions (token_hash, user_id, until) VALUES (?, ?, ?)').bind(th, me.id, now + ADMIN_TTL),
-      env.DB.prepare('DELETE FROM admin_sessions WHERE until < ?').bind(now),
-      env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind(accKey),
+      env.DB.prepare('UPDATE admins SET pin_hash = NULL, pin_salt = NULL, pin_until = ? WHERE user_id = ?').bind(now + PIN_SET_MS, me.id),
+      env.DB.prepare('DELETE FROM admin_sessions WHERE user_id = ?').bind(me.id),
+      env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind(t.keys[0]),
     ]);
-    return json({ ok: true, until: now + ADMIN_TTL });
+    return json({ ok: true });
   },
-  // выйти из админки (аккаунт остаётся админом, но в следующий раз нужен пароль)
+  // свой пин-код: только сразу после одноразового пароля (15 минут), и админка тут же открывается
+  async 'POST /admin/pin/set'({ env, request, me }) {
+    if (!adminCandidate(me, env)) return fail(404, 'Нет такого адреса.');
+    const row = await adminRow(env, me);
+    if (!row) return fail(404, 'Нет такого адреса.');
+    if (row.pin_hash) return fail(409, 'Пин-код уже задан. Если забыл, сбрось его одноразовым паролем.');
+    if (!(row.pin_until > Date.now())) return fail(403, 'Время задать пин-код вышло. Введи одноразовый пароль ещё раз.');
+    const { pin } = await readBody(request);
+    if (typeof pin !== 'string' || !PIN_RE.test(pin)) return fail(400, 'Пин-код — от 4 до 8 цифр.');
+    const salt = randHex(16);
+    await env.DB.prepare('UPDATE admins SET pin_hash = ?, pin_salt = ?, pin_until = NULL WHERE user_id = ? AND pin_hash IS NULL').bind(await hashPass(pin, salt), salt, me.id).run();
+    await adminLog(env, request, me, 'pin:set', true);
+    return json({ ok: true, until: await openAdmin(env, request, me) });
+  },
+  // вход в админку пин-кодом: открыта 12 часов в этой сессии
+  async 'POST /admin/pin'({ env, request, me }) {
+    if (!adminCandidate(me, env)) return fail(404, 'Нет такого адреса.');
+    const row = await adminRow(env, me);
+    if (!row) return fail(404, 'Нет такого адреса.');
+    if (!row.pin_hash) return fail(409, 'Сначала задай пин-код.');
+    const t = await adminTry(env, request, me);
+    if (t.wait) return tooMany(t.wait);
+    const { pin } = await readBody(request);
+    const ok = typeof pin === 'string' && PIN_RE.test(pin) && sameHex(await hashPass(pin, row.pin_salt), row.pin_hash);
+    await adminLog(env, request, me, 'unlock:pin', ok);
+    if (!ok) {
+      for (const k of t.keys) await hit(env, k, 'admin');
+      return fail(403, 'Неверный пин-код.');
+    }
+    await env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind(t.keys[0]).run();
+    return json({ ok: true, until: await openAdmin(env, request, me) });
+  },
+  // выйти из админки (аккаунт остаётся админом, но в следующий раз нужен пин-код)
   async 'POST /admin/lock'({ env, request, me }) {
     if (!adminCandidate(me, env)) return fail(404, 'Нет такого адреса.');
     const th = await tokenHashOf(request);
@@ -618,6 +660,7 @@ const routes = {
     // число друзей — для значка «Душа компании»
     const fc = await env.DB.prepare("SELECT COUNT(*) AS n FROM friendships WHERE (a = ?1 OR b = ?1) AND status = 'accepted'").bind(arg).first();
     const user = { ...pubUser(row), createdAt: row.created_at || null, friends: fc ? fc.n : 0, lastSeen: row.hide_online ? null : row.last_seen || null };
+    if (await env.DB.prepare('SELECT 1 FROM admins WHERE user_id = ?').bind(row.id).first()) user.admin = true; // звание «Администратор»
     const shelf = await env.DB.prepare('SELECT data, updated_at FROM shelves WHERE user_id = ?').bind(arg).first();
     const s = readShelf(shelf);
     // свои категории видит только хозяин
@@ -1033,8 +1076,10 @@ function cleanLayout(l) {
   if (l.grid && typeof l.grid === 'object') {
     for (const [k, v] of Object.entries(l.grid).slice(0, 30)) {
       if (!WKEY.test(k) || !v || typeof v !== 'object') continue;
-      const x = Math.round(+v.x), y = Math.round(+v.y), w = Math.round(+v.w);
-      if (x >= 0 && x <= 11 && w >= 1 && w <= 12 && y >= 0 && y <= 20000) grid[k] = { x, y, w };
+      const x = Math.round(+v.x), y = Math.round(+v.y), w = Math.round(+v.w), h = Math.round(+v.h);
+      if (!(x >= 0 && x <= 11 && w >= 1 && w <= 12 && y >= 0 && y <= 20000)) continue;
+      grid[k] = { x, y, w };
+      if (h >= 5 && h <= 600) grid[k].h = h; // высота вручную (в строках по 8px), без неё — по содержимому
     }
   }
   const out = { showcases, sections, order, size, grid, at: +l.at };
@@ -1207,7 +1252,25 @@ async function gameInfo(appid) {
 const STEAM_ART = (id, file) => `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${id}/${file}`;
 const IMDB_KIND = { movie: 'Фильм', tvMovie: 'Фильм', video: 'Фильм', tvSeries: 'Сериал', tvMiniSeries: 'Мини-сериал', short: 'Короткий метр', tvSpecial: 'Спецвыпуск' };
 const ANI_KIND = { TV: 'Аниме', TV_SHORT: 'Аниме', MOVIE: 'Аниме-фильм', OVA: 'OVA', ONA: 'ONA', SPECIAL: 'Спецвыпуск', MANGA: 'Манга', ONE_SHOT: 'Манга', NOVEL: 'Ранобэ' };
+const DZ_IMG = /^https:\/\/(cdn-images|e-cdns-images)\.dzcdn\.net\//;
+const DZ_KIND = { album: 'Альбом', ep: 'EP', single: 'Сингл', compile: 'Сборник' };
 const COVER_FIND = {
+  // музыка: Deezer. iTunes браузер спрашивает сам, но небольших исполнителей там часто нет. Сначала альбомы, потом треки
+  async music(q) {
+    const get = (what) => cachedJson(`https://api.deezer.com/search/${what}?limit=8&q=${encodeURIComponent(q)}`, null, 86400).catch(() => ({}));
+    const [al, tr] = await Promise.all([get('album'), get('track')]);
+    const out = [];
+    for (const a of al.data || []) {
+      if (!a || !DZ_IMG.test(a.cover_xl || '')) continue;
+      out.push({ id: '', title: String(a.title || '').slice(0, 140), artist: String((a.artist && a.artist.name) || '').slice(0, 80), sub: DZ_KIND[a.record_type] || 'Альбом', year: '', art: a.cover_xl, thumb: DZ_IMG.test(a.cover_medium || '') ? a.cover_medium : a.cover_xl, tall: false });
+    }
+    for (const t of tr.data || []) {
+      const a = t && t.album;
+      if (!a || !DZ_IMG.test(a.cover_xl || '')) continue;
+      out.push({ id: '', title: String(t.title || '').slice(0, 140), artist: String((t.artist && t.artist.name) || '').slice(0, 80), sub: 'Трек', year: '', art: a.cover_xl, thumb: DZ_IMG.test(a.cover_medium || '') ? a.cover_medium : a.cover_xl, tall: false });
+    }
+    return out;
+  },
   // Steam: вертикальная обложка 600×900, у старых игр её может не быть — тогда шапка магазина
   async game(q) {
     const d = await cachedJson('https://store.steampowered.com/api/storesearch/?l=english&cc=US&term=' + encodeURIComponent(q), null, 86400);

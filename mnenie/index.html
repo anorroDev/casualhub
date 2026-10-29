@@ -1523,6 +1523,8 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
             <span class="label">Статус</span>
             <div class="status-chips" id="statusChips" role="group" aria-label="Статус">
               <button type="button" class="status-chip" data-status="Завершено" aria-pressed="false">✓ Завершено</button>
+              <button type="button" class="status-chip" data-status="В процессе" aria-pressed="false">▶ В процессе</button>
+              <button type="button" class="status-chip" data-status="В планах" aria-pressed="false">◷ В планах</button>
               <button type="button" class="status-chip" data-status="Брошено" aria-pressed="false">✕ Брошено</button>
             </div>
           </div>
@@ -1613,6 +1615,13 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
                   <button type="button" class="sub-chip" data-sfilter="good" aria-pressed="false">7.5+ хорошие</button>
                   <button type="button" class="sub-chip" data-sfilter="mid" aria-pressed="false">5–7.4 средние</button>
                   <button type="button" class="sub-chip" data-sfilter="bad" aria-pressed="false">до 5 слабые</button>
+                </div>
+              </div>
+              <div>
+                <span class="label">Статус</span>
+                <div class="lvl-chips">
+                  <button type="button" class="sub-chip" data-sfilter="plan" aria-pressed="false">◷ В планах</button>
+                  <button type="button" class="sub-chip" data-sfilter="doing" aria-pressed="false">▶ В процессе</button>
                 </div>
               </div>
               <div id="genreSec" hidden>

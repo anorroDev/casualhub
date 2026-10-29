@@ -253,7 +253,7 @@
       const v = scoreOf(x.rating), at = isoOf(x.date);
       return {
         id: newId('r'), cat: cat.id, catName: cat.name, name: x.name.slice(0, 140), nameKey: keyOf(x.name),
-        scores: [{ id: SCORE_ID, name: 'Оценка с Letterboxd', v }], total: v, fav: false, status: 'Завершено', src: 'letterboxd',
+        scores: [{ id: SCORE_ID, name: 'Оценка с Letterboxd', v }], total: v, fav: false, status: 'Просмотрено', src: 'letterboxd',
         meta: [x.year, x.tags].filter(Boolean).join(', ').slice(0, 80), pros: '', cons: '',
         note: reviews ? x.review.slice(0, 4000) : '', example: false, author, createdAt: at, updatedAt: at,
       };

@@ -272,6 +272,11 @@ button, input { font: inherit; color: inherit; }
 .adm-in:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .adm-lock .btn { width: 100%; height: 48px; }
 .adm-err { min-height: 20px; color: var(--bad-ink); font-size: 13.5px; font-weight: 600; }
+.adm-pin { font-size: 26px; letter-spacing: .5em; text-indent: .5em; font-variant-numeric: tabular-nums; }
+.adm-pin::placeholder { font-size: 15px; letter-spacing: .04em; text-indent: 0; }
+.adm-link { border: 0; background: none; padding: 4px; color: var(--accent); font-size: 13.5px; font-weight: 700; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+.adm-hero > div { flex: 1 1 260px; min-width: 0; }
+.adm-out { flex: none; }
 .adm-lock.shake { animation: adm-shake .4s; }
 @keyframes adm-shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
 .adm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }

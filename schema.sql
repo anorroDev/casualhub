@@ -74,8 +74,9 @@ CREATE INDEX IF NOT EXISTS reactions_from ON reactions(from_id);
 -- Служебные отметки сервера, например «старые ники уже переведены в юзернеймы»
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
 
--- Админы: кто уже ввёл одноразовый пароль админ-панели (секрет ADMIN_CODE)
-CREATE TABLE IF NOT EXISTS admins (user_id TEXT PRIMARY KEY, handle TEXT NOT NULL, at INTEGER NOT NULL);
+-- Админы: кто уже ввёл одноразовый пароль админ-панели (секрет ADMIN_CODE); дальше вход по своему пин-коду
+-- pin_hash/pin_salt — пин-код (PBKDF2), pin_until — до какого времени можно задать пин-код после одноразового пароля
+CREATE TABLE IF NOT EXISTS admins (user_id TEXT PRIMARY KEY, handle TEXT NOT NULL, at INTEGER NOT NULL, pin_hash TEXT, pin_salt TEXT, pin_until INTEGER);
 -- Вход в админку на 12 часов (привязан к сессии) и журнал входов и действий админов
 CREATE TABLE IF NOT EXISTS admin_sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, until INTEGER NOT NULL);
 CREATE TABLE IF NOT EXISTS admin_log (at INTEGER NOT NULL, user_id TEXT NOT NULL, ip TEXT, action TEXT NOT NULL, ok INTEGER NOT NULL);

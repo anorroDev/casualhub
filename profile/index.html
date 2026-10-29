@@ -422,6 +422,9 @@ button.nick-st:focus-visible { outline: 2px solid var(--accent); outline-offset:
   background: var(--panel-2); border: 1px solid var(--line); font-size: 12.5px; font-weight: 700; color: var(--ink);
 }
 .title-chip i { width: 8px; height: 8px; border-radius: 2px; background: var(--tier, var(--accent)); }
+/* звание «Администратор»: красное, у админов сайта */
+.title-chip.t-admin { background: color-mix(in srgb, var(--bad) 16%, var(--panel)); border-color: color-mix(in srgb, var(--bad) 60%, var(--line)); color: var(--bad-ink); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 12%, transparent); }
+.title-chip.t-admin i { background: var(--bad); border-radius: 50%; box-shadow: 0 0 6px var(--bad); }
 .hero-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
 
 /* Stats */
@@ -596,7 +599,16 @@ button.stat:focus-visible, a.item:focus-visible, a.pod:focus-visible, button.cat
 .wg-rs i { width: 4px; height: 24px; border-radius: 2px; background: repeating-linear-gradient(var(--ink-3) 0 3px, transparent 3px 6px); }
 .wg-rs:hover, .wg-rs:focus-visible { border-color: var(--accent); }
 .wg-rs:hover i, .wg-rs:focus-visible i { background: repeating-linear-gradient(var(--accent) 0 3px, transparent 3px 6px); }
-@media (max-width: 979px) { .prof-edit .wg-rs { display: none; } }
+/* нижний край: тянуть, чтобы поменять высоту (тоже только на широком экране) */
+.wg-rh { display: none; }
+.prof-edit .wg-rh { position: absolute; z-index: 3; left: 50%; bottom: 18px; translate: -50% 50%; width: 56px; height: 18px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 9px; background: var(--panel); cursor: ns-resize; touch-action: none; box-shadow: 0 8px 18px -10px rgba(0, 0, 0, .7); }
+.wg-rh i { width: 24px; height: 4px; border-radius: 2px; background: repeating-linear-gradient(90deg, var(--ink-3) 0 3px, transparent 3px 6px); }
+.wg-rh:hover, .wg-rh:focus-visible, .wg[data-fh] .wg-rh { border-color: var(--accent); }
+.wg-rh:hover i, .wg-rh:focus-visible i { background: repeating-linear-gradient(90deg, var(--accent) 0 3px, transparent 3px 6px); }
+/* блок с высотой вручную: ровно такой, лишнее прокручивается внутри */
+.wg[data-fh] > :is(.card, .stats) { height: calc(100% - 18px); overflow: auto; overscroll-behavior: contain; scrollbar-width: thin; }
+@media (max-width: 979px) { .prof-edit .wg-rs, .prof-edit .wg-rh { display: none; } }
+body.wg-ns, body.wg-ns * { cursor: ns-resize !important; }
 body.wg-ew, body.wg-ew * { cursor: ew-resize !important; }
 .wg-ghost > :is(.card, .stats) { outline: 2px solid var(--accent) !important; }
 body.wg-dragging, body.wg-dragging * { cursor: grabbing !important; user-select: none; }

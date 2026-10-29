@@ -1377,8 +1377,9 @@ function updateTotal() {
   const t = ratedRows.length ? totalOf(ratedRows.map(r => ({ v: form.scores[r.id], w: r.w || 1 }))) : null;
   el.total.dataset.tier = tierT(t);
   el.totalNum.textContent = t == null ? '—' : fmt(t);
-  el.verdict.textContent = t == null ? 'Пока без оценки' : verdict(t);
-  el.totalSub.textContent = t == null ? 'Подвинь хотя бы один ползунок' : coverage(ratedRows.length, rows.length);
+  const plan = t == null && noScoreOk(form.status);
+  el.verdict.textContent = t == null ? (plan ? form.status.trim() : 'Пока без оценки') : verdict(t);
+  el.totalSub.textContent = t == null ? (plan ? 'Можно сохранить и без балла' : 'Подвинь хотя бы один ползунок или отметь «В планах»') : coverage(ratedRows.length, rows.length);
   el.total.classList.remove('nudge');
 }
 function updateHead() {
@@ -1431,13 +1432,35 @@ function renderForm() {
   updateNameState();
 }
 
-// у музыки вместо «Завершено / Брошено» — «Сингл / Альбом»
+// статусы: у музыки «Сингл / Альбом», у фильмов и сериалов «Просмотрено» вместо «Завершено»;
+// «В планах» и «В процессе» можно сохранить и без балла
 const STATUS_SETS = {
   music: [['Сингл', '♪ Сингл'], ['Альбом', '◉ Альбом']],
-  base: [['Завершено', '✓ Завершено'], ['Брошено', '✕ Брошено']]
+  movie: [['Просмотрено', '✓ Просмотрено'], ['В процессе', '▶ В процессе'], ['В планах', '◷ В планах'], ['Брошено', '✕ Брошено']],
+  base: [['Завершено', '✓ Завершено'], ['В процессе', '▶ В процессе'], ['В планах', '◷ В планах'], ['Брошено', '✕ Брошено']]
 };
-function statusSet() { return formMusic() ? STATUS_SETS.music : STATUS_SETS.base; }
-function statusFits(v) { const t = String(v || '').trim(); return !t || statusSet().some(([k]) => t.includes(k)); }
+const NO_SCORE_OK = ['В планах', 'В процессе'];
+const noScoreOk = (st) => NO_SCORE_OK.includes(String(st || '').trim());
+function statusSet() { return formMusic() ? STATUS_SETS.music : catKind(currentCat()) === 'movie' ? STATUS_SETS.movie : STATUS_SETS.base; }
+// статус под текущую категорию: «Завершено» у фильма становится «Просмотрено» и наоборот, чужой статус сбрасывается
+function fitStatus(v) {
+  const t = String(v || '').trim();
+  if (!t) return '';
+  const set = statusSet();
+  const swap = set === STATUS_SETS.movie ? t.replace('Завершено', 'Просмотрено') : t.replace('Просмотрено', 'Завершено');
+  return set.some(([k]) => swap.includes(k)) ? swap : '';
+}
+// старые оценки фильмов и сериалов: «Завершено» → «Просмотрено» (время правки не трогаем, это не правка оценки)
+function migrateWatched() {
+  let n = 0;
+  for (const r of state.ratings) {
+    if (r.example || !/Завершено/.test(r.status || '')) continue;
+    if (catKind(state.cats.find(c => c.id === r.cat) || { id: r.cat, name: r.catName || '' }) !== 'movie') continue;
+    r.status = r.status.replace('Завершено', 'Просмотрено');
+    n++;
+  }
+  if (n) saveLocalRatings();
+}
 function renderStatusSet() {
   const box = el.statusChips || $('statusChips');
   if (!box) return;
@@ -1471,7 +1494,7 @@ function artistsMap() {
 }
 function saveArtists() {
   try { localStorage.setItem(ARTISTS_KEY, JSON.stringify(artistsMap())); return true; }
-  catch (_) { toast('В браузере не хватает места для аватарки'); return false; }
+  catch (_) { return false; }
 }
 function artistGet(name) { const k = keyOf(name); return k ? (artistsMap()[k] || null) : null; }
 function artistAvaUrl(r) { if (!r || !r.artist) return ''; const a = artistGet(r.artist); return a && a.ava ? a.ava : ''; }
@@ -1507,17 +1530,30 @@ async function patchArtistRatings(key, patchOf) {
   return list.length;
 }
 // quiet: картинка пришла с сервера, оценки трогать не надо
+// возвращает false, если браузер не дал сохранить (нет места): тогда всё остаётся как было
 function artistSetAva(name, data, quiet) {
   const k = keyOf(name);
-  if (!k) return;
+  if (!k) return false;
   const m = artistsMap();
-  const cur = m[k] || { name: name.trim() };
+  const prev = m[k];
+  const cur = prev || { name: name.trim() };
   if (data) m[k] = Object.assign({}, cur, { ava: data, fp: avaFp(data) });
   else { m[k] = Object.assign({}, cur); delete m[k].ava; delete m[k].fp; }
-  if (!saveArtists()) return;
+  if (!saveArtists()) { if (prev) m[k] = prev; else delete m[k]; return false; }
   if (!quiet) patchArtistRatings(k, () => ({ artistAva: m[k].fp || '' }));
   renderArtist();
   renderBoard();
+  return true;
+}
+// ставим аватарку из файла; места в браузере мало — пробуем картинку поменьше. Сообщение — по тому, что вышло на самом деле
+async function setArtistAvaFile(name, f, done) {
+  for (const [side, q] of [[192, 0.86], [112, 0.78], [72, 0.72]]) {
+    const d = await artistAvaFromFile(f, side, q);
+    if (!d) return false;
+    if (artistSetAva(name, d)) { toast(done); return true; }
+  }
+  toast('В браузере закончилось место, и аватарка не сохранилась. Освободи место: убери лишние фото из старых оценок');
+  return false;
 }
 async function artistRename(oldName, newName) {
   const name = String(newName || '').trim().replace(/\s+/g, ' ').slice(0, 80);
@@ -1540,16 +1576,16 @@ async function artistRename(oldName, newName) {
   return true;
 }
 // квадратная аватарка 192×192 из середины картинки
-async function artistAvaFromFile(f) {
+async function artistAvaFromFile(f, out = 192, quality = 0.86) {
   if (!f || !/^image\//.test(f.type)) { toast('Нужна картинка'); return ''; }
   try {
     const bmp = await createImageBitmap(f);
-    const side = Math.min(bmp.width, bmp.height), out = 192;
+    const side = Math.min(bmp.width, bmp.height);
     const cv = document.createElement('canvas');
     cv.width = cv.height = out;
     cv.getContext('2d').drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, out, out);
     if (bmp.close) bmp.close();
-    return cv.toDataURL('image/jpeg', 0.86);
+    return cv.toDataURL('image/jpeg', quality);
   } catch (_) { toast('Эту картинку не получилось открыть'); return ''; }
 }
 let artistPick = -1, artistEditing = null;
@@ -1596,6 +1632,7 @@ function pickArtist(name) {
   renderArtist();
   updateNameState();
   scheduleDraft();
+  scheduleCovers();
 }
 function openArtistEdit() {
   const a = artistList().find(x => x.key === keyOf(form.artist));
@@ -1620,7 +1657,7 @@ function closeArtistEdit() {
 // музыка — iTunes прямо из браузера; игры — Steam, фильмы и сериалы — IMDb, книги — Open Library, аниме — AniList
 // через наш сервер (нужен вход). Выбранная обложка скачивается и становится обычным фото оценки
 let coverTimer = null, coverCtl = null, coverKey = '', coverItems = [], coverFrom = '';
-const COVER_SRC = { music: 'Apple Music', game: 'Steam', movie: 'IMDb', book: 'Open Library', anime: 'AniList' };
+const COVER_SRC = { music: 'Apple Music и Deezer', game: 'Steam', movie: 'IMDb', book: 'Open Library', anime: 'AniList' };
 function coverKind() { return catKind(currentCat()); }
 // какие обложки подходят категории: по её названию
 function catKind(c) {
@@ -1637,9 +1674,9 @@ function coverQuery() {
   const kind = coverKind();
   if (!kind || form.photo || !canPhoto() || photoBusy) return '';
   if (kind !== 'music' && !(window.casualApi && window.casualApi.online())) return '';
-  const t = form.name.trim();
-  if (t.length < 2) return '';
-  return kind === 'music' ? `${(form.artist || '').trim()} ${t}`.trim() : t;
+  const t = form.name.trim(), a = kind === 'music' ? (form.artist || '').trim() : '';
+  if (t.length < 2 && a.length < 2) return ''; // у музыки хватает и одного исполнителя
+  return kind === 'music' ? `${a} ${t}`.trim() : t;
 }
 function scheduleCovers() {
   clearTimeout(coverTimer);
@@ -1672,6 +1709,13 @@ async function findCovers() {
     return;
   }
   const ent = form.status === 'Альбом' ? 'album' : form.status === 'Сингл' ? 'song' : 'album,song';
+  // Deezer — через наш сервер (нужен вход): там много исполнителей, которых нет в iTunes. Спрашиваем параллельно
+  const dz = window.casualApi && window.casualApi.online()
+    ? window.casualApi.get(`/covers?kind=music&q=${encodeURIComponent(q)}`).then((r) => ((r && r.items) || []).filter(c => c && /^https:\/\//.test(c.art)).map(c => ({
+      title: String(c.title || ''), artist: String(c.artist || ''), kind: String(c.sub || ''), year: '', genre: '',
+      art: c.art, thumb: /^https:\/\//.test(c.thumb || '') ? c.thumb : c.art, via: 'server'
+    })).filter(c => !(form.status === 'Альбом' && c.kind === 'Трек') && !(form.status === 'Сингл' && c.kind !== 'Трек' && c.kind !== 'Сингл')), () => [])
+    : Promise.resolve([]);
   try {
     const res = await fetch(`https://itunes.apple.com/search?media=music&entity=${ent}&limit=15&country=US&term=${encodeURIComponent(q)}`, { signal: ctl.signal });
     const d = await res.json();
@@ -1689,8 +1733,14 @@ async function findCovers() {
     if (e && e.name === 'AbortError') return;
     coverItems = [];
   }
+  // сначала iTunes, следом Deezer; одинаковые (исполнитель + название) не повторяем
+  const same = (c) => keyOf(c.artist) + '|' + keyOf(String(c.title).replace(/\s+-\s+(Single|EP)$/i, ''));
+  const have = new Set(coverItems.map(same));
+  const extra = (await dz).filter(c => !have.has(same(c)) && have.add(same(c)));
+  if (ctl !== coverCtl) return;
+  coverItems = coverItems.concat(extra).slice(0, 12);
   coverFrom = 'music';
-  if (ctl === coverCtl) renderCovers();
+  renderCovers();
 }
 function renderCovers() {
   const box = $('coverSugg');
@@ -1742,6 +1792,7 @@ async function pickCover(i) {
 // (фильмы — из Wikidata, игры — из Steam), а если его нет, оставляем то, что написано
 async function fillFromCover(c) {
   const kind = coverFrom;
+  if (kind === 'music') { fillMusicFromCover(c); return; }
   let info = { ru: '', genres: c.genres && c.genres.length ? c.genres : c.genre ? [c.genre] : [] };
   if (c.id && (kind === 'movie' || kind === 'game') && window.casualApi && window.casualApi.online()) {
     try { info = Object.assign(info, await window.casualApi.get(`/covers/info?kind=${kind}&id=${encodeURIComponent(c.id)}`)); } catch (_) {}
@@ -1759,6 +1810,28 @@ async function fillFromCover(c) {
     form.meta = [c.year || meta, ...(info.genres || []).map(g => String(g).toLowerCase())].filter(Boolean).join(', ').slice(0, 80);
     if (el.meta) el.meta.value = form.meta;
   }
+}
+
+// музыка: из iTunes приходят исполнитель, название (у синглов и EP с хвостом « - Single»), тип, год и жанр
+function fillMusicFromCover(c) {
+  const artist = String(c.artist || '').trim().slice(0, 80);
+  if (artist && keyOf(artist) !== keyOf(form.artist)) {
+    form.artist = artist;
+    if (el.artist) el.artist.value = artist;
+    renderArtist();
+  }
+  const title = String(c.title || '').replace(/\s+-\s+(Single|EP)$/i, '').trim();
+  if (title && title !== form.name.trim()) {
+    form.name = title.slice(0, 140);
+    el.name.value = form.name;
+  }
+  if (!form.status) { form.status = c.kind === 'Альбом' || c.kind === 'EP' || c.kind === 'Сборник' ? 'Альбом' : 'Сингл'; renderStatusSet(); }
+  const meta = (form.meta || '').trim();
+  if (!meta || /^(18|19|20)\d{2}$/.test(meta)) {
+    form.meta = [c.year || meta, c.genre && c.genre.toLowerCase()].filter(Boolean).join(', ').slice(0, 80);
+    if (el.meta) el.meta.value = form.meta;
+  }
+  updateNameState();
 }
 
 /* ---------- Фото исполнителя с Genius ---------- */
@@ -1819,11 +1892,9 @@ async function pickGenius(i) {
       blob = dataUrlToBlob(r.data);
     }
     const type = /^image\//.test(blob.type) ? blob.type : 'image/jpeg';
-    const d = await artistAvaFromFile(new File([blob], 'artist.jpg', { type }));
-    if (!d) return;
+    if (!(await setArtistAvaFile(name, new File([blob], 'artist.jpg', { type }), `Аватарка исполнителя «${name}» поставлена`))) return;
     geniusItems = [];
-    artistSetAva(name, d);
-    toast(`Аватарка исполнителя «${name}» поставлена`);
+    renderGenius();
   } catch (_) {
     toast('Фото исполнителя не загрузилось, можно поставить своё');
   }
@@ -1992,6 +2063,8 @@ function applySubFilter(list) {
     case 'good': return list.filter(r => r.total != null && r.total >= 7.5);
     case 'mid': return list.filter(r => r.total != null && r.total >= 5 && r.total < 7.5);
     case 'bad': return list.filter(r => r.total != null && r.total < 5);
+    case 'plan': return list.filter(r => /В планах/.test(r.status || ''));
+    case 'doing': return list.filter(r => /В процессе/.test(r.status || ''));
     default: return list;
   }
 }
@@ -2032,7 +2105,7 @@ function unifyCats() {
   return ratings || cats;
 }
 function renderBoard() {
-  if (state.loaded) unifyCats();
+  if (state.loaded) { unifyCats(); migrateWatched(); }
   const gs = groups();
   if (state.filter !== 'all' && !gs.some(g => g.id === state.filter)) state.filter = 'all';
   const showFilters = gs.length >= 2;
@@ -2057,7 +2130,7 @@ function renderBoard() {
   if (moreHint) {
     const parts = [
       { date: 'новые', name: 'А–Я' }[state.sort],
-      { master: '8.5+', good: '7.5+', mid: '5–7.4', bad: 'до 5' }[state.sfilter],
+      { master: '8.5+', good: '7.5+', mid: '5–7.4', bad: 'до 5', plan: 'в планах', doing: 'в процессе' }[state.sfilter],
       state.genres.length ? (state.genres.length === 1 ? state.genres[0] : 'жанров: ' + state.genres.length) : '',
     ].filter(Boolean);
     moreHint.textContent = parts.length ? ' · ' + parts.join(' · ') : '';
@@ -2166,7 +2239,7 @@ function loadIntoForm(r) {
     form.name = r.name.slice(i + 3);
   }
   form.fav = !!r.fav;
-  form.status = r.status || '';
+  form.status = fitStatus(r.status || '');
   form.meta = r.meta || '';
   form.pros = r.pros || '';
   form.cons = r.cons || '';
@@ -2290,7 +2363,7 @@ function moveRatingCat(id) {
     form.artist = '';
     if (el.name) el.name.value = form.name;
   }
-  if (!statusFits(form.status)) form.status = '';
+  form.status = fitStatus(form.status);
   state.catDelConfirm = false;
   renderStatusSet();
   renderArtist();
@@ -2308,7 +2381,7 @@ function switchCat(id) {
   if (prev && state.editCat) normalizeCat(prev);
   form.cat = id;
   form.extra = [];
-  if (!statusFits(form.status)) form.status = '';
+  form.status = fitStatus(form.status);
   state.catDelConfirm = false;
   renderStatusSet();
   renderArtist();
@@ -2417,9 +2490,9 @@ async function save() {
   // переоценили фильм из Letterboxd по критериям: его общий балл больше не нужен
   if (scores.some(s => s.id !== LB_SCORE)) scores = scores.filter(s => s.id !== LB_SCORE);
   const t = totalOf(scores);
-  if (t == null) {
+  if (t == null && !noScoreOk(form.status)) {
     el.total.classList.remove('nudge'); void el.total.offsetWidth; el.total.classList.add('nudge');
-    toast('Оцени хотя бы один критерий');
+    toast('Оцени хотя бы один критерий или отметь «В планах»');
     return;
   }
   const dup = findDup();
@@ -4914,7 +4987,7 @@ if (el.favBtn) {
   });
 }
 if (el.artist) {
-  el.artist.addEventListener('input', () => { form.artist = el.artist.value; artistPick = -1; showArtistList(); renderArtist(); updateNameState(); scheduleDraft(); });
+  el.artist.addEventListener('input', () => { form.artist = el.artist.value; artistPick = -1; showArtistList(); renderArtist(); updateNameState(); scheduleDraft(); scheduleCovers(); });
   el.artist.addEventListener('focus', () => showArtistList());
   el.artist.addEventListener('blur', () => setTimeout(hideArtistList, 120));
   el.artist.addEventListener('keydown', e => {
@@ -4946,11 +5019,8 @@ if (el.artist) {
     el.artistFile.value = '';
     const name = artistEditing || form.artist;
     if (!f || !keyOf(name)) return;
-    const d = await artistAvaFromFile(f);
-    if (!d) return;
-    artistSetAva(name, d);
+    if (!(await setArtistAvaFile(name, f, `Аватарка исполнителя «${name.trim()}» сохранена`))) return;
     if (artistEditing) openArtistEdit();
-    toast(`Аватарка исполнителя «${name.trim()}» сохранена`);
   });
   el.artistEdit.addEventListener('click', openArtistEdit);
   $('artistSugg').addEventListener('click', e => {
@@ -4966,7 +5036,7 @@ if (el.artist) {
     const act = b.dataset.aact;
     if (act === 'cancel') { closeArtistEdit(); renderArtist(); }
     else if (act === 'ava') el.artistFile.click();
-    else if (act === 'noava') { artistSetAva(artistEditing, ''); openArtistEdit(); }
+    else if (act === 'noava') { if (!artistSetAva(artistEditing, '')) toast('Не получилось сохранить: в браузере нет места'); openArtistEdit(); }
     else if (act === 'save') {
       const v = $('artistNewName').value;
       if (!keyOf(v)) { toast('Имя исполнителя не может быть пустым'); return; }

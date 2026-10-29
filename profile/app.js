@@ -206,6 +206,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const avg = n ? rated.reduce((a, r) => a + r.total, 0) / n : null;
     const out = [];
     const add = (id, t, tier, got, need) => out.push({ id, t, tier, got: !!got, need });
+    if (p.isAdmin) add('admin', 'Администратор', 'admin', true, ''); // всегда первое, его не убрать и не передвинуть
     add('n0', 'Новичок', 'none', true, '');
     [[1, 'Осматривается', 'none'], [5, 'Ценитель', 'mid'], [20, 'Критик', 'good'], [50, 'Легенда оценок', 'good'], [100, 'Архивариус', 'good']]
       .forEach(([k, t, tier]) => add('n' + k, t, tier, n >= k, k === 1 ? 'первая оценка с баллом' : `${k} оценок с баллом`));
@@ -223,17 +224,19 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     return out;
   }
   // если хозяин ничего не выбирал — как раньше: звание за число оценок, за средний балл, любимая тема и шедевры
+  // звание «Администратор» сюда не входит: оно показывается отдельно и всегда первым
   function titlesShown(p, cat) {
-    const got = (id) => cat.find((t) => t.id === id && t.got);
+    const got = (id) => id !== 'admin' && cat.find((t) => t.id === id && t.got);
     const sel = p.layout && Array.isArray(p.layout.titles) ? p.layout.titles : null;
     if (sel) return sel.map(got).filter(Boolean);
     return [['n100', 'n50', 'n20', 'n5', 'n1', 'n0'].map(got).find(Boolean), ...['avg-gen', 'avg-kind', 'avg-bal', 'avg-strict', 'top', 'masters'].map(got)].filter(Boolean);
   }
+  const adminChip = (p) => (p.isAdmin ? '<span class="title-chip t-admin" data-tier="admin" title="Админ Казуал Хаба"><i></i>Администратор</span>' : '');
   function titlePopHTML(cat, shown) {
     const sel = shown.map((t) => t.id);
     const locked = cat.filter((t) => !t.got && t.need);
     return `<div class="t-pop-h"><b>Звания</b><small>выбрано ${sel.length} из ${TITLE_MAX}</small></div>
-      <div class="t-list">${cat.filter((t) => t.got).map((t) => `<button type="button" class="t-opt" data-tadd="${esc(t.id)}" aria-pressed="${sel.includes(t.id)}" data-tier="${t.tier}"><i></i><span>${esc(t.t)}</span>${sel.includes(t.id) ? '<em>✓</em>' : ''}</button>`).join('')}</div>
+      <div class="t-list">${cat.filter((t) => t.got && t.id !== 'admin').map((t) => `<button type="button" class="t-opt" data-tadd="${esc(t.id)}" aria-pressed="${sel.includes(t.id)}" data-tier="${t.tier}"><i></i><span>${esc(t.t)}</span>${sel.includes(t.id) ? '<em>✓</em>' : ''}</button>`).join('')}</div>
       ${locked.length ? `<span class="label">Ещё не открыты</span><div class="t-list">${locked.map((t) => `<span class="t-opt off" data-tier="${t.tier}"><i></i><span>${esc(t.t)}<small>${esc(t.need)}</small></span></span>`).join('')}</div>` : ''}`;
   }
   function titlesRowHTML(p, rs) {
@@ -241,9 +244,9 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const chip = (t) => (EDIT
       ? `<span class="title-chip" data-tier="${t.tier}" data-tid="${esc(t.id)}" tabindex="0" title="Перетащи, чтобы поменять порядок (или стрелками)"><i></i>${esc(t.t)}<button type="button" class="t-x" data-tx="${esc(t.id)}" aria-label="Убрать звание «${esc(t.t)}»" title="Убрать">✕</button></span>`
       : `<span class="title-chip" data-tier="${t.tier}"><i></i>${esc(t.t)}</span>`);
-    if (!EDIT) return `<div class="titles"${hid(p, 'titles')}>${shown.map(chip).join('')}</div>`;
+    if (!EDIT) return `<div class="titles"${hid(p, 'titles')}>${adminChip(p)}${shown.map(chip).join('')}</div>`;
     const on = secOn(p, 'titles');
-    return `<div class="t-wrap"><div class="titles edit${on ? '' : ' off'}" id="titlesRow">${shown.map(chip).join('')}<button type="button" class="title-add" id="titleAdd" aria-expanded="${tpOpen}" aria-controls="titlePop">＋ Звание</button><button type="button" class="title-eye" id="titleEye" aria-pressed="${!on}" title="${on ? 'Скрыть звания' : 'Показать звания'}" aria-label="${on ? 'Скрыть звания' : 'Показать звания'}">${on ? WIC.eye : WIC.eyeOff}</button></div>
+    return `<div class="t-wrap"><div class="titles edit${on ? '' : ' off'}" id="titlesRow">${adminChip(p)}${shown.map(chip).join('')}<button type="button" class="title-add" id="titleAdd" aria-expanded="${tpOpen}" aria-controls="titlePop">＋ Звание</button><button type="button" class="title-eye" id="titleEye" aria-pressed="${!on}" title="${on ? 'Скрыть звания' : 'Показать звания'}" aria-label="${on ? 'Скрыть звания' : 'Показать звания'}">${on ? WIC.eye : WIC.eyeOff}</button></div>
       <div class="t-pop" id="titlePop"${tpOpen ? '' : ' hidden'}>${titlePopHTML(cat, shown)}</div></div>`;
   }
 
@@ -388,6 +391,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   // блоки профиля — виджеты на сетке из 12 колонок: блок стоит там, куда его поставили, ширина — от 3 до 12 колонок
   const WG_NAME = { stats: 'Цифры', podium: 'Любимое', all: 'Все оценки', badges: 'Ачивки', taste: 'Вкусы', friends: 'Друзья', hist: 'Оценки 1–10', cats: 'Категории' };
   const COLS = 12, ROW = 8; // колонки и шаг строк сетки в пикселях
+  const HSTEP = 5, HMIN = 10; // высота, заданная вручную: шаг 5 строк (40px), не меньше 10 строк
   const WG_W = { stats: 12, podium: 8, all: 8, badges: 4, taste: 4, friends: 4, hist: 4, cats: 4 };
   const OLD_W = { s: 4, m: 6, l: 8, f: 12 }; // размеры из прошлой версии (⅓, ½, ⅔, во всю ширину)
   const wgMin = (k) => (k === 'stats' ? 6 : k === 'all' || k === 'podium' || k.startsWith('sc:') ? 4 : 3);
@@ -603,10 +607,11 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       <button type="button" class="wg-btn wg-move" title="Зажми и перетащи куда угодно. Стрелками на клавиатуре тоже можно" aria-label="Переместить блок «${name}»">${WIC.move}</button>
       <span class="wg-tools">${sc ? `<button type="button" class="wg-btn" data-wga="scedit" title="Изменить витрину" aria-label="Изменить витрину «${name}»">${WIC.pen}</button><button type="button" class="wg-btn danger" data-wga="scdel" title="Удалить витрину" aria-label="Удалить витрину «${name}»">${WIC.trash}</button>` : ''}<button type="button" class="wg-btn" data-wga="eye" aria-pressed="${!on}" title="${on ? 'Скрыть блок' : 'Показать блок'}" aria-label="${on ? 'Скрыть' : 'Показать'} блок «${name}»">${on ? WIC.eye : WIC.eyeOff}</button></span>
       <button type="button" class="wg-rs" title="Тяни, чтобы поменять ширину. Стрелками тоже можно" aria-label="Ширина блока «${name}»"><i></i></button>
+      <button type="button" class="wg-rh" title="Тяни, чтобы поменять высоту. Двойной щелчок — высота по содержимому" aria-label="Высота блока «${name}»"><i></i></button>
       ${html}</div>`;
   }
   const editBarHTML = (p) => `<div class="ed-bar" id="edBar" role="toolbar" aria-label="Редактирование профиля">
-    <span class="ed-tx"><b>Редактирование профиля</b><small id="edHint"${lyDirty ? ' class="dirty"' : ''}>${lyDirty ? 'Есть несохранённые изменения' : 'Тащи блоки за ✥, ширину — за край, глаз скрывает'}</small></span>
+    <span class="ed-tx"><b>Редактирование профиля</b><small id="edHint"${lyDirty ? ' class="dirty"' : ''}>${lyDirty ? 'Есть несохранённые изменения' : 'Тащи блоки за ✥, размер — за правый и нижний край, глаз скрывает'}</small></span>
     ${((p.layout && p.layout.showcases) || []).length < SC_MAX ? '<button type="button" class="btn ghost ed-add" data-ed="add">＋ Витрина</button>' : ''}
     <button type="button" class="btn ghost" data-ed="cancel">Отмена</button>
     <button type="button" class="btn primary" data-ed="save">Сохранить</button></div>`;
@@ -649,7 +654,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     return [...board.children].map((el, i) => {
       const k = el.dataset.wg, s = g[k];
       const w = Math.max(wgMin(k), Math.min(COLS, Math.round(s ? s.w : OLD_W[sz[k]] || WG_W[k] || (k.startsWith('sc:') ? 12 : 4))));
-      return s ? { k, el, i, w, x: Math.max(0, Math.min(COLS - w, Math.round(s.x))), y: Math.max(0, +s.y || 0), h: 1, fresh: false } : { k, el, i, w, x: 0, y: Infinity, h: 1, fresh: true };
+      const fh = s && s.h ? Math.max(HMIN, Math.round(s.h / HSTEP) * HSTEP) : 0; // 0 — высота по содержимому
+      return s ? { k, el, i, w, fh, x: Math.max(0, Math.min(COLS - w, Math.round(s.x))), y: Math.max(0, +s.y || 0), h: 1, fresh: false } : { k, el, i, w, fh, x: 0, y: Infinity, h: 1, fresh: true };
     });
   }
   // плавный переезд: блок рисуется на новом месте, но стартует со старого
@@ -673,15 +679,20 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       if (lead) its.forEach((q) => { if (q !== lead && q.bx != null) { q.x = q.bx; q.y = q.by; } });
       // блок отпускают на верхнюю половину соседа — встаёт на его место, сосед уступает
       if (lead) { const up = its.filter((q) => q !== lead && hit(lead, q) && lead.y < q.y + q.h / 2); lead.sy = up.length ? Math.min(...up.map((q) => q.y)) - 0.5 : null; }
-      its.forEach((it) => { it.el.style.order = ''; it.el.style.gridColumn = `${(it.fresh ? 0 : it.x) + 1} / span ${it.w}`; });
-      const hs = its.map((it) => it.el.offsetHeight); // сначала все замеры, потом запись: одна раскладка
-      its.forEach((it, n) => { it.h = Math.max(1, Math.ceil(hs[n] / ROW)); });
+      its.forEach((it) => {
+        it.el.style.order = ''; it.el.style.gridColumn = `${(it.fresh ? 0 : it.x) + 1} / span ${it.w}`;
+        // высота вручную: блок ровно такой, лишнее прокручивается внутри
+        it.el.toggleAttribute('data-fh', !!it.fh);
+        it.el.style.height = it.fh ? it.fh * ROW + 'px' : '';
+      });
+      const hs = its.map((it) => (it.fh ? 0 : it.el.offsetHeight)); // сначала все замеры, потом запись: одна раскладка
+      its.forEach((it, n) => { it.h = it.fh || Math.max(1, Math.ceil(hs[n] / ROW)); });
       const placed = compact(its.filter((it) => !it.fresh), lead);
       its.filter((it) => it.fresh).sort((a, b) => a.i - b.i).forEach((it) => { Object.assign(it, firstFit(placed, it), { fresh: false }); placed.push(it); });
       its.forEach((it) => { it.el.style.gridColumn = `${it.x + 1} / span ${it.w}`; it.el.style.gridRow = `${it.y + 1} / span ${it.h}`; });
     } else {
       // узко: порядок — сверху вниз и слева направо, широкие блоки (от 7 колонок) — на обе колонки
-      seqOf(its).forEach((it, n) => { it.el.style.order = n; it.el.style.gridColumn = mqTwo.matches && it.w >= 7 ? 'span 2' : ''; it.el.style.gridRow = ''; });
+      seqOf(its).forEach((it, n) => { it.el.style.order = n; it.el.style.gridColumn = mqTwo.matches && it.w >= 7 ? 'span 2' : ''; it.el.style.gridRow = ''; it.el.style.height = ''; it.el.removeAttribute('data-fh'); });
       const hs = its.map((it) => it.el.offsetHeight);
       its.forEach((it, n) => { it.el.style.gridRow = 'span ' + Math.max(1, Math.ceil(hs[n] / ROW)); });
     }
@@ -705,7 +716,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   // места блоков — в черновик раскладки (на сервер уйдут по «Сохранить»)
   function keepGrid(p) {
     const grid = {};
-    BL.items.forEach((it) => { if (!it.fresh) grid[it.k] = { x: it.x, y: it.y, w: it.w }; });
+    BL.items.forEach((it) => { if (!it.fresh) grid[it.k] = it.fh ? { x: it.x, y: it.y, w: it.w, h: it.fh } : { x: it.x, y: it.y, w: it.w }; });
     p.layout.grid = { ...(p.layout.grid || {}), ...grid };
     saveLayout(p, true);
   }
@@ -802,16 +813,52 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     };
     addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
   }
-  // клавиатура: ✥ стрелками двигает блок, край стрелками меняет ширину
+  // высота: тянем за нижний край, шаг — 40px; двойной щелчок по ручке — снова по содержимому
+  function dragHeight(e, it, p) {
+    e.preventDefault();
+    it.el.classList.add('wg-sizing');
+    document.body.classList.add('wg-dragging', 'wg-ns');
+    BL.drag = it;
+    base(true);
+    let y = e.clientY, raf = 0, moved = false;
+    const frame = () => {
+      raf = 0;
+      if (y > innerHeight - 70) { scrollBy(0, 14); raf = requestAnimationFrame(frame); }
+      const top = it.el.getBoundingClientRect().top;
+      const nh = Math.max(HMIN, Math.round((y - top + 18) / (ROW * HSTEP)) * HSTEP);
+      if (nh === it.fh) return;
+      it.fh = nh; moved = true;
+      layoutBoard(it, true);
+    };
+    const move = (ev) => { y = ev.clientY; if (!raf) raf = requestAnimationFrame(frame); };
+    const up = () => {
+      removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
+      if (raf) { cancelAnimationFrame(raf); frame(); }
+      cancelAnimationFrame(raf);
+      it.el.classList.remove('wg-sizing');
+      document.body.classList.remove('wg-dragging', 'wg-ns');
+      BL.drag = null;
+      base(false);
+      layoutBoard(null, true);
+      if (moved) keepGrid(p);
+    };
+    addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+  }
+  // клавиатура: ✥ стрелками двигает блок, края стрелками меняют ширину и высоту (Delete — высота по содержимому)
   function keyBoard(e, p) {
-    const mv = e.target.closest('.wg-move'), rs = e.target.closest('.wg-rs');
-    if (!mv && !rs) return;
-    const dir = { ArrowLeft: 'l', ArrowRight: 'r', ArrowUp: 'u', ArrowDown: 'd' }[e.key];
+    const mv = e.target.closest('.wg-move'), rs = e.target.closest('.wg-rs'), rh = e.target.closest('.wg-rh');
+    if (!mv && !rs && !rh) return;
+    const dir = { ArrowLeft: 'l', ArrowRight: 'r', ArrowUp: 'u', ArrowDown: 'd', Delete: 'x', Backspace: 'x' }[e.key];
     if (!dir) return;
     e.preventDefault();
     const it = BL.items.find((q) => q.el === e.target.closest('.wg'));
     const vis = BL.items.filter((q) => !q.el.hidden && q !== it);
-    if (rs) {
+    if (rh) {
+      if (dir === 'x') it.fh = 0;
+      else if (dir === 'u' || dir === 'd') it.fh = Math.max(HMIN, Math.round((it.fh || it.h) / HSTEP) * HSTEP + (dir === 'd' ? HSTEP : -HSTEP));
+      else return;
+    } else if (dir === 'x') return;
+    else if (rs) {
       if (dir !== 'l' && dir !== 'r') return;
       it.w = Math.max(wgMin(it.k), Math.min(COLS - it.x, it.w + (dir === 'r' ? 1 : -1)));
     } else if (!mqWide.matches) {
@@ -859,12 +906,12 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const move = (ev) => {
       if (!on && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return;
       if (!on) { on = true; chip.classList.add('t-lift'); document.body.classList.add('wg-dragging'); }
-      const t = document.elementFromPoint(ev.clientX, ev.clientY), o = t && t.closest('#titlesRow .title-chip');
+      const t = document.elementFromPoint(ev.clientX, ev.clientY), o = t && t.closest('#titlesRow .title-chip[data-tid]');
       if (!o || o === chip) return;
       const r = o.getBoundingClientRect();
-      const before = rects([...row.querySelectorAll('.title-chip')].map((el) => ({ el })));
+      const before = rects([...row.querySelectorAll('.title-chip[data-tid]')].map((el) => ({ el })));
       row.insertBefore(chip, ev.clientX < r.left + r.width / 2 ? o : o.nextSibling);
-      flip([...row.querySelectorAll('.title-chip')].map((el) => ({ el })), before);
+      flip([...row.querySelectorAll('.title-chip[data-tid]')].map((el) => ({ el })), before);
     };
     const up = () => {
       removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
@@ -876,7 +923,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
   }
   function keepTitles(p) {
-    const ids = [...$('#titlesRow').querySelectorAll('.title-chip')].map((c) => c.dataset.tid);
+    const ids = [...$('#titlesRow').querySelectorAll('.title-chip[data-tid]')].map((c) => c.dataset.tid);
     const cur = titlesShown(p, titleCatalog(p, p.ratings)).map((t) => t.id);
     if (ids.join() === cur.join()) return;
     p.layout.titles = ids;
@@ -887,13 +934,13 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     if (!row) return;
     const shownIds = () => titlesShown(p, titleCatalog(p, p.ratings)).map((t) => t.id);
     const setSel = (ids) => { p.layout.titles = ids.slice(0, TITLE_MAX); saveLayout(p); };
-    row.addEventListener('pointerdown', (e) => { const c = e.target.closest('.title-chip'); if (c) dragTitle(e, c, p); });
+    row.addEventListener('pointerdown', (e) => { const c = e.target.closest('.title-chip[data-tid]'); if (c) dragTitle(e, c, p); });
     row.addEventListener('keydown', (e) => {
       const c = e.target.closest('.title-chip');
       if (!c || e.target !== c || (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight')) return;
       e.preventDefault();
       const sib = e.key === 'ArrowLeft' ? c.previousElementSibling : c.nextElementSibling;
-      if (!sib || !sib.classList.contains('title-chip')) return;
+      if (!sib || !sib.matches('.title-chip[data-tid]')) return;
       if (e.key === 'ArrowLeft') sib.before(c); else sib.after(c);
       c.focus();
       keepTitles(p);
@@ -922,10 +969,19 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     board.addEventListener('click', (e) => onWgClick(e, p));
     board.addEventListener('pointerdown', (e) => {
       if (e.button > 0) return;
-      const h = e.target.closest('.wg-move, .wg-rs');
+      const h = e.target.closest('.wg-move, .wg-rs, .wg-rh');
       if (!h) return;
       const it = BL.items.find((q) => q.el === h.closest('.wg'));
-      if (h.classList.contains('wg-move')) dragMove(e, it, p); else dragSize(e, it, p);
+      if (h.classList.contains('wg-move')) dragMove(e, it, p); else if (h.classList.contains('wg-rs')) dragSize(e, it, p); else dragHeight(e, it, p);
+    });
+    // двойной щелчок по нижней ручке — высота снова по содержимому
+    board.addEventListener('dblclick', (e) => {
+      const h = e.target.closest('.wg-rh');
+      const it = h && BL.items.find((q) => q.el === h.closest('.wg'));
+      if (!it || !it.fh) return;
+      it.fh = 0;
+      layoutBoard(it, true);
+      keepGrid(p);
     });
     board.addEventListener('keydown', (e) => keyBoard(e, p));
     $('#edBar').addEventListener('click', (e) => {
@@ -1931,7 +1987,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const born = (meServer && meServer.createdAt) || local.createdAt;
     const since = born ? dayFmt(born) : '';
     const p = {
-      kind: 'me', name: meServer && meServer.username ? meServer.username : user ? user.name : 'Гость', avatar: shownAvatar(user), color: user && user.color,
+      kind: 'me', name: meServer && meServer.username ? meServer.username : user ? user.name : 'Гость', avatar: shownAvatar(user), color: user && user.color, isAdmin: !!(meServer && meServer.admin),
       sub: user ? [meServer && meServer.handle ? '@' + meServer.handle : '', since ? 'в Казуал Хабе с ' + since : ''].filter(Boolean).join(' · ') || 'твой профиль' : 'Гостевой профиль: оценки хранятся в этом браузере',
       createdAt: user ? born : null,
       ratings: [], allRatings: myRatings(), hide: localHide().hide, uid: meServer && meServer.id, banner: localBanner(), sticker: localSticker().src, layout: localLayout(),
@@ -2039,7 +2095,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       const match = common.length ? Math.max(0, Math.min(100, Math.round(100 - (common.reduce((a, c) => a + Math.abs(c.diff), 0) / common.length) * 10))) : 0;
       render({
         kind: 'friend', name: s.user.username, sub: [s.user.handle ? '@' + s.user.handle : '', s.updatedAt ? 'оценки обновлены ' + ago(s.updatedAt) : 'оценок пока нет'].filter(Boolean).join(' · '),
-        ratings, uid: s.user.id, common, match, layout: s.layout || null, followed: (fol.ids || []).includes(s.user.id),
+        ratings, uid: s.user.id, common, match, layout: s.layout || null, followed: (fol.ids || []).includes(s.user.id), isAdmin: !!s.user.admin,
         friends: fr && !fr.hidden ? fr.friends || [] : null, createdAt: s.user.createdAt, lastSeen: s.user.lastSeen, sticker: s.sticker && s.sticker.src, friendCount: s.user.friends != null ? s.user.friends : null,
       });
       document.title = `${s.user.username} · Казуал Хаб`;
