@@ -1664,7 +1664,7 @@ const tierMeta = (l) => ({
 // ---------- поиск музыки ----------
 const httpsOnly = (s) => (/^https:\/\/[^\s"'<>()\\]{1,500}$/.test(String(s || '')) ? String(s) : '');
 // караоке, каверы и «в стиле»: это не сами исполнители, даже если лежит в каталоге
-const NOT_OFFICIAL = /karaoke|tribute|made famous|originally performed|in the style of|as made|cover version|covered by|караоке|минусовка|кавер/i;
+const NOT_OFFICIAL = /karaoke|tribute|made famous|originally performed|in the style of|as made|cover version|covered by|cover of|covers|(piano|guitar|acoustic|instrumental) cover|караоке|минусовка|кавер/i;
 const YTM_HEADERS = { 'content-type': 'application/json', origin: 'https://music.youtube.com', 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36' };
 async function ytMusicSearch(q) {
   // раздел «Песни»: туда попадают только релизы исполнителей, без чужих роликов

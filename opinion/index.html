@@ -290,9 +290,8 @@ a.user-pill { color: inherit; text-decoration: none; }
   background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
 }
 .photo-url-row input:focus { outline: none; border-color: var(--accent); }
-.music-search-row { margin: 0 0 12px; }
 .artist-box > .field-msg { margin: -6px 0 12px; }
-.music-results { display: grid; gap: 4px; margin: -6px 0 12px; padding: 4px; max-height: 340px; overflow: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); }
+.music-results { display: grid; gap: 4px; margin: 8px 0 0; padding: 4px; max-height: 340px; overflow: auto; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); }
 .music-results:not([hidden]) { animation: enter-up .24s cubic-bezier(.2, .8, .2, 1) both; }
 .music-opt { display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; align-items: center; gap: 10px; width: 100%; padding: 6px; border: 0; border-radius: 9px; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: pointer; transition: transform .22s cubic-bezier(.34, 1.56, .64, 1), background-color .12s; }
 .music-opt:hover, .music-opt:focus-visible { background: var(--panel); outline: none; }
@@ -302,7 +301,7 @@ a.user-pill { color: inherit; text-decoration: none; }
 .music-opt b { font-size: 14px; font-weight: 700; }
 .music-opt small { font-size: 12.5px; color: var(--ink-2); }
 .music-opt i { font-style: normal; font-size: 11px; font-weight: 600; color: var(--ink-3); white-space: nowrap; }
-.music-picked { display: flex; align-items: center; gap: 8px; margin: -6px 0 12px; }
+.music-picked { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; }
 .music-picked:not([hidden]) { animation: enter-up .24s cubic-bezier(.2, .8, .2, 1) both; }
 .music-picked .e-listen { margin: 0; }
 .e-listen { display: inline-flex; align-items: center; gap: 6px; margin: 10px 0 2px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel-2); color: var(--ink); font-size: 13.5px; font-weight: 600; text-decoration: none; transition: border-color .15s; }
@@ -1519,11 +1518,6 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
 
       <div class="field">
         <div class="artist-box" id="artistBox" hidden>
-          <label class="label" for="musicQuery">Найти трек или альбом</label>
-          <div class="photo-url-row music-search-row"><input type="text" id="musicQuery" autocapitalize="none" spellcheck="false" autocomplete="off" maxlength="100" enterkeyhint="search" placeholder="Название трека или исполнитель"></div>
-          <div class="music-results" id="musicResults" hidden></div>
-          <p id="musicMsg" class="field-msg" hidden></p>
-          <div class="music-picked" id="musicPicked" hidden></div>
           <label class="label" for="itemArtist">Исполнитель</label>
           <div class="artist-row">
             <button type="button" class="artist-ava" id="artistAva" aria-label="Аватарка исполнителя" title="Аватарка исполнителя: нажми, чтобы поставить фото. Одна на все его треки и альбомы"></button>
@@ -1542,6 +1536,9 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
           <input id="itemName" class="name-input" type="text" placeholder="Что оцениваешь?" autocomplete="off" maxlength="140" enterkeyhint="done">
           <button type="button" class="fav-toggle" id="favBtn" aria-pressed="false" title="Добавить в избранное ★" aria-label="В избранное">★</button>
         </div>
+        <div class="music-results" id="musicResults" hidden></div>
+        <p id="musicMsg" class="field-msg" hidden></p>
+        <div class="music-picked" id="musicPicked" hidden></div>
         <p id="nameMsg" class="field-msg" hidden></p>
         <div class="meta-grid">
           <div class="meta-box">

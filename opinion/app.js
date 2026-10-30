@@ -1651,8 +1651,10 @@ function renderArtist() {
   if (!el.artistBox) return;
   const music = formMusic();
   el.artistBox.hidden = !music;
+  if (!music && form.link) form.link = ''; // «Слушать» есть только у музыки
+  renderMusicPicked();
   el.nameLabel.textContent = music ? 'Название трека или альбома' : 'Название';
-  el.name.placeholder = music ? 'Как называется?' : 'Что оцениваешь?';
+  el.name.placeholder = music ? 'Начни писать, и трек найдётся' : 'Что оцениваешь?';
   if (!music) { hideArtistList(); return; }
   if (el.artist.value !== (form.artist || '')) el.artist.value = form.artist || '';
   const a = artistGet(form.artist);
@@ -1841,7 +1843,8 @@ async function findCovers() {
 function renderCovers() {
   const box = $('coverSugg');
   if (!box) return;
-  const show = coverItems.length > 0 && !!coverQuery();
+  // пока открыт список найденных треков, вторая подборка обложек только мешает
+  const show = coverItems.length > 0 && !!coverQuery() && !musicItems.length;
   box.hidden = !show;
   if (!show) { box.replaceChildren(); return; }
   box.innerHTML = `<span class="label">Обложки из ${esc(COVER_SRC[coverFrom] || 'интернета')}</span><div class="cover-list">${coverItems.map((c, i) => `<button type="button" class="cover-opt${c.tall ? ' tall' : ''}" data-cover="${i}" title="${esc([c.artist, c.title].filter(Boolean).join(' — '))}"><img src="${esc(c.thumb || c.art)}"${c.alt ? ` data-alt="${esc(c.alt)}"` : ''} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"><span>${esc(c.title)}</span><small>${esc([c.kind, c.year].filter(Boolean).join(' · '))}</small></button>`).join('')}</div>`;
@@ -1938,29 +1941,31 @@ function musicMsg(text, bad) {
   m.hidden = !text;
   m.classList.toggle('err', !!bad);
 }
-let musicItems = [], musicTimer = 0, musicSeq = 0, musicPhotoAuto = false;
+let musicItems = [], musicTimer = 0, musicSeq = 0, musicPhotoAuto = false, musicPickedArtist = '';
 function renderMusicPicked() {
   const box = $('musicPicked');
   if (!box) return;
-  const html = listenHTML({ link: form.link });
+  const music = formMusic();
+  if (!music && musicItems.length) { musicItems = []; renderMusicResults(); }
+  const html = music ? listenHTML({ link: form.link }) : '';
   box.hidden = !html;
-  if (box.dataset.link !== (form.link || '')) { box.dataset.link = form.link || ''; box.innerHTML = html ? html + '<button type="button" class="mini-btn" id="musicUnlink" aria-label="Убрать ссылку" title="Убрать ссылку">✕</button>' : ''; }
+  if (box.dataset.link !== html) { box.dataset.link = html; box.innerHTML = html ? html + '<button type="button" class="mini-btn" id="musicUnlink" aria-label="Убрать ссылку" title="Убрать ссылку">✕</button>' : ''; }
 }
 function renderMusicResults() {
   const box = $('musicResults');
   if (!box) return;
   box.hidden = !musicItems.length;
   box.innerHTML = musicItems.map((c, i) => `<button type="button" class="music-opt" data-music="${i}"><img src="${esc(c.thumb || c.art)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"><span><b>${esc(c.title)}</b><small>${esc([c.artist, c.album, c.year].filter(Boolean).join(' · '))}</small></span><i>${esc(c.kind === 'Альбом' ? 'Альбом' : '')}</i></button>`).join('');
+  renderCovers();
 }
 function musicClear() {
   clearTimeout(musicTimer); musicSeq++;
   musicItems = []; musicPhotoAuto = false;
-  const inp = $('musicQuery');
-  if (inp) inp.value = '';
+  musicPickedArtist = '';
   renderMusicResults();
 }
 // поиск: с аккаунтом — по всем каталогам через наш сервер, без него — только Apple Music
-async function searchMusic(q) {
+async function searchMusic(q, title) {
   const seq = ++musicSeq;
   const album = form.status === 'Альбом';
   let items = [];
@@ -1980,9 +1985,15 @@ async function searchMusic(q) {
     return;
   }
   if (seq !== musicSeq) return;
+  // искали вместе с исполнителем: нужны треки с этим названием, а если таких нет, ищем только по названию
+  if (title) {
+    const same = items.filter(c => keyOf(c.title).includes(keyOf(title)));
+    if (!same.length) return searchMusic(title);
+    items = same;
+  }
   musicItems = items;
   renderMusicResults();
-  musicMsg(items.length ? '' : 'Ничего не нашлось. Попробуй написать иначе.');
+  musicMsg('');
 }
 // выбрали трек: исполнитель, название, год, ссылка и обложка подставляются сами
 async function applyMusicPick(c) {
@@ -1995,8 +2006,8 @@ async function applyMusicPick(c) {
   const swap = !form.photo || musicPhotoAuto; // своё фото не заменяем, а обложку от прошлого выбора — да
   musicItems = [];
   renderMusicResults();
-  const inp = $('musicQuery');
-  if (inp) inp.value = '';
+  clearTimeout(musicTimer); musicSeq++;
+  musicPickedArtist = keyOf(c.artist);
   renderMusicPicked();
   scheduleDraft();
   if (c.art && swap) {
@@ -3510,7 +3521,12 @@ el.cats.addEventListener('click', e => {
   if (act === 'newcat') newCategory();
   else if (b.dataset.cat) switchCat(b.dataset.cat);
 });
-el.name.addEventListener('input', () => { form.name = el.name.value; updateNameState(); scheduleDraft(); scheduleCovers(); });
+el.name.addEventListener('input', () => {
+  form.name = el.name.value;
+  // название стало другим — старая кнопка «Слушать» вела бы не туда
+  if (form.link) { form.link = ''; renderMusicPicked(); }
+  updateNameState(); scheduleDraft(); scheduleCovers(); scheduleMusicSearch();
+});
 el.note.addEventListener('input', () => { form.note = el.note.value; autoGrow(el.note); scheduleDraft(); });
 el.name.addEventListener('keydown', e => {
   if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.isComposing) { e.preventDefault(); el.name.blur(); }
@@ -5230,34 +5246,34 @@ if (el.favBtn) {
     scheduleDraft();
   });
 }
-// поиск трека
+// поиск трека: идёт прямо при вводе названия
+function scheduleMusicSearch() {
+  clearTimeout(musicTimer);
+  const name = form.name.trim();
+  if (!formMusic() || name.length < 2) { musicSeq++; musicItems = []; renderMusicResults(); musicMsg(''); return; }
+  // исполнитель, написанный своими руками, уточняет поиск, а оставшийся от прошлого выбранного трека — нет
+  const artist = form.artist.trim();
+  const both = artist && keyOf(artist) !== musicPickedArtist;
+  musicTimer = setTimeout(() => (both ? searchMusic(artist + ' ' + name, name) : searchMusic(name)), 420);
+}
 {
-  const ml = $('musicQuery');
-  if (ml) {
-    const run = () => {
-      clearTimeout(musicTimer);
-      const q = ml.value.trim();
-      if (q.length < 2) { musicSeq++; musicItems = []; renderMusicResults(); musicMsg(''); return; }
-      musicTimer = setTimeout(() => searchMusic(q), 420);
-    };
-    ml.addEventListener('input', run);
-    ml.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); if (musicItems.length) applyMusicPick(musicItems[0]); else run(); }
-      if (e.key === 'Escape' && musicItems.length) { e.stopPropagation(); musicItems = []; renderMusicResults(); }
-      if (e.key === 'ArrowDown' && musicItems.length) { e.preventDefault(); const f = document.querySelector('#musicResults .music-opt'); if (f) f.focus(); }
-    });
-    const list = $('musicResults');
-    list.addEventListener('click', (e) => { const b = e.target.closest('[data-music]'); if (b && musicItems[+b.dataset.music]) applyMusicPick(musicItems[+b.dataset.music]); });
-    list.addEventListener('keydown', (e) => {
-      const b = e.target.closest('.music-opt');
-      if (!b) return;
-      if (e.key === 'ArrowDown' && b.nextElementSibling) { e.preventDefault(); b.nextElementSibling.focus(); }
-      if (e.key === 'ArrowUp') { e.preventDefault(); (b.previousElementSibling || ml).focus(); }
-      if (e.key === 'Escape') { e.stopPropagation(); musicItems = []; renderMusicResults(); ml.focus(); }
-    });
-    document.addEventListener('click', (e) => { if (musicItems.length && !e.target.closest('#musicResults, #musicQuery')) { musicItems = []; renderMusicResults(); } });
-    $('musicPicked').addEventListener('click', (e) => { if (e.target.closest('#musicUnlink')) { form.link = ''; renderMusicPicked(); scheduleDraft(); } });
-  }
+  const closeMusic = () => { clearTimeout(musicTimer); musicSeq++; musicItems = []; renderMusicResults(); };
+  el.name.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') closeMusic();
+    if (e.key === 'Escape' && musicItems.length) { e.stopPropagation(); closeMusic(); }
+    if (e.key === 'ArrowDown' && musicItems.length) { e.preventDefault(); const f = document.querySelector('#musicResults .music-opt'); if (f) f.focus(); }
+  });
+  const list = $('musicResults');
+  list.addEventListener('click', (e) => { const b = e.target.closest('[data-music]'); if (b && musicItems[+b.dataset.music]) applyMusicPick(musicItems[+b.dataset.music]); });
+  list.addEventListener('keydown', (e) => {
+    const b = e.target.closest('.music-opt');
+    if (!b) return;
+    if (e.key === 'ArrowDown' && b.nextElementSibling) { e.preventDefault(); b.nextElementSibling.focus(); }
+    if (e.key === 'ArrowUp') { e.preventDefault(); (b.previousElementSibling || el.name).focus(); }
+    if (e.key === 'Escape') { e.stopPropagation(); closeMusic(); el.name.focus(); }
+  });
+  document.addEventListener('click', (e) => { if (musicItems.length && !e.target.closest('#musicResults, #itemName')) closeMusic(); });
+  $('musicPicked').addEventListener('click', (e) => { if (e.target.closest('#musicUnlink')) { form.link = ''; renderMusicPicked(); scheduleDraft(); } });
 }
 if (el.artist) {
   el.artist.addEventListener('input', () => { form.artist = el.artist.value; artistPick = -1; showArtistList(); renderArtist(); updateNameState(); scheduleDraft(); scheduleCovers(); scheduleArtistNet(); });
