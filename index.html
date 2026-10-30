@@ -337,6 +337,7 @@ h1, h2, p { margin: 0; }
 /* App cards: a live preview on top, the name under it, the footer with counters */
 .apps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; perspective: 1200px; }
 @media (min-width: 760px) { .apps { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; } }
+@media (min-width: 1100px) { .apps { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .app {
   --lift: 0px;
   position: relative; isolation: isolate; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px 16px; align-content: start;
@@ -348,6 +349,8 @@ h1, h2, p { margin: 0; }
 }
 .app:nth-child(1) { animation-delay: .55s; }
 .app:nth-child(2) { animation-delay: .68s; }
+.app:nth-child(3) { animation-delay: .81s; }
+@media (min-width: 760px) and (max-width: 1099px) { .app:nth-child(3) { grid-column: 1 / -1; } }
 @keyframes app-in { from { transform: translateY(40px) rotateX(10deg); } }
 @property --rx { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
 @property --ry { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
@@ -411,6 +414,13 @@ h1, h2, p { margin: 0; }
 .pv-tag { position: absolute; right: 10px; top: 9px; line-height: 1; font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-3); }
 
 /* Колесо preview: a small wheel that really spins and names who landed under the pointer */
+/* Тир-листы: маленькие ряды с карточками */
+.pv-tiers { display: grid; align-content: center; gap: 6px; padding: 12px 14px; }
+.pv-tier { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 6px; height: 36px; }
+.pv-tier > i { border-radius: 8px; }
+.pv-tier > span { display: flex; gap: 5px; padding: 4px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); overflow: hidden; }
+.pv-tier b { flex: none; width: 26px; border-radius: 5px; background: var(--cell); transition: transform .35s var(--spring) calc(var(--j) * 35ms); }
+.app:hover .pv-tier b { transform: translateY(-2px) scale(1.06); }
 .pv-wheel { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 0 22px 0 20px; }
 .pv-under { display: grid; gap: 4px; min-width: 0; }
 .pv-under small { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
@@ -590,6 +600,16 @@ h1, h2, p { margin: 0; }
         <span class="app-desc">На выбывание или один победитель с одной прокрутки: просто имена или донаты, где шанс равен доле в банке. Своя музыка и стикеры в центре.</span>
       </span>
       <span class="app-foot"><span class="app-meta" id="wheelMeta"></span><span class="app-go">Крутить <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></span></span>
+    </a>
+    <a class="app" href="/tier/">
+      <span class="glow" aria-hidden="true"><i></i></span>
+      <span class="pv pv-tiers" aria-hidden="true"><span class="pv-tier"><i style="background:#43C97A"></i><span><b style="--j:0"></b><b style="--j:1"></b><b style="--j:2"></b></span></span><span class="pv-tier"><i style="background:#F2BA44"></i><span><b style="--j:0"></b><b style="--j:1"></b><b style="--j:2"></b><b style="--j:3"></b><b style="--j:4"></b></span></span><span class="pv-tier"><i style="background:#F28E4C"></i><span><b style="--j:0"></b><b style="--j:1"></b></span></span><span class="pv-tier"><i style="background:#F26A55"></i><span><b style="--j:0"></b><b style="--j:1"></b><b style="--j:2"></b><b style="--j:3"></b></span></span></span>
+      <span class="app-icon" aria-hidden="true"><svg viewBox="0 0 256 256"><rect width="256" height="256" rx="58" fill="#14161C"/><rect x="36" y="44" width="52" height="48" rx="11" fill="#43C97A"/><rect x="100" y="44" width="120" height="48" rx="11" fill="#3A3F4B"/><rect x="36" y="104" width="52" height="48" rx="11" fill="#F2BA44"/><rect x="100" y="104" width="84" height="48" rx="11" fill="#3A3F4B"/><rect x="36" y="164" width="52" height="48" rx="11" fill="#F26A55"/><rect x="100" y="164" width="48" height="48" rx="11" fill="#3A3F4B"/></svg></span>
+      <span class="app-text">
+        <span class="app-name">Тир-листы Казуала</span>
+        <span class="app-desc">Как на TierMaker: свои картинки, текст, оценки или стикеры. Разложи по рядам и скачай картинкой.</span>
+      </span>
+      <span class="app-foot"><span class="app-meta" id="tierMeta"></span><span class="app-go">Собрать <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></span></span>
     </a>
   </section>
 

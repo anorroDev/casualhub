@@ -1,5 +1,5 @@
 /* Казуал Хаб: шапка без россыпи кнопок.
-   На виду остаются главная, «Мнение», «Колесо», «Друзья», профиль и кнопка ☰. В меню ☰ уезжают «Помощь»,
+   На виду остаются главная, «Мнение», «Колесо», «Тир-листы», «Друзья», профиль и кнопка ☰. В меню ☰ уезжают «Помощь»,
    «Тема», «⚙️ Настройки» (окно с импортом из Letterboxd и обновлением обложек) и GitHub. «Что нового» на широком экране стоит в самом углу страницы, на узком — тоже в меню.
    Кнопки переносятся целиком, поэтому их обработчики и счётчики (online.js, whatsnew.js) продолжают работать. */
 (() => {
@@ -30,8 +30,9 @@
 .hm-all .hm-go { margin-left: auto; font-size: 18px; line-height: 1; opacity: .55; }
 /* на узком экране «Мнение» и «Колесо» — только значки, чтобы шапка помещалась в одну строку */
 @media (max-width: 480px) { .hm-nav .hm-t, .hm-nav .t, .hm-fr .fb-t { display: none !important; } .hm-nav, .hm-fr { padding: 0 11px !important; } }
-/* узкий телефон: «← Хаб» только стрелкой, чтобы «Друзья», профиль и ☰ поместились в одну строку */
-@media (max-width: 400px) { #homeLink, #backLink, header .pill[href="/"] { width: 36px; min-width: 36px; padding: 0 !important; font-size: 0 !important; justify-content: center; } }
+/* телефон: «← Хаб» только стрелкой, а на самых узких ещё и без счётчика, чтобы разделы, «Друзья», профиль и ☰ поместились в одну строку */
+@media (max-width: 400px) { .oc-mini { display: none !important; } #homeLink, #backLink, header .pill[href="/"] { margin-right: auto !important; } }
+@media (max-width: 480px) { #homeLink, #backLink, header .pill[href="/"] { width: 36px; min-width: 36px; padding: 0 !important; font-size: 0 !important; justify-content: center; } }
 /* у гостя на главной «Регистрация» на телефоне не помещается — она есть в окне «Войти» */
 @media (max-width: 480px) { #account a[href="/opinion/#reg"] { display: none !important; } }
 /* сколько людей на сайте: слева в шапке, только кружок и число (подпись — во всплывающей подсказке) */
@@ -80,8 +81,9 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
   const ICON = {
     '/opinion/': '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1.5" y="9" width="3.4" height="5.5" rx="1" fill="#E4553F"/><rect x="6.3" y="6" width="3.4" height="8.5" rx="1" fill="#EAA92C"/><rect x="11.1" y="2" width="3.4" height="12.5" rx="1" fill="#2EAD60"/></svg>',
     '/wheel/': '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="#3550E8"/><path d="M8 8V1.5A6.5 6.5 0 0 1 14.5 8z" fill="#EAA92C"/><path d="M8 8h6.5A6.5 6.5 0 0 1 8 14.5z" fill="#2EAD60"/><circle cx="8" cy="8" r="1.8" fill="#fff"/></svg>',
+    '/tier/': '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1" y="1.5" width="4" height="3.6" rx="1" fill="#2EAD60"/><rect x="6" y="1.5" width="9" height="3.6" rx="1" fill="currentColor" opacity=".55"/><rect x="1" y="6.2" width="4" height="3.6" rx="1" fill="#EAA92C"/><rect x="6" y="6.2" width="6" height="3.6" rx="1" fill="currentColor" opacity=".55"/><rect x="1" y="10.9" width="4" height="3.6" rx="1" fill="#E4553F"/><rect x="6" y="10.9" width="3" height="3.6" rx="1" fill="currentColor" opacity=".55"/></svg>',
   };
-  const NAMES = { '/opinion/': 'Мнение', '/wheel/': 'Колесо' };
+  const NAMES = { '/opinion/': 'Мнение', '/wheel/': 'Колесо', '/tier/': 'Тир-листы' };
   // окно «Настройки»: разделы и пункты. Новая настройка — ещё один пункт здесь.
   // href — куда вести со страниц, где пункт сам не работает; attr — атрибут, по которому его ловит Мнение
   const SETTINGS = [
@@ -150,8 +152,8 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     const cls = twin && /\bpill\b/.test(twin.className) ? 'pill' : 'theme-btn';
     const here = location.pathname.replace(/index\.html$/, '');
 
-    // «Мнение» и «Колесо» всегда на виду (кроме страницы, где ты уже находишься), с подписью
-    ['/opinion/', '/wheel/'].forEach((href) => {
+    // «Мнение», «Колесо» и «Тир-листы» всегда на виду (кроме страницы, где ты уже находишься), с подписью
+    ['/opinion/', '/wheel/', '/tier/'].forEach((href) => {
       let a = bar.querySelector(`a[href="${href}"]`);
       if (here.startsWith(href)) return;
       if (!a) {

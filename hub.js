@@ -35,6 +35,8 @@
   const items = wheel && Array.isArray(wheel.items) ? wheel.items : [];
   const alive = items.filter((i) => !i.out).length;
   const total = items.length;
+  const tierCount = (() => { try { const d = JSON.parse(localStorage.getItem('casualhub.tierlists.v1') || 'null'); return d && Array.isArray(d.lists) ? d.lists.length : 0; } catch (e) { return 0; } })();
+  $('#tierMeta').innerHTML = tierCount ? chip(tierCount, plural(tierCount, 'тир-лист', 'тир-листа', 'тир-листов')) : chip('', 'Пока нет своих');
   $('#wheelMeta').innerHTML = total
     ? chip(alive, plural(alive, 'участник', 'участника', 'участников') + (alive < total ? ` из ${total}` : '') + ' на колесе')
     : '<span class="chip">Колесо пустое</span>';
