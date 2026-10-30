@@ -102,13 +102,11 @@
   nameEl.textContent = under();
   let watching = false;
   const watch = () => {
-    let last = under(), shownAt = 0;
+    let last = under();
     const loop = () => {
       const s = under();
       if (s !== last) { last = s; flick(); }
-      // на большой скорости имена мелькали бы и резали глаза: новое не чаще раза в полсекунды, точное — когда колесо встанет
-      const now = performance.now();
-      if (last !== nameEl.textContent && now - shownAt >= 500) { shownAt = now; showName(last); }
+      // имя пока колесо крутится не меняем, иначе мелькает и режет глаза: новое появится, когда оно встанет
       if (watching) requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
