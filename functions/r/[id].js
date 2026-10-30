@@ -60,7 +60,7 @@ body { min-height: 100vh; background: var(--bg); color: var(--ink); font: 400 16
   padding: max(16px, env(safe-area-inset-top)) 16px 40px; display: grid; justify-items: center; }
 .wrap { width: min(620px, 100%); display: grid; gap: 14px; }
 .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.brand { font-family: Handjet, Onest, sans-serif; font-weight: 800; font-size: 26px; color: var(--ink); text-decoration: none; }
+.brand { font-family: Handjet, Onest, sans-serif; font-weight: 800; font-size: 26px; color: var(--ink); text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
 .pill { display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); text-decoration: none; font-weight: 600; font-size: 14px; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 20px; display: grid; gap: 16px; animation: rise .6s cubic-bezier(.34, 1.56, .64, 1) both; }
 @keyframes rise { from { transform: translateY(18px) scale(.985); } }
@@ -106,14 +106,15 @@ function page(T, title, body, meta) {
 <meta name="robots" content="noindex, nofollow">
 <title>${esc(title)}</title>
 ${meta || ''}
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
+<link rel="icon" href="/favicon.ico?v=2" sizes="48x48">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Handjet:wght@600..800&family=Onest:wght@400..700&display=swap">
 <style>${CSS}</style>
 </head>
 <body><div class="wrap">
-<div class="top"><a class="brand" href="/">casualhub</a><a class="pill" href="/opinion/">${T.opinion}</a></div>
+<div class="top"><a class="brand" href="/"><svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#14161C"/><g fill="none" stroke-width="5"><path d="M9.21 24.19A9.6 9.6 0 0 1 8.75 11.1" stroke="#F26A55"/><path d="M9.45 10.38A9.6 9.6 0 0 1 22.55 10.38" stroke="#F2BA44"/><path d="M23.25 11.1A9.6 9.6 0 0 1 22.79 24.19" stroke="#43C97A"/></g><g><path d="M16 17.4L22.28 13.48" fill="none" stroke="#E8EAF0" stroke-width="2.4" stroke-linecap="round"/><circle cx="16" cy="17.4" r="3" fill="#E8EAF0"/></g></svg>casualhub</a><a class="pill" href="/opinion/">${T.opinion}</a></div>
 ${body}
 <p class="foot">${T.foot}</p>
 </div></body></html>`;

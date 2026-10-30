@@ -80,7 +80,6 @@
   }
 
   // где лежит карточка: ряд S–D или '' (не распределена)
-  const rowOf = (id) => TIERS.find((t) => (S.rows[t.id] || []).includes(id));
   function moveTo(id, tier, beforeId) {
     TIERS.forEach((t) => { S.rows[t.id] = (S.rows[t.id] || []).filter((x) => x !== id); });
     if (tier) {

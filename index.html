@@ -5,9 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Казуал Хаб</title>
 <meta name="description" content="Казуал Хаб: Мнение Казуала для оценок всего подряд, и Колесо Казуала на выбывание, лента оценок друзей.">
-<link rel="icon" href="/favicon.ico" sizes="48x48">
-<link rel="icon" type="image/svg+xml" href="/favicon.svg">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="icon" href="/favicon.ico?v=2" sizes="48x48">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2">
 <link rel="manifest" href="/site.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -222,13 +222,12 @@ h1, h2, p { margin: 0; }
 .mark { display: inline-flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 700; font-size: 22px; text-decoration: none; letter-spacing: .02em; border-radius: 10px; }
 .mark svg { width: 32px; height: 32px; transition: transform .5s var(--spring); }
 .mark:hover svg { transform: rotate(-8deg) scale(1.08); }
-/* The pixel К assembles itself: stem, joint, then the arms */
-.mark svg g rect { transform-box: fill-box; transform-origin: 50% 50%; animation: px-in .5s var(--spring) backwards; }
-.mark svg g rect:nth-child(1) { transform-origin: 50% 100%; animation-delay: .1s; }
-.mark svg g rect:nth-child(2) { animation-delay: .22s; }
-.mark svg g rect:nth-child(3) { animation-delay: .3s; } .mark svg g rect:nth-child(4) { animation-delay: .36s; }
-.mark svg g rect:nth-child(5) { animation-delay: .3s; } .mark svg g rect:nth-child(6) { animation-delay: .36s; }
-@keyframes px-in { from { transform: scale(0); } }
+/* The logo assembles itself: the scale draws from red to green, then the needle swings over to green */
+.mark .lg-arc { stroke-dasharray: 1; animation: lg-draw .3s ease-out backwards; }
+.mark .lg-arc:nth-child(1) { animation-delay: .1s; } .mark .lg-arc:nth-child(2) { animation-delay: .25s; } .mark .lg-arc:nth-child(3) { animation-delay: .4s; }
+@keyframes lg-draw { from { stroke-dashoffset: 1; } }
+.mark .lg-needle { transform-box: view-box; transform-origin: 16px 17.4px; animation: lg-swing .8s var(--spring) .35s backwards; }
+@keyframes lg-swing { from { transform: rotate(-190deg); } }
 .online-chip { cursor: default; }
 .user-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; flex: 1 1 auto; } /* прижата вправо и под логотипом: кнопку «Что нового» не двигает то, что дорисовывается левее */
 #account { display: contents; }
@@ -535,7 +534,7 @@ h1, h2, p { margin: 0; }
 <div class="page">
   <header class="top">
     <a class="mark" href="/" aria-label="Казуал Хаб, главная">
-      <svg viewBox="0 0 16 16" aria-hidden="true"><rect width="16" height="16" rx="3.5" fill="#14161C"/><g shape-rendering="crispEdges"><rect x="3" y="3" width="2" height="10" fill="#E8EAF0"/><rect x="5" y="7" width="4" height="2" fill="#F2BA44"/><rect x="9" y="5" width="2" height="2" fill="#43C97A"/><rect x="11" y="3" width="2" height="2" fill="#43C97A"/><rect x="9" y="9" width="2" height="2" fill="#F26A55"/><rect x="11" y="11" width="2" height="2" fill="#F26A55"/></g></svg>
+      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#14161C"/><g fill="none" stroke-width="5"><path class="lg-arc" pathLength="1" d="M9.21 24.19A9.6 9.6 0 0 1 8.75 11.1" stroke="#F26A55"/><path class="lg-arc" pathLength="1" d="M9.45 10.38A9.6 9.6 0 0 1 22.55 10.38" stroke="#F2BA44"/><path class="lg-arc" pathLength="1" d="M23.25 11.1A9.6 9.6 0 0 1 22.79 24.19" stroke="#43C97A"/></g><g class="lg-needle"><path d="M16 17.4L22.28 13.48" fill="none" stroke="#E8EAF0" stroke-width="2.4" stroke-linecap="round"/><circle cx="16" cy="17.4" r="3" fill="#E8EAF0"/></g></svg>
       casualhub
     </a>
     <div class="user-bar">

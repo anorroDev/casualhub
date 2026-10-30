@@ -12,6 +12,19 @@
 /.gitignore   /  302
 /functions/*  /  302
 /OWNER-NOTES.local.md  /  302
+# убранные повторы стикеров: у кого такой остался в профиле, увидит оставшийся вариант
+/wheel/hub/papich/papich-013.webp  /wheel/hub/papich/papich-005.webp  301
+/wheel/hub/papich/papich-025.webp  /wheel/hub/papich/papich-008.webp  301
+/wheel/hub/papich/papich-034.webp  /wheel/hub/papich/papich-018.webp  301
+/wheel/hub/papich/papich-052.webp  /wheel/hub/papich/papich-008.webp  301
+/wheel/hub/papich/papich-060.webp  /wheel/hub/papich/papich-059.webp  301
+/wheel/hub/papich/papich-082.webp  /wheel/hub/papich/papich-006.webp  301
+/wheel/hub/roflan/roflan-005.png  /wheel/hub/roflan/roflan-001.png  301
+/wheel/hub/roflan/roflan-009.webp  /wheel/hub/roflan/roflan-001.png  301
+/wheel/hub/roflan/roflan-011.webp  /wheel/hub/roflan/roflan-003.png  301
+/wheel/hub/roflan/roflan-014.webp  /wheel/hub/roflan/roflan-008.webp  301
+/wheel/hub/roflan/roflan-033.webp  /wheel/hub/roflan/roflan-024.webp  301
+/wheel/hub/roflan/roflan-176.webp  /wheel/hub/roflan/roflan-104.png  301
 # короткая ссылка на профиль: /u/<@юзернейм или ник> показывает /profile/ (адрес в браузере остаётся /u/…)
 /u/*  /profile/  200
 # SPA fallback rule for Cloudflare Pages

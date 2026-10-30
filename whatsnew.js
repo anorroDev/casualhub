@@ -6,7 +6,8 @@
 
   function load() {
     if (!cache) {
-      cache = fetch('/whatsnew', { cache: 'no-cache' }) // Cloudflare отдаёт whatsnew.html по адресу без .html
+      // Cloudflare отдаёт whatsnew.html по адресу без .html; в английской версии свой файл
+      cache = fetch(document.documentElement.lang === 'en' ? '/whatsnew-en' : '/whatsnew', { cache: 'no-cache' })
         .then((r) => (r.ok ? r.text() : Promise.reject(new Error(r.status))))
         .then((html) => {
           const box = document.createElement('div');
@@ -106,8 +107,7 @@
     document.documentElement.style.overflow = 'hidden'; // страница под окном не прокручивается
     s.querySelector('.wn-x').focus({ preventScroll: true });
     load().then((d) => {
-      const note = document.documentElement.lang === 'en' ? '<p class="wn-msg">The changelog is available in Russian only.</p>' : '';
-      s.querySelector('#wnBody').innerHTML = note + d.html;
+      s.querySelector('#wnBody').innerHTML = d.html;
       s.querySelector('#wnBody').scrollTop = 0;
       s.querySelector('#wnStat').textContent = d.stat;
       markSeen(d.latest);
