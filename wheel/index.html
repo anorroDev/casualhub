@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<link rel="icon" type="image/svg+xml" href="/koleso/favicon.svg">
+<link rel="icon" type="image/svg+xml" href="/wheel/favicon.svg">
 <style>
 :root{color-scheme:light;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
 html{scroll-padding-top:env(safe-area-inset-top,0px)}
@@ -15,7 +15,8 @@ img{max-width:100%}
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Handjet:wght@400..800&family=Onest:wght@400..700&display=block">
-<script src="/koleso/head.js"></script>
+<script src="/i18n.js"></script>
+<script src="/wheel/head.js"></script>
 <style>
 /* Layout: the rater's two-panel console. Wheel stage with a status bar on the left, participants board on the right; one section at a time on phones. */
 :root {
@@ -152,7 +153,7 @@ img{max-width:100%}
   --on-accent: var(--on-tier);
   color-scheme: dark;
 }
-/* Motion shared by all Casual Hub pages (same block in /index.html and mnenie/index.html) */
+/* Motion shared by all Casual Hub pages (same block in /index.html and opinion/index.html) */
 /* Between pages the page slides sideways, no fading: forward to the left, back to the right */
 @view-transition { navigation: auto; }
 ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
@@ -664,9 +665,9 @@ html::after {
 }
 .theme-btn:hover { box-shadow: 0 6px 18px -10px color-mix(in srgb, var(--accent) 60%, transparent); }
 #backLink:hover { transform: translateX(-2px); }
-#mnenieLink svg rect { transform-box: fill-box; transform-origin: 50% 100%; transition: transform .35s var(--spring); }
-#mnenieLink:hover svg rect:nth-child(2) { transform: scaleY(1.2); }
-#mnenieLink:hover svg rect:nth-child(3) { transform: scaleY(.8); }
+#opinionLink svg rect { transform-box: fill-box; transform-origin: 50% 100%; transition: transform .35s var(--spring); }
+#opinionLink:hover svg rect:nth-child(2) { transform: scaleY(1.2); }
+#opinionLink:hover svg rect:nth-child(3) { transform: scaleY(.8); }
 .scale span { background: color-mix(in srgb, var(--panel) 92%, transparent); }
 .theme-menu { border-radius: 16px; transform-origin: 90% 0; box-shadow: 0 24px 50px -20px color-mix(in srgb, var(--ink) 55%, transparent); }
 .theme-pick[open] .theme-menu { animation: menu-in .26s var(--spring) both; }
@@ -678,7 +679,7 @@ html.theme-swap::view-transition-new(root) { animation: theme-circle .6s cubic-b
 @keyframes theme-circle { from { clip-path: circle(0 at var(--tx, 50%) var(--ty, 0)); } to { clip-path: circle(150vmax at var(--tx, 50%) var(--ty, 0)); } }
 @media (max-width: 560px) {
   #themeBtn span, .ml-text, .hl-full, .wn-text { display: none; }
-  #themeBtn, #mnenieLink, #whatsNewBtn { width: 36px; padding: 0; }
+  #themeBtn, #opinionLink, #whatsNewBtn { width: 36px; padding: 0; }
   #githubLink { display: none; }
   .masthead { gap: 18px; }
   .masthead-right > .user-bar { flex-wrap: nowrap; gap: 6px; }
@@ -859,10 +860,10 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     <div class="masthead-right">
       <div class="user-bar">
         <a class="theme-btn" id="backLink" href="/" aria-label="Казуал Хаб, главная"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 8H3M7 4L3 8l4 4"/></svg><span class="hl-full">Казуал </span>Хаб</a>
-        <a class="theme-btn" id="mnenieLink" href="/mnenie/" title="Мнение Казуала"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1.5" y="9" width="3.4" height="5.5" rx="1" fill="#E4553F"/><rect x="6.3" y="6" width="3.4" height="8.5" rx="1" fill="#EAA92C"/><rect x="11.1" y="2.5" width="3.4" height="12" rx="1" fill="#2EAD60"/></svg><span class="ml-text">Мнение</span></a>
+        <a class="theme-btn" id="opinionLink" href="/opinion/" title="Мнение Казуала"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1.5" y="9" width="3.4" height="5.5" rx="1" fill="#E4553F"/><rect x="6.3" y="6" width="3.4" height="8.5" rx="1" fill="#EAA92C"/><rect x="11.1" y="2.5" width="3.4" height="12" rx="1" fill="#2EAD60"/></svg><span class="ml-text">Мнение</span></a>
         <a class="theme-btn" id="githubLink" href="https://github.com/anorroDev/casualhub" target="_blank" rel="noopener" title="Код сайта на GitHub"><svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a>
         <span class="theme-btn online-chip" data-online-count title="Сколько людей сейчас на сайте: с аккаунтом и гости"><em aria-hidden="true"></em><b>—</b><span class="oc-t">&nbsp;на сайте</span></span>
-        <a class="theme-btn fr-btn" href="/mnenie/#friends" data-friends-btn title="Друзья"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="5.5" r="2.5"/><path d="M1.5 14c.6-2.6 2.3-4 4.5-4s3.9 1.4 4.5 4"/><path d="M10.5 3.2a2.5 2.5 0 0 1 0 4.6M12.5 10.3c1 .6 1.7 1.9 2 3.7"/></svg><span class="fb-t">Друзья</span><i class="fb-n fb-on" hidden></i><i class="fb-n fb-req" hidden></i></a>
+        <a class="theme-btn fr-btn" href="/opinion/#friends" data-friends-btn title="Друзья"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="5.5" r="2.5"/><path d="M1.5 14c.6-2.6 2.3-4 4.5-4s3.9 1.4 4.5 4"/><path d="M10.5 3.2a2.5 2.5 0 0 1 0 4.6M12.5 10.3c1 .6 1.7 1.9 2 3.7"/></svg><span class="fb-t">Друзья</span><i class="fb-n fb-on" hidden></i><i class="fb-n fb-req" hidden></i></a>
         <button type="button" class="theme-btn howto-btn" id="howtoBtn" title="Как пользоваться"><span aria-hidden="true">❓</span><span class="hb-t">Помощь</span></button>
         <details class="theme-pick" id="themePick">
           <summary class="theme-btn" id="themeBtn" title="Тема оформления">🌓 Тема: Авто</summary>
@@ -1086,7 +1087,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
 <script src="/themes.js"></script>
 <script src="/fx.js"></script>
 <script src="/howto.js"></script>
-<script src="/koleso/app.js"></script>
-<script src="/koleso/motion.js"></script>
+<script src="/wheel/app.js"></script>
+<script src="/wheel/motion.js"></script>
 </body>
 </html>

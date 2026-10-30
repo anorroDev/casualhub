@@ -215,7 +215,7 @@
     if (typeof toast === 'function') toast(changed ? `Обновлено: ${changed} из ${done}` : 'Менять нечего — всё уже на месте');
   }
 
-  // пункт «Обновить» в меню ☰ и ссылка /mnenie/#refresh
+  // пункт «Обновить» в меню ☰ и ссылка /opinion/#refresh
   document.addEventListener('click', (e) => { if (e.target.closest('[data-refresh-open]')) { e.preventDefault(); open(); } });
   window.CasualRefresh = { open };
 })();

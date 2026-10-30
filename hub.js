@@ -26,16 +26,16 @@
   // ---------- что лежит в разделах ----------
   const ratings = (read('ocenshik.ratings.v2') || []).filter((r) => r && !r.example);
   const mine = user ? ratings.filter((r) => r.author && r.author.id === user.id) : ratings;
-  const mMeta = $('#mnenieMeta');
+  const mMeta = $('#opinionMeta');
   mMeta.innerHTML = '<span id="mnCount" style="display:contents"></span>';
-  const renderMnCount = (n) => { $('#mnCount').innerHTML = n ? chip(n, plural(n, 'оценка', 'оценки', 'оценок'), 'go', '/mnenie/#rating') : '<span class="chip">Пока ни одной оценки</span>'; };
+  const renderMnCount = (n) => { $('#mnCount').innerHTML = n ? chip(n, plural(n, 'оценка', 'оценки', 'оценок'), 'go', '/opinion/#rating') : '<span class="chip">Пока ни одной оценки</span>'; };
   renderMnCount(mine.length);
 
   const wheel = read('koleso-vybyvanie-v1');
   const items = wheel && Array.isArray(wheel.items) ? wheel.items : [];
   const alive = items.filter((i) => !i.out).length;
   const total = items.length;
-  $('#kolesoMeta').innerHTML = total
+  $('#wheelMeta').innerHTML = total
     ? chip(alive, plural(alive, 'участник', 'участника', 'участников') + (alive < total ? ` из ${total}` : '') + ' на колесе')
     : '<span class="chip">Колесо пустое</span>';
 
@@ -48,7 +48,7 @@
   // своих оценок меньше трёх: пустые места ждут следующих
   const ghosts = Array.from({ length: 3 - rows.length }, (_, g) => `<span class="pv-row ghost" style="--k:${rows.length + g}"><span class="pv-rank">${rows.length + g + 1}</span><span class="pv-name">${g ? '…' : 'Следующая оценка'}</span><span class="pv-bar">${barsOf(0)}</span><span class="pv-badge">—</span></span>`).join('');
   $('#mnPreview').innerHTML = (top.length ? '<span class="pv-tag">твой топ</span>' : '<span class="pv-tag">пример</span>')
-    + rows.map((r, k) => `<span class="pv-row" data-tier="${tierT(r.t)}" style="--k:${k}"${r.id ? ` data-go="/mnenie/#r=${encodeURIComponent(r.id)}" title="Открыть оценку «${esc(r.name)}»"` : ''}><span class="pv-rank">${k + 1}</span><span class="pv-name">${esc(r.name)}</span><span class="pv-bar">${barsOf(Math.round(r.t))}</span><span class="pv-badge">${fmt(r.t)}</span></span>`).join('')
+    + rows.map((r, k) => `<span class="pv-row" data-tier="${tierT(r.t)}" style="--k:${k}"${r.id ? ` data-go="/opinion/#r=${encodeURIComponent(r.id)}" title="Открыть оценку «${esc(r.name)}»"` : ''}><span class="pv-rank">${k + 1}</span><span class="pv-name">${esc(r.name)}</span><span class="pv-bar">${barsOf(Math.round(r.t))}</span><span class="pv-badge">${fmt(r.t)}</span></span>`).join('')
     + ghosts;
   }
   renderMnPreview(mine);
@@ -118,8 +118,8 @@
     spinAnim.onfinish = () => { watching = false; showName(under()); if (idle) idle.play(); };
     if (!watching) { watching = true; watch(); }
   };
-  const kolesoCard = document.querySelector('.app[href="/koleso/"]');
-  kolesoCard.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') spin(); });
+  const wheelCard = document.querySelector('.app[href="/wheel/"]');
+  wheelCard.addEventListener('pointerenter', (e) => { if (e.pointerType === 'mouse') spin(); });
   // на телефоне наводить нечем: колесо крутится само, когда показывается на экране
   if (!matchMedia('(hover: hover)').matches && 'IntersectionObserver' in window) {
     new IntersectionObserver((es) => es.forEach((en) => { if (en.isIntersecting) spin(); }), { threshold: 0.7 }).observe(document.getElementById('wheel'));
@@ -212,7 +212,7 @@
       const x = it.react;
       const ico = (x.emoji && RXI[x.emoji]) || '';
       const what = x.emoji === 'nope' ? '🙅 «не согласен» на твою оценку' : ico ? `${ico} на твою оценку` : '💬 комментарий к твоей оценке';
-      return `<li><a class="fd" href="/mnenie/#r=${encodeURIComponent(x.rid)}" title="Открыть твою оценку">
+      return `<li><a class="fd" href="/opinion/#r=${encodeURIComponent(x.rid)}" title="Открыть твою оценку">
         <span class="fd-pic rx" style="--fc:${colorOf(it.user.id)}">${ico || '💬'}</span>
         <span class="fd-text"><b>${who}: ${esc(what)}</b><span>«${esc(x.name)}»${x.text ? ' · ' + esc(x.text) : ''} · ${ago(it.at)}</span></span>
         <span class="fd-score none">открыть</span></a></li>`;
@@ -220,7 +220,7 @@
     // друг написал мне: на стене профиля или под моей оценкой
     if (it.kind === 'comment') {
       const x = it.comment;
-      const href = x.rid ? `/mnenie/#r=${encodeURIComponent(x.rid)}` : '/profile/#wallSec';
+      const href = x.rid ? `/opinion/#r=${encodeURIComponent(x.rid)}` : '/profile/#wallSec';
       return `<li><a class="fd" href="${href}" title="${x.rid ? 'Открыть оценку' : 'Открыть стену профиля'}">
         <span class="fd-pic rx" style="--fc:${colorOf(it.user.id)}">💬</span>
         <span class="fd-text"><b>${who}: ${x.rid ? `комментарий к «${esc(x.name)}»` : 'написал на твоей стене'}</b><span>${esc(x.text)} · ${ago(it.at)}</span></span>
@@ -232,7 +232,7 @@
       : r.photo && r.photo.remote ? '' : esc(String(r.name).charAt(0));
     const rx = it.reacts ? Object.keys(RXI).map((k) => (it.reacts[k] ? RXI[k] + it.reacts[k] : '')).concat(it.reacts.text ? ['💬' + it.reacts.text] : []).filter(Boolean).join(' ') : '';
     const meta = [`<em>${who}</em>`, r.cat && esc(r.cat), r.status && esc(r.status), rx, ago(it.at)].filter(Boolean).join(' · ');
-    return `<li><a class="fd" href="/mnenie/#friend=${encodeURIComponent(it.user.id)}&r=${encodeURIComponent(r.id)}" title="Открыть оценку у ${who}">
+    return `<li><a class="fd" href="/opinion/#friend=${encodeURIComponent(it.user.id)}&r=${encodeURIComponent(r.id)}" title="Открыть оценку у ${who}">
       <span class="fd-pic" style="--fc:${colorOf(r.id || r.name)}"${r.photo && r.photo.remote ? ` data-ph="${esc(it.user.id + '|' + r.id)}"` : ''}>${pic || esc(String(r.name).charAt(0))}</span>
       <span class="fd-text"><b>${r.fav ? '★ ' : ''}${esc(r.name)}</b><span>${meta}</span></span>
       ${r.total != null ? `<span class="fd-score" data-tier="${tierT(r.total)}">${fmt(r.total)}</span>` : '<span class="fd-score none">без оценки</span>'}</a></li>`;
@@ -308,9 +308,9 @@
         const f = d.friends.length, inc = d.incoming.length;
         d.friends.forEach((x) => hubFriends.set(x.id, x.username));
         renderOnline();
-        if (f) mMeta.insertAdjacentHTML('beforeend', chip(f, plural(f, 'друг', 'друга', 'друзей'), 'go', '/mnenie/#friends'));
+        if (f) mMeta.insertAdjacentHTML('beforeend', chip(f, plural(f, 'друг', 'друга', 'друзей'), 'go', '/opinion/#friends'));
         if (inc) {
-          mMeta.insertAdjacentHTML('beforeend', chip(inc, plural(inc, 'заявка', 'заявки', 'заявок') + ' в друзья', 'alert go', '/mnenie/#friends'));
+          mMeta.insertAdjacentHTML('beforeend', chip(inc, plural(inc, 'заявка', 'заявки', 'заявок') + ' в друзья', 'alert go', '/opinion/#friends'));
           const dot = $('#reqDot');
           if (dot) { dot.textContent = inc; dot.hidden = false; }
         }
@@ -325,7 +325,7 @@
         const feed = $('#feed');
         feed.hidden = false;
         if (!d.friends) {
-          $('#feedList').innerHTML = '<li class="feed-empty">Тут появятся оценки друзей. <a href="/mnenie/">Добавь друзей в Мнении Казуала</a> через кнопку «👥 Друзья».</li>';
+          $('#feedList').innerHTML = '<li class="feed-empty">Тут появятся оценки друзей. <a href="/opinion/">Добавь друзей в Мнении Казуала</a> через кнопку «👥 Друзья».</li>';
           return;
         }
         if (!d.items.length) { $('#feedList').innerHTML = '<li class="feed-empty">Друзья пока ничего не оценили.</li>'; return; }

@@ -1,3 +1,17 @@
+# разделы переехали: старые ссылки ведут на новые адреса
+/koleso      /wheel/        301
+/koleso/*    /wheel/:splat  301
+/mnenie      /opinion/      301
+/mnenie/*    /opinion/:splat 301
+# служебные файлы репозитория сайту не нужны
+/README.md    /  302
+/SECURITY.md  /  302
+/scheme.sql   /  302
+/wrangler.toml /  302
+/.github/*    /  302
+/.gitignore   /  302
+/functions/*  /  302
+/OWNER-NOTES.local.md  /  302
 # короткая ссылка на профиль: /u/<@юзернейм или ник> показывает /profile/ (адрес в браузере остаётся /u/…)
 /u/*  /profile/  200
 # SPA fallback rule for Cloudflare Pages

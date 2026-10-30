@@ -33,11 +33,12 @@
 /* узкий телефон: «← Хаб» только стрелкой, чтобы «Друзья», профиль и ☰ поместились в одну строку */
 @media (max-width: 400px) { #homeLink, #backLink, header .pill[href="/"] { width: 36px; min-width: 36px; padding: 0 !important; font-size: 0 !important; justify-content: center; } }
 /* у гостя на главной «Регистрация» на телефоне не помещается — она есть в окне «Войти» */
-@media (max-width: 480px) { #account a[href="/mnenie/#reg"] { display: none !important; } }
+@media (max-width: 480px) { #account a[href="/opinion/#reg"] { display: none !important; } }
 /* сколько людей на сайте: слева в шапке, только кружок и число (подпись — во всплывающей подсказке) */
 .oc-mini { flex: none; min-width: 0 !important; padding: 0 11px !important; gap: 7px !important; }
 .oc-mini .oc-t { display: none !important; }
 header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
+@media (max-width: 480px) { .oc-mini { padding: 0 9px !important; margin-left: 0 !important; } .top .sp { display: none; } .top .oc-mini { margin-right: auto; } }
 .wn-corner { position: absolute; top: 14px; right: 16px; z-index: 60; display: flex; align-items: center; gap: 8px; }
 .wn-corner .hm-admin { box-shadow: 0 10px 24px -14px rgba(0, 0, 0, .6); }
 .hm-admin { border-color: color-mix(in srgb, #E4553F 55%, var(--line, #2b2e38)) !important; color: var(--ink, #f3f4f6) !important; }
@@ -64,20 +65,31 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
 @media (prefers-reduced-motion: reduce) { .hs-card { animation: none; } }
 `;
   document.head.appendChild(css);
-  const MENU_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h11"/></svg>';
+  // ссылка на страницу, где ты уже находишься (кнопка своего профиля на своём профиле, логотип на главной):
+  // без перезагрузки и анимации перехода, только наверх страницы
+  document.addEventListener('click', (e) => {
+    if (e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+    const a = e.target.closest && e.target.closest('a[href]');
+    if (!a || a.hasAttribute('download') || (a.target && a.target !== '_self')) return;
+    const same = a.origin === location.origin && a.pathname === location.pathname && a.search === location.search && !a.hash;
+    if (!same && a.getAttribute('aria-current') !== 'page') return;
+    e.preventDefault();
+    window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  });
+  const MENU_ICON ='<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h11"/></svg>';
   const ICON = {
-    '/mnenie/': '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1.5" y="9" width="3.4" height="5.5" rx="1" fill="#E4553F"/><rect x="6.3" y="6" width="3.4" height="8.5" rx="1" fill="#EAA92C"/><rect x="11.1" y="2" width="3.4" height="12.5" rx="1" fill="#2EAD60"/></svg>',
-    '/koleso/': '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="#3550E8"/><path d="M8 8V1.5A6.5 6.5 0 0 1 14.5 8z" fill="#EAA92C"/><path d="M8 8h6.5A6.5 6.5 0 0 1 8 14.5z" fill="#2EAD60"/><circle cx="8" cy="8" r="1.8" fill="#fff"/></svg>',
+    '/opinion/': '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1.5" y="9" width="3.4" height="5.5" rx="1" fill="#E4553F"/><rect x="6.3" y="6" width="3.4" height="8.5" rx="1" fill="#EAA92C"/><rect x="11.1" y="2" width="3.4" height="12.5" rx="1" fill="#2EAD60"/></svg>',
+    '/wheel/': '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="#3550E8"/><path d="M8 8V1.5A6.5 6.5 0 0 1 14.5 8z" fill="#EAA92C"/><path d="M8 8h6.5A6.5 6.5 0 0 1 8 14.5z" fill="#2EAD60"/><circle cx="8" cy="8" r="1.8" fill="#fff"/></svg>',
   };
-  const NAMES = { '/mnenie/': 'Мнение', '/koleso/': 'Колесо' };
+  const NAMES = { '/opinion/': 'Мнение', '/wheel/': 'Колесо' };
   // окно «Настройки»: разделы и пункты. Новая настройка — ещё один пункт здесь.
   // href — куда вести со страниц, где пункт сам не работает; attr — атрибут, по которому его ловит Мнение
   const SETTINGS = [
     { title: 'Импорт', items: [
-      { icon: '🎬', name: 'Импорт из Letterboxd', desc: 'Перенести оценки фильмов из архива Letterboxd', href: '/mnenie/#letterboxd', attr: 'data-lb-open' },
+      { icon: '🎬', name: 'Импорт из Letterboxd', desc: 'Перенести оценки фильмов из архива Letterboxd', href: '/opinion/#letterboxd', attr: 'data-lb-open' },
     ] },
     { title: 'Обложки и названия', items: [
-      { icon: '🔄', name: 'Обновить обложки и названия', desc: 'Подтянуть к сохранённым оценкам обложки, русские названия, год и жанры', href: '/mnenie/#refresh', attr: 'data-refresh-open' },
+      { icon: '🔄', name: 'Обновить обложки и названия', desc: 'Подтянуть к сохранённым оценкам обложки, русские названия, год и жанры', href: '/opinion/#refresh', attr: 'data-refresh-open' },
     ] },
   ];
   const escH = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -139,7 +151,7 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     const here = location.pathname.replace(/index\.html$/, '');
 
     // «Мнение» и «Колесо» всегда на виду (кроме страницы, где ты уже находишься), с подписью
-    ['/mnenie/', '/koleso/'].forEach((href) => {
+    ['/opinion/', '/wheel/'].forEach((href) => {
       let a = bar.querySelector(`a[href="${href}"]`);
       if (here.startsWith(href)) return;
       if (!a) {
@@ -197,8 +209,19 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     set.innerHTML = '<span aria-hidden="true">⚙️</span><span class="hm-t">Настройки</span>';
     set.addEventListener('click', openSettings);
     panel.appendChild(set);
+    // язык сайта (i18n.js): кнопка называет тот язык, на который переключит
+    if (window.CasualLang) {
+      const en = window.CasualLang.lang === 'en';
+      const lang = document.createElement('button');
+      lang.type = 'button';
+      lang.className = cls + ' hm-lang';
+      lang.title = en ? 'Switch to Russian' : 'Switch to English';
+      lang.innerHTML = `<span aria-hidden="true">🌐</span><span class="hm-t">${en ? 'Русский' : 'English'}</span>`;
+      lang.addEventListener('click', () => window.CasualLang.set(en ? 'ru' : 'en'));
+      panel.appendChild(lang);
+    }
     // одинаковый порядок пунктов на всех страницах
-    ['#howtoBtn, .howto-btn', '.theme-pick', '.hm-set', 'a[href*="github.com"]'].forEach((sel) => { const el = panel.querySelector(`:scope > :is(${sel})`); if (el) panel.appendChild(el); });
+    ['#howtoBtn, .howto-btn', '.theme-pick', '.hm-lang', '.hm-set', 'a[href*="github.com"]'].forEach((sel) => { const el = panel.querySelector(`:scope > :is(${sel})`); if (el) panel.appendChild(el); });
     // «Все оценки» — самый первый пункт, в цветной рамке
     const all = document.createElement('a');
     all.className = cls + ' hm-all';

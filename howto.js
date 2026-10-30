@@ -6,7 +6,7 @@
   const KEY = 'casualhub.howto.v1';
   const path = location.pathname;
   // подсказка только на четырёх страницах сайта: на админке, странице отзыва и прочих её нет
-  const PAGE = path.startsWith('/mnenie') ? 'mnenie' : path.startsWith('/koleso') ? 'koleso' : path.startsWith('/profile') ? 'profile' : (path === '/' || path === '/index.html') ? 'hub' : '';
+  const PAGE = path.startsWith('/opinion') ? 'opinion' : path.startsWith('/wheel') ? 'wheel' : path.startsWith('/profile') ? 'profile' : (path === '/' || path === '/index.html') ? 'hub' : '';
   const STEPS = {
     hub: {
       title: 'Казуал Хаб',
@@ -16,7 +16,7 @@
         'Вверху кнопка аккаунта: <b>войди</b>, чтобы оценки были на всех твоих устройствах и их видели друзья. Рядом — «Друзья», а в меню <b>☰</b> — тема и эта подсказка',
       ],
     },
-    mnenie: {
+    opinion: {
       title: 'Мнение Казуала',
       steps: [
         'Выбери <b>категорию</b> и напиши, что оцениваешь: игру, фильм, кафе — что угодно',
@@ -24,7 +24,7 @@
         'Жми <b>«Сохранить»</b> внизу — оценка появится в рейтинге. Друзья смогут поставить реакцию и написать комментарий',
       ],
     },
-    koleso: {
+    wheel: {
       title: 'Колесо Казуала',
       steps: [
         'Впиши участника в поле <b>«Имя или название»</b> и жми <b>«Добавить»</b>, или вставь сразу всех через <b>«Вставить списком»</b>. На телефоне это вкладка <b>«👥 Участники»</b>',
@@ -174,7 +174,7 @@ body.howto-lock { overflow: hidden; }
     const otherOpen = () => [...document.querySelectorAll('[role="dialog"], dialog[open]')].some((d) => d.id !== 'howto' && d.getClientRects().length && getComputedStyle(d).visibility !== 'hidden');
     // само окно — только новичкам: гостю без аккаунта и только пока на этой странице его ещё не закрывали
     const hasAccount = (() => { try { const u = JSON.parse(localStorage.getItem('ocenshik.user.v1') || 'null'); return !!(u && u.name); } catch (e) { return false; } })();
-    if (!read()[PAGE] && !hasAccount) setTimeout(() => { if (modal.hidden && !otherOpen()) open(); }, calm ? 200 : 900);
+    if (!read()[PAGE] && !read()[{ opinion: 'mnenie', wheel: 'koleso' }[PAGE]] && !hasAccount) setTimeout(() => { if (modal.hidden && !otherOpen()) open(); }, calm ? 200 : 900);
 
     // круглая «❓» видна, когда шапка (кнопка «Помощь» или меню ☰) уехала за экран; держится над нижними панелями
     let q = false;

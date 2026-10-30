@@ -389,7 +389,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   const keepSticker = (st) => { try { const all = read(STICKER_KEY) || {}; all[hideOwner()] = st; localStorage.setItem(STICKER_KEY, JSON.stringify(all)); } catch (e) {} };
   // старые iPhone не играют WebM: рядом лежит тот же ролик в MP4
   const WEBM_OK = (() => { try { return !!document.createElement('video').canPlayType('video/webm; codecs="vp9"'); } catch (e) { return false; } })();
-  const stUrl = (src) => '/koleso/' + (WEBM_OK ? src : String(src).replace(/\.webm$/i, '.mp4'));
+  const stUrl = (src) => '/wheel/' + (WEBM_OK ? src : String(src).replace(/\.webm$/i, '.mp4'));
   const isVid = (src) => /\.webm$/i.test(src);
   const stMedia = (src, lazy) => (isVid(src)
     ? `<video ${lazy ? 'data-src' : 'src'}="${esc(stUrl(src))}" muted loop playsinline${lazy ? '' : ' autoplay'}></video>`
@@ -427,7 +427,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     document.body.style.overflow = 'hidden';
     box.querySelector('.st-x').focus({ preventScroll: true });
     if (stCatalog) return fillPicker();
-    fetch('/koleso/hub/index.json').then((r) => r.json()).then((d) => { stCatalog = d.groups || []; fillPicker(); })
+    fetch('/wheel/hub/index.json').then((r) => r.json()).then((d) => { stCatalog = d.groups || []; fillPicker(); })
       .catch(() => { box.querySelector('.st-grid').innerHTML = '<p class="muted">Стикеры не загрузились, попробуй ещё раз.</p>'; });
   }
   function fillPicker() {
@@ -1459,7 +1459,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       : `<div class="rd-tools"><button type="button" class="btn primary rd-edit" data-rd="edit">${RD_IC.edit}Изменить</button><span class="rd-ib">
         <button type="button" class="rd-i fav${r.fav ? ' on' : ''}" data-rd="fav" aria-pressed="${r.fav}" title="${r.fav ? 'Убрать из избранного' : 'В избранное'}" aria-label="${r.fav ? 'Убрать из избранного' : 'В избранное'}">${RD_IC.star}</button>
         ${token && p.uid ? `<button type="button" class="rd-i" data-rd="link" title="Поделиться ссылкой: отзыв увидит кто угодно, даже без аккаунта" aria-label="Поделиться ссылкой">${RD_IC.link}</button>` : ''}
-        <a class="rd-i" href="/mnenie/#r=${encodeURIComponent(r.id)}&amp;share=1" title="Картинка или текст: откроется в Мнении" aria-label="Картинка или текст">${RD_IC.share}</a></span></div>`;
+        <a class="rd-i" href="/opinion/#r=${encodeURIComponent(r.id)}&amp;share=1" title="Картинка или текст: откроется в Мнении" aria-label="Картинка или текст">${RD_IC.share}</a></span></div>`;
     rdBox.innerHTML = `<article class="rd-card${ed ? ' editing' : ''}" data-tier="${tierT(total)}">
       <button type="button" class="st-x rd-x" data-rd="close" aria-label="Закрыть">✕</button>
       ${r.photo ? `<div class="rd-pic" id="rdPic"><span class="ltr">${letter(r.name)}</span>${lbm(r)}</div>` : ''}
@@ -1507,7 +1507,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   // любая ссылка на оценку в профиле (список, «Любимое», витрины, все оценки) открывает карточку;
   // с Ctrl, Shift или средней кнопкой ссылка по-прежнему открывается в Мнении
   document.addEventListener('click', (e) => {
-    const a = e.target.closest('#app a[href^="/mnenie/#"]');
+    const a = e.target.closest('#app a[href^="/opinion/#"]');
     if (!a || !curP || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     const id = new URLSearchParams((a.getAttribute('href').split('#')[1]) || '').get('r');
     const r = id && curP.ratings.find((x) => x.id === id);
@@ -1571,7 +1571,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
             <div class="chips genre-chips" id="genreChips" hidden></div>
             <div class="list" id="list"></div>
             <button type="button" class="btn ghost more" id="more" hidden>Показать ещё</button>`
-            : `<div class="empty"><p class="muted"><strong>${isMe ? 'Тут появятся твои оценки.' : 'У друга пока нет оценок.'}</strong> ${isMe ? 'Оцени игру, фильм или любимую кофейню в Мнении Казуала, и профиль оживёт.' : 'Как только он что-нибудь оценит, оценки появятся здесь.'}</p>${isMe ? '<a class="btn primary" href="/mnenie/">Оценить первое</a>' : ''}</div>`}
+            : `<div class="empty"><p class="muted"><strong>${isMe ? 'Тут появятся твои оценки.' : 'У друга пока нет оценок.'}</strong> ${isMe ? 'Оцени игру, фильм или любимую кофейню в Мнении Казуала, и профиль оживёт.' : 'Как только он что-нибудь оценит, оценки появятся здесь.'}</p>${isMe ? '<a class="btn primary" href="/opinion/">Оценить первое</a>' : ''}</div>`}
           </section>`;
     if (p.badges) {
       const got = p.badges.filter((b) => b.got).length, pc = Math.round((got / Math.max(1, p.badges.length)) * 100), shown = got + 4;
@@ -1595,7 +1595,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
                 <span class="av" data-uid="${esc(f.id)}" style="background-color:${colorOf(f.username)}">${letter(f.username)}</span>
                 <span class="tx"><b>${esc(f.username)} <i class="on-dot" data-on="${esc(f.id)}" data-last="${+f.lastSeen || ''}"></i></b><small><span data-seen="${esc(f.id)}" data-last="${+f.lastSeen || ''}" data-post=" · "></span>${f.handle ? '@' + esc(f.handle) : ''}${isMe ? `${f.handle ? ' · ' : ''}${f.updatedAt ? 'оценки обновлены ' + ago(f.updatedAt) : 'оценок пока нет'}` : ''}</small></span>${ICON.go}</a>`).join('')}</div>`
               : `<p class="muted">${isMe ? 'Пока никого. Добавить друга можно кнопкой «Друзья» в меню вверху.' : 'Пока никого.'}</p>`}
-            ${p.incoming ? `<p class="note">${p.incoming} ${plural(p.incoming, 'заявка', 'заявки', 'заявок')} в друзья ${plural(p.incoming, 'ждёт', 'ждут', 'ждут')} ответа. <a href="/mnenie/">Открыть в Мнении</a></p>` : ''}
+            ${p.incoming ? `<p class="note">${p.incoming} ${plural(p.incoming, 'заявка', 'заявки', 'заявок')} в друзья ${plural(p.incoming, 'ждёт', 'ждут', 'ждут')} ответа. <a href="/opinion/">Открыть в Мнении</a></p>` : ''}
           </section>` : (isMe ? `<section class="card rise" style="--d:${d++}"><div class="head"><h2 class="h2">Друзья</h2></div><p class="muted">${esc(p.friendsHint || '')}</p></section>` : '');
     if (cats.size) { W.hist = `<section class="card rise" style="--d:${d++}">
             <div class="head"><h2 class="h2">Оценки 1–10</h2><span class="label">${rated.length} с баллом</span></div>
@@ -1628,7 +1628,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
           ${!isMe && p.uid ? `<p class="sub" data-seen="${esc(p.uid)}" data-last="${+p.lastSeen || ''}"></p>` : ''}
           ${titlesRowHTML(p, rs)}
           <div class="hero-acts">${isMe
-            ? `<a class="btn primary" href="/mnenie/">Оценить что-нибудь</a><button type="button" class="btn ghost ic-btn" id="layoutBtn" aria-pressed="${EDIT}" title="${EDIT ? 'Сохрани или отмени изменения внизу' : 'Редактировать профиль: блоки, витрины, звания'}" aria-label="Редактировать профиль">${ICON_LAYOUT}</button>`
+            ? `<a class="btn primary" href="/opinion/">Оценить что-нибудь</a><button type="button" class="btn ghost ic-btn" id="layoutBtn" aria-pressed="${EDIT}" title="${EDIT ? 'Сохрани или отмени изменения внизу' : 'Редактировать профиль: блоки, витрины, звания'}" aria-label="Редактировать профиль">${ICON_LAYOUT}</button>`
             : `<a class="btn ghost" href="/profile/">Мой профиль</a>${p.common && p.common.length ? '<a class="btn primary" href="#taste">Сравнить вкусы</a>' : ''}`}</div>
         </div>
       </section>
@@ -1670,7 +1670,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   }
   let hashDone = false;
 
-  const rateLink = (p, r) => (p.kind === 'me' || !p.uid ? `/mnenie/#r=${encodeURIComponent(r.id)}` : `/mnenie/#friend=${encodeURIComponent(p.uid)}&r=${encodeURIComponent(r.id)}`);
+  const rateLink = (p, r) => (p.kind === 'me' || !p.uid ? `/opinion/#r=${encodeURIComponent(r.id)}` : `/opinion/#friend=${encodeURIComponent(p.uid)}&r=${encodeURIComponent(r.id)}`);
   // плитки и категории: прокрутка к разделу, категория ещё и фильтрует список
   // плавная прокрутка к разделу; если браузер её не довёл — докручиваем сразу
   const jumpTo = (el) => {
@@ -2190,12 +2190,14 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
 
   // ---------- свой профиль ----------
   async function showMe(meServer) {
-    const local = (read('ocenshik.users.v1') || []).find((u) => user && u.id === user.id) || user || {};
+    // открыт свой профиль, в том числе по /u/<имя> или ?id=: кнопка профиля в шапке теперь никуда не ведёт
+    if (!ALL && window.CasualAccount && !window.CasualAccount.own) { window.CasualAccount.own = true; window.CasualAccount.render(); }
+    const local =(read('ocenshik.users.v1') || []).find((u) => user && u.id === user.id) || user || {};
     // дата регистрации и ник — из аккаунта, если он есть: так они одинаковые на всех устройствах
     const born = (meServer && meServer.createdAt) || local.createdAt;
     const since = born ? dayFmt(born) : '';
     const p = {
-      kind: 'me', name: meServer && meServer.username ? meServer.username : user ? user.name : 'Гость', avatar: shownAvatar(user), color: user && user.color, isAdmin: !!(meServer && meServer.admin),
+      kind: 'me', name: meServer && meServer.username ? meServer.username : user ? user.name : (window.CasualLang && window.CasualLang.t ? window.CasualLang.t('Гость') : 'Гость'), avatar: shownAvatar(user), color: user && user.color, isAdmin: !!(meServer && meServer.admin),
       sub: user ? [meServer && meServer.handle ? '@' + meServer.handle : '', since ? 'в Казуал Хабе с ' + since : ''].filter(Boolean).join(' · ') || 'твой профиль' : 'Гостевой профиль: оценки хранятся в этом браузере',
       createdAt: user ? born : null,
       ratings: [], allRatings: myRatings(), hide: localHide().hide, uid: meServer && meServer.id, banner: localBanner(), sticker: localSticker().src, layout: localLayout(),
@@ -2301,7 +2303,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   // ---------- профиль друга ----------
   async function showFriend(id) {
     if (!token) {
-      message('Профиль друга', 'Профили друзей видны после входа в аккаунт, подключённый к друзьям.', '<a class="btn primary" href="/mnenie/#login">Войти</a><a class="btn ghost" href="/profile/">Мой профиль</a>');
+      message('Профиль друга', 'Профили друзей видны после входа в аккаунт, подключённый к друзьям.', '<a class="btn primary" href="/opinion/#login">Войти</a><a class="btn ghost" href="/profile/">Мой профиль</a>');
       return;
     }
     app.innerHTML = '<section class="card state"><p class="muted">Загружаю профиль…</p></section>';
@@ -2332,7 +2334,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     let meServer = null;
     if (token) { try { meServer = (await api('/me')).user; } catch (e) {} }
     if (!wantId && wantName) {
-      if (!token) { message('Профиль', 'Профили открываются после входа в аккаунт.', '<a class="btn primary" href="/mnenie/#login">Войти</a><a class="btn ghost" href="/profile/">Мой профиль</a>'); return; }
+      if (!token) { message('Профиль', 'Профили открываются после входа в аккаунт.', '<a class="btn primary" href="/opinion/#login">Войти</a><a class="btn ghost" href="/profile/">Мой профиль</a>'); return; }
       try {
         const d = await api('/users/resolve?q=' + encodeURIComponent(wantName));
         if (d.user) {

@@ -5,11 +5,27 @@
 import { cleanRating, readShelf, SAFE_URL } from '../_lib/shelf.js';
 
 const SHARE_RE = /^[A-Za-z0-9]{12}$/;
-const VERDICTS = ['Ужас', 'Провал', 'Плохо', 'Слабо', 'Средне', 'Нормально', 'Неплохо', 'Хорошо', 'Отлично', 'Шедевр'];
-const verdict = (t) => (t == null ? 'Без оценки' : VERDICTS[Math.max(1, Math.min(10, Math.round(t))) - 1]);
+// язык страницы: тот, что человек выбрал на сайте (кука ставится в i18n.js)
+const TEXT = {
+  ru: {
+    html: 'ru', locale: 'ru-RU', verdicts: ['Ужас', 'Провал', 'Плохо', 'Слабо', 'Средне', 'Нормально', 'Неплохо', 'Хорошо', 'Отлично', 'Шедевр'], notRated: 'Без оценки', notRatedLow: 'без оценки',
+    site: 'Казуал Хаб', opinion: 'Мнение Казуала', outOf: 'из 10', ratingBy: 'оценка от', ratingByCap: 'Оценка от', fav: '★ В избранном', crit: 'Критерии', pros: '➕ Плюсы', cons: '➖ Минусы', notes: 'Заметки',
+    rate: 'Оценить что-нибудь своё', foot: 'Отзыв открыт по ссылке. Свои оценки можно вести в Мнении Казуала, это бесплатно.', goneTitle: 'Отзыв недоступен', gone: 'Хозяин закрыл ссылку или удалил оценку.', open: 'Открыть Мнение Казуала', home: 'На главную', wait: 'Слишком много запросов, подожди минуту.',
+  },
+  en: {
+    html: 'en', locale: 'en-GB', verdicts: ['Awful', 'Flop', 'Bad', 'Weak', 'Average', 'Okay', 'Not bad', 'Good', 'Great', 'Masterpiece'], notRated: 'Not rated', notRatedLow: 'not rated',
+    site: 'Casual Hub', opinion: 'Casual Opinion', outOf: 'out of 10', ratingBy: 'rated by', ratingByCap: 'Rated by', fav: '★ In favorites', crit: 'Criteria', pros: '➕ Pros', cons: '➖ Cons', notes: 'Notes',
+    rate: 'Rate something yourself', foot: 'This review is open by link. You can keep your own ratings in Casual Opinion for free.', goneTitle: 'Review unavailable', gone: 'The owner closed the link or deleted the rating.', open: 'Open Casual Opinion', home: 'Home', wait: 'Too many requests, wait a minute.',
+  },
+};
+const langOf = (request) => (/(?:^|;\s*)casualhub_lang=en\b/.test(request.headers.get('cookie') || '') ? TEXT.en : TEXT.ru);
+// статусы, стандартные категории и критерии лежат в оценке по-русски
+const EN_WORDS = { __proto__: null, 'Завершено': 'Completed', 'Просмотрено': 'Watched', 'В процессе': 'In progress', 'В планах': 'Planned', 'Брошено': 'Dropped', 'Сингл': 'Single', 'Альбом': 'Album', 'Игры': 'Games', 'Фильмы и сериалы': 'Films and series', 'Музыка и альбомы': 'Music and albums', 'Книги': 'Books', 'Еда и заведения': 'Food and places', 'Аниме и манга': 'Anime and manga', 'Гаджеты и техника': 'Gadgets and tech', 'Геймплей': 'Gameplay', 'Сюжет': 'Story', 'Графика': 'Graphics', 'Звук и музыка': 'Sound and music', 'Атмосфера': 'Atmosphere', 'Реиграбельность': 'Replayability', 'Концовка': 'Ending', 'Техническое состояние': 'Technical condition', 'Актёрская игра': 'Acting', 'Режиссура': 'Direction', 'Визуал': 'Visuals', 'Музыка и звук': 'Music and sound', 'Пересматриваемость': 'Rewatchability'};
+const word = (T, v) => (T.html === 'en' ? EN_WORDS[v] || String(v || '').replace(/[А-Яа-яЁё][А-Яа-яЁё ]*[А-Яа-яЁё]/g, (m) => EN_WORDS[m] || m) : v);
+const verdict = (t, T) => (t == null ? T.notRated : T.verdicts[Math.max(1, Math.min(10, Math.round(t))) - 1]);
 const tier = (t) => (t == null ? 'none' : t >= 7.5 ? 'good' : t >= 5 ? 'mid' : 'bad');
 const tierV = (v) => (v >= 8 ? 'good' : v >= 5 ? 'mid' : v >= 1 ? 'bad' : 'none');
-const fmt = (n) => Number(n).toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+const fmt = (n, T) => Number(n).toLocaleString(T.locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const lines = (t) => String(t || '').split(/\r?\n/).map((x) => x.replace(/^[+\-•*]\s*/, '').trim()).filter(Boolean).slice(0, 30);
 
@@ -27,6 +43,7 @@ function tooFast(ip) {
 const HEADERS = {
   'content-type': 'text/html; charset=utf-8',
   'cache-control': 'public, max-age=60',
+  vary: 'Cookie',
   'x-content-type-options': 'nosniff',
   'referrer-policy': 'no-referrer',
   'x-robots-tag': 'noindex, nofollow',
@@ -80,9 +97,9 @@ h1 { font-family: Handjet, Onest, sans-serif; font-weight: 800; font-size: clamp
 .empty { text-align: center; display: grid; gap: 12px; justify-items: center; padding: 30px 20px; }
 @media (prefers-reduced-motion: reduce) { .card { animation: none; } }`;
 
-function page(title, body, meta) {
+function page(T, title, body, meta) {
   return `<!doctype html>
-<html lang="ru">
+<html lang="${T.html}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
@@ -96,47 +113,48 @@ ${meta || ''}
 <style>${CSS}</style>
 </head>
 <body><div class="wrap">
-<div class="top"><a class="brand" href="/">casualhub</a><a class="pill" href="/mnenie/">Мнение Казуала</a></div>
+<div class="top"><a class="brand" href="/">casualhub</a><a class="pill" href="/opinion/">${T.opinion}</a></div>
 ${body}
-<p class="foot">Отзыв открыт по ссылке. Свои оценки можно вести в Мнении Казуала, это бесплатно.</p>
+<p class="foot">${T.foot}</p>
 </div></body></html>`;
 }
 
-function notFound() {
-  return new Response(page('Отзыв недоступен · Казуал Хаб', `<main class="card empty"><h1>Отзыв недоступен</h1>
-<p class="by">Хозяин закрыл ссылку или удалил оценку.</p>
-<div class="cta"><a class="btn primary" href="/mnenie/">Открыть Мнение Казуала</a><a class="btn ghost" href="/">На главную</a></div></main>`), { status: 404, headers: HEADERS });
+function notFound(T) {
+  return new Response(page(T, `${T.goneTitle} · ${T.site}`, `<main class="card empty"><h1>${T.goneTitle}</h1>
+<p class="by">${T.gone}</p>
+<div class="cta"><a class="btn primary" href="/opinion/">${T.open}</a><a class="btn ghost" href="/">${T.home}</a></div></main>`), { status: 404, headers: HEADERS });
 }
 
 export async function onRequest({ request, env, params }) {
   if (request.method !== 'GET' && request.method !== 'HEAD') return new Response(null, { status: 405, headers: { allow: 'GET, HEAD' } });
   const id = String(params.id || '');
-  if (!SHARE_RE.test(id) || !env.DB) return notFound();
-  if (tooFast(request.headers.get('CF-Connecting-IP') || 'local')) return new Response('Слишком много запросов, подожди минуту.', { status: 429, headers: { 'content-type': 'text/plain; charset=utf-8', 'retry-after': '60' } });
+  const T = langOf(request);
+  if (!SHARE_RE.test(id) || !env.DB) return notFound(T);
+  if (tooFast(request.headers.get('CF-Connecting-IP') || 'local')) return new Response(T.wait, { status: 429, headers: { 'content-type': 'text/plain; charset=utf-8', 'retry-after': '60' } });
   let sh, user, r;
   try {
     sh = await env.DB.prepare('SELECT owner_id, rid FROM shares WHERE id = ?').bind(id).first();
-    if (!sh) return notFound();
+    if (!sh) return notFound(T);
     user = await env.DB.prepare('SELECT username, uname, banned FROM users WHERE id = ?').bind(sh.owner_id).first();
-    if (user && user.banned) return notFound(); // отзывы забаненного по ссылке не открываются
+    if (user && user.banned) return notFound(T); // отзывы забаненного по ссылке не открываются
     const shelf =readShelf(await env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(sh.owner_id).first());
     r = cleanRating(shelf.ratings.find((x) => x && x.id === sh.rid && !x.example));
-  } catch (e) { return notFound(); }
-  if (!r || !user) return notFound();
+  } catch (e) { return notFound(T); }
+  if (!r || !user) return notFound(T);
 
   const origin = new URL(request.url).origin;
   const t = typeof r.total === 'number' ? r.total : null;
-  const cat = r.catLabel || r.catName || '';
+  const cat = word(T, r.catLabel || r.catName || '');
   const photo = r.photo && r.photo.remote ? `/api/share/${id}/img` : r.photo && r.photo.url && SAFE_URL.test(r.photo.url) ? r.photo.url : '';
-  const when = (() => { const d = new Date(r.updatedAt || r.createdAt || 0); return isNaN(d) || !+d ? '' : d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }); })();
+  const when = (() => { const d = new Date(r.updatedAt || r.createdAt || 0); return isNaN(d) || !+d ? '' : d.toLocaleDateString(T.locale, { day: 'numeric', month: 'long', year: 'numeric' }); })();
   const scores = (r.scores || []).filter((s) => s && (s.v > 0 || s.note)).slice(0, 30);
   const pros = lines(r.pros), cons = lines(r.cons);
-  const title = `«${r.name}» — ${t != null ? fmt(t) + ' из 10' : 'без оценки'} · Мнение Казуала`;
-  const desc = `${verdict(t)}${cat ? ' · ' + cat : ''} · оценка от ${user.username} (@${user.uname})`;
+  const title = `${T.html === 'en' ? '“' : '«'}${r.name}${T.html === 'en' ? '”' : '»'} — ${t != null ? fmt(t, T) + ' ' + T.outOf : T.notRatedLow} · ${T.opinion}`;
+  const desc = `${verdict(t, T)}${cat ? ' · ' + cat : ''} · ${T.ratingBy} ${user.username} (@${user.uname})`;
   const meta = [
     `<meta name="description" content="${esc(desc)}">`,
     `<meta property="og:type" content="article">`,
-    `<meta property="og:site_name" content="Казуал Хаб">`,
+    `<meta property="og:site_name" content="${T.site}">`,
     `<meta property="og:title" content="${esc(title)}">`,
     `<meta property="og:description" content="${esc(desc)}">`,
     `<meta property="og:url" content="${esc(origin + '/r/' + id)}">`,
@@ -147,13 +165,13 @@ export async function onRequest({ request, env, params }) {
   const body = `<main class="card">
 ${photo ? `<img class="photo" src="${esc(photo)}" alt="" referrerpolicy="no-referrer">` : ''}
 <div class="head"><h1>${esc(r.name)}</h1>
-<div class="score"><span class="badge" data-tier="${tier(t)}">${t != null ? fmt(t) : '—'}</span><span class="verdict">${esc(verdict(t))}</span></div></div>
-<div class="chips">${r.fav ? '<span class="chip">★ В избранном</span>' : ''}${cat ? `<span class="chip">${esc(cat)}</span>` : ''}${r.status ? `<span class="chip">${esc(r.status)}</span>` : ''}${r.meta ? `<span class="chip">${esc(r.meta)}</span>` : ''}</div>
-<p class="by">Оценка от <b>${esc(user.username)}</b> @${esc(user.uname)}${when ? ' · ' + esc(when) : ''}</p>
-${scores.length ? `<section><p class="label">Критерии</p><ul class="crit">${scores.map((s) => `<li data-tier="${tierV(s.v)}"><span class="n">${esc(s.name)}</span><span class="v">${s.v || '—'}</span><span class="cells">${Array.from({ length: 10 }, (_, i) => `<i${i < s.v ? ' class="on"' : ''}></i>`).join('')}</span>${s.note ? `<span class="cnote">${esc(s.note)}</span>` : ''}</li>`).join('')}</ul></section>` : ''}
-${pros.length || cons.length ? `<section class="pc">${pros.length ? `<div><p class="label">➕ Плюсы</p><ul>${pros.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}${cons.length ? `<div><p class="label">➖ Минусы</p><ul>${cons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}</section>` : ''}
-${r.note ? `<section><p class="label">Заметки</p><p class="note">${esc(r.note)}</p></section>` : ''}
-<div class="cta"><a class="btn primary" href="/mnenie/">Оценить что-нибудь своё</a><a class="btn ghost" href="/">Казуал Хаб</a></div>
+<div class="score"><span class="badge" data-tier="${tier(t)}">${t != null ? fmt(t, T) : '—'}</span><span class="verdict">${esc(verdict(t, T))}</span></div></div>
+<div class="chips">${r.fav ? `<span class="chip">${T.fav}</span>` : ''}${cat ? `<span class="chip">${esc(cat)}</span>` : ''}${r.status ? `<span class="chip">${esc(word(T, r.status))}</span>` : ''}${r.meta ? `<span class="chip">${esc(r.meta)}</span>` : ''}</div>
+<p class="by">${T.ratingByCap} <b>${esc(user.username)}</b> @${esc(user.uname)}${when ? ' · ' + esc(when) : ''}</p>
+${scores.length ? `<section><p class="label">${T.crit}</p><ul class="crit">${scores.map((s) => `<li data-tier="${tierV(s.v)}"><span class="n">${esc(word(T, s.name))}</span><span class="v">${s.v || '—'}</span><span class="cells">${Array.from({ length: 10 }, (_, i) => `<i${i < s.v ? ' class="on"' : ''}></i>`).join('')}</span>${s.note ? `<span class="cnote">${esc(s.note)}</span>` : ''}</li>`).join('')}</ul></section>` : ''}
+${pros.length || cons.length ? `<section class="pc">${pros.length ? `<div><p class="label">${T.pros}</p><ul>${pros.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}${cons.length ? `<div><p class="label">${T.cons}</p><ul>${cons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}</section>` : ''}
+${r.note ? `<section><p class="label">${T.notes}</p><p class="note">${esc(r.note)}</p></section>` : ''}
+<div class="cta"><a class="btn primary" href="/opinion/">${T.rate}</a><a class="btn ghost" href="/">${T.site}</a></div>
 </main>`;
-  return new Response(request.method === 'HEAD' ? null : page(title, body, meta), { headers: HEADERS });
+  return new Response(request.method === 'HEAD' ? null : page(T, title, body, meta), { headers: HEADERS });
 }

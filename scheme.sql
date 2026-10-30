@@ -1,5 +1,5 @@
 -- Казуал Хаб: база для друзей (Cloudflare D1).
--- Применить один раз: npx wrangler d1 execute casualhub --remote --file=schema.sql
+-- Применить один раз: npx wrangler d1 execute casualhub --remote --file=scheme.sql
 
 CREATE TABLE IF NOT EXISTS users (
   id TEXT PRIMARY KEY,

@@ -22,7 +22,7 @@
   if (document.readyState === 'complete') start(); else addEventListener('load', start);
 })();
 
-/* Ссылки с главной: /mnenie/#login, #reg и #profile сразу открывают окно аккаунта */
+/* Ссылки с главной: /opinion/#login, #reg и #profile сразу открывают окно аккаунта */
 function openAuthFromHash() {
   const h = location.hash;
   if (/^#(login|reg|profile)$/.test(h)) {
@@ -32,7 +32,7 @@ function openAuthFromHash() {
     Promise.resolve(ready).then(() => openAuthModal(tab === 'profile' ? (state.user ? 'edit' : undefined) : tab));
     return;
   }
-  // ссылка для друзей с Letterboxd: /mnenie/#letterboxd сразу открывает импорт
+  // ссылка для друзей с Letterboxd: /opinion/#letterboxd сразу открывает импорт
   if (h === '#letterboxd') {
     history.replaceState(null, '', location.pathname + location.search);
     Promise.resolve(ready).catch(() => {}).then(() => { if (window.CasualLetterboxd) window.CasualLetterboxd.open(); });

@@ -1,5 +1,5 @@
 // Казуал Хаб: онлайн-аккаунты, друзья и оценки друзей.
-// Cloudflare Pages Functions, база D1 подключена как binding DB (см. schema.sql и README).
+// Cloudflare Pages Functions, база D1 подключена как binding DB (см. scheme.sql и README).
 
 import { clip, numOrNull, SAFE_URL, cleanRating, readShelf, stampOf, RID_RE, SPOOF_RE } from '../_lib/shelf.js';
 
@@ -36,11 +36,11 @@ async function freeHandle(env, base, selfId) {
 const pubUser = (u) => ({ id: u.id, username: u.username, handle: u.handle || u.uname });
 const ownUser = (u) => ({ ...pubUser(u), email: u.email || '', createdAt: u.created_at || u.createdAt || null, hideOnline: !!u.hide_online });
 
-// Таблицы создаются и обновляются сами при первом запросе (то же, что в schema.sql),
+// Таблицы создаются и обновляются сами при первом запросе (то же, что в scheme.sql),
 // чтобы новые поля вроде email не требовали ручной миграции.
-let schemaReady = false;
-async function ensureSchema(env) {
-  if (schemaReady) return;
+let schemeReady = false;
+async function ensureScheme(env) {
+  if (schemeReady) return;
   await env.DB.batch([
     env.DB.prepare('CREATE TABLE IF NOT EXISTS users (id TEXT PRIMARY KEY, username TEXT NOT NULL, uname TEXT NOT NULL UNIQUE, pass_hash TEXT NOT NULL, salt TEXT NOT NULL, created_at INTEGER NOT NULL, email TEXT)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, expires_at INTEGER NOT NULL)'),
@@ -103,7 +103,7 @@ async function ensureSchema(env) {
     }
     await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('handles', '1')").run();
   }
-  schemaReady = true;
+  schemeReady = true;
 }
 const cleanEmail = (s) => String(s || '').trim().toLowerCase();
 
@@ -295,8 +295,10 @@ const devMail = (env, request) => env.MAIL_DEV === '1' && ['127.0.0.1', 'localho
 async function deliverCode(env, request, to, code, kind) {
   if (devMail(env, request)) { await env.DB.prepare('INSERT OR REPLACE INTO meta (k, v) VALUES (?, ?)').bind('devcode:' + to, code).run(); return true; }
   if (!((env.BREVO_API_KEY || env.RESEND_API_KEY) && env.MAIL_FROM)) return false;
-  return sendCode(env, to, code, kind);
+  return sendCode(env, to, code, kind, langOf(request));
 }
+// язык письма: тот, что человек выбрал на сайте (кука ставится в i18n.js)
+const langOf = (request) => (/(?:^|;\s*)casualhub_lang=en\b/.test(request.headers.get('cookie') || '') ? 'en' : 'ru');
 const sixDigits = () => String(crypto.getRandomValues(new Uint32Array(1))[0] % 1e6).padStart(6, '0');
 const maskEmail = (m) => { const [a, d] = String(m).split('@'); return (a.length <= 2 ? a[0] + '*' : a.slice(0, 2) + '***') + '@' + d; };
 async function mailLimit(env, request, mail) {
@@ -321,19 +323,24 @@ async function sendMail(env, to, subject, text, html) {
     return r.ok;
   } catch (e) { console.error('mail', e); return false; }
 }
-function sendCode(env, to, code, kind) {
-  const what = kind === 'reg' ? 'регистрации' : kind === 'email' ? 'смены почты' : 'входа';
-  const ifNot = kind === 'email' ? 'без кода почта не поменяется' : 'без кода в аккаунт не войти';
-  const subject = `${code} — код для ${what} в Казуал Хабе`;
-  const text = `Твой код для ${what} в Казуал Хабе: ${code}\n\nОн действует 15 минут. Если это был не ты, просто ничего не делай: ${ifNot}.\n\ncasualhub.pages.dev`;
-  const html = `<div style="font-family:Arial,sans-serif;max-width:440px;margin:0 auto;padding:24px;color:#14161C"><h2 style="margin:0 0 12px">Казуал Хаб</h2><p>Твой код для ${what}:</p><p style="font-size:34px;font-weight:800;letter-spacing:8px;margin:12px 0;padding:14px 18px;background:#ECEEF3;border-radius:12px;text-align:center">${code}</p><p style="color:#565C6B;font-size:14px">Код действует 15 минут. Если это был не ты, просто ничего не делай: ${ifNot}.</p></div>`;
+function sendCode(env, to, code, kind, lang) {
+  const en = lang === 'en';
+  const what = en ? (kind === 'reg' ? 'sign-up' : kind === 'email' ? 'email change' : 'sign-in') : (kind === 'reg' ? 'регистрации' : kind === 'email' ? 'смены почты' : 'входа');
+  const ifNot = en ? (kind === 'email' ? 'the email won\'t change without the code' : 'nobody can sign in without the code') : (kind === 'email' ? 'без кода почта не поменяется' : 'без кода в аккаунт не войти');
+  const site = en ? 'Casual Hub' : 'Казуал Хаб';
+  const note = en ? `The code works for 15 minutes. If this wasn't you, just do nothing: ${ifNot}.` : `Код действует 15 минут. Если это был не ты, просто ничего не делай: ${ifNot}.`;
+  const yours = en ? `Your ${what} code` : `Твой код для ${what}`;
+  const subject = en ? `${code} — your ${what} code for Casual Hub` : `${code} — код для ${what} в Казуал Хабе`;
+  const text = en ? `${yours} for Casual Hub: ${code}\n\n${note}\n\ncasualhub.pages.dev` : `${yours} в Казуал Хабе: ${code}\n\n${note}\n\ncasualhub.pages.dev`;
+  const html = `<div style="font-family:Arial,sans-serif;max-width:440px;margin:0 auto;padding:24px;color:#14161C"><h2 style="margin:0 0 12px">${site}</h2><p>${yours}:</p><p style="font-size:34px;font-weight:800;letter-spacing:8px;margin:12px 0;padding:14px 18px;background:#ECEEF3;border-radius:12px;text-align:center">${code}</p><p style="color:#565C6B;font-size:14px">${note}</p></div>`;
   return sendMail(env, to, subject, text, html);
 }
 // почту сменили: старый адрес об этом узнаёт. Если это сделал не хозяин, он хотя бы поймёт, что случилось
 async function mailChangedNotice(env, request, to, mail) {
   if (devMail(env, request) || !EMAIL_RE.test(to || '') || !((env.BREVO_API_KEY || env.RESEND_API_KEY) && env.MAIL_FROM)) return;
-  const line = `Почта твоего аккаунта в Казуал Хабе изменена на ${maskEmail(mail)}. Если это был не ты, поменяй пароль и напиши администрации.`;
-  await sendMail(env, to, 'Почта аккаунта изменена — Казуал Хаб', line + '\n\ncasualhub.pages.dev', `<div style="font-family:Arial,sans-serif;max-width:440px;margin:0 auto;padding:24px;color:#14161C"><h2 style="margin:0 0 12px">Казуал Хаб</h2><p>${line}</p></div>`);
+  const en = langOf(request) === 'en';
+  const line = en ? `The email of your Casual Hub account was changed to ${maskEmail(mail)}. If this wasn't you, change your password and contact the administration.` : `Почта твоего аккаунта в Казуал Хабе изменена на ${maskEmail(mail)}. Если это был не ты, поменяй пароль и напиши администрации.`;
+  await sendMail(env, to, en ? 'Account email changed — Casual Hub' : 'Почта аккаунта изменена — Казуал Хаб', line + '\n\ncasualhub.pages.dev', `<div style="font-family:Arial,sans-serif;max-width:440px;margin:0 auto;padding:24px;color:#14161C"><h2 style="margin:0 0 12px">${en ? 'Casual Hub' : 'Казуал Хаб'}</h2><p>${line}</p></div>`);
 }
 // начать проверку кодом: письмо уходит, клиент получает билет и показывает поле для кода
 async function startCode(env, request, kind, mail, data, userId) {
@@ -1101,23 +1108,26 @@ const routes = {
     if (burst('genius:' + me.id, 40, 60e3)) return tooMany(1);
     const q = (new URL(request.url).searchParams.get('q') || '').trim().slice(0, 80);
     if (q.length < 2) return json({ artists: [] });
-    let artists = [], why = env.GENIUS_TOKEN ? '' : 'Genius не подключён.';
+    // причину отказа видно только в логах функции: посетителю незачем знать, какие у сайта ключи
+    let artists = [], why = env.GENIUS_TOKEN ? '' : 'нет ключа';
     if (env.GENIUS_TOKEN && Date.now() >= geniusPause) {
       try {
         const res = await geniusFetch(env, 'https://api.genius.com/search?q=' + encodeURIComponent(q), 86400);
         if (res.status === 429) geniusPause = Date.now() + 60e3; // минуту не дёргаем Genius
-        if (res.status === 401) why = 'Genius не принял токен (401): в секрете GENIUS_TOKEN нужен Client Access Token.';
-        else if (!res.ok) why = `Genius не ответил (${res.status}).`;
+        if (!res.ok) why = 'ответ ' + res.status;
         else artists = geniusArtists(await res.json());
-      } catch (e) { why = 'Genius не ответил.'; }
-    } else if (env.GENIUS_TOKEN) why = 'Genius просил подождать (429).';
+      } catch (e) { why = 'нет ответа'; }
+    } else if (env.GENIUS_TOKEN) why = 'пауза после 429';
     if (!artists.length) {
       try {
         const res = await geniusFetch(env, 'https://api.deezer.com/search/artist?limit=8&q=' + encodeURIComponent(q), 86400);
         if (res.ok) artists = deezerArtists(await res.json(), q);
       } catch (e) {}
     }
-    if (!artists.length && why) return fail(502, why);
+    if (!artists.length && why) {
+      console.error('Genius: ' + why);
+      return fail(502, 'Поиск исполнителей сейчас не отвечает, попробуй позже.');
+    }
     return json({ artists });
   },
   // имена исполнителей для подсказки при вводе: Deezer прощает опечатки («deathmerie» → deathmarried)
@@ -1831,7 +1841,7 @@ export async function onRequest({ request, env, params }) {
   if (slow) return new Response(JSON.stringify({ error: 'Слишком много запросов, подожди немного.' }), { status: 429, headers: { 'content-type': 'application/json; charset=utf-8', 'retry-after': String(slow) } });
 
   try {
-    await ensureSchema(env);
+    await ensureScheme(env);
     let me = null;
     if (!PUBLIC.has(key)) {
       me = await currentUser(env, request);

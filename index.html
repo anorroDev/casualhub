@@ -12,6 +12,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Handjet:wght@300..800&family=Onest:wght@400..700&display=block">
+<script src="/i18n.js"></script>
 <script src="/hub.head.js"></script>
 <style>
 /* Layout: a hub screen. Top bar, a big animated wordmark over a playable 1–10 meter, then two app cards with live previews. */
@@ -161,7 +162,7 @@
   color-scheme: dark;
 }
 
-/* Motion shared by all Casual Hub pages (same block in mnenie/index.html and koleso/index.html) */
+/* Motion shared by all Casual Hub pages (same block in opinion/index.html and wheel/index.html) */
 @view-transition { navigation: auto; }
 ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
 html:active-view-transition-type(forward)::view-transition-old(root) { animation: vt-out-l .42s cubic-bezier(.4, 0, .2, 1) both; }
@@ -539,7 +540,7 @@ h1, h2, p { margin: 0; }
     </a>
     <div class="user-bar">
       <span class="pill online-chip" data-online-count title="Сколько людей сейчас на сайте: с аккаунтом и гости"><em aria-hidden="true"></em><b>—</b><span class="oc-t">&nbsp;на сайте</span></span>
-      <a class="pill fr-btn" href="/mnenie/#friends" data-friends-btn title="Друзья"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="5.5" r="2.5"/><path d="M1.5 14c.6-2.6 2.3-4 4.5-4s3.9 1.4 4.5 4"/><path d="M10.5 3.2a2.5 2.5 0 0 1 0 4.6M12.5 10.3c1 .6 1.7 1.9 2 3.7"/></svg><span class="fb-t">Друзья</span><i class="fb-n fb-on" hidden></i><i class="fb-n fb-req" hidden></i></a>
+      <a class="pill fr-btn" href="/opinion/#friends" data-friends-btn title="Друзья"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="5.5" r="2.5"/><path d="M1.5 14c.6-2.6 2.3-4 4.5-4s3.9 1.4 4.5 4"/><path d="M10.5 3.2a2.5 2.5 0 0 1 0 4.6M12.5 10.3c1 .6 1.7 1.9 2 3.7"/></svg><span class="fb-t">Друзья</span><i class="fb-n fb-on" hidden></i><i class="fb-n fb-req" hidden></i></a>
       <details class="theme-pick" id="themePick">
         <summary class="pill" id="themeBtn" title="Тема оформления">Тема</summary>
         <div class="theme-menu" id="themeMenu" role="group" aria-label="Тема оформления"></div>
@@ -568,7 +569,7 @@ h1, h2, p { margin: 0; }
   </main>
 
   <section class="apps" aria-label="Разделы">
-    <a class="app" href="/mnenie/">
+    <a class="app" href="/opinion/">
       <span class="glow" aria-hidden="true"><i></i></span>
       <span class="pv pv-board" id="mnPreview" aria-hidden="true"></span>
       <span class="app-icon" aria-hidden="true"><svg viewBox="0 0 256 256"><rect width="256" height="256" rx="58" fill="#14161C"/><rect x="34" y="104" width="38" height="48" rx="11" fill="#F26A55"/><rect x="80" y="104" width="38" height="48" rx="11" fill="#F2BA44"/><rect x="126" y="104" width="38" height="48" rx="11" fill="#43C97A"/><rect x="172" y="46" width="50" height="164" rx="16" fill="#43C97A"/><rect x="186" y="102" width="7" height="52" rx="3.5" fill="#14161C" fill-opacity=".5"/><rect x="201" y="102" width="7" height="52" rx="3.5" fill="#14161C" fill-opacity=".5"/></svg></span>
@@ -576,9 +577,9 @@ h1, h2, p { margin: 0; }
         <span class="app-name">Мнение Казуала</span>
         <span class="app-desc">Игры, фильмы, еда, места или что угодно своё. Критерии, рейтинг, тиры, статистика и оценки друзей.</span>
       </span>
-      <span class="app-foot"><span class="app-meta" id="mnenieMeta"></span><span class="app-go">Открыть <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></span></span>
+      <span class="app-foot"><span class="app-meta" id="opinionMeta"></span><span class="app-go">Открыть <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></span></span>
     </a>
-    <a class="app" href="/koleso/">
+    <a class="app" href="/wheel/">
       <span class="glow" aria-hidden="true"><i></i></span>
       <span class="pv pv-wheel" aria-hidden="true">
         <span class="pv-under"><small>Под стрелкой</small><strong id="wheelName">—</strong></span>
@@ -589,12 +590,12 @@ h1, h2, p { margin: 0; }
         <span class="app-name">Колесо Казуала</span>
         <span class="app-desc">На выбывание или один победитель с одной прокрутки: просто имена или донаты, где шанс равен доле в банке. Своя музыка и стикеры в центре.</span>
       </span>
-      <span class="app-foot"><span class="app-meta" id="kolesoMeta"></span><span class="app-go">Крутить <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></span></span>
+      <span class="app-foot"><span class="app-meta" id="wheelMeta"></span><span class="app-go">Крутить <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></span></span>
     </a>
   </section>
 
   <section class="feed" id="feed" hidden aria-labelledby="feedTitle">
-    <div class="feed-head"><h2 id="feedTitle">Что у друзей</h2><span class="feed-side"><span id="feedNote"></span><a class="feed-all" href="/mnenie/#friends">все друзья →</a></span></div>
+    <div class="feed-head"><h2 id="feedTitle">Что у друзей</h2><span class="feed-side"><span id="feedNote"></span><a class="feed-all" href="/opinion/#friends">все друзья →</a></span></div>
     <ul class="feed-list" id="feedList"></ul>
   </section>
 

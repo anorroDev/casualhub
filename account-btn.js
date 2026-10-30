@@ -14,11 +14,12 @@
   var USER_ICON = '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" aria-hidden="true"><circle cx="8" cy="5.5" r="2.8"/><path d="M2.8 14c.6-2.8 2.7-4.3 5.2-4.3s4.6 1.5 5.2 4.3"/></svg>';
   function render() {
     var user = read('ocenshik.user.v1');
-    var here = /^\/profile\/?$/.test(location.pathname) && !/[?&](id|all)=/.test(location.search);
+    // свой профиль открывается и по /u/<имя> или ?id=: это знает только страница профиля, она ставит own
+    var here = (/^\/profile\/?$/.test(location.pathname) && !/[?&](id|all)=/.test(location.search)) || window.CasualAccount.own;
     document.querySelectorAll('[data-account]').forEach(function (slot) {
       var cls = slot.getAttribute('data-cls') || 'pill';
       if (!user || !user.name) {
-        slot.innerHTML = '<a class="' + esc(cls) + ' acct-btn" href="/mnenie/#login" title="Войти или зарегистрироваться">' + USER_ICON + '<span class="acct-name">Войти</span></a>';
+        slot.innerHTML = '<a class="' + esc(cls) + ' acct-btn" href="/opinion/#login" title="Войти или зарегистрироваться">' + USER_ICON + '<span class="acct-name">Войти</span></a>';
         return;
       }
       var img = typeof user.avatar === 'string' && /^(data:image\/|https?:\/\/)/.test(user.avatar);
@@ -31,7 +32,7 @@
       slot.innerHTML = '<a class="' + esc(cls) + ' acct-btn" href="/profile/" title="Мой профиль"' + (here ? ' aria-current="page"' : '') + '>' + ava + '<span class="acct-name">' + esc(user.name) + '</span></a>';
     });
   }
-  window.CasualAccount = { render: render };
+  window.CasualAccount = { render: render, own: false };
   render();
   // вошли, вышли или сменили аватар в другой вкладке — кнопка обновляется сама
   window.addEventListener('storage', function (e) { if (e.key === 'ocenshik.user.v1' || e.key === 'casualhub.avatarAnim.v1') render(); });

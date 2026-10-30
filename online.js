@@ -112,7 +112,7 @@
     bar.className = 'site-ann';
     bar.dataset.kind = 'warn';
     bar.setAttribute('role', 'alert');
-    bar.innerHTML = '<i aria-hidden="true">🔒</i><span>Вход в аккаунт закончился: оценки на этом устройстве целы, войди ещё раз, чтобы они снова синхронизировались. <a href="/mnenie/#login">Войти</a></span><button type="button" aria-label="Закрыть">✕</button>';
+    bar.innerHTML = '<i aria-hidden="true">🔒</i><span>Вход в аккаунт закончился: оценки на этом устройстве целы, войди ещё раз, чтобы они снова синхронизировались. <a href="/opinion/#login">Войти</a></span><button type="button" aria-label="Закрыть">✕</button>';
     bar.querySelector('button').addEventListener('click', () => bar.remove());
     document.body.prepend(bar);
   }

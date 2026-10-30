@@ -340,7 +340,7 @@
     }
   })();
 
-  // кнопки «Импорт из Letterboxd» в окне аккаунта и ссылка /mnenie/#letterboxd
+  // кнопки «Импорт из Letterboxd» в окне аккаунта и ссылка /opinion/#letterboxd
   document.addEventListener('click', (e) => { if (e.target.closest('[data-lb-open]')) { e.preventDefault(); open(); } });
   window.CasualLetterboxd = { open, parseCSV, unzip, collect, fillPosters, pickPoster };
 })();

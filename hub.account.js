@@ -5,7 +5,7 @@
     window.hubRenderAccount = function () {
       var acc = document.getElementById('account');
       var user = read('ocenshik.user.v1');
-      if (!user || !user.name) { acc.innerHTML = '<a class="pill" href="/mnenie/#login">Войти</a> <a class="pill primary" href="/mnenie/#reg">Регистрация</a>'; return; }
+      if (!user || !user.name) { acc.innerHTML = '<a class="pill" href="/opinion/#login">Войти</a> <a class="pill primary" href="/opinion/#reg">Регистрация</a>'; return; }
       var anim = (read('casualhub.avatarAnim.v1') || {})[user.id];
       var img = typeof user.avatar === 'string' && /^(data:image\/|https?:\/\/)/.test(user.avatar);
       var src = anim && anim.data && img && anim.sig === user.avatar.slice(-48) ? anim.data : user.avatar;

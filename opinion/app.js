@@ -1071,7 +1071,7 @@ function exportBackup() {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  a.download = `mnenie-backup-${new Date().toISOString().slice(0, 10)}.json`;
+  a.download = `opinion-backup-${new Date().toISOString().slice(0, 10)}.json`;
   // ссылка должна быть на странице и жить, пока браузер начинает загрузку (Safari и Firefox иначе ничего не скачивают)
   document.body.appendChild(a);
   a.click();
@@ -4760,7 +4760,7 @@ el.logList.addEventListener('keydown', e => {
 
 
 /* ---------- Statistics, Compare & Theme ---------- */
-// темы общие с колесом: список и id должны совпадать с koleso/index.html
+// темы общие с колесом: список и id должны совпадать с wheel/index.html
 const THEMES = window.CasualThemes.list; // общий список тем: /themes.js
 function applyTheme(t) {
   const th = THEMES.find(x => x.id === t) || THEMES[0];

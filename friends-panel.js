@@ -1,5 +1,5 @@
 /* Казуал Хаб: окно «Друзья» на любой странице.
-   Кнопка «Друзья» в шапке ([data-friends-btn]) и ссылки на /mnenie/#friends открывают окно на месте, без перехода.
+   Кнопка «Друзья» в шапке ([data-friends-btn]) и ссылки на /opinion/#friends открывают окно на месте, без перехода.
    В Мнении открывается его собственное окно (friends.js: там ещё доски друзей и отправка оценок),
    на остальных страницах — это: заявки, добавление по @юзернейму, список друзей, «в сети».
    Аватарки друзей с рамкой отсюда же берёт и окно Мнения (window.CasualFriendsUI). */
@@ -204,15 +204,15 @@ a.fr-who:hover b { text-decoration: underline; }
     let body;
     if (!user) {
       body = `<div class="fr-sec"><p class="fr-muted">Друзья работают через аккаунт Казуал Хаба. Войди или зарегистрируйся, и по твоему @юзернейму тебя смогут добавить.</p>
-        <div class="fr-acts" style="margin:0"><a class="fp-btn primary" href="/mnenie/#login">Войти</a><a class="fp-btn" href="/mnenie/#reg">Зарегистрироваться</a></div></div>`;
+        <div class="fr-acts" style="margin:0"><a class="fp-btn primary" href="/opinion/#login">Войти</a><a class="fp-btn" href="/opinion/#reg">Зарегистрироваться</a></div></div>`;
     } else if (!token()) {
       body = `<div class="fr-sec"><p class="fr-muted">Аккаунт ${esc(user.name || '')} ещё не подключён к друзьям. Подключить его можно в Мнении Казуала.</p>
-        <div class="fr-acts" style="margin:0"><a class="fp-btn primary" href="/mnenie/#friends">Подключить в Мнении</a></div></div>`;
+        <div class="fr-acts" style="margin:0"><a class="fp-btn primary" href="/opinion/#friends">Подключить в Мнении</a></div></div>`;
     } else if (!S.loaded) {
       body = '<p class="fr-muted">Загружаю друзей…</p>';
     } else if (S.expired) {
       body = `<div class="fr-sec"><p class="fr-muted"><strong>Вход в аккаунт закончился.</strong> Войди ещё раз, и друзья снова появятся. Оценки на этом устройстве целы.</p>
-        <div class="fr-acts" style="margin:0"><a class="fp-btn primary" href="/mnenie/#login">Войти</a></div></div>`;
+        <div class="fr-acts" style="margin:0"><a class="fp-btn primary" href="/opinion/#login">Войти</a></div></div>`;
     } else if (S.failed && !S.friends.length) {
       body = '<div class="fr-sec"><p class="fr-muted"><strong>Сервер друзей сейчас не отвечает.</strong> Попробуй открыть окно ещё раз чуть позже.</p></div>';
     } else {
@@ -321,7 +321,7 @@ a.fr-who:hover b { text-decoration: underline; }
 
   // кнопка «Друзья» и ссылки на окно друзей: открываем окно на месте; в Мнении — его собственное
   document.addEventListener('click', (e) => {
-    const a = e.target.closest('[data-friends-btn], a[href="/mnenie/#friends"]');
+    const a = e.target.closest('[data-friends-btn], a[href="/opinion/#friends"]');
     if (!a || e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     if (a.closest('.fp-card')) return; // «Подключить в Мнении» внутри окна ведёт в Мнение
     e.preventDefault();

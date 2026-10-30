@@ -860,7 +860,7 @@
       lines.push('', 'Порядок вылета:');
       d.outs.forEach((o, k) => lines.push(`${k + 1}. ${o.name}${o.money ? ' — ' + o.money : ''}`));
     }
-    lines.push('', `Колесо Казуала · ${d.date}`, location.origin + '/koleso/');
+    lines.push('', `Колесо Казуала · ${d.date}`, location.origin + '/wheel/');
     return lines.join('\n');
   }
   async function resultImage(it) {
@@ -922,7 +922,7 @@
       if (d.outs.length > rows) { g.textAlign = 'left'; g.fillStyle = C.ink3; g.fillText(`…и ещё ${d.outs.length - rows}`, 190, y); }
     }
     g.textAlign = 'center'; g.fillStyle = C.ink3; g.font = `500 28px ${FONT}`;
-    g.fillText(`${d.date}  ·  ${location.host}/koleso`, W / 2, H - 50);
+    g.fillText(`${d.date}  ·  ${location.host}/wheel`, W / 2, H - 50);
     return new Promise((res) => cv.toBlob(res, 'image/png'));
   }
   function wMsg(t) { $('#wMsg').textContent = t || ''; }
@@ -931,7 +931,7 @@
     wMsg('Рисую картинку…');
     try {
       const blob = await resultImage(lastWinner);
-      const file = new File([blob], `koleso-${Date.now()}.png`, { type: 'image/png' });
+      const file = new File([blob], `wheel-${Date.now()}.png`, { type: 'image/png' });
       // на телефоне — системное «Поделиться» (сохранить в фото, отправить в чат), на компьютере — скачать файл
       if (matchMedia('(pointer: coarse)').matches && navigator.canShare && navigator.canShare({ files: [file] })) {
         try { await navigator.share({ files: [file], title: 'Колесо Казуала', text: `Победитель: ${lastWinner.name}` }); wMsg(''); return; }
@@ -1956,7 +1956,7 @@
     if (!d) { S.sample = true; SAMPLE.forEach(([n, a]) => S.items.push(makeItem(n, a, S.cur))); }
     $('#cur').innerHTML = CODES.map((c) => `<option value="${c}">${CUR[c].sym} ${c}</option>`).join('');
     $('#cur').value = S.cur;
-    if (!/\/koleso(\/|\/index\.html)?$/.test(location.pathname)) { $('#backLink').hidden = true; $('#mnenieLink').hidden = true; } // вне сайта ссылкам некуда вести
+    if (!/\/wheel(\/|\/index\.html)?$/.test(location.pathname)) { $('#backLink').hidden = true; $('#opinionLink').hidden = true; } // вне сайта ссылкам некуда вести
 
     applyTheme(readThemePref(), false);
     readTheme();

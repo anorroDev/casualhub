@@ -44,12 +44,14 @@
     if (first) first.focus();
     // в пин-коде только цифры
     // буквы молча не пропадают: говорим, что тут нужны цифры (частая ошибка — вводить сюда пароль от аккаунта)
+    let pinHint = false;
     form.querySelectorAll('input[data-pin]').forEach((i) => i.addEventListener('input', () => {
       const clean = i.value.replace(/\D/g, '').slice(0, 8);
       if (clean !== i.value && /\D/.test(i.value)) {
         err.textContent = 'В пин-коде только цифры 0–9. Это не пароль от аккаунта, а свой короткий код из цифр.';
+        pinHint = true;
         box.classList.remove('shake'); void box.offsetWidth; box.classList.add('shake');
-      } else if (err.textContent.startsWith('В пин-коде только цифры')) err.textContent = '';
+      } else if (pinHint) { err.textContent = ''; pinHint = false; }
       i.value = clean;
     }));
     form.addEventListener('submit', async (e) => {
@@ -74,7 +76,7 @@
   // одноразовый пароль: первый вход или сброс забытого пин-кода
   function codeForm(reset, note) {
     if (!me.ready) {
-      message(reset ? 'Сброс пин-кода' : 'Админ-панель', `${reset ? 'Сбросить пин-код можно одноразовым паролем, но он' : 'Одноразовый пароль'} сейчас не задан на сервере. Его нужно добавить в настройках Cloudflare (секрет <b>ADMIN_CODE</b>), а потом обновить эту страницу.`,
+      message(reset ? 'Сброс пин-кода' : 'Админ-панель', `${reset ? 'Сбросить пин-код можно одноразовым паролем, но он' : 'Одноразовый пароль'} сейчас не задан на сервере. Его добавляет владелец сайта в настройках хостинга, а потом нужно обновить эту страницу.`,
         reset ? '<button type="button" class="btn ghost" id="admBack">Назад</button>' : '');
       const back = $('#admBack');
       if (back) back.addEventListener('click', pinForm);
@@ -283,7 +285,7 @@
   const plural = (n, one, few, many) => { const a = Math.abs(n) % 100, b = a % 10; return a > 10 && a < 20 ? many : b > 1 && b < 5 ? few : b === 1 ? one : many; };
   const fail = (x) => {
     // сессия аккаунта закончилась: пин-код тут не поможет
-    if (lostSession(x)) { message('Вход закончился', 'Войди в аккаунт ещё раз, и админка снова откроется.', '<a class="btn primary" href="/mnenie/#login">Войти</a>'); return; }
+    if (lostSession(x)) { message('Вход закончился', 'Войди в аккаунт ещё раз, и админка снова откроется.', '<a class="btn primary" href="/opinion/#login">Войти</a>'); return; }
     if (lostAdmin(x)) { me.active = false; pinForm(); return; }
     const s = sec();
     if (s) s.innerHTML = `<p class="adm-err">${esc(x.message)}</p><button type="button" class="btn ghost small" id="admRetryTab">Попробовать ещё раз</button>`;
@@ -504,11 +506,11 @@
 
   async function start() {
     if (!token) {
-      message('Админ-панель', 'Сначала войди в онлайн-аккаунт в Мнении.', '<a class="btn primary" href="/mnenie/#login">Войти</a>');
+      message('Админ-панель', 'Сначала войди в онлайн-аккаунт в Мнении.', '<a class="btn primary" href="/opinion/#login">Войти</a>');
       return;
     }
     try { me = await call('GET', '/admin/me'); } catch (x) {
-      if (x.status === 401) message('Вход закончился', 'Войди в аккаунт ещё раз: сессия на этом устройстве больше не действует.', '<a class="btn primary" href="/mnenie/#login">Войти</a>');
+      if (x.status === 401) message('Вход закончился', 'Войди в аккаунт ещё раз: сессия на этом устройстве больше не действует.', '<a class="btn primary" href="/opinion/#login">Войти</a>');
       else if (x.status === 404) message('Нет доступа', 'Эта страница только для админов сайта.', '<a class="btn ghost" href="/">На главную</a>');
       else { message('Админ-панель', esc(x.message), '<button type="button" class="btn ghost" id="admRetry">Попробовать ещё раз</button>'); $('#admRetry').addEventListener('click', start); }
       return;
