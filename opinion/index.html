@@ -490,10 +490,10 @@ a.user-pill { color: inherit; text-decoration: none; }
 /* Between pages the page slides sideways, no fading: forward to the left, back to the right */
 @view-transition { navigation: auto; }
 ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
-html:active-view-transition-type(forward)::view-transition-old(root) { animation: vt-out-r .42s cubic-bezier(.4, 0, .2, 1) both; }
-html:active-view-transition-type(forward)::view-transition-new(root) { animation: vt-in-l .42s cubic-bezier(.4, 0, .2, 1) both; }
-html:active-view-transition-type(back)::view-transition-old(root) { animation: vt-out-l .42s cubic-bezier(.4, 0, .2, 1) both; }
-html:active-view-transition-type(back)::view-transition-new(root) { animation: vt-in-r .42s cubic-bezier(.4, 0, .2, 1) both; }
+html:active-view-transition-type(forward)::view-transition-old(root) { animation: vt-out-l .42s cubic-bezier(.4, 0, .2, 1) both; }
+html:active-view-transition-type(forward)::view-transition-new(root) { animation: vt-in-r .42s cubic-bezier(.4, 0, .2, 1) both; }
+html:active-view-transition-type(back)::view-transition-old(root) { animation: vt-out-r .42s cubic-bezier(.4, 0, .2, 1) both; }
+html:active-view-transition-type(back)::view-transition-new(root) { animation: vt-in-l .42s cubic-bezier(.4, 0, .2, 1) both; }
 @keyframes vt-out-l { to { transform: translateX(-100%); } }
 @keyframes vt-in-r { from { transform: translateX(100%); } }
 @keyframes vt-out-r { to { transform: translateX(100%); } }

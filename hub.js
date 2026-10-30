@@ -155,7 +155,7 @@
     else if (e.key === 'Home') { e.preventDefault(); setVal(1); } else if (e.key === 'End') { e.preventDefault(); setVal(10); }
   });
   // на старте шкала заполняется сама, клетка за клеткой
-  if (calm || window.CasualReloaded) setVal(10, true);
+  if (calm || window.CasualSettled) setVal(10, true);
   else {
     setVal(1, true);
     let v = 1;
