@@ -210,7 +210,6 @@ body.howto-lock { overflow: hidden; }
     addEventListener('resize', later);
     addEventListener('click', () => setTimeout(later, 80));
     place();
-    window.CasualHowto = { open, close: () => close(false) };
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
 })();

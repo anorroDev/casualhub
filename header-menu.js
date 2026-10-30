@@ -271,7 +271,6 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     };
     placeWn();
     if (location.hash === '#settings') { history.replaceState(null, '', location.pathname + location.search); openSettings(); }
-    window.CasualSettings = { open: openSettings, close: closeSettings };
     let rq = 0;
     addEventListener('resize', () => { cancelAnimationFrame(rq); rq = requestAnimationFrame(placeWn); });
 

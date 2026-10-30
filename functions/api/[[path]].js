@@ -1561,11 +1561,6 @@ const routes = {
     return json({ ok: true });
   },
   // сколько комментариев под оценками человека: число 💬 у строк рейтинга
-  async 'GET /comments-count/:uid'({ env, me, arg }) {
-    if (!(await canSee(env, me, arg))) return fail(403, 'Комментарии видны только друзьям.');
-    const { results } = await env.DB.prepare("SELECT target, COUNT(*) AS n FROM comments WHERE owner_id = ? AND target LIKE 'r.%' GROUP BY target").bind(arg).all();
-    return json({ counts: Object.fromEntries(results.map((x) => [x.target.slice(2), x.n])) });
-  },
 
   // ?meta=1 — только когда фото менялось (телефон не качает аватар заново, если он тот же);
   // ?thumb=1 — маленькое превью «<id>.t», а если его ещё нет, то полное фото
@@ -2084,7 +2079,6 @@ export async function onRequest({ request, env, params }) {
   if (!routes[key] && segs.length === 3 && segs[0] === 'admin' && segs[1] === 'comment' && /^[0-9a-f]{20}$/.test(segs[2])) { key = `${request.method} /admin/comment/:id`; arg = segs[2]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'comments' && CM_TARGET_RE.test(segs[2])) { key = `${request.method} /comments/:uid/:target`; arg = [segs[1], segs[2]]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'comment' && /^[0-9a-f]{20}$/.test(segs[1])) { key = `${request.method} /comment/:id`; arg = segs[1]; }
-  if (!routes[key] && segs.length === 2 && segs[0] === 'comments-count') { key = `${request.method} /comments-count/:uid`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'photo-history' && HIST_KINDS.has(segs[1])) { key = `${request.method} /photo-history/:kind`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'tierlist' && TIER_ID_RE.test(segs[2])) { key = `${request.method} /tierlist/:uid/:id`; arg = [segs[1], segs[2]]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'tierlist' && TIER_ID_RE.test(segs[1])) { key = `${request.method} /tierlist/:id`; arg = segs[1]; }

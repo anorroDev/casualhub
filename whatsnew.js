@@ -132,7 +132,6 @@
     }, () => {});
   }
 
-  window.CasualWhatsNew = { load, open, close, markSeen };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindButtons);
   else bindButtons();
 })();

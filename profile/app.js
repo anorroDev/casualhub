@@ -1554,8 +1554,6 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     if (ALL) return renderAll(p);
     const rs = p.ratings;
     const rated = rs.filter((r) => r.total != null);
-    const avg = rated.length ? rated.reduce((a, r) => a + r.total, 0) / rated.length : null;
-    const masters = rated.filter((r) => r.total >= 8.5).length;
     const cats = new Map(); rs.forEach((r) => { const c = cats.get(r.cat) || { n: 0, sum: 0, k: 0 }; c.n++; if (r.total != null) { c.sum += r.total; c.k++; } cats.set(r.cat, c); });
     const hist = Array.from({ length: 10 }, (_, i) => rated.filter((r) => Math.min(10, Math.max(1, Math.round(r.total))) === i + 1).length);
     const hmax = Math.max(1, ...hist);

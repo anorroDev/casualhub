@@ -1360,7 +1360,6 @@ function editorHTML(cat) {
   const starter = STARTERS.some(s => s.id === cat.id);
   const tpls = allTemplates().map((t, idx) => `<button type="button" class="tpl-btn" data-act="apply-tpl" data-tpl="${idx}">${esc(t.name)}</button>`).join('');
   const items = cat.criteria.map((c, i) => {
-    const w = c.w || 1;
     return `<li class="ed-item" data-id="${esc(c.id)}">
 <span class="ed-num" aria-hidden="true">${i + 1}</span>
 <div class="ed-fields">
@@ -1542,7 +1541,6 @@ function avaFp(s) {
   for (let i = 0; i < s.length; i += 7) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
   return (h >>> 0).toString(36) + '.' + s.length.toString(36);
 }
-function artistRid(name) { let h = 5381; for (const ch of keyOf(name)) h = ((h * 33) ^ ch.codePointAt(0)) >>> 0; return 'art.' + h.toString(36); }
 let artistsCache = null;
 function artistsMap() {
   if (!artistsCache) {

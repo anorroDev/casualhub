@@ -6,7 +6,6 @@
 (() => {
   const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-  const plural = (n, one, few, many) => { const a = Math.abs(n) % 100, b = a % 10; return a > 10 && a < 20 ? many : b > 1 && b < 5 ? few : b === 1 ? one : many; };
   const COLORS = ['#3550E8', '#2EAD60', '#EAA92C', '#E4553F', '#9333EA', '#06B6D4', '#EC4899', '#F97316'];
   const colorOf = (s) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.codePointAt(0)) >>> 0; return COLORS[h % COLORS.length]; };
   const token = () => { const u = read('ocenshik.user.v1'); const t = read('casualhub.tokens.v1') || {}; return (u && t[u.id]) || null; };
@@ -328,5 +327,4 @@ a.fr-who:hover b { text-decoration: underline; }
     if (window.CasualFriends && typeof window.CasualFriends.openSheet === 'function') { window.CasualFriends.openSheet(); return; }
     open();
   });
-  window.CasualFriendsPanel = { open, close };
 })();
