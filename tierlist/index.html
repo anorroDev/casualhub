@@ -18,7 +18,7 @@ img{max-width:100%}
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Handjet:wght@400..800&family=Onest:wght@400..700&display=block">
 <script src="/i18n.js"></script>
-<script src="/tier/head.js"></script>
+<script src="/tierlist/head.js"></script>
 <style>
 /* Layout: the rater's two-panel console. Wheel stage with a status bar on the left, participants board on the right; one section at a time on phones. */
 :root {
@@ -538,6 +538,7 @@ button.tl-lab:hover { filter: brightness(1.07); }
 @media (hover: hover) { .tl-x { opacity: 0; } .tl-it:hover .tl-x, .tl-it:focus-within .tl-x { opacity: 1; } }
 .tl-ghost { position: fixed; z-index: 130; width: 84px; pointer-events: none; transform: translate(-50%, -55%) rotate(-4deg) scale(1.06); filter: drop-shadow(0 12px 20px rgba(0, 0, 0, .5)); }
 .tl-ghost .tl-x { display: none; }
+.tl-fly { transform: none; filter: none; }
 body.tl-dragging, body.tl-dragging * { cursor: grabbing !important; }
 body.tl-dropping .tl-pool { border-color: var(--accent); box-shadow: inset 0 0 0 2px var(--accent); }
 .tl-dock { position: sticky; bottom: 8px; z-index: 5; }
@@ -640,6 +641,6 @@ body.tl-dropping .tl-pool { border-color: var(--accent); box-shadow: inset 0 0 0
 <script src="/howto.js"></script>
 <script src="/photo-store.js"></script>
 <script src="/comments.js"></script>
-<script src="/tier/app.js"></script>
+<script src="/tierlist/app.js"></script>
 </body>
 </html>

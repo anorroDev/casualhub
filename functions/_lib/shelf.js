@@ -10,7 +10,7 @@ export const numOrNull = (v) => (typeof v === 'number' && Number.isFinite(v) ? v
 export const SAFE_URL = /^https?:\/\/[^\s"'<>()\\]{1,1500}$/;
 // любое значение: строки, числа, да/нет и вложенные объекты/списки неглубоко; функции и прочее отбрасываются
 // ссылка на трек у оценки: только сами сервисы
-export const MUSIC_LINK_RE = /^https:\/\/(open\.spotify\.com|(www\.|music\.)?youtube\.com|youtu\.be|soundcloud\.com)\/[^\s"'<>()\\]{1,300}$/;
+export const MUSIC_LINK_RE = /^https:\/\/(open\.spotify\.com|(www\.|music\.)?youtube\.com|youtu\.be|soundcloud\.com|music\.apple\.com|(www\.)?deezer\.com)\/[^\s"'<>()\\]{1,300}$/;
 export function plain(v, depth) {
   if (v == null || typeof v === 'boolean') return v;
   if (typeof v === 'number') return Number.isFinite(v) ? v : null;

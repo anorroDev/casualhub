@@ -15,12 +15,15 @@
 @keyframes hm-in { from { transform: translateY(-6px) scale(.97); } }
 @media (prefers-reduced-motion: reduce) { .hm-panel { animation: none; } }
 .hm-panel[hidden] { display: none; }
+.hm-panel > * { animation: hm-item .34s cubic-bezier(.34, 1.56, .64, 1) backwards; animation-delay: calc(var(--i, 0) * 22ms); }
+@keyframes hm-item { from { transform: translateX(14px); } }
+@media (prefers-reduced-motion: reduce) { .hm-panel > * { animation: none; } }
 .hm-panel > * { display: flex !important; width: 100%; margin: 0 !important; justify-content: flex-start !important; text-align: left; }
 .hm-panel > [hidden] { display: none !important; }
 .hm-panel .theme-pick { display: block !important; }
 .hm-panel .theme-pick > summary { width: 100%; justify-content: flex-start; }
 .hm-panel .theme-menu { position: static !important; translate: none !important; transform: none !important; inset: auto !important; width: 100% !important; max-width: none !important; margin-top: 8px; box-shadow: none !important; }
-.hm-panel .oc-t, .hm-panel .fb-t, .hm-panel .hb-t, .hm-panel .t, .hm-panel .wn-text, .hm-panel summary > span, .hm-panel .hm-t { display: inline !important; }
+.hm-panel .oc-t, .hm-panel .fb-t, .hm-panel .hb-t, .hm-panel .t, .hm-panel .wn-text, .hm-panel summary > span, .hm-panel .hm-t, .hm-panel > a > span, .hm-panel > button > span { display: inline !important; }
 /* в меню все пункты — строки одной ширины с подписью, даже если на телефоне в шапке они были круглыми значками */
 .hm-panel > a, .hm-panel > button, .hm-panel > span, .hm-panel .theme-pick > summary { width: 100% !important; min-width: 0 !important; height: auto !important; min-height: 40px; padding: 8px 12px !important; gap: 8px !important; border-radius: 11px !important; font-size: 13.5px !important; line-height: 1.2 !important; align-items: center; }
 .hm-t { margin-left: 2px; }
@@ -79,12 +82,13 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   });
   const MENU_ICON ='<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h11"/></svg>';
+  const GH_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>';
   const ICON = {
     '/opinion/': '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1.5" y="9" width="3.4" height="5.5" rx="1" fill="#E4553F"/><rect x="6.3" y="6" width="3.4" height="8.5" rx="1" fill="#EAA92C"/><rect x="11.1" y="2" width="3.4" height="12.5" rx="1" fill="#2EAD60"/></svg>',
     '/wheel/': '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="#3550E8"/><path d="M8 8V1.5A6.5 6.5 0 0 1 14.5 8z" fill="#EAA92C"/><path d="M8 8h6.5A6.5 6.5 0 0 1 8 14.5z" fill="#2EAD60"/><circle cx="8" cy="8" r="1.8" fill="#fff"/></svg>',
-    '/tier/': '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1" y="1.5" width="4" height="3.6" rx="1" fill="#2EAD60"/><rect x="6" y="1.5" width="9" height="3.6" rx="1" fill="currentColor" opacity=".55"/><rect x="1" y="6.2" width="4" height="3.6" rx="1" fill="#EAA92C"/><rect x="6" y="6.2" width="6" height="3.6" rx="1" fill="currentColor" opacity=".55"/><rect x="1" y="10.9" width="4" height="3.6" rx="1" fill="#E4553F"/><rect x="6" y="10.9" width="3" height="3.6" rx="1" fill="currentColor" opacity=".55"/></svg>',
+    '/tierlist/': '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1" y="1.5" width="4" height="3.6" rx="1" fill="#2EAD60"/><rect x="6" y="1.5" width="9" height="3.6" rx="1" fill="currentColor" opacity=".55"/><rect x="1" y="6.2" width="4" height="3.6" rx="1" fill="#EAA92C"/><rect x="6" y="6.2" width="6" height="3.6" rx="1" fill="currentColor" opacity=".55"/><rect x="1" y="10.9" width="4" height="3.6" rx="1" fill="#E4553F"/><rect x="6" y="10.9" width="3" height="3.6" rx="1" fill="currentColor" opacity=".55"/></svg>',
   };
-  const NAMES = { '/opinion/': 'Мнение', '/wheel/': 'Колесо', '/tier/': 'Тир-листы' };
+  const NAMES = { '/opinion/': 'Мнение', '/wheel/': 'Колесо', '/tierlist/': 'Тир-листы' };
   // окно «Настройки»: разделы и пункты. Новая настройка — ещё один пункт здесь.
   // href — куда вести со страниц, где пункт сам не работает; attr — атрибут, по которому его ловит Мнение
   const SETTINGS = [
@@ -154,7 +158,7 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     const here = location.pathname.replace(/index\.html$/, '');
 
     // «Мнение», «Колесо» и «Тир-листы» всегда на виду (кроме страницы, где ты уже находишься), с подписью
-    ['/opinion/', '/wheel/', '/tier/'].forEach((href) => {
+    ['/opinion/', '/wheel/', '/tierlist/'].forEach((href) => {
       let a = bar.querySelector(`a[href="${href}"]`);
       if (here.startsWith(href)) return;
       if (!a) {
@@ -204,6 +208,17 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
       if (!el.matches('.theme-pick') && !el.textContent.trim() && el.title) el.insertAdjacentHTML('beforeend', `<span class="hm-t">${el.title.replace(/\s*:.*$/, '')}</span>`);
       panel.appendChild(el);
     });
+    // GitHub есть в меню на всех страницах, даже если в шапке страницы его нет
+    if (!panel.querySelector('a[href*="github.com"]')) {
+      const gh = document.createElement('a');
+      gh.className = cls;
+      gh.href = 'https://github.com/anorroDev/casualhub';
+      gh.target = '_blank';
+      gh.rel = 'noopener';
+      gh.title = 'Код сайта на GitHub';
+      gh.innerHTML = GH_ICON + '<span class="hm-t">GitHub</span>';
+      panel.appendChild(gh);
+    }
     // «Настройки»: окно с импортом из Letterboxd и обновлением обложек (пункты — в SETTINGS выше)
     const set = document.createElement('button');
     set.type = 'button';
@@ -265,6 +280,7 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
         const r = btn.getBoundingClientRect();
         panel.style.top = Math.round(r.bottom + 8) + 'px';
         panel.style.right = Math.max(8, Math.round(document.documentElement.clientWidth - r.right)) + 'px';
+        [...panel.children].forEach((c, i) => c.style.setProperty('--i', i));
       }
       panel.hidden = !on;
       btn.setAttribute('aria-expanded', String(on));

@@ -6,7 +6,7 @@
   const KEY = 'casualhub.howto.v1';
   const path = location.pathname;
   // подсказка только на пяти страницах сайта: на админке, странице отзыва и прочих её нет
-  const PAGE = path.startsWith('/opinion') ? 'opinion' : path.startsWith('/wheel') ? 'wheel' : path.startsWith('/tier') ? 'tier' : path.startsWith('/profile') ? 'profile' : (path === '/' || path === '/index.html') ? 'hub' : '';
+  const PAGE = path.startsWith('/opinion') ? 'opinion' : path.startsWith('/wheel') ? 'wheel' : path.startsWith('/tierlist') ? 'tierlist' : path.startsWith('/profile') ? 'profile' : (path === '/' || path === '/index.html') ? 'hub' : '';
   const STEPS = {
     hub: {
       title: 'Казуал Хаб',
@@ -33,7 +33,7 @@
         '<b>На выбывание</b>: на кого показала стрелка — вылетает, последний побеждает. <b>«Один победитель»</b> — выигрывает сразу тот, на ком остановилось',
       ],
     },
-    tier: {
+    tierlist: {
       title: 'Тир-листы Казуала',
       steps: [
         'Начни <b>с нуля</b>, из своих оценок или из стикеров. Картинки можно загрузить, бросить на страницу или вставить через Ctrl+V',
@@ -184,7 +184,7 @@ body.howto-lock { overflow: hidden; }
     const otherOpen = () => [...document.querySelectorAll('[role="dialog"], dialog[open]')].some((d) => d.id !== 'howto' && d.getClientRects().length && getComputedStyle(d).visibility !== 'hidden');
     // само окно — только новичкам: гостю без аккаунта и только пока на этой странице его ещё не закрывали
     const hasAccount = (() => { try { const u = JSON.parse(localStorage.getItem('ocenshik.user.v1') || 'null'); return !!(u && u.name); } catch (e) { return false; } })();
-    if (!read()[PAGE] && !read()[{ opinion: 'mnenie', wheel: 'koleso' }[PAGE]] && !hasAccount) setTimeout(() => { if (modal.hidden && !otherOpen()) open(); }, calm ? 200 : 900);
+    if (!read()[PAGE] && !read()[{ opinion: 'mnenie', wheel: 'koleso', tierlist: 'tier' }[PAGE]] && !hasAccount) setTimeout(() => { if (modal.hidden && !otherOpen()) open(); }, calm ? 200 : 900);
 
     // круглая «❓» видна, когда шапка (кнопка «Помощь» или меню ☰) уехала за экран; держится над нижними панелями
     let q = false;

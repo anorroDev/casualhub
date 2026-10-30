@@ -3,6 +3,8 @@
 /koleso/*    /wheel/:splat  301
 /mnenie      /opinion/      301
 /mnenie/*    /opinion/:splat 301
+/tier        /tierlist/      301
+/tier/*      /tierlist/:splat 301
 # служебные файлы репозитория сайту не нужны
 /README.md    /  302
 /SECURITY.md  /  302

@@ -467,7 +467,7 @@
     lock(true);
     setStatus('Крутится…', baseSub());
     const t0 = performance.now();
-    let last = segAt(from, segs);
+    let last = segAt(from, segs), nameAt = t0;
     $('#ticker').textContent = last.item.name;
 
     // колесо рисуется один раз, а крутит его видеокарта: canvas поворачивается целиком, без перерисовки в каждом кадре
@@ -479,10 +479,13 @@
       const e = 1 - Math.pow(1 - t, 4);
       S.rot = from + (to - from) * e;
       const cur = segAt(S.rot, segs);
-      if (cur !== last) { last = cur; tick(); $('#ticker').textContent = cur.item.name; }
+      if (cur !== last) { last = cur; tick(); }
+      // на большой скорости имена мелькали бы и резали глаза: новое не чаще раза в 0,3 секунды, а к концу прокрутки — каждое
+      if (now - nameAt >= 300 && $('#ticker').textContent !== last.item.name) { nameAt = now; $('#ticker').textContent = last.item.name; }
       canvas.style.transform = `rotate(${S.rot - from}rad)`;
       if (t < 1) bgFrame(frame);
       else {
+        $('#ticker').textContent = last.item.name;
         drawRot = null;
         canvas.style.transform = '';
         canvas.style.willChange = '';

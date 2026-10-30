@@ -340,7 +340,7 @@ h1, h2, p { margin: 0; }
 @media (min-width: 1100px) { .apps { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 .app {
   --lift: 0px;
-  position: relative; isolation: isolate; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px 16px; align-content: start;
+  position: relative; isolation: isolate; display: grid; grid-template-columns: auto minmax(0, 1fr); grid-template-rows: auto 1fr auto; gap: 14px 16px;
   padding: 14px 14px 18px; background: var(--panel); border: 1px solid var(--line); border-radius: 22px; text-decoration: none;
   box-shadow: var(--shadow);
   transform: rotateX(var(--rx)) rotateY(var(--ry)) translateY(var(--lift));
@@ -426,7 +426,8 @@ h1, h2, p { margin: 0; }
 .pv-under small { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
 .pv-under strong {
   font-family: var(--font-display); font-weight: 800; font-size: clamp(26px, 3.4vw, 36px); line-height: .95;
-  overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; display: block; min-height: 1.9em;
+  overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; min-height: 2.85em;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
 }
 .pv-under strong { transform-origin: 0 100%; }
 .wheel { position: relative; width: 168px; height: 168px; animation: wheel-in 1s var(--spring) .8s backwards; }
@@ -478,11 +479,15 @@ h1, h2, p { margin: 0; }
 .app-icon { width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center; transition: transform .5s var(--spring); }
 .app-icon svg { width: 100%; height: 100%; }
 .app:hover .app-icon { transform: rotate(-6deg) scale(1.06); }
-.app-text { display: grid; gap: 4px; min-width: 0; align-content: center; }
+.app-text { display: grid; gap: 4px; min-width: 0; align-content: start; }
 .app-name { font-family: var(--font-display); font-weight: 800; font-size: clamp(32px, 4.2vw, 42px); line-height: .9; }
 .app-desc { color: var(--ink-2); font-size: 14px; text-wrap: pretty; }
-.app-foot { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; padding: 12px 4px 0; border-top: 1px solid var(--line); }
-.app-meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.app-foot { grid-column: 1 / -1; display: flex; flex-wrap: nowrap; align-items: center; justify-content: space-between; gap: 8px 14px; padding: 12px 4px 0; border-top: 1px solid var(--line); }
+/* значки в одну строку: что не влезло, уходит целиком на скрытую вторую, а не обрезается */
+.app-meta { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; height: 28px; overflow: hidden; }
+.app-meta .chip { white-space: nowrap; }
+.app-go { flex: none; }
+@media (min-width: 1100px) { .app-name { font-size: clamp(30px, 2.7vw, 38px); white-space: nowrap; } }
 .chip { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 10px; border-radius: 9px; background: var(--panel-2); border: 1px solid var(--line); font-size: 12.5px; font-weight: 600; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .chip b { font-family: var(--font-display); font-size: 18px; font-weight: 800; color: var(--ink); }
 .chip.alert { border-color: transparent; background: color-mix(in srgb, var(--bad) 18%, var(--panel)); color: var(--bad-ink); animation: nudge 2.4s ease-in-out 1.6s infinite; }
@@ -601,7 +606,7 @@ h1, h2, p { margin: 0; }
       </span>
       <span class="app-foot"><span class="app-meta" id="wheelMeta"></span><span class="app-go">Крутить <svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4"/></svg></span></span>
     </a>
-    <a class="app" href="/tier/">
+    <a class="app" href="/tierlist/">
       <span class="glow" aria-hidden="true"><i></i></span>
       <span class="pv pv-tiers" aria-hidden="true"><span class="pv-tier"><i style="background:#43C97A"></i><span><b style="--j:0"></b><b style="--j:1"></b><b style="--j:2"></b></span></span><span class="pv-tier"><i style="background:#F2BA44"></i><span><b style="--j:0"></b><b style="--j:1"></b><b style="--j:2"></b><b style="--j:3"></b><b style="--j:4"></b></span></span><span class="pv-tier"><i style="background:#F28E4C"></i><span><b style="--j:0"></b><b style="--j:1"></b></span></span><span class="pv-tier"><i style="background:#F26A55"></i><span><b style="--j:0"></b><b style="--j:1"></b><b style="--j:2"></b><b style="--j:3"></b></span></span></span>
       <span class="app-icon" aria-hidden="true"><svg viewBox="0 0 256 256"><rect width="256" height="256" rx="58" fill="#14161C"/><rect x="36" y="44" width="52" height="48" rx="11" fill="#43C97A"/><rect x="100" y="44" width="120" height="48" rx="11" fill="#3A3F4B"/><rect x="36" y="104" width="52" height="48" rx="11" fill="#F2BA44"/><rect x="100" y="104" width="84" height="48" rx="11" fill="#3A3F4B"/><rect x="36" y="164" width="52" height="48" rx="11" fill="#F26A55"/><rect x="100" y="164" width="48" height="48" rx="11" fill="#3A3F4B"/></svg></span>

@@ -1,7 +1,7 @@
 // Казуал Хаб: онлайн-аккаунты, друзья и оценки друзей.
 // Cloudflare Pages Functions, база D1 подключена как binding DB (см. scheme.sql и README).
 
-import { clip, numOrNull, SAFE_URL, cleanRating, readShelf, stampOf, RID_RE, SPOOF_RE } from '../_lib/shelf.js';
+import { clip, numOrNull, SAFE_URL, cleanRating, readShelf, stampOf, RID_RE, SPOOF_RE, MUSIC_LINK_RE } from '../_lib/shelf.js';
 
 const enc = new TextEncoder();
 const ITER = 10000; // PBKDF2: больше не даёт бесплатный тариф по времени CPU
@@ -1141,7 +1141,8 @@ const routes = {
     try {
       const d = await cachedJson('https://api.deezer.com/search/artist?limit=8&q=' + encodeURIComponent(q), null, 86400);
       // у исполнителей без фото Deezer отдаёт заглушку с адресом «…/artist//…»
-      const artists = (d.data || []).filter((a) => a && a.name).map((a) => ({
+      // профили почти без слушателей — это обычно не настоящие исполнители; точное совпадение с именем всё равно показываем
+      const artists = (d.data || []).filter((a) => a && a.name && (+a.nb_fan >= 100 || String(a.name).toLowerCase() === q.toLowerCase())).map((a) => ({
         name: String(a.name).slice(0, 80),
         img: DZ_IMG.test(a.picture_medium || '') && !/\/artist\/\//.test(a.picture_medium) ? a.picture_medium : '',
         fans: +a.nb_fan || 0,
@@ -1266,11 +1267,11 @@ const routes = {
   },
   // ---------- тир-листы: свои видит хозяин, остальные — только друзья, и только те, что не скрыты ----------
   // что лежит в аккаунте и что удалено; сами тир-листы устройство докачивает по одному
-  async 'GET /tiers'({ env, me }) {
+  async 'GET /tierlists'({ env, me }) {
     const { results } = await env.DB.prepare('SELECT id, at, data IS NULL AS gone FROM tierlists WHERE user_id = ?').bind(me.id).all();
     return json({ items: results.filter((x) => !x.gone).map(({ id, at }) => ({ id, at })), deleted: results.filter((x) => x.gone).map(({ id, at }) => ({ id, at })) });
   },
-  async 'GET /tiers-feed'({ env, me }) {
+  async 'GET /tierlists-feed'({ env, me }) {
     if (burst('tierfeed:' + me.id, 60, 60e3)) return tooMany(1);
     const { results: fr } = await env.DB.prepare(
       "SELECT CASE WHEN f.a = ?1 THEN f.b ELSE f.a END AS id, u.username, u.uname FROM friendships f JOIN users u ON u.id = (CASE WHEN f.a = ?1 THEN f.b ELSE f.a END) WHERE (f.a = ?1 OR f.b = ?1) AND f.status = 'accepted'"
@@ -1285,7 +1286,7 @@ const routes = {
     }
     return json({ friends: fr.length, items });
   },
-  async 'GET /tier/:uid/:id'({ env, me, arg }) {
+  async 'GET /tierlist/:uid/:id'({ env, me, arg }) {
     const [uid, id] = arg;
     if (!(await canSee(env, me, uid))) return fail(403, 'Тир-листы видны только друзьям.');
     const row = await env.DB.prepare('SELECT data, private, at FROM tierlists WHERE user_id = ? AND id = ?').bind(uid, id).first();
@@ -1294,7 +1295,7 @@ const routes = {
     if (!u) return fail(404, 'Тир-лист не найден: его удалили или скрыли.');
     return json({ list: { ...JSON.parse(row.data), at: row.at }, user: pubUser(u) });
   },
-  async 'PUT /tier/:id'({ env, request, me, arg }) {
+  async 'PUT /tierlist/:id'({ env, request, me, arg }) {
     if (burst('tier:' + me.id, 60, 60e3)) return tooMany(1);
     const { list: raw } = await readBody(request);
     const list = cleanTierList(raw, arg);
@@ -1321,7 +1322,7 @@ const routes = {
     ]);
     return json({ ok: true, at });
   },
-  async 'DELETE /tier/:id'({ env, request, me, arg }) {
+  async 'DELETE /tierlist/:id'({ env, request, me, arg }) {
     if (burst('tier:' + me.id, 60, 60e3)) return tooMany(1);
     const now = Date.now();
     const asked = +new URL(request.url).searchParams.get('at');
@@ -1340,7 +1341,7 @@ const routes = {
     return json({ ok: true, at });
   },
   // картинка карточки: квадрат 240×240, ключ придумывает браузер
-  async 'PUT /tier-img/:key'({ env, request, me, arg }) {
+  async 'PUT /tierlist-img/:key'({ env, request, me, arg }) {
     if (burst('tierimg:' + me.id, 120, 60e3)) return tooMany(1);
     const { data } = await readBody(request);
     if (typeof data !== 'string' || !/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/]+=*$/.test(data)) return fail(400, 'Нужна картинка.');
@@ -1357,7 +1358,7 @@ const routes = {
     return json({ ok: true });
   },
   // несколько картинок за раз: тир-лист из сотни карточек не должен делать сотню запросов
-  async 'POST /tier-imgs/:uid'({ env, request, me, arg }) {
+  async 'POST /tierlist-imgs/:uid'({ env, request, me, arg }) {
     if (burst('tierimgs:' + me.id, 240, 60e3)) return tooMany(1);
     if (!(await canSee(env, me, arg))) return fail(403, 'Картинки видны только друзьям.');
     const { keys } = await readBody(request);
@@ -1366,15 +1367,13 @@ const routes = {
     const { results } = await env.DB.prepare(`SELECT key, data FROM photos WHERE key IN (${list.map(() => '?').join(',')})`).bind(...list.map((k) => `${arg}:${k}`)).all();
     return json({ images: Object.fromEntries(results.map((x) => [x.key.slice(arg.length + 1), x.data])) });
   },
-  // трек или альбом по ссылке: Spotify, YouTube и YouTube Music, SoundCloud. Ключи не нужны, это открытые описания страниц
-  async 'GET /music/link'({ request, me }) {
-    if (burst('mlink:' + me.id, 30, 60e3)) return tooMany(1);
-    let u;
-    try { u = new URL(new URL(request.url).searchParams.get('u') || ''); } catch (e) { return fail(400, 'Это не ссылка.'); }
-    let info;
-    try { info = await musicLink(u); } catch (e) { return fail(502, 'Сервис сейчас не ответил, попробуй ещё раз.'); }
-    if (!info) return fail(400, 'Подходят ссылки на трек или альбом в Spotify, YouTube Music и SoundCloud.');
-    return json(info);
+  // поиск треков и альбомов по названию: только лицензионные каталоги, где исполнители настоящие
+  async 'GET /music/search'({ env, request, me }) {
+    if (burst('msearch:' + me.id, 40, 60e3)) return tooMany(1);
+    const sp = new URL(request.url).searchParams;
+    const q = (sp.get('q') || '').trim().slice(0, 100);
+    if (q.length < 2) return json({ items: [] });
+    return json({ items: await musicSearch(env, q, sp.get('kind') === 'album') });
   },
   // ---------- реакции: друг ставит 🔥 / 💀 / «не согласен» и может оставить короткий комментарий ----------
   async 'PUT /react/:uid/:rid'({ env, request, me, arg }) {
@@ -1662,76 +1661,89 @@ const tierMeta = (l) => ({
   })),
 });
 
-// ---------- музыка по ссылке ----------
-const MUSIC_HOST = /^(open\.spotify\.com|spotify\.link|(www\.|m\.|music\.)?youtube\.com|youtu\.be|(www\.|m\.)?soundcloud\.com|on\.soundcloud\.com)$/i;
-const MUSIC_UA = 'Mozilla/5.0 (compatible; CasualHub/1.0; +https://casualhub.pages.dev)';
-const unHtml = (s) => String(s || '').replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16))).replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d)).replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+// ---------- поиск музыки ----------
 const httpsOnly = (s) => (/^https:\/\/[^\s"'<>()\\]{1,500}$/.test(String(s || '')) ? String(s) : '');
-const musicResult = (o) => ({ source: o.source, kind: o.album ? 'Альбом' : 'Сингл', title: clip(o.title, 140).trim(), artist: clip(o.artist, 80).trim(), year: /^(19|20)\d{2}/.test(String(o.year || '')) ? String(o.year).slice(0, 4) : '', art: httpsOnly(o.art), alt: httpsOnly(o.alt), url: o.url });
-async function musicLink(start) {
-  let u = start;
-  if (u.protocol !== 'https:' || u.username || u.password || u.port || !MUSIC_HOST.test(u.hostname)) return null;
-  // короткие ссылки: проходим переадресации, не покидая этих сайтов
-  for (let hop = 0; /^(spotify\.link|on\.soundcloud\.com)$/i.test(u.hostname); hop++) {
-    if (hop >= 3) return null;
-    const res = await fetch(u.href, { redirect: 'manual', signal: AbortSignal.timeout(6000), headers: { 'user-agent': MUSIC_UA } });
-    const loc = res.headers.get('location');
-    if (!loc) return null;
-    u = new URL(loc, u);
-    if (u.protocol !== 'https:' || !MUSIC_HOST.test(u.hostname)) return null;
+// караоке, каверы и «в стиле»: это не сами исполнители, даже если лежит в каталоге
+const NOT_OFFICIAL = /karaoke|tribute|made famous|originally performed|in the style of|as made|cover version|covered by|караоке|минусовка|кавер/i;
+const YTM_HEADERS = { 'content-type': 'application/json', origin: 'https://music.youtube.com', 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125 Safari/537.36' };
+async function ytMusicSearch(q) {
+  // раздел «Песни»: туда попадают только релизы исполнителей, без чужих роликов
+  const d = await cachedJson('https://music.youtube.com/youtubei/v1/search?prettyPrint=false', { method: 'POST', headers: YTM_HEADERS, body: JSON.stringify({ context: { client: { clientName: 'WEB_REMIX', clientVersion: '1.20250101.01.00', hl: 'ru', gl: 'US' } }, query: q, params: 'EgWKAQIIAWoMEA4QChADEAQQCRAF' }) }, 86400);
+  const rows = [];
+  const walk = (o, depth) => {
+    if (!o || typeof o !== 'object' || depth > 24 || rows.length >= 8) return;
+    if (o.musicResponsiveListItemRenderer) { rows.push(o.musicResponsiveListItemRenderer); return; }
+    for (const k of Object.keys(o)) walk(o[k], depth + 1);
+  };
+  walk(d, 0);
+  return rows.map((x) => {
+    const cols = (x.flexColumns || []).map((c) => (((c.musicResponsiveListItemFlexColumnRenderer || {}).text || {}).runs || []).map((t) => t.text).join(''));
+    const parts = String(cols[1] || '').split(' • ');
+    const id = x.playlistItemData && x.playlistItemData.videoId;
+    const th = (((x.thumbnail || {}).musicThumbnailRenderer || {}).thumbnail || {}).thumbnails || [];
+    const url = th.length ? String(th[th.length - 1].url || '') : '';
+    return { title: cols[0], artist: parts[0], album: parts.length > 2 ? parts[1] : '', kind: 'Трек', art: url.replace(/=w\d+-h\d+.*$/, '=w600-h600-l90-rj'), thumb: url, source: 'YouTube Music', link: id ? 'https://music.youtube.com/watch?v=' + id : '' };
+  }).filter((x) => x.link);
+}
+async function deezerMusicSearch(q, album) {
+  const d = await cachedJson(`https://api.deezer.com/search/${album ? 'album' : 'track'}?limit=20&q=${encodeURIComponent(q)}`, null, 86400);
+  return (d.data || []).map((x) => {
+    const al = album ? x : x.album || {};
+    return { title: x.title, artist: (x.artist || {}).name, album: album ? '' : al.title, kind: album ? 'Альбом' : 'Трек', art: al.cover_xl || al.cover_big || '', thumb: al.cover_medium || '', source: 'Deezer', link: x.link };
+  });
+}
+async function appleMusicSearch(q, album) {
+  const d = await cachedJson(`https://itunes.apple.com/search?media=music&entity=${album ? 'album' : 'song'}&limit=20&country=US&term=${encodeURIComponent(q)}`, null, 86400);
+  return (d.results || []).map((x) => {
+    const a = String(x.artworkUrl100 || '');
+    return { title: album ? x.collectionName : x.trackName, artist: x.artistName, album: album ? '' : x.collectionName, year: String(x.releaseDate || '').slice(0, 4), kind: album ? 'Альбом' : 'Трек', art: a.replace(/\/\d+x\d+bb\./, '/600x600bb.'), thumb: a.replace(/\/\d+x\d+bb\./, '/200x200bb.'), source: 'Apple Music', link: album ? x.collectionViewUrl : x.trackViewUrl };
+  });
+}
+// Spotify ищет только с ключом разработчика: секреты SPOTIFY_CLIENT_ID и SPOTIFY_CLIENT_SECRET. Без них этот источник просто пропускается
+let spotifyAuth = { token: '', until: 0 };
+async function spotifySearch(env, q, album) {
+  if (!env.SPOTIFY_CLIENT_ID || !env.SPOTIFY_CLIENT_SECRET) return [];
+  if (Date.now() >= spotifyAuth.until) {
+    const r = await fetch('https://accounts.spotify.com/api/token', { method: 'POST', signal: AbortSignal.timeout(6000), headers: { 'content-type': 'application/x-www-form-urlencoded', authorization: 'Basic ' + btoa(env.SPOTIFY_CLIENT_ID + ':' + env.SPOTIFY_CLIENT_SECRET) }, body: 'grant_type=client_credentials' });
+    if (!r.ok) return [];
+    const t = await r.json();
+    spotifyAuth = { token: t.access_token, until: Date.now() + ((+t.expires_in || 3600) - 60) * 1000 };
   }
-  const host = u.hostname.toLowerCase();
-  if (host === 'open.spotify.com') {
-    const m = /^\/(?:intl-[a-z-]+\/)?(track|album)\/([A-Za-z0-9]{10,40})/.exec(u.pathname);
-    if (!m) return null;
-    const url = `https://open.spotify.com/${m[1]}/${m[2]}`;
-    const album = m[1] === 'album';
-    let title = '', artist = '', year = '', art = '';
-    // в описании страницы есть всё: название, исполнитель, год и обложка
-    try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(6000), headers: { 'user-agent': MUSIC_UA, accept: 'text/html' } });
-      const buf = res.ok ? await readCapped(res, 2e6) : null;
-      if (buf) {
-        const html = new TextDecoder().decode(buf);
-        const tag = (n) => { const x = new RegExp(`<meta (?:property|name)="${n}" content="([^"]*)"`).exec(html); return x ? unHtml(x[1]) : ''; };
-        const desc = tag('og:description').split(' · ');
-        title = tag('og:title'); art = tag('og:image'); artist = tag('music:musician_description') || desc[0] || ''; year = tag('music:release_date') || (desc.find((p) => /^(19|20)\d{2}$/.test(p)) || '');
-        if (album) {
-          const t = /^(?:Listen to )?(.+?)(?: - (?:Single|EP|Album))?(?: by (.+?))?(?: \| Spotify)?$/.exec(title);
-          if (t) { title = t[1]; if (t[2]) artist = t[2]; }
-        }
-      }
-    } catch (e) {}
-    if (!title) { // страница не открылась: хотя бы название и обложка
-      const d = await cachedJson('https://open.spotify.com/oembed?url=' + encodeURIComponent(url), null, 86400);
-      title = d.title; art = d.thumbnail_url;
-    }
-    return musicResult({ source: 'Spotify', album, title, artist, year, art, url });
-  }
-  if (/youtube\.com$|^youtu\.be$/.test(host)) {
-    const id = host === 'youtu.be' ? u.pathname.slice(1).split('/')[0] : u.searchParams.get('v') || (/^\/(?:shorts|embed|live)\/([\w-]+)/.exec(u.pathname) || [])[1] || '';
-    const list = u.searchParams.get('list') || '';
-    const video = /^[\w-]{6,20}$/.test(id);
-    if (!video && !/^[\w-]{10,80}$/.test(list)) return null;
-    const page = video ? 'https://www.youtube.com/watch?v=' + id : 'https://www.youtube.com/playlist?list=' + list;
-    const d = await cachedJson('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent(page), null, 86400);
-    const author = String(d.author_name || '');
-    const topic = /\s*-\s*Topic$/i.test(author); // автоматический канал исполнителя: в названии только трек
-    let artist = author.replace(/\s*-\s*Topic$/i, '').replace(/VEVO$/, '').trim();
-    let title = String(d.title || '').replace(/\s*[([][^)\]]*(official|video|audio|lyric|visuali[sz]er|m\/?v\b|клип|премьера|remaster|\b4k\b|\bhd\b)[^)\]]*[)\]]/gi, '').trim();
-    const dash = topic ? null : /^(.+?)\s+[-–—]\s+(.+)$/.exec(title);
-    if (dash) { artist = dash[1]; title = dash[2]; }
-    const url = video ? (host === 'music.youtube.com' ? 'https://music.youtube.com/watch?v=' + id : page) : (host === 'music.youtube.com' ? 'https://music.youtube.com/playlist?list=' + list : page);
-    return musicResult({ source: host === 'music.youtube.com' ? 'YouTube Music' : 'YouTube', album: !video, title, artist, art: video ? `https://i.ytimg.com/vi/${id}/maxresdefault.jpg` : d.thumbnail_url, alt: video ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : '', url });
-  }
-  const parts = u.pathname.split('/').filter(Boolean);
-  if (parts.length < 2 || !/^[\w.-]+$/.test(parts[0])) return null;
-  const url = 'https://soundcloud.com/' + parts.slice(0, 3).map(encodeURIComponent).join('/');
-  const d = await cachedJson('https://soundcloud.com/oembed?format=json&url=' + encodeURIComponent(url), null, 86400);
-  const author = String(d.author_name || '');
-  let title = String(d.title || '');
-  if (author && title.endsWith(' by ' + author)) title = title.slice(0, -(author.length + 4));
-  return musicResult({ source: 'SoundCloud', album: parts[1] === 'sets', title, artist: author, art: String(d.thumbnail_url || '').replace('-t300x300.', '-t500x500.'), url });
+  const r = await fetch(`https://api.spotify.com/v1/search?type=${album ? 'album' : 'track'}&limit=8&q=${encodeURIComponent(q)}`, { signal: AbortSignal.timeout(6000), headers: { authorization: 'Bearer ' + spotifyAuth.token } });
+  if (!r.ok) return [];
+  const d = await r.json();
+  return (((album ? d.albums : d.tracks) || {}).items || []).filter(Boolean).map((x) => {
+    const al = album ? x : x.album || {};
+    const imgs = al.images || [];
+    return { title: x.name, artist: (x.artists || []).map((a) => a.name).join(', '), album: album ? '' : al.name, year: String(al.release_date || '').slice(0, 4), kind: album ? 'Альбом' : 'Трек', art: (imgs[0] || {}).url || '', thumb: (imgs[imgs.length - 1] || {}).url || '', source: 'Spotify', link: (x.external_urls || {}).spotify || '' };
+  });
+}
+async function musicSearch(env, q, album) {
+  const lists = await Promise.all([
+    spotifySearch(env, q, album).catch(() => []),
+    album ? [] : ytMusicSearch(q).catch(() => []),
+    appleMusicSearch(q, album).catch(() => []),
+    deezerMusicSearch(q, album).catch(() => []),
+  ]);
+  const norm = (v) => String(v || '').toLowerCase().replace(/\s*[([].*?[)\]]/g, '').replace(/\s+-\s+(single|ep)$/i, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+  const LINK_ORDER = ['Spotify', 'YouTube Music', 'Apple Music', 'Deezer'];
+  const seen = new Map();
+  lists.flat().forEach((x, pos) => {
+    if (!x.title || !x.artist || !/^https:\/\//.test(String(x.art || '')) || NOT_OFFICIAL.test(x.title + ' ' + x.artist + ' ' + (x.album || ''))) return;
+    const k = norm(x.artist.split(/,|&| и | feat.? | ft.? | x /i)[0]) + '|' + norm(x.title);
+    const cur = seen.get(k);
+    if (!cur) { seen.set(k, { ...x, n: 1, pos }); return; }
+    cur.n += 1; // тот же трек в другом каталоге — верный признак настоящего релиза
+    if (!cur.year && x.year) cur.year = x.year;
+    if (LINK_ORDER.indexOf(x.source) < LINK_ORDER.indexOf(cur.source) && x.link) { cur.link = x.link; cur.source = x.source; }
+  });
+  // настоящий релиз есть сразу в нескольких каталогах, а залитое кем попало — обычно в одном. Такое показываем, только если другого нет
+  const all = [...seen.values()].sort((a, b) => b.n - a.n || a.pos - b.pos);
+  const sure = all.filter((x) => x.n > 1);
+  return (sure.length ? sure : all).slice(0, 8).map((x) => ({
+    title: clip(x.title, 140), artist: clip(x.artist, 80), album: clip(x.album, 80), year: /^(19|20)\d{2}$/.test(x.year || '') ? x.year : '', kind: x.kind,
+    art: httpsOnly(x.art), thumb: httpsOnly(x.thumb) || httpsOnly(x.art), source: x.source, link: MUSIC_LINK_RE.test(String(x.link || '')) ? x.link : '',
+  }));
 }
 
 const LAYOUT_SECTIONS = ['stats', 'titles', 'podium', 'all', 'badges', 'taste', 'friends', 'hist', 'cats'];
@@ -2074,10 +2086,10 @@ export async function onRequest({ request, env, params }) {
   if (!routes[key] && segs.length === 2 && segs[0] === 'comment' && /^[0-9a-f]{20}$/.test(segs[1])) { key = `${request.method} /comment/:id`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'comments-count') { key = `${request.method} /comments-count/:uid`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'photo-history' && HIST_KINDS.has(segs[1])) { key = `${request.method} /photo-history/:kind`; arg = segs[1]; }
-  if (!routes[key] && segs.length === 3 && segs[0] === 'tier' && TIER_ID_RE.test(segs[2])) { key = `${request.method} /tier/:uid/:id`; arg = [segs[1], segs[2]]; }
-  if (!routes[key] && segs.length === 2 && segs[0] === 'tier' && TIER_ID_RE.test(segs[1])) { key = `${request.method} /tier/:id`; arg = segs[1]; }
-  if (!routes[key] && segs.length === 2 && segs[0] === 'tier-img' && TIER_IMG_RE.test(segs[1])) { key = `${request.method} /tier-img/:key`; arg = segs[1]; }
-  if (!routes[key] && segs.length === 2 && segs[0] === 'tier-imgs') { key = `${request.method} /tier-imgs/:uid`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 3 && segs[0] === 'tierlist' && TIER_ID_RE.test(segs[2])) { key = `${request.method} /tierlist/:uid/:id`; arg = [segs[1], segs[2]]; }
+  if (!routes[key] && segs.length === 2 && segs[0] === 'tierlist' && TIER_ID_RE.test(segs[1])) { key = `${request.method} /tierlist/:id`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 2 && segs[0] === 'tierlist-img' && TIER_IMG_RE.test(segs[1])) { key = `${request.method} /tierlist-img/:key`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 2 && segs[0] === 'tierlist-imgs') { key = `${request.method} /tierlist-imgs/:uid`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'reacts') { key = `${request.method} /reacts/:id`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'share' && SHARE_RE.test(segs[1])) { key = `${request.method} /share/:id`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'share' && segs[2] === 'img' && SHARE_RE.test(segs[1])) { key = `${request.method} /share/:id/img`; arg = segs[1]; }

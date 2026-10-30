@@ -1471,7 +1471,7 @@ function renderForm() {
   if (el.name.value !== form.name) el.name.value = form.name;
   if (el.note.value !== form.note) el.note.value = form.note;
   if (el.meta && el.meta.value !== (form.meta || '')) el.meta.value = form.meta || '';
-  { const ml = $('musicLink'); if (ml && document.activeElement !== ml && ml.value !== (form.link || '')) ml.value = form.link || ''; }
+  renderMusicPicked();
   if (el.pros && el.pros.value !== (form.pros || '')) el.pros.value = form.pros || '';
   if (el.cons && el.cons.value !== (form.cons || '')) el.cons.value = form.cons || '';
   if (el.favBtn) el.favBtn.setAttribute('aria-pressed', String(!!form.fav));
@@ -1930,54 +1930,83 @@ function fillMusicFromCover(c) {
   updateNameState();
 }
 
-/* ---------- Трек по ссылке: Spotify, YouTube Music, SoundCloud ---------- */
-// поиска без ключей у этих сервисов нет, зато по ссылке сервер отдаёт название, исполнителя, год и обложку
-const MUSIC_PASTE_RE = /^\s*https?:\/\/(open\.spotify\.com|spotify\.link|(www\.|m\.|music\.)?youtube\.com|youtu\.be|(www\.|m\.)?soundcloud\.com|on\.soundcloud\.com)\/\S+\s*$/i;
-let musicLinkBusy = false;
-function musicLinkMsg(text, bad) {
-  const m = $('musicLinkMsg');
+/* ---------- Поиск трека или альбома ---------- */
+function musicMsg(text, bad) {
+  const m = $('musicMsg');
   if (!m) return;
   m.textContent = text || '';
   m.hidden = !text;
   m.classList.toggle('err', !!bad);
 }
-async function applyMusicLink(raw) {
-  const inp = $('musicLink');
-  const u = String(raw != null ? raw : inp ? inp.value : '').trim();
-  if (!u) { form.link = ''; musicLinkMsg(''); scheduleDraft(); return; }
-  if (musicLinkBusy) return;
-  if (!MUSIC_PASTE_RE.test(u)) { musicLinkMsg('Подходят ссылки на трек или альбом в Spotify, YouTube Music и SoundCloud.', true); return; }
-  if (!window.casualApi || !window.casualApi.online()) { musicLinkMsg('Ссылки работают после входа в аккаунт.', true); return; }
-  musicLinkBusy = true;
-  const go = $('musicLinkGo');
-  if (go) go.disabled = true;
-  musicLinkMsg('Ищу трек…');
+let musicItems = [], musicTimer = 0, musicSeq = 0, musicPhotoAuto = false;
+function renderMusicPicked() {
+  const box = $('musicPicked');
+  if (!box) return;
+  const html = listenHTML({ link: form.link });
+  box.hidden = !html;
+  if (box.dataset.link !== (form.link || '')) { box.dataset.link = form.link || ''; box.innerHTML = html ? html + '<button type="button" class="mini-btn" id="musicUnlink" aria-label="Убрать ссылку" title="Убрать ссылку">✕</button>' : ''; }
+}
+function renderMusicResults() {
+  const box = $('musicResults');
+  if (!box) return;
+  box.hidden = !musicItems.length;
+  box.innerHTML = musicItems.map((c, i) => `<button type="button" class="music-opt" data-music="${i}"><img src="${esc(c.thumb || c.art)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"><span><b>${esc(c.title)}</b><small>${esc([c.artist, c.album, c.year].filter(Boolean).join(' · '))}</small></span><i>${esc(c.kind === 'Альбом' ? 'Альбом' : '')}</i></button>`).join('');
+}
+function musicClear() {
+  clearTimeout(musicTimer); musicSeq++;
+  musicItems = []; musicPhotoAuto = false;
+  const inp = $('musicQuery');
+  if (inp) inp.value = '';
+  renderMusicResults();
+}
+// поиск: с аккаунтом — по всем каталогам через наш сервер, без него — только Apple Music
+async function searchMusic(q) {
+  const seq = ++musicSeq;
+  const album = form.status === 'Альбом';
+  let items = [];
   try {
-    const r = await window.casualApi.get('/music/link?u=' + encodeURIComponent(u));
-    if (!r || !r.title) throw new Error(r && r.error ? r.error : 'Сервис не отдал название этого трека.');
-    form.link = musicLinkOk(r.url);
-    if (inp) inp.value = form.link || u;
-    const c = { title: String(r.title), artist: String(r.artist || ''), kind: r.kind === 'Альбом' ? 'Альбом' : 'Трек', year: String(r.year || ''), genre: '', art: r.art, alt: r.alt, thumb: r.art, via: 'server' };
-    // статус «Сингл» или «Альбом» берём из ссылки, а «В планах» и другие, выбранные сами, не трогаем
-    if (!form.status || form.status === 'Сингл' || form.status === 'Альбом') { form.status = r.kind === 'Альбом' ? 'Альбом' : 'Сингл'; renderStatusSet(); }
-    fillMusicFromCover(c);
-    scheduleDraft();
-    let pic = false;
-    if (c.art && !form.photo) {
-      // обложка необязательна: без неё трек всё равно добавлен
-      coverItems = [c]; coverFrom = 'music';
-      try { await pickCover(0); pic = !!form.photo; } catch (_) {}
-      coverItems = []; renderCovers();
+    if (window.casualApi && window.casualApi.online()) {
+      items = ((await window.casualApi.get(`/music/search?q=${encodeURIComponent(q)}${album ? '&kind=album' : ''}`)) || {}).items || [];
+      items = items.map(c => ({ ...c, via: 'server' }));
+    } else {
+      const res = await fetch(`https://itunes.apple.com/search?media=music&entity=${album ? 'album' : 'song'}&limit=8&country=US&term=${encodeURIComponent(q)}`);
+      items = ((await res.json()).results || []).filter(r => r && r.artworkUrl100 && !/karaoke|tribute|караоке/i.test((r.trackName || r.collectionName) + ' ' + r.artistName)).map(r => ({
+        title: String((album ? r.collectionName : r.trackName) || ''), artist: String(r.artistName || ''), album: album ? '' : String(r.collectionName || ''), year: String(r.releaseDate || '').slice(0, 4),
+        kind: album ? 'Альбом' : 'Трек', art: r.artworkUrl100.replace(/\/\d+x\d+bb\./, '/600x600bb.'), thumb: r.artworkUrl100, link: musicLinkOk(album ? r.collectionViewUrl : r.trackViewUrl), via: '',
+      }));
     }
-    musicLinkMsg(`${r.source}: ${[c.artist, c.title].filter(Boolean).join(' — ')}${c.art && !pic && !form.photo ? '. Обложка не загрузилась' : ''}`);
-  } catch (e) {
-    musicLinkMsg((e && e.message) || 'Сервис сейчас не ответил, попробуй ещё раз.', true);
-  } finally {
-    musicLinkBusy = false;
-    if (go) go.disabled = false;
+  } catch (_) {
+    if (seq === musicSeq) musicMsg('Поиск сейчас не отвечает, попробуй ещё раз.', true);
+    return;
+  }
+  if (seq !== musicSeq) return;
+  musicItems = items;
+  renderMusicResults();
+  musicMsg(items.length ? '' : 'Ничего не нашлось. Попробуй написать иначе.');
+}
+// выбрали трек: исполнитель, название, год, ссылка и обложка подставляются сами
+async function applyMusicPick(c) {
+  form.link = musicLinkOk(c.link);
+  // статус «Сингл» или «Альбом» берём из найденного, а «В планах» и другие, выбранные сами, не трогаем
+  if (!form.status || form.status === 'Сингл' || form.status === 'Альбом') { form.status = c.kind === 'Альбом' ? 'Альбом' : 'Сингл'; renderStatusSet(); }
+  // год из прошлого выбранного трека не должен остаться у нового
+  if (musicPhotoAuto && /^(18|19|20)\d{2}$/.test((form.meta || '').trim())) form.meta = '';
+  fillMusicFromCover({ title: c.title, artist: c.artist, kind: c.kind, year: c.year, genre: '' });
+  const swap = !form.photo || musicPhotoAuto; // своё фото не заменяем, а обложку от прошлого выбора — да
+  musicItems = [];
+  renderMusicResults();
+  const inp = $('musicQuery');
+  if (inp) inp.value = '';
+  renderMusicPicked();
+  scheduleDraft();
+  if (c.art && swap) {
+    coverItems = [{ ...c, kind: c.kind === 'Альбом' ? 'Альбом' : 'Трек' }]; coverFrom = 'music';
+    await pickCover(0);
+    musicPhotoAuto = !!form.photo;
+    coverItems = []; renderCovers();
+    if (!form.photo) musicMsg('Обложка не загрузилась');
   }
 }
-
 /* ---------- Фото исполнителя с Genius ---------- */
 // работает только после входа в онлайн-аккаунт: запрос идёт через наш сервер, где лежит токен Genius
 let geniusTimer = null, geniusKey = '', geniusItems = [], geniusPauseUntil = 0;
@@ -2098,12 +2127,12 @@ function splitLines(txt) {
   return String(txt || '').split(/\r?\n/).map(s => s.replace(/^[+\-•*]\s*/, '').trim()).filter(Boolean);
 }
 // ссылка на трек: только сами сервисы (то же правило на сервере)
-const MUSIC_LINK_RE = /^https:\/\/(open\.spotify\.com|(www\.|music\.)?youtube\.com|youtu\.be|soundcloud\.com)\/[^\s"'<>()\\]{1,300}$/;
+const MUSIC_LINK_RE = /^https:\/\/(open\.spotify\.com|(www\.|music\.)?youtube\.com|youtu\.be|soundcloud\.com|music\.apple\.com|(www\.)?deezer\.com)\/[^\s"'<>()\\]{1,300}$/;
 function musicLinkOk(v) { return typeof v === 'string' && MUSIC_LINK_RE.test(v) ? v : ''; }
 function listenHTML(r) {
   const u = musicLinkOk(r && r.link);
   if (!u) return '';
-  const src = /spotify/.test(u) ? 'Spotify' : /music\.youtube/.test(u) ? 'YouTube Music' : /soundcloud/.test(u) ? 'SoundCloud' : 'YouTube';
+  const src = /spotify/.test(u) ? 'Spotify' : /music\.youtube/.test(u) ? 'YouTube Music' : /soundcloud/.test(u) ? 'SoundCloud' : /music\.apple/.test(u) ? 'Apple Music' : /deezer/.test(u) ? 'Deezer' : 'YouTube';
   return `<a class="e-listen" href="${esc(u)}" target="_blank" rel="noopener noreferrer">🎧 Слушать в ${src}</a>`;
 }
 window.CasualListen = listenHTML;
@@ -2374,7 +2403,8 @@ function setScore(id, v) {
   scheduleDraft();
 }
 function resetForm(cat) {
-  musicLinkMsg('');
+  musicMsg('');
+  musicClear();
   revokeFormPhoto();
   form = blankForm(cat && state.cats.some(c => c.id === cat) ? cat : undefined);
   state.editCat = false;
@@ -5200,23 +5230,34 @@ if (el.favBtn) {
     scheduleDraft();
   });
 }
-// ссылку можно вставить в отдельное поле, а можно и прямо в «Исполнителя» или «Название»
+// поиск трека
 {
-  const ml = $('musicLink');
+  const ml = $('musicQuery');
   if (ml) {
-    ml.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); applyMusicLink(); } });
-    ml.addEventListener('paste', (e) => { const t = e.clipboardData && e.clipboardData.getData('text'); if (t && MUSIC_PASTE_RE.test(t)) { e.preventDefault(); ml.value = t.trim(); applyMusicLink(t); } });
-    ml.addEventListener('input', () => { if (!ml.value.trim()) { form.link = ''; musicLinkMsg(''); scheduleDraft(); } });
-    const go = $('musicLinkGo');
-    if (go) go.addEventListener('click', () => applyMusicLink());
-  }
-  [el.artist, el.name].forEach((inp) => {
-    if (inp) inp.addEventListener('paste', (e) => {
-      if (!formMusic()) return;
-      const t = e.clipboardData && e.clipboardData.getData('text');
-      if (t && MUSIC_PASTE_RE.test(t)) { e.preventDefault(); if (ml) ml.value = t.trim(); applyMusicLink(t); }
+    const run = () => {
+      clearTimeout(musicTimer);
+      const q = ml.value.trim();
+      if (q.length < 2) { musicSeq++; musicItems = []; renderMusicResults(); musicMsg(''); return; }
+      musicTimer = setTimeout(() => searchMusic(q), 420);
+    };
+    ml.addEventListener('input', run);
+    ml.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); if (musicItems.length) applyMusicPick(musicItems[0]); else run(); }
+      if (e.key === 'Escape' && musicItems.length) { e.stopPropagation(); musicItems = []; renderMusicResults(); }
+      if (e.key === 'ArrowDown' && musicItems.length) { e.preventDefault(); const f = document.querySelector('#musicResults .music-opt'); if (f) f.focus(); }
     });
-  });
+    const list = $('musicResults');
+    list.addEventListener('click', (e) => { const b = e.target.closest('[data-music]'); if (b && musicItems[+b.dataset.music]) applyMusicPick(musicItems[+b.dataset.music]); });
+    list.addEventListener('keydown', (e) => {
+      const b = e.target.closest('.music-opt');
+      if (!b) return;
+      if (e.key === 'ArrowDown' && b.nextElementSibling) { e.preventDefault(); b.nextElementSibling.focus(); }
+      if (e.key === 'ArrowUp') { e.preventDefault(); (b.previousElementSibling || ml).focus(); }
+      if (e.key === 'Escape') { e.stopPropagation(); musicItems = []; renderMusicResults(); ml.focus(); }
+    });
+    document.addEventListener('click', (e) => { if (musicItems.length && !e.target.closest('#musicResults, #musicQuery')) { musicItems = []; renderMusicResults(); } });
+    $('musicPicked').addEventListener('click', (e) => { if (e.target.closest('#musicUnlink')) { form.link = ''; renderMusicPicked(); scheduleDraft(); } });
+  }
 }
 if (el.artist) {
   el.artist.addEventListener('input', () => { form.artist = el.artist.value; artistPick = -1; showArtistList(); renderArtist(); updateNameState(); scheduleDraft(); scheduleCovers(); scheduleArtistNet(); });

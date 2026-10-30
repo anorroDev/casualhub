@@ -57,7 +57,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     id: r.id, name: String(r.name || 'Без названия'), cat: r.catName || r.catLabel || r.cat || 'Без категории',
     total: typeof r.total === 'number' ? r.total : null, scores: Array.isArray(r.scores) ? r.scores : [],
     status: r.status || '', fav: !!r.fav, meta: r.meta || '', photo: r.photo || null, note: !!String(r.note || '').trim(),
-    link: /^https:\/\/(open\.spotify\.com|(www\.|music\.)?youtube\.com|youtu\.be|soundcloud\.com)\/[^\s"'<>()\\]{1,300}$/.test(String(r.link || '')) ? r.link : '',
+    link: /^https:\/\/(open\.spotify\.com|(www\.|music\.)?youtube\.com|youtu\.be|soundcloud\.com|music\.apple\.com|(www\.)?deezer\.com)\/[^\s"'<>()\\]{1,300}$/.test(String(r.link || '')) ? r.link : '',
     genres: genresOf(r.meta),
     lb: r.src === 'letterboxd' || (Array.isArray(r.scores) && r.scores.some((s) => s && s.id === 'lb-score')),
     text: String(r.note || '').trim().slice(0, 4000), pros: String(r.pros || '').slice(0, 1000), cons: String(r.cons || '').slice(0, 1000),
@@ -354,6 +354,28 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     box.innerHTML = `<button type="button" data-st="all" aria-pressed="${S.status === 'all'}">Все</button>`
       + opts.map(([k, t, n]) => `<button type="button" data-st="${k}" aria-pressed="${S.status === k}">${t}<b>${n}</b></button>`).join('');
   }
+  // смена фильтра: что осталось, переезжает на новое место, новое выпрыгивает по очереди
+  const motionKey = (el) => el.dataset.acat || el.dataset.cat || el.dataset.st || el.dataset.genre || el.getAttribute('href') || '';
+  function moving(boxes, change) {
+    const nodes = () => boxes.flatMap((s) => { const b = $(s); return b ? [...b.querySelectorAll('.chip, [data-st], a[href]')] : []; });
+    if (calm) { change(); return; }
+    const before = new Map();
+    nodes().forEach((el) => { const k = motionKey(el); if (k) before.set(k, el.getBoundingClientRect()); });
+    change();
+    let fresh = 0;
+    nodes().slice(0, 80).forEach((el) => {
+      const was = before.get(motionKey(el));
+      const r = el.getBoundingClientRect();
+      if (r.bottom < 0 || r.top > innerHeight) return; // за экраном двигать незачем
+      if (!was) {
+        el.animate([{ transform: 'translateY(12px) scale(.82)' }, { transform: 'none' }], { duration: 420, delay: Math.min(fresh++, 12) * 28, easing: 'cubic-bezier(.34, 1.56, .64, 1)', fill: 'backwards' });
+      } else if (Math.abs(was.left - r.left) > 1 || Math.abs(was.top - r.top) > 1) {
+        el.animate([{ transform: `translate(${was.left - r.left}px, ${was.top - r.top}px)` }, { transform: 'none' }], { duration: 420, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+      }
+    });
+  }
+  // сменили статус: выбранные жанры, которых под него нет, снимаются, иначе список внезапно окажется пустым
+  const fitGenres = (S, pool) => { S.genres = S.genres.filter((g) => pool.some((r) => r.genres.includes(g))); };
   // фильтр по жанрам: кнопка «Фильтры» раскрывает строку жанров; выбранные нужны все сразу
   const hasGenres = (r, sel) => sel.every((g) => r.genres.includes(g));
   function genreUI(btn, box, pool, S) {
@@ -1203,11 +1225,17 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         const k = b.dataset.acat;
         AST.cats = k === '*' ? [] : AST.cats.includes(k) ? AST.cats.filter((x) => x !== k) : [...AST.cats, k];
         AST.limit = 60;
-        drawAll();
+        moving(['#allCats', '#allStSeg', '#allGenres', '#allBody'], drawAll);
       });
       $('#allQ').addEventListener('input', (e) => { AST.q = e.target.value; AST.limit = 60; drawAll(); });
-      $('#allSort').addEventListener('click', (e) => { const b = e.target.closest('[data-sort]'); if (b) { AST.sort = b.dataset.sort; keepAll(); drawAll(); } });
-      $('#allStSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-st]'); if (b) { AST.status = b.dataset.st; AST.limit = 60; drawAll(); } });
+      $('#allSort').addEventListener('click', (e) => { const b = e.target.closest('[data-sort]'); if (b) { AST.sort = b.dataset.sort; keepAll(); moving(['#allCats', '#allStSeg', '#allGenres', '#allBody'], drawAll); } });
+      $('#allStSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-st]'); if (b) {
+        AST.status = b.dataset.st; AST.limit = 60;
+        const fit = allP.ratings.filter((r) => statusOk(r, AST.status));
+        AST.cats = AST.cats.filter((k) => fit.some((r) => keyOf(r.cat) === k));
+        fitGenres(AST, fit.filter((r) => !AST.cats.length || AST.cats.includes(keyOf(r.cat))));
+        moving(['#allCats', '#allStSeg', '#allGenres', '#allBody'], drawAll);
+      } });
       $('#allView').addEventListener('click', (e) => { const b = e.target.closest('[data-view]'); if (b) { AST.view = b.dataset.view; AST.limit = 60; keepAll(); drawAll(); } });
       $('#allMore').addEventListener('click', () => { AST.limit += 60; drawAll(); });
       // «Свой тир-лист»: те же оценки, что сейчас на странице (темы, жанры, поиск), раскладываются по рядам вручную
@@ -1220,7 +1248,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
           items: (AST.shown || []).map((r) => ({ id: r.id, name: r.name, total: r.total, img: r.photo ? () => photoOf(p, r) : '' })),
         });
       });
-      wireGenres($('#allGenreBtn'), $('#allGenres'), AST, drawAll);
+      wireGenres($('#allGenreBtn'), $('#allGenres'), AST, () => moving(['#allCats', '#allStSeg', '#allGenres', '#allBody'], drawAll));
     }
     $('#allWho').textContent = p.name;
     drawAll();
@@ -1229,14 +1257,17 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const p = allP, rs = p.ratings;
     const cats = [...new Map(rs.map((r) => [keyOf(r.cat), r.cat])).entries()];
     AST.cats = AST.cats.filter((k) => cats.some(([c]) => c === k));
-    $('#allCats').innerHTML = cats.length > 1 ? [`<button type="button" class="chip" data-acat="*" aria-pressed="${!AST.cats.length}">Все <b>${rs.length}</b></button>`]
-      .concat(cats.map(([k, t]) => `<button type="button" class="chip" data-acat="${esc(k)}" aria-pressed="${AST.cats.includes(k)}">${esc(t)} <b>${rs.filter((r) => keyOf(r.cat) === k).length}</b></button>`)).join('') : '';
+    // темы и цифры у них — только то, что подходит под выбранный статус
+    const byStatus = rs.filter((r) => statusOk(r, AST.status));
+    const shownCats = cats.filter(([k]) => AST.cats.includes(k) || byStatus.some((r) => keyOf(r.cat) === k));
+    $('#allCats').innerHTML = shownCats.length > 1 || AST.cats.length ? [`<button type="button" class="chip" data-acat="*" aria-pressed="${!AST.cats.length}">Все <b>${byStatus.length}</b></button>`]
+      .concat(shownCats.map(([k, t]) => `<button type="button" class="chip" data-acat="${esc(k)}" aria-pressed="${AST.cats.includes(k)}">${esc(t)} <b>${byStatus.filter((r) => keyOf(r.cat) === k).length}</b></button>`)).join('') : '';
     $('#allSort').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.sort === AST.sort)));
     $('#allView').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === AST.view)));
     $('#allSort').hidden = AST.view === 'tier';
     const q = keyOf(AST.q);
     const inCats = rs.filter((r) => !AST.cats.length || AST.cats.includes(keyOf(r.cat)));
-    genreUI($('#allGenreBtn'), $('#allGenres'), inCats, AST);
+    genreUI($('#allGenreBtn'), $('#allGenres'), inCats.filter((r) => statusOk(r, AST.status)), AST);
     statusSegUI($('#allStSeg'), inCats, AST);
     const list = inCats.filter((r) => statusOk(r, AST.status) && hasGenres(r, AST.genres) && (!q || keyOf(r.name + ' ' + r.meta).includes(q)));
     AST.shown = list;
@@ -1731,12 +1762,15 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const cats = [...new Set(rs.map((r) => r.cat))];
     const chips = $('#catChips');
     const draw = () => {
-      chips.innerHTML = cats.length > 1 ? [`<button type="button" class="chip" data-cat="all" aria-pressed="${ST.cat === 'all'}">Все <b>${rs.length}</b></button>`]
-        .concat(cats.map((c) => `<button type="button" class="chip" data-cat="${esc(c)}" aria-pressed="${ST.cat === c}">${esc(c)} <b>${rs.filter((r) => r.cat === c).length}</b></button>`)).join('') : '';
+      // темы и цифры у них — только то, что подходит под выбранный статус
+      const byStatus = rs.filter((r) => statusOk(r, ST.status));
+      const shownCats = cats.filter((c) => ST.cat === c || byStatus.some((r) => r.cat === c));
+      chips.innerHTML = shownCats.length > 1 || ST.cat !== 'all' ? [`<button type="button" class="chip" data-cat="all" aria-pressed="${ST.cat === 'all'}">Все <b>${byStatus.length}</b></button>`]
+        .concat(shownCats.map((c) => `<button type="button" class="chip" data-cat="${esc(c)}" aria-pressed="${ST.cat === c}">${esc(c)} <b>${byStatus.filter((r) => r.cat === c).length}</b></button>`)).join('') : '';
       $('#sortSeg').querySelectorAll('button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.sort === ST.sort)));
       const q = keyOf(ST.q);
       const inCat = rs.filter((r) => ST.cat === 'all' || r.cat === ST.cat);
-      genreUI($('#genreBtn'), $('#genreChips'), inCat, ST);
+      genreUI($('#genreBtn'), $('#genreChips'), inCat.filter((r) => statusOk(r, ST.status)), ST);
       statusSegUI($('#stSeg'), inCat, ST);
       let list = inCat.filter((r) => statusOk(r, ST.status) && hasGenres(r, ST.genres) && (!q || keyOf(r.name + ' ' + r.meta).includes(q)));
       list.sort(ST.sort === 'date' ? (a, b) => b.at - a.at : ST.sort === 'name' ? (a, b) => a.name.localeCompare(b.name, 'ru') : (a, b) => (b.total ?? -1) - (a.total ?? -1) || b.at - a.at);
@@ -1753,12 +1787,18 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     };
     // профиль перерисовывается и сам (пришли друзья, оценка с сервера): написанный поиск остаётся в поле, раз он всё ещё фильтрует список
     $('#q').value = ST.q;
-    chips.addEventListener('click', (e) => { const b = e.target.closest('[data-cat]'); if (!b) return; ST.cat = b.dataset.cat; ST.limit = 24; draw(); });
-    $('#sortSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-sort]'); if (!b) return; ST.sort = b.dataset.sort; draw(); });
-    $('#stSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-st]'); if (!b) return; ST.status = b.dataset.st; ST.limit = 24; draw(); });
+    chips.addEventListener('click', (e) => { const b = e.target.closest('[data-cat]'); if (!b) return; ST.cat = b.dataset.cat; ST.limit = 24; moving(['#catChips', '#stSeg', '#genreChips', '#list'], draw); });
+    $('#sortSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-sort]'); if (!b) return; ST.sort = b.dataset.sort; moving(['#catChips', '#stSeg', '#genreChips', '#list'], draw); });
+    $('#stSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-st]'); if (!b) return;
+      ST.status = b.dataset.st; ST.limit = 24;
+      const fit = rs.filter((r) => statusOk(r, ST.status));
+      if (ST.cat !== 'all' && !fit.some((r) => r.cat === ST.cat)) ST.cat = 'all';
+      fitGenres(ST, fit.filter((r) => ST.cat === 'all' || r.cat === ST.cat));
+      moving(['#catChips', '#stSeg', '#genreChips', '#list'], draw);
+    });
     $('#q').addEventListener('input', (e) => { ST.q = e.target.value; ST.limit = 24; draw(); });
     $('#more').addEventListener('click', () => { ST.limit += 24; draw(); });
-    wireGenres($('#genreBtn'), $('#genreChips'), ST, draw);
+    wireGenres($('#genreBtn'), $('#genreChips'), ST, () => moving(['#catChips', '#stSeg', '#genreChips', '#list'], draw));
     draw();
   }
 

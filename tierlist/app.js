@@ -183,7 +183,7 @@
     for (let i = 0; i < need.length; i += 40) {
       const part = need.slice(i, i + 40);
       let images = {};
-      try { images = (await api('/tier-imgs/' + encodeURIComponent(uid), 'POST', { keys: part })).images || {}; } catch (e) { continue; }
+      try { images = (await api('/tierlist-imgs/' + encodeURIComponent(uid), 'POST', { keys: part })).images || {}; } catch (e) { continue; }
       for (const k of part) {
         const data = images[k];
         if (typeof data !== 'string' || !DATA_RE.test(data)) continue;
@@ -192,7 +192,7 @@
     }
   }
   async function pull() {
-    const d = await api('/tiers');
+    const d = await api('/tierlists');
     let changed = false;
     for (const g of d.deleted || []) {
       const l = lists.find((x) => x.id === g.id);
@@ -206,7 +206,7 @@
     for (const it of d.items || []) {
       const l = lists.find((x) => x.id === it.id);
       if (l && it.at <= l.at) { if (it.at === l.at) sync.marks[it.id] = it.at; continue; }
-      const r = await api(`/tier/${encodeURIComponent(me)}/${encodeURIComponent(it.id)}`);
+      const r = await api(`/tierlist/${encodeURIComponent(me)}/${encodeURIComponent(it.id)}`);
       const fresh = clean(r.list);
       if (!fresh) continue;
       fresh.id = it.id; fresh.at = it.at;
@@ -220,7 +220,7 @@
   }
   async function push() {
     for (const g of [...sync.del]) {
-      await api(`/tier/${encodeURIComponent(g.id)}?at=${g.at}`, 'DELETE');
+      await api(`/tierlist/${encodeURIComponent(g.id)}?at=${g.at}`, 'DELETE');
       sync.del = sync.del.filter((x) => x !== g);
       delete sync.marks[g.id];
     }
@@ -232,7 +232,7 @@
         const b = await idb('readonly', (st) => st.get(it.img));
         if (!(b instanceof Blob)) continue;
         try {
-          await api('/tier-img/' + encodeURIComponent(it.img), 'PUT', { data: await blobToData(b) });
+          await api('/tierlist-img/' + encodeURIComponent(it.img), 'PUT', { data: await blobToData(b) });
           sync.sent[it.img] = 1;
         } catch (e) {
           if (e.status === 413) { if (!imgLimitShown) { imgLimitShown = true; toast(e.message); } continue; }
@@ -241,7 +241,7 @@
       }
       const sentAt = l.at;
       let r;
-      try { r = await api('/tier/' + encodeURIComponent(l.id), 'PUT', { list: l }); }
+      try { r = await api('/tierlist/' + encodeURIComponent(l.id), 'PUT', { list: l }); }
       catch (e) {
         // этот тир-лист сервер не примет и в следующий раз, но остальные это задерживать не должно
         if (e.status === 413 || e.status === 400) { if (!listLimitShown) { listLimitShown = true; toast(e.message); } continue; }
@@ -328,7 +328,7 @@
 
   // ---------- состояние страницы ----------
   const view = $('#view');
-  const S = { list: null, friend: null, sel: '', pop: '', armed: '', tab: 'mine', who: '', feed: null, feedAt: 0, built: '' };
+  const S = { list: null, friend: null, sel: '', pop: '', dropped: '', armed: '', tab: 'mine', who: '', feed: null, feedAt: 0, built: '' };
   let drag = null, justDragged = false;
   const fmtDate = (t) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
   const allItems = (l) => [...l.rows.flatMap((r) => r.items), ...l.pool];
@@ -388,7 +388,7 @@
     if (!me) { box.innerHTML = '<p class="tl-empty">Тир-листы друзей видны после входа в аккаунт.</p>'; return; }
     if (!S.feed) box.innerHTML = '<p class="tl-empty">Загружаю…</p>';
     if (!S.feed || Date.now() - S.feedAt > 30e3) {
-      try { S.feed = await api('/tiers-feed'); S.feed.items = (S.feed.items || []).filter((x) => x.title || +x.count > 0); S.feedAt = Date.now(); }
+      try { S.feed = await api('/tierlists-feed'); S.feed.items = (S.feed.items || []).filter((x) => x.title || +x.count > 0); S.feedAt = Date.now(); }
       catch (e) { if (!S.feed) { if (S.tab === 'friends' && $('#tlPanel')) $('#tlPanel').innerHTML = `<p class="tl-empty">${esc(e.message)}</p>`; return; } }
     }
     if (S.tab !== 'friends' || !$('#tlPanel')) return;
@@ -414,7 +414,7 @@
       const list = [...keys].filter((k) => !urls.has(k));
       for (let i = 0; i < list.length; i += 40) {
         try {
-          const { images } = await api('/tier-imgs/' + encodeURIComponent(uid), 'POST', { keys: list.slice(i, i + 40) });
+          const { images } = await api('/tierlist-imgs/' + encodeURIComponent(uid), 'POST', { keys: list.slice(i, i + 40) });
           Object.entries(images || {}).forEach(([k, d]) => { if (typeof d === 'string' && DATA_RE.test(d)) urls.set(k, d); });
         } catch (e) { break; }
       }
@@ -451,6 +451,45 @@
     }).join('');
   }
 
+  // где сейчас карточки: после перерисовки они поедут отсюда на новые места
+  function cardSpots() {
+    const spots = new Map();
+    if (reduced) return spots;
+    view.querySelectorAll('.tl-it[data-id]').forEach((el) => {
+      const row = el.closest('[data-row]');
+      spots.set(el.dataset.id, { rect: el.getBoundingClientRect(), row: row ? row.dataset.row : '' });
+    });
+    return spots;
+  }
+  function flyCards(before) {
+    if (!before.size || drag) return;
+    view.querySelectorAll('.tl-it[data-id]').forEach((el) => {
+      const id = el.dataset.id, was = before.get(id);
+      if (!was || id === S.dropped) return;
+      const r = el.getBoundingClientRect();
+      const dx = was.rect.left - r.left, dy = was.rect.top - r.top;
+      if (Math.abs(dx) < 1 && Math.abs(dy) < 1) return;
+      const row = el.closest('[data-row]');
+      if (!row || row.dataset.row === was.row) {
+        el.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 300, easing: 'cubic-bezier(.2, .8, .2, 1)' });
+        return;
+      }
+      // в другой ряд: ряды обрезают содержимое по краям, поэтому летит копия поверх страницы
+      el.classList.remove('pop');
+      const ghost = el.cloneNode(true);
+      ghost.classList.add('tl-ghost', 'tl-fly');
+      ghost.style.left = r.left + 'px';
+      ghost.style.top = r.top + 'px';
+      document.body.appendChild(ghost);
+      el.style.visibility = 'hidden';
+      ghost.animate([
+        { transform: `translate(${dx}px, ${dy}px) scale(1.04) rotate(-3deg)` },
+        { transform: 'translate(0, 0) scale(1)' },
+      ], { duration: 460, easing: 'cubic-bezier(.34, 1.3, .64, 1)' });
+      setTimeout(() => { ghost.remove(); el.style.visibility = ''; }, 460);
+    });
+    S.dropped = '';
+  }
   function boardIntro(el) {
     if (!el) return;
     el.classList.add('intro');
@@ -489,6 +528,7 @@
       boardIntro($('#tlBoard'));
       if (me) mountSocial(me, l.id, true);
     }
+    const before = cardSpots();
     const title = $('#tlTitle');
     if (document.activeElement !== title) title.value = l.title;
     $('#tlCaps').checked = l.captions;
@@ -505,6 +545,7 @@
     const selBar = S.sel ? '<span class="tl-selbar"><button type="button" class="btn small ghost" data-do="sel-pool">Убрать из ряда</button></span>' : '';
     $('#tlDock').innerHTML = `<div class="tl-row tl-pool" data-row=""><div class="tl-pool-h"><span>Без места · ${n}</span>${selBar}</div><div class="tl-items">${l.pool.map((id) => cardHTML(l, id)).join('') || `<span class="tl-drop">${Object.keys(l.items).length ? 'Всё разложено 👌' : 'Добавь карточки кнопками наверху'}</span>`}</div></div>`;
     { const p = $('#tlDock .tl-items'); if (p) p.scrollTop = poolScroll; }
+    flyCards(before);
     S.pop = '';
     if (S.sel && !touch) { const b = view.querySelector(`.tl-it[data-id="${CSS.escape(S.sel)}"] .tl-card`); if (b) b.focus({ preventScroll: true }); }
   }
@@ -877,7 +918,7 @@
     view.innerHTML = '<section class="card"><p class="tl-empty">Загружаю…</p></section>';
     window.scrollTo(0, 0);
     let d;
-    try { d = await api(`/tier/${encodeURIComponent(uid)}/${encodeURIComponent(id)}`); }
+    try { d = await api(`/tierlist/${encodeURIComponent(uid)}/${encodeURIComponent(id)}`); }
     catch (e) {
       if (S.built !== 'friend:' + uid + '.' + id) return;
       view.innerHTML = `<section class="card"><p class="tl-empty">${esc(e.message)}</p><div class="tl-foot"><a class="btn small ghost" href="#friends">‹ Тир-листы друзей</a></div></section>`;
@@ -1072,7 +1113,14 @@
     }
     if (!S.list || justDragged) return;
     const x = e.target.closest('.tl-x');
-    if (x) { removeWithUndo(x.closest('.tl-it').dataset.id); return; }
+    if (x) {
+      const card = x.closest('.tl-it'), id = card.dataset.id;
+      if (reduced || !card.animate) { removeWithUndo(id); return; }
+      card.style.pointerEvents = 'none';
+      card.animate([{ transform: 'none' }, { transform: 'scale(.2) rotate(-14deg)' }], { duration: 170, easing: 'cubic-bezier(.5, 0, .75, 0)', fill: 'forwards' });
+      setTimeout(() => removeWithUndo(id), 170); // по таймеру: в фоновой вкладке анимации не доигрывают
+      return;
+    }
     const it = e.target.closest('.tl-it');
     const row = e.target.closest('[data-row]');
     if (S.sel) {
@@ -1186,7 +1234,7 @@
       d.src.classList.remove('tl-src');
       if (d.row) d.row.classList.remove('over');
       if (d.near) d.near.classList.remove('ins-before', 'ins-after');
-      if (ev.type === 'pointerup' && d.row) moveTo(d.id, d.row.dataset.row, d.near ? d.near.dataset.id : '', d.after);
+      if (ev.type === 'pointerup' && d.row) { S.dropped = d.id; moveTo(d.id, d.row.dataset.row, d.near ? d.near.dataset.id : '', d.after); }
       renderEditor();
       // клик сразу после перетаскивания — не выбор карточки
       justDragged = true;

@@ -38,7 +38,7 @@
   const tierCount = (() => { try { const u = JSON.parse(localStorage.getItem('ocenshik.user.v1') || 'null'); const d = JSON.parse(localStorage.getItem('casualhub.tierlists.v1' + (u && u.id ? ':' + u.id : '')) || 'null'); return d && Array.isArray(d.lists) ? d.lists.length : 0; } catch (e) { return 0; } })();
   $('#tierMeta').innerHTML = tierCount ? chip(tierCount, plural(tierCount, 'тир-лист', 'тир-листа', 'тир-листов')) : chip('', 'Пока нет своих');
   $('#wheelMeta').innerHTML = total
-    ? chip(alive, plural(alive, 'участник', 'участника', 'участников') + (alive < total ? ` из ${total}` : '') + ' на колесе')
+    ? chip(alive, alive < total ? `из ${total} на колесе` : plural(alive, 'участник', 'участника', 'участников'))
     : '<span class="chip">Колесо пустое</span>';
 
   // ---------- превью Мнения: свой топ-3 или примеры ----------
@@ -96,16 +96,19 @@
   const showName = (s) => {
     if (nameEl.textContent === s) return;
     nameEl.textContent = s;
-    if (!calm) nameEl.animate([{ transform: 'none' }, { transform: 'translateY(-5px) scale(1.05)' }, { transform: 'none' }], { duration: 300, easing: SPRING });
+    if (!calm) nameEl.animate([{ transform: 'translateY(7px) scale(.97)' }, { transform: 'none' }], { duration: 340, easing: SPRING });
   };
   const flick = () => ptr.animate([{ transform: 'rotate(0deg)' }, { transform: 'rotate(-18deg)' }, { transform: 'rotate(0deg)' }], { duration: 120, easing: 'ease-in-out' });
   nameEl.textContent = under();
   let watching = false;
   const watch = () => {
-    let last = nameEl.textContent;
+    let last = under(), shownAt = 0;
     const loop = () => {
       const s = under();
-      if (s !== last) { last = s; showName(s); flick(); }
+      if (s !== last) { last = s; flick(); }
+      // на большой скорости имена мелькали бы и резали глаза: новое не чаще раза в полсекунды, точное — когда колесо встанет
+      const now = performance.now();
+      if (last !== nameEl.textContent && now - shownAt >= 500) { shownAt = now; showName(last); }
       if (watching) requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
@@ -214,7 +217,7 @@
       const x = it.react;
       const ico = (x.emoji && RXI[x.emoji]) || '';
       const what = x.tier ? (ico ? `${ico} на твой тир-лист` : '💬 комментарий к твоему тир-листу') : x.emoji === 'nope' ? '🙅 «не согласен» на твою оценку' : ico ? `${ico} на твою оценку` : '💬 комментарий к твоей оценке';
-      return `<li><a class="fd" href="${x.tier ? '/tier/#l=' + encodeURIComponent(x.tier) : '/opinion/#r=' + encodeURIComponent(x.rid)}" title="${x.tier ? 'Открыть тир-лист' : 'Открыть твою оценку'}">
+      return `<li><a class="fd" href="${x.tier ? '/tierlist/#l=' + encodeURIComponent(x.tier) : '/opinion/#r=' + encodeURIComponent(x.rid)}" title="${x.tier ? 'Открыть тир-лист' : 'Открыть твою оценку'}">
         <span class="fd-pic rx" style="--fc:${colorOf(it.user.id)}">${ico || '💬'}</span>
         <span class="fd-text"><b>${who}: ${esc(what)}</b><span>«${esc(x.name)}»${x.text ? ' · ' + esc(x.text) : ''} · ${ago(it.at)}</span></span>
         <span class="fd-score none">открыть</span></a></li>`;
@@ -222,7 +225,7 @@
     // друг написал мне: на стене профиля или под моей оценкой
     if (it.kind === 'comment') {
       const x = it.comment;
-      const href = x.tier ? `/tier/#l=${encodeURIComponent(x.tier)}` : x.rid ? `/opinion/#r=${encodeURIComponent(x.rid)}` : '/profile/#wallSec';
+      const href = x.tier ? `/tierlist/#l=${encodeURIComponent(x.tier)}` : x.rid ? `/opinion/#r=${encodeURIComponent(x.rid)}` : '/profile/#wallSec';
       return `<li><a class="fd" href="${href}" title="${x.tier ? 'Открыть тир-лист' : x.rid ? 'Открыть оценку' : 'Открыть стену профиля'}">
         <span class="fd-pic rx" style="--fc:${colorOf(it.user.id)}">💬</span>
         <span class="fd-text"><b>${who}: ${x.rid || x.tier ? `комментарий к «${esc(x.name)}»` : 'написал на твоей стене'}</b><span>${esc(x.text)} · ${ago(it.at)}</span></span>
@@ -231,7 +234,7 @@
     // друг собрал тир-лист
     if (it.kind === 'tier') {
       const x = it.tier;
-      return `<li><a class="fd" href="/tier/#f=${encodeURIComponent(it.user.id)}.${encodeURIComponent(x.id)}" title="Открыть тир-лист">
+      return `<li><a class="fd" href="/tierlist/#f=${encodeURIComponent(it.user.id)}.${encodeURIComponent(x.id)}" title="Открыть тир-лист">
         <span class="fd-pic rx" style="--fc:${colorOf(it.user.id)}">🏆</span>
         <span class="fd-text"><b>${who}: тир-лист «${esc(x.title || 'Без названия')}»</b><span>${x.count} ${plural(x.count, 'карточка', 'карточки', 'карточек')} · ${ago(it.at)}</span></span>
         <span class="fd-score none">открыть</span></a></li>`;
