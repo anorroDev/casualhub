@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS users (
   hide_online INTEGER              -- 1: не показывать друзьям, что в сети
 );
 CREATE INDEX IF NOT EXISTS users_seen ON users(last_seen);
+CREATE INDEX IF NOT EXISTS users_nkey ON users(nkey);
 CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users(email);
 -- Сервер сам создаёт эти таблицы и добавляет колонки email и nkey при первом запросе,
 -- так что этот файл нужен только для ручной установки.
@@ -43,6 +44,7 @@ CREATE TABLE IF NOT EXISTS photos (
   data TEXT NOT NULL,
   updated_at INTEGER NOT NULL
 );
+CREATE INDEX IF NOT EXISTS photos_user ON photos(user_id);
 
 -- Копия оценок пользователя ({ratings, deleted}), которую видят его друзья и его же другие устройства
 CREATE TABLE IF NOT EXISTS shelves (

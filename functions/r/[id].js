@@ -117,8 +117,9 @@ export async function onRequest({ request, env, params }) {
   try {
     sh = await env.DB.prepare('SELECT owner_id, rid FROM shares WHERE id = ?').bind(id).first();
     if (!sh) return notFound();
-    user = await env.DB.prepare('SELECT username, uname FROM users WHERE id = ?').bind(sh.owner_id).first();
-    const shelf = readShelf(await env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(sh.owner_id).first());
+    user = await env.DB.prepare('SELECT username, uname, banned FROM users WHERE id = ?').bind(sh.owner_id).first();
+    if (user && user.banned) return notFound(); // отзывы забаненного по ссылке не открываются
+    const shelf =readShelf(await env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(sh.owner_id).first());
     r = cleanRating(shelf.ratings.find((x) => x && x.id === sh.rid && !x.example));
   } catch (e) { return notFound(); }
   if (!r || !user) return notFound();

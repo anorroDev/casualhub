@@ -1368,7 +1368,9 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const { p, r } = rdCur;
     const doc = ownDoc(p, r.id);
     if (!doc) return;
-    doc.fav = !doc.fav; // как в Мнении: избранное не считается правкой оценки
+    doc.fav = !doc.fav;
+    // как в Мнении: избранное не правка оценки, в списке она не сдвигается, но чуть новее, чтобы другое устройство приняло выбор
+    doc.updatedAt = new Date((+new Date(doc.updatedAt || doc.createdAt || 0) || Date.now()) + 1000).toISOString();
     rdCommit(p, doc, doc.fav ? '★ В избранном' : 'Убрано из избранного');
   }
   // ссылка на отзыв (страница /r/<код>): та же, что делает Мнение
@@ -1378,7 +1380,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     let id = '';
     try { id = (await send('POST', '/share', { rid: r.id })).id; } catch (st) {
       // оценка ещё не дошла до сервера: отправляем её и пробуем ещё раз
-      const doc = st === 404 && ownDoc(p, r.id);
+      const doc = st && st.status === 404 && ownDoc(p, r.id);
       if (doc) { try { await send('PUT', '/shelf', { ratings: [shelfCopy(doc)] }); id = (await send('POST', '/share', { rid: r.id })).id; } catch (e) {} }
     }
     b.disabled = false;
@@ -1435,7 +1437,12 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         else if (act === 'link') rdLink(b);
       });
       rdBox.addEventListener('input', (e) => { const f = e.target.dataset && e.target.dataset.f; if (f && rdEd) rdEd[f] = e.target.value; });
-      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !rdBox.hidden) closeRating(); });
+      document.addEventListener('keydown', (e) => {
+        if (e.key !== 'Escape' || rdBox.hidden) return;
+        // во время правки Esc не стирает написанное: выйти можно кнопкой «Отмена»
+        if (rdEd) { toast('Сохрани или отмени правку кнопками вверху'); return; }
+        closeRating();
+      });
     }
     if (rdBox.hidden) { rdBack = document.activeElement; rdEd = null; }
     rdCur = { p, r };
@@ -1655,7 +1662,13 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     if (window.CasualOnline) window.CasualOnline.paint(app);
     hydratePhotos(p, app);
     countUp();
+    // ссылка из ленты: /profile/#wallSec. Блока при загрузке страницы ещё не было, поэтому браузер сам не прокрутил
+    if (!hashDone && location.hash.length > 1) {
+      const t = document.getElementById(location.hash.slice(1));
+      if (t) { hashDone = true; setTimeout(() => jumpTo(t), 300); }
+    }
   }
+  let hashDone = false;
 
   const rateLink = (p, r) => (p.kind === 'me' || !p.uid ? `/mnenie/#r=${encodeURIComponent(r.id)}` : `/mnenie/#friend=${encodeURIComponent(p.uid)}&r=${encodeURIComponent(r.id)}`);
   // плитки и категории: прокрутка к разделу, категория ещё и фильтрует список
@@ -1736,6 +1749,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       $('#more').hidden = list.length <= ST.limit;
       hydratePhotos(p, $('#list'));
     };
+    // профиль перерисовывается и сам (пришли друзья, оценка с сервера): написанный поиск остаётся в поле, раз он всё ещё фильтрует список
+    $('#q').value = ST.q;
     chips.addEventListener('click', (e) => { const b = e.target.closest('[data-cat]'); if (!b) return; ST.cat = b.dataset.cat; ST.limit = 24; draw(); });
     $('#sortSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-sort]'); if (!b) return; ST.sort = b.dataset.sort; draw(); });
     $('#stSeg').addEventListener('click', (e) => { const b = e.target.closest('[data-st]'); if (!b) return; ST.status = b.dataset.st; ST.limit = 24; draw(); });
@@ -1769,9 +1784,21 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       return true;
     } catch (e) { return false; }
   };
+  // баннер уже был в аккаунте: если там его больше нет, значит, его убрали, а не «ещё не отправили»
+  const BAN_SYNC_KEY = 'casualhub.bannerSynced.v1';
+  const bannerSynced = (on) => {
+    const all = read(BAN_SYNC_KEY) || {};
+    if (on === undefined) return !!all[bannerOwner()];
+    try { all[bannerOwner()] = on ? 1 : 0; localStorage.setItem(BAN_SYNC_KEY, JSON.stringify(all)); } catch (e) {}
+    return on;
+  };
   const send = (method, path, body) => fetch('/api' + path, {
     method, headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined,
-  }).then((r) => (r.ok ? r.json() : Promise.reject(r.status)));
+  }).then(async (r) => {
+    if (r.ok) return r.json();
+    const d = await r.json().catch(() => ({})); // текст ошибки от сервера: показываем его человеку
+    return Promise.reject({ status: r.status, error: d.error });
+  });
   // видимая часть баннера едет вместе с картинкой: «…#pos=x,y» в конце (браузер такой хвост у картинки не читает)
   const posOf = (d) => { const m = /#pos=(\d{1,3}),(\d{1,3})$/.exec(d || ''); return m ? { x: Math.min(100, +m[1]), y: Math.min(100, +m[2]) } : { x: 50, y: 50 }; };
   const bare = (d) => String(d || '').replace(/#pos=\d{1,3},\d{1,3}$/, '');
@@ -2076,7 +2103,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       if (!token) { say(kept ? (d ? 'Баннер стоит. Войди в аккаунт, чтобы его видели друзья.' : 'Баннер убран.') : 'Браузер не дал сохранить баннер: мало места.', !kept); return; }
       banner.classList.add('busy');
       (d ? send('PUT', '/photo/banner', { data: d }) : send('DELETE', '/photo/banner'))
-        .then(() => say(d ? 'Готово, друзья тоже увидят этот баннер.' : 'Баннер убран.'), () => say('Баннер стоит здесь, но в аккаунт не сохранился. Попробуй ещё раз позже.', true))
+        .then(() => { bannerSynced(!!d); say(d ? 'Готово, друзья тоже увидят этот баннер.' : 'Баннер убран.'); }, () => say('Баннер стоит здесь, но в аккаунт не сохранился. Попробуй ещё раз позже.', true))
         .finally(() => banner.classList.remove('busy'));
     };
     const fromFile = async (f) => {
@@ -2121,18 +2148,20 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         if (!value || value.length < 2 || value.length > 24) { toast('Ник должен быть от 2 до 24 символов'); input.focus(); return; }
         const sb = form.querySelector('[type="submit"]'); if (sb.disabled) return; sb.disabled = true; // двойное нажатие не отправляет ник дважды
         try {
+          // ник такой, каким его сохранил сервер (лишние пробелы он убирает)
+          let nick = value;
           if (token) {
             const d = await send('PUT', '/account', { username: value });
-            if (d.user && user) user.name = d.user.username || value;
-          } else if (user) {
-            user.name = value;
+            if (d.user && d.user.username) nick = d.user.username;
           }
           if (user) {
-            const users = (read('ocenshik.users.v1') || []).map((u) => u.id === user.id ? { ...u, name: value } : u);
+            user.name = nick;
+            const users = (read('ocenshik.users.v1') || []).map((u) => u.id === user.id ? { ...u, name: nick } : u);
             localStorage.setItem('ocenshik.user.v1', JSON.stringify(user));
             localStorage.setItem('ocenshik.users.v1', JSON.stringify(users));
+            if (window.CasualAccount) window.CasualAccount.render(); // кнопка профиля в шапке
           }
-          p.name = value;
+          p.name = nick;
           p.editingName = false;
           render(p);
           toast('Ник обновлён');
@@ -2180,11 +2209,19 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       // оценки из аккаунта: здесь могут быть не все (например, музыку оценили на другом устройстве, а Мнение здесь не открывали)
       api(`/shelf/${encodeURIComponent(meServer.id)}`).then((s) => {
         let changed = false;
-        const have = new Set(p.allRatings.map((r) => r.id));
+        // удалённые на другом устройстве: пропадают и здесь, как в Мнении
+        const gone = new Map((s.deleted || []).filter((d) => d && d.id).map((d) => [d.id, +d.at || 0]));
+        if (gone.size) {
+          const kept = p.allRatings.filter((r) => !(gone.has(r.id) && r.at <= gone.get(r.id)));
+          if (kept.length !== p.allRatings.length) { p.allRatings = kept; changed = true; }
+        }
+        // недостающие добавляются, а если на другом устройстве оценку правили позже — показываем свежую версию
+        const byId = new Map(p.allRatings.map((r, k) => [r.id, k]));
         for (const r of s.ratings || []) {
-          if (!r || r.example || have.has(r.id)) continue;
-          p.allRatings.push(norm(r));
-          changed = true;
+          if (!r || r.example) continue;
+          const nr = norm(r), k = byId.get(r.id);
+          if (k == null) { p.allRatings.push(nr); byId.set(r.id, p.allRatings.length - 1); changed = true; }
+          else if (nr.at > p.allRatings[k].at) { p.allRatings[k] = nr; changed = true; }
         }
         const sh = s.profile, lh = localHide();
         if (sh && +sh.at > (+lh.at || 0)) { p.hide = sh.hide; keepHide({ hide: sh.hide, at: +sh.at }); changed = true; }
@@ -2209,10 +2246,16 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         p.avatar = shownAvatar(user);
         setAvaEl(p.avatar);
       });
-      api(`/photo/${encodeURIComponent(meServer.id)}/banner`).then(
-        (d) => { if (d.data && d.data !== p.banner) { p.banner = d.data; keepBanner(d.data); showBanner(d.data); } },
-        () => { if (p.banner) send('PUT', '/photo/banner', { data: p.banner }).catch(() => {}); } // в аккаунте ещё нет: отправляем свой
-      );
+      api(`/photo/${encodeURIComponent(meServer.id)}/banner`).then((d) => {
+        if (d.data) {
+          bannerSynced(true);
+          if (d.data !== p.banner) { p.banner = d.data; keepBanner(d.data); showBanner(d.data); }
+        } else if (p.banner) {
+          // в аккаунте пусто: баннер убрали на другом устройстве (тогда и здесь убираем) или его поставили до входа (тогда отправляем свой)
+          if (bannerSynced()) { p.banner = null; keepBanner(null); showBanner(null); }
+          else send('PUT', '/photo/banner', { data: p.banner }).then(() => bannerSynced(true), () => {});
+        }
+      }, () => {});
     }
     try {
       const fr = await api('/friends');

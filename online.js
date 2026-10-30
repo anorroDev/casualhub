@@ -66,8 +66,6 @@
     let bar = document.getElementById('siteAnnounce');
     let seenId = '';
     try { seenId = localStorage.getItem(ANN_KEY) || ''; } catch (e) {}
-    if (!a || !a.text || a.id === seenId) { if (bar) bar.remove(); return; }
-    if (bar && bar.dataset.id === a.id) return;
     if (!document.getElementById('annCss')) {
       const css = document.createElement('style');
       css.id = 'annCss';
@@ -77,9 +75,12 @@
 .site-ann button { flex: none; width: 30px; height: 30px; border: 0; border-radius: 50%; background: color-mix(in srgb, var(--ann) 20%, transparent); color: inherit; font: inherit; cursor: pointer; }
 @keyframes ann-in { from { transform: translateY(-14px) scale(.97); } }
 @media (max-width: 1220px) { .site-ann { margin: 10px 16px 0; } }
+.site-ann a { color: inherit; font-weight: 800; }
 @media (prefers-reduced-motion: reduce) { .site-ann { animation: none; } }`;
       document.head.appendChild(css);
     }
+    if (!a || !a.text || a.id === seenId) { if (bar) bar.remove(); return; }
+    if (bar && bar.dataset.id === a.id) return;
     if (!bar) {
       bar = document.createElement('div');
       bar.id = 'siteAnnounce';
@@ -96,6 +97,26 @@
     bar.querySelector('button').addEventListener('click', () => { try { localStorage.setItem(ANN_KEY, a.id); } catch (e) {} bar.remove(); });
   }
 
+  // сессии больше нет (сменили пароль на другом устройстве, выкинули из админки, забанили): без этого страницы молча переставали работать.
+  // Токен убираем, оценки в браузере остаются, плашка ведёт ко входу
+  let goneShown = false;
+  function sessionGone() {
+    try {
+      const u = read('ocenshik.user.v1'), t = read('casualhub.tokens.v1') || {};
+      if (u && t[u.id]) { delete t[u.id]; localStorage.setItem('casualhub.tokens.v1', JSON.stringify(t)); }
+    } catch (e) {}
+    if (goneShown || location.pathname.startsWith('/admin')) return; // в админке своё окно входа
+    goneShown = true;
+    if (!document.getElementById('annCss')) announce(null);
+    const bar = document.createElement('div');
+    bar.className = 'site-ann';
+    bar.dataset.kind = 'warn';
+    bar.setAttribute('role', 'alert');
+    bar.innerHTML = '<i aria-hidden="true">🔒</i><span>Вход в аккаунт закончился: оценки на этом устройстве целы, войди ещё раз, чтобы они снова синхронизировались. <a href="/mnenie/#login">Войти</a></span><button type="button" aria-label="Закрыть">✕</button>';
+    bar.querySelector('button').addEventListener('click', () => bar.remove());
+    document.body.prepend(bar);
+  }
+
   let timer = 0, busy = false;
   async function ping() {
     if (busy || document.hidden) return;
@@ -109,6 +130,7 @@
       });
       if (r.ok) {
         const d = await r.json();
+        if (t && d.authed === false) sessionGone();
         st.online = +d.online || 0;
         st.friends = new Map((d.friends || []).map((x) => [x.id, +x.at || Date.now()]));
         st.incoming = +d.incoming || 0;

@@ -9,6 +9,8 @@ const SESSION_DAYS = 30;
 const MAX_SHELF = 1800000; // символов JSON на одного человека (фото хранятся отдельно)
 const NAME_RE = /^[\p{L}\p{N}_.\- ]{2,24}$/u;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+// новая почта (регистрация и смена): ещё и без кавычек, скобок и запятых — почта показывается в админке и уходит в письмо
+const NEW_MAIL_RE = /^[^\s@<>"'`,;:()[\]\\]+@[^\s@<>"'`,;:()[\]\\]+\.[^\s@<>"'`,;:()[\]\\.]{2,}$/;
 // @юзернейм: латиница, цифры, «_» и «.», от 3 до 20 символов, точка не по краям. Хранится в колонке uname.
 const HANDLE_RE = /^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/;
 const cleanHandle = (s) => String(s || '').trim().replace(/^@+/, '').toLowerCase();
@@ -67,6 +69,8 @@ async function ensureSchema(env) {
     env.DB.prepare('CREATE TABLE IF NOT EXISTS email_codes (ticket TEXT PRIMARY KEY, kind TEXT NOT NULL, email TEXT NOT NULL, user_id TEXT, data TEXT, code_hash TEXT NOT NULL, expires INTEGER NOT NULL, tries INTEGER NOT NULL, sent_at INTEGER NOT NULL, sends INTEGER NOT NULL)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS trusted_devices (hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, until INTEGER NOT NULL)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS trusted_devices_user ON trusted_devices(user_id)'),
+    // без него подсчёт фото человека и история аватарок читали всю таблицу на каждую загрузку
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS photos_user ON photos(user_id)'),
   ]);
   const { results } = await env.DB.prepare('PRAGMA table_info(users)').all();
   if (!results.some((c) => c.name === 'email')) await env.DB.prepare('ALTER TABLE users ADD COLUMN email TEXT').run();
@@ -79,6 +83,7 @@ async function ensureSchema(env) {
   if (!results.some((c) => c.name === 'ban_reason')) await env.DB.prepare('ALTER TABLE users ADD COLUMN ban_reason TEXT').run();
   await env.DB.batch([
     env.DB.prepare('CREATE INDEX IF NOT EXISTS users_seen ON users(last_seen)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS users_nkey ON users(nkey)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS presence (id TEXT PRIMARY KEY, at INTEGER NOT NULL)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS presence_at ON presence(at)'),
   ]);
@@ -214,17 +219,30 @@ async function openAdmin(env, request, me) {
   return now + ADMIN_TTL;
 }
 // каждое действие в админке и каждая попытка входа записываются: кто, когда, с какого адреса
-const adminLog = (env, request, me, action, ok) => env.DB.prepare('INSERT INTO admin_log (at, user_id, ip, action, ok) VALUES (?, ?, ?, ?, ?)')
-  .bind(Date.now(), me ? me.id : '', clientIp(request), String(action).slice(0, 80), ok ? 1 : 0).run().catch(() => {});
+const adminLog = async (env, request, me, action, ok) => {
+  try {
+    await env.DB.prepare('INSERT INTO admin_log (at, user_id, ip, action, ok) VALUES (?, ?, ?, ?, ?)')
+      .bind(Date.now(), me ? me.id : '', clientIp(request), String(action).slice(0, 80), ok ? 1 : 0).run();
+    if (Math.random() < 0.02) await env.DB.prepare('DELETE FROM admin_log WHERE at < ?').bind(Date.now() - 365 * 864e5).run(); // журнал хранится год
+  } catch (e) {}
+};
 // сравнение без подсказки по времени ответа: сравниваются отпечатки одинаковой длины (sameHex — выше)
 const sameSecret = async (a, b) => sameHex(await sha256(a), await sha256(b));
-// попытки входа (одноразовый пароль или пин-код): общий потолок на сервер, а неверные — на аккаунт и на адрес
+// попытки входа (одноразовый пароль или пин-код): общий потолок на сервер и счётчики на аккаунт и на адрес
 async function adminTry(env, request, me) {
   const keys = ['admin:' + me.id, 'adminip:' + clientIp(request)];
   if (burst('adminunlock:all', 20, 60e3)) return { wait: 1, keys };
-  for (const k of keys) { const w = await overLimit(env, k, 'admin'); if (w) return { wait: w, keys }; }
-  return { wait: 0, keys };
+  let wait = 0;
+  for (const k of keys) wait = Math.max(wait, await bump(env, k, 'admin'));
+  return { wait, keys };
 }
+// удачный вход: счётчик аккаунта обнуляется, с адреса снимается только эта попытка
+const adminTryOk = (env, t) => env.DB.batch([
+  env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind(t.keys[0]),
+  env.DB.prepare('UPDATE attempts SET count = MAX(0, count - 1) WHERE key = ?').bind(t.keys[1]),
+]);
+// админ — это и тот, кто уже входил в админку, даже если сменил @: такого нельзя забанить, удалить или выкинуть
+const isAdminAccount = async (env, u) => ADMIN_HANDLES.includes(String(u.uname || '').toLowerCase()) || !!(await env.DB.prepare('SELECT 1 FROM admins WHERE user_id = ?').bind(u.id).first());
 const CM_MAX = 500; // символов в одном комментарии
 const CM_TARGET_RE = /^(wall|r\.[\w.-]{1,80})$/;
 const clientIp = (request) => request.headers.get('CF-Connecting-IP') || 'local';
@@ -241,7 +259,26 @@ async function hit(env, key, kind) {
   ).bind(key, now + LIMITS[kind].win, now).run();
   if (Math.random() < 0.02) await env.DB.prepare('DELETE FROM attempts WHERE reset_at <= ?').bind(now).run();
 }
-const tooMany = (min) => new Response(JSON.stringify({ error: `Слишком много попыток. Подожди ${min} мин. и попробуй снова.` }), {
+// попытка засчитывается сразу, до проверки пароля: если сначала проверять, а считать потом, сотня одновременных запросов
+// прошла бы мимо лимита. Сколько минут ждать (0 — можно); удачная попытка снимается отдельно
+async function bump(env, key, kind) {
+  const now = Date.now();
+  const row = await env.DB.prepare(
+    'INSERT INTO attempts (key, count, reset_at) VALUES (?1, 1, ?2) ON CONFLICT(key) DO UPDATE SET ' +
+    'count = CASE WHEN reset_at <= ?3 THEN 1 ELSE count + 1 END, reset_at = CASE WHEN reset_at <= ?3 THEN ?2 ELSE reset_at END RETURNING count, reset_at'
+  ).bind(key, now + LIMITS[kind].win, now).first();
+  return row && row.count > LIMITS[kind].max ? Math.max(1, Math.ceil((row.reset_at - now) / 60e3)) : 0;
+}
+// сколько байт можно потратить за сутки (фото): то же окно, только считаем байты, а не попытки
+async function spend(env, key, bytes, max) {
+  const now = Date.now();
+  const row = await env.DB.prepare(
+    'INSERT INTO attempts (key, count, reset_at) VALUES (?1, ?4, ?2) ON CONFLICT(key) DO UPDATE SET ' +
+    'count = CASE WHEN reset_at <= ?3 THEN ?4 ELSE count + ?4 END, reset_at = CASE WHEN reset_at <= ?3 THEN ?2 ELSE reset_at END RETURNING count, reset_at'
+  ).bind(key, now + 864e5, now, bytes).first();
+  return row && row.count > max ? Math.max(1, Math.ceil((row.reset_at - now) / 60e3)) : 0;
+}
+const tooMany =(min) => new Response(JSON.stringify({ error: `Слишком много попыток. Подожди ${min} мин. и попробуй снова.` }), {
   status: 429,
   headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'retry-after': String(min * 60) },
 });
@@ -270,11 +307,7 @@ async function mailLimit(env, request, mail) {
   await hit(env, 'mailto:' + mail, 'mailTo');
   return null;
 }
-async function sendCode(env, to, code, kind) {
-  const what = kind === 'reg' ? 'регистрации' : 'входа';
-  const subject = `${code} — код для ${what} в Казуал Хабе`;
-  const text = `Твой код для ${what} в Казуал Хабе: ${code}\n\nОн действует 15 минут. Если это был не ты, просто ничего не делай: без кода в аккаунт не войти.\n\ncasualhub.pages.dev`;
-  const html = `<div style="font-family:Arial,sans-serif;max-width:440px;margin:0 auto;padding:24px;color:#14161C"><h2 style="margin:0 0 12px">Казуал Хаб</h2><p>Твой код для ${what}:</p><p style="font-size:34px;font-weight:800;letter-spacing:8px;margin:12px 0;padding:14px 18px;background:#ECEEF3;border-radius:12px;text-align:center">${code}</p><p style="color:#565C6B;font-size:14px">Код действует 15 минут. Если это был не ты, просто ничего не делай: без кода в аккаунт не войти.</p></div>`;
+async function sendMail(env, to, subject, text, html) {
   try {
     let r;
     if (env.BREVO_API_KEY) {
@@ -287,6 +320,20 @@ async function sendCode(env, to, code, kind) {
     if (!r.ok) console.error('mail', r.status, (await r.text()).slice(0, 300));
     return r.ok;
   } catch (e) { console.error('mail', e); return false; }
+}
+function sendCode(env, to, code, kind) {
+  const what = kind === 'reg' ? 'регистрации' : kind === 'email' ? 'смены почты' : 'входа';
+  const ifNot = kind === 'email' ? 'без кода почта не поменяется' : 'без кода в аккаунт не войти';
+  const subject = `${code} — код для ${what} в Казуал Хабе`;
+  const text = `Твой код для ${what} в Казуал Хабе: ${code}\n\nОн действует 15 минут. Если это был не ты, просто ничего не делай: ${ifNot}.\n\ncasualhub.pages.dev`;
+  const html = `<div style="font-family:Arial,sans-serif;max-width:440px;margin:0 auto;padding:24px;color:#14161C"><h2 style="margin:0 0 12px">Казуал Хаб</h2><p>Твой код для ${what}:</p><p style="font-size:34px;font-weight:800;letter-spacing:8px;margin:12px 0;padding:14px 18px;background:#ECEEF3;border-radius:12px;text-align:center">${code}</p><p style="color:#565C6B;font-size:14px">Код действует 15 минут. Если это был не ты, просто ничего не делай: ${ifNot}.</p></div>`;
+  return sendMail(env, to, subject, text, html);
+}
+// почту сменили: старый адрес об этом узнаёт. Если это сделал не хозяин, он хотя бы поймёт, что случилось
+async function mailChangedNotice(env, request, to, mail) {
+  if (devMail(env, request) || !EMAIL_RE.test(to || '') || !((env.BREVO_API_KEY || env.RESEND_API_KEY) && env.MAIL_FROM)) return;
+  const line = `Почта твоего аккаунта в Казуал Хабе изменена на ${maskEmail(mail)}. Если это был не ты, поменяй пароль и напиши администрации.`;
+  await sendMail(env, to, 'Почта аккаунта изменена — Казуал Хаб', line + '\n\ncasualhub.pages.dev', `<div style="font-family:Arial,sans-serif;max-width:440px;margin:0 auto;padding:24px;color:#14161C"><h2 style="margin:0 0 12px">Казуал Хаб</h2><p>${line}</p></div>`);
 }
 // начать проверку кодом: письмо уходит, клиент получает билет и показывает поле для кода
 async function startCode(env, request, kind, mail, data, userId) {
@@ -335,7 +382,7 @@ const routes = {
     const mail = cleanEmail(email);
     const pass = String(password || '');
     const wanted = handle ? cleanHandle(handle) : '';
-    if (!EMAIL_RE.test(mail) || mail.length > 120) return fail(400, 'Нужна почта, например name@mail.com.');
+    if (!NEW_MAIL_RE.test(mail) || mail.length > 120) return fail(400, 'Нужна почта, например name@mail.com.');
     if (!NAME_RE.test(name)) return fail(400, NAME_HINT);
     if (wanted && !HANDLE_RE.test(wanted)) return fail(400, HANDLE_HINT);
     if (wanted && reservedHandle(env, wanted, null)) return fail(409, `Юзернейм @${wanted} уже занят.`);
@@ -355,24 +402,44 @@ const routes = {
   async 'POST /code/verify'({ env, request }) {
     const { ticket, code, device } = await readBody(request);
     if (!/^[0-9a-f]{32}$/.test(String(ticket || ''))) return fail(400, 'Начни заново: код устарел.');
-    const row = await env.DB.prepare('SELECT * FROM email_codes WHERE ticket = ?').bind(ticket).first();
-    if (!row || row.expires < Date.now()) { if (row) await env.DB.prepare('DELETE FROM email_codes WHERE ticket = ?').bind(ticket).run(); return fail(410, 'Код устарел. Запроси новый.'); }
-    if (row.tries >= CODE_TRIES) { await env.DB.prepare('DELETE FROM email_codes WHERE ticket = ?').bind(ticket).run(); return fail(429, 'Слишком много неверных кодов. Начни заново.'); }
+    // попытка засчитывается до сравнения: одновременными запросами больше CODE_TRIES кодов не перебрать
+    const now = Date.now();
+    const row = await env.DB.prepare('UPDATE email_codes SET tries = tries + 1 WHERE ticket = ? AND expires >= ? AND tries < ? RETURNING *').bind(ticket, now, CODE_TRIES).first();
+    if (!row) {
+      const old = await env.DB.prepare('SELECT expires FROM email_codes WHERE ticket = ?').bind(ticket).first();
+      if (old) await env.DB.prepare('DELETE FROM email_codes WHERE ticket = ?').bind(ticket).run();
+      return old && old.expires >= now ? fail(429, 'Слишком много неверных кодов. Начни заново.') : fail(410, 'Код устарел. Запроси новый.');
+    }
     const c = String(code || '').replace(/\D/g, '');
     if (c.length !== 6 || !sameHex(await sha256(c + ':' + ticket), row.code_hash)) {
-      await env.DB.prepare('UPDATE email_codes SET tries = tries + 1 WHERE ticket = ?').bind(ticket).run();
-      const left = CODE_TRIES - row.tries - 1;
+      const left = CODE_TRIES - row.tries;
       return fail(403, left > 0 ? `Неверный код. Осталось попыток: ${left}.` : 'Неверный код. Попытки кончились, начни заново.');
     }
-    await env.DB.prepare('DELETE FROM email_codes WHERE ticket = ?').bind(ticket).run();
+    // код одноразовый: из двух одновременных запросов сработает только первый
+    const used = await env.DB.prepare('DELETE FROM email_codes WHERE ticket = ?').bind(ticket).run();
+    if (!used.meta || !used.meta.changes) return fail(410, 'Код уже использован. Начни заново.');
     let out;
     if (row.kind === 'reg') {
       const d = JSON.parse(row.data);
       // пока человек шёл за письмом, почту или юзернейм мог занять кто-то другой
       if (await env.DB.prepare('SELECT 1 FROM users WHERE email = ?').bind(d.mail).first()) return fail(409, 'На эту почту уже есть аккаунт.');
       if (await env.DB.prepare('SELECT 1 FROM users WHERE uname = ?').bind(d.uname).first()) return fail(409, `Юзернейм @${d.uname} уже занят. Выбери другой и зарегистрируйся заново.`);
-      out = await createUser(env, d);
+      try { out = await createUser(env, d); } catch (e) { return fail(409, 'Почту или юзернейм только что занял кто-то другой. Зарегистрируйся заново.'); }
       await trustDevice(env, device, out.user.id);
+    } else if (row.kind === 'email') {
+      // смена почты: новая начинает действовать только теперь, когда доказано, что она твоя
+      const d = JSON.parse(row.data);
+      const u = await env.DB.prepare('SELECT id, username, uname, email, created_at, hide_online, banned FROM users WHERE id = ?').bind(row.user_id).first();
+      if (!u || u.banned) return fail(404, 'Аккаунт не найден.');
+      const taken = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(d.mail).first();
+      if (taken && taken.id !== u.id) return fail(409, 'На эту почту уже есть аккаунт.');
+      await env.DB.batch([
+        env.DB.prepare('UPDATE users SET email = ? WHERE id = ?').bind(d.mail, u.id),
+        env.DB.prepare('DELETE FROM trusted_devices WHERE user_id = ?').bind(u.id), // новая почта — устройства подтверждаются заново
+      ]);
+      await trustDevice(env, device, u.id);
+      await mailChangedNotice(env, request, u.email, d.mail);
+      out = { user: ownUser({ ...u, email: d.mail }) };
     } else {
       const u = await env.DB.prepare('SELECT id, username, uname, email, created_at, banned, ban_reason FROM users WHERE id = ?').bind(row.user_id).first();
       if (!u) return fail(404, 'Аккаунт не найден.');
@@ -404,28 +471,30 @@ const routes = {
     const { login, username, password, device } = await readBody(request);
     const ident = String(login || username || '').trim();
     const ipKey = 'login-ip:' + clientIp(request);
-    const accKey = 'login-acc:' + ident.toLowerCase().slice(0, 120);
     // общий потолок входов на сервер: перебор с многих адресов упирается в него раньше, чем в лимит базы
     if (burst('login:all', 300, 60e3)) return tooMany(1);
-    const wait = Math.max(await overLimit(env, ipKey, 'loginIp'), await overLimit(env, accKey, 'loginAcc'));
-    if (wait) return tooMany(wait);
+    const waitIp = await bump(env, ipKey, 'loginIp');
+    if (waitIp) return tooMany(waitIp);
     const COLS = 'id, username, uname, email, created_at, pass_hash, salt, banned, ban_reason';
     let u = await env.DB.prepare(`SELECT ${COLS} FROM users WHERE uname = ? OR email = ?`).bind(cleanHandle(ident), cleanEmail(ident)).first();
     if (!u) {
       const { results: same } = await env.DB.prepare(`SELECT ${COLS} FROM users WHERE nkey = ? LIMIT 2`).bind(cleanName(ident).toLowerCase()).all();
       if (same.length === 1) u = same[0];
     }
+    // счётчик на сам аккаунт, а не на написанное: «@ник», «@@ник», почта и ник — один и тот же человек
+    const accKey = u ? 'login-acc:' + u.id : '';
+    if (u) { const waitAcc = await bump(env, accKey, 'loginAcc'); if (waitAcc) return tooMany(waitAcc); }
     // и для несуществующего аккаунта считаем хеш: по времени ответа не понять, есть ли такой
     const hash = await hashPass(String(password || '').slice(0, 200), u ? u.salt : 'no-such-user-salt'); // паролей длиннее 200 не бывает
-    if (!u || !sameHex(hash, u.pass_hash)) {
-      await hit(env, ipKey, 'loginIp');
-      await hit(env, accKey, 'loginAcc');
-      return fail(401, 'Неверная почта, юзернейм или пароль.');
-    }
+    if (!u || !sameHex(hash, u.pass_hash)) return fail(401, 'Неверная почта, юзернейм или пароль.');
     // заблокированный аккаунт: пароль верный, но войти нельзя (об этом говорим только тому, кто знает пароль)
     if (u.banned) return fail(403, 'Аккаунт заблокирован администрацией' + (u.ban_reason ? ': ' + u.ban_reason : '.'));
-    await env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind(accKey).run();
-    await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND expires_at < ?').bind(u.id, Date.now()).run();
+    // пароль верный: попытка не считается
+    await env.DB.batch([
+      env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind(accKey),
+      env.DB.prepare('UPDATE attempts SET count = MAX(0, count - 1) WHERE key = ?').bind(ipKey),
+      env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND expires_at < ?').bind(u.id, Date.now()),
+    ]);
     // второй шаг: код на почту, если это устройство ещё не подтверждалось (подтверждённое помнится 30 дней)
     if (mailReady(env) && EMAIL_RE.test(u.email || '') && !(await trustedDevice(env, device, u.id))) return startCode(env, request, 'login', u.email, null, u.id);
     return json({ token: await newSession(env, u.id), user: ownUser(u) });
@@ -457,17 +526,14 @@ const routes = {
     const { code } = await readBody(request);
     const ok = typeof code === 'string' && code.trim().length > 0 && code.length <= 200 && (await sameSecret(code.trim(), String(env.ADMIN_CODE).trim()));
     await adminLog(env, request, me, 'unlock:code', ok);
-    if (!ok) {
-      for (const k of t.keys) await hit(env, k, 'admin');
-      return fail(403, 'Неверный одноразовый пароль.');
-    }
+    if (!ok) return fail(403, 'Неверный одноразовый пароль.');
     const now = Date.now();
     await env.DB.batch([
       env.DB.prepare('INSERT OR IGNORE INTO admins (user_id, handle, at) VALUES (?, ?, ?)').bind(me.id, me.handle, now),
       env.DB.prepare('UPDATE admins SET pin_hash = NULL, pin_salt = NULL, pin_until = ? WHERE user_id = ?').bind(now + PIN_SET_MS, me.id),
       env.DB.prepare('DELETE FROM admin_sessions WHERE user_id = ?').bind(me.id),
-      env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind(t.keys[0]),
     ]);
+    await adminTryOk(env, t);
     return json({ ok: true });
   },
   // свой пин-код: только сразу после одноразового пароля (15 минут), и админка тут же открывается
@@ -495,11 +561,8 @@ const routes = {
     const { pin } = await readBody(request);
     const ok = typeof pin === 'string' && PIN_RE.test(pin) && sameHex(await hashPass(pin, row.pin_salt), row.pin_hash);
     await adminLog(env, request, me, 'unlock:pin', ok);
-    if (!ok) {
-      for (const k of t.keys) await hit(env, k, 'admin');
-      return fail(403, 'Неверный пин-код.');
-    }
-    await env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind(t.keys[0]).run();
+    if (!ok) return fail(403, 'Неверный пин-код.');
+    await adminTryOk(env, t);
     return json({ ok: true, until: await openAdmin(env, request, me) });
   },
   // выйти из админки (аккаунт остаётся админом, но в следующий раз нужен пин-код)
@@ -521,7 +584,8 @@ const routes = {
     if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
     const now = Date.now();
     const q = (sql, ...b) => env.DB.prepare(sql).bind(...b);
-    const [users, fresh, day, online, guests, banned, comments, reacts, shares, shelves] = await env.DB.batch([
+    // оценки считает сама база: разбирать тут все полки целиком значило бы упереться в лимит времени сервера
+    const [users, fresh, day, online, guests, banned, comments, reacts, shares, shelves, photos] = await env.DB.batch([
       q('SELECT COUNT(*) AS n FROM users'),
       q('SELECT COUNT(*) AS n FROM users WHERE created_at > ?', now - 7 * 864e5),
       q('SELECT COUNT(*) AS n FROM users WHERE last_seen > ?', now - 864e5),
@@ -531,29 +595,25 @@ const routes = {
       q('SELECT COUNT(*) AS n FROM comments'),
       q('SELECT COUNT(*) AS n FROM reactions'),
       q('SELECT COUNT(*) AS n FROM shares'),
-      q('SELECT data FROM shelves'),
+      q(`SELECT COALESCE(SUM(${SHELF_COUNT}), 0) AS n FROM shelves`),
+      q('SELECT COUNT(*) AS n FROM photos'),
     ]);
     const n = (r) => ((r.results || [])[0] || {}).n || 0;
-    let ratings = 0;
-    for (const row of shelves.results || []) { try { ratings += readShelf(row).ratings.filter((r) => r && !r.example).length; } catch (e) {} }
-    return json({ users: n(users), new7: n(fresh), active24: n(day), onlineUsers: n(online), onlineGuests: n(guests), banned: n(banned), ratings, comments: n(comments), reactions: n(reacts), shares: n(shares) });
+    return json({ users: n(users), new7: n(fresh), active24: n(day), onlineUsers: n(online), onlineGuests: n(guests), banned: n(banned), ratings: n(shelves), comments: n(comments), reactions: n(reacts), shares: n(shares), photos: n(photos), dbBytes: (photos.meta && photos.meta.size_after) || 0 });
   },
   async 'GET /admin/users'({ env, request, me }) {
     if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
-    const raw = String(new URL(request.url).searchParams.get('q') || '').trim().slice(0, 60);
+    const sp = new URL(request.url).searchParams;
+    const raw = String(sp.get('q') || '').trim().slice(0, 60);
+    const offset = Math.max(0, Math.min(1e6, Math.floor(+sp.get('offset') || 0)));
     const like = '%' + raw.toLowerCase().replace(/^@+/, '').replace(/[\\%_]/g, '\\$&') + '%';
     const { results } = await env.DB.prepare(
-      `SELECT id, username, uname, email, created_at, last_seen, banned, ban_reason FROM users
-        WHERE ?1 = '' OR uname LIKE ?2 ESCAPE '\\' OR nkey LIKE ?2 ESCAPE '\\' OR email LIKE ?2 ESCAPE '\\' OR id = ?1
-        ORDER BY created_at DESC LIMIT 50`
-    ).bind(raw, like).all();
-    const ids = results.map((u) => u.id);
-    const counts = new Map();
-    if (ids.length) {
-      const { results: sh } = await env.DB.prepare(`SELECT user_id, data FROM shelves WHERE user_id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all();
-      for (const row of sh) { try { counts.set(row.user_id, readShelf(row).ratings.filter((r) => r && !r.example).length); } catch (e) {} }
-    }
-    return json({ users: results.map((u) => ({ id: u.id, username: u.username, handle: u.uname, email: u.email || '', createdAt: u.created_at, lastSeen: u.last_seen || null, banned: !!u.banned, banReason: u.ban_reason || '', ratings: counts.get(u.id) || 0, admin: ADMIN_HANDLES.includes(String(u.uname).toLowerCase()) })) });
+      `SELECT u.id, u.username, u.uname, u.email, u.created_at, u.last_seen, u.banned, u.ban_reason, a.user_id AS adm, (SELECT ${SHELF_COUNT} FROM shelves WHERE shelves.user_id = u.id) AS ratings
+         FROM users u LEFT JOIN admins a ON a.user_id = u.id
+        WHERE ?1 = '' OR u.uname LIKE ?2 ESCAPE '\\' OR u.nkey LIKE ?2 ESCAPE '\\' OR u.email LIKE ?2 ESCAPE '\\' OR u.id = ?1
+        ORDER BY u.created_at DESC LIMIT 51 OFFSET ?3`
+    ).bind(raw, like, offset).all();
+    return json({ more: results.length > 50, users: results.slice(0, 50).map((u) => ({ id: u.id, username: u.username, handle: u.uname, email: u.email || '', createdAt: u.created_at, lastSeen: u.last_seen || null, banned: !!u.banned, banReason: u.ban_reason || '', ratings: u.ratings || 0, admin: !!u.adm || ADMIN_HANDLES.includes(String(u.uname).toLowerCase()) })) });
   },
   // бан и разбан: заблокированный выходит со всех устройств, не может войти и ничего менять; админа забанить нельзя
   async 'POST /admin/ban/:id'({ env, request, me, arg }) {
@@ -561,7 +621,7 @@ const routes = {
     const { on, reason } = await readBody(request);
     const u = await env.DB.prepare('SELECT id, uname FROM users WHERE id = ?').bind(arg).first();
     if (!u) return fail(404, 'Нет такого аккаунта.');
-    if (ADMIN_HANDLES.includes(String(u.uname).toLowerCase()) || u.id === me.id) return fail(400, 'Админа забанить нельзя.');
+    if (u.id === me.id || (await isAdminAccount(env, u))) return fail(400, 'Админа забанить нельзя.');
     const why = clip(String(reason || '').replace(/[<>]/g, '').replace(/\s+/g, ' ').trim(), 200); // причину человек видит при входе: без разметки
     if (on) await env.DB.batch([
       env.DB.prepare('UPDATE users SET banned = 1, ban_reason = ? WHERE id = ?').bind(why || null, u.id),
@@ -581,28 +641,35 @@ const routes = {
     const name = username != null && username !== '' ? cleanName(username) : null;
     // почта: если в ней опечатка, человеку не дойдёт код для входа — админ может её поправить
     const mail = email != null && email !== '' ? cleanEmail(email) : null;
-    if (mail != null && mail !== (u.email || '')) {
-      if (!EMAIL_RE.test(mail) || mail.length > 120) return fail(400, 'Нужна почта, например name@mail.com.');
+    const mailChange = mail != null && mail !== (u.email || '');
+    const handleChange = h != null && h !== u.uname;
+    const nameChange = name != null && name !== u.username;
+    // сначала все проверки, потом все записи: при ошибке в одном поле остальные не меняются наполовину
+    if (mailChange) {
+      if (!NEW_MAIL_RE.test(mail) || mail.length > 120) return fail(400, 'Нужна почта, например name@mail.com.');
       const taken = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(mail).first();
       if (taken && taken.id !== u.id) return fail(409, 'На эту почту уже есть аккаунт.');
-      await env.DB.batch([
-        env.DB.prepare('UPDATE users SET email = ? WHERE id = ?').bind(mail, u.id),
-        env.DB.prepare('DELETE FROM trusted_devices WHERE user_id = ?').bind(u.id), // новая почта — устройства подтверждаются заново
-      ]);
-      await adminLog(env, request, me, `email @${u.uname}`, true);
     }
-    if (h != null && h !== u.uname) {
+    if (handleChange) {
       if (!HANDLE_RE.test(h)) return fail(400, HANDLE_HINT);
       const own = ADMIN_HANDLES.includes(String(u.uname).toLowerCase());
       if (ADMIN_HANDLES.includes(h) && !own) return fail(409, `Юзернейм @${h} уже занят.`);
       const taken = await env.DB.prepare('SELECT id FROM users WHERE uname = ?').bind(h).first();
       if (taken && taken.id !== u.id) return fail(409, `Юзернейм @${h} уже занят.`);
     }
-    if (name != null && !NAME_RE.test(name)) return fail(400, NAME_HINT);
-    if (h != null && h !== u.uname) await env.DB.prepare('UPDATE users SET uname = ? WHERE id = ?').bind(h, u.id).run();
-    if (name != null && name !== u.username) await env.DB.prepare('UPDATE users SET username = ?, nkey = ? WHERE id = ?').bind(name, name.toLowerCase(), u.id).run();
-    await adminLog(env, request, me, `rename @${u.uname} → @${h || u.uname}${name && name !== u.username ? ' «' + name + '»' : ''}`, true);
-    return json({ ok: true, handle: h || u.uname, username: name || u.username });
+    if (nameChange && !NAME_RE.test(name)) return fail(400, NAME_HINT);
+    const writes = [];
+    if (mailChange) writes.push(
+      env.DB.prepare('UPDATE users SET email = ? WHERE id = ?').bind(mail, u.id),
+      env.DB.prepare('DELETE FROM trusted_devices WHERE user_id = ?').bind(u.id), // новая почта — устройства подтверждаются заново
+    );
+    if (handleChange) writes.push(env.DB.prepare('UPDATE users SET uname = ? WHERE id = ?').bind(h, u.id));
+    if (nameChange) writes.push(env.DB.prepare('UPDATE users SET username = ?, nkey = ? WHERE id = ?').bind(name, name.toLowerCase(), u.id));
+    if (!writes.length) return json({ ok: true, handle: u.uname, username: u.username });
+    await env.DB.batch(writes);
+    if (mailChange) await adminLog(env, request, me, `email @${u.uname}`, true);
+    if (handleChange || nameChange) await adminLog(env, request, me, `rename @${u.uname} → @${handleChange ? h : u.uname}${nameChange ? ' «' + name + '»' : ''}`, true);
+    return json({ ok: true, handle: handleChange ? h : u.uname, username: nameChange ? name : u.username });
   },
   // удалить чужой аккаунт насовсем: сам аккаунт и всё его — оценки, фото, друзья, реакции, комментарии, ссылки, сессии.
   // Для подтверждения нужно прислать его @юзернейм; админа удалить нельзя
@@ -611,7 +678,7 @@ const routes = {
     const { confirm } = await readBody(request);
     const u = await env.DB.prepare('SELECT id, uname, username FROM users WHERE id = ?').bind(arg).first();
     if (!u) return fail(404, 'Нет такого аккаунта.');
-    if (ADMIN_HANDLES.includes(String(u.uname).toLowerCase()) || u.id === me.id) return fail(400, 'Админа удалить нельзя.');
+    if (u.id === me.id || (await isAdminAccount(env, u))) return fail(400, 'Админа удалить нельзя.');
     if (cleanHandle(confirm) !== u.uname) return fail(400, `Чтобы удалить, впиши его юзернейм @${u.uname}.`);
     const id = u.id;
     await env.DB.batch([
@@ -634,6 +701,7 @@ const routes = {
     if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
     const u = await env.DB.prepare('SELECT id, uname FROM users WHERE id = ?').bind(arg).first();
     if (!u) return fail(404, 'Нет такого аккаунта.');
+    if (u.id === me.id || (await isAdminAccount(env, u))) return fail(400, 'Админа выкинуть нельзя.');
     await env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(u.id).run();
     await adminLog(env, request, me, 'kick ' + u.uname, true);
     return json({ ok: true });
@@ -692,7 +760,7 @@ const routes = {
     const nameChange = name != null && name !== me.username;
     const pass = password ? String(password) : '';
     // сначала все проверки, потом все записи: при ошибке в одном поле остальные не меняются наполовину
-    if (mailChange && (!EMAIL_RE.test(mail) || mail.length > 120)) return fail(400, 'Нужна почта, например name@mail.com.');
+    if (mailChange && (!NEW_MAIL_RE.test(mail) || mail.length > 120)) return fail(400, 'Нужна почта, например name@mail.com.');
     if (handleChange && !HANDLE_RE.test(h)) return fail(400, HANDLE_HINT);
     // свой прежний юзернейм админ вернуть может (он записан в таблице админов), остальные — нет
     if (handleChange && reservedHandle(env, h, me) && !(await env.DB.prepare('SELECT 1 FROM admins WHERE user_id = ? AND handle = ?').bind(me.id, h).first())) return fail(409, `Юзернейм @${h} уже занят.`);
@@ -700,15 +768,15 @@ const routes = {
     if (pass && weakPass(pass)) return fail(400, WEAK_PASS);
     if (pass || mailChange) {
       // украденной сессии мало, чтобы угнать аккаунт: почту и пароль меняют, зная текущий пароль
-      const wait = await overLimit(env, 'acc:' + me.id, 'loginAcc');
+      const wait = await bump(env, 'acc:' + me.id, 'loginAcc');
       if (wait) return tooMany(wait);
       const cur = String(current || '');
       const row = await env.DB.prepare('SELECT pass_hash, salt FROM users WHERE id = ?').bind(me.id).first();
       // паролей длиннее 200 не бывает: огромную строку даже не хешируем, чтобы ей нельзя было нагрузить сервер
       if (!row || cur.length > 200 || !sameHex(await hashPass(cur, row.salt), row.pass_hash)) {
-        await hit(env, 'acc:' + me.id, 'loginAcc');
         return fail(403, current ? 'Текущий пароль не подходит.' : 'Чтобы сменить почту или пароль, впиши текущий пароль.');
       }
+      await env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind('acc:' + me.id).run();
     }
     if (mailChange) {
       const taken = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(mail).first();
@@ -718,11 +786,19 @@ const routes = {
       const taken = await env.DB.prepare('SELECT id FROM users WHERE uname = ?').bind(h).first();
       if (taken && taken.id !== me.id) return fail(409, `Юзернейм @${h} уже занят.`);
     }
+    // когда почта подключена, новая почта начинает действовать только после кода из письма на неё:
+    // иначе можно было бы зарегистрироваться на свою и тут же занять чужой адрес
+    let pendingMail = null;
+    if (mailChange && mailReady(env)) {
+      const r = await startCode(env, request, 'email', mail, { mail }, me.id);
+      if (!r.ok) return r; // письмо не ушло: ничего не меняем
+      pendingMail = await r.json();
+    }
     if (hideOnline != null) {
       await env.DB.prepare('UPDATE users SET hide_online = ? WHERE id = ?').bind(hideOnline ? 1 : 0, me.id).run();
       out.hide_online = hideOnline ? 1 : 0;
     }
-    if (mailChange) {
+    if (mailChange && !pendingMail) {
       await env.DB.prepare('UPDATE users SET email = ? WHERE id = ?').bind(mail, me.id).run();
       out.email = mail;
     }
@@ -744,7 +820,7 @@ const routes = {
       await env.DB.prepare('DELETE FROM admin_sessions WHERE user_id = ?').bind(me.id).run(); // после смены пароля в админку заново
       await env.DB.prepare('DELETE FROM trusted_devices WHERE user_id = ?').bind(me.id).run(); // и код на почту снова спросят на всех устройствах
     }
-    return json({ user: ownUser(out) });
+    return json({ user: ownUser(out), ...(pendingMail || {}) });
   },
 
   // гость присылает случайный id из своего браузера, вошедший — токен
@@ -785,7 +861,9 @@ const routes = {
       const c = await env.DB.prepare("SELECT COUNT(*) AS n FROM friendships WHERE (a = ?1 OR b = ?1) AND status = 'pending' AND requested_by != ?1").bind(me.id).first();
       incoming = c ? c.n : 0;
     }
-    return json({ online: Math.max(onlineCache.n, me ? 1 : 0), friends, incoming, window: ONLINE_MS, announce: await currentAnnounce(env) });
+    // authed: браузер прислал токен, а сессии уже нет (сменили пароль, выкинули, забанили): страница попросит войти заново
+    const sentToken = /^Bearer /.test(request.headers.get('authorization') || '');
+    return json({ online: Math.max(onlineCache.n, me ? 1 : 0), friends, incoming, window: ONLINE_MS, announce: await currentAnnounce(env), ...(sentToken ? { authed: !!me } : {}) });
   },
 
   async 'GET /friends'({ env, me }) {
@@ -898,7 +976,8 @@ const routes = {
     const old = readShelf(row);
     const del = new Map(old.deleted.map((d) => [d.id, d.at]));
     for (const d of Array.isArray(deleted) ? deleted : []) {
-      if (d && typeof d.id === 'string' && Number.isFinite(+d.at)) del.set(d.id, Math.max(del.get(d.id) || 0, +d.at));
+      // отметка из будущего (сбитые часы) навсегда не дала бы вернуть оценку: не позже, чем сейчас
+      if (d && typeof d.id === 'string' && d.id.length <= 120 && Number.isFinite(+d.at)) del.set(d.id, Math.max(del.get(d.id) || 0, Math.min(+d.at, Date.now())));
     }
     const byId = new Map();
     // новые оценки чистим, старые уже лежат в базе (их чистит чтение для друзей)
@@ -973,6 +1052,7 @@ const routes = {
       // вместе с фото уходит и его превью «<id>.t»
       await env.DB.batch(gone.flatMap((id) => [`${me.id}:${id}`, `${me.id}:${id}.t`].map((k) => env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(k))
         .concat(env.DB.prepare('DELETE FROM shares WHERE owner_id = ? AND rid = ?').bind(me.id, id)) // и ссылка на отзыв закрывается
+        .concat(env.DB.prepare('DELETE FROM reactions WHERE owner_id = ? AND rid = ?').bind(me.id, id)) // и реакции
         .concat(env.DB.prepare('DELETE FROM comments WHERE owner_id = ? AND target = ?').bind(me.id, 'r.' + id)))); // и ветка комментариев под ней
     }
     return json({ ok: true, updatedAt: updated, count: merged.length, catsAt: catsOut ? catsOut.at : null });
@@ -1125,7 +1205,7 @@ const routes = {
     let res;
     try {
       for (let hop = 0; ; hop++) {
-        res = await fetch(u.href, { redirect: 'manual', headers: { 'user-agent': 'Mozilla/5.0 (compatible; CasualHub/1.0; +https://casualhub.pages.dev)', accept: 'image/avif,image/webp,image/*;q=0.9,*/*;q=0.5' } });
+        res = await fetch(u.href, { redirect: 'manual', signal: AbortSignal.timeout(12000), headers: { 'user-agent': 'Mozilla/5.0 (compatible; CasualHub/1.0; +https://casualhub.pages.dev)', accept: 'image/avif,image/webp,image/*;q=0.9,*/*;q=0.5' } });
         if (res.status < 300 || res.status >= 400) break;
         const loc = res.headers.get('location');
         if (!loc || hop >= 4) return fail(502, 'Сайт с картинкой слишком долго перенаправляет');
@@ -1136,7 +1216,8 @@ const routes = {
     if (!res.ok) return fail(502, `Сайт с картинкой её не отдал (${res.status})`);
     if (+res.headers.get('content-length') > 6e6) return fail(413, 'Картинка больше 6 МБ');
     // читаем по кусочкам и обрываем на 6 МБ: размер в заголовке может врать или отсутствовать
-    const buf = await readCapped(res, 6e6);
+    let buf;
+    try { buf = await readCapped(res, 6e6); } catch (e) { return fail(502, 'Сайт с картинкой не ответил'); }
     if (!buf) return fail(413, 'Картинка больше 6 МБ');
     const type = imageType(buf);
     if (!type) return fail(415, 'По ссылке страница, а не картинка. Открой саму картинку и скопируй её адрес');
@@ -1154,6 +1235,9 @@ const routes = {
       const c = await env.DB.prepare('SELECT COUNT(*) AS n FROM photos WHERE user_id = ?').bind(me.id).first();
       if (c && c.n >= MAX_PHOTOS) return fail(413, `Слишком много фото в аккаунте (больше ${MAX_PHOTOS}). Удали старые оценки с фото.`);
     }
+    // за сутки на человека и на адрес: один аккаунт не должен за минуты забить базу, общую на всех
+    const over = Math.max(await spend(env, 'photo:' + me.id, data.length, PHOTO_DAY_USER), await spend(env, 'photoip:' + clientIp(request), data.length, PHOTO_DAY_IP));
+    if (over) return new Response(JSON.stringify({ error: 'На сегодня лимит загрузки фото исчерпан. Остальные дойдут завтра сами.' }), { status: 429, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'retry-after': String(over * 60) } });
     const now = Date.now();
     // аватар и баннер: прежняя картинка уходит в историю (последние 8), её можно вернуть одним нажатием
     if (HIST_KINDS.has(arg)) await toHistory(env, me.id, arg, data);
@@ -1226,8 +1310,8 @@ const routes = {
   // картинка отзыва (для страницы /r/<код> и превью в чатах): только если ссылка есть и оценка жива
   async 'GET /share/:id/img'({ env, request, arg }) {
     if (burst('shareimg:' + clientIp(request), 240, 60e3)) return new Response(null, { status: 429 });
-    const sh = await env.DB.prepare('SELECT owner_id, rid FROM shares WHERE id = ?').bind(arg).first();
-    if (!sh) return new Response(null, { status: 404 });
+    const sh = await env.DB.prepare('SELECT s.owner_id, s.rid, u.banned FROM shares s LEFT JOIN users u ON u.id = s.owner_id WHERE s.id = ?').bind(arg).first();
+    if (!sh || sh.banned) return new Response(null, { status: 404 }); // отзывы забаненного по ссылке не открываются
     const row = (await env.DB.prepare('SELECT data FROM photos WHERE key = ?').bind(`${sh.owner_id}:${sh.rid}.t`).first())
       || (await env.DB.prepare('SELECT data FROM photos WHERE key = ?').bind(`${sh.owner_id}:${sh.rid}`).first());
     const m = row && /^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/]+=*)$/.exec(row.data);
@@ -1250,7 +1334,8 @@ const routes = {
     for (const sh of shelves) {
       let list = [];
       try { list = readShelf(sh).ratings; } catch (e) { continue; }
-      list.map((r) => ({ r, at: stampOf(r) })).sort((a, b) => b.at - a.at).slice(0, 15).forEach(({ r, at }) => {
+      // дата из будущего не держит оценку наверху ленты
+      list.map((r) => ({ r, at: Math.min(stampOf(r), Date.now()) })).sort((a, b) => b.at - a.at).slice(0, 15).forEach(({ r, at }) => {
         if (!r || !r.name || !at) return;
         items.push({
           kind: 'rating', at, user: people.get(sh.user_id),
@@ -1390,8 +1475,11 @@ async function toHistory(env, uid, kind, next) {
 }
 const MAX_PHOTOS = 1200; // фото, превью, аватар и баннер вместе
 const MAX_PHOTO = 1900000; // символов в data URL, предел строки в D1 около 2 МБ
+const PHOTO_DAY_USER = 200e6, PHOTO_DAY_IP = 400e6; // сколько символов фото можно залить за сутки
+// сколько оценок на полке: сама база считает длину списка, старый формат полки — просто список
+const SHELF_COUNT = "CASE json_type(data) WHEN 'array' THEN json_array_length(data) ELSE COALESCE(json_array_length(data, '$.ratings'), 0) END";
 // оформление профиля: до 6 витрин (топ-3/5/10 из темы, лучшие по баллу или выбранные вручную) и видимость блоков
-const LAYOUT_SECTIONS = ['stats', 'titles', 'podium', 'all', 'badges', 'friends', 'hist', 'cats'];
+const LAYOUT_SECTIONS = ['stats', 'titles', 'podium', 'all', 'badges', 'taste', 'friends', 'hist', 'cats'];
 function cleanLayout(l) {
   const one = (x) => String(x == null ? '' : x).replace(SPOOF_RE, '');
   const showcases = (Array.isArray(l.showcases) ? l.showcases : []).filter((s) => s && typeof s === 'object').slice(0, 6).map((s) => ({
@@ -1647,7 +1735,7 @@ const COVER_FIND = {
 function publicUrl(u) {
   if (!/^https?:$/.test(u.protocol) || u.username || u.password) return false;
   if (u.port && u.port !== '80' && u.port !== '443') return false;
-  const h = u.hostname.toLowerCase();
+  const h = u.hostname.toLowerCase().replace(/\.+$/, ''); // «localhost.» с точкой на конце — тот же localhost
   if (!h.includes('.') || /^[\d.]+$|^0x|^\[|:/.test(h)) return false;
   if (/(^|\.)(localhost|local|localdomain|internal|intranet|lan|home|corp|arpa)$/.test(h)) return false;
   return true;

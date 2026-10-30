@@ -188,9 +188,10 @@ a.fr-who:hover b { text-decoration: underline; }
       const [m, f] = await Promise.all([api('/me'), api('/friends')]);
       S.me = m.user || null;
       S.friends = f.friends || []; S.incoming = f.incoming || []; S.outgoing = f.outgoing || [];
-      S.failed = false;
+      S.failed = false; S.expired = false;
     } catch (e) {
       S.failed = true;
+      S.expired = e.status === 401 || e.status === 403; // сервер работает, это сессия закончилась
     }
     S.loaded = true;
     if (!sheet.hidden) draw();
@@ -209,6 +210,9 @@ a.fr-who:hover b { text-decoration: underline; }
         <div class="fr-acts" style="margin:0"><a class="fp-btn primary" href="/mnenie/#friends">Подключить в Мнении</a></div></div>`;
     } else if (!S.loaded) {
       body = '<p class="fr-muted">Загружаю друзей…</p>';
+    } else if (S.expired) {
+      body = `<div class="fr-sec"><p class="fr-muted"><strong>Вход в аккаунт закончился.</strong> Войди ещё раз, и друзья снова появятся. Оценки на этом устройстве целы.</p>
+        <div class="fr-acts" style="margin:0"><a class="fp-btn primary" href="/mnenie/#login">Войти</a></div></div>`;
     } else if (S.failed && !S.friends.length) {
       body = '<div class="fr-sec"><p class="fr-muted"><strong>Сервер друзей сейчас не отвечает.</strong> Попробуй открыть окно ещё раз чуть позже.</p></div>';
     } else {

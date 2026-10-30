@@ -15,7 +15,10 @@
     const d = await r.json().catch(() => ({}));
     if (!r.ok) throw Object.assign(new Error(d.error || 'Не получилось, попробуй ещё раз'), { status: r.status });
     return d;
-  });
+  }, () => { throw Object.assign(new Error('Нет связи с сервером, проверь интернет и попробуй ещё раз'), { status: 0 }); });
+  // вход в админку закончился (12 часов прошло или вышли на другом устройстве): сервер отвечает «нет такого адреса»
+  const lostAdmin = (x) => x && x.status === 404 && x.message === 'Нет такого адреса.';
+  const lostSession = (x) => x && x.status === 401;
   const SHIELD = (s) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5l8 3v6.2c0 4.9-3.4 8.6-8 10-4.6-1.4-8-5.1-8-10V5.5z"/><path d="M8.5 12l2.5 2.5 4.6-5"/></svg>`;
   const LOCK = (s) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.5" r="1.3" fill="currentColor"/></svg>`;
   // запоминаем, что админка открывалась: кнопка «Админ» в шапке останется и после смены юзернейма
@@ -221,20 +224,47 @@
         if (inp.select) inp.select();
       } else okBtn.focus();
       validate();
-      const close = (v) => { m.classList.add('out'); document.body.classList.remove('adm-lock-scroll'); setTimeout(() => m.remove(), calm ? 0 : 220); if (back && back.isConnected) back.focus({ preventScroll: true }); resolve(v); };
-      m.addEventListener('click', (e) => { if (e.target === m || e.target.closest('[data-x]')) close(null); });
-      m.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); close(null); } });
+      let closed = false, busy = false;
+      const close = (v) => {
+        if (closed) return;
+        closed = true;
+        document.removeEventListener('keydown', onKey, true);
+        m.classList.add('out'); document.body.classList.remove('adm-lock-scroll');
+        setTimeout(() => m.remove(), calm ? 0 : 220);
+        if (back && back.isConnected) back.focus({ preventScroll: true });
+        resolve(v);
+      };
+      // Esc закрывает, а Tab не уходит на страницу под окном, где бы ни был фокус (например, после клика по тексту окна)
+      const onKey = (e) => {
+        if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (!busy) close(null); return; }
+        if (e.key !== 'Tab') return;
+        const items = [...m.querySelectorAll('button, input, textarea')].filter((n) => !n.disabled);
+        if (!items.length) return;
+        const first = items[0], last = items[items.length - 1], cur = document.activeElement;
+        if (e.shiftKey && (cur === first || !m.contains(cur))) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && (cur === last || !m.contains(cur))) { e.preventDefault(); first.focus(); }
+      };
+      document.addEventListener('keydown', onKey, true);
+      // клик мимо закрывает, только если и нажатие началось мимо окна: выделение текста в поле с вылетом за край окно не закрывает
+      let downOut = false;
+      m.addEventListener('pointerdown', (e) => { downOut = e.target === m; });
+      m.addEventListener('click', (e) => { if (busy) return; if ((e.target === m && downOut) || e.target.closest('[data-x]')) close(null); });
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
-        if (okBtn.disabled || !validate()) return;
+        if (busy || okBtn.disabled || !validate()) return;
+        busy = true;
         okBtn.disabled = true; err.textContent = '';
         const label = okBtn.textContent; okBtn.textContent = 'Секунду…';
         try {
           const r = o.submit ? o.submit(val()) : true;
-          if (r === null) { close(null); return; } // ничего не поменялось
+          if (r === null) { busy = false; close(null); return; } // ничего не поменялось
           await r;
+          busy = false;
           close(true);
         } catch (x) {
+          busy = false;
+          // вход в админку уже закончился: окно ни при чём, снова спрашиваем пин-код
+          if (lostAdmin(x) || lostSession(x)) { close(null); fail(x); return; }
           err.textContent = x.message;
           okBtn.textContent = label; okBtn.disabled = false;
           form.classList.remove('shake'); void form.offsetWidth; form.classList.add('shake');
@@ -250,34 +280,75 @@
   let tab = 'stats';
   const sec = () => $('#admSec');
   const when = (t) => (t ? new Date(t).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—');
-  const fail = (x) => { const s = sec(); if (s) s.innerHTML = `<p class="adm-err">${esc(x.message)}</p>`; if (x.status === 404) pinForm(); };
+  const plural = (n, one, few, many) => { const a = Math.abs(n) % 100, b = a % 10; return a > 10 && a < 20 ? many : b > 1 && b < 5 ? few : b === 1 ? one : many; };
+  const fail = (x) => {
+    // сессия аккаунта закончилась: пин-код тут не поможет
+    if (lostSession(x)) { message('Вход закончился', 'Войди в аккаунт ещё раз, и админка снова откроется.', '<a class="btn primary" href="/mnenie/#login">Войти</a>'); return; }
+    if (lostAdmin(x)) { me.active = false; pinForm(); return; }
+    const s = sec();
+    if (s) s.innerHTML = `<p class="adm-err">${esc(x.message)}</p><button type="button" class="btn ghost small" id="admRetryTab">Попробовать ещё раз</button>`;
+    const again = $('#admRetryTab');
+    if (again) again.addEventListener('click', showTab);
+  };
+  // быстрый клик по вкладкам: ответ на прошлую вкладку не должен перезаписать ту, что открыта сейчас
+  let view = 0;
+  const fresh = () => ++view;
+  const stale = (my) => my !== view || !sec();
   function showTab() {
     const s = sec();
     if (!s) return;
     s.innerHTML = '<p class="muted">Загружаю…</p>';
     ({ stats, users, comments, announce, log })[tab]();
   }
+  const mb = (n) => (n >= 1e9 ? (n / 1e9).toFixed(2).replace('.', ',') + ' ГБ' : Math.max(1, Math.round(n / 1e6)) + ' МБ');
   async function stats() {
+    const my = fresh();
     try {
       const d = await call('GET', '/admin/stats');
-      const tiles = [['Аккаунтов', d.users], ['Новых за неделю', d.new7], ['Заходили за сутки', d.active24], ['Сейчас на сайте', `${d.onlineUsers} + ${d.onlineGuests} гостей`], ['Оценок', d.ratings], ['Комментариев', d.comments], ['Реакций', d.reactions], ['Ссылок на отзывы', d.shares], ['Забанено', d.banned]];
+      if (stale(my)) return;
+      const tiles = [['Аккаунтов', d.users], ['Новых за неделю', d.new7], ['Заходили за сутки', d.active24], ['Сейчас на сайте', `${d.onlineUsers} + ${d.onlineGuests} ${plural(d.onlineGuests, 'гость', 'гостя', 'гостей')}`], ['Оценок', d.ratings], ['Комментариев', d.comments], ['Реакций', d.reactions], ['Ссылок на отзывы', d.shares], ['Забанено', d.banned], ['Фото в базе', d.photos]];
+      if (d.dbBytes) tiles.push(['Размер базы', mb(d.dbBytes)]);
       sec().innerHTML = `<div class="head"><h2 class="h2">Статистика</h2><button type="button" class="btn ghost small" id="admRe">Обновить</button></div>
         <div class="adm-stats">${tiles.map(([k, v], i) => `<div class="adm-stat" style="--k:${i}"><b>${esc(v)}</b><small>${esc(k)}</small></div>`).join('')}</div>`;
       $('#admRe').addEventListener('click', showTab);
-    } catch (x) { fail(x); }
+    } catch (x) { if (!stale(my)) fail(x); }
   }
+  const userRow = (u, i) => {
+    const edit = `<button type="button" class="btn ghost small" data-act="set-handle" data-h="${esc(u.handle)}" title="Сменить @юзернейм">@ Юзернейм</button><button type="button" class="btn ghost small" data-act="set-nick" title="Сменить ник">✎ Ник</button><button type="button" class="btn ghost small" data-act="set-mail" data-m="${esc(u.email)}" title="Сменить почту">✉ Почта</button>`;
+    const hard = `<button type="button" class="btn ghost small" data-act="kick">Выкинуть с устройств</button><button type="button" class="btn small danger" data-act="delete" data-h="${esc(u.handle)}">🗑 Удалить</button><button type="button" class="btn small ${u.banned ? 'ghost' : 'danger'}" data-act="${u.banned ? 'unban' : 'ban'}">${u.banned ? 'Разбанить' : 'Забанить'}</button>`;
+    const facts = [u.email, 'с ' + when(u.createdAt), 'был ' + when(u.lastSeen), 'оценок ' + u.ratings].filter(Boolean).map(esc).join(' · ');
+    return `<li class="adm-row${u.banned ? ' banned' : ''}" style="--k:${Math.min(i, 12)}" data-uid="${esc(u.id)}"${u.admin ? ' data-admin="1"' : ''}>
+          <div class="adm-who"><b>${esc(u.username)}</b> <a href="/profile/?id=${encodeURIComponent(u.id)}">@${esc(u.handle)}</a>${u.admin ? ' <em class="adm-badge">админ</em>' : ''}${u.banned ? ` <em class="adm-badge bad">бан${u.banReason ? ': ' + esc(u.banReason) : ''}</em>` : ''}
+            <small>${facts}</small></div>
+          <div class="adm-acts">${edit}${u.admin ? '' : hard}</div>
+        </li>`;
+  };
+  // q — поиск; страницы по 50 подгружаются кнопкой, чтобы старые аккаунты тоже можно было найти глазами
   async function users(q) {
     q = q || '';
+    const my = fresh();
     try {
       const d = await call('GET', '/admin/users?q=' + encodeURIComponent(q));
-      sec().innerHTML = `<div class="head"><h2 class="h2">Пользователи</h2><span class="label">${d.users.length}${d.users.length === 50 ? '+' : ''}</span></div>
+      if (stale(my)) return;
+      let shown = d.users.length;
+      sec().innerHTML = `<div class="head"><h2 class="h2">Пользователи</h2><span class="label" id="admUn">${shown}${d.more ? '+' : ''}</span></div>
         <form class="adm-search" id="admUq"><input class="adm-in" type="search" placeholder="@юзернейм, ник или почта" value="${esc(q)}" aria-label="Поиск пользователя"><button class="btn primary" type="submit">Найти</button></form>
-        <ul class="adm-list">${d.users.map((u, i) => `<li class="adm-row${u.banned ? ' banned' : ''}" style="--k:${Math.min(i, 12)}" data-uid="${esc(u.id)}">
-          <div class="adm-who"><b>${esc(u.username)}</b> <a href="/profile/?id=${encodeURIComponent(u.id)}">@${esc(u.handle)}</a>${u.admin ? ' <em class="adm-badge">админ</em>' : ''}${u.banned ? ` <em class="adm-badge bad">бан${u.banReason ? ': ' + esc(u.banReason) : ''}</em>` : ''}
-            <small>${esc(u.email)} · с ${when(u.createdAt)} · был ${when(u.lastSeen)} · оценок ${u.ratings}</small></div>
-          ${u.admin ? `<div class="adm-acts"><button type="button" class="btn ghost small" data-act="set-handle" data-h="${esc(u.handle)}" title="Сменить @юзернейм">@ Юзернейм</button><button type="button" class="btn ghost small" data-act="set-nick" title="Сменить ник">✎ Ник</button><button type="button" class="btn ghost small" data-act="set-mail" data-m="${esc(u.email)}" title="Сменить почту">✉ Почта</button></div>` : `<div class="adm-acts"><button type="button" class="btn ghost small" data-act="set-handle" data-h="${esc(u.handle)}" title="Сменить @юзернейм">@ Юзернейм</button><button type="button" class="btn ghost small" data-act="set-nick" title="Сменить ник">✎ Ник</button><button type="button" class="btn ghost small" data-act="set-mail" data-m="${esc(u.email)}" title="Сменить почту">✉ Почта</button><button type="button" class="btn ghost small" data-act="kick">Выкинуть с устройств</button><button type="button" class="btn small danger" data-act="delete" data-h="${esc(u.handle)}">🗑 Удалить</button><button type="button" class="btn small ${u.banned ? 'ghost' : 'danger'}" data-act="${u.banned ? 'unban' : 'ban'}">${u.banned ? 'Разбанить' : 'Забанить'}</button></div>`}
-        </li>`).join('') || '<li class="muted">Никого не нашлось.</li>'}</ul>`;
+        <ul class="adm-list">${d.users.map(userRow).join('') || '<li class="muted">Никого не нашлось.</li>'}</ul>
+        ${d.more ? '<button type="button" class="btn ghost adm-more" id="admMore">Показать ещё</button>' : ''}`;
       $('#admUq').addEventListener('submit', (e) => { e.preventDefault(); users(e.target.querySelector('input').value.trim()); });
+      const more = $('#admMore');
+      if (more) more.addEventListener('click', async () => {
+        more.disabled = true;
+        const v = view;
+        try {
+          const n = await call('GET', `/admin/users?q=${encodeURIComponent(q)}&offset=${shown}`);
+          if (v !== view) return;
+          sec().querySelector('.adm-list').insertAdjacentHTML('beforeend', n.users.map(userRow).join(''));
+          shown += n.users.length;
+          $('#admUn').textContent = shown + (n.more ? '+' : '');
+          if (n.more) more.disabled = false; else more.remove();
+        } catch (x) { more.disabled = false; if (v === view) fail(x); }
+      });
       sec().querySelector('.adm-list').addEventListener('click', async (e) => {
         const b = e.target.closest('[data-act]');
         if (!b) return;
@@ -289,7 +360,8 @@
         if (act === 'set-handle') ok = await dialog({
           icon: '@', title: 'Новый юзернейм', who: name,
           field: { value: b.dataset.h, prefix: '@', placeholder: 'yukomagod', max: 20, filterHint: 'В юзернейме только латинские буквы, цифры, «_» и «.» — без пробелов и кириллицы', filter: (v) => v.toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9_.]/g, ''), check: (v) => (/^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/.test(v) ? '' : 'От 3 до 20 символов: латинские буквы, цифры, «_» и «.» (точка не по краям)') },
-          hint: 'По нему человека находят друзья и открывают его профиль: casualhub.pages.dev/u/…', button: 'Сохранить',
+          // у админа вход в админку привязан к @: сменишь — он потеряет доступ, пока не вернёт прежний в настройках профиля
+          hint: li.dataset.admin ? 'Осторожно: вход в админку привязан к @. После смены этот админ не откроет панель, пока не вернёт прежний @ в настройках профиля.' : 'По нему человека находят друзья и открывают его профиль: casualhub.pages.dev/u/…', button: 'Сохранить',
           submit: (v) => (v === b.dataset.h ? null : rename('handle', v)),
         });
         else if (act === 'set-nick') ok = await dialog({
@@ -326,8 +398,10 @@
     } catch (x) { fail(x); }
   }
   async function comments() {
+    const my = fresh();
     try {
       const d = await call('GET', '/admin/comments');
+      if (stale(my)) return;
       sec().innerHTML = `<div class="head"><h2 class="h2">Комментарии</h2><span class="label">последние ${d.items.length}</span></div>
         <ul class="adm-list">${d.items.map((c, i) => `<li class="adm-row" style="--k:${Math.min(i, 12)}" data-cid="${esc(c.id)}">
           <div class="adm-who"><b>${esc(c.from.username)}</b> <small class="inl">@${esc(c.from.handle)} → ${c.where === 'wall' ? 'стена' : 'оценка'} @${esc(c.owner.handle)} · ${when(c.at)}</small><p class="adm-text">${esc(c.text)}</p></div>
@@ -339,11 +413,13 @@
         const ok = await dialog({ icon: '💬', danger: true, title: 'Удалить комментарий?', who: li.querySelector('.adm-who b').textContent, text: li.querySelector('.adm-text').textContent, button: 'Удалить', submit: () => call('DELETE', '/admin/comment/' + encodeURIComponent(li.dataset.cid)) });
         if (ok) { li.classList.add('gone'); setTimeout(() => li.remove(), 300); }
       });
-    } catch (x) { fail(x); }
+    } catch (x) { if (!stale(my)) fail(x); }
   }
   async function announce() {
+    const my = fresh();
     try {
       const { announce: a } = await call('GET', '/admin/announce');
+      if (stale(my)) return;
       const live = a && a.text && (!a.until || a.until > Date.now());
       sec().innerHTML = `<div class="head"><h2 class="h2">Объявление</h2><span class="label">${live ? 'висит' + (a.until ? ' до ' + when(a.until) : '') : 'нет'}</span></div>
         <p class="muted">Плашка вверху у всех на сайте. Каждый может её закрыть; новое объявление покажется снова.</p>
@@ -358,20 +434,39 @@
         </form>`;
       const f = $('#admAnn');
       if (live) f.kind.value = a.kind || 'info';
+      const area = f.querySelector('textarea'), msg = $('#admAnnMsg');
+      let sending = false;
       const save = async (text) => {
-        try { await call('PUT', '/admin/announce', { text, kind: f.kind.value, hours: +f.hours.value }); announce(); } catch (x) { $('#admAnnMsg').textContent = x.message; }
+        if (sending) return;
+        sending = true;
+        f.querySelectorAll('button').forEach((b) => { b.disabled = true; });
+        try { await call('PUT', '/admin/announce', { text, kind: f.kind.value, hours: +f.hours.value }); announce(); }
+        catch (x) {
+          sending = false;
+          f.querySelectorAll('button').forEach((b) => { b.disabled = false; });
+          if (lostAdmin(x) || lostSession(x)) fail(x); else msg.textContent = x.message;
+        }
       };
-      f.addEventListener('submit', (e) => { e.preventDefault(); const t = f.querySelector('textarea').value.trim(); if (t) save(t); });
+      f.addEventListener('submit', (e) => {
+        e.preventDefault();
+        const t = area.value.trim();
+        if (t) { save(t); return; }
+        msg.textContent = 'Напиши текст объявления';
+        area.focus();
+      });
+      area.addEventListener('input', () => { msg.textContent = ''; });
       const off = $('#admAnnOff');
       if (off) off.addEventListener('click', () => save(''));
-    } catch (x) { fail(x); }
+    } catch (x) { if (!stale(my)) fail(x); }
   }
   async function log() {
+    const my = fresh();
     try {
       const d = await call('GET', '/admin/log');
+      if (stale(my)) return;
       sec().innerHTML = `<div class="head"><h2 class="h2">Журнал</h2><span class="label">последние ${d.items.length}</span></div>
         <ul class="adm-list adm-log">${d.items.map((x) => `<li class="adm-row${x.ok ? '' : ' banned'}"><div class="adm-who"><b>${x.ok ? '✔' : '✖'} ${esc(x.action)}</b><small>@${esc(x.handle || '?')} · ${when(x.at)} · ${esc(x.ip)}</small></div></li>`).join('') || '<li class="muted">Пусто.</li>'}</ul>`;
-    } catch (x) { fail(x); }
+    } catch (x) { if (!stale(my)) fail(x); }
   }
 
   // ---------- тема: тот же выбор, что на остальных страницах (меню ☰ → «Тема») ----------
@@ -413,7 +508,8 @@
       return;
     }
     try { me = await call('GET', '/admin/me'); } catch (x) {
-      if (x.status === 404 || x.status === 401) message('Нет доступа', 'Эта страница только для админов сайта.', '<a class="btn ghost" href="/">На главную</a>');
+      if (x.status === 401) message('Вход закончился', 'Войди в аккаунт ещё раз: сессия на этом устройстве больше не действует.', '<a class="btn primary" href="/mnenie/#login">Войти</a>');
+      else if (x.status === 404) message('Нет доступа', 'Эта страница только для админов сайта.', '<a class="btn ghost" href="/">На главную</a>');
       else { message('Админ-панель', esc(x.message), '<button type="button" class="btn ghost" id="admRetry">Попробовать ещё раз</button>'); $('#admRetry').addEventListener('click', start); }
       return;
     }

@@ -171,7 +171,8 @@
     tick();
   });
   window.CasualFriends = {
-    openSheet: () => waitFor(() => F.me || !F.online, 6000).then(() => openSheet()),
+    // ждём, пока станет ясно, вошёл ли человек: иначе окно успело бы показать «аккаунт ещё не подключён»
+    openSheet: () => waitFor(() => F.synced || F.me, 6000).then(() => openSheet()),
     async showFriend(uid, rid) {
       // друзья подгружаются после входа: ждём, пока этот друг появится в списке
       const ok = await waitFor(() => F.friends.some((f) => f.id === uid));
@@ -216,10 +217,11 @@
 @keyframes code-shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
 .code-card h3 { margin: 0; font-size: 20px; }
 .code-card p { margin: 0; font-size: 14px; color: var(--ink-2, #a3a9b8); line-height: 1.45; }
-.code-card input { height: 56px; padding: 0 12px; border: 1px solid var(--line, #2a2f3a); border-radius: 14px; background: var(--panel-2, #1d2129); color: var(--ink, #e8eaf0); font: 800 28px/1 ui-monospace, monospace; letter-spacing: .4em; text-indent: .4em; text-align: center; }
-.code-card input:focus { outline: none; border-color: var(--accent, #3550E8); box-shadow: 0 0 0 3px var(--accent-soft, #232A4F); }
+.code-card input[inputmode] { height: 56px; padding: 0 12px; border: 1px solid var(--line, #2a2f3a); border-radius: 14px; background: var(--panel-2, #1d2129); color: var(--ink, #e8eaf0); font: 800 28px/1 ui-monospace, monospace; letter-spacing: .4em; text-indent: .4em; text-align: center; }
+.code-card input[inputmode]:focus { outline: none; border-color: var(--accent, #3550E8); box-shadow: 0 0 0 3px var(--accent-soft, #232A4F); }
 .code-card .code-err { min-height: 18px; color: var(--bad, #F26A55); font-size: 13px; font-weight: 600; }
 .code-card label { display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 13px; color: var(--ink-2, #a3a9b8); }
+.code-card label input { width: 18px; height: 18px; accent-color: var(--accent, #3550E8); }
 .code-acts { display: grid; gap: 8px; }
 .code-acts button { height: 44px; border-radius: 999px; border: 1px solid var(--line, #2a2f3a); background: var(--panel-2, #1d2129); color: var(--ink, #e8eaf0); font: inherit; font-weight: 700; cursor: pointer; }
 .code-acts .go { background: var(--accent, #3550E8); border-color: var(--accent, #3550E8); color: var(--on-accent, #fff); }
@@ -242,7 +244,9 @@
       const form = m.querySelector('form'), inp = m.querySelector('input[inputmode]'), err = m.querySelector('.code-err');
       const keep = m.querySelector('input[type="checkbox"]'), again = m.querySelector('[data-c="again"]'), go = m.querySelector('.go');
       inp.focus();
-      const done = (v) => { m.remove(); resolve(v); };
+      const onEsc = (e) => { if (e.key === 'Escape') { e.preventDefault(); clearInterval(tick); done(null); } };
+      const done = (v) => { document.removeEventListener('keydown', onEsc, true); m.remove(); resolve(v); };
+      document.addEventListener('keydown', onEsc, true); // где бы ни был фокус
       const shake = (t) => { err.textContent = t; form.classList.remove('shake'); void form.offsetWidth; form.classList.add('shake'); };
       // «прислать ещё раз» доступно через 45 секунд
       let left = 45, tick = 0;
@@ -271,7 +275,6 @@
         catch (x) { shake(x.message); again.disabled = false; }
       });
       m.querySelector('[data-c="cancel"]').addEventListener('click', () => { clearInterval(tick); done(null); });
-      m.addEventListener('keydown', (e) => { if (e.key === 'Escape') { clearInterval(tick); done(null); } });
     });
   }
 
@@ -293,6 +296,7 @@
     if (!res.ok) {
       const err = new Error(out.error || 'Сервер не отвечает.');
       err.status = res.status;
+      err.retryAfter = +res.headers.get('retry-after') || 0;
       throw err;
     }
     return out;
@@ -621,8 +625,9 @@
   async function uploadPhotos() {
     const sent = readJSON(PHOTOS_KEY, {});
     const thumbs = readJSON(THUMBS_KEY, {});
-    let changed = false, tChanged = false, busy = false;
-    // сервер попросил подождать (429): остальные фото уйдут со следующей отправкой
+    let changed = false, tChanged = false, busy = 0;
+    // сервер попросил подождать (429): остальные фото уйдут со следующей отправкой, через столько, сколько он сказал
+    const pause = (e) => { busy = Math.max(65e3, ((e && e.retryAfter) || 0) * 1000); };
     for (const r of state.ratings.filter(ownsRating)) {
       if (busy) break;
       const d = photoData(r.photo);
@@ -630,13 +635,13 @@
       const f = fp(d);
       if (sent[r.id] !== f) {
         try { await api('/photo/' + encodeURIComponent(r.id), 'PUT', { data: d }); sent[r.id] = f; changed = true; }
-        catch (e) { if (e.status === 413) { sent[r.id] = f; changed = true; } if (e.status === 429) { busy = true; break; } }
+        catch (e) { if (e.status === 413) { sent[r.id] = f; changed = true; } if (e.status === 429) { pause(e); break; } }
       }
       // превью уходит и для старых фото, и для слишком больших, которые сервер не принял целиком
       if (thumbs[r.id] !== f) {
         const t = await thumbOf(d);
         if (t) {
-          try { await api('/photo/' + encodeURIComponent(r.id + '.t'), 'PUT', { data: t }); thumbs[r.id] = f; tChanged = true; } catch (e) { if (e.status === 429) busy = true; }
+          try { await api('/photo/' + encodeURIComponent(r.id + '.t'), 'PUT', { data: t }); thumbs[r.id] = f; tChanged = true; } catch (e) { if (e.status === 429) pause(e); }
         }
       }
     }
@@ -658,8 +663,9 @@
     if (!F.me) return;
     if (claimGuestRatings()) { saveLocalRatingsQuiet(); renderBoard(); }
     try {
-      // не все фото ушли (сервер попросил подождать): досылаем через минуту
-      if (await uploadPhotos()) { clearTimeout(F.photoRetry); F.photoRetry = setTimeout(() => pushShelf(), 65e3); }
+      // не все фото ушли (сервер попросил подождать): досылаем, когда он разрешит
+      const later = await uploadPhotos();
+      if (later) { clearTimeout(F.photoRetry); F.photoRetry = setTimeout(() => pushShelf(), later); }
       const r = await api('/shelf', 'PUT', { ratings: myRatings(), deleted: readJSON(DELETED_KEY, []), cats: catsPayload() });
       F.pushedAt = r.updatedAt;
       F.pushedCount = r.count;
@@ -1338,7 +1344,8 @@ ${ICON.chev}
       }
       // сервер недоступен: обычный вход на этом устройстве
       if (err && (err.status === 0 || err.status === 503)) return orig.login.apply(this, arguments);
-      if (err && err.status === 429) { toast(err.message); return false; }
+      // бан, «письмо не ушло», «слишком много попыток»: сервер сам сказал, что не так. «Неверный пароль» — только при 401
+      if (err && err.status !== 401) { toast(err.message); return false; }
       // старый аккаунт, созданный до онлайн-входа: входим локально и тихо подключаем к друзьям
       if (local && !local.serverId && (!local.pass || local.pass === pass)) {
         const ok = orig.login.apply(this, arguments);
@@ -1389,6 +1396,12 @@ ${ICON.chev}
         try {
           const r = await api('/account', 'PUT', { username: nickChanged ? nick : undefined, handle: handleChanged ? h : undefined, password: pass || undefined, email: emailChanged ? em : undefined, current: current || undefined });
           F.me = r.user;
+          // новая почта начинает действовать только после кода из письма на неё; остальное уже сохранено
+          if (r.verify) {
+            const v = await finishCode(r);
+            if (v && v.user) { F.me = v.user; toast('Почта подтверждена и изменена'); }
+            else toast('Почта осталась прежней: код из письма не подтверждён');
+          }
         } catch (e) {
           toast(e.message);
           return false;
@@ -1469,7 +1482,7 @@ ${ICON.chev}
       const d = h.ok ? await h.json() : null;
       F.online = !!(d && d.ok);
     } catch (e) { F.online = false; }
-    await syncSession();
+    try { await syncSession(); } finally { F.synced = true; }
     renderBoard();
   })();
 })();

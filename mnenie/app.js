@@ -1064,7 +1064,7 @@ function exportBackup() {
     exportedAt: new Date().toISOString(),
     ratings: state.ratings,
     categories: serializeCats(),
-    users: state.users,
+    users: state.users.map(({ pass, ...u }) => u), // пароль в файл не попадает: файл могут и переслать
     log: LOG.entries
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
@@ -1092,22 +1092,29 @@ function handleBackupImport(e) {
       }
       const n = Array.isArray(data.ratings) ? data.ratings.filter(r => r && !r.example).length : 0;
       if (!confirm(`Заменить оценки и категории на этом устройстве данными из файла? В файле ${n} ${plural(n, 'оценка', 'оценки', 'оценок')}.`)) return;
+      // файл мог быть поправлен руками или обрезан: битые записи пропускаем, а не ломаем ими страницу на каждом заходе
       if (Array.isArray(data.ratings)) {
-        state.ratings = data.ratings.map(r => normalizeRating(r.id, r)).filter(Boolean);
+        state.ratings = data.ratings.map(r => (r && typeof r.id === 'string' ? normalizeRating(r.id, r) : null)).filter(Boolean);
         saveLocalRatings();
       }
       if (Array.isArray(data.categories) && data.categories.length) {
-        state.cats = parseCats({ items: data.categories });
-        saveLocalCats();
+        const cats = parseCats({ items: data.categories });
+        if (cats && cats.length) { state.cats = cats; saveLocalCats(); }
       }
       if (Array.isArray(data.users) && data.users.length) {
-        state.users = data.users;
-        saveUsers();
+        const users = data.users.filter(u => u && typeof u.id === 'string' && u.id && typeof u.name === 'string' && u.name);
+        if (users.length) {
+          state.users = users;
+          if (state.user) state.user = users.find(u => u.id === state.user.id) || state.user;
+          saveUsers();
+        }
       }
       if (Array.isArray(data.log)) {
-        LOG.entries = data.log;
+        LOG.entries = readLog(data.log);
+        indexLog();
         saveLocalLog();
       }
+      if (!state.cats.some(c => c.id === form.cat) && !form.editingId) form.cat = state.cats[0].id;
       renderBoard(); renderCats(); renderForm(); renderLog(); renderUserBar();
       toast('Данные восстановлены из копии');
       closeAuthModal();
@@ -2337,7 +2344,8 @@ function loadIntoForm(r) {
   form.cons = r.cons || '';
   form.note = r.note || '';
   form.extraCatName = r.catName || '';
-  form.photo = r.photo ? { kind: 'saved', id: r.photo.id, data: r.photo.data || '', w: r.photo.w, h: r.photo.h } : null;
+  // ref: фото лежит только на сервере, в этом браузере его сейчас нет. Без этой ссылки сохранение правки выбросило бы фото из оценки
+  form.photo = r.photo ? { kind: 'saved', id: r.photo.id, data: r.photo.data || '', w: r.photo.w, h: r.photo.h, ...(r.photo.ref ? { ref: r.photo.ref } : {}) } : null;
   for (const s of r.scores) {
     if (s.v > 0) form.scores[s.id] = s.v;
     if (s.note) form.notes[s.id] = s.note;
@@ -2628,7 +2636,7 @@ async function save() {
       catch (err) { handleAssetError(err); return; }
       photo = { id: uploaded.id, data: uploaded.data || '', w: p.w, h: p.h };
     } else if (p && p.kind === 'saved') {
-      photo = { id: p.id, data: p.data || '', w: p.w || 0, h: p.h || 0 };
+      photo = { id: p.id, data: p.data || '', w: p.w || 0, h: p.h || 0, ...(p.ref ? { ref: p.ref } : {}) };
     } else if (!p && !form.editingId && target && target.photo) {
       photo = target.photo;
     }
@@ -2639,7 +2647,7 @@ async function save() {
     const oldId = target && target.photo ? target.photo.id : null;
     if (oldId && (!photo || photo.id !== oldId)) dropAsset(oldId);
     resetForm(form.cat);
-    toast(`${target ? 'Оценка обновлена' : 'Сохранено'}: ${name}, ${fmt(t)}`);
+    toast(`${target ? 'Оценка обновлена' : 'Сохранено'}: ${name}${t != null ? ', ' + fmt(t) : ''}`);
     setTimeout(() => { if (state.flashId === id) state.flashId = null; }, 2000);
   } catch (e) {
     state.flashId = null;
@@ -2858,7 +2866,8 @@ async function initStorage() {
         await hydratePhotos(savedRatings);
         // старые оценки хранили фото прямо в себе (и дважды): переносим в IndexedDB и освобождаем место
         const inline = savedRatings.some(r => r && (photoDataOf(r.photo) || (r.author && /^data:/.test(r.author.avatar || ''))));
-        state.ratings = savedRatings.map(r => normalizeRating(r.id, r)).filter(Boolean);
+        // одна битая запись не должна оставить человека без всех оценок (пустой список потом затёр бы сохранённые)
+        state.ratings = savedRatings.map(r => (r && typeof r.id === 'string' ? normalizeRating(r.id, r) : null)).filter(Boolean);
         if (inline && state.photoStore) saveLocalRatings();
         // черновик с сохранённым фото: оно тоже в IndexedDB
         if (form.photo && form.photo.ref && !form.photo.data) {
@@ -2872,13 +2881,15 @@ async function initStorage() {
     } catch (_) {}
     try {
       const savedLog = JSON.parse(localStorage.getItem(STORAGE_KEYS.LOG) || 'null');
-      if (savedLog && Array.isArray(savedLog)) LOG.entries = savedLog;
+      // индекс нужен сразу: по нему в карточке оценки показывается «История», без него она пропадала после перезагрузки
+      if (savedLog && Array.isArray(savedLog)) { LOG.entries = readLog(savedLog); indexLog(); }
     } catch (_) {}
     state.loaded = true;
     state.catsLoaded = true;
     LOG.loaded = true;
     logReadyResolve(false);
     repairOverwrittenCats();
+    fillDraftFromRating();
     if (!form.editingId && !currentCat()) form.cat = state.cats[0].id;
     renderForm(); renderNotice(); renderBoard(); renderLog(); renderUserBar();
     return;
@@ -2898,11 +2909,13 @@ let draftTimer = null;
 function scheduleDraft() { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 300); }
 function saveDraft() {
   try {
-    const empty = !form.editingId && !form.name.trim() && !form.note.trim()
+    const empty = !form.editingId && !form.name.trim() && !form.note.trim() && !form.fav && !form.status
+      && !(form.meta || '').trim() && !(form.pros || '').trim() && !(form.cons || '').trim()
       && !Object.keys(form.scores).length && !Object.values(form.notes).some(n => n && n.trim()) && !form.photo;
     if (empty) localStorage.setItem(DRAFT_KEY, JSON.stringify({ v: 2, form: { cat: form.cat } }));
     else localStorage.setItem(DRAFT_KEY, JSON.stringify({ v: 2, form: {
       editingId: form.editingId, cat: form.cat, name: form.name, artist: form.artist, note: form.note,
+      fav: !!form.fav, status: form.status, meta: form.meta, pros: form.pros, cons: form.cons,
       scores: form.scores, notes: form.notes, weights: form.weights, extra: form.extra, extraCatName: form.extraCatName,
       photo: form.photo && form.photo.kind === 'saved' ? draftPhoto(form.photo) : null
     } }));
@@ -2917,6 +2930,16 @@ function draftPhoto(p) {
   if (!photoKeys.has(key)) { photoKeys.add(key); window.CasualPhotos.put(key, d).then((ok) => { if (!ok) { photoKeys.delete(key); photoBad.add(key); } }); }
   return { kind: 'saved', ref: key, w: p.w, h: p.h };
 }
+// старый черновик правки (до того, как в нём стали храниться статус, описание, плюсы и минусы): эти поля берём из самой оценки.
+// Иначе «Обновить» стёрло бы их у сохранённой оценки
+function fillDraftFromRating() {
+  const f = form;
+  if (!f.editingId || f.draftOld !== true) return;
+  delete f.draftOld;
+  const r = state.ratings.find(x => x.id === f.editingId);
+  if (!r) return;
+  f.fav = !!r.fav; f.status = fitStatus(r.status || ''); f.meta = r.meta || ''; f.pros = r.pros || ''; f.cons = r.cons || '';
+}
 function loadDraft() {
   try {
     const d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null');
@@ -2929,11 +2952,13 @@ function loadDraft() {
       editingId: typeof f.editingId === 'string' ? f.editingId : null,
       cat: typeof f.cat === 'string' ? f.cat : blankForm().cat,
       name: str(f.name).slice(0, 140), artist: str(f.artist).slice(0, 80), note: str(f.note).slice(0, 4000), scores, notes,
+      fav: f.fav === true, status: str(f.status).slice(0, 40), meta: str(f.meta).slice(0, 80), pros: str(f.pros).slice(0, 1000), cons: str(f.cons).slice(0, 1000),
       extra: Array.isArray(f.extra) ? f.extra.filter(x => x && typeof x.id === 'string' && typeof x.name === 'string').map(x => ({ id: x.id, name: x.name, desc: str(x.desc).slice(0, 120) })) : [],
       extraCatName: str(f.extraCatName),
       weights: (() => { const o = {}; if (f.weights && typeof f.weights === 'object') for (const [k, v] of Object.entries(f.weights)) if ([2, 0.5].includes(v)) o[k] = v; return o; })(),
       photo: (() => { const n = f.photo && f.photo.kind === 'saved' ? normPhoto(f.photo) : null; return n ? Object.assign({ kind: 'saved' }, n) : null; })()
     });
+    if (typeof f.editingId === 'string' && f.status === undefined) form.draftOld = true;
   } catch (_) {}
 }
 function loadPrefs() {
@@ -3096,14 +3121,14 @@ function paintCard(ctx, d, pal, draw, bmp) {
   y += title.length * 66 + 14;
   const n = d.scores.filter(s => s.v > 0).length;
   ctx.font = `600 28px ${FB}`;
-  if (draw) { ctx.fillStyle = pal['ink-2']; ctx.fillText(fitText(ctx, `${verdict(d.total)} · ${n} ${critWord(n)}`, leftW), X0, y + 26); }
+  if (draw) { ctx.fillStyle = pal['ink-2']; ctx.fillText(fitText(ctx, `${verdict(d.total) || d.status || 'Без оценки'} · ${n} ${critWord(n)}`, leftW), X0, y + 26); }
   y += 36;
   const bx = X1 - BW, by = top;
   if (draw) {
     rr(ctx, bx, by, BW, BH, 26);
     ctx.fillStyle = tierCol(tierT(d.total)); ctx.fill();
     ctx.font = `800 128px ${FD}`; ctx.textAlign = 'center';
-    const num = fmt(d.total);
+    const num = d.total != null ? fmt(d.total) : '—'; // оценка «В планах» без балла: не «0,0»
     const m = ctx.measureText(num);
     const asc = m.actualBoundingBoxAscent || 92, dsc = m.actualBoundingBoxDescent || 0;
     ctx.fillStyle = pal['on-tier'];
@@ -3231,7 +3256,7 @@ async function renderCardBlob(d) {
 }
 function fileNameFor(d) {
   const base = d.name.replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || 'Оценка';
-  return `${base} ${fmt(d.total)}.png`;
+  return d.total != null ? `${base} ${fmt(d.total)}.png` : `${base}.png`;
 }
 const share = { data: null, blob: null, url: null, filename: '', text: '', trigger: null, token: 0 };
 function shareView() {
@@ -3304,7 +3329,7 @@ async function refreshShare() {
     const old = share.url;
     share.url = URL.createObjectURL(blob);
     const img = new Image();
-    img.alt = `Картинка оценки: ${v.name}, ${fmt(v.total)} из 10`;
+    img.alt = v.total != null ? `Картинка оценки: ${v.name}, ${fmt(v.total)} из 10` : `Картинка оценки: ${v.name}, без балла`;
     img.src = share.url;
     el.sheetPreview.replaceChildren(img);
     if (old) URL.revokeObjectURL(old);
@@ -3671,7 +3696,8 @@ el.board.addEventListener('click', e => {
   const sel = `.entry[data-id="${CSS.escape(id)}"] [data-act=`;
   switch (b.dataset.act) {
     case 'edit': loadIntoForm(r); break;
-    case 'fav-card': r.fav = !r.fav; saveLocalRatings(); renderBoard(); toast(r.fav ? `★ В избранном: ${r.name}` : `Убрано из избранного`); break;
+    // чуть новее (без сдвига в списке): при равном времени другое устройство со старой копией вернуло бы прежнее избранное
+    case 'fav-card': r.fav = !r.fav; r.updatedAt = new Date((+new Date(r.updatedAt || r.createdAt || 0) || Date.now()) + 1000).toISOString(); saveLocalRatings(); renderBoard(); toast(r.fav ? `★ В избранном: ${r.name}` : `Убрано из избранного`); break;
     case 'cmp': toggleCompare(r.id); break;
     case 'share': openShare(exportFromRating(r), b); break;
     case 'link': shareLink(r, b); break;
@@ -3725,7 +3751,8 @@ el.shDownload.addEventListener('click', downloadShare);
 el.shCopyImg.addEventListener('click', copyShareImage);
 el.shCopyText.addEventListener('click', copyShareText);
 [el.optDesc, el.optNotes, el.optPhoto].forEach(inp => inp.addEventListener('change', () => {
-  state.exportOpts = { desc: el.optDesc.checked, notes: el.optNotes.checked, photo: el.optPhoto.checked };
+  // Object.assign: галочка «Плюсы и минусы» хранится тут же и не должна сбрасываться
+  Object.assign(state.exportOpts, { desc: el.optDesc.checked, notes: el.optNotes.checked, photo: el.optPhoto.checked });
   savePrefs();
   refreshShare();
 }));
@@ -4062,8 +4089,10 @@ async function applyPhotoUrl() {
   }
   if (urlPhotoBusy || photoBusy) return;
   if (url.startsWith('data:image/')) {
-    const b = dataUrlToBlob(url);
+    let b = null;
+    try { b = dataUrlToBlob(url); } catch (_) {} // обрезанная или испорченная ссылка
     if (b) await setPhotoFromFile(new File([b], 'photo', { type: b.type }), true);
+    else toast('Эта ссылка на картинку испорчена, скопируй её заново');
     return;
   }
   const api = window.casualApi;
@@ -4242,6 +4271,8 @@ function normEntry(id, e, dayId) {
     bf: e.bf === true, comment: str(e.comment).slice(0, 500)
   };
 }
+// журнал из браузера или из файла копии: только правильные записи, иначе одна битая ломает показ журнала на каждом заходе
+const readLog = (list) => list.map(e => (e && typeof e.id === 'string' ? normEntry(e.id, e, 'local') : null)).filter(Boolean);
 function indexLog() {
   LOG.entries.sort((a, b) => (a.at < b.at ? 1 : a.at > b.at ? -1 : 0));
   LOG.byRef = new Map();
@@ -4615,6 +4646,9 @@ function goToRating(id) {
   if (isNarrow()) setSection('board'); else setView('board');
   if (state.filter !== 'all' && catKey(r) !== state.filter) { state.filter = 'all'; savePrefs(); }
   if (state.query && !r.nameKey.includes(keyOf(state.query))) { state.query = ''; el.search.value = ''; }
+  // оценка могла быть скрыта фильтром: «Друзья» вообще прячут свой рейтинг, а уровень и жанр — часть оценок
+  if (!applySubFilter([r]).length || state.sfilter === 'mine') state.sfilter = 'all';
+  if (!hasGenres(r)) state.genres = [];
   state.open.add(id);
   state.flashId = id;
   renderBoard();
@@ -4696,7 +4730,8 @@ el.views.addEventListener('click', e => {
 });
 el.views.addEventListener('keydown', e => {
   let v = null;
-  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') v = state.view === 'board' ? 'log' : 'board';
+  const order = ['board', 'stats', 'log'];
+  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') v = order[(order.indexOf(state.view) + (e.key === 'ArrowRight' ? 1 : order.length - 1)) % order.length];
   else if (e.key === 'Home') v = 'board';
   else if (e.key === 'End') v = 'log';
   if (!v) return;
@@ -5092,6 +5127,7 @@ if (el.cmpTrayBtn) el.cmpTrayBtn.addEventListener('click', openCompareModal);
 if (el.cmpClose) el.cmpClose.addEventListener('click', closeCompareModal);
 if (el.cmpClearBtn) el.cmpClearBtn.addEventListener('click', () => { state.cmpIds = []; closeCompareModal(); renderBoard(); });
 if (el.compareModal) el.compareModal.addEventListener('click', e => { if (e.target === el.compareModal) closeCompareModal(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && el.compareModal && !el.compareModal.hidden) closeCompareModal(); });
 
 if (el.favBtn) {
   el.favBtn.addEventListener('click', () => {
@@ -5262,6 +5298,31 @@ if (el.optPc) {
     refreshShare();
   });
 }
+
+/* ---------- Две вкладки: что сохранено в другой, приходит и сюда. Иначе следующее сохранение здесь затёрло бы то, что там добавили ---------- */
+window.addEventListener('storage', async e => {
+  if (state.mode !== 'local' || !e.newValue) return;
+  try {
+    if (e.key === STORAGE_KEYS.RATINGS) {
+      const list = JSON.parse(e.newValue);
+      if (!Array.isArray(list)) return;
+      await hydratePhotos(list);
+      state.ratings = list.map(r => (r && typeof r.id === 'string' ? normalizeRating(r.id, r) : null)).filter(Boolean);
+      renderBoard();
+      updateNameState();
+    } else if (e.key === STORAGE_KEYS.CATS && !state.editCat && !catTimer) {
+      const cats = parseCats({ items: JSON.parse(e.newValue) });
+      if (!cats || !cats.length) return;
+      state.cats = cats;
+      if (!form.editingId && !currentCat()) form.cat = state.cats[0].id;
+      renderForm();
+      renderBoard();
+    } else if (e.key === STORAGE_KEYS.LOG && !LOG.editing) {
+      const log = JSON.parse(e.newValue);
+      if (Array.isArray(log)) { LOG.entries = readLog(log); indexLog(); renderLog(); renderBoard(); }
+    }
+  } catch (_) {}
+});
 
 /* ---------- Boot ---------- */
 loadDraft();

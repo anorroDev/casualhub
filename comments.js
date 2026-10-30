@@ -54,6 +54,7 @@
   // кэш веток: при перерисовке страницы ветка показывается сразу, а свежие комментарии подтягиваются в фоне
   const cache = new Map(); // ключ uid|target -> { items, at }
   const avatars = new Map(); // id человека -> data URL аватарки (или null)
+  const drafts = new Map(); // ключ uid|target -> недописанный текст: перерисовка страницы его не стирает
 
   function req(token, method, path, body) {
     return fetch('/api' + path, { method, headers: { authorization: 'Bearer ' + token, ...(body ? { 'content-type': 'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined })
@@ -82,6 +83,7 @@
       </form></div>`;
     const list = el.querySelector('[data-cm-list]'), nEl = el.querySelector('[data-cm-n]'), form = el.querySelector('[data-cm-form]');
     const ta = form.querySelector('textarea'), msg = el.querySelector('[data-cm-msg]'), btn = form.querySelector('.cm-send');
+    ta.value = drafts.get(key) || '';
     const say = (t, err) => { msg.textContent = t; msg.classList.toggle('err', !!err); };
     const paint = (freshId) => {
       const c = cache.get(key);
@@ -112,7 +114,7 @@
     if (!c || Date.now() - c.at > 15e3) load();
 
     ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); form.requestSubmit(); } });
-    ta.addEventListener('input', () => { const left = MAX - ta.value.length; say(left < 60 ? `Осталось ${left} ${plural(left, 'символ', 'символа', 'символов')}` : 'Enter — отправить, Shift+Enter — новая строка', left < 0); });
+    ta.addEventListener('input', () => { drafts.set(key, ta.value); const left = MAX - ta.value.length; say(left < 60 ? `Осталось ${left} ${plural(left, 'символ', 'символа', 'символов')}` : 'Enter — отправить, Shift+Enter — новая строка', left < 0); });
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const text = ta.value.trim();
@@ -124,6 +126,7 @@
         cur.items.push(d.item);
         cache.set(key, cur);
         ta.value = '';
+        drafts.delete(key);
         say('Отправлено ✔');
         paint(d.item.id);
         if (opt.onCount) opt.onCount(cur.items.length);
