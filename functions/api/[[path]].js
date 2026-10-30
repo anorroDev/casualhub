@@ -67,10 +67,6 @@ async function ensureScheme(env) {
     env.DB.prepare('CREATE TABLE IF NOT EXISTS admin_sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, until INTEGER NOT NULL)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS admin_log (at INTEGER NOT NULL, user_id TEXT NOT NULL, ip TEXT, action TEXT NOT NULL, ok INTEGER NOT NULL)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS admin_log_at ON admin_log(at)'),
-    // коды на почту (регистрация и вход) и подтверждённые устройства
-    env.DB.prepare('CREATE TABLE IF NOT EXISTS email_codes (ticket TEXT PRIMARY KEY, kind TEXT NOT NULL, email TEXT NOT NULL, user_id TEXT, data TEXT, code_hash TEXT NOT NULL, expires INTEGER NOT NULL, tries INTEGER NOT NULL, sent_at INTEGER NOT NULL, sends INTEGER NOT NULL)'),
-    env.DB.prepare('CREATE TABLE IF NOT EXISTS trusted_devices (hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, until INTEGER NOT NULL)'),
-    env.DB.prepare('CREATE INDEX IF NOT EXISTS trusted_devices_user ON trusted_devices(user_id)'),
     // без него подсчёт фото человека и история аватарок читали всю таблицу на каждую загрузку
     env.DB.prepare('CREATE INDEX IF NOT EXISTS photos_user ON photos(user_id)'),
   ]);
@@ -180,8 +176,6 @@ const LIMITS = {
   friendReq: { max: 40, win: 10 * 60e3 }, // заявок в друзья (перебор ников)
   react: { max: 120, win: 10 * 60e3 },    // реакций и комментариев
   comment: { max: 60, win: 10 * 60e3 },   // комментариев на стенах и под оценками
-  mailIp: { max: 20, win: 60 * 60e3 },    // писем с кодом с одного адреса в час
-  mailTo: { max: 6, win: 60 * 60e3 },     // писем с кодом на одну почту в час
   admin: { max: 5, win: 60 * 60e3 },      // неверных одноразовых паролей и пин-кодов админки
 };
 // ---------- админ-панель: только для двух аккаунтов ----------
@@ -285,95 +279,12 @@ const tooMany =(min) => new Response(JSON.stringify({ error: `Слишком м�
   headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'retry-after': String(min * 60) },
 });
 
-// ---------- код на почту (регистрация и вход) ----------
-// Почта включается секретами в Cloudflare: BREVO_API_KEY (или RESEND_API_KEY) и MAIL_FROM — адрес отправителя.
-// Пока их нет, регистрация и вход работают как раньше, без кода.
-const CODE_TTL = 15 * 60e3; // код живёт 15 минут
-const CODE_TRIES = 5;       // неверных вводов на один код
-const DEVICE_DAYS = 30;     // подтверждённое устройство помнится 30 дней
-const mailReady = (env) => !!(((env.BREVO_API_KEY || env.RESEND_API_KEY) && env.MAIL_FROM) || env.MAIL_DEV === '1');
-// проверка на своём компьютере: MAIL_DEV=1 и адрес 127.0.0.1 — письмо не уходит, код кладётся в локальную базу для тестов
-const devMail = (env, request) => env.MAIL_DEV === '1' && ['127.0.0.1', 'localhost'].includes(new URL(request.url).hostname);
-async function deliverCode(env, request, to, code, kind) {
-  if (devMail(env, request)) { await env.DB.prepare('INSERT OR REPLACE INTO meta (k, v) VALUES (?, ?)').bind('devcode:' + to, code).run(); return true; }
-  if (!((env.BREVO_API_KEY || env.RESEND_API_KEY) && env.MAIL_FROM)) return false;
-  return sendCode(env, to, code, kind, langOf(request));
-}
-// язык письма: тот, что человек выбрал на сайте (кука ставится в i18n.js)
-const langOf = (request) => (/(?:^|;\s*)casualhub_lang=en\b/.test(request.headers.get('cookie') || '') ? 'en' : 'ru');
-const sixDigits = () => String(crypto.getRandomValues(new Uint32Array(1))[0] % 1e6).padStart(6, '0');
-const maskEmail = (m) => { const [a, d] = String(m).split('@'); return (a.length <= 2 ? a[0] + '*' : a.slice(0, 2) + '***') + '@' + d; };
-async function mailLimit(env, request, mail) {
-  if (burst('mail:all', 60, 60e3)) return tooMany(1);
-  const w = Math.max(await overLimit(env, 'mailip:' + clientIp(request), 'mailIp'), await overLimit(env, 'mailto:' + mail, 'mailTo'));
-  if (w) return tooMany(w);
-  await hit(env, 'mailip:' + clientIp(request), 'mailIp');
-  await hit(env, 'mailto:' + mail, 'mailTo');
-  return null;
-}
-async function sendMail(env, to, subject, text, html) {
-  try {
-    let r;
-    if (env.BREVO_API_KEY) {
-      r = await fetch('https://api.brevo.com/v3/smtp/email', { method: 'POST', headers: { 'api-key': String(env.BREVO_API_KEY).trim(), 'content-type': 'application/json', accept: 'application/json' },
-        body: JSON.stringify({ sender: { email: String(env.MAIL_FROM).trim(), name: 'Казуал Хаб' }, to: [{ email: to }], subject, textContent: text, htmlContent: html }) });
-    } else {
-      r = await fetch('https://api.resend.com/emails', { method: 'POST', headers: { authorization: 'Bearer ' + String(env.RESEND_API_KEY).trim(), 'content-type': 'application/json' },
-        body: JSON.stringify({ from: `Казуал Хаб <${String(env.MAIL_FROM).trim()}>`, to: [to], subject, text, html }) });
-    }
-    if (!r.ok) console.error('mail', r.status, (await r.text()).slice(0, 300));
-    return r.ok;
-  } catch (e) { console.error('mail', e); return false; }
-}
-function sendCode(env, to, code, kind, lang) {
-  const en = lang === 'en';
-  const what = en ? (kind === 'reg' ? 'sign-up' : kind === 'email' ? 'email change' : 'sign-in') : (kind === 'reg' ? 'регистрации' : kind === 'email' ? 'смены почты' : 'входа');
-  const ifNot = en ? (kind === 'email' ? 'the email won\'t change without the code' : 'nobody can sign in without the code') : (kind === 'email' ? 'без кода почта не поменяется' : 'без кода в аккаунт не войти');
-  const site = en ? 'Casual Hub' : 'Казуал Хаб';
-  const note = en ? `The code works for 15 minutes. If this wasn't you, just do nothing: ${ifNot}.` : `Код действует 15 минут. Если это был не ты, просто ничего не делай: ${ifNot}.`;
-  const yours = en ? `Your ${what} code` : `Твой код для ${what}`;
-  const subject = en ? `${code} — your ${what} code for Casual Hub` : `${code} — код для ${what} в Казуал Хабе`;
-  const text = en ? `${yours} for Casual Hub: ${code}\n\n${note}\n\ncasualhub.pages.dev` : `${yours} в Казуал Хабе: ${code}\n\n${note}\n\ncasualhub.pages.dev`;
-  const html = `<div style="font-family:Arial,sans-serif;max-width:440px;margin:0 auto;padding:24px;color:#14161C"><h2 style="margin:0 0 12px">${site}</h2><p>${yours}:</p><p style="font-size:34px;font-weight:800;letter-spacing:8px;margin:12px 0;padding:14px 18px;background:#ECEEF3;border-radius:12px;text-align:center">${code}</p><p style="color:#565C6B;font-size:14px">${note}</p></div>`;
-  return sendMail(env, to, subject, text, html);
-}
-// почту сменили: старый адрес об этом узнаёт. Если это сделал не хозяин, он хотя бы поймёт, что случилось
-async function mailChangedNotice(env, request, to, mail) {
-  if (devMail(env, request) || !EMAIL_RE.test(to || '') || !((env.BREVO_API_KEY || env.RESEND_API_KEY) && env.MAIL_FROM)) return;
-  const en = langOf(request) === 'en';
-  const line = en ? `The email of your Casual Hub account was changed to ${maskEmail(mail)}. If this wasn't you, change your password and contact the administration.` : `Почта твоего аккаунта в Казуал Хабе изменена на ${maskEmail(mail)}. Если это был не ты, поменяй пароль и напиши администрации.`;
-  await sendMail(env, to, en ? 'Account email changed — Casual Hub' : 'Почта аккаунта изменена — Казуал Хаб', line + '\n\ncasualhub.pages.dev', `<div style="font-family:Arial,sans-serif;max-width:440px;margin:0 auto;padding:24px;color:#14161C"><h2 style="margin:0 0 12px">${en ? 'Casual Hub' : 'Казуал Хаб'}</h2><p>${line}</p></div>`);
-}
-// начать проверку кодом: письмо уходит, клиент получает билет и показывает поле для кода
-async function startCode(env, request, kind, mail, data, userId) {
-  const lim = await mailLimit(env, request, mail);
-  if (lim) return lim;
-  const ticket = randHex(16), code = sixDigits(), now = Date.now();
-  if (!(await deliverCode(env, request, mail, code, kind))) return fail(502, 'Не получилось отправить письмо с кодом. Проверь почту или попробуй позже.');
-  await env.DB.batch([
-    env.DB.prepare('INSERT INTO email_codes (ticket, kind, email, user_id, data, code_hash, expires, tries, sent_at, sends) VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, 1)')
-      .bind(ticket, kind, mail, userId, data ? JSON.stringify(data) : null, await sha256(code + ':' + ticket), now + CODE_TTL, now),
-    env.DB.prepare('DELETE FROM email_codes WHERE expires < ?').bind(now),
-  ]);
-  return json({ verify: kind, ticket, email: maskEmail(mail) });
-}
 async function createUser(env, d) {
   const id = randHex(12), now = Date.now();
   await env.DB.prepare('INSERT INTO users (id, username, uname, pass_hash, salt, created_at, email, nkey) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
     .bind(id, d.name, d.uname, d.passHash, d.salt, now, d.mail, d.name.toLowerCase()).run();
   return { token: await newSession(env, id), user: ownUser({ id, username: d.name, uname: d.uname, email: d.mail, created_at: now }) };
 }
-// устройство — случайный ключ из браузера; на сервере хранится только его отпечаток вместе с id аккаунта
-const deviceHash = (device, uid) => sha256(String(device) + ':' + uid);
-async function trustedDevice(env, device, uid) {
-  if (!/^[0-9a-f]{32}$/.test(String(device || ''))) return false;
-  return !!(await env.DB.prepare('SELECT 1 FROM trusted_devices WHERE hash = ? AND until > ?').bind(await deviceHash(device, uid), Date.now()).first());
-}
-async function trustDevice(env, device, uid) {
-  if (!/^[0-9a-f]{32}$/.test(String(device || ''))) return;
-  await env.DB.prepare('INSERT OR REPLACE INTO trusted_devices (hash, user_id, until) VALUES (?, ?, ?)').bind(await deviceHash(device, uid), uid, Date.now() + DEVICE_DAYS * 864e5).run();
-}
-
 async function link(env, x, y) {
   const [a, b] = pair(x, y);
   return env.DB.prepare('SELECT status, requested_by FROM friendships WHERE a = ? AND b = ?').bind(a, b).first();
@@ -403,81 +314,11 @@ const routes = {
     const uname = wanted || await freeHandle(env, toHandle(name)); // старые версии сайта юзернейм не присылают
     const salt = randHex(16);
     const passHash = await hashPass(pass, salt);
-    // почта подключена: аккаунт появится только после кода из письма (так никто не заведёт аккаунт на чужую почту)
-    if (mailReady(env)) return startCode(env, request, 'reg', mail, { name, uname, mail, passHash, salt }, null);
     return json(await createUser(env, { name, uname, mail, passHash, salt }));
   },
-  // код из письма: подтверждает регистрацию или вход
-  async 'POST /code/verify'({ env, request }) {
-    const { ticket, code, device } = await readBody(request);
-    if (!/^[0-9a-f]{32}$/.test(String(ticket || ''))) return fail(400, 'Начни заново: код устарел.');
-    // попытка засчитывается до сравнения: одновременными запросами больше CODE_TRIES кодов не перебрать
-    const now = Date.now();
-    const row = await env.DB.prepare('UPDATE email_codes SET tries = tries + 1 WHERE ticket = ? AND expires >= ? AND tries < ? RETURNING *').bind(ticket, now, CODE_TRIES).first();
-    if (!row) {
-      const old = await env.DB.prepare('SELECT expires FROM email_codes WHERE ticket = ?').bind(ticket).first();
-      if (old) await env.DB.prepare('DELETE FROM email_codes WHERE ticket = ?').bind(ticket).run();
-      return old && old.expires >= now ? fail(429, 'Слишком много неверных кодов. Начни заново.') : fail(410, 'Код устарел. Запроси новый.');
-    }
-    const c = String(code || '').replace(/\D/g, '');
-    if (c.length !== 6 || !sameHex(await sha256(c + ':' + ticket), row.code_hash)) {
-      const left = CODE_TRIES - row.tries;
-      return fail(403, left > 0 ? `Неверный код. Осталось попыток: ${left}.` : 'Неверный код. Попытки кончились, начни заново.');
-    }
-    // код одноразовый: из двух одновременных запросов сработает только первый
-    const used = await env.DB.prepare('DELETE FROM email_codes WHERE ticket = ?').bind(ticket).run();
-    if (!used.meta || !used.meta.changes) return fail(410, 'Код уже использован. Начни заново.');
-    let out;
-    if (row.kind === 'reg') {
-      const d = JSON.parse(row.data);
-      // пока человек шёл за письмом, почту или юзернейм мог занять кто-то другой
-      if (await env.DB.prepare('SELECT 1 FROM users WHERE email = ?').bind(d.mail).first()) return fail(409, 'На эту почту уже есть аккаунт.');
-      if (await env.DB.prepare('SELECT 1 FROM users WHERE uname = ?').bind(d.uname).first()) return fail(409, `Юзернейм @${d.uname} уже занят. Выбери другой и зарегистрируйся заново.`);
-      try { out = await createUser(env, d); } catch (e) { return fail(409, 'Почту или юзернейм только что занял кто-то другой. Зарегистрируйся заново.'); }
-      await trustDevice(env, device, out.user.id);
-    } else if (row.kind === 'email') {
-      // смена почты: новая начинает действовать только теперь, когда доказано, что она твоя
-      const d = JSON.parse(row.data);
-      const u = await env.DB.prepare('SELECT id, username, uname, email, created_at, hide_online, banned FROM users WHERE id = ?').bind(row.user_id).first();
-      if (!u || u.banned) return fail(404, 'Аккаунт не найден.');
-      const taken = await env.DB.prepare('SELECT id FROM users WHERE email = ?').bind(d.mail).first();
-      if (taken && taken.id !== u.id) return fail(409, 'На эту почту уже есть аккаунт.');
-      await env.DB.batch([
-        env.DB.prepare('UPDATE users SET email = ? WHERE id = ?').bind(d.mail, u.id),
-        env.DB.prepare('DELETE FROM trusted_devices WHERE user_id = ?').bind(u.id), // новая почта — устройства подтверждаются заново
-      ]);
-      await trustDevice(env, device, u.id);
-      await mailChangedNotice(env, request, u.email, d.mail);
-      out = { user: ownUser({ ...u, email: d.mail }) };
-    } else {
-      const u = await env.DB.prepare('SELECT id, username, uname, email, created_at, banned, ban_reason FROM users WHERE id = ?').bind(row.user_id).first();
-      if (!u) return fail(404, 'Аккаунт не найден.');
-      if (u.banned) return fail(403, 'Аккаунт заблокирован администрацией' + (u.ban_reason ? ': ' + u.ban_reason : '.'));
-      await trustDevice(env, device, u.id);
-      out = { token: await newSession(env, u.id), user: ownUser(u) };
-    }
-    return json(out);
-  },
-  // прислать код ещё раз (не чаще раза в 45 секунд и не больше 5 писем на один вход)
-  async 'POST /code/resend'({ env, request }) {
-    const { ticket } = await readBody(request);
-    if (!/^[0-9a-f]{32}$/.test(String(ticket || ''))) return fail(400, 'Начни заново.');
-    const row = await env.DB.prepare('SELECT * FROM email_codes WHERE ticket = ?').bind(ticket).first();
-    if (!row || row.expires < Date.now()) return fail(410, 'Код устарел. Начни заново.');
-    const wait = Math.ceil((row.sent_at + 45e3 - Date.now()) / 1000);
-    if (wait > 0) return fail(429, `Новый код можно запросить через ${wait} с.`);
-    if (row.sends >= 5) return fail(429, 'Писем уже слишком много. Начни заново чуть позже.');
-    const lim = await mailLimit(env, request, row.email);
-    if (lim) return lim;
-    const code = sixDigits();
-    if (!(await deliverCode(env, request, row.email, code, row.kind))) return fail(502, 'Не получилось отправить письмо. Попробуй позже.');
-    await env.DB.prepare('UPDATE email_codes SET code_hash = ?, tries = 0, sent_at = ?, sends = sends + 1, expires = ? WHERE ticket = ?').bind(await sha256(code + ':' + ticket), Date.now(), Date.now() + CODE_TTL, ticket).run();
-    return json({ ok: true, email: maskEmail(row.email) });
-  },
-
   // вход по почте или по нику
   async 'POST /login'({ env, request }) {
-    const { login, username, password, device } = await readBody(request);
+    const { login, username, password } = await readBody(request);
     const ident = String(login || username || '').trim();
     const ipKey = 'login-ip:' + clientIp(request);
     // общий потолок входов на сервер: перебор с многих адресов упирается в него раньше, чем в лимит базы
@@ -504,8 +345,6 @@ const routes = {
       env.DB.prepare('UPDATE attempts SET count = MAX(0, count - 1) WHERE key = ?').bind(ipKey),
       env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND expires_at < ?').bind(u.id, Date.now()),
     ]);
-    // второй шаг: код на почту, если это устройство ещё не подтверждалось (подтверждённое помнится 30 дней)
-    if (mailReady(env) && EMAIL_RE.test(u.email || '') && !(await trustedDevice(env, device, u.id))) return startCode(env, request, 'login', u.email, null, u.id);
     return json({ token: await newSession(env, u.id), user: ownUser(u) });
   },
 
@@ -648,7 +487,7 @@ const routes = {
     if (!u) return fail(404, 'Нет такого аккаунта.');
     const h = handle != null && handle !== '' ? cleanHandle(handle) : null;
     const name = username != null && username !== '' ? cleanName(username) : null;
-    // почта: если в ней опечатка, человеку не дойдёт код для входа — админ может её поправить
+    // почта: если в ней опечатка, админ может её поправить
     const mail = email != null && email !== '' ? cleanEmail(email) : null;
     const mailChange = mail != null && mail !== (u.email || '');
     const handleChange = h != null && h !== u.uname;
@@ -668,10 +507,7 @@ const routes = {
     }
     if (nameChange && !NAME_RE.test(name)) return fail(400, NAME_HINT);
     const writes = [];
-    if (mailChange) writes.push(
-      env.DB.prepare('UPDATE users SET email = ? WHERE id = ?').bind(mail, u.id),
-      env.DB.prepare('DELETE FROM trusted_devices WHERE user_id = ?').bind(u.id), // новая почта — устройства подтверждаются заново
-    );
+    if (mailChange) writes.push(env.DB.prepare('UPDATE users SET email = ? WHERE id = ?').bind(mail, u.id));
     if (handleChange) writes.push(env.DB.prepare('UPDATE users SET uname = ? WHERE id = ?').bind(h, u.id));
     if (nameChange) writes.push(env.DB.prepare('UPDATE users SET username = ?, nkey = ? WHERE id = ?').bind(name, name.toLowerCase(), u.id));
     if (!writes.length) return json({ ok: true, handle: u.uname, username: u.username });
@@ -699,8 +535,6 @@ const routes = {
       'DELETE FROM reactions WHERE owner_id = ?1 OR from_id = ?1',
       'DELETE FROM comments WHERE owner_id = ?1 OR from_id = ?1',
       'DELETE FROM shares WHERE owner_id = ?1',
-      'DELETE FROM trusted_devices WHERE user_id = ?1',
-      'DELETE FROM email_codes WHERE user_id = ?1',
       'DELETE FROM users WHERE id = ?1',
     ].map((q) => env.DB.prepare(q).bind(id)));
     await adminLog(env, request, me, `delete account @${u.uname} «${u.username}»`, true);
@@ -796,19 +630,11 @@ const routes = {
       const taken = await env.DB.prepare('SELECT id FROM users WHERE uname = ?').bind(h).first();
       if (taken && taken.id !== me.id) return fail(409, `Юзернейм @${h} уже занят.`);
     }
-    // когда почта подключена, новая почта начинает действовать только после кода из письма на неё:
-    // иначе можно было бы зарегистрироваться на свою и тут же занять чужой адрес
-    let pendingMail = null;
-    if (mailChange && mailReady(env)) {
-      const r = await startCode(env, request, 'email', mail, { mail }, me.id);
-      if (!r.ok) return r; // письмо не ушло: ничего не меняем
-      pendingMail = await r.json();
-    }
     if (hideOnline != null) {
       await env.DB.prepare('UPDATE users SET hide_online = ? WHERE id = ?').bind(hideOnline ? 1 : 0, me.id).run();
       out.hide_online = hideOnline ? 1 : 0;
     }
-    if (mailChange && !pendingMail) {
+    if (mailChange) {
       await env.DB.prepare('UPDATE users SET email = ? WHERE id = ?').bind(mail, me.id).run();
       out.email = mail;
     }
@@ -828,9 +654,8 @@ const routes = {
       const m = (request.headers.get('authorization') || '').match(/^Bearer ([0-9a-f]{64})$/);
       await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?').bind(me.id, m ? await sha256(m[1]) : '').run();
       await env.DB.prepare('DELETE FROM admin_sessions WHERE user_id = ?').bind(me.id).run(); // после смены пароля в админку заново
-      await env.DB.prepare('DELETE FROM trusted_devices WHERE user_id = ?').bind(me.id).run(); // и код на почту снова спросят на всех устройствах
     }
-    return json({ user: ownUser(out), ...(pendingMail || {}) });
+    return json({ user: ownUser(out) });
   },
 
   // гость присылает случайный id из своего браузера, вошедший — токен
@@ -2041,7 +1866,7 @@ async function canSee(env, me, uid) {
   return !!row && row.status === 'accepted';
 }
 
-const PUBLIC = new Set(['POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'POST /code/verify', 'POST /code/resend']);
+const PUBLIC = new Set(['POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce']);
 // код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности
 const SHARE_RE = /^[A-Za-z0-9]{12}$/;
 function shareId() {
