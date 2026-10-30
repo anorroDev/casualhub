@@ -20,13 +20,13 @@ try {
   window.CasualSettled = !!(navE && navE.type === 'reload') || byClick;
   if (navE && navE.type === 'reload') settleIntro(2500);
 } catch (e) {}
-/* сдвиг между страницами: новая страница приезжает с той стороны экрана, где стоит нажатая кнопка */
+/* сдвиг между страницами: первая кнопка разделов в шапке ведёт влево, остальные вправо, а всё прочее — в ту сторону экрана, где стоит кнопка */
 document.addEventListener('click', function (e) {
   var a = e.target.closest && e.target.closest('a[href], [data-go]');
   if (!a || (a.target && a.target !== '_self')) return;
   var r = a.getBoundingClientRect();
   if (!r.width) return;
-  try { sessionStorage.setItem('casualhub.side', (r.left + r.width / 2 < document.documentElement.clientWidth * 0.48 ? 'back' : 'forward') + ':' + Date.now()); } catch (x) {}
+  try { sessionStorage.setItem('casualhub.side', ((a.classList.contains('hm-nav') ? a === document.querySelector('header .hm-nav') : r.left + r.width / 2 < document.documentElement.clientWidth * 0.48) ? 'back' : 'forward') + ':' + Date.now()); } catch (x) {}
 }, true);
 addEventListener('pagereveal', function (e) {
   var side = '';
