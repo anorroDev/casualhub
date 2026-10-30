@@ -9,6 +9,8 @@ export const clip = (v, n) => String(v == null ? '' : v).replace(SPOOF_RE, '').s
 export const numOrNull = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : (typeof v === 'string' && v.trim() !== '' && Number.isFinite(+v) ? +v : null));
 export const SAFE_URL = /^https?:\/\/[^\s"'<>()\\]{1,1500}$/;
 // любое значение: строки, числа, да/нет и вложенные объекты/списки неглубоко; функции и прочее отбрасываются
+// ссылка на трек у оценки: только сами сервисы
+export const MUSIC_LINK_RE = /^https:\/\/(open\.spotify\.com|(www\.|music\.)?youtube\.com|youtu\.be|soundcloud\.com)\/[^\s"'<>()\\]{1,300}$/;
 export function plain(v, depth) {
   if (v == null || typeof v === 'boolean') return v;
   if (typeof v === 'number') return Number.isFinite(v) ? v : null;
@@ -41,6 +43,7 @@ export function cleanRating(r) {
     o.photo = url || remote ? { ...(url ? { url } : {}), ...(remote ? { remote } : {}), w: Math.max(0, numOrNull(p.w) || 0), h: Math.max(0, numOrNull(p.h) || 0) } : null;
     if (!o.photo) delete o.photo;
   }
+  if (o.link != null && !(typeof o.link === 'string' && MUSIC_LINK_RE.test(o.link))) delete o.link;
   // artistAva — отпечаток фото исполнителя (короткая строка), не адрес
   if (o.artistAva != null && !(typeof o.artistAva === 'string' && /^[\w.-]{0,80}$/.test(o.artistAva))) delete o.artistAva;
   return o;

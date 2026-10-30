@@ -35,7 +35,7 @@
   const items = wheel && Array.isArray(wheel.items) ? wheel.items : [];
   const alive = items.filter((i) => !i.out).length;
   const total = items.length;
-  const tierCount = (() => { try { const d = JSON.parse(localStorage.getItem('casualhub.tierlists.v1') || 'null'); return d && Array.isArray(d.lists) ? d.lists.length : 0; } catch (e) { return 0; } })();
+  const tierCount = (() => { try { const u = JSON.parse(localStorage.getItem('ocenshik.user.v1') || 'null'); const d = JSON.parse(localStorage.getItem('casualhub.tierlists.v1' + (u && u.id ? ':' + u.id : '')) || 'null'); return d && Array.isArray(d.lists) ? d.lists.length : 0; } catch (e) { return 0; } })();
   $('#tierMeta').innerHTML = tierCount ? chip(tierCount, plural(tierCount, 'тир-лист', 'тир-листа', 'тир-листов')) : chip('', 'Пока нет своих');
   $('#wheelMeta').innerHTML = total
     ? chip(alive, plural(alive, 'участник', 'участника', 'участников') + (alive < total ? ` из ${total}` : '') + ' на колесе')
@@ -213,8 +213,8 @@
     if (it.kind === 'react') {
       const x = it.react;
       const ico = (x.emoji && RXI[x.emoji]) || '';
-      const what = x.emoji === 'nope' ? '🙅 «не согласен» на твою оценку' : ico ? `${ico} на твою оценку` : '💬 комментарий к твоей оценке';
-      return `<li><a class="fd" href="/opinion/#r=${encodeURIComponent(x.rid)}" title="Открыть твою оценку">
+      const what = x.tier ? (ico ? `${ico} на твой тир-лист` : '💬 комментарий к твоему тир-листу') : x.emoji === 'nope' ? '🙅 «не согласен» на твою оценку' : ico ? `${ico} на твою оценку` : '💬 комментарий к твоей оценке';
+      return `<li><a class="fd" href="${x.tier ? '/tier/#l=' + encodeURIComponent(x.tier) : '/opinion/#r=' + encodeURIComponent(x.rid)}" title="${x.tier ? 'Открыть тир-лист' : 'Открыть твою оценку'}">
         <span class="fd-pic rx" style="--fc:${colorOf(it.user.id)}">${ico || '💬'}</span>
         <span class="fd-text"><b>${who}: ${esc(what)}</b><span>«${esc(x.name)}»${x.text ? ' · ' + esc(x.text) : ''} · ${ago(it.at)}</span></span>
         <span class="fd-score none">открыть</span></a></li>`;
@@ -222,10 +222,18 @@
     // друг написал мне: на стене профиля или под моей оценкой
     if (it.kind === 'comment') {
       const x = it.comment;
-      const href = x.rid ? `/opinion/#r=${encodeURIComponent(x.rid)}` : '/profile/#wallSec';
-      return `<li><a class="fd" href="${href}" title="${x.rid ? 'Открыть оценку' : 'Открыть стену профиля'}">
+      const href = x.tier ? `/tier/#l=${encodeURIComponent(x.tier)}` : x.rid ? `/opinion/#r=${encodeURIComponent(x.rid)}` : '/profile/#wallSec';
+      return `<li><a class="fd" href="${href}" title="${x.tier ? 'Открыть тир-лист' : x.rid ? 'Открыть оценку' : 'Открыть стену профиля'}">
         <span class="fd-pic rx" style="--fc:${colorOf(it.user.id)}">💬</span>
-        <span class="fd-text"><b>${who}: ${x.rid ? `комментарий к «${esc(x.name)}»` : 'написал на твоей стене'}</b><span>${esc(x.text)} · ${ago(it.at)}</span></span>
+        <span class="fd-text"><b>${who}: ${x.rid || x.tier ? `комментарий к «${esc(x.name)}»` : 'написал на твоей стене'}</b><span>${esc(x.text)} · ${ago(it.at)}</span></span>
+        <span class="fd-score none">открыть</span></a></li>`;
+    }
+    // друг собрал тир-лист
+    if (it.kind === 'tier') {
+      const x = it.tier;
+      return `<li><a class="fd" href="/tier/#f=${encodeURIComponent(it.user.id)}.${encodeURIComponent(x.id)}" title="Открыть тир-лист">
+        <span class="fd-pic rx" style="--fc:${colorOf(it.user.id)}">🏆</span>
+        <span class="fd-text"><b>${who}: тир-лист «${esc(x.title || 'Без названия')}»</b><span>${x.count} ${plural(x.count, 'карточка', 'карточки', 'карточек')} · ${ago(it.at)}</span></span>
         <span class="fd-score none">открыть</span></a></li>`;
     }
     if (it.kind !== 'rating') return '';

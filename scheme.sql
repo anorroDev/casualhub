@@ -74,6 +74,9 @@ CREATE TABLE IF NOT EXISTS reactions (
 CREATE INDEX IF NOT EXISTS reactions_from ON reactions(from_id);
 
 -- Служебные отметки сервера, например «старые ники уже переведены в юзернеймы»
+-- Тир-листы: data пустая — тир-лист удалён (отметка нужна, чтобы его не вернуло другое устройство)
+CREATE TABLE IF NOT EXISTS tierlists (user_id TEXT NOT NULL, id TEXT NOT NULL, data TEXT, meta TEXT, private INTEGER NOT NULL DEFAULT 0, at INTEGER NOT NULL, PRIMARY KEY (user_id, id));
+
 CREATE TABLE IF NOT EXISTS meta (k TEXT PRIMARY KEY, v TEXT);
 
 -- Админы: кто уже ввёл одноразовый пароль админ-панели (секрет ADMIN_CODE); дальше вход по своему пин-коду

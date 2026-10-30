@@ -1239,7 +1239,7 @@ const state = {
 function blankForm(cat) {
   return {
     editingId: null, cat: cat || (state.cats[0] ? state.cats[0].id : 'games'),
-    name: '', artist: '', fav: false, status: '', meta: '', pros: '', cons: '',
+    name: '', artist: '', link: '', fav: false, status: '', meta: '', pros: '', cons: '',
     note: '', scores: {}, notes: {}, openNotes: {}, weights: {}, extra: [], extraCatName: '', photo: null, ownOnly: false
   };
 }
@@ -1471,6 +1471,7 @@ function renderForm() {
   if (el.name.value !== form.name) el.name.value = form.name;
   if (el.note.value !== form.note) el.note.value = form.note;
   if (el.meta && el.meta.value !== (form.meta || '')) el.meta.value = form.meta || '';
+  { const ml = $('musicLink'); if (ml && document.activeElement !== ml && ml.value !== (form.link || '')) ml.value = form.link || ''; }
   if (el.pros && el.pros.value !== (form.pros || '')) el.pros.value = form.pros || '';
   if (el.cons && el.cons.value !== (form.cons || '')) el.cons.value = form.cons || '';
   if (el.favBtn) el.favBtn.setAttribute('aria-pressed', String(!!form.fav));
@@ -1929,6 +1930,54 @@ function fillMusicFromCover(c) {
   updateNameState();
 }
 
+/* ---------- Трек по ссылке: Spotify, YouTube Music, SoundCloud ---------- */
+// поиска без ключей у этих сервисов нет, зато по ссылке сервер отдаёт название, исполнителя, год и обложку
+const MUSIC_PASTE_RE = /^\s*https?:\/\/(open\.spotify\.com|spotify\.link|(www\.|m\.|music\.)?youtube\.com|youtu\.be|(www\.|m\.)?soundcloud\.com|on\.soundcloud\.com)\/\S+\s*$/i;
+let musicLinkBusy = false;
+function musicLinkMsg(text, bad) {
+  const m = $('musicLinkMsg');
+  if (!m) return;
+  m.textContent = text || '';
+  m.hidden = !text;
+  m.classList.toggle('err', !!bad);
+}
+async function applyMusicLink(raw) {
+  const inp = $('musicLink');
+  const u = String(raw != null ? raw : inp ? inp.value : '').trim();
+  if (!u) { form.link = ''; musicLinkMsg(''); scheduleDraft(); return; }
+  if (musicLinkBusy) return;
+  if (!MUSIC_PASTE_RE.test(u)) { musicLinkMsg('Подходят ссылки на трек или альбом в Spotify, YouTube Music и SoundCloud.', true); return; }
+  if (!window.casualApi || !window.casualApi.online()) { musicLinkMsg('Ссылки работают после входа в аккаунт.', true); return; }
+  musicLinkBusy = true;
+  const go = $('musicLinkGo');
+  if (go) go.disabled = true;
+  musicLinkMsg('Ищу трек…');
+  try {
+    const r = await window.casualApi.get('/music/link?u=' + encodeURIComponent(u));
+    if (!r || !r.title) throw new Error(r && r.error ? r.error : 'Сервис не отдал название этого трека.');
+    form.link = musicLinkOk(r.url);
+    if (inp) inp.value = form.link || u;
+    const c = { title: String(r.title), artist: String(r.artist || ''), kind: r.kind === 'Альбом' ? 'Альбом' : 'Трек', year: String(r.year || ''), genre: '', art: r.art, alt: r.alt, thumb: r.art, via: 'server' };
+    // статус «Сингл» или «Альбом» берём из ссылки, а «В планах» и другие, выбранные сами, не трогаем
+    if (!form.status || form.status === 'Сингл' || form.status === 'Альбом') { form.status = r.kind === 'Альбом' ? 'Альбом' : 'Сингл'; renderStatusSet(); }
+    fillMusicFromCover(c);
+    scheduleDraft();
+    let pic = false;
+    if (c.art && !form.photo) {
+      // обложка необязательна: без неё трек всё равно добавлен
+      coverItems = [c]; coverFrom = 'music';
+      try { await pickCover(0); pic = !!form.photo; } catch (_) {}
+      coverItems = []; renderCovers();
+    }
+    musicLinkMsg(`${r.source}: ${[c.artist, c.title].filter(Boolean).join(' — ')}${c.art && !pic && !form.photo ? '. Обложка не загрузилась' : ''}`);
+  } catch (e) {
+    musicLinkMsg((e && e.message) || 'Сервис сейчас не ответил, попробуй ещё раз.', true);
+  } finally {
+    musicLinkBusy = false;
+    if (go) go.disabled = false;
+  }
+}
+
 /* ---------- Фото исполнителя с Genius ---------- */
 // работает только после входа в онлайн-аккаунт: запрос идёт через наш сервер, где лежит токен Genius
 let geniusTimer = null, geniusKey = '', geniusItems = [], geniusPauseUntil = 0;
@@ -2048,6 +2097,16 @@ function resolvePhotoUrl(p) {
 function splitLines(txt) {
   return String(txt || '').split(/\r?\n/).map(s => s.replace(/^[+\-•*]\s*/, '').trim()).filter(Boolean);
 }
+// ссылка на трек: только сами сервисы (то же правило на сервере)
+const MUSIC_LINK_RE = /^https:\/\/(open\.spotify\.com|(www\.|music\.)?youtube\.com|youtu\.be|soundcloud\.com)\/[^\s"'<>()\\]{1,300}$/;
+function musicLinkOk(v) { return typeof v === 'string' && MUSIC_LINK_RE.test(v) ? v : ''; }
+function listenHTML(r) {
+  const u = musicLinkOk(r && r.link);
+  if (!u) return '';
+  const src = /spotify/.test(u) ? 'Spotify' : /music\.youtube/.test(u) ? 'YouTube Music' : /soundcloud/.test(u) ? 'SoundCloud' : 'YouTube';
+  return `<a class="e-listen" href="${esc(u)}" target="_blank" rel="noopener noreferrer">🎧 Слушать в ${src}</a>`;
+}
+window.CasualListen = listenHTML;
 function entryHTML(r, rank, showCat) {
   const t = r.total;
   const n = r.scores.filter(s => s.v > 0).length;
@@ -2095,6 +2154,7 @@ ${ICON.chev}
 <div class="e-body">
 ${pUrl ? `<img class="e-photo" data-photo="body" src="${esc(pUrl)}" alt="Фото: ${esc(r.name)}" loading="lazy" decoding="async"${r.photo.w && r.photo.h ? ` width="${r.photo.w}" height="${r.photo.h}"` : ''}>` : ''}
 <ul class="bd">${bd}</ul>
+${listenHTML(r)}
 ${pcHTML}
 ${r.note ? `<div class="e-note"><span class="label">Заметки</span><p>${esc(r.note)}</p></div>` : ''}
 ${histHTML(r)}
@@ -2314,6 +2374,7 @@ function setScore(id, v) {
   scheduleDraft();
 }
 function resetForm(cat) {
+  musicLinkMsg('');
   revokeFormPhoto();
   form = blankForm(cat && state.cats.some(c => c.id === cat) ? cat : undefined);
   state.editCat = false;
@@ -2340,6 +2401,7 @@ function loadIntoForm(r) {
   form.fav = !!r.fav;
   form.status = fitStatus(r.status || '');
   form.meta = r.meta || '';
+  form.link = musicLinkOk(r.link);
   form.pros = r.pros || '';
   form.cons = r.cons || '';
   form.note = r.note || '';
@@ -2608,6 +2670,7 @@ async function save() {
     fav: !!form.fav,
     status: (form.status || '').trim().slice(0, 40),
     meta: (form.meta || '').trim().slice(0, 80),
+    ...(formMusic() && form.link ? { link: form.link } : {}),
     pros: (form.pros || '').trim().slice(0, 1000),
     cons: (form.cons || '').trim().slice(0, 1000),
     note: form.note.trim().slice(0, 4000),
@@ -2715,6 +2778,7 @@ function normalizeRating(id, d) {
     fav: d.fav === true,
     status: str(d.status).slice(0, 40),
     meta: str(d.meta).slice(0, 80),
+    ...(musicLinkOk(d.link) ? { link: musicLinkOk(d.link) } : {}),
     pros: str(d.pros).slice(0, 1000),
     cons: str(d.cons).slice(0, 1000),
     note: str(d.note).slice(0, 4000), example: d.example === true,
@@ -2910,12 +2974,12 @@ function scheduleDraft() { clearTimeout(draftTimer); draftTimer = setTimeout(sav
 function saveDraft() {
   try {
     const empty = !form.editingId && !form.name.trim() && !form.note.trim() && !form.fav && !form.status
-      && !(form.meta || '').trim() && !(form.pros || '').trim() && !(form.cons || '').trim()
+      && !(form.meta || '').trim() && !(form.pros || '').trim() && !(form.cons || '').trim() && !form.link
       && !Object.keys(form.scores).length && !Object.values(form.notes).some(n => n && n.trim()) && !form.photo;
     if (empty) localStorage.setItem(DRAFT_KEY, JSON.stringify({ v: 2, form: { cat: form.cat } }));
     else localStorage.setItem(DRAFT_KEY, JSON.stringify({ v: 2, form: {
       editingId: form.editingId, cat: form.cat, name: form.name, artist: form.artist, note: form.note,
-      fav: !!form.fav, status: form.status, meta: form.meta, pros: form.pros, cons: form.cons,
+      fav: !!form.fav, status: form.status, meta: form.meta, link: form.link, pros: form.pros, cons: form.cons,
       scores: form.scores, notes: form.notes, weights: form.weights, extra: form.extra, extraCatName: form.extraCatName,
       photo: form.photo && form.photo.kind === 'saved' ? draftPhoto(form.photo) : null
     } }));
@@ -2938,7 +3002,7 @@ function fillDraftFromRating() {
   delete f.draftOld;
   const r = state.ratings.find(x => x.id === f.editingId);
   if (!r) return;
-  f.fav = !!r.fav; f.status = fitStatus(r.status || ''); f.meta = r.meta || ''; f.pros = r.pros || ''; f.cons = r.cons || '';
+  f.fav = !!r.fav; f.status = fitStatus(r.status || ''); f.meta = r.meta || ''; f.link = musicLinkOk(r.link); f.pros = r.pros || ''; f.cons = r.cons || '';
 }
 function loadDraft() {
   try {
@@ -2952,7 +3016,7 @@ function loadDraft() {
       editingId: typeof f.editingId === 'string' ? f.editingId : null,
       cat: typeof f.cat === 'string' ? f.cat : blankForm().cat,
       name: str(f.name).slice(0, 140), artist: str(f.artist).slice(0, 80), note: str(f.note).slice(0, 4000), scores, notes,
-      fav: f.fav === true, status: str(f.status).slice(0, 40), meta: str(f.meta).slice(0, 80), pros: str(f.pros).slice(0, 1000), cons: str(f.cons).slice(0, 1000),
+      fav: f.fav === true, status: str(f.status).slice(0, 40), meta: str(f.meta).slice(0, 80), link: musicLinkOk(f.link), pros: str(f.pros).slice(0, 1000), cons: str(f.cons).slice(0, 1000),
       extra: Array.isArray(f.extra) ? f.extra.filter(x => x && typeof x.id === 'string' && typeof x.name === 'string').map(x => ({ id: x.id, name: x.name, desc: str(x.desc).slice(0, 120) })) : [],
       extraCatName: str(f.extraCatName),
       weights: (() => { const o = {}; if (f.weights && typeof f.weights === 'object') for (const [k, v] of Object.entries(f.weights)) if ([2, 0.5].includes(v)) o[k] = v; return o; })(),
@@ -5134,6 +5198,24 @@ if (el.favBtn) {
     form.fav = !form.fav;
     el.favBtn.setAttribute('aria-pressed', String(form.fav));
     scheduleDraft();
+  });
+}
+// ссылку можно вставить в отдельное поле, а можно и прямо в «Исполнителя» или «Название»
+{
+  const ml = $('musicLink');
+  if (ml) {
+    ml.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); applyMusicLink(); } });
+    ml.addEventListener('paste', (e) => { const t = e.clipboardData && e.clipboardData.getData('text'); if (t && MUSIC_PASTE_RE.test(t)) { e.preventDefault(); ml.value = t.trim(); applyMusicLink(t); } });
+    ml.addEventListener('input', () => { if (!ml.value.trim()) { form.link = ''; musicLinkMsg(''); scheduleDraft(); } });
+    const go = $('musicLinkGo');
+    if (go) go.addEventListener('click', () => applyMusicLink());
+  }
+  [el.artist, el.name].forEach((inp) => {
+    if (inp) inp.addEventListener('paste', (e) => {
+      if (!formMusic()) return;
+      const t = e.clipboardData && e.clipboardData.getData('text');
+      if (t && MUSIC_PASTE_RE.test(t)) { e.preventDefault(); if (ml) ml.value = t.trim(); applyMusicLink(t); }
+    });
   });
 }
 if (el.artist) {

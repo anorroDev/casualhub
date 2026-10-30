@@ -58,6 +58,8 @@ async function ensureScheme(env) {
     // комментарии: на стене профиля (target = 'wall') и под оценкой (target = 'r.<id оценки>')
     env.DB.prepare('CREATE TABLE IF NOT EXISTS comments (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, target TEXT NOT NULL, from_id TEXT NOT NULL, text TEXT NOT NULL, at INTEGER NOT NULL)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS comments_owner ON comments(owner_id, target, at)'),
+    // тир-листы: data пустая — тир-лист удалён (отметка нужна, чтобы его не вернуло другое устройство)
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS tierlists (user_id TEXT NOT NULL, id TEXT NOT NULL, data TEXT, meta TEXT, private INTEGER NOT NULL DEFAULT 0, at INTEGER NOT NULL, PRIMARY KEY (user_id, id))'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS comments_from ON comments(from_id)'),
     // админы: кто уже ввёл одноразовый пароль; дальше вход в админку по своему пин-коду
     env.DB.prepare('CREATE TABLE IF NOT EXISTS admins (user_id TEXT PRIMARY KEY, handle TEXT NOT NULL, at INTEGER NOT NULL, pin_hash TEXT, pin_salt TEXT, pin_until INTEGER)'),
@@ -244,7 +246,7 @@ const adminTryOk = (env, t) => env.DB.batch([
 // админ — это и тот, кто уже входил в админку, даже если сменил @: такого нельзя забанить, удалить или выкинуть
 const isAdminAccount = async (env, u) => ADMIN_HANDLES.includes(String(u.uname || '').toLowerCase()) || !!(await env.DB.prepare('SELECT 1 FROM admins WHERE user_id = ?').bind(u.id).first());
 const CM_MAX = 500; // символов в одном комментарии
-const CM_TARGET_RE = /^(wall|r\.[\w.-]{1,80})$/;
+const CM_TARGET_RE = /^(wall|[rt]\.[\w.-]{1,80})$/; // стена, оценка или тир-лист
 const clientIp = (request) => request.headers.get('CF-Connecting-IP') || 'local';
 async function overLimit(env, key, kind) {
   const row = await env.DB.prepare('SELECT count, reset_at FROM attempts WHERE key = ?').bind(key).first();
@@ -691,6 +693,7 @@ const routes = {
     await env.DB.batch([
       'DELETE FROM sessions WHERE user_id = ?1',
       'DELETE FROM shelves WHERE user_id = ?1',
+      'DELETE FROM tierlists WHERE user_id = ?1',
       'DELETE FROM photos WHERE user_id = ?1',
       'DELETE FROM friendships WHERE a = ?1 OR b = ?1',
       'DELETE FROM reactions WHERE owner_id = ?1 OR from_id = ?1',
@@ -719,7 +722,7 @@ const routes = {
       `SELECT c.id, c.owner_id, c.target, c.from_id, c.text, c.at, f.username AS fname, f.uname AS fhandle, o.username AS oname, o.uname AS ohandle
          FROM comments c LEFT JOIN users f ON f.id = c.from_id LEFT JOIN users o ON o.id = c.owner_id ORDER BY c.at DESC LIMIT 100`
     ).all();
-    return json({ items: results.map((x) => ({ id: x.id, text: x.text, at: x.at, where: x.target === 'wall' ? 'wall' : 'rating', from: { id: x.from_id, username: x.fname || '?', handle: x.fhandle || '' }, owner: { id: x.owner_id, username: x.oname || '?', handle: x.ohandle || '' } })) });
+    return json({ items: results.map((x) => ({ id: x.id, text: x.text, at: x.at, where: x.target === 'wall' ? 'wall' : x.target.startsWith('t.') ? 'tier' : 'rating', from: { id: x.from_id, username: x.fname || '?', handle: x.fhandle || '' }, owner: { id: x.owner_id, username: x.oname || '?', handle: x.ohandle || '' } })) });
   },
   async 'DELETE /admin/comment/:id'({ env, request, me, arg }) {
     if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
@@ -1261,6 +1264,118 @@ const routes = {
     await env.DB.prepare('DELETE FROM photos WHERE key = ? OR key = ?').bind(`${me.id}:${arg}`, `${me.id}:${arg}.t`).run();
     return json({ ok: true });
   },
+  // ---------- тир-листы: свои видит хозяин, остальные — только друзья, и только те, что не скрыты ----------
+  // что лежит в аккаунте и что удалено; сами тир-листы устройство докачивает по одному
+  async 'GET /tiers'({ env, me }) {
+    const { results } = await env.DB.prepare('SELECT id, at, data IS NULL AS gone FROM tierlists WHERE user_id = ?').bind(me.id).all();
+    return json({ items: results.filter((x) => !x.gone).map(({ id, at }) => ({ id, at })), deleted: results.filter((x) => x.gone).map(({ id, at }) => ({ id, at })) });
+  },
+  async 'GET /tiers-feed'({ env, me }) {
+    if (burst('tierfeed:' + me.id, 60, 60e3)) return tooMany(1);
+    const { results: fr } = await env.DB.prepare(
+      "SELECT CASE WHEN f.a = ?1 THEN f.b ELSE f.a END AS id, u.username, u.uname FROM friendships f JOIN users u ON u.id = (CASE WHEN f.a = ?1 THEN f.b ELSE f.a END) WHERE (f.a = ?1 OR f.b = ?1) AND f.status = 'accepted'"
+    ).bind(me.id).all();
+    if (!fr.length) return json({ friends: 0, items: [] });
+    const ids = fr.slice(0, 90).map((x) => x.id);
+    const people = new Map(fr.map((x) => [x.id, pubUser(x)]));
+    const { results } = await env.DB.prepare(`SELECT user_id, id, meta, at FROM tierlists WHERE user_id IN (${ids.map(() => '?').join(',')}) AND data IS NOT NULL AND private = 0 ORDER BY at DESC LIMIT 60`).bind(...ids).all();
+    const items = [];
+    for (const x of results) {
+      try { items.push({ ...JSON.parse(x.meta), id: x.id, at: x.at, user: people.get(x.user_id) }); } catch (e) {}
+    }
+    return json({ friends: fr.length, items });
+  },
+  async 'GET /tier/:uid/:id'({ env, me, arg }) {
+    const [uid, id] = arg;
+    if (!(await canSee(env, me, uid))) return fail(403, 'Тир-листы видны только друзьям.');
+    const row = await env.DB.prepare('SELECT data, private, at FROM tierlists WHERE user_id = ? AND id = ?').bind(uid, id).first();
+    if (!row || row.data == null || (row.private && uid !== me.id)) return fail(404, 'Тир-лист не найден: его удалили или скрыли.');
+    const u = await env.DB.prepare('SELECT id, username, uname FROM users WHERE id = ?').bind(uid).first();
+    if (!u) return fail(404, 'Тир-лист не найден: его удалили или скрыли.');
+    return json({ list: { ...JSON.parse(row.data), at: row.at }, user: pubUser(u) });
+  },
+  async 'PUT /tier/:id'({ env, request, me, arg }) {
+    if (burst('tier:' + me.id, 60, 60e3)) return tooMany(1);
+    const { list: raw } = await readBody(request);
+    const list = cleanTierList(raw, arg);
+    if (!list) return fail(400, 'Это не тир-лист.');
+    const now = Date.now();
+    const at = Math.min(Number.isFinite(+list.at) && +list.at > 0 ? +list.at : now, now); // сбитые часы не держат тир-лист «новее всех» навсегда
+    list.at = at;
+    const data = JSON.stringify(list);
+    if (data.length > MAX_TIER) return fail(413, 'В тир-листе слишком много данных.');
+    const old = await env.DB.prepare('SELECT data, at FROM tierlists WHERE user_id = ? AND id = ?').bind(me.id, arg).first();
+    // на сервере версия не старше: устройство её заберёт, а если тир-лист удалён, удалит у себя
+    if (old && at <= old.at) return json({ ok: true, stale: true, gone: old.data == null, at: old.at });
+    if (!old || old.data == null) {
+      const c = await env.DB.prepare('SELECT COUNT(*) AS n FROM tierlists WHERE user_id = ? AND data IS NOT NULL').bind(me.id).first();
+      if (c && c.n >= MAX_TIERS) return fail(413, `Слишком много тир-листов в аккаунте (больше ${MAX_TIERS}). Удали старые.`);
+    }
+    // картинки, которых в тир-листе больше нет, стираем сразу: на другом устройстве они уже не понадобятся
+    const keep = new Set(tierImgs(list));
+    const dropped = old && old.data ? tierImgs(JSON.parse(old.data)).filter((k) => !keep.has(k)).slice(0, 200) : [];
+    await env.DB.batch([
+      env.DB.prepare('INSERT INTO tierlists (user_id, id, data, meta, private, at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(user_id, id) DO UPDATE SET data = excluded.data, meta = excluded.meta, private = excluded.private, at = excluded.at')
+        .bind(me.id, arg, data, JSON.stringify(tierMeta(list)), list.private ? 1 : 0, at),
+      ...dropped.map((k) => env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(`${me.id}:${k}`)),
+    ]);
+    return json({ ok: true, at });
+  },
+  async 'DELETE /tier/:id'({ env, request, me, arg }) {
+    if (burst('tier:' + me.id, 60, 60e3)) return tooMany(1);
+    const now = Date.now();
+    const asked = +new URL(request.url).searchParams.get('at');
+    const at = Math.min(Number.isFinite(asked) && asked > 0 ? asked : now, now);
+    const old = await env.DB.prepare('SELECT data, at FROM tierlists WHERE user_id = ? AND id = ?').bind(me.id, arg).first();
+    if (old && old.data != null && old.at > at) return json({ ok: true, stale: true, at: old.at }); // на другом устройстве его правили позже
+    const imgs = old && old.data ? tierImgs(JSON.parse(old.data)).slice(0, 500) : [];
+    await env.DB.batch([
+      env.DB.prepare('INSERT INTO tierlists (user_id, id, data, meta, private, at) VALUES (?, ?, NULL, NULL, 0, ?) ON CONFLICT(user_id, id) DO UPDATE SET data = NULL, meta = NULL, private = 0, at = excluded.at').bind(me.id, arg, at),
+      // отметки об удалении старше полугода больше не нужны: все устройства давно синхронизировались
+      env.DB.prepare('DELETE FROM tierlists WHERE user_id = ? AND data IS NULL AND at < ?').bind(me.id, now - 183 * 864e5),
+      env.DB.prepare('DELETE FROM comments WHERE owner_id = ? AND target = ?').bind(me.id, 't.' + arg),
+      env.DB.prepare('DELETE FROM reactions WHERE owner_id = ? AND rid = ?').bind(me.id, 't.' + arg),
+      ...imgs.map((k) => env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(`${me.id}:${k}`)),
+    ]);
+    return json({ ok: true, at });
+  },
+  // картинка карточки: квадрат 240×240, ключ придумывает браузер
+  async 'PUT /tier-img/:key'({ env, request, me, arg }) {
+    if (burst('tierimg:' + me.id, 120, 60e3)) return tooMany(1);
+    const { data } = await readBody(request);
+    if (typeof data !== 'string' || !/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/]+=*$/.test(data)) return fail(400, 'Нужна картинка.');
+    if (data.length > MAX_TIER_IMG) return fail(413, 'Картинка слишком большая.');
+    const key = `${me.id}:${arg}`;
+    if (!(await env.DB.prepare('SELECT 1 FROM photos WHERE key = ?').bind(key).first())) {
+      // ключи «<id>:ti_…» идут подряд: считаем только их, по первичному ключу
+      const c = await env.DB.prepare('SELECT COUNT(*) AS n FROM photos WHERE key >= ? AND key < ?').bind(`${me.id}:ti_`, `${me.id}:ti\``).first();
+      if (c && c.n >= MAX_TIER_IMGS) return fail(413, 'Слишком много картинок в тир-листах аккаунта. Новые останутся только на этом устройстве.');
+    }
+    const over = Math.max(await spend(env, 'photo:' + me.id, data.length, PHOTO_DAY_USER), await spend(env, 'photoip:' + clientIp(request), data.length, PHOTO_DAY_IP));
+    if (over) return new Response(JSON.stringify({ error: 'На сегодня лимит загрузки фото исчерпан. Остальные дойдут завтра сами.' }), { status: 429, headers: { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store', 'retry-after': String(over * 60) } });
+    await env.DB.prepare('INSERT INTO photos (key, user_id, data, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at').bind(key, me.id, data, Date.now()).run();
+    return json({ ok: true });
+  },
+  // несколько картинок за раз: тир-лист из сотни карточек не должен делать сотню запросов
+  async 'POST /tier-imgs/:uid'({ env, request, me, arg }) {
+    if (burst('tierimgs:' + me.id, 240, 60e3)) return tooMany(1);
+    if (!(await canSee(env, me, arg))) return fail(403, 'Картинки видны только друзьям.');
+    const { keys } = await readBody(request);
+    const list = (Array.isArray(keys) ? keys : []).filter((k) => typeof k === 'string' && TIER_IMG_RE.test(k)).slice(0, 40);
+    if (!list.length) return json({ images: {} });
+    const { results } = await env.DB.prepare(`SELECT key, data FROM photos WHERE key IN (${list.map(() => '?').join(',')})`).bind(...list.map((k) => `${arg}:${k}`)).all();
+    return json({ images: Object.fromEntries(results.map((x) => [x.key.slice(arg.length + 1), x.data])) });
+  },
+  // трек или альбом по ссылке: Spotify, YouTube и YouTube Music, SoundCloud. Ключи не нужны, это открытые описания страниц
+  async 'GET /music/link'({ request, me }) {
+    if (burst('mlink:' + me.id, 30, 60e3)) return tooMany(1);
+    let u;
+    try { u = new URL(new URL(request.url).searchParams.get('u') || ''); } catch (e) { return fail(400, 'Это не ссылка.'); }
+    let info;
+    try { info = await musicLink(u); } catch (e) { return fail(502, 'Сервис сейчас не ответил, попробуй ещё раз.'); }
+    if (!info) return fail(400, 'Подходят ссылки на трек или альбом в Spotify, YouTube Music и SoundCloud.');
+    return json(info);
+  },
   // ---------- реакции: друг ставит 🔥 / 💀 / «не согласен» и может оставить короткий комментарий ----------
   async 'PUT /react/:uid/:rid'({ env, request, me, arg }) {
     const [uid, rid] = arg;
@@ -1377,12 +1492,29 @@ const routes = {
         items.push({ kind: 'react', at: x.at, user: people.get(x.from_id), react: { rid: x.rid, name: String(nameOf.get(x.rid)).slice(0, 120), emoji: x.emoji || null, text: x.text || '' } });
       }
     }
+    // тир-листы друзей и то, что друзья написали под моими
+    const { results: tl } = await env.DB.prepare(`SELECT user_id, id, meta, at FROM tierlists WHERE user_id IN (${marks}) AND data IS NOT NULL AND private = 0 ORDER BY at DESC LIMIT 10`).bind(...ids).all();
+    for (const x of tl) {
+      try { const m = JSON.parse(x.meta); items.push({ kind: 'tier', at: x.at, user: people.get(x.user_id), tier: { id: x.id, title: clip(m.title, 120), count: +m.count || 0 } }); } catch (e) {}
+    }
+    const { results: myTl } = await env.DB.prepare('SELECT id, meta FROM tierlists WHERE user_id = ? AND data IS NOT NULL').bind(me.id).all();
+    const tierName = new Map();
+    for (const x of myTl) { try { tierName.set(x.id, clip(JSON.parse(x.meta).title, 120) || 'Без названия'); } catch (e) {} }
+    for (const x of mineRx) {
+      if (!x.rid.startsWith('t.') || !tierName.has(x.rid.slice(2))) continue;
+      items.push({ kind: 'react', at: x.at, user: people.get(x.from_id), react: { rid: x.rid, tier: x.rid.slice(2), name: tierName.get(x.rid.slice(2)), emoji: x.emoji || null, text: x.text || '' } });
+    }
     // друзья написали мне: на стене профиля или под моей оценкой
     const { results: mineCm } = await env.DB.prepare(`SELECT target, from_id, text, at FROM comments WHERE owner_id = ? AND from_id IN (${marks}) ORDER BY at DESC LIMIT 15`).bind(me.id, ...ids).all();
     if (mineCm.length) {
       const myShelf = readShelf(await env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(me.id).first());
       const nameOf = new Map(myShelf.ratings.map((r) => [r.id, r.name]));
       for (const x of mineCm) {
+        if (x.target.startsWith('t.')) {
+          const t = x.target.slice(2);
+          if (tierName.has(t)) items.push({ kind: 'comment', at: x.at, user: people.get(x.from_id), comment: { rid: null, tier: t, name: tierName.get(t), text: String(x.text).slice(0, 200) } });
+          continue;
+        }
         const rid = x.target === 'wall' ? null : x.target.slice(2);
         if (rid && !nameOf.has(rid)) continue;
         items.push({ kind: 'comment', at: x.at, user: people.get(x.from_id), comment: { rid, name: rid ? String(nameOf.get(rid)).slice(0, 120) : '', text: String(x.text).slice(0, 200) } });
@@ -1432,7 +1564,7 @@ const routes = {
   // сколько комментариев под оценками человека: число 💬 у строк рейтинга
   async 'GET /comments-count/:uid'({ env, me, arg }) {
     if (!(await canSee(env, me, arg))) return fail(403, 'Комментарии видны только друзьям.');
-    const { results } = await env.DB.prepare("SELECT target, COUNT(*) AS n FROM comments WHERE owner_id = ? AND target != 'wall' GROUP BY target").bind(arg).all();
+    const { results } = await env.DB.prepare("SELECT target, COUNT(*) AS n FROM comments WHERE owner_id = ? AND target LIKE 'r.%' GROUP BY target").bind(arg).all();
     return json({ counts: Object.fromEntries(results.map((x) => [x.target.slice(2), x.n])) });
   },
 
@@ -1489,6 +1621,119 @@ const PHOTO_DAY_USER = 200e6, PHOTO_DAY_IP = 400e6; // сколько симво
 // сколько оценок на полке: сама база считает длину списка, старый формат полки — просто список
 const SHELF_COUNT = "CASE json_type(data) WHEN 'array' THEN json_array_length(data) ELSE COALESCE(json_array_length(data, '$.ratings'), 0) END";
 // оформление профиля: до 6 витрин (топ-3/5/10 из темы, лучшие по баллу или выбранные вручную) и видимость блоков
+// тир-листы: только ожидаемые поля, чтобы в страницу друга не попало лишнее
+const MAX_TIERS = 100, MAX_TIER = 150e3, MAX_TIER_IMG = 200e3, MAX_TIER_IMGS = 800;
+const TIER_ID_RE = /^\w{1,40}$/, TIER_IMG_RE = /^ti_\w{1,40}$/, TIER_COLOR_RE = /^#[0-9a-f]{6}$/i;
+const TIER_ITEM_RE = /^(?!__proto__$|constructor$|prototype$)[\w.:-]{1,80}$/;
+const TIER_SRC_RE = /^\/wheel\/hub\/(?!.*\.\.)[\w\-\/.]{1,120}\.(png|webp|gif|jpe?g)$/i;
+function cleanTierList(raw, id) {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const src = raw.items && typeof raw.items === 'object' && !Array.isArray(raw.items) ? raw.items : {};
+  const items = {};
+  for (const k of Object.keys(src).slice(0, 500)) {
+    const it = src[k];
+    if (!TIER_ITEM_RE.test(k) || !it || typeof it !== 'object') continue;
+    const o = { id: k, name: clip(it.name, 80).trim(), kind: 'text' };
+    if (it.kind === 'img' && TIER_IMG_RE.test(String(it.img))) { o.kind = 'img'; o.img = String(it.img); }
+    else if (it.kind === 'url' && TIER_SRC_RE.test(String(it.src))) { o.kind = 'url'; o.src = String(it.src); }
+    else if (!o.name) continue;
+    items[k] = o;
+  }
+  const seen = new Set();
+  const own = (a) => (Array.isArray(a) ? a : []).filter((x) => typeof x === 'string' && Object.prototype.hasOwnProperty.call(items, x) && !seen.has(x) && seen.add(x));
+  const rows = (Array.isArray(raw.rows) ? raw.rows : []).slice(0, 20).filter((r) => r && typeof r === 'object').map((r) => ({
+    id: TIER_ID_RE.test(String(r.id)) ? String(r.id) : randHex(4),
+    label: clip(r.label, 40).trim(),
+    color: TIER_COLOR_RE.test(String(r.color)) ? String(r.color) : '#9AA0AE',
+    items: own(r.items),
+  }));
+  if (!rows.length) return null;
+  const pool = own(raw.pool);
+  Object.keys(items).forEach((k) => { if (!seen.has(k)) { seen.add(k); pool.push(k); } });
+  return { id, title: clip(raw.title, 80).trim(), rows, pool, items, captions: !!raw.captions, private: !!raw.private, at: +raw.at || 0 };
+}
+const tierImgs = (l) => Object.values((l && l.items) || {}).map((it) => it && it.img).filter((k) => typeof k === 'string' && TIER_IMG_RE.test(k));
+// короткое описание для ленты друзей: разбирать сами тир-листы ради карточек в списке было бы дорого
+const tierMeta = (l) => ({
+  title: l.title, count: Object.keys(l.items).length,
+  rows: l.rows.slice(0, 6).map((r) => ({
+    label: clip(r.label, 12), color: r.color, n: r.items.length,
+    items: r.items.slice(0, 7).map((id) => { const it = l.items[id]; return { name: clip(it.name, 24), ...(it.img ? { img: it.img } : {}), ...(it.src ? { src: it.src } : {}) }; }),
+  })),
+});
+
+// ---------- музыка по ссылке ----------
+const MUSIC_HOST = /^(open\.spotify\.com|spotify\.link|(www\.|m\.|music\.)?youtube\.com|youtu\.be|(www\.|m\.)?soundcloud\.com|on\.soundcloud\.com)$/i;
+const MUSIC_UA = 'Mozilla/5.0 (compatible; CasualHub/1.0; +https://casualhub.pages.dev)';
+const unHtml = (s) => String(s || '').replace(/&#x([0-9a-f]+);/gi, (_, h) => String.fromCodePoint(parseInt(h, 16))).replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(+d)).replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
+const httpsOnly = (s) => (/^https:\/\/[^\s"'<>()\\]{1,500}$/.test(String(s || '')) ? String(s) : '');
+const musicResult = (o) => ({ source: o.source, kind: o.album ? 'Альбом' : 'Сингл', title: clip(o.title, 140).trim(), artist: clip(o.artist, 80).trim(), year: /^(19|20)\d{2}/.test(String(o.year || '')) ? String(o.year).slice(0, 4) : '', art: httpsOnly(o.art), alt: httpsOnly(o.alt), url: o.url });
+async function musicLink(start) {
+  let u = start;
+  if (u.protocol !== 'https:' || u.username || u.password || u.port || !MUSIC_HOST.test(u.hostname)) return null;
+  // короткие ссылки: проходим переадресации, не покидая этих сайтов
+  for (let hop = 0; /^(spotify\.link|on\.soundcloud\.com)$/i.test(u.hostname); hop++) {
+    if (hop >= 3) return null;
+    const res = await fetch(u.href, { redirect: 'manual', signal: AbortSignal.timeout(6000), headers: { 'user-agent': MUSIC_UA } });
+    const loc = res.headers.get('location');
+    if (!loc) return null;
+    u = new URL(loc, u);
+    if (u.protocol !== 'https:' || !MUSIC_HOST.test(u.hostname)) return null;
+  }
+  const host = u.hostname.toLowerCase();
+  if (host === 'open.spotify.com') {
+    const m = /^\/(?:intl-[a-z-]+\/)?(track|album)\/([A-Za-z0-9]{10,40})/.exec(u.pathname);
+    if (!m) return null;
+    const url = `https://open.spotify.com/${m[1]}/${m[2]}`;
+    const album = m[1] === 'album';
+    let title = '', artist = '', year = '', art = '';
+    // в описании страницы есть всё: название, исполнитель, год и обложка
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(6000), headers: { 'user-agent': MUSIC_UA, accept: 'text/html' } });
+      const buf = res.ok ? await readCapped(res, 2e6) : null;
+      if (buf) {
+        const html = new TextDecoder().decode(buf);
+        const tag = (n) => { const x = new RegExp(`<meta (?:property|name)="${n}" content="([^"]*)"`).exec(html); return x ? unHtml(x[1]) : ''; };
+        const desc = tag('og:description').split(' · ');
+        title = tag('og:title'); art = tag('og:image'); artist = tag('music:musician_description') || desc[0] || ''; year = tag('music:release_date') || (desc.find((p) => /^(19|20)\d{2}$/.test(p)) || '');
+        if (album) {
+          const t = /^(?:Listen to )?(.+?)(?: - (?:Single|EP|Album))?(?: by (.+?))?(?: \| Spotify)?$/.exec(title);
+          if (t) { title = t[1]; if (t[2]) artist = t[2]; }
+        }
+      }
+    } catch (e) {}
+    if (!title) { // страница не открылась: хотя бы название и обложка
+      const d = await cachedJson('https://open.spotify.com/oembed?url=' + encodeURIComponent(url), null, 86400);
+      title = d.title; art = d.thumbnail_url;
+    }
+    return musicResult({ source: 'Spotify', album, title, artist, year, art, url });
+  }
+  if (/youtube\.com$|^youtu\.be$/.test(host)) {
+    const id = host === 'youtu.be' ? u.pathname.slice(1).split('/')[0] : u.searchParams.get('v') || (/^\/(?:shorts|embed|live)\/([\w-]+)/.exec(u.pathname) || [])[1] || '';
+    const list = u.searchParams.get('list') || '';
+    const video = /^[\w-]{6,20}$/.test(id);
+    if (!video && !/^[\w-]{10,80}$/.test(list)) return null;
+    const page = video ? 'https://www.youtube.com/watch?v=' + id : 'https://www.youtube.com/playlist?list=' + list;
+    const d = await cachedJson('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent(page), null, 86400);
+    const author = String(d.author_name || '');
+    const topic = /\s*-\s*Topic$/i.test(author); // автоматический канал исполнителя: в названии только трек
+    let artist = author.replace(/\s*-\s*Topic$/i, '').replace(/VEVO$/, '').trim();
+    let title = String(d.title || '').replace(/\s*[([][^)\]]*(official|video|audio|lyric|visuali[sz]er|m\/?v\b|клип|премьера|remaster|\b4k\b|\bhd\b)[^)\]]*[)\]]/gi, '').trim();
+    const dash = topic ? null : /^(.+?)\s+[-–—]\s+(.+)$/.exec(title);
+    if (dash) { artist = dash[1]; title = dash[2]; }
+    const url = video ? (host === 'music.youtube.com' ? 'https://music.youtube.com/watch?v=' + id : page) : (host === 'music.youtube.com' ? 'https://music.youtube.com/playlist?list=' + list : page);
+    return musicResult({ source: host === 'music.youtube.com' ? 'YouTube Music' : 'YouTube', album: !video, title, artist, art: video ? `https://i.ytimg.com/vi/${id}/maxresdefault.jpg` : d.thumbnail_url, alt: video ? `https://i.ytimg.com/vi/${id}/hqdefault.jpg` : '', url });
+  }
+  const parts = u.pathname.split('/').filter(Boolean);
+  if (parts.length < 2 || !/^[\w.-]+$/.test(parts[0])) return null;
+  const url = 'https://soundcloud.com/' + parts.slice(0, 3).map(encodeURIComponent).join('/');
+  const d = await cachedJson('https://soundcloud.com/oembed?format=json&url=' + encodeURIComponent(url), null, 86400);
+  const author = String(d.author_name || '');
+  let title = String(d.title || '');
+  if (author && title.endsWith(' by ' + author)) title = title.slice(0, -(author.length + 4));
+  return musicResult({ source: 'SoundCloud', album: parts[1] === 'sets', title, artist: author, art: String(d.thumbnail_url || '').replace('-t300x300.', '-t500x500.'), url });
+}
+
 const LAYOUT_SECTIONS = ['stats', 'titles', 'podium', 'all', 'badges', 'taste', 'friends', 'hist', 'cats'];
 function cleanLayout(l) {
   const one = (x) => String(x == null ? '' : x).replace(SPOOF_RE, '');
@@ -1829,6 +2074,10 @@ export async function onRequest({ request, env, params }) {
   if (!routes[key] && segs.length === 2 && segs[0] === 'comment' && /^[0-9a-f]{20}$/.test(segs[1])) { key = `${request.method} /comment/:id`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'comments-count') { key = `${request.method} /comments-count/:uid`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'photo-history' && HIST_KINDS.has(segs[1])) { key = `${request.method} /photo-history/:kind`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 3 && segs[0] === 'tier' && TIER_ID_RE.test(segs[2])) { key = `${request.method} /tier/:uid/:id`; arg = [segs[1], segs[2]]; }
+  if (!routes[key] && segs.length === 2 && segs[0] === 'tier' && TIER_ID_RE.test(segs[1])) { key = `${request.method} /tier/:id`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 2 && segs[0] === 'tier-img' && TIER_IMG_RE.test(segs[1])) { key = `${request.method} /tier-img/:key`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 2 && segs[0] === 'tier-imgs') { key = `${request.method} /tier-imgs/:uid`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'reacts') { key = `${request.method} /reacts/:id`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'share' && SHARE_RE.test(segs[1])) { key = `${request.method} /share/:id`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'share' && segs[2] === 'img' && SHARE_RE.test(segs[1])) { key = `${request.method} /share/:id/img`; arg = segs[1]; }

@@ -866,7 +866,7 @@
 <span class="badge" data-tier="${tierT(t)}">${t != null ? fmt(t) : '—'}</span>
 ${ICON.chev}
 </span></summary>
-<div class="e-body">${friendPhoto(r, 'body', uid)}<ul class="bd">${bd}</ul>${pc}${r.note ? `<div class="e-note"><span class="label">Заметки</span><p>${esc(r.note)}</p></div>` : ''}<div class="rx" data-rx="${esc(r.id || '')}">${rxBlock(uid, r.id)}</div><div class="cm-slot" data-cm-uid="${esc(uid)}" data-cm-rid="${esc(r.id || '')}"></div></div>
+<div class="e-body">${friendPhoto(r, 'body', uid)}<ul class="bd">${bd}</ul>${window.CasualListen ? window.CasualListen(r) : ''}${pc}${r.note ? `<div class="e-note"><span class="label">Заметки</span><p>${esc(r.note)}</p></div>` : ''}<div class="rx" data-rx="${esc(r.id || '')}">${rxBlock(uid, r.id)}</div><div class="cm-slot" data-cm-uid="${esc(uid)}" data-cm-rid="${esc(r.id || '')}"></div></div>
 </details></li>`;
   }
 

@@ -72,7 +72,8 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     if (e.defaultPrevented || e.button || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
     const a = e.target.closest && e.target.closest('a[href]');
     if (!a || a.hasAttribute('download') || (a.target && a.target !== '_self')) return;
-    const same = a.origin === location.origin && a.pathname === location.pathname && a.search === location.search && !a.hash;
+    // ссылка с «#» — это переход внутри страницы, его не трогаем
+    const same = !a.getAttribute('href').includes('#') && a.origin === location.origin && a.pathname === location.pathname && a.search === location.search;
     if (!same && a.getAttribute('aria-current') !== 'page') return;
     e.preventDefault();
     window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });

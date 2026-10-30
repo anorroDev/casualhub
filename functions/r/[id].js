@@ -2,19 +2,19 @@
 // Собирается на сервере и не содержит ни одного скрипта: весь текст экранируется, а заголовок CSP
 // запрещает странице выполнять любой код. Поэтому даже если в оценке окажется что-то вредное,
 // оно покажется просто текстом. Ссылку создаёт хозяин оценки в Мнении (POST /api/share).
-import { cleanRating, readShelf, SAFE_URL } from '../_lib/shelf.js';
+import { cleanRating, readShelf, SAFE_URL, MUSIC_LINK_RE } from '../_lib/shelf.js';
 
 const SHARE_RE = /^[A-Za-z0-9]{12}$/;
 // язык страницы: тот, что человек выбрал на сайте (кука ставится в i18n.js)
 const TEXT = {
   ru: {
     html: 'ru', locale: 'ru-RU', verdicts: ['Ужас', 'Провал', 'Плохо', 'Слабо', 'Средне', 'Нормально', 'Неплохо', 'Хорошо', 'Отлично', 'Шедевр'], notRated: 'Без оценки', notRatedLow: 'без оценки',
-    site: 'Казуал Хаб', opinion: 'Мнение Казуала', outOf: 'из 10', ratingBy: 'оценка от', ratingByCap: 'Оценка от', fav: '★ В избранном', crit: 'Критерии', pros: '➕ Плюсы', cons: '➖ Минусы', notes: 'Заметки',
+    site: 'Казуал Хаб', opinion: 'Мнение Казуала', outOf: 'из 10', ratingBy: 'оценка от', ratingByCap: 'Оценка от', fav: '★ В избранном', crit: 'Критерии', listen: '🎧 Слушать', pros: '➕ Плюсы', cons: '➖ Минусы', notes: 'Заметки',
     rate: 'Оценить что-нибудь своё', foot: 'Отзыв открыт по ссылке. Свои оценки можно вести в Мнении Казуала, это бесплатно.', goneTitle: 'Отзыв недоступен', gone: 'Хозяин закрыл ссылку или удалил оценку.', open: 'Открыть Мнение Казуала', home: 'На главную', wait: 'Слишком много запросов, подожди минуту.',
   },
   en: {
     html: 'en', locale: 'en-GB', verdicts: ['Awful', 'Flop', 'Bad', 'Weak', 'Average', 'Okay', 'Not bad', 'Good', 'Great', 'Masterpiece'], notRated: 'Not rated', notRatedLow: 'not rated',
-    site: 'Casual Hub', opinion: 'Casual Opinion', outOf: 'out of 10', ratingBy: 'rated by', ratingByCap: 'Rated by', fav: '★ In favorites', crit: 'Criteria', pros: '➕ Pros', cons: '➖ Cons', notes: 'Notes',
+    site: 'Casual Hub', opinion: 'Casual Opinion', outOf: 'out of 10', ratingBy: 'rated by', ratingByCap: 'Rated by', fav: '★ In favorites', crit: 'Criteria', listen: '🎧 Listen', pros: '➕ Pros', cons: '➖ Cons', notes: 'Notes',
     rate: 'Rate something yourself', foot: 'This review is open by link. You can keep your own ratings in Casual Opinion for free.', goneTitle: 'Review unavailable', gone: 'The owner closed the link or deleted the rating.', open: 'Open Casual Opinion', home: 'Home', wait: 'Too many requests, wait a minute.',
   },
 };
@@ -168,6 +168,7 @@ ${photo ? `<img class="photo" src="${esc(photo)}" alt="" referrerpolicy="no-refe
 <div class="head"><h1>${esc(r.name)}</h1>
 <div class="score"><span class="badge" data-tier="${tier(t)}">${t != null ? fmt(t, T) : '—'}</span><span class="verdict">${esc(verdict(t, T))}</span></div></div>
 <div class="chips">${r.fav ? `<span class="chip">${T.fav}</span>` : ''}${cat ? `<span class="chip">${esc(cat)}</span>` : ''}${r.status ? `<span class="chip">${esc(word(T, r.status))}</span>` : ''}${r.meta ? `<span class="chip">${esc(r.meta)}</span>` : ''}</div>
+${typeof r.link === 'string' && MUSIC_LINK_RE.test(r.link) ? `<p><a class="btn ghost" href="${esc(r.link)}" target="_blank" rel="noopener noreferrer">${T.listen}</a></p>` : ''}
 <p class="by">${T.ratingByCap} <b>${esc(user.username)}</b> @${esc(user.uname)}${when ? ' · ' + esc(when) : ''}</p>
 ${scores.length ? `<section><p class="label">${T.crit}</p><ul class="crit">${scores.map((s) => `<li data-tier="${tierV(s.v)}"><span class="n">${esc(word(T, s.name))}</span><span class="v">${s.v || '—'}</span><span class="cells">${Array.from({ length: 10 }, (_, i) => `<i${i < s.v ? ' class="on"' : ''}></i>`).join('')}</span>${s.note ? `<span class="cnote">${esc(s.note)}</span>` : ''}</li>`).join('')}</ul></section>` : ''}
 ${pros.length || cons.length ? `<section class="pc">${pros.length ? `<div><p class="label">${T.pros}</p><ul>${pros.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}${cons.length ? `<div><p class="label">${T.cons}</p><ul>${cons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}</section>` : ''}
