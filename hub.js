@@ -78,7 +78,7 @@
     + `<span class="wheel-layer"><span id="wheelIdle"><span id="wheelRot"><svg viewBox="0 0 168 168">${paths}<g stroke="rgba(0,0,0,.18)" stroke-width="1">${lines}</g></svg></span></span></span>`
     + `<svg class="wheel-layer" viewBox="0 0 168 168">${ticks}<circle cx="${C}" cy="${C}" r="17" fill="var(--accent)" stroke="var(--panel)" stroke-width="4"/></svg>`
     + `<svg class="wheel-ptr" viewBox="0 0 20 22"><path d="M10 22L1 4a3 3 0 0 1 2.7-4h12.6A3 3 0 0 1 19 4z" fill="var(--panel)" stroke="var(--ink)" stroke-width="2"/></svg>`;
-  const rotEl = $('#wheelRot'), idleEl = $('#wheelIdle'), nameEl = $('#wheelName'), ptr = document.querySelector('.wheel-ptr');
+  const rotEl = $('#wheelRot'), idleEl = $('#wheelIdle'), ptr = document.querySelector('.wheel-ptr');
   const IDLE = 60000, SPIN = 3200, SPRING = 'cubic-bezier(.34, 1.56, .64, 1)';
   const idle = calm ? null : idleEl.animate([{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }], { duration: IDLE, iterations: Infinity });
   // угол считаем по времени анимаций, не трогая стили: так проверка «кто под стрелкой» ничего не стоит
@@ -93,20 +93,13 @@
     const rot = ((idleAngle() + spinAngle()) % 360 + 360) % 360;
     return seg[Math.floor(((360 - rot) % 360) / step) % n];
   };
-  const showName = (s) => {
-    if (nameEl.textContent === s) return;
-    nameEl.textContent = s;
-    if (!calm) nameEl.animate([{ transform: 'translateY(7px) scale(.97)' }, { transform: 'none' }], { duration: 340, easing: SPRING });
-  };
   const flick = () => ptr.animate([{ transform: 'rotate(0deg)' }, { transform: 'rotate(-18deg)' }, { transform: 'rotate(0deg)' }], { duration: 120, easing: 'ease-in-out' });
-  nameEl.textContent = under();
   let watching = false;
   const watch = () => {
     let last = under();
     const loop = () => {
       const s = under();
       if (s !== last) { last = s; flick(); }
-      // имя пока колесо крутится не меняем, иначе мелькает и режет глаза: новое появится, когда оно встанет
       if (watching) requestAnimationFrame(loop);
     };
     requestAnimationFrame(loop);
@@ -118,7 +111,7 @@
     to = from + 720 + Math.floor(Math.random() * 360);
     if (idle) idle.pause();
     spinAnim = rotEl.animate([{ transform: `rotate(${from}deg)` }, { transform: `rotate(${to}deg)` }], { duration: SPIN, easing: 'cubic-bezier(.12, .7, .12, 1)', fill: 'forwards' });
-    spinAnim.onfinish = () => { watching = false; showName(under()); if (idle) idle.play(); };
+    spinAnim.onfinish = () => { watching = false; if (idle) idle.play(); };
     if (!watching) { watching = true; watch(); }
   };
   const wheelCard = document.querySelector('.app[href="/wheel/"]');

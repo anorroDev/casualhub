@@ -421,15 +421,7 @@ h1, h2, p { margin: 0; }
 .pv-tier > span { display: flex; gap: 5px; padding: 4px; border-radius: 8px; background: var(--panel); border: 1px solid var(--line); overflow: hidden; }
 .pv-tier b { flex: none; width: 26px; border-radius: 5px; background: var(--cell); transition: transform .35s var(--spring) calc(var(--j) * 35ms); }
 .app:hover .pv-tier b { transform: translateY(-2px) scale(1.06); }
-.pv-wheel { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 0 22px 0 20px; }
-.pv-under { display: grid; gap: 4px; min-width: 0; }
-.pv-under small { font-size: 11px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
-.pv-under strong {
-  font-family: var(--font-display); font-weight: 800; font-size: clamp(26px, 3.4vw, 36px); line-height: .95;
-  overflow-wrap: break-word; -webkit-hyphens: auto; hyphens: auto; min-height: 2.85em;
-  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
-}
-.pv-under strong { transform-origin: 0 100%; }
+.pv-wheel { display: grid; place-items: center; }
 .wheel { position: relative; width: 168px; height: 168px; animation: wheel-in 1s var(--spring) .8s backwards; }
 @keyframes wheel-in { from { transform: scale(.4) rotate(-120deg); } }
 .wheel::before { content: ""; position: absolute; inset: 4px; border-radius: 50%; box-shadow: 0 16px 30px -8px color-mix(in srgb, var(--ink) 45%, transparent); }
@@ -527,7 +519,6 @@ h1, h2, p { margin: 0; }
   .pv-row { height: 42px; }
   .pv-bar { display: none; }
   .wheel { width: 140px; height: 140px; }
-  .pv-wheel { padding: 0 14px; }
   .app-icon { width: 46px; height: 46px; }
 }
 @media (hover: none) {
@@ -596,7 +587,6 @@ h1, h2, p { margin: 0; }
     <a class="app" href="/wheel/">
       <span class="glow" aria-hidden="true"><i></i></span>
       <span class="pv pv-wheel" aria-hidden="true">
-        <span class="pv-under"><small>Под стрелкой</small><strong id="wheelName">—</strong></span>
         <span class="wheel" id="wheel"></span>
       </span>
       <span class="app-icon" aria-hidden="true"><svg viewBox="0 0 256 256"><rect width="256" height="256" rx="58" fill="#14161C"/><path d="M137.00 114.02L137.00 32.02A82 82 0 0 1 208.01 73.02Z" fill="#43C97A" stroke="#14161C" stroke-width="9" stroke-linejoin="round"/><path d="M122.00 140.00L193.01 99.00A82 82 0 0 1 193.01 181.00Z" fill="#F2BA44" stroke="#14161C" stroke-width="9" stroke-linejoin="round"/><path d="M122.00 140.00L193.01 181.00A82 82 0 0 1 122.00 222.00Z" fill="#F26A55" stroke="#14161C" stroke-width="9" stroke-linejoin="round"/><path d="M122.00 140.00L122.00 222.00A82 82 0 0 1 50.99 181.00Z" fill="#43C97A" stroke="#14161C" stroke-width="9" stroke-linejoin="round"/><path d="M122.00 140.00L50.99 181.00A82 82 0 0 1 50.99 99.00Z" fill="#F2BA44" stroke="#14161C" stroke-width="9" stroke-linejoin="round"/><path d="M122.00 140.00L50.99 99.00A82 82 0 0 1 122.00 58.00Z" fill="#F26A55" stroke="#14161C" stroke-width="9" stroke-linejoin="round"/><circle cx="122" cy="140" r="22" fill="#8C9BFF" stroke="#14161C" stroke-width="9"/></svg></span>
