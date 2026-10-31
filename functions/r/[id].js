@@ -9,13 +9,13 @@ const SHARE_RE = /^[A-Za-z0-9]{12}$/;
 const TEXT = {
   ru: {
     html: 'ru', locale: 'ru-RU', verdicts: ['Ужас', 'Провал', 'Плохо', 'Слабо', 'Средне', 'Нормально', 'Неплохо', 'Хорошо', 'Отлично', 'Шедевр'], notRated: 'Без оценки', notRatedLow: 'без оценки',
-    tierBy: 'Тир-лист от', tierSite: 'Тир-листы Казуала', tierUntitled: 'Без названия', tierPool: 'Не разложено', tierMake: 'Собрать свой тир-лист', tierFoot: 'Тир-лист открыт по ссылке. Свои можно собирать в Тир-листах Казуала, это бесплатно.', tierGoneTitle: 'Тир-лист недоступен', tierGone: 'Владелец закрыл ссылку или удалил тир-лист.', tierOpen: 'Открыть Тир-листы',
+    tierBy: 'Тир-лист от', tierSite: 'Тир-листы Казуала', tierUntitled: 'Без названия', tierPool: 'Не разложено', tierMake: 'Собрать свой тир-лист', tierFoot: 'Тир-лист открыт по ссылке. Свои можно собирать в Тир-листах Казуала, это бесплатно.', close: 'Закрыть', tierGoneTitle: 'Тир-лист недоступен', tierGone: 'Владелец закрыл ссылку или удалил тир-лист.', tierOpen: 'Открыть Тир-листы',
     site: 'Казуал Хаб', opinion: 'Мнение Казуала', outOf: 'из 10', ratingBy: 'оценка от', ratingByCap: 'Оценка от', fav: '★ В избранном', crit: 'Критерии', listen: '🎧 Слушать', pros: '➕ Плюсы', cons: '➖ Минусы', notes: 'Заметки',
     rate: 'Оценить что-нибудь своё', foot: 'Отзыв открыт по ссылке. Свои оценки можно вести в Мнении Казуала, это бесплатно.', goneTitle: 'Ссылка недоступна', gone: 'Хозяин закрыл ссылку или удалил то, что она открывала.', open: 'Открыть Мнение Казуала', home: 'На главную', wait: 'Слишком много запросов, подожди минуту.',
   },
   en: {
     html: 'en', locale: 'en-GB', verdicts: ['Awful', 'Flop', 'Bad', 'Weak', 'Average', 'Okay', 'Not bad', 'Good', 'Great', 'Masterpiece'], notRated: 'Not rated', notRatedLow: 'not rated',
-    tierBy: 'Tier list by', tierSite: 'Casual Tier Lists', tierUntitled: 'Untitled', tierPool: 'Not placed', tierMake: 'Make your own tier list', tierFoot: 'This tier list is open by link. You can make your own in Casual Tier Lists for free.', tierGoneTitle: 'Tier list unavailable', tierGone: 'The owner closed the link or deleted the tier list.', tierOpen: 'Open Tier Lists',
+    tierBy: 'Tier list by', tierSite: 'Casual Tier Lists', tierUntitled: 'Untitled', tierPool: 'Not placed', tierMake: 'Make your own tier list', tierFoot: 'This tier list is open by link. You can make your own in Casual Tier Lists for free.', close: 'Close', tierGoneTitle: 'Tier list unavailable', tierGone: 'The owner closed the link or deleted the tier list.', tierOpen: 'Open Tier Lists',
     site: 'Casual Hub', opinion: 'Casual Opinion', outOf: 'out of 10', ratingBy: 'rated by', ratingByCap: 'Rated by', fav: '★ In favorites', crit: 'Criteria', listen: '🎧 Listen', pros: '➕ Pros', cons: '➖ Cons', notes: 'Notes',
     rate: 'Rate something yourself', foot: 'This review is open by link. You can keep your own ratings in Casual Opinion for free.', goneTitle: 'Link unavailable', gone: 'The owner closed the link or deleted what it opened.', open: 'Open Casual Opinion', home: 'Home', wait: 'Too many requests, wait a minute.',
   },
@@ -102,10 +102,15 @@ h1 { font-family: Handjet, Onest, sans-serif; font-weight: 800; font-size: clamp
 .tc { display: grid; gap: 2px; width: 72px; }
 .tc img { display: block; width: 72px; height: 72px; object-fit: cover; border-radius: 10px; background: var(--cell); }
 .tc span { display: grid; place-items: center; min-height: 72px; padding: 4px; border-radius: 10px; background: var(--cell); font-size: 12.5px; font-weight: 600; text-align: center; overflow-wrap: anywhere; }
+.tz { display: block; cursor: zoom-in; }
+.lb { display: none; position: fixed; inset: 0; z-index: 9; place-items: center; padding: 16px; background: rgba(13, 15, 20, .86); cursor: zoom-out; }
+.lb:target { display: grid; }
+.tc .lb img { width: auto; height: auto; max-width: 100%; max-height: 100%; min-width: min(60vw, 240px); border-radius: 14px; object-fit: contain; animation: lb-in .5s cubic-bezier(.34, 1.56, .64, 1) both; }
+@keyframes lb-in { from { transform: translateY(40px) scale(.7); } }
 .tc small { font-size: 11.5px; line-height: 1.2; color: var(--ink-2); overflow-wrap: anywhere; }
 .foot { text-align: center; font-size: 12.5px; color: var(--ink-3); }
 .empty { text-align: center; display: grid; gap: 12px; justify-items: center; padding: 30px 20px; }
-@media (prefers-reduced-motion: reduce) { .card { animation: none; } }`;
+@media (prefers-reduced-motion: reduce) { .card, .tc .lb img { animation: none; } }`;
 
 function page(T, title, body, meta, tier) {
   return `<!doctype html>
@@ -142,12 +147,14 @@ const TIER_COLOR_RE = /^#[0-9a-f]{6}$/i, TIER_SRC_RE = /^\/wheel\/hub\/(?!.*\.\.
 function tierResponse(request, T, id, user, l, at) {
   const origin = new URL(request.url).origin;
   const src = (it) => (it.kind === 'img' && TIER_IMG_RE.test(String(it.img)) ? `/api/share/${id}/img?k=${encodeURIComponent(it.img)}` : it.kind === 'url' && TIER_SRC_RE.test(String(it.src)) ? it.src : '');
+  let shot = 0;
   const card = (key) => {
     const it = l.items && l.items[key];
     if (!it) return '';
     const u = src(it);
     if (!u) return `<div class="tc"><span>${esc(it.name || '?')}</span></div>`;
-    return `<div class="tc"><img src="${esc(u)}" alt="${esc(it.name || '')}" loading="lazy" decoding="async">${l.captions && it.name ? `<small>${esc(it.name)}</small>` : ''}</div>`;
+    const n = ++shot;
+    return `<div class="tc"><a class="tz" href="#p${n}"><img src="${esc(u)}" alt="${esc(it.name || '')}" loading="lazy" decoding="async"></a>${l.captions && it.name ? `<small>${esc(it.name)}</small>` : ''}<a class="lb" id="p${n}" href="#_" aria-label="${T.close}"><img src="${esc(u)}" alt="" loading="lazy" decoding="async"></a></div>`;
   };
   const rows = (Array.isArray(l.rows) ? l.rows : []).map((row) => `<div class="tr"><div class="tn" style="--c:${TIER_COLOR_RE.test(String(row.color)) ? row.color : '#9AA0AE'}">${esc(row.label)}</div><div class="ti">${(row.items || []).map(card).join('')}</div></div>`).join('');
   const pool = (Array.isArray(l.pool) ? l.pool : []).map(card).join('');

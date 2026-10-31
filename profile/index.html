@@ -305,6 +305,9 @@ button, input { font: inherit; color: inherit; }
 }
 .ban-pos span { overflow: hidden; text-overflow: ellipsis; }
 .ban-pos .btn { height: 34px; padding: 0 14px; border-radius: 999px; background: #fff; color: #14161C; box-shadow: none; }
+.ban-view { position: absolute; inset: 0; z-index: 2; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
+.ban-view[hidden], .banner.posing .ban-view { display: none; }
+.ban-view:focus-visible { outline: 2px solid #fff; outline-offset: -5px; border-radius: inherit; }
 .ban-btn {
   position: absolute; right: 14px; top: 14px; z-index: 3; display: inline-flex; align-items: center; gap: 7px; height: 36px; padding: 0 13px;
   border: 1px solid rgba(255, 255, 255, .28); border-radius: 999px; background: rgba(10, 12, 18, .5); color: #fff;
@@ -397,11 +400,11 @@ button.nick-st:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .ban-msg:empty { display: none; }
 .ban-msg.err { color: var(--bad-ink); font-weight: 600; }
 .ava-wrap { position: relative; z-index: 1; width: 116px; height: 116px; flex: none; margin-top: -64px; }
-.ava-wrap.can { cursor: pointer; }
-.ava-wrap.can:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 50%; }
+.ava-wrap.can, .ava-wrap.view { cursor: zoom-in; }
+.ava-wrap.can:focus-visible, .ava-wrap.view:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: 50%; }
 .ava-edit {
   position: absolute; right: 2px; bottom: 2px; z-index: 2; width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center;
-  background: var(--ink); color: var(--panel); border: 3px solid var(--panel); transition: transform .25s var(--spring);
+  padding: 0; background: var(--ink); color: var(--panel); border: 3px solid var(--panel); cursor: pointer; transition: transform .25s var(--spring);
 }
 .ava-wrap.can:hover .ava-edit { transform: scale(1.12) rotate(-8deg); }
 .ava-wrap.busy .ava { filter: brightness(.6); }
@@ -767,6 +770,8 @@ button.sc-slot:hover em, button.sc-slot:focus-visible em { opacity: 1; }
 .fr-card header { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; }
 .fr-card .th { width: 56px; height: 56px; border-radius: 12px; overflow: hidden; display: grid; place-items: center; background: color-mix(in srgb, var(--tier) 22%, var(--panel)); font-family: var(--font-display); font-weight: 800; font-size: 28px; color: color-mix(in srgb, var(--tier) 70%, var(--ink)); }
 .fr-card .th img { width: 100%; height: 100%; object-fit: cover; }
+#app [data-photo]:has(img), #rdPic:has(img) { cursor: zoom-in; }
+body.prof-edit #app [data-photo] { cursor: inherit; }
 .fr-t { min-width: 0; display: grid; gap: 2px; }
 .fr-t a { color: var(--ink); font-weight: 700; font-size: 16px; line-height: 1.25; text-decoration: none; overflow-wrap: anywhere; }
 .fr-t a:hover { text-decoration: underline; }
@@ -992,6 +997,7 @@ button.sc-slot:hover em, button.sc-slot:focus-visible em { opacity: 1; }
 <script src="/howto.js"></script>
 <script src="/comments.js"></script>
 <script src="/photo-store.js"></script>
+<script src="/photo-view.js"></script>
 <script src="/profile/app.js"></script>
 <script src="/tier-maker.js"></script>
 </body>

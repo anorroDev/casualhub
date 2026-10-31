@@ -2041,6 +2041,21 @@
 "{} · лотов: {} · {} · сейчас на колесе":"{} · lots: {} · {} · on the wheel now",
 "Убрать {}":"Remove {}",
 "{}, фото {}":"{}, photos {}",
+"Просмотр картинки":"Picture view",
+"Посмотреть":"View",
+"Посмотреть аватар":"View avatar",
+"Посмотреть баннер":"View banner",
+"Поставить аватар":"Set avatar",
+"Изменить баннер":"Change banner",
+"чтобы его поменять. Кнопка с камерой на аватарке и кнопка":"to change it. The camera button on your avatar and the",
+"ставят картинку (прошлые сохраняются в истории), а":"button set a picture (past ones stay in the history), and",
+"добавляет стикер из колеса":"adds a sticker from the wheel",
+"Нажми на аватарку, баннер или фото оценки, чтобы открыть их на весь экран":"Tap an avatar, a banner or a rating photo to open it full screen",
+"Перетаскивай карточки по рядам. На телефоне нажми на карточку, а потом на ряд. Два нажатия на карточку открывают картинку":"Drag cards between rows. On a phone, tap a card and then a row. Tap a card twice to open its picture",
+"Нажми на карточку, а потом на ряд. Всё сохраняется само. Два нажатия на карточку открывают картинку":"Press a card and then a row. Everything saves by itself. Tap a card twice to open its picture",
+"Перетаскивай карточки по рядам или нажми на карточку, а потом на ряд. Всё сохраняется само. Два нажатия на карточку открывают картинку":"Drag cards between rows, or press a card and then a row. Everything saves by itself. Tap a card twice to open its picture",
+"Нажми на карточку, а потом на ряд. Крестик удаляет карточку, а название ряда меняется нажатием. Всё сохраняется само. Два нажатия на карточку открывают картинку":"Tap a card, then a row. The cross deletes a card, and tapping a row name changes it. Everything saves itself. Tap a card twice to open its picture",
+"Перетаскивай карточки по рядам. Картинки можно бросить прямо сюда или вставить через Ctrl+V. Крестик удаляет карточку, а название ряда меняется нажатием. Всё сохраняется само. Два нажатия на карточку открывают картинку":"Drag cards between rows. Drop pictures right here or paste them with Ctrl+V. The cross deletes a card, and clicking a row name changes it. Everything saves itself. Tap a card twice to open its picture",
 "· Казуал Хаб":"· Casual Hub",
 "(прежние критерии":"(old criteria",
 "Выбрать аватарку":"Choose an avatar",
@@ -2189,7 +2204,7 @@
   const ATTRS = ['title', 'placeholder', 'aria-label', 'alt', 'aria-valuetext'];
   const SKIP_TAG = new Set(['SCRIPT', 'STYLE', 'TEXTAREA', 'NOSCRIPT']);
   // написанное людьми и журнал «Что нового» не трогаем, даже если слово случайно есть в словаре
-  const SKIP = '.cm-text, .rx-list span, .adm-text, .site-ann span, .wn-body, .cm-meta b, .adm-who b, .fr-who b, .tl-txt, .tl-lab, .tl-tile b';
+  const SKIP = '.pv-cap, .cm-text, .rx-list span, .adm-text, .site-ann span, .wn-body, .cm-meta b, .adm-who b, .fr-who b, .tl-txt, .tl-lab, .tl-tile b';
   function text(n) {
     const v = n.nodeValue;
     // шкала в подписях: 7,5–10 → 7.5–10

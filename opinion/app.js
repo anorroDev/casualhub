@@ -2105,7 +2105,7 @@ function groups() {
     return (ia < 0 ? 999 : ia) - (ib < 0 ? 999 : ib) || a.name.localeCompare(b.name, 'ru');
   });
 }
-const stamp = r => r.updatedAt || r.createdAt || '';
+const stamp = r => String(r.updatedAt || r.createdAt || '');
 function byScore(a, b) { return (b.total == null ? -1 : b.total) - (a.total == null ? -1 : a.total) || stamp(b).localeCompare(stamp(a)); }
 function sortList(list) {
   const a = [...list];

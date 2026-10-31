@@ -1530,6 +1530,49 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       img.src = src;
     });
   }
+  // ---------- просмотр на весь экран: фото оценок, аватарка и баннер ----------
+  const bgUrl = (el) => { const m = el && /^url\(["']?(.+?)["']?\)$/.exec(el.style.backgroundImage || ''); return m ? m[1] : ''; };
+  // в списках лежат превью, смотреть лучше полное фото
+  const fullPhoto = (p, r) => {
+    if (r.photo && r.photo.data && /^data:image\//.test(r.photo.data)) return Promise.resolve(r.photo.data);
+    const server = () => (token && p.uid ? api(`/photo/${encodeURIComponent(p.uid)}/${encodeURIComponent(r.id)}`).then((d) => d.data || null, () => null) : Promise.resolve(null));
+    const own = idbPhoto(r);
+    if (own) return own.then((d) => d || server());
+    const link = r.photo && (r.photo.url || (typeof r.photo.id === 'string' && /^https:\/\//.test(r.photo.id) ? r.photo.id : ''));
+    return link ? Promise.resolve(link) : server();
+  };
+  function wirePhotoView(p) {
+    const pv = window.CasualPhotoView;
+    if (!pv) return;
+    const ban = $('#banView');
+    if (ban) {
+      ban.addEventListener('click', () => {
+        // баннер и аватарка могут приехать после отрисовки: смотрим то, что сейчас на странице
+        const src = bare(bgUrl($('#banner')));
+        if (!src) return;
+        pv.open({ src, from: $('#banner'), action: p.kind === 'me' ? { label: 'Изменить баннер', run: () => { const b = $('#banBtn'); if (b) b.click(); } } : null });
+      });
+    }
+    const wrap = $('#avaWrap');
+    if (!wrap || wrap.classList.contains('can')) return;
+    const show = () => { const a = wrap.querySelector('.ava'), src = bgUrl(a); if (src) pv.open({ src, from: a }); };
+    wrap.addEventListener('click', show);
+    wrap.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); show(); } });
+  }
+  // фото оценки где угодно в профиле: нажатие на него показывает картинку, нажатие рядом открывает карточку оценки
+  document.addEventListener('click', (e) => {
+    if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || !curP || !window.CasualPhotoView) return;
+    const n = e.target.closest('#app [data-photo], #rdPic');
+    if (!n || EDIT) return;
+    const img = n.querySelector('img');
+    if (!img) return;
+    const inCard = n.id === 'rdPic', p = inCard && rdCur ? rdCur.p : curP;
+    const r = inCard ? rdCur && rdCur.r : p.ratings.find((x) => x.id === n.dataset.photo) || (p.allRatings || []).find((x) => x.id === n.dataset.photo);
+    if (!r) return;
+    e.preventDefault();
+    e.stopPropagation();
+    window.CasualPhotoView.open({ src: img.src, full: fullPhoto(p, r), from: n, caption: r.name, action: inCard ? null : { label: 'Открыть оценку', run: () => openRating(p, r) } });
+  }, true);
   function closeRating() {
     if (!rdBox) return;
     rdBox.hidden = true;
@@ -1564,7 +1607,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     document.body.classList.toggle('prof-edit', EDIT);
     p.friendCount = p.kind === 'me' ? (p.friends ? p.friends.length : null) : p.friendCount;
     p.badges = user || p.kind !== 'me' ? badgesOf(p) : null;
-    const ava = p.avatar && /^(data:image\/|https?:\/\/)/.test(p.avatar)
+    const avaImg = !!p.avatar && /^(data:image\/|https?:\/\/)/.test(p.avatar);
+    const ava = avaImg
       ? `<span class="ava" style="background-image:url('${esc(p.avatar)}')"></span>`
       : `<span class="ava" style="background-color:${esc(p.color || colorOf(p.name))}">${letter(p.name)}</span>`;
     let i = 0;
@@ -1638,7 +1682,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
 
     app.innerHTML = `
       <section class="card hero rise" style="--d:0">
-        <div class="banner${p.banner ? '' : ' def'}" id="banner"${p.banner ? ` style="background-image:url('${esc(p.banner)}');background-position:${posOf(p.banner).x}% ${posOf(p.banner).y}%"` : ''}><span class="ban-blur top" aria-hidden="true"></span><span class="ban-blur bot" aria-hidden="true"></span>${isMe ? `<button type="button" class="ban-btn" id="banBtn" aria-expanded="false" aria-controls="banMenu"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="1.5" y="3" width="13" height="10" rx="2"/><circle cx="5.5" cy="6.5" r="1.3"/><path d="M14.5 11l-4-3.5-6 5.5"/></svg><span>Баннер</span></button>` : ''}</div>
+        <div class="banner${p.banner ? '' : ' def'}" id="banner"${p.banner ? ` style="background-image:url('${esc(p.banner)}');background-position:${posOf(p.banner).x}% ${posOf(p.banner).y}%"` : ''}><span class="ban-blur top" aria-hidden="true"></span><span class="ban-blur bot" aria-hidden="true"></span><button type="button" class="ban-view" id="banView" aria-label="Посмотреть баннер" title="Посмотреть баннер"${p.banner ? '' : ' hidden'}></button>${isMe ? `<button type="button" class="ban-btn" id="banBtn" aria-expanded="false" aria-controls="banMenu"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><rect x="1.5" y="3" width="13" height="10" rx="2"/><circle cx="5.5" cy="6.5" r="1.3"/><path d="M14.5 11l-4-3.5-6 5.5"/></svg><span>Баннер</span></button>` : ''}</div>
         ${isMe ? `<div class="ban-menu" id="banMenu" role="dialog" aria-label="Баннер профиля" hidden>
           <span class="label">Своя картинка</span>
           <label class="btn ghost ban-up">Загрузить картинку<input type="file" id="banFile" accept="image/*" class="vh"></label>
@@ -1650,7 +1694,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
           <button type="button" class="btn ghost" id="banRemove"${p.banner ? '' : ' hidden'}>Убрать баннер</button>
           <p class="ban-msg" id="banMsg" role="status"></p>
         </div>` : ''}
-        <div class="ava-wrap${isMe && user ? ' can' : ''}" id="avaWrap"${isMe && user ? ' role="button" tabindex="0" aria-label="Сменить аватар, можно и анимированный GIF" title="Сменить аватар"' : ''}><span class="ava-ring" aria-hidden="true"></span>${ava}${isMe && user ? `<span class="ava-edit" aria-hidden="true"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M2 5.5h2.5L6 3.5h4l1.5 2H14v7H2z"/><circle cx="8" cy="9" r="2.3"/></svg></span><input type="file" id="avaFile" accept="image/*" class="vh">` : ''}</div>
+        <div class="ava-wrap${isMe && user ? ' can' : avaImg ? ' view' : ''}" id="avaWrap"${(isMe && user) || avaImg ? ` role="button" tabindex="0" aria-label="${avaImg ? 'Посмотреть аватар' : 'Поставить аватар'}" title="${avaImg ? 'Посмотреть аватар' : 'Поставить аватар'}"` : ''}><span class="ava-ring" aria-hidden="true"></span>${ava}${isMe && user ? `<button type="button" class="ava-edit" aria-label="Сменить аватар, можно и анимированный GIF" title="Сменить аватар"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"><path d="M2 5.5h2.5L6 3.5h4l1.5 2H14v7H2z"/><circle cx="8" cy="9" r="2.3"/></svg></button><input type="file" id="avaFile" accept="image/*" class="vh">` : ''}</div>
         <div class="who">
           <div class="name-row">${isMe && p.editingName
             ? `<form class="name-edit" id="nameEditForm"><input id="profileNameInput" type="text" value="${esc(p.name)}" minlength="2" maxlength="24" aria-label="Ник"><button type="submit" class="btn primary">Сохранить</button><button type="button" class="btn ghost" id="profileNameCancel">Отмена</button></form>`
@@ -1688,6 +1732,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     wireBoard(p);
     const fb = $('#followBtn');
     if (fb) fb.addEventListener('click', () => toggleFollow(p, fb));
+    wirePhotoView(p);
     if (isMe) { wireBanner(p); wireAvatar(p); wireTopics(p); const sb = $('#stBtn'); if (sb) sb.addEventListener('click', () => stickerPicker(p)); }
     hydrateFriendAvatars(p);
     if (window.CasualOnline) window.CasualOnline.paint(app);
@@ -1849,7 +1894,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     b.style.backgroundImage = d ? `url("${d}")` : '';
     const ps = posOf(d);
     b.style.backgroundPosition = d ? `${ps.x}% ${ps.y}%` : '';
-    ['banRemove', 'banPos'].forEach((id) => { const e = document.getElementById(id); if (e) e.hidden = !d; });
+    ['banRemove', 'banPos', 'banView'].forEach((id) => { const e = document.getElementById(id); if (e) e.hidden = !d; });
   };
   // любая картинка ложится в 1500×500 «по ширине», в JPEG, чтобы влезть и в браузер, и в аккаунт
   const W = 1500, H = 500;
@@ -1948,6 +1993,12 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     if (!a || !isImgSrc(src)) return;
     a.style.backgroundImage = `url("${src}")`;
     a.textContent = '';
+    const w = document.getElementById('avaWrap');
+    if (w) {
+      if (!w.classList.contains('can')) { w.classList.add('view'); w.setAttribute('role', 'button'); w.tabIndex = 0; }
+      w.setAttribute('aria-label', 'Посмотреть аватар');
+      w.title = 'Посмотреть аватар';
+    }
   };
 
   function wireAvatar(p) {
@@ -1955,8 +2006,22 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     if (!wrap || !inp) return;
     // с аккаунтом нажатие открывает меню: загрузить новую или вернуть одну из прошлых; без аккаунта — сразу выбор файла
     const pick = () => (token && p.uid ? histMenu(wrap, 'avatar', p, { upload: () => inp.click(), use: (d) => setAvatar(dataToBlob(d)) }) : inp.click());
-    wrap.addEventListener('click', (e) => { if (e.target !== inp && !e.target.closest('.hist-menu')) pick(); });
-    wrap.addEventListener('keydown', (e) => { if ((e.key === 'Enter' || e.key === ' ') && !e.target.closest('.hist-menu')) { e.preventDefault(); pick(); } });
+    // нажатие на картинку открывает её на весь экран, кнопка с камерой меняет; пока картинки нет, менять можно и нажатием на букву
+    const show = () => {
+      const a = wrap.querySelector('.ava'), src = bgUrl(a);
+      if (!src || !window.CasualPhotoView) { pick(); return; }
+      closeHist();
+      window.CasualPhotoView.open({ src, from: a, action: { label: 'Сменить аватар', run: pick } });
+    };
+    wrap.addEventListener('click', (e) => {
+      if (e.target === inp || e.target.closest('.hist-menu')) return;
+      if (e.target.closest('.ava-edit')) pick(); else show();
+    });
+    wrap.addEventListener('keydown', (e) => {
+      if ((e.key !== 'Enter' && e.key !== ' ') || e.target.closest('.hist-menu')) return;
+      e.preventDefault();
+      if (e.target.closest('.ava-edit')) pick(); else show();
+    });
     inp.addEventListener('change', () => {
       const f = inp.files && inp.files[0];
       inp.value = '';

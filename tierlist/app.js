@@ -602,12 +602,12 @@
     paintSync();
     $('#tlHint').textContent = S.sel
       ? (touch ? 'Теперь нажми на ряд или на карточку, перед которой поставить.' : 'Теперь нажми на ряд или на карточку, перед которой поставить. Стрелки двигают, Delete удаляет карточку.')
-      : (touch ? 'Нажми на карточку, а потом на ряд. Крестик удаляет карточку, а название ряда меняется нажатием. Всё сохраняется само.' : 'Перетаскивай карточки по рядам. Картинки можно бросить прямо сюда или вставить через Ctrl+V. Крестик удаляет карточку, а название ряда меняется нажатием. Всё сохраняется само.');
+      : (touch ? 'Нажми на карточку, а потом на ряд. Крестик удаляет карточку, а название ряда меняется нажатием. Всё сохраняется само. Два нажатия на карточку открывают картинку.' : 'Перетаскивай карточки по рядам. Картинки можно бросить прямо сюда или вставить через Ctrl+V. Крестик удаляет карточку, а название ряда меняется нажатием. Всё сохраняется само. Два нажатия на карточку открывают картинку.');
     $('#tlBoard').innerHTML = rowsHTML(l, false)
       + (l.rows.length < LIMIT.rows ? '<button type="button" class="btn small text tl-addrow" data-do="add-row">＋ Ряд</button>' : '');
     const n = l.pool.length;
     const poolScroll = (() => { const p = $('#tlDock .tl-items'); return p ? p.scrollTop : 0; })();
-    const selBar = S.sel ? '<span class="tl-selbar"><button type="button" class="btn small ghost" data-do="sel-pool">Убрать из ряда</button></span>' : '';
+    const selBar = S.sel ? `<span class="tl-selbar">${l.items[S.sel] && imgOf(l.items[S.sel]) ? '<button type="button" class="btn small ghost" data-do="sel-view">🔍 Посмотреть</button>' : ''}<button type="button" class="btn small ghost" data-do="sel-pool">Убрать из ряда</button></span>` : '';
     $('#tlDock').innerHTML = `<div class="tl-row tl-pool" data-row=""><div class="tl-pool-h"><span>Без места · ${n}</span>${selBar}</div><div class="tl-items">${l.pool.map((id) => cardHTML(l, id)).join('') || `<span class="tl-drop">${Object.keys(l.items).length ? 'Всё разложено 👌' : 'Добавь карточки кнопками наверху'}</span>`}</div></div>`;
     { const p = $('#tlDock .tl-items'); if (p) p.scrollTop = poolScroll; }
     flyCards(before);
@@ -1161,9 +1161,24 @@
       S.list = null;
       location.hash = '';
     });
+    else if (a === 'sel-view') { if (S.sel) viewCard(S.sel); }
     else if (a === 'sel-pool') { if (S.sel) { moveTo(S.sel, '', ''); S.sel = ''; renderEditor(); } }
   }
+  // картинка карточки на весь экран
+  function viewCard(id) {
+    const l = S.list, it = l && l.items[id], src = it && imgOf(it);
+    if (!src || !window.CasualPhotoView) return;
+    window.CasualPhotoView.open({ src, from: view.querySelector(`.tl-it[data-id="${CSS.escape(id)}"] .tl-face`), caption: it.name || '' });
+  }
+  let selAt = 0;
   view.addEventListener('click', (e) => {
+    // чужой тир-лист только смотрят: нажатие сразу открывает картинку
+    const seen = e.target.closest('.tl-view .tl-it');
+    if (seen) {
+      const face = seen.querySelector('.tl-face'), img = face && face.querySelector('img');
+      if (img && window.CasualPhotoView) window.CasualPhotoView.open({ src: img.src, from: face, caption: seen.title });
+      return;
+    }
     const nw = e.target.closest('[data-new]');
     if (nw) { startNew(nw.dataset.new); return; }
     const tab = e.target.closest('[data-tab]');
@@ -1206,10 +1221,17 @@
     const it = e.target.closest('.tl-it');
     const row = e.target.closest('[data-row]');
     if (S.sel) {
-      if (it && it.dataset.id === S.sel) { S.sel = ''; renderEditor(); return; }
+      if (it && it.dataset.id === S.sel) {
+        // в своём тир-листе нажатие выбирает карточку, а второе сразу за ним открывает картинку
+        const id = S.sel, quick = Date.now() - selAt < 400;
+        S.sel = '';
+        renderEditor();
+        if (quick) viewCard(id);
+        return;
+      }
       if (row) { moveTo(S.sel, row.dataset.row, it ? it.dataset.id : ''); S.sel = ''; renderEditor(); return; }
     }
-    if (it) { S.sel = it.dataset.id; renderEditor(); return; }
+    if (it) { S.sel = it.dataset.id; selAt = Date.now(); renderEditor(); return; }
     const ed = e.target.closest('[data-edit]');
     if (ed) rowDialog(ed.dataset.edit);
   });
