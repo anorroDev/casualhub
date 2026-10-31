@@ -1248,7 +1248,7 @@ const routes = {
   },
   // открывается и без входа: посмотреть на колесо можно всем, у кого есть ссылка
   async 'GET /lots/:code'({ env, request, arg }) {
-    if (burst('lotget:' + clientIp(request), 400, 60e3)) return tooMany(1);
+    if (burst('lotget:' + clientIp(request), 1500, 60e3)) return tooMany(1);
     let me = null;
     try { me = await currentUser(env, request); } catch (e) {}
     const v = new URL(request.url).searchParams.get('v');
@@ -1282,11 +1282,8 @@ const routes = {
     const [code, id] = arg;
     const room = await env.DB.prepare('SELECT * FROM lot_rooms WHERE id = ?').bind(code).first();
     if (!room) return fail(404, 'Такого сбора нет.');
-    const own = room.owner_id === me.id;
-    if (!own && (room.closed || (room.ends_at && Date.now() >= room.ends_at))) return fail(403, 'Сбор уже закончился, лоты больше не меняются.');
-    const r = own
-      ? await env.DB.prepare('DELETE FROM lots WHERE room_id = ? AND id = ?').bind(code, id).run()
-      : await env.DB.prepare('DELETE FROM lots WHERE room_id = ? AND id = ? AND user_id = ?').bind(code, id, me.id).run();
+    if (room.owner_id !== me.id) return fail(403, 'Убрать лот может только ведущий.');
+    const r = await env.DB.prepare('DELETE FROM lots WHERE room_id = ? AND id = ?').bind(code, id).run();
     if (!r.meta.changes) return fail(404, 'Этого лота уже нет.');
     await env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(code).run();
     return lotAnswer(env, code, me);
@@ -1667,7 +1664,7 @@ function cleanLive(b) {
     music: { bg: lotTrack(b && b.music && b.music.bg), win: lotTrack(b && b.music && b.music.win) },
     status: clip(b && b.status, 140),
     out: (Array.isArray(b && b.out) ? b.out : []).slice(0, MAX_LOTS).map((x) => clip(x, LOT_NAME)),
-    winner: b && b.winner && b.winner.n ? { n: clip(b.winner.n, LOT_NAME), sum: clip(b.winner.sum, 40) } : null,
+    winner: b && b.winner && b.winner.n ? { n: clip(b.winner.n, LOT_NAME), sum: clip(b.winner.sum, 40), at: finite(b.winner.at) } : null,
   };
 }
 async function lotAnswer(env, id, me, knownVer) {

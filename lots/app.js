@@ -241,6 +241,22 @@
 
   // ---------- колесо: та же отрисовка, что у ведущего ----------
   let canvas, ctx, size = 0, dpr = 1, hubPct = 24, T = {}, spinRaf = 0, tweenRaf = 0, pulseRaf = 0, spinKey = '', shown = [], restSig = '';
+  const lum = (hex) => {
+    const n = parseInt(hex.slice(1), 16);
+    const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  };
+  const inkOn = (c) => { const L = lum(c); return (L + 0.05) / (lum('#14161C') + 0.05) >= 1.05 / (L + 0.05) ? '#14161C' : '#FFFFFF'; };
+  // колесо ещё не запускали: показываем лоты сразу, вкладка ведущего может быть в фоне и прислать их позже
+  function shownSegs() {
+    const live = S.live;
+    const hostSegs = live && Array.isArray(live.segs) ? live.segs : [];
+    const started = live && (live.spin || (live.out && live.out.length) || live.winner);
+    if (started || !S.lots.length) return hostSegs;
+    const names = new Set(hostSegs.map((x) => x.n));
+    if (hostSegs.length >= S.lots.length && S.lots.every((l) => names.has(l.name))) return hostSegs;
+    return S.lots.map((l, i) => { const c = PALETTE[i % PALETTE.length]; return { n: l.name, p: 1 / S.lots.length, c, t: inkOn(c) }; });
+  }
   const place = (segs) => { let acc = 0; return segs.map((s) => { const start = acc * TAU; acc += s.p; return { ...s, start, end: acc * TAU }; }); };
   function readTheme() {
     const cs = getComputedStyle(document.documentElement);
@@ -361,12 +377,12 @@
     tweenRaf = requestAnimationFrame(frame);
   }
   function wheel() {
-    if (!canvas || !S.live) { if (canvas && !shown.length && !restSig) { restSig = 'empty'; paint([], 0); } return; }
-    const live = S.live;
+    if (!canvas) return;
+    const live = S.live || { rot: 0 };
     hubPct = +live.hub || 24;
     $('.wheel-wrap').style.setProperty('--hub', hubPct + '%');
     paintHubImg(live.hubImg || '');
-    const segs = place(live.segs || []);
+    const segs = place(shownSegs());
     const spin = live.spin;
     if (spin && serverNow() < spin.at + spin.ms) {
       const key = String(spin.at);
@@ -567,7 +583,8 @@
   function paintWinner() {
     const w = S.live && S.live.winner ? S.live.winner.n : '';
     if (S.winner === w) return;
-    const first = S.firstPoll;
+    const at = S.live && S.live.winner ? +S.live.winner.at || 0 : 0;
+    const first = S.firstPoll && !(at && serverNow() - at < 60000);
     S.winner = w;
     if (!w) { $('#winner').hidden = true; if (CH.win.active) { stopChannel('win'); syncBg(); } return; }
     const show = () => { if (S.winner === w) { if (first) openWinner(w); else { playWinMusic(); winFx(w, S.live.winner.sum).then(() => { if (S.winner === w) openWinner(w); }); } } };
@@ -606,7 +623,7 @@
     box.dataset.state = state;
     if (state === 'off') { box.innerHTML = ''; S.results = []; return; }
     if (state === 'guest') { box.innerHTML = '<div class="example-bar"><span>Чтобы добавить лот, войди в аккаунт: так у каждого будет свой лимит.</span> <a class="btn small primary" href="/opinion/#login">Войти</a></div>'; return; }
-    if (state === 'full') { box.innerHTML = `<p class="lots-note">Твой лимит исчерпан: ${S.room.perUser} из ${S.room.perUser}. Чтобы заменить лот, сначала убери его.</p>`; S.results = []; return; }
+    if (state === 'full') { box.innerHTML = `<p class="lots-note">Твой лимит исчерпан: ${S.room.perUser} из ${S.room.perUser}. Убрать лот может только ведущий.</p>`; S.results = []; return; }
     const k = kindOf(), free = S.room.kind === 'any';
     box.innerHTML = `<label class="label" for="lotQ">${k.add}</label>
       <div class="add-row"><input class="inp" id="lotQ" type="${free ? 'text' : 'search'}" autocomplete="off" maxlength="${free ? 60 : 200}" enterkeyhint="${free ? 'done' : 'search'}" placeholder="${k.ph}">${free ? '<button type="button" class="btn primary" id="lotFree">Добавить</button>' : ''}</div>
@@ -628,21 +645,11 @@
     const box = $('#lotList');
     const out = new Set(S.live && Array.isArray(S.live.out) ? S.live.out : []);
     const n = S.lots.length;
-    const canEdit = isOpen();
-    box.innerHTML = `<p class="board-stat"><b>${n}</b> ${plural(n, 'лот', 'лота', 'лотов')}</p>${n ? `<ul class="lots-list">${S.lots.map((l) => `<li class="${out.has(l.name) ? 'out' : ''}">${lotPic(l)}<span class="lots-who"><b>${esc(l.name)}</b><small>${esc(l.by)}${out.has(l.name) ? ' · вылетел' : ''}</small></span>${(l.mine && canEdit) || S.room.own ? `<button type="button" class="lots-del" data-del="${esc(l.id)}" aria-label="Убрать ${esc(l.name)}" title="Убрать">✕</button>` : ''}</li>`).join('')}</ul>` : '<p class="lots-empty">Пока ни одного лота. Будь первым!</p>'}`;
+    box.innerHTML = `<p class="board-stat"><b>${n}</b> ${plural(n, 'лот', 'лота', 'лотов')}</p>${n ? `<ul class="lots-list">${S.lots.map((l) => `<li class="${out.has(l.name) ? 'out' : ''}">${lotPic(l)}<span class="lots-who"><b>${esc(l.name)}</b><small>${esc(l.by)}${out.has(l.name) ? ' · вылетел' : ''}</small></span>${S.room.own ? `<button type="button" class="lots-del" data-del="${esc(l.id)}" aria-label="Убрать ${esc(l.name)}" title="Убрать">✕</button>` : ''}</li>`).join('')}</ul>` : '<p class="lots-empty">Пока ни одного лота. Будь первым!</p>'}`;
   }
   function paintStatus() {
-    // ведущему центр колеса ведёт на его Колесо: крутит он оттуда
-    const hub = $('#lotHub');
-    if (!!S.room.own !== (hub.dataset.own === '1')) {
-      hub.dataset.own = S.room.own ? '1' : '';
-      hub.classList.toggle('lots-own', !!S.room.own);
-      const link = hub.querySelector('a');
-      if (S.room.own && !link) hub.insertAdjacentHTML('beforeend', '<a class="hub-label" href="/wheel/">Крутить</a>');
-      else if (!S.room.own && link) link.remove();
-    }
     const live = S.live;
-    const n = live && Array.isArray(live.segs) ? live.segs.length : 0;
+    const n = shownSegs().length;
     $('#aliveBadge').textContent = n;
     $('#aliveBadge').dataset.tier = live && live.winner ? 'good' : live && live.pick ? 'bad' : 'idle';
     $('#statusMain').textContent = live && live.status ? live.status : 'Ждём, когда ведущий запустит колесо';
@@ -663,7 +670,6 @@
   let pollT = 0;
   async function poll() {
     clearTimeout(pollT);
-    if (document.hidden) return; // вернётся, когда вкладку откроют снова
     let d = null;
     try { d = await api(`/lots/${encodeURIComponent(code)}${S.room ? '?v=' + S.room.ver : ''}`); }
     catch (e) {
@@ -677,9 +683,8 @@
       paintAll();
       S.firstPoll = false;
     }
-    // пока идёт сбор, спешить некуда; когда колесо началось, спрашиваем чаще; после победы почти не спрашиваем
-    const started = S.live && (S.live.spin || (S.live.out && S.live.out.length));
-    const wait = S.live && S.live.winner ? 20000 : started || !isOpen() ? 2500 : 4000;
+    // новые лоты и прокрутка видны через пару секунд; в фоновой вкладке и после победы спрашиваем реже
+    const wait = document.hidden ? 8000 : S.live && S.live.winner ? 15000 : 2000;
     pollT = setTimeout(poll, wait);
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden && code && S.room) poll(); });
@@ -759,6 +764,11 @@
   // карточка закрылась — песня победы замолкает, возвращается фон
   const closeWinner = () => { if ($('#winner').hidden) return; $('#winner').hidden = true; if (CH.win.active) stopChannel('win'); syncBg(); };
   $('#wClose').addEventListener('click', closeWinner);
+  // песню победы можно выключить и в заставке (нажатие не закрывает её), и в карточке
+  const muteWin = (e) => { e.stopPropagation(); if (CH.win.active) stopChannel('win'); };
+  $('#fxMute').addEventListener('click', muteWin);
+  $('#wMute').addEventListener('click', muteWin);
+  setInterval(() => { $('#fxMute').hidden = $('#wMute').hidden = !CH.win.active; }, 300);
   $('#winner').addEventListener('click', (e) => { if (e.target === $('#winner')) closeWinner(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeWinner(); });
 

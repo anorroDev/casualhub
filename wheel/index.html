@@ -847,6 +847,9 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
 .online-chip { cursor: default; }
 @media (max-width: 560px) { .oc-t, .fb-t { display: none; } .masthead-right > .user-bar { flex-wrap: wrap; justify-content: flex-end; row-gap: 6px; } }
 @media (max-width: 360px) { #backLink { width: 36px; padding: 0; font-size: 0; } }
+
+.fx-mute { position: absolute; top: max(16px, env(safe-area-inset-top)); left: 16px; z-index: 2; height: 40px; padding: 0 16px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; transition: transform .22s var(--spring); }
+.fx-mute:active { transform: scale(.94); }
 </style>
 <script src="/whatsnew.js"></script>
 <script src="/online.js" defer></script><script src="/friends-panel.js" defer></script><script src="/header-menu.js" defer></script>
@@ -1073,6 +1076,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     <p class="fx-sum" hidden></p>
     <p class="fx-hint">Нажми в любом месте, чтобы пропустить</p>
   </div>
+  <button type="button" class="fx-mute" id="fxMute" hidden>🔇 Выключить музыку</button>
   <button type="button" class="fx-skip">Пропустить ›<i class="fx-prog" aria-hidden="true"></i></button>
 </div>
 
@@ -1083,6 +1087,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     <div class="w-stats" id="wStats"></div>
     <div class="sheet-actions">
       <button type="button" class="btn primary" id="wAgain">Новый раунд с теми же</button>
+      <button type="button" class="btn ghost" id="wMute" hidden>🔇 Выключить музыку</button>
       <button type="button" class="btn ghost" id="wClose">Закрыть</button>
     </div>
     <div class="sheet-actions w-share">

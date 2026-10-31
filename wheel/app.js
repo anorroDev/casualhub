@@ -986,7 +986,7 @@
 
   function showWinner(it) {
     lastWinner = it;
-    lotsWinner = { n: it.name, sum: S.mode === 'donate' && +it.amount > 0 ? `${fmt(it.amount)} ${sym(it.cur)}` : '' };
+    lotsWinner = { n: it.name, at: Date.now() + lotsOffset, sum: S.mode === 'donate' && +it.amount > 0 ? `${fmt(it.amount)} ${sym(it.cur)}` : '' };
     lotsLiveNow();
     wMsg('');
     playWinMusic();
@@ -1008,6 +1008,7 @@
   function hideWinner() {
     if ($('#winner').hidden) return;
     $('#winner').hidden = true;
+    if (CH.win.active) { stopChannel('win'); resumeBg(); }
     $('#restart').focus();
   }
 
@@ -1919,6 +1920,10 @@
     $('#wCopy').addEventListener('click', copyResult);
     $('#wAgain').addEventListener('click', () => { restoreAll(); if (S.pick === 'one') spin(); });
     $('#wClose').addEventListener('click', hideWinner);
+    const muteWin = (e) => { e.stopPropagation(); if (CH.win.active) stopChannel('win'); };
+    $('#fxMute').addEventListener('click', muteWin);
+    $('#wMute').addEventListener('click', muteWin);
+    setInterval(() => { $('#fxMute').hidden = $('#wMute').hidden = !CH.win.active; }, 300);
     // та же карточка, что после победы (картинка: скопировать или скачать, текст), только без музыки и салюта
     $('#exportRes').addEventListener('click', () => { const w = winnerNow(); if (!w) return; lastWinner = w; wMsg(''); openWinnerCard(w); });
     $('#winner').addEventListener('click', (e) => { if (e.target.id === 'winner') hideWinner(); });
@@ -2063,6 +2068,13 @@
       lotsMap[l.id] = it ? it.id : -1;
       if (r === 'added') { changed = true; msg(`Новый лот: «${l.name}»`, 'ok'); }
     }
+    if (!S.sample) {
+      for (const id of Object.keys(lotsMap)) {
+        if (!ids.has(id) || lotsMap[id] <= 0 || S.items.some((i) => i.id === lotsMap[id])) continue;
+        delete lotsMap[id];
+        lotsApi('/lots/' + lotsRoom.id + '/' + id, 'DELETE').catch(() => {});
+      }
+    }
     for (const id of Object.keys(lotsMap)) {
       if (ids.has(id)) continue;
       const it = S.items.find((i) => i.id === lotsMap[id]);
@@ -2127,7 +2139,7 @@
     box.innerHTML = `<label class="lots-f">Ссылка для зрителей<div class="lots-row"><input class="inp" id="lotsUrl" readonly value="${esc(lotsLink())}"><button type="button" class="btn small primary" data-lots="copy">Скопировать</button></div></label>
       <p class="lots-note">Категория: ${esc(LOT_KIND_NAMES[lotsRoom.kind] || '')}</p>
       <div class="lots-row"><b>${lotsList.length}</b> ${lotsList.length % 10 === 1 && lotsList.length % 100 !== 11 ? 'лот' : lotsList.length % 10 > 1 && lotsList.length % 10 < 5 && (lotsList.length % 100 < 12 || lotsList.length % 100 > 14) ? 'лота' : 'лотов'} · <span id="lotsClock" class="${open ? 'lots-note' : 'lots-note bad'}">${lotsClockText(left, open)}</span></div>
-      <p class="lots-note">Пока идёт аук, держи эту вкладку открытой: лоты приезжают на колесо и зрители видят его, только пока она открыта.</p>
+      <p class="lots-note">Пока идёт сбор, вкладку можно закрыть: зрители всё равно видят лоты, а на твоё колесо они встанут, когда вернёшься. Открытой она нужна, только когда крутишь.</p>
       <p class="lots-note">Зрители слышат музыку из списка, а свой загруженный файл играет только у тебя.</p>
       <div class="lots-f"><span>Лотов на человека</span><div class="seg" role="group" aria-label="Лотов на человека">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-lots-limit="${n}" aria-pressed="${n === lotsRoom.perUser}">${n}</button>`).join('')}</div></div>
       <div class="lots-row">
@@ -2198,10 +2210,11 @@
   async function lotsPoll() {
     clearTimeout(lotsPollT);
     if (!lotsRoom) return;
-    if (!document.hidden && !S.spinning) {
+    if (!S.spinning) {
       try { const d = await lotsApi('/lots/' + lotsRoom.id + '?v=' + lotsRoom.ver); lotsOffset = d.now - Date.now(); lotsRoom = d.room; if (d.lots) { lotsList = d.lots; lotsImport(); lotsPaint(); } } catch (e) {}
     }
-    lotsPollT = setTimeout(lotsPoll, lotsOpen() ? 4000 : 15000);
+    // и когда вкладка в фоне: лоты должны доезжать, пока ведущий занят другим окном
+    lotsPollT = setTimeout(lotsPoll, lotsOpen() ? 2000 : 8000);
   }
   async function lotsInit() {
     const box = $('#lotsBody');
@@ -2290,7 +2303,7 @@
       // на этом устройстве сбор уже шёл: продолжаем его; с другого устройства подхватываем свежий открытый сбор
       const pick = lotsRooms.find((r) => st && r.id === st.code) || (st && st.code === '' ? null : lotsRooms.find((r) => !r.winner && !r.closed && (!r.endsAt || r.endsAt > d.now)));
       if (pick) {
-        if (st && st.code === pick.id) lotsMap = st.map || {};
+        if (st && st.code === pick.id) { lotsMap = st.map || {}; Object.keys(lotsMap).forEach((k) => { if (!S.items.some((i) => i.id === lotsMap[k])) delete lotsMap[k]; }); }
         lotsTake(await lotsApi('/lots/' + pick.id));
         lotsLiveNow();
         lotsPoll();
