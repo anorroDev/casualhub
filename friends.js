@@ -29,7 +29,7 @@
     loading: new Set(),
     msg: '', msgErr: false,
     linkError: '',
-    pushedAt: null, pushedCount: 0, pushTimer: 0,
+    pushedAt: null, pushedCount: 0, pushTimer: 0, pushErr: '', pushToastAt: 0,
     removeArmed: '',
   };
 
@@ -566,9 +566,11 @@
     return busy;
   }
   // сервер сам объединяет оценки с разных устройств, поэтому отправка ничего не затирает
+  // true — оценки дошли до аккаунта. Если нет, причина остаётся в F.pushErr (и в окне «Друзья»), а не пропадает молча
   async function pushShelf() {
-    if (!F.me) return;
+    if (!F.me) return false;
     if (claimGuestRatings()) { saveLocalRatingsQuiet(); renderBoard(); }
+    let ok = false;
     try {
       // не все фото ушли (сервер попросил подождать): досылаем, когда он разрешит
       const later = await uploadPhotos();
@@ -576,8 +578,16 @@
       const r = await api('/shelf', 'PUT', { ratings: myRatings(), deleted: readJSON(DELETED_KEY, []), cats: catsPayload() });
       F.pushedAt = r.updatedAt;
       F.pushedCount = r.count;
-    } catch (e) { say(e.message, true); }
+      F.pushErr = '';
+      ok = true;
+    } catch (e) {
+      F.pushErr = e.message || 'неизвестная ошибка';
+      say(e.message, true);
+      // без связи — это нормально (оценки уйдут позже), а вот отказ сервера человеку надо показать, иначе оценки «пропадают» между устройствами
+      if (e.status !== 0 && Date.now() - F.pushToastAt > 60e3) { F.pushToastAt = Date.now(); try { toast('Оценки не отправились в аккаунт: ' + F.pushErr); } catch (x) {} }
+    }
     if (!sheet.hidden) renderSheet();
+    return ok;
   }
   function schedulePush() {
     if (!F.me) return;
@@ -1014,6 +1024,7 @@ ${ICON.chev}
         </div>
         ${F.outgoing.length ? `<div class="fr-sec"><span class="label">Ты отправил</span><div class="fr-list">${F.outgoing.map((u) => row(u, btn('remove', u.id, 'Отменить'), 'ждёт ответа')).join('')}</div></div>` : ''}
         <div class="fr-sec">
+          ${F.pushErr ? `<p class="fr-msg err" role="status">Оценки с этого устройства (${state.ratings.filter(ownsRating).length}) пока не дошли до аккаунта: ${esc(F.pushErr)}</p>` : ''}
           <p class="fr-muted">${F.pushedAt ? `Друзья видят ${F.pushedCount} ${plural(F.pushedCount, 'твою оценку', 'твои оценки', 'твоих оценок')}, отправлено ${new Date(F.pushedAt).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}.` : 'Твои оценки отправляются друзьям сами после каждого сохранения.'}</p>
           <div class="sheet-actions"><button type="button" class="btn small ghost" data-fr="push">Отправить оценки сейчас</button></div>
         </div>
@@ -1119,7 +1130,7 @@ ${ICON.chev}
     try {
       if (act === 'accept') { await api('/friends/accept', 'POST', { userId: id }); F.msg = 'Заявка принята.'; F.msgErr = false; }
       if (act === 'remove') { await api('/friends/remove', 'POST', { userId: id }); F.removeArmed = ''; F.shelves.delete(id); F.msg = ''; }
-      if (act === 'push') { await pushShelf(true); F.msg = 'Оценки отправлены.'; F.msgErr = false; }
+      if (act === 'push') { if (await pushShelf(true)) { F.msg = 'Оценки отправлены.'; F.msgErr = false; } } // при отказе остаётся его причина
       await refreshFriends();
       if ((act === 'accept' || act === 'remove') && window.CasualOnline) window.CasualOnline.ping(); // цифры на кнопке «Друзья» сразу
     } catch (err) {
