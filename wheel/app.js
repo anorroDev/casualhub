@@ -2056,30 +2056,16 @@
     lotsImport();
     lotsPaint();
   }
-  // новые лоты встают на колесо, убранные зрителем с него уходят. Пока колесо крутится, ничего не трогаем
+  // новые лоты встают на колесо. Пока колесо крутится, ничего не трогаем
   function lotsImport() {
     if (!lotsRoom || S.spinning) return;
     let changed = false;
-    const ids = new Set(lotsList.map((l) => l.id));
     for (const l of lotsList) {
       if (lotsMap[l.id]) continue;
       const r = addItem(l.name, 0, S.cur);
       const it = S.items.find((i) => i.name.toLowerCase() === l.name.toLowerCase());
       lotsMap[l.id] = it ? it.id : -1;
       if (r === 'added') { changed = true; msg(`Новый лот: «${l.name}»`, 'ok'); }
-    }
-    if (!S.sample) {
-      for (const id of Object.keys(lotsMap)) {
-        if (!ids.has(id) || lotsMap[id] <= 0 || S.items.some((i) => i.id === lotsMap[id])) continue;
-        delete lotsMap[id];
-        lotsApi('/lots/' + lotsRoom.id + '/' + id, 'DELETE').catch(() => {});
-      }
-    }
-    for (const id of Object.keys(lotsMap)) {
-      if (ids.has(id)) continue;
-      const it = S.items.find((i) => i.id === lotsMap[id]);
-      if (it && !it.out) { S.items = S.items.filter((i) => i !== it); changed = true; }
-      delete lotsMap[id];
     }
     try { localStorage.setItem(LOTS_KEY, JSON.stringify({ code: lotsRoom.id, map: lotsMap })); } catch (e) {}
     if (changed) { save(); render(); }

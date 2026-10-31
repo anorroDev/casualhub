@@ -2260,7 +2260,9 @@ function applySubFilter(list) {
     case 'good': return list.filter(r => r.total != null && r.total >= 7.5);
     case 'mid': return list.filter(r => r.total != null && r.total >= 5 && r.total < 7.5);
     case 'bad': return list.filter(r => r.total != null && r.total < 5);
+    case 'done': return list.filter(r => /Завершено|Просмотрено/.test(r.status || ''));
     case 'plan': return list.filter(r => /В планах/.test(r.status || ''));
+    case 'drop': return list.filter(r => /Брошено/.test(r.status || ''));
     case 'doing': return list.filter(r => /В процессе/.test(r.status || ''));
     default: return list;
   }
@@ -2327,7 +2329,7 @@ function renderBoard() {
   if (moreHint) {
     const parts = [
       { date: 'новые', name: 'А–Я' }[state.sort],
-      { master: '8.5+', good: '7.5+', mid: '5–7.4', bad: 'до 5', plan: 'в планах', doing: 'в процессе' }[state.sfilter],
+      { master: '8.5+', good: '7.5+', mid: '5–7.4', bad: 'до 5', done: 'завершено', plan: 'в планах', doing: 'в процессе', drop: 'брошено' }[state.sfilter],
       state.genres.length ? (state.genres.length === 1 ? state.genres[0] : 'жанров: ' + state.genres.length) : '',
     ].filter(Boolean);
     moreHint.textContent = parts.length ? ' · ' + parts.join(' · ') : '';

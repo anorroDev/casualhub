@@ -623,7 +623,7 @@
     box.dataset.state = state;
     if (state === 'off') { box.innerHTML = ''; S.results = []; return; }
     if (state === 'guest') { box.innerHTML = '<div class="example-bar"><span>Чтобы добавить лот, войди в аккаунт: так у каждого будет свой лимит.</span> <a class="btn small primary" href="/opinion/#login">Войти</a></div>'; return; }
-    if (state === 'full') { box.innerHTML = `<p class="lots-note">Твой лимит исчерпан: ${S.room.perUser} из ${S.room.perUser}. Убрать лот может только ведущий.</p>`; S.results = []; return; }
+    if (state === 'full') { box.innerHTML = `<p class="lots-note">Твой лимит исчерпан: ${S.room.perUser} из ${S.room.perUser}. Удалить лот нельзя.</p>`; S.results = []; return; }
     const k = kindOf(), free = S.room.kind === 'any';
     box.innerHTML = `<label class="label" for="lotQ">${k.add}</label>
       <div class="add-row"><input class="inp" id="lotQ" type="${free ? 'text' : 'search'}" autocomplete="off" maxlength="${free ? 60 : 200}" enterkeyhint="${free ? 'done' : 'search'}" placeholder="${k.ph}">${free ? '<button type="button" class="btn primary" id="lotFree">Добавить</button>' : ''}</div>
@@ -645,7 +645,7 @@
     const box = $('#lotList');
     const out = new Set(S.live && Array.isArray(S.live.out) ? S.live.out : []);
     const n = S.lots.length;
-    box.innerHTML = `<p class="board-stat"><b>${n}</b> ${plural(n, 'лот', 'лота', 'лотов')}</p>${n ? `<ul class="lots-list">${S.lots.map((l) => `<li class="${out.has(l.name) ? 'out' : ''}">${lotPic(l)}<span class="lots-who"><b>${esc(l.name)}</b><small>${esc(l.by)}${out.has(l.name) ? ' · вылетел' : ''}</small></span>${S.room.own ? `<button type="button" class="lots-del" data-del="${esc(l.id)}" aria-label="Убрать ${esc(l.name)}" title="Убрать">✕</button>` : ''}</li>`).join('')}</ul>` : '<p class="lots-empty">Пока ни одного лота. Будь первым!</p>'}`;
+    box.innerHTML = `<p class="board-stat"><b>${n}</b> ${plural(n, 'лот', 'лота', 'лотов')}</p>${n ? `<ul class="lots-list">${S.lots.map((l) => `<li class="${out.has(l.name) ? 'out' : ''}">${lotPic(l)}<span class="lots-who"><b>${esc(l.name)}</b><small>${esc(l.by)}${out.has(l.name) ? ' · вылетел' : ''}</small></span></li>`).join('')}</ul>` : '<p class="lots-empty">Пока ни одного лота. Будь первым!</p>'}`;
   }
   function paintStatus() {
     const live = S.live;
@@ -750,16 +750,6 @@
     if (e.target.closest('#lotFree')) { addFree(); return; }
     const opt = e.target.closest('[data-pick]');
     if (opt && S.results[+opt.dataset.pick]) { addLot(S.results[+opt.dataset.pick].payload, opt); return; }
-    const del = e.target.closest('[data-del]');
-    if (del) {
-      del.disabled = true;
-      try {
-        const d = await api(`/lots/${encodeURIComponent(code)}/${encodeURIComponent(del.dataset.del)}`, 'DELETE');
-        S.lots = d.lots;
-        S.room = d.room;
-        paintAll();
-      } catch (er) { del.disabled = false; lotMsg(er.message); }
-    }
   });
   // карточка закрылась — песня победы замолкает, возвращается фон
   const closeWinner = () => { if ($('#winner').hidden) return; $('#winner').hidden = true; if (CH.win.active) stopChannel('win'); syncBg(); };

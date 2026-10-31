@@ -1278,16 +1278,6 @@ const routes = {
     await env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(arg).run();
     return lotAnswer(env, arg, me);
   },
-  async 'DELETE /lots/:code/:id'({ env, me, arg }) {
-    const [code, id] = arg;
-    const room = await env.DB.prepare('SELECT * FROM lot_rooms WHERE id = ?').bind(code).first();
-    if (!room) return fail(404, 'Такого сбора нет.');
-    if (room.owner_id !== me.id) return fail(403, 'Убрать лот может только ведущий.');
-    const r = await env.DB.prepare('DELETE FROM lots WHERE room_id = ? AND id = ?').bind(code, id).run();
-    if (!r.meta.changes) return fail(404, 'Этого лота уже нет.');
-    await env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(code).run();
-    return lotAnswer(env, code, me);
-  },
   // ведущий: лимит, время, закрыть или открыть снова
   async 'PATCH /lots/:code'({ env, request, me, arg }) {
     if (burst('lotroom:' + me.id, 120, 600e3)) return tooMany(10);
@@ -2112,7 +2102,6 @@ export async function onRequest({ request, env, params }) {
   if (!routes[key] && segs.length === 2 && segs[0] === 'reacts') { key = `${request.method} /reacts/:id`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'lots' && SHARE_RE.test(segs[1])) { key = `${request.method} /lots/:code`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'live') { key = `${request.method} /lots/:code/live`; arg = segs[1]; }
-  if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && /^[0-9a-f]{16}$/.test(segs[2])) { key = `${request.method} /lots/:code/:id`; arg = [segs[1], segs[2]]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'share' && SHARE_RE.test(segs[1])) { key = `${request.method} /share/:id`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'share' && segs[2] === 'img' && SHARE_RE.test(segs[1])) { key = `${request.method} /share/:id/img`; arg = segs[1]; }
   const handler = routes[key];
