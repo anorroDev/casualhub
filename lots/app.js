@@ -402,6 +402,14 @@
     box.innerHTML = `<p class="board-stat"><b>${n}</b> ${plural(n, 'лот', 'лота', 'лотов')}</p>${n ? `<ul class="lots-list">${S.lots.map((l) => `<li class="${out.has(l.name) ? 'out' : ''}">${lotPic(l)}<span class="lots-who"><b>${esc(l.name)}</b><small>${esc(l.by)}${out.has(l.name) ? ' · вылетел' : ''}</small></span>${(l.mine && canEdit) || S.room.own ? `<button type="button" class="lots-del" data-del="${esc(l.id)}" aria-label="Убрать ${esc(l.name)}" title="Убрать">✕</button>` : ''}</li>`).join('')}</ul>` : '<p class="lots-empty">Пока ни одного лота. Будь первым!</p>'}`;
   }
   function paintStatus() {
+    // ведущему центр колеса ведёт на его Колесо: крутит он оттуда
+    const hub = $('#lotHub');
+    if (!!S.room.own !== (hub.dataset.own === '1')) {
+      hub.dataset.own = S.room.own ? '1' : '';
+      hub.classList.toggle('lots-own', !!S.room.own);
+      hub.innerHTML = S.room.own ? '<a class="hub-label" href="/wheel/">Крутить</a>' : '';
+      hub.removeAttribute('aria-hidden');
+    }
     const live = S.live;
     const n = live && Array.isArray(live.segs) ? live.segs.length : 0;
     $('#aliveBadge').textContent = n;

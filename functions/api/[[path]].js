@@ -1226,12 +1226,12 @@ const routes = {
     } catch (e) { return fail(502, 'Steam сейчас не отвечает, попробуй ещё раз.'); }
   },
   async 'POST /lots'({ env, request, me }) {
-    if (burst('lotroom:' + me.id, 20, 600e3)) return tooMany(10);
+    if (burst('lotnew:' + me.id, 20, 600e3)) return tooMany(10);
     const b = await readBody(request);
     const now = Date.now();
     const id = shareId();
-    const old = await env.DB.prepare('SELECT id FROM lot_rooms WHERE owner_id = ?').bind(me.id).all();
-    // у ведущего один сбор: новая ссылка заменяет прошлую
+    // старые сборы остаются со своими ссылками; убираем только самые давние сверх лимита
+    const old = await env.DB.prepare('SELECT id FROM lot_rooms WHERE owner_id = ? ORDER BY created_at DESC LIMIT -1 OFFSET ?').bind(me.id, MAX_LOT_ROOMS - 1).all();
     await env.DB.batch([
       ...old.results.flatMap((x) => [env.DB.prepare('DELETE FROM lots WHERE room_id = ?').bind(x.id), env.DB.prepare('DELETE FROM lot_rooms WHERE id = ?').bind(x.id)]),
       env.DB.prepare('INSERT INTO lot_rooms (id, owner_id, title, kind, per_user, ends_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id, me.id, lotTitle(b.title), LOT_KINDS.includes(b.kind) ? b.kind : 'game', lotLimit(b.perUser), lotEnds(b.minutes, now), now),
@@ -1239,9 +1239,12 @@ const routes = {
     return lotAnswer(env, id, me);
   },
   async 'GET /lots-mine'({ env, me }) {
-    const row = await env.DB.prepare('SELECT id FROM lot_rooms WHERE owner_id = ? ORDER BY created_at DESC LIMIT 1').bind(me.id).first();
-    if (!row) return json({ room: null, now: Date.now() });
-    return lotAnswer(env, row.id, me);
+    const { results } = await env.DB.prepare('SELECT r.id, r.title, r.kind, r.per_user, r.ends_at, r.closed, r.live, r.created_at, (SELECT COUNT(*) FROM lots l WHERE l.room_id = r.id) AS n FROM lot_rooms r WHERE r.owner_id = ? ORDER BY r.created_at DESC LIMIT ?').bind(me.id, MAX_LOT_ROOMS).all();
+    return json({ now: Date.now(), rooms: results.map((x) => {
+      let winner = '';
+      try { const l = x.live ? JSON.parse(x.live) : null; winner = (l && l.winner && l.winner.n) || ''; } catch (e) {}
+      return { id: x.id, title: x.title, kind: x.kind, perUser: x.per_user, endsAt: x.ends_at, closed: !!x.closed, createdAt: x.created_at, n: x.n, winner };
+    }) });
   },
   // открывается и без входа: посмотреть на колесо можно всем, у кого есть ссылка
   async 'GET /lots/:code'({ env, request, arg }) {
@@ -1297,7 +1300,12 @@ const routes = {
     const now = Date.now();
     let ends = room.ends_at, closed = room.closed;
     if (b.minutes !== undefined) { ends = lotEnds(b.minutes, now); closed = 0; }
-    if (b.extra !== undefined) { ends = Math.max(room.ends_at || now, now) + Math.max(1, Math.min(1440, Math.round(+b.extra) || 1)) * 60e3; closed = 0; }
+    if (b.extra !== undefined) {
+      const extra = Math.max(-1440, Math.min(1440, Math.round(+b.extra) || 0));
+      // отнять можно только у идущего таймера: время кончается не раньше, чем сейчас
+      if (extra > 0) { ends = Math.max(room.ends_at || now, now) + extra * 60e3; closed = 0; }
+      else if (extra < 0 && room.ends_at) ends = Math.max(now, room.ends_at + extra * 60e3);
+    }
     if (typeof b.closed === 'boolean') closed = b.closed ? 1 : 0;
     await env.DB.prepare('UPDATE lot_rooms SET per_user = ?, title = ?, ends_at = ?, closed = ?, ver = ver + 1 WHERE id = ?')
       .bind(b.perUser !== undefined ? lotLimit(b.perUser) : room.per_user, b.title !== undefined ? lotTitle(b.title) : room.title, ends, closed, arg).run();
@@ -1618,7 +1626,7 @@ const tierMeta = (l) => ({
 });
 
 // ---------- лоты по ссылке ----------
-const LOT_NAME = 60, MAX_LOTS = 300;
+const LOT_NAME = 60, MAX_LOTS = 300, MAX_LOT_ROOMS = 30;
 const LOT_KINDS = ['game', 'movie', 'anime', 'book', 'music', 'any'];
 const lotKey = (v) => String(v || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 // что именно добавляют: название и картинку берём из каталога, а не со слов браузера. Только в категории «что угодно» текст свободный

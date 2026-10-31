@@ -2029,7 +2029,7 @@
   // ---------- лоты по ссылке: зрители добавляют игры сами, а колесо видят вживую ----------
   const lotsAccount = (() => { try { const u = JSON.parse(localStorage.getItem('ocenshik.user.v1') || 'null'); const t = u && (JSON.parse(localStorage.getItem('casualhub.tokens.v1') || 'null') || {})[u.id]; return u && t ? { id: u.id, token: t } : null; } catch (e) { return null; } })();
   const LOTS_KEY = 'casualhub.lots.v1' + (lotsAccount ? ':' + lotsAccount.id : '');
-  let lotsRoom = null, lotsList = [], lotsOffset = 0, lotsMap = {}, lotsWinner = null, liveSpin = null, liveT = 0, liveSig = '', lotsPollT = 0, livePick = '', lotsPerNew = 3, lotsMinsNew = 10, lotsKindNew = 'game', lotsErr = '';
+  let lotsRoom = null, lotsList = [], lotsOffset = 0, lotsMap = {}, lotsWinner = null, liveSpin = null, liveT = 0, liveSig = '', lotsPollT = 0, livePick = '', lotsPerNew = 3, lotsMinsNew = 10, lotsKindNew = 'game', lotsErr = '', lotsRooms = [];
   const LOT_KIND_NAMES = { game: 'Игры из Steam', movie: 'Фильмы и сериалы', anime: 'Аниме', book: 'Книги', music: 'Музыка', any: 'Что угодно' };
   async function lotsApi(path, method = 'GET', body) {
     let r;
@@ -2115,7 +2115,9 @@
         <div class="lots-f"><span>Лотов на человека</span><div class="seg" role="group" aria-label="Лотов на человека">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-lots-per="${n}" aria-pressed="${n === lotsPerNew}">${n}</button>`).join('')}</div></div>
         <label class="lots-f">Сколько минут можно вписывать (0 — пока не закроешь сам)<input class="inp lots-mins" id="lotsMins" type="number" inputmode="numeric" min="0" max="1440" value="${lotsMinsNew}"></label>
         <div class="dfoot"><button type="button" class="btn small primary" data-lots="create">Открыть сбор</button></div>
-        ${lotsErr ? `<p class="lots-note bad">${esc(lotsErr)}</p>` : ''}`;
+        ${lotsErr ? `<p class="lots-note bad">${esc(lotsErr)}</p>` : ''}
+        <div id="lotsRooms"></div>`;
+      lotsPaintRooms();
       return;
     }
     const left = lotsLeft(), open = lotsOpen();
@@ -2125,11 +2127,60 @@
       <p class="lots-note">Пока идёт аук, держи эту вкладку открытой: лоты приезжают на колесо и зрители видят его, только пока она открыта.</p>
       <div class="lots-f"><span>Лотов на человека</span><div class="seg" role="group" aria-label="Лотов на человека">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-lots-limit="${n}" aria-pressed="${n === lotsRoom.perUser}">${n}</button>`).join('')}</div></div>
       <div class="lots-row">
-        <button type="button" class="btn small ghost" data-lots="plus5">+5 минут</button>
+        ${open ? '' : '<button type="button" class="btn small primary" data-lots="spin">Крутить</button>'}
+        ${open && lotsRoom.endsAt ? '<button type="button" class="btn small ghost" data-lots="minus">−1 минута</button>' : ''}
+        <button type="button" class="btn small ghost" data-lots="plus">+1 минута</button>
         ${open ? '<button type="button" class="btn small ghost" data-lots="close">Закрыть сбор</button>' : '<button type="button" class="btn small ghost" data-lots="reopen">Открыть снова</button>'}
         <button type="button" class="btn text" data-lots="new">Новый сбор</button>
       </div>
-      ${lotsErr ? `<p class="lots-note bad">${esc(lotsErr)}</p>` : ''}`;
+      ${lotsErr ? `<p class="lots-note bad">${esc(lotsErr)}</p>` : ''}
+      <div id="lotsRooms"></div>`;
+    lotsPaintRooms();
+  }
+  // все сборы ведущего: ссылка на каждый лежит здесь, сколько бы новых он ни открыл
+  function lotsPaintRooms() {
+    const box = $('#lotsRooms');
+    if (!box) return;
+    const now = Date.now() + lotsOffset;
+    const rows = lotsRooms.map((r) => {
+      const on = lotsRoom && lotsRoom.id === r.id;
+      const room = on ? { ...r, ...lotsRoom, n: lotsList.length } : r;
+      const state = room.winner ? '🏆 ' + room.winner : room.closed ? 'закрыт' : room.endsAt && room.endsAt <= now ? 'время вышло' : 'открыт';
+      return `<li${on ? ' class="on"' : ''}><span class="lots-room"><b>${esc(room.title || 'Без названия')}</b><small>${esc(LOT_KIND_NAMES[room.kind] || '')} · лотов: ${room.n} · ${esc(state)}${on ? ' · сейчас на колесе' : ''}</small></span><button type="button" class="btn small ghost" data-lots-copy="${esc(r.id)}">Ссылка</button>${on || room.winner ? '' : `<button type="button" class="btn small ghost" data-lots-open="${esc(r.id)}">На колесо</button>`}<button type="button" class="btn text" data-lots-del="${esc(r.id)}">Удалить</button></li>`;
+    });
+    box.innerHTML = rows.length ? `<div class="lots-f"><span>Мои сборы</span><ul class="lots-rooms">${rows.join('')}</ul></div>` : '';
+  }
+  async function lotsRefreshRooms() {
+    try { const d = await lotsApi('/lots-mine'); lotsRooms = d.rooms || []; if (d.now) lotsOffset = d.now - Date.now(); lotsPaintRooms(); } catch (e) {}
+  }
+  // снимаем лоты текущего сбора с колеса; сам сбор и его ссылка остаются
+  function lotsDetach() {
+    const old = new Set(Object.values(lotsMap));
+    clearTimeout(lotsPollT);
+    lotsRoom = null; lotsList = []; lotsMap = {}; lotsErr = ''; lotsWinner = null; liveSpin = null; livePick = ''; liveSig = '';
+    $('#winner').hidden = true;
+    stopChannel('win');
+    resumeBg();
+    if (old.size) { S.items = S.items.filter((i) => !old.has(i.id)); save(); render(); }
+    try { localStorage.setItem(LOTS_KEY, JSON.stringify({ code: '', map: {} })); } catch (e) {}
+  }
+  // вернуть старый сбор на колесо: его лоты встают заново, а вылетевшие остаются вылетевшими
+  async function lotsResume(id) {
+    if (S.spinning) return;
+    lotsErr = '';
+    let d;
+    try { d = await lotsApi('/lots/' + id); } catch (e) { lotsErr = e.message; lotsPaint(); return; }
+    lotsDetach();
+    if (S.sample) { S.items = []; S.outSeq = 0; S.sample = false; }
+    lotsTake(d);
+    const out = d.live && Array.isArray(d.live.out) ? d.live.out : [];
+    if (out.length) {
+      S.items.forEach((i) => { if (out.includes(i.name)) { i.out = true; i.outOrder = ++S.outSeq; } });
+      save();
+      render();
+    }
+    lotsLiveNow();
+    lotsPoll();
   }
   function lotsClockText(left, open) {
     if (lotsRoom.closed) return 'сбор закрыт';
@@ -2164,6 +2215,32 @@
       }
       const lim = e.target.closest('[data-lots-limit]');
       if (lim) { lotsDo(() => lotsApi('/lots/' + lotsRoom.id, 'PATCH', { perUser: +lim.dataset.lotsLimit })); return; }
+      const cp = e.target.closest('[data-lots-copy]');
+      if (cp) {
+        const url = location.origin + '/lots/#' + cp.dataset.lotsCopy;
+        try { await navigator.clipboard.writeText(url); msg('Ссылка скопирована.', 'ok'); } catch (er) { msg(url, 'ok'); }
+        return;
+      }
+      const op = e.target.closest('[data-lots-open]');
+      if (op) { lotsResume(op.dataset.lotsOpen); return; }
+      const del = e.target.closest('[data-lots-del]');
+      if (del) {
+        // удаление насовсем: ссылка перестанет открываться, поэтому нажать нужно дважды
+        if (!del.dataset.armed) {
+          del.dataset.armed = '1';
+          del.textContent = 'Точно удалить?';
+          setTimeout(() => { if (del.isConnected) { delete del.dataset.armed; del.textContent = 'Удалить'; } }, 3000);
+          return;
+        }
+        const id = del.dataset.lotsDel;
+        try {
+          await lotsApi('/lots/' + id, 'DELETE');
+          if (lotsRoom && lotsRoom.id === id) { lotsDetach(); lotsPaint(); }
+          lotsRooms = lotsRooms.filter((r) => r.id !== id);
+          lotsPaintRooms();
+        } catch (er) { lotsErr = er.message; lotsPaint(); }
+        return;
+      }
       const b = e.target.closest('[data-lots]');
       if (!b) return;
       const a = b.dataset.lots;
@@ -2174,37 +2251,46 @@
           // пример на колесе зрителям ни к чему: дальше на нём только их лоты
           if (S.sample) { S.items = []; S.outSeq = 0; S.sample = false; save(); render(); }
           lotsMap = {}; liveSig = ''; lotsWinner = null; lotsLiveNow(); lotsPoll();
+          lotsRefreshRooms();
         }
       } else if (a === 'copy') {
         try { await navigator.clipboard.writeText(lotsLink()); msg('Ссылка скопирована.', 'ok'); }
         catch (er) { const u = $('#lotsUrl'); u.focus(); u.select(); msg('Скопируй ссылку из поля.', 'ok'); }
-      } else if (a === 'plus5') lotsDo(() => lotsApi('/lots/' + lotsRoom.id, 'PATCH', { extra: 5 }));
+      } else if (a === 'plus') lotsDo(() => lotsApi('/lots/' + lotsRoom.id, 'PATCH', { extra: 1 }));
+      else if (a === 'minus') lotsDo(() => lotsApi('/lots/' + lotsRoom.id, 'PATCH', { extra: -1 }));
+      else if (a === 'spin') {
+        if (S.spinning) return;
+        if (alive().length < 2) { msg('Чтобы крутить, на колесе нужно хотя бы два лота.', 'err'); return; }
+        $('#stage').scrollIntoView({ block: 'center', behavior: 'smooth' });
+        clearTimeout(autoTimer);
+        spin();
+      }
       else if (a === 'close') lotsDo(() => lotsApi('/lots/' + lotsRoom.id, 'PATCH', { closed: true }));
       else if (a === 'reopen') lotsDo(() => lotsApi('/lots/' + lotsRoom.id, 'PATCH', { closed: false, ...(lotsLeft() != null && lotsLeft() <= 0 ? { extra: 5 } : {}) }));
       else if (a === 'new') {
         if (S.spinning) return;
-        // лоты прошлого сбора с колеса убираем, свои записи ведущего остаются
-        const old = new Set(Object.values(lotsMap));
-        clearTimeout(lotsPollT);
-        lotsRoom = null; lotsList = []; lotsMap = {}; lotsErr = ''; lotsWinner = null;
-        $('#winner').hidden = true;
-        stopChannel('win');
-        resumeBg();
-        if (old.size) { S.items = S.items.filter((i) => !old.has(i.id)); save(); render(); }
+        lotsDetach();
         lotsPaint();
+        lotsRefreshRooms();
       }
     });
-    setInterval(() => { if (!lotsRoom) return; const c = $('#lotsClock'); if (!c) return; const open = lotsOpen(), t = lotsClockText(lotsLeft(), open); if (c.textContent !== t) { c.textContent = t; c.className = open ? 'lots-note' : 'lots-note bad'; } }, 1000);
+    setInterval(() => { if (!lotsRoom) return; const c = $('#lotsClock'); if (!c) return; const open = lotsOpen(), t = lotsClockText(lotsLeft(), open); if (open !== (c.className === 'lots-note')) { lotsPaint(); return; } if (c.textContent !== t) c.textContent = t; }, 1000);
     document.addEventListener('visibilitychange', () => { if (!document.hidden && lotsRoom) lotsPoll(); });
     if (!lotsAccount) return;
     try {
       const d = await lotsApi('/lots-mine');
-      if (d.room) {
-        try { const st = JSON.parse(localStorage.getItem(LOTS_KEY) || 'null'); if (st && st.code === d.room.id) lotsMap = st.map || {}; } catch (e) {}
-        lotsTake(d);
+      lotsRooms = d.rooms || [];
+      if (d.now) lotsOffset = d.now - Date.now();
+      let st = null;
+      try { st = JSON.parse(localStorage.getItem(LOTS_KEY) || 'null'); } catch (e) {}
+      // на этом устройстве сбор уже шёл: продолжаем его; с другого устройства подхватываем свежий открытый сбор
+      const pick = lotsRooms.find((r) => st && r.id === st.code) || (st && st.code === '' ? null : lotsRooms.find((r) => !r.winner && !r.closed && (!r.endsAt || r.endsAt > d.now)));
+      if (pick) {
+        if (st && st.code === pick.id) lotsMap = st.map || {};
+        lotsTake(await lotsApi('/lots/' + pick.id));
         lotsLiveNow();
         lotsPoll();
-      }
+      } else lotsPaintRooms();
     } catch (e) {}
   }
 
