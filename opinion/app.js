@@ -1541,6 +1541,8 @@ function avaFp(s) {
   for (let i = 0; i < s.length; i += 7) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
   return (h >>> 0).toString(36) + '.' + s.length.toString(36);
 }
+// адрес картинки исполнителя на сервере: art.<хеш имени>. Её использует friends.js (отправка и получение аватарок исполнителей)
+function artistRid(name) { let h = 5381; for (const ch of keyOf(name)) h = ((h * 33) ^ ch.codePointAt(0)) >>> 0; return 'art.' + h.toString(36); }
 let artistsCache = null;
 function artistsMap() {
   if (!artistsCache) {

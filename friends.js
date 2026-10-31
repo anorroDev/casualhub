@@ -314,19 +314,21 @@
     }
     // аватарка исполнителя сменилась на другом устройстве: в оценках другой отпечаток, качаем новую
     if (typeof artistGet === 'function') {
-      const seen = new Set();
-      for (const x of state.ratings) {
-        if (x.example || !x.artist || !x.artistAva) continue;
-        const rid = artistRid(x.artist);
-        if (seen.has(rid)) continue;
-        seen.add(rid);
-        const a = artistGet(x.artist);
-        if (a && a.fp === x.artistAva) continue;
-        try {
-          const ph = await api('/photo/' + encodeURIComponent(F.me.id) + '/' + encodeURIComponent(rid));
-          if (ph && ph.data) { artistSetAva(x.artist, ph.data, true); sent[rid] = avaFp(ph.data); photos++; }
-        } catch (e) {}
-      }
+      try {
+        const seen = new Set();
+        for (const x of state.ratings) {
+          if (x.example || !x.artist || !x.artistAva) continue;
+          const rid = artistRid(x.artist);
+          if (seen.has(rid)) continue;
+          seen.add(rid);
+          const a = artistGet(x.artist);
+          if (a && a.fp === x.artistAva) continue;
+          try {
+            const ph = await api('/photo/' + encodeURIComponent(F.me.id) + '/' + encodeURIComponent(rid));
+            if (ph && ph.data) { artistSetAva(x.artist, ph.data, true); sent[rid] = avaFp(ph.data); photos++; }
+          } catch (e) {}
+        }
+      } catch (e) { console.error('artist avatars', e); } // не мешаем сохранить полученные оценки
     }
     if (photos) lsSet(PHOTOS_KEY, JSON.stringify(sent));
     if (!added && !updated && !removed && !photos) return;
@@ -573,7 +575,8 @@
     let ok = false;
     try {
       // не все фото ушли (сервер попросил подождать): досылаем, когда он разрешит
-      const later = await uploadPhotos();
+      let later = 0;
+      try { later = await uploadPhotos(); } catch (e) { console.error('photos', e); } // сбой с фото не должен остановить отправку оценок
       if (later) { clearTimeout(F.photoRetry); F.photoRetry = setTimeout(() => pushShelf(), later); }
       const r = await api('/shelf', 'PUT', { ratings: myRatings(), deleted: readJSON(DELETED_KEY, []), cats: catsPayload() });
       F.pushedAt = r.updatedAt;
