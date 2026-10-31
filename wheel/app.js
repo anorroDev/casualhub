@@ -986,7 +986,7 @@
 
   function showWinner(it) {
     lastWinner = it;
-    lotsWinner = { n: it.name };
+    lotsWinner = { n: it.name, sum: S.mode === 'donate' && +it.amount > 0 ? `${fmt(it.amount)} ${sym(it.cur)}` : '' };
     lotsLiveNow();
     wMsg('');
     playWinMusic();
@@ -2079,6 +2079,9 @@
     return {
       segs: a.map((x) => ({ n: x.item.name, p: +x.p.toFixed(6), c: colorOf(x.item).c, t: colorOf(x.item).t })),
       rot: +mod(S.rot, TAU).toFixed(4), spin: liveSpin, pick: livePick, hub: S.hub,
+      // зрителям уходят только треки из списка и картинки сайта: свои файлы лежат в браузере ведущего
+      music: { bg: S.bgOn && presetOf(S.music.bg) ? presetOf(S.music.bg).id : '', win: presetOf(S.music.win) ? presetOf(S.music.win).id : '' },
+      hubImg: (() => { const b = BASE_HUBS.find((x) => x.id === S.gif); return b ? b.src.replace(/\.mp4$/i, '.webm') : ''; })(),
       status: S.sample ? '' : $('#statusMain').textContent.slice(0, 140),
       out: S.items.filter((i) => i.out).map((i) => i.name), winner: won,
     };
@@ -2125,6 +2128,7 @@
       <p class="lots-note">Категория: ${esc(LOT_KIND_NAMES[lotsRoom.kind] || '')}</p>
       <div class="lots-row"><b>${lotsList.length}</b> ${lotsList.length % 10 === 1 && lotsList.length % 100 !== 11 ? 'лот' : lotsList.length % 10 > 1 && lotsList.length % 10 < 5 && (lotsList.length % 100 < 12 || lotsList.length % 100 > 14) ? 'лота' : 'лотов'} · <span id="lotsClock" class="${open ? 'lots-note' : 'lots-note bad'}">${lotsClockText(left, open)}</span></div>
       <p class="lots-note">Пока идёт аук, держи эту вкладку открытой: лоты приезжают на колесо и зрители видят его, только пока она открыта.</p>
+      <p class="lots-note">Зрители слышат музыку из списка, а свой загруженный файл играет только у тебя.</p>
       <div class="lots-f"><span>Лотов на человека</span><div class="seg" role="group" aria-label="Лотов на человека">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-lots-limit="${n}" aria-pressed="${n === lotsRoom.perUser}">${n}</button>`).join('')}</div></div>
       <div class="lots-row">
         ${open ? '' : '<button type="button" class="btn small primary" data-lots="spin">Крутить</button>'}

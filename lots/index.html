@@ -876,6 +876,9 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
 .lots-empty { margin: 14px 0; font-size: 14px; color: var(--ink-2); text-align: center; }
 .lots-hub { cursor: default; pointer-events: none; }
 .lots-live-note { margin-top: 10px; text-align: center; }
+.lots-sound { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 10px; margin-top: 12px; }
+.lots-vol { flex: 0 1 180px; min-width: 110px; display: flex; }
+.lots-vol input { width: 100%; accent-color: var(--accent); }
 .lots-hub.lots-own { pointer-events: auto; }
 .lots-own a { display: grid; place-items: center; width: 100%; height: 100%; color: inherit; text-decoration: none; cursor: pointer; }
 #wLink, #lotAdd a { text-decoration: none; }
@@ -924,7 +927,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
       <div class="wheel-wrap">
         <svg class="pointer" id="pointer" viewBox="0 0 40 48" aria-hidden="true"><path d="M4 3h32L20 45z"/></svg>
         <canvas id="wheel" aria-label="Колесо ведущего"></canvas>
-        <div class="hub lots-hub" id="lotHub" aria-hidden="true"></div>
+        <div class="hub lots-hub" id="lotHub"><img id="hubImg" alt="" hidden><video id="hubVid" muted loop playsinline hidden></video></div>
       </div>
 
       <div class="scorebar">
@@ -936,7 +939,12 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
           </div>
         </div>
       </div>
-      <p class="lots-note lots-live-note">Колесо показывается с задержкой в пару секунд и без звука.</p>
+      <div class="lots-sound">
+        <button type="button" class="btn small primary" id="lotSound">🔊 Включить звук</button>
+        <label class="lots-vol"><span class="vh">Громкость</span><input type="range" id="lotVol" min="0" max="100" step="1" aria-label="Громкость"></label>
+      </div>
+      <p class="lots-note lots-live-note" id="lotPlaying">Колесо показывается с задержкой в пару секунд.</p>
+      <div class="mp-offscreen" aria-hidden="true"><div id="yt-bg"></div><div id="yt-win"></div></div>
     </section>
 
     <section class="card board" aria-label="Лоты">

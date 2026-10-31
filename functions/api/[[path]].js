@@ -1656,15 +1656,18 @@ const lotLimit = (v) => Math.max(1, Math.min(5, Math.round(+v) || 3));
 const lotTitle = (v) => clip(v, 60).replace(SPOOF_RE, '').trim();
 const lotEnds = (minutes, now) => { const m = Math.round(+minutes) || 0; return m > 0 ? now + Math.min(m, 1440) * 60e3 : null; };
 const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+const lotTrack = (v) => (typeof v === 'string' && /^[a-z0-9]{1,16}$/.test(v) ? v : '');
 function cleanLive(b) {
   const finite = (v) => (Number.isFinite(+v) ? +v : 0);
   const spin = b && b.spin && typeof b.spin === 'object' ? { from: finite(b.spin.from), to: finite(b.spin.to), ms: Math.max(0, Math.min(120000, finite(b.spin.ms))), at: finite(b.spin.at) } : null;
   return {
     segs: (Array.isArray(b && b.segs) ? b.segs : []).slice(0, MAX_LOTS).map((x) => ({ n: clip(x && x.n, LOT_NAME), p: Math.max(0, Math.min(1, finite(x && x.p))), c: HEX_COLOR.test(String(x && x.c)) ? x.c : '#64748B', t: HEX_COLOR.test(String(x && x.t)) ? x.t : '#FFFFFF' })),
     rot: finite(b && b.rot), spin, pick: clip(b && b.pick, LOT_NAME), hub: Math.max(10, Math.min(60, finite(b && b.hub) || 24)),
+    hubImg: b && STICKER_RE.test(String(b.hubImg)) ? b.hubImg : '',
+    music: { bg: lotTrack(b && b.music && b.music.bg), win: lotTrack(b && b.music && b.music.win) },
     status: clip(b && b.status, 140),
     out: (Array.isArray(b && b.out) ? b.out : []).slice(0, MAX_LOTS).map((x) => clip(x, LOT_NAME)),
-    winner: b && b.winner && b.winner.n ? { n: clip(b.winner.n, LOT_NAME) } : null,
+    winner: b && b.winner && b.winner.n ? { n: clip(b.winner.n, LOT_NAME), sum: clip(b.winner.sum, 40) } : null,
   };
 }
 async function lotAnswer(env, id, me, knownVer) {
