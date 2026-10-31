@@ -616,20 +616,21 @@
   }
 
   // ---------- страница ----------
+  // заголовок по буквам, как на всём сайте; длинное название мельче
+  function setTitle(title, again) {
+    const head = $('#lotTitle');
+    if (!again && head.dataset.t === title) return;
+    head.dataset.t = title;
+    head.classList.toggle('lots-long', [...title].length > 22);
+    if (reduced) { head.textContent = title; return; }
+    let i = 0;
+    head.setAttribute('aria-label', title);
+    head.innerHTML = title.split(' ').map((w) => `<span class="w" aria-hidden="true">${[...w].map((c) => `<span class="ch" style="--i:${i++}">${esc(c)}</span>`).join('')}</span>`).join(' ');
+  }
   function paintHead() {
     const r = S.room;
     const title = r.title || 'Сбор лотов';
-    const head = $('#lotTitle');
-    if (head.dataset.t !== title) {
-      head.dataset.t = title;
-      head.classList.toggle('lots-long', [...title].length > 22);
-      if (reduced) head.textContent = title;
-      else {
-        let i = 0;
-        head.setAttribute('aria-label', title);
-        head.innerHTML = title.split(' ').map((w) => `<span class="w" aria-hidden="true">${[...w].map((c) => `<span class="ch" style="--i:${i++}">${esc(c)}</span>`).join('')}</span>`).join(' ');
-      }
-    }
+    setTitle(title);
     document.title = `${title} · Казуал Хаб`;
     $('#lotLede').textContent = `Ведущий: ${r.owner}. Категория: ${kindOf().label}. Можно добавить ${r.perUser} ${plural(r.perUser, 'лот', 'лота', 'лотов')} на человека.`;
   }
@@ -702,13 +703,23 @@
     $('#statusMain').textContent = live && live.status ? live.status : 'Ждём, когда ведущий запустит колесо';
     $('#statusSub').textContent = n ? `${n} ${plural(n, 'лот', 'лота', 'лотов')} на колесе` : '';
   }
+  // сбор только что закончился или открылся снова: буквы заголовка собираются заново, надпись подпрыгивает
+  function watchOpen() {
+    const open = isOpen();
+    if (S.wasOpen !== undefined && S.wasOpen !== open) {
+      setTitle(S.room.title || 'Сбор лотов', true);
+      const rule = $('#lotRule');
+      if (!reduced && rule && rule.animate) rule.animate([{ transform: 'translateY(10px) scale(.96)' }, { transform: 'none' }], { duration: 480, easing: 'cubic-bezier(.34, 1.56, .64, 1)' });
+    }
+    S.wasOpen = open;
+  }
   function paintAll() {
-    paintHead(); paintRule(); paintAdd(); paintResults(); paintList(); paintStatus(); wheel(); paintWinner(); syncBg();
+    paintHead(); paintRule(); paintAdd(); paintResults(); paintList(); paintStatus(); wheel(); paintWinner(); syncBg(); watchOpen();
   }
   function paintGone(text) {
-    $('#lotTitle').textContent = 'Сбор лотов';
+    setTitle('Сбор лотов', true);
     $('#lotLede').textContent = '';
-    view.innerHTML = `<section class="card"><p class="lots-empty">${esc(text)}</p><div class="dfoot"><a class="btn small primary" href="/wheel/">Открыть Колесо</a></div></section>`;
+    view.innerHTML = `<section class="card lots-gone"><p class="lots-empty">${esc(text)}</p><a class="btn primary" href="/wheel/">Открыть Колесо</a></section>`;
     canvas = null;
     S.room = null;
   }
@@ -740,6 +751,7 @@
     const was = $('#lotAdd').dataset.state;
     paintRule();
     if (was !== 'off' && !isOpen()) { paintAdd(); paintList(); }
+    watchOpen();
   }, 1000);
 
   async function addLot(payload, btn) {
