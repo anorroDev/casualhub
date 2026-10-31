@@ -1,6 +1,3 @@
-# Заголовки безопасности для всех страниц (Cloudflare Pages).
-# CSP: код только из файлов сайта (встроенные скрипты запрещены) и плееров YouTube/Spotify, запросы только к своему API и поиску iTunes,
-# сайт нельзя встроить в чужую страницу (защита от подмены кликов).
 /*
   X-Content-Type-Options: nosniff
   X-Frame-Options: SAMEORIGIN
@@ -15,7 +12,9 @@
 /api/*
   Cache-Control: no-store
 
-# админка: не кешируется и не попадает в поиск
+/og/*
+  ! Cross-Origin-Resource-Policy
+
 /admin/*
   Cache-Control: no-store
   X-Robots-Tag: noindex, nofollow

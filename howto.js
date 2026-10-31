@@ -5,8 +5,7 @@
 (() => {
   const KEY = 'casualhub.howto.v1';
   const path = location.pathname;
-  // подсказка только на пяти страницах сайта: на админке, странице отзыва и прочих её нет
-  const PAGE = path.startsWith('/opinion') ? 'opinion' : path.startsWith('/wheel') ? 'wheel' : path.startsWith('/tierlist') ? 'tierlist' : path.startsWith('/profile') ? 'profile' : (path === '/' || path === '/index.html') ? 'hub' : '';
+  const PAGE = path.startsWith('/opinion') ? 'opinion' : path.startsWith('/wheel') ? 'wheel' : path.startsWith('/tierlist') ? 'tierlist' : path.startsWith('/profile') ? 'profile' : path.startsWith('/lots') ? 'lots' : (path === '/' || path === '/index.html') ? 'hub' : '';
   const STEPS = {
     hub: {
       title: 'Казуал Хаб',
@@ -28,10 +27,19 @@
     wheel: {
       title: 'Колесо Казуала',
       steps: [
-        'В блоке <b>«Лоты по ссылке»</b> открой сбор, выбери категорию и дай ссылку: зрители сами добавят лоты и увидят, как крутится колесо',
         'Впиши участника в поле <b>«Имя или название»</b> и жми <b>«Добавить»</b>, или вставь сразу всех через <b>«Вставить списком»</b>. На телефоне это вкладка <b>«👥 Участники»</b>',
         'Жми <b>«Крутить»</b> в центре колеса. Музыку можно ставить на паузу и перематывать прямо во время прокрутки',
         '<b>На выбывание</b>: на кого показала стрелка — вылетает, последний побеждает. <b>«Один победитель»</b> — выигрывает сразу тот, на ком остановилось',
+        'Хочешь, чтобы лоты вписывали зрители? Открой блок <b>«Лоты по ссылке»</b>, выбери категорию, лимит и время и дай им ссылку. Когда сбор закончится, там же появится кнопка <b>«Крутить»</b>',
+      ],
+    },
+    lots: {
+      title: 'Лоты по ссылке',
+      steps: [
+        'Войди в аккаунт, найди лот по названию и нажми на него: он сам встанет на колесо ведущего',
+        'Игру можно найти по названию или ссылке из Steam. Если её нет в списке, жми <b>«Добавить как есть»</b>',
+        'Вверху написан лимит на человека, а в блоке <b>«Лоты»</b> — сколько осталось времени. Удалить лот нельзя, так что выбирай внимательно',
+        'Колесо крутит ведущий, а здесь видно то же самое: прокрутку, вылетевшие лоты и победителя. Нажми <b>«Включить звук»</b>, чтобы слышать щелчки и музыку',
       ],
     },
     tierlist: {
@@ -78,6 +86,8 @@
 .howto-modal.in .howto li:nth-child(1) { animation-delay: .12s; }
 .howto-modal.in .howto li:nth-child(2) { animation-delay: .22s; }
 .howto-modal.in .howto li:nth-child(3) { animation-delay: .32s; }
+.howto-modal.in .howto li:nth-child(4) { animation-delay: .42s; }
+.howto-modal.in .howto li:nth-child(5) { animation-delay: .52s; }
 @keyframes howto-step { from { transform: translateX(-18px); } }
 .howto li > b { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: var(--on-accent, #fff); font-size: 15px; font-weight: 800; box-shadow: 0 4px 10px -4px var(--accent); }
 .howto li span b { font-weight: 800; }
@@ -98,7 +108,7 @@ body.howto-lock { overflow: hidden; }
   document.head.appendChild(css);
 
   const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { return {}; } };
-  const mark = (v) => { try { const m = read(); m[PAGE] = v; localStorage.setItem(KEY, JSON.stringify(m)); } catch (e) {} };
+  const mark = (v) => { try { const m = read(); m[PAGE] = v; if (PAGE === 'wheel') m.wheelLots = v; localStorage.setItem(KEY, JSON.stringify(m)); } catch (e) {} };
 
   function makeHeaderBtn() {
     const pick = document.getElementById('themePick');
@@ -183,9 +193,14 @@ body.howto-lock { overflow: hidden; }
     // первый заход (и каждый следующий, пока не нажали «Понятно»): окно открывается само, когда страница показалась
     // не поверх другого открытого окна (вход, карточка оценки): считаем только те, что реально видно
     const otherOpen = () => [...document.querySelectorAll('[role="dialog"], dialog[open]')].some((d) => d.id !== 'howto' && d.getClientRects().length && getComputedStyle(d).visibility !== 'hidden');
-    // само окно — только новичкам: гостю без аккаунта и только пока на этой странице его ещё не закрывали
+    // само окно — новичкам: гостю без аккаунта и только пока на этой странице его ещё не закрывали
+    // про лоты по ссылке рассказываем один раз всем: на странице сбора люди оказываются по чужой ссылке, а в Колесе это новый блок
     const hasAccount = (() => { try { const u = JSON.parse(localStorage.getItem('ocenshik.user.v1') || 'null'); return !!(u && u.name); } catch (e) { return false; } })();
-    if (!read()[PAGE] && !read()[{ opinion: 'mnenie', wheel: 'koleso', tierlist: 'tier' }[PAGE]] && !hasAccount) setTimeout(() => { if (modal.hidden && !otherOpen()) open(); }, calm ? 200 : 900);
+    const seen = read();
+    const newbie = !seen[PAGE] && !seen[{ opinion: 'mnenie', wheel: 'koleso', tierlist: 'tier' }[PAGE]] && !hasAccount;
+    const lotsNews = PAGE === 'lots' ? !seen.lots : PAGE === 'wheel' && !seen.wheelLots;
+    // сбор не нашёлся или уже удалён: объяснять нечего
+    if (newbie || lotsNews) setTimeout(() => { if (modal.hidden && !otherOpen() && !document.querySelector('.lots-gone')) open(); }, calm ? 200 : 900);
 
     // круглая «❓» видна, когда шапка (кнопка «Помощь» или меню ☰) уехала за экран; держится над нижними панелями
     let q = false;

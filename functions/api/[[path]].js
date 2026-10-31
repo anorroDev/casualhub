@@ -1,15 +1,14 @@
 // Казуал Хаб: онлайн-аккаунты, друзья и оценки друзей.
-// Cloudflare Pages Functions, база D1 подключена как binding DB (см. scheme.sql и README).
+// Cloudflare Pages Functions, база D1 подключена как binding DB.
 
 import { clip, numOrNull, SAFE_URL, cleanRating, readShelf, stampOf, RID_RE, SPOOF_RE, MUSIC_LINK_RE } from '../_lib/shelf.js';
 
 const enc = new TextEncoder();
-const ITER = 10000; // PBKDF2: больше не даёт бесплатный тариф по времени CPU
+const ITER = 10000;
 const SESSION_DAYS = 30;
 const MAX_SHELF = 1800000; // символов JSON на одного человека (фото хранятся отдельно)
 const NAME_RE = /^[\p{L}\p{N}_.\- ]{2,24}$/u;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-// новая почта (регистрация и смена): ещё и без кавычек, скобок и запятых — почта показывается в админке и уходит в письмо
 const NEW_MAIL_RE = /^[^\s@<>"'`,;:()[\]\\]+@[^\s@<>"'`,;:()[\]\\]+\.[^\s@<>"'`,;:()[\]\\.]{2,}$/;
 // @юзернейм: латиница, цифры, «_» и «.», от 3 до 20 символов, точка не по краям. Хранится в колонке uname.
 const HANDLE_RE = /^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/;
@@ -28,7 +27,7 @@ async function freeHandle(env, base, selfId) {
   for (let i = 0; i < 12; i++) {
     const h = i ? base.slice(0, 15) + '_' + Math.floor(1000 + Math.random() * 9000) : base;
     const row = await env.DB.prepare('SELECT id FROM users WHERE uname = ?').bind(h).first();
-    if ((!row || row.id === selfId) && !ADMIN_HANDLES.includes(h)) return h; // юзернеймы админов не выдаются никому
+    if ((!row || row.id === selfId) && !ADMIN_HANDLES.includes(h)) return h;
   }
   return 'user_' + randHex(6);
 }
@@ -36,7 +35,7 @@ async function freeHandle(env, base, selfId) {
 const pubUser = (u) => ({ id: u.id, username: u.username, handle: u.handle || u.uname });
 const ownUser = (u) => ({ ...pubUser(u), email: u.email || '', createdAt: u.created_at || u.createdAt || null, hideOnline: !!u.hide_online });
 
-// Таблицы создаются и обновляются сами при первом запросе (то же, что в scheme.sql),
+// Таблицы создаются и обновляются сами при первом запросе,
 // чтобы новые поля вроде email не требовали ручной миграции.
 let schemeReady = false;
 async function ensureScheme(env) {
@@ -65,9 +64,7 @@ async function ensureScheme(env) {
     env.DB.prepare('CREATE INDEX IF NOT EXISTS lots_user ON lots(room_id, user_id)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS tierlists (user_id TEXT NOT NULL, id TEXT NOT NULL, data TEXT, meta TEXT, private INTEGER NOT NULL DEFAULT 0, at INTEGER NOT NULL, PRIMARY KEY (user_id, id))'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS comments_from ON comments(from_id)'),
-    // админы: кто уже ввёл одноразовый пароль; дальше вход в админку по своему пин-коду
     env.DB.prepare('CREATE TABLE IF NOT EXISTS admins (user_id TEXT PRIMARY KEY, handle TEXT NOT NULL, at INTEGER NOT NULL, pin_hash TEXT, pin_salt TEXT, pin_until INTEGER)'),
-    // вход в админку на 12 часов, привязан к сессии; журнал входов и действий админов
     env.DB.prepare('CREATE TABLE IF NOT EXISTS admin_sessions (token_hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, until INTEGER NOT NULL)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS admin_log (at INTEGER NOT NULL, user_id TEXT NOT NULL, ip TEXT, action TEXT NOT NULL, ok INTEGER NOT NULL)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS admin_log_at ON admin_log(at)'),
@@ -80,7 +77,6 @@ async function ensureScheme(env) {
   if (!results.some((c) => c.name === 'nkey')) await env.DB.prepare('ALTER TABLE users ADD COLUMN nkey TEXT').run();
   if (!results.some((c) => c.name === 'last_seen')) await env.DB.prepare('ALTER TABLE users ADD COLUMN last_seen INTEGER').run();
   if (!results.some((c) => c.name === 'hide_online')) await env.DB.prepare('ALTER TABLE users ADD COLUMN hide_online INTEGER').run();
-  // бан из админки: заблокированный аккаунт не входит и не может ничего менять
   if (!results.some((c) => c.name === 'banned')) await env.DB.prepare('ALTER TABLE users ADD COLUMN banned INTEGER').run();
   if (!results.some((c) => c.name === 'ban_reason')) await env.DB.prepare('ALTER TABLE users ADD COLUMN ban_reason TEXT').run();
   await env.DB.batch([
@@ -89,7 +85,6 @@ async function ensureScheme(env) {
     env.DB.prepare('CREATE TABLE IF NOT EXISTS presence (id TEXT PRIMARY KEY, at INTEGER NOT NULL)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS presence_at ON presence(at)'),
   ]);
-  // пин-код админки и её короткая сессия появились позже самой таблицы
   const { results: ac } = await env.DB.prepare('PRAGMA table_info(admins)').all();
   for (const [c, t] of [['pin_hash', 'TEXT'], ['pin_salt', 'TEXT'], ['pin_until', 'INTEGER']]) {
     if (!ac.some((x) => x.name === c)) await env.DB.prepare(`ALTER TABLE admins ADD COLUMN ${c} ${t}`).run();
@@ -141,8 +136,6 @@ async function readBody(request) {
   try { const v = JSON.parse(text); return v && typeof v === 'object' ? v : {}; } catch (e) { return {}; }
 }
 
-// ---------- защита от наплыва запросов: счётчик в памяти воркера, без запросов к базе ----------
-// Не общий для всех серверов Cloudflare, но гасит перебор и флуд с одного адреса почти бесплатно.
 const BURST = new Map(); // ключ -> { n, reset }
 function burst(key, max, winMs) {
   const now = Date.now();
@@ -172,36 +165,27 @@ async function newSession(env, userId) {
     .bind(await sha256(token), userId, Date.now() + SESSION_DAYS * 864e5).run();
   return token;
 }
-// ---------- защита от перебора: счётчики попыток в окне времени ----------
 const LIMITS = {
-  loginIp: { max: 30, win: 15 * 60e3 },   // неудачных входов с одного адреса
-  loginAcc: { max: 10, win: 15 * 60e3 },  // неудачных входов в один аккаунт
-  register: { max: 10, win: 60 * 60e3 },  // регистраций (и попыток на занятые почту/ник) с одного адреса
-  friendReq: { max: 40, win: 10 * 60e3 }, // заявок в друзья (перебор ников)
-  react: { max: 120, win: 10 * 60e3 },    // реакций и комментариев
-  comment: { max: 60, win: 10 * 60e3 },   // комментариев на стенах и под оценками
-  admin: { max: 5, win: 60 * 60e3 },      // неверных одноразовых паролей и пин-кодов админки
+  loginIp: { max: 30, win: 15 * 60e3 },
+  loginAcc: { max: 10, win: 15 * 60e3 },
+  register: { max: 10, win: 60 * 60e3 },
+  friendReq: { max: 40, win: 10 * 60e3 },
+  react: { max: 120, win: 10 * 60e3 },
+  comment: { max: 60, win: 10 * 60e3 },
+  admin: { max: 5, win: 60 * 60e3 },
 };
-// ---------- админ-панель: только для двух аккаунтов ----------
-// Первый вход — одноразовый пароль из секрета ADMIN_CODE (Cloudflare → Pages → Settings → Variables and Secrets),
-// сразу после него админ задаёт свой пин-код. Дальше админка открывается пин-кодом на 12 часов в этой сессии.
-// Забытый пин-код сбрасывается тем же одноразовым паролем.
-const ADMIN_HANDLES = ['anorro', 'yukomagod'];
-// ADMIN_IDS (необязательный секрет или переменная): id аккаунтов админов через запятую. Если задан, кандидатом
-// считается только аккаунт из списка — юзернейм можно сменить, а id нет
+const ADMIN_HANDLES = ['YW5vcnJv', 'eXVrb21hZ29k'].map(atob);
 const adminIds = (env) => String(env.ADMIN_IDS || '').split(',').map((s) => s.trim()).filter(Boolean);
 const adminCandidate = (me, env) => {
   if (!me || !ADMIN_HANDLES.includes(String(me.handle || '').toLowerCase())) return false;
   const ids = adminIds(env || {});
   return !ids.length || ids.includes(me.id);
 };
-// юзернеймы админов заняты навсегда: никто другой не зарегистрирует их и не сменит на них свой (кроме аккаунтов из ADMIN_IDS)
 const reservedHandle = (env, h, me) => ADMIN_HANDLES.includes(String(h || '').toLowerCase()) && !(me && adminIds(env).includes(me.id));
 const PIN_RE = /^\d{4,8}$/;
-const PIN_SET_MS = 15 * 60e3; // после одноразового пароля пин-код нужно задать за 15 минут
+const PIN_SET_MS = 15 * 60e3;
 const adminRow = (env, me) => (me ? env.DB.prepare('SELECT user_id, pin_hash, pin_salt, pin_until FROM admins WHERE user_id = ?').bind(me.id).first() : null);
 const isAdmin = async (env, me) => !!(await adminRow(env, me));
-// вход в админку живёт 12 часов и привязан к этой сессии: украденный токен без пин-кода админку не откроет
 const ADMIN_TTL = 12 * 3600e3;
 const tokenHashOf = async (request) => { const m = (request.headers.get('authorization') || '').match(/^Bearer ([0-9a-f]{64})$/); return m ? sha256(m[1]) : null; };
 async function adminActive(env, request, me) {
@@ -209,7 +193,6 @@ async function adminActive(env, request, me) {
   const th = await tokenHashOf(request);
   return !!(th && (await env.DB.prepare('SELECT 1 FROM admin_sessions WHERE token_hash = ? AND user_id = ? AND until > ?').bind(th, me.id, Date.now()).first()));
 }
-// открыть админку в этой сессии на 12 часов
 async function openAdmin(env, request, me) {
   const th = await tokenHashOf(request), now = Date.now();
   await env.DB.batch([
@@ -218,7 +201,6 @@ async function openAdmin(env, request, me) {
   ]);
   return now + ADMIN_TTL;
 }
-// каждое действие в админке и каждая попытка входа записываются: кто, когда, с какого адреса
 const adminLog = async (env, request, me, action, ok) => {
   try {
     await env.DB.prepare('INSERT INTO admin_log (at, user_id, ip, action, ok) VALUES (?, ?, ?, ?, ?)')
@@ -228,7 +210,6 @@ const adminLog = async (env, request, me, action, ok) => {
 };
 // сравнение без подсказки по времени ответа: сравниваются отпечатки одинаковой длины (sameHex — выше)
 const sameSecret = async (a, b) => sameHex(await sha256(a), await sha256(b));
-// попытки входа (одноразовый пароль или пин-код): общий потолок на сервер и счётчики на аккаунт и на адрес
 async function adminTry(env, request, me) {
   const keys = ['admin:' + me.id, 'adminip:' + clientIp(request)];
   if (burst('adminunlock:all', 20, 60e3)) return { wait: 1, keys };
@@ -241,7 +222,6 @@ const adminTryOk = (env, t) => env.DB.batch([
   env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind(t.keys[0]),
   env.DB.prepare('UPDATE attempts SET count = MAX(0, count - 1) WHERE key = ?').bind(t.keys[1]),
 ]);
-// админ — это и тот, кто уже входил в админку, даже если сменил @: такого нельзя забанить, удалить или выкинуть
 const isAdminAccount = async (env, u) => ADMIN_HANDLES.includes(String(u.uname || '').toLowerCase()) || !!(await env.DB.prepare('SELECT 1 FROM admins WHERE user_id = ?').bind(u.id).first());
 const CM_MAX = 500; // символов в одном комментарии
 const CM_TARGET_RE = /^(wall|[rt]\.[\w.-]{1,80})$/; // стена, оценка или тир-лист
@@ -297,7 +277,6 @@ async function link(env, x, y) {
 const routes = {
   async 'POST /register'({ env, request }) {
     const ipKey = 'reg:' + clientIp(request);
-    // общий потолок на сервер: бот-сеть с тысяч адресов не наплодит аккаунтов и не выжжет записи в базу
     if (burst('reg:all', 30, 60e3)) return tooMany(1);
     const wait = await overLimit(env, ipKey, 'register');
     if (wait) return tooMany(wait);
@@ -325,7 +304,6 @@ const routes = {
     const { login, username, password } = await readBody(request);
     const ident = String(login || username || '').trim();
     const ipKey = 'login-ip:' + clientIp(request);
-    // общий потолок входов на сервер: перебор с многих адресов упирается в него раньше, чем в лимит базы
     if (burst('login:all', 300, 60e3)) return tooMany(1);
     const waitIp = await bump(env, ipKey, 'loginIp');
     if (waitIp) return tooMany(waitIp);
@@ -338,10 +316,8 @@ const routes = {
     // счётчик на сам аккаунт, а не на написанное: «@ник», «@@ник», почта и ник — один и тот же человек
     const accKey = u ? 'login-acc:' + u.id : '';
     if (u) { const waitAcc = await bump(env, accKey, 'loginAcc'); if (waitAcc) return tooMany(waitAcc); }
-    // и для несуществующего аккаунта считаем хеш: по времени ответа не понять, есть ли такой
     const hash = await hashPass(String(password || '').slice(0, 200), u ? u.salt : 'no-such-user-salt'); // паролей длиннее 200 не бывает
     if (!u || !sameHex(hash, u.pass_hash)) return fail(401, 'Неверная почта, юзернейм или пароль.');
-    // заблокированный аккаунт: пароль верный, но войти нельзя (об этом говорим только тому, кто знает пароль)
     if (u.banned) return fail(403, 'Аккаунт заблокирован администрацией' + (u.ban_reason ? ': ' + u.ban_reason : '.'));
     // пароль верный: попытка не считается
     await env.DB.batch([
@@ -354,22 +330,19 @@ const routes = {
 
   async 'POST /logout'({ env, request }) {
     const m = (request.headers.get('authorization') || '').match(/^Bearer ([0-9a-f]{64})$/);
-    if (m) { const th = await sha256(m[1]); await env.DB.batch([env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(th), env.DB.prepare('DELETE FROM admin_sessions WHERE token_hash = ?').bind(th)]); } // и вход в админку тоже закрывается
+    if (m) { const th = await sha256(m[1]); await env.DB.batch([env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(th), env.DB.prepare('DELETE FROM admin_sessions WHERE token_hash = ?').bind(th)]); }
     return json({ ok: true });
   },
 
   async 'GET /me'({ env, me }) {
-    // admin — звание «Администратор» в профиле (только у тех, кто уже вошёл в админку)
     return json({ user: { ...ownUser(me), admin: !!(await adminRow(env, me)) } });
   },
 
-  // админка: остальным отвечаем «нет такого адреса», чтобы не было видно, что она вообще есть
   async 'GET /admin/me'({ env, request, me }) {
     if (!adminCandidate(me, env)) return fail(404, 'Нет такого адреса.');
     const row = await adminRow(env, me);
     return json({ admin: !!row, pinSet: !!(row && row.pin_hash), active: !!row && (await adminActive(env, request, me)), ready: !!env.ADMIN_CODE, handle: me.handle });
   },
-  // одноразовый пароль ADMIN_CODE: первый вход, а у админа — сброс забытого пин-кода. После него — 15 минут, чтобы задать пин-код
   async 'POST /admin/unlock'({ env, request, me }) {
     if (!adminCandidate(me, env)) return fail(404, 'Нет такого адреса.');
     if (!env.ADMIN_CODE) return fail(503, 'Одноразовый пароль ещё не задан на сервере.');
@@ -388,7 +361,6 @@ const routes = {
     await adminTryOk(env, t);
     return json({ ok: true });
   },
-  // свой пин-код: только сразу после одноразового пароля (15 минут), и админка тут же открывается
   async 'POST /admin/pin/set'({ env, request, me }) {
     if (!adminCandidate(me, env)) return fail(404, 'Нет такого адреса.');
     const row = await adminRow(env, me);
@@ -402,7 +374,6 @@ const routes = {
     await adminLog(env, request, me, 'pin:set', true);
     return json({ ok: true, until: await openAdmin(env, request, me) });
   },
-  // вход в админку пин-кодом: открыта 12 часов в этой сессии
   async 'POST /admin/pin'({ env, request, me }) {
     if (!adminCandidate(me, env)) return fail(404, 'Нет такого адреса.');
     const row = await adminRow(env, me);
@@ -417,7 +388,6 @@ const routes = {
     await adminTryOk(env, t);
     return json({ ok: true, until: await openAdmin(env, request, me) });
   },
-  // выйти из админки (аккаунт остаётся админом, но в следующий раз нужен пин-код)
   async 'POST /admin/lock'({ env, request, me }) {
     if (!adminCandidate(me, env)) return fail(404, 'Нет такого адреса.');
     const th = await tokenHashOf(request);
@@ -431,7 +401,6 @@ const routes = {
     if (burst('ann:' + clientIp(request), 40, 60e3)) return tooMany(1); // страница просто пропустит этот раз, плашка не пропадёт
     return json({ announce: await currentAnnounce(env) });
   },
-  // ---------- инструменты админки: только с открытым входом в админку (пин-код на этом устройстве), каждое действие в журнале ----------
   async 'GET /admin/stats'({ env, request, me }) {
     if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
     const now = Date.now();
@@ -467,7 +436,6 @@ const routes = {
     ).bind(raw, like, offset).all();
     return json({ more: results.length > 50, users: results.slice(0, 50).map((u) => ({ id: u.id, username: u.username, handle: u.uname, email: u.email || '', createdAt: u.created_at, lastSeen: u.last_seen || null, banned: !!u.banned, banReason: u.ban_reason || '', ratings: u.ratings || 0, admin: !!u.adm || ADMIN_HANDLES.includes(String(u.uname).toLowerCase()) })) });
   },
-  // бан и разбан: заблокированный выходит со всех устройств, не может войти и ничего менять; админа забанить нельзя
   async 'POST /admin/ban/:id'({ env, request, me, arg }) {
     if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
     const { on, reason } = await readBody(request);
@@ -483,7 +451,6 @@ const routes = {
     await adminLog(env, request, me, (on ? 'ban ' : 'unban ') + u.uname, true);
     return json({ ok: true });
   },
-  // сменить человеку @юзернейм и/или ник: те же правила, что при смене самим человеком, юзернеймы админов другим не выдаются
   async 'POST /admin/rename/:id'({ env, request, me, arg }) {
     if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
     const { handle, username, email } = await readBody(request);
@@ -491,7 +458,6 @@ const routes = {
     if (!u) return fail(404, 'Нет такого аккаунта.');
     const h = handle != null && handle !== '' ? cleanHandle(handle) : null;
     const name = username != null && username !== '' ? cleanName(username) : null;
-    // почта: если в ней опечатка, админ может её поправить
     const mail = email != null && email !== '' ? cleanEmail(email) : null;
     const mailChange = mail != null && mail !== (u.email || '');
     const handleChange = h != null && h !== u.uname;
@@ -520,8 +486,6 @@ const routes = {
     if (handleChange || nameChange) await adminLog(env, request, me, `rename @${u.uname} → @${handleChange ? h : u.uname}${nameChange ? ' «' + name + '»' : ''}`, true);
     return json({ ok: true, handle: handleChange ? h : u.uname, username: nameChange ? name : u.username });
   },
-  // удалить чужой аккаунт насовсем: сам аккаунт и всё его — оценки, фото, друзья, реакции, комментарии, ссылки, сессии.
-  // Для подтверждения нужно прислать его @юзернейм; админа удалить нельзя
   async 'POST /admin/delete/:id'({ env, request, me, arg }) {
     if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
     const { confirm } = await readBody(request);
@@ -612,17 +576,14 @@ const routes = {
     // сначала все проверки, потом все записи: при ошибке в одном поле остальные не меняются наполовину
     if (mailChange && (!NEW_MAIL_RE.test(mail) || mail.length > 120)) return fail(400, 'Нужна почта, например name@mail.com.');
     if (handleChange && !HANDLE_RE.test(h)) return fail(400, HANDLE_HINT);
-    // свой прежний юзернейм админ вернуть может (он записан в таблице админов), остальные — нет
     if (handleChange && reservedHandle(env, h, me) && !(await env.DB.prepare('SELECT 1 FROM admins WHERE user_id = ? AND handle = ?').bind(me.id, h).first())) return fail(409, `Юзернейм @${h} уже занят.`);
     if (nameChange && !NAME_RE.test(name)) return fail(400, NAME_HINT);
     if (pass && weakPass(pass)) return fail(400, WEAK_PASS);
     if (pass || mailChange) {
-      // украденной сессии мало, чтобы угнать аккаунт: почту и пароль меняют, зная текущий пароль
       const wait = await bump(env, 'acc:' + me.id, 'loginAcc');
       if (wait) return tooMany(wait);
       const cur = String(current || '');
       const row = await env.DB.prepare('SELECT pass_hash, salt FROM users WHERE id = ?').bind(me.id).first();
-      // паролей длиннее 200 не бывает: огромную строку даже не хешируем, чтобы ей нельзя было нагрузить сервер
       if (!row || cur.length > 200 || !sameHex(await hashPass(cur, row.salt), row.pass_hash)) {
         return fail(403, current ? 'Текущий пароль не подходит.' : 'Чтобы сменить почту или пароль, впиши текущий пароль.');
       }
@@ -659,12 +620,11 @@ const routes = {
       // все остальные устройства выходят из аккаунта: если пароль утёк, старые сессии больше не работают
       const m = (request.headers.get('authorization') || '').match(/^Bearer ([0-9a-f]{64})$/);
       await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?').bind(me.id, m ? await sha256(m[1]) : '').run();
-      await env.DB.prepare('DELETE FROM admin_sessions WHERE user_id = ?').bind(me.id).run(); // после смены пароля в админку заново
+      await env.DB.prepare('DELETE FROM admin_sessions WHERE user_id = ?').bind(me.id).run();
     }
     return json({ user: ownUser(out) });
   },
 
-  // гость присылает случайный id из своего браузера, вошедший — токен
   async 'POST /ping'({ env, request }) {
     const ip = clientIp(request);
     if (burst('ping:' + ip, 150, 60e3)) return json({ online: onlineCache.n, friends: [] });
@@ -702,7 +662,6 @@ const routes = {
       const c = await env.DB.prepare("SELECT COUNT(*) AS n FROM friendships WHERE (a = ?1 OR b = ?1) AND status = 'pending' AND requested_by != ?1").bind(me.id).first();
       incoming = c ? c.n : 0;
     }
-    // authed: браузер прислал токен, а сессии уже нет (сменили пароль, выкинули, забанили): страница попросит войти заново
     const sentToken = /^Bearer /.test(request.headers.get('authorization') || '');
     return json({ online: Math.max(onlineCache.n, me ? 1 : 0), friends, incoming, window: ONLINE_MS, announce: await currentAnnounce(env), ...(sentToken ? { authed: !!me } : {}) });
   },
@@ -809,7 +768,6 @@ const routes = {
   // Оценки с разных устройств объединяются: по id остаётся более свежая версия,
   // удалённые (deleted: [{id, at}]) запоминаются и больше не возвращаются, их фото стираются.
   async 'PUT /shelf'({ env, request, me }) {
-    // обычный сайт шлёт оценки раз в несколько секунд; больше — это флуд записями
     if (burst('shelf:' + me.id, 40, 60e3)) return tooMany(1);
     const { ratings, deleted, cats, profile, sticker, layout } = await readBody(request);
     if (!Array.isArray(ratings)) return fail(400, 'Нужен список оценок.');
@@ -906,7 +864,7 @@ const routes = {
     // число друзей — для значка «Душа компании»
     const fc = await env.DB.prepare("SELECT COUNT(*) AS n FROM friendships WHERE (a = ?1 OR b = ?1) AND status = 'accepted'").bind(arg).first();
     const user = { ...pubUser(row), createdAt: row.created_at || null, friends: fc ? fc.n : 0, lastSeen: row.hide_online ? null : row.last_seen || null };
-    if (await env.DB.prepare('SELECT 1 FROM admins WHERE user_id = ?').bind(row.id).first()) user.admin = true; // звание «Администратор»
+    if (await env.DB.prepare('SELECT 1 FROM admins WHERE user_id = ?').bind(row.id).first()) user.admin = true;
     const shelf = await env.DB.prepare('SELECT data, updated_at FROM shelves WHERE user_id = ?').bind(arg).first();
     const s = readShelf(shelf);
     // свои категории видит только хозяин
@@ -1216,14 +1174,35 @@ const routes = {
     return json({ images: Object.fromEntries(results.map((x) => [x.key.slice(arg.length + 1), x.data])) });
   },
   // ---------- лоты по ссылке: ведущий открывает сбор и выбирает категорию, зрители добавляют лоты, у каждого свой лимит ----------
-  async 'GET /steam/search'({ request, me }) {
+  // игры для сбора: Steam и Википедия, там есть и то, чего нет в Steam
+  async 'GET /games/search'({ request, me }) {
     if (burst('steam:' + me.id, 60, 60e3)) return tooMany(1);
     const q = (new URL(request.url).searchParams.get('q') || '').trim().slice(0, 100);
     if (q.length < 2) return json({ items: [] });
-    try {
-      const d = await cachedJson('https://store.steampowered.com/api/storesearch/?l=russian&cc=US&term=' + encodeURIComponent(q), null, 86400);
-      return json({ items: (d.items || []).filter((x) => x && x.type === 'app' && Number.isInteger(x.id) && x.name).slice(0, 8).map((x) => ({ appId: x.id, name: clip(x.name, LOT_NAME), img: httpsOnly(x.tiny_image) })) });
-    } catch (e) { return fail(502, 'Steam сейчас не отвечает, попробуй ещё раз.'); }
+    const ru = CYR.test(q);
+    const names = ru ? await latinTitles(q, 'game').catch(() => []) : [];
+    const lists = await Promise.allSettled([steamGames(q), ...names.map(steamGames), wikiGames(q, ru ? 'ru' : 'en'), ...names.map((t) => wikiGames(t, 'en'))]);
+    if (lists.every((x) => x.status === 'rejected')) return fail(502, 'Поиск игр сейчас не отвечает, попробуй ещё раз.');
+    const seen = new Set(), items = [];
+    for (const l of lists) for (const x of l.status === 'fulfilled' ? l.value : []) { const k = lotKey(x.name); if (k && !seen.has(k)) { seen.add(k); items.push(x); } }
+    // точное совпадение первым, чтобы по «world of warcraft» сверху был он сам
+    const want = [lotKey(q), ...names.map(lotKey)];
+    return json({ items: items.sort((a, b) => want.includes(lotKey(b.name)) - want.includes(lotKey(a.name))).slice(0, 10) });
+  },
+  // своя картинка ведущего в центре колеса: одна на аккаунт, зрителям она видна, пока стоит на его колесе
+  async 'PUT /lots-hub'({ env, request, me }) {
+    if (burst('lothub:' + me.id, 30, 60e3)) return tooMany(1);
+    const { data } = await readBody(request);
+    if (typeof data !== 'string' || !/^data:image\/(jpeg|png|webp|gif);base64,[A-Za-z0-9+/]+=*$/.test(data)) return fail(400, 'Нужна картинка.');
+    if (data.length > MAX_PHOTO) return fail(413, 'Картинка слишком большая.');
+    const over = Math.max(await spend(env, 'photo:' + me.id, data.length, PHOTO_DAY_USER), await spend(env, 'photoip:' + clientIp(request), data.length, PHOTO_DAY_IP));
+    if (over) return fail(429, 'На сегодня лимит загрузки фото исчерпан.');
+    await env.DB.prepare('INSERT INTO photos (key, user_id, data, updated_at) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at').bind(`${me.id}:lothub`, me.id, data, Date.now()).run();
+    return json({ ok: true });
+  },
+  async 'DELETE /lots-hub'({ env, me }) {
+    await env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(`${me.id}:lothub`).run();
+    return json({ ok: true });
   },
   async 'POST /lots'({ env, request, me }) {
     if (burst('lotnew:' + me.id, 20, 600e3)) return tooMany(10);
@@ -1266,6 +1245,11 @@ const routes = {
     try { lot = await lotItem(room.kind, b); }
     catch (e) { return fail(502, 'Поиск сейчас не отвечает, попробуй ещё раз.'); }
     if (lot.error) return fail(lot.status || 400, lot.error);
+    // одна и та же игра могла прийти из разных источников
+    if (room.kind === 'game') {
+      const { results } = await env.DB.prepare('SELECT name FROM lots WHERE room_id = ?').bind(arg).all();
+      if (results.some((x) => lotKey(x.name) === lotKey(lot.name))) return fail(409, 'Это уже добавили.');
+    }
     const r = await env.DB.prepare(`INSERT INTO lots (room_id, id, user_id, ref, name, img, link, created_at)
       SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8 WHERE (SELECT COUNT(*) FROM lots WHERE room_id = ?1 AND user_id = ?3) < ?9 AND (SELECT COUNT(*) FROM lots WHERE room_id = ?1) < ?10
       ON CONFLICT(room_id, ref) DO NOTHING`).bind(arg, randHex(8), me.id, lot.ref, lot.name, lot.img, lot.link, now, room.per_user, MAX_LOTS).run();
@@ -1305,6 +1289,19 @@ const routes = {
     return json({ ok: true });
   },
   // что сейчас на колесе у ведущего: зрители рисуют то же самое
+  async 'GET /lots/:code/hub'({ env, request, arg }) {
+    if (burst('lothubget:' + clientIp(request), 240, 60e3)) return new Response(null, { status: 429 });
+    const room = await env.DB.prepare('SELECT r.owner_id, r.live, u.banned FROM lot_rooms r LEFT JOIN users u ON u.id = r.owner_id WHERE r.id = ?').bind(arg).first();
+    if (!room || room.banned) return new Response(null, { status: 404 });
+    let own = '';
+    try { own = (JSON.parse(room.live || 'null') || {}).hubOwn; } catch (e) {}
+    if (!own) return new Response(null, { status: 404 });
+    const row = await env.DB.prepare('SELECT data FROM photos WHERE key = ?').bind(`${room.owner_id}:lothub`).first();
+    const m = row && /^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/]+=*)$/.exec(row.data);
+    if (!m) return new Response(null, { status: 404 });
+    const bin = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0));
+    return new Response(bin, { headers: { 'content-type': m[1], 'cache-control': 'public, max-age=600', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'" } });
+  },
   async 'PUT /lots/:code/live'({ env, request, me, arg }) {
     if (burst('lotlive:' + me.id, 240, 60e3)) return tooMany(1);
     const live = cleanLive(await readBody(request));
@@ -1382,7 +1379,7 @@ const routes = {
   async 'GET /share/:id/img'({ env, request, arg }) {
     if (burst('shareimg:' + clientIp(request), 240, 60e3)) return new Response(null, { status: 429 });
     const sh = await env.DB.prepare('SELECT s.owner_id, s.rid, u.banned FROM shares s LEFT JOIN users u ON u.id = s.owner_id WHERE s.id = ?').bind(arg).first();
-    if (!sh || sh.banned) return new Response(null, { status: 404 }); // отзывы забаненного по ссылке не открываются
+    if (!sh || sh.banned) return new Response(null, { status: 404 });
     let row;
     if (sh.rid.startsWith('t.')) {
       // картинка тир-листа: отдаём только те, что есть в этом тир-листе
@@ -1616,7 +1613,31 @@ const tierMeta = (l) => ({
 const LOT_NAME = 60, MAX_LOTS = 300, MAX_LOT_ROOMS = 30;
 const LOT_KINDS = ['game', 'movie', 'anime', 'book', 'music', 'any'];
 const lotKey = (v) => String(v || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
-// что именно добавляют: название и картинку берём из каталога, а не со слов браузера. Только в категории «что угодно» текст свободный
+async function steamGames(q) {
+  const d = await cachedJson('https://store.steampowered.com/api/storesearch/?l=russian&cc=US&term=' + encodeURIComponent(q), null, 86400);
+  return (d.items || []).filter((x) => x && x.type === 'app' && Number.isInteger(x.id) && x.name && !/\b(soundtrack|ost|artbook|dlc)\b/i.test(x.name)).slice(0, 8).map((x) => ({ appId: x.id, name: clip(x.name, LOT_NAME), img: httpsOnly(x.tiny_image), sub: 'Steam' }));
+}
+// только сами игры: без серий, персонажей, студий и турниров
+const WIKI_GAME = { en: /\bvideo game(?: (?:by|from|developed|for)\b.*)?$|\bcomputer game$/i, ru: /компьютерная игра|видеоигра/i };
+const wikiApi = (lang) => `https://${lang}.wikipedia.org/w/api.php?format=json&action=query&redirects=1&prop=pageimages%7Cdescription&piprop=thumbnail&pithumbsize=500&pilicense=any&`;
+function wikiCard(p, lang) {
+  if (!p || !p.title || p.missing !== undefined || !WIKI_GAME[lang].test(p.description || '')) return null;
+  const year = (/\b(19|20)\d\d\b/.exec(p.description) || [''])[0];
+  const base = p.title.replace(/\s*\([^)]*\)\s*$/, '');
+  // у одноимённых игр разные годы: Doom (1993) и Doom (2016)
+  const name = clip(base !== p.title && year ? `${base} (${year})` : base, LOT_NAME).trim();
+  return { wiki: p.title, lang, name, img: httpsOnly(p.thumbnail && p.thumbnail.source), sub: year || 'Игра', link: `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(p.title.replace(/ /g, '_'))}` };
+}
+async function wikiGames(q, lang) {
+  const word = lang === 'ru' ? ' компьютерная игра' : ' video game';
+  const d = await cachedJson(wikiApi(lang) + 'generator=search&gsrlimit=15&gsrsearch=' + encodeURIComponent(q + word), null, 86400);
+  return Object.values((d.query && d.query.pages) || {}).sort((a, b) => a.index - b.index).map((p) => wikiCard(p, lang)).filter(Boolean).slice(0, 8).map(({ link, ...x }) => x);
+}
+async function wikiGame(title, lang) {
+  const d = await cachedJson(wikiApi(lang) + 'titles=' + encodeURIComponent(clip(title, 200)), null, 86400);
+  return Object.values((d.query && d.query.pages) || {}).map((p) => wikiCard(p, lang)).find(Boolean) || null;
+}
+// что именно добавляют: название и картинку берём из каталога, а не со слов браузера. Текст свободный только в категории «что угодно» и у игры, которой нет в каталогах
 async function lotItem(kind, b) {
   if (kind === 'any') {
     const name = clip(b.name, LOT_NAME).replace(SPOOF_RE, '').trim();
@@ -1624,6 +1645,17 @@ async function lotItem(kind, b) {
     return { ref: 'any:' + lotKey(name), name, img: '', link: '' };
   }
   if (kind === 'game') {
+    // игры нет ни в одном каталоге: хватит названия
+    if (typeof b.custom === 'string') {
+      const name = clip(b.custom, LOT_NAME).replace(SPOOF_RE, '').trim();
+      if (lotKey(name).length < 2) return { error: 'Впиши название игры.' };
+      return { ref: 'game:' + lotKey(name), name, img: '', link: '' };
+    }
+    if (typeof b.wiki === 'string') {
+      const lang = b.lang === 'ru' ? 'ru' : 'en', g = await wikiGame(b.wiki, lang);
+      if (!g) return { error: 'Выбери из списка.' };
+      return { ref: 'wiki:' + lang + ':' + lotKey(b.wiki), name: g.name, img: g.img, link: g.link };
+    }
     const appId = b.appId;
     if (!Number.isInteger(appId) || appId <= 0 || appId > 9999999999) return { error: 'Это не игра из Steam.' };
     const g = ((await cachedJson(`https://store.steampowered.com/api/appdetails?appids=${appId}&l=russian&cc=US&filters=basic`, null, 86400)) || {})[appId];
@@ -1651,6 +1683,8 @@ function cleanLive(b) {
     segs: (Array.isArray(b && b.segs) ? b.segs : []).slice(0, MAX_LOTS).map((x) => ({ n: clip(x && x.n, LOT_NAME), p: Math.max(0, Math.min(1, finite(x && x.p))), c: HEX_COLOR.test(String(x && x.c)) ? x.c : '#64748B', t: HEX_COLOR.test(String(x && x.t)) ? x.t : '#FFFFFF' })),
     rot: finite(b && b.rot), spin, pick: clip(b && b.pick, LOT_NAME), hub: Math.max(10, Math.min(60, finite(b && b.hub) || 24)),
     hubImg: b && STICKER_RE.test(String(b.hubImg)) ? b.hubImg : '',
+    hubOwn: b && /^g[a-z0-9]{1,30}$/.test(String(b.hubOwn)) ? b.hubOwn : '',
+    seen: Math.max(0, Math.min(MAX_LOTS, Math.round(finite(b && b.seen)))),
     music: { bg: lotTrack(b && b.music && b.music.bg), win: lotTrack(b && b.music && b.music.win) },
     status: clip(b && b.status, 140),
     out: (Array.isArray(b && b.out) ? b.out : []).slice(0, MAX_LOTS).map((x) => clip(x, LOT_NAME)),
@@ -1709,7 +1743,6 @@ async function appleMusicSearch(q, album) {
     return { title: album ? x.collectionName : x.trackName, artist: x.artistName, album: album ? '' : x.collectionName, year: String(x.releaseDate || '').slice(0, 4), kind: album ? 'Альбом' : 'Трек', art: a.replace(/\/\d+x\d+bb\./, '/600x600bb.'), thumb: a.replace(/\/\d+x\d+bb\./, '/200x200bb.'), source: 'Apple Music', link: album ? x.collectionViewUrl : x.trackViewUrl };
   });
 }
-// Spotify ищет только с ключом разработчика: секреты SPOTIFY_CLIENT_ID и SPOTIFY_CLIENT_SECRET. Без них этот источник просто пропускается
 let spotifyAuth = { token: '', until: 0 };
 async function spotifySearch(env, q, album) {
   if (!env.SPOTIFY_CLIENT_ID || !env.SPOTIFY_CLIENT_SECRET) return [];
@@ -1795,10 +1828,8 @@ function cleanLayout(l) {
   return out;
 }
 const STICKER_RE = /^hub\/(?!.*\.\.)[\w\-\/.]{1,100}\.(png|gif|webp|webm|jpe?g)$/; // путь картинки из каталога колеса
-// 🔥 огонь, 💀 жесть, 🙅 не согласен, 😂 ору, 😍 обожаю, 👍 согласен, 👎 мимо, 🤔 спорно, 😭 до слёз, 🤡 клоунада, 🗿 база, 🐐 легенда
+// 🔥 огонь, 💀 жесть, 🙅 не согласен, 😂 ору, 😍 обожаю, 👍 согласен, 👎 мимо, 🤔 спорно, 😭 до слёз, 🤡 клоунада, 🗿 база, 🐐 GOAT
 const REACTIONS = ['fire', 'skull', 'nope', 'lol', 'love', 'like', 'dislike', 'think', 'cry', 'clown', 'moai', 'goat'];
-// ---------- Genius: фото исполнителей ----------
-// Токен лежит в секрете GENIUS_TOKEN и наружу не уходит. Поиск доступен только вошедшим, ответы кэшируются на сутки.
 const GENIUS_IMG = /^https:\/\/(images|assets|t2)\.genius\.com\/|^https:\/\/images\.rapgenius\.com\/|^https:\/\/(cdn-images|e-cdns-images)\.dzcdn\.net\//;
 let geniusPause = 0; // после 429 Genius минуту не трогаем (в пределах одного экземпляра сервера)
 function geniusArtists(d) {
@@ -2056,7 +2087,7 @@ async function canSee(env, me, uid) {
   return !!row && row.status === 'accepted';
 }
 
-const PUBLIC = new Set(['POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code']);
+const PUBLIC = new Set(['POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub']);
 // код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности
 const SHARE_RE = /^[A-Za-z0-9]{12}$/;
 function shareId() {
@@ -2066,7 +2097,6 @@ function shareId() {
 const ONLINE_MS = 150e3; // «в сети» — заходил за последние 2,5 минуты
 const onlineCache = { n: 0, at: 0 };
 const announceCache = { v: null, at: 0 };
-// объявление из админки: читается из базы не чаще раза в 5 секунд на сервер
 async function currentAnnounce(env) {
   const now = Date.now();
   if (announceCache.at < now - 5e3) {
@@ -2102,11 +2132,11 @@ export async function onRequest({ request, env, params }) {
   if (!routes[key] && segs.length === 2 && segs[0] === 'reacts') { key = `${request.method} /reacts/:id`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'lots' && SHARE_RE.test(segs[1])) { key = `${request.method} /lots/:code`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'live') { key = `${request.method} /lots/:code/live`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'hub') { key = `${request.method} /lots/:code/hub`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'share' && SHARE_RE.test(segs[1])) { key = `${request.method} /share/:id`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'share' && segs[2] === 'img' && SHARE_RE.test(segs[1])) { key = `${request.method} /share/:id/img`; arg = segs[1]; }
   const handler = routes[key];
   if (!handler) return fail(404, 'Нет такого адреса.');
-  // флуд с одного адреса гасится до базы данных
   const ip = clientIp(request);
   // щедро: за одним адресом бывает много людей (мобильный интернет), а доска друга с фото — это десятки запросов
   const slow = burst('all:' + ip, 900, 60e3) || (request.method !== 'GET' && burst('w:' + ip, 150, 60e3));

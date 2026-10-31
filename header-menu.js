@@ -127,14 +127,13 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     document.documentElement.style.overflow = '';
   }
 
-  // админы сайта: им видна кнопка «Админ». Это только кнопка, доступ к админке проверяет сервер
-  const ADMINS = ['anorro', 'yukomagod'];
+  const ADMINS = ['YW5vcnJv', 'eXVrb21hZ29k'].map((x) => atob(x));
   function adminBtn(cls) {
     let u = null, t = null, seen = null;
     try {
       u = JSON.parse(localStorage.getItem('ocenshik.user.v1') || 'null');
       t = u && (JSON.parse(localStorage.getItem('casualhub.tokens.v1') || 'null') || {})[u.id];
-      seen = localStorage.getItem('casualhub.admin.v1'); // админка уже открывалась с этого аккаунта
+      seen = localStorage.getItem('casualhub.admin.v1');
     } catch (e) {}
     if (!u || !t || !(ADMINS.includes(String(u.handle || '').toLowerCase()) || seen === u.id)) return null;
     const a = document.createElement('a');
@@ -247,7 +246,6 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     all.innerHTML = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1.3"/><rect x="9" y="2" width="5" height="5" rx="1.3"/><rect x="2" y="9" width="5" height="5" rx="1.3"/><rect x="9" y="9" width="5" height="5" rx="1.3"/></svg><span class="hm-t">Все оценки</span><span class="hm-go" aria-hidden="true">›</span>';
     panel.prepend(all);
 
-    // «Админ» — последний пункт меню, только у админов (кто админ на самом деле, проверяет сервер)
     const adm = adminBtn(cls);
     // «Что нового»: в самом углу страницы, на узком экране — в меню
     const wn = bar.querySelector('[data-whatsnew]');

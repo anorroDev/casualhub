@@ -31,7 +31,6 @@ const fmt = (n, T) => Number(n).toLocaleString(T.locale, { minimumFractionDigits
 const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const lines = (t) => String(t || '').split(/\r?\n/).map((x) => x.replace(/^[+\-•*]\s*/, '').trim()).filter(Boolean).slice(0, 30);
 
-// флуд с одного адреса гасится до базы
 const HITS = new Map();
 function tooFast(ip) {
   const now = Date.now();
@@ -163,8 +162,8 @@ function tierResponse(request, T, id, user, l, at) {
     `<meta property="og:title" content="${esc(title)}">`,
     `<meta property="og:description" content="${esc(desc)}">`,
     `<meta property="og:url" content="${esc(origin + '/r/' + id)}">`,
-    first ? `<meta property="og:image" content="${esc(origin + first)}">` : '',
-    `<meta name="twitter:card" content="summary">`,
+    `<meta property="og:image" content="${esc(origin + (first || '/og/tierlist.jpg'))}">`,
+    `<meta name="twitter:card" content="${first ? 'summary' : 'summary_large_image'}">`,
   ].join('\n');
   const when = at ? new Date(at).toLocaleDateString(T.locale, { day: 'numeric', month: 'long', year: 'numeric' }) : '';
   const body = `<main class="card">
@@ -188,7 +187,7 @@ export async function onRequest({ request, env, params }) {
     sh = await env.DB.prepare('SELECT owner_id, rid FROM shares WHERE id = ?').bind(id).first();
     if (!sh) return notFound(T);
     user = await env.DB.prepare('SELECT username, uname, banned FROM users WHERE id = ?').bind(sh.owner_id).first();
-    if (user && user.banned) return notFound(T, sh.rid.startsWith('t.')); // отзывы забаненного по ссылке не открываются
+    if (user && user.banned) return notFound(T, sh.rid.startsWith('t.'));
     if (sh.rid.startsWith('t.')) {
       if (!user) return notFound(T, true);
       const row = await env.DB.prepare('SELECT data, at FROM tierlists WHERE user_id = ? AND id = ?').bind(sh.owner_id, sh.rid.slice(2)).first();
@@ -216,8 +215,8 @@ export async function onRequest({ request, env, params }) {
     `<meta property="og:title" content="${esc(title)}">`,
     `<meta property="og:description" content="${esc(desc)}">`,
     `<meta property="og:url" content="${esc(origin + '/r/' + id)}">`,
-    photo ? `<meta property="og:image" content="${esc(photo.startsWith('/') ? origin + photo : photo)}">` : '',
-    `<meta name="twitter:card" content="${photo ? 'summary_large_image' : 'summary'}">`,
+    `<meta property="og:image" content="${esc(!photo ? origin + '/og/opinion.jpg' : photo.startsWith('/') ? origin + photo : photo)}">`,
+    `<meta name="twitter:card" content="summary_large_image">`,
   ].join('\n');
 
   const body = `<main class="card">

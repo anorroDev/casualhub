@@ -14,6 +14,16 @@ img{max-width:100%}
 [hidden]{display:none!important}
 </style>
 <title>Тир-листы Казуала</title>
+<meta name="description" content="Собирай тир-листы из своих картинок, текста, оценок и стикеров.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Казуал Хаб">
+<meta property="og:title" content="Тир-листы Казуала">
+<meta property="og:description" content="Собирай тир-листы из своих картинок, текста, оценок и стикеров.">
+<meta property="og:url" content="https://casualhub.pages.dev/tierlist/">
+<meta property="og:image" content="https://casualhub.pages.dev/og/tierlist.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Handjet:wght@400..800&family=Onest:wght@400..700&display=block">
@@ -173,12 +183,10 @@ html:active-view-transition-type(back)::view-transition-new(root) { animation: v
 }
 .btn:active:not(:disabled), .seg button:active, .theme-btn:active, .mini-btn:active:not(:disabled),
 .theme-opt:active, .mnav button:active, .th:active, .opt:active { transform: scale(.96); }
-.enter { animation: enter-up .24s cubic-bezier(.2, .8, .2, 1) both; }
-.theme-pick[open] .theme-menu, details.tool[open] > .dbody { animation: enter-up .2s cubic-bezier(.2, .8, .2, 1) both; }
+.theme-pick[open] .theme-menu { animation: enter-up .2s cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes enter-up { from { transform: translateY(8px); } }
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
-  .enter { animation: none; }
 }
 .theme-pick { position: relative; }
 .theme-pick > summary { list-style: none; }
@@ -244,8 +252,6 @@ svg { flex: none; }
 .scale { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 6px; font-size: 12.5px; color: var(--ink-2); }
 .scale span { display: inline-flex; align-items: center; gap: 7px; padding: 5px 10px 5px 7px; background: var(--panel); border: 1px solid var(--line); border-radius: 999px; }
 .scale i { width: 16px; height: 10px; border-radius: 3px; }
-.scale .k-win i { background: var(--ink); }
-.scale .k-out i { background: var(--bad); }
 
 .layout { display: grid; gap: 20px; align-items: start; }
 @media (min-width: 980px) { .layout { grid-template-columns: minmax(0, 1fr) minmax(0, 1.55fr); gap: 24px; } }
@@ -262,8 +268,7 @@ svg { flex: none; }
 .btn:disabled { opacity: .45; cursor: default; }
 .mini-btn { flex: none; width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 8px; background: transparent; color: var(--ink-3); cursor: pointer; }
 .mini-btn:disabled { opacity: .3; cursor: default; }
-.link-btn { border: 0; background: none; padding: 0; color: var(--accent); font-weight: 600; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
-.btn:focus-visible, .mini-btn:focus-visible, .link-btn:focus-visible, .seg button:focus-visible, .theme-btn:focus-visible, .th:focus-visible, details > summary:focus-visible {
+.btn:focus-visible, .mini-btn:focus-visible, .seg button:focus-visible, .theme-btn:focus-visible, .th:focus-visible, details > summary:focus-visible {
   outline: 2px solid var(--accent); outline-offset: 2px;
 }
 
@@ -289,8 +294,6 @@ svg { flex: none; }
   background: rgba(5, 6, 10, .55); overscroll-behavior: contain;
 }
 .sheet-card { width: min(520px, 100%); max-height: 100%; overflow: auto; display: grid; gap: 16px; padding: 22px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; }
-.sheet-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.sheet-actions .btn { flex: 1 1 auto; }
 @keyframes pop { from { transform: translateY(12px) scale(.97); opacity: 0; } to { transform: none; opacity: 1; } }
 .sheet:not([hidden]) .sheet-card { animation: pop .35s cubic-bezier(.2, 1.2, .4, 1); }
 button, label, summary, input, textarea, select, a { touch-action: manipulation; }
@@ -306,7 +309,6 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
     width: 100%; max-height: 92vh; max-height: 92dvh; border-bottom: 0; border-radius: 18px 18px 0 0;
     padding: 18px max(16px, env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
   }
-  .sheet-actions .btn { flex: 1 1 100%; }
 }
 
 @media (hover: hover) {
@@ -372,9 +374,6 @@ html::after {
 }
 .theme-btn:hover { box-shadow: 0 6px 18px -10px color-mix(in srgb, var(--accent) 60%, transparent); }
 #backLink:hover { transform: translateX(-2px); }
-#opinionLink svg rect { transform-box: fill-box; transform-origin: 50% 100%; transition: transform .35s var(--spring); }
-#opinionLink:hover svg rect:nth-child(2) { transform: scaleY(1.2); }
-#opinionLink:hover svg rect:nth-child(3) { transform: scaleY(.8); }
 .scale span { background: color-mix(in srgb, var(--panel) 92%, transparent); }
 .theme-menu { border-radius: 16px; transform-origin: 90% 0; box-shadow: 0 24px 50px -20px color-mix(in srgb, var(--ink) 55%, transparent); }
 .theme-pick[open] .theme-menu { animation: menu-in .26s var(--spring) both; }
@@ -385,8 +384,8 @@ html.theme-swap::view-transition-old(root) { animation: none; }
 html.theme-swap::view-transition-new(root) { animation: theme-circle .6s cubic-bezier(.4, 0, .2, 1) both; }
 @keyframes theme-circle { from { clip-path: circle(0 at var(--tx, 50%) var(--ty, 0)); } to { clip-path: circle(150vmax at var(--tx, 50%) var(--ty, 0)); } }
 @media (max-width: 560px) {
-  #themeBtn span, .ml-text, .hl-full, .wn-text { display: none; }
-  #themeBtn, #opinionLink, #whatsNewBtn { width: 36px; padding: 0; }
+  #themeBtn span, .hl-full, .wn-text { display: none; }
+  #themeBtn, #whatsNewBtn { width: 36px; padding: 0; }
   #githubLink { display: none; }
   .masthead { gap: 18px; }
   .masthead-right > .user-bar { flex-wrap: nowrap; gap: 6px; }
@@ -416,7 +415,6 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
 /* The dot next to the card title breathes: a ring that scales and fades */
 .eyebrow .dot { position: relative; }
 .eyebrow .dot::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: inherit; animation: breathe 2.6s ease-out infinite; }
-.stage.is-spinning .eyebrow .dot::after { animation-duration: .7s; }
 @keyframes breathe { 0% { transform: scale(1); opacity: .6; } 60%, 100% { transform: scale(2.4); opacity: 0; } }
 
 /* Inputs and buttons */

@@ -4,6 +4,16 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Админ-панель · Казуал Хаб</title>
+<meta name="description" content="Оценивай всё подряд, крути колесо и собирай тир-листы.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Казуал Хаб">
+<meta property="og:title" content="Казуал Хаб">
+<meta property="og:description" content="Оценивай всё подряд, крути колесо и собирай тир-листы.">
+<meta property="og:url" content="https://casualhub.pages.dev/">
+<meta property="og:image" content="https://casualhub.pages.dev/og/hub.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="robots" content="noindex, nofollow">
 <link rel="icon" href="/favicon.ico?v=2" sizes="48x48">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
@@ -14,7 +24,6 @@
 <script src="/i18n.js"></script>
 <script src="/profile/head.js"></script>
 <style>
-/* Админ-панель: шапка как у профиля, дальше вход по одноразовому паролю или сама панель. Стили и темы — как в профиле. */
 :root {
   --bg: #ECEEF3; --dot: #D3D7E0; --panel: #FFFFFF; --panel-2: #F4F5F8;
   --ink: #14161C; --ink-2: #565C6B; --ink-3: #666C7B; --line: #DADDE5; --cell: #E1E4EB;
@@ -123,7 +132,6 @@
   --good: #2E9E5B; --mid: #D99A12; --bad: #DE5340; --bad-ink: #B13628; --on-tier: #25210F;
   color-scheme: light;
 }
-/* Ещё тёмные темы: Аметист, Кофе, Вампир, Графит (чёрная, для OLED-экранов) */
 :root[data-theme="amethyst"] {
   --bg: #110E1C; --dot: #1F1A32; --panel: #171328; --panel-2: #1E1933;
   --ink: #ECE8FA; --ink-2: #ADA4C8; --ink-3: #837A9F; --line: #2C2645; --cell: #27213E;
@@ -161,7 +169,6 @@
   color-scheme: dark;
 }
 
-/* Motion shared by all Casual Hub pages */
 @view-transition { navigation: auto; }
 ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
 html:active-view-transition-type(forward)::view-transition-old(root) { animation: vt-out-l .42s cubic-bezier(.4, 0, .2, 1) both; }
@@ -206,7 +213,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .page { max-width: 1180px; margin: 0 auto; padding-block: 20px 56px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 
-/* Top bar */
 .top { display: flex; flex-wrap: wrap; justify-content: flex-end; row-gap: 6px; align-items: center; gap: 8px; margin-bottom: 22px; animation: drop-in .6s var(--out) backwards; }
 .top .sp { flex: 1; }
 .online-chip { cursor: default; }
@@ -222,7 +228,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .pill:hover { border-color: color-mix(in srgb, var(--accent) 70%, var(--line)); color: var(--ink); box-shadow: 0 6px 18px -10px color-mix(in srgb, var(--accent) 60%, transparent); }
 .pill:active { transform: scale(.95); }
 .pill svg { flex: none; }
-.pill:focus-visible, .btn:focus-visible, .chip:focus-visible, .seg button:focus-visible, .fr:focus-visible, .theme-opt:focus-visible, .search:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pill:focus-visible, .btn:focus-visible, .fr:focus-visible, .theme-opt:focus-visible, .search:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .theme-pick { position: relative; }
 .theme-pick > summary { list-style: none; }
 .theme-pick > summary::-webkit-details-marker { display: none; }
@@ -238,7 +244,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .theme-opt:hover i { transform: rotate(180deg) scale(1.1); }
 .theme-opt[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
 
-/* Cards */
 .card {
   background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 93%, var(--accent)) 0, var(--panel) 140px);
   border: 1px solid var(--line); border-radius: 22px; padding: 22px; box-shadow: var(--lift); min-width: 0;
@@ -259,8 +264,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .btn.ghost:hover { border-color: color-mix(in srgb, var(--ink) 32%, var(--line)); }
 .btn:active { transform: scale(.96); }
 
-
-/* Админ-панель */
 .adm { display: grid; gap: 16px; }
 .adm-hero { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
 .adm-ic { flex: none; width: 64px; height: 64px; border-radius: 20px; display: grid; place-items: center; color: #fff; background: linear-gradient(140deg, #F87171, #C81E1E); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), 0 14px 30px -14px #C81E1E; }
@@ -281,7 +284,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .adm-lock.shake { animation: adm-shake .4s; }
 @keyframes adm-shake { 20%, 60% { transform: translateX(-8px); } 40%, 80% { transform: translateX(8px); } }
 @media (prefers-reduced-motion: reduce) { .adm-lock.shake { animation: none; } }
-/* разделы админки: вкладки, статистика, списки людей и комментариев, объявление, журнал */
 .btn.small { height: 34px; padding: 0 12px; font-size: 13px; }
 .btn.danger { background: var(--bad); color: #fff; border-color: var(--bad); }
 .btn.danger:hover { background: color-mix(in srgb, var(--bad) 85%, #000); }
@@ -319,7 +321,6 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .adm-more { display: block; margin: 12px auto 0; }
 .btn:disabled { opacity: .55; cursor: default; }
 @media (prefers-reduced-motion: reduce) { .adm-stat, .adm-row, .adm-row.gone { animation: none; } }
-/* окно админки: смена @юзернейма, ника и почты, бан, удаление — в стиле сайта, поверх размытой страницы */
 body.adm-lock-scroll { overflow: hidden; }
 .adm-modal { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg) 50%, transparent); -webkit-backdrop-filter: blur(10px) saturate(1.1); backdrop-filter: blur(10px) saturate(1.1); }
 .adm-dlg { position: relative; width: min(100%, 440px); max-height: calc(100dvh - 32px); overflow-y: auto; display: grid; gap: 12px; padding: 26px 22px 20px; border-radius: 24px; background: linear-gradient(160deg, var(--panel), color-mix(in srgb, var(--accent-soft) 55%, var(--panel))); border: 2px solid var(--accent); box-shadow: 0 30px 70px -24px rgba(0, 0, 0, .55), 0 14px 34px -18px color-mix(in srgb, var(--accent) 70%, transparent); text-align: center; animation: dlg-in .5s var(--spring); }

@@ -5,6 +5,15 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Профиль · Казуал Хаб</title>
 <meta name="description" content="Профиль в Казуал Хабе: все оценки, любимое, статистика и друзья.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Казуал Хаб">
+<meta property="og:title" content="Профиль · Казуал Хаб">
+<meta property="og:description" content="Профиль в Казуал Хабе: все оценки, любимое, статистика и друзья.">
+<meta property="og:url" content="https://casualhub.pages.dev/profile/">
+<meta property="og:image" content="https://casualhub.pages.dev/og/profile.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="icon" href="/favicon.ico?v=2" sizes="48x48">
 <link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
 <link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2">
@@ -426,7 +435,6 @@ button.nick-st:focus-visible { outline: 2px solid var(--accent); outline-offset:
   background: var(--panel-2); border: 1px solid var(--line); font-size: 12.5px; font-weight: 700; color: var(--ink);
 }
 .title-chip i { width: 8px; height: 8px; border-radius: 2px; background: var(--tier, var(--accent)); }
-/* звание «Администратор»: красное, у админов сайта */
 .title-chip.t-admin { background: color-mix(in srgb, var(--bad) 16%, var(--panel)); border-color: color-mix(in srgb, var(--bad) 60%, var(--line)); color: var(--bad-ink); box-shadow: 0 0 0 3px color-mix(in srgb, var(--bad) 12%, transparent); }
 .title-chip.t-admin i { background: var(--bad); border-radius: 50%; box-shadow: 0 0 6px var(--bad); }
 .hero-acts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
@@ -556,8 +564,7 @@ button.stat:focus-visible, a.item:focus-visible, a.pod:focus-visible, button.cat
 .hp-n { min-width: 17px; height: 17px; padding: 0 4px; border-radius: 99px; display: grid; place-items: center; background: color-mix(in srgb, var(--ink-3) 30%, transparent); color: var(--ink-2); font-style: normal; font-size: 10.5px; font-weight: 800; }
 .genre-btn { display: inline-flex; align-items: center; gap: 7px; }
 .gb-n { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 99px; display: grid; place-items: center; background: var(--accent); color: #fff; font-size: 11px; font-weight: 800; }
-/* Витрины: топ-3/5/10 из темы постерами или списком */
-.shows { display: grid; gap: 16px; margin-top: 16px; }
+
 .sc-row.as-posters { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 12px; }
 .sc-it { display: grid; gap: 6px; align-content: start; color: inherit; text-decoration: none; transition: transform .25s var(--spring); }
 .sc-it:hover { transform: translateY(-3px); }

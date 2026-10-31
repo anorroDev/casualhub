@@ -25,7 +25,7 @@
   }
 
   const KINDS = {
-    game: { label: 'Игры из Steam', add: 'Добавить игру из Steam', ph: 'Название игры или ссылка на неё в Steam' },
+    game: { label: 'Игры', add: 'Добавить игру', ph: 'Название игры или ссылка на неё в Steam' },
     movie: { label: 'Фильмы и сериалы', add: 'Добавить фильм или сериал', ph: 'Название фильма или сериала' },
     anime: { label: 'Аниме', add: 'Добавить аниме', ph: 'Название аниме' },
     book: { label: 'Книги', add: 'Добавить книгу', ph: 'Название книги или автор' },
@@ -41,7 +41,9 @@
     { id: 'chopin', title: 'Шопен — Вальс до-диез минор, оп. 64 № 2', key: 'SUT_0c2QVzo', start: 5 },
     { id: 'eva', title: 'Evangelion — E05 (ReMaster TV Original)', key: '7dVDG6IqtV8', alt: ['ELcLRK8LZ-o'], start: 0 },
   ];
-  const code = location.hash.slice(1);
+  // адрес сбора: /lots/<код>; старые ссылки /lots/#<код> тоже работают
+  const pathCode = /^\/lots\/([A-Za-z0-9]{12})\/?$/.exec(location.pathname);
+  const code = pathCode ? pathCode[1] : location.hash.slice(1);
   const view = $('#view');
   const S = { room: null, lots: [], live: null, offset: 0, results: [], busy: false, winner: null, firstPoll: true };
   const serverNow = () => Date.now() + S.offset;
@@ -247,15 +249,17 @@
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
   };
   const inkOn = (c) => { const L = lum(c); return (L + 0.05) / (lum('#14161C') + 0.05) >= 1.05 / (L + 0.05) ? '#14161C' : '#FFFFFF'; };
-  // колесо ещё не запускали: показываем лоты сразу, вкладка ведущего может быть в фоне и прислать их позже
+  // на колесе то же, что у ведущего. Новые лоты, которые его вкладка ещё не забрала, видны сразу: она может быть в фоне
   function shownSegs() {
     const live = S.live;
     const hostSegs = live && Array.isArray(live.segs) ? live.segs : [];
-    const started = live && (live.spin || (live.out && live.out.length) || live.winner);
-    if (started || !S.lots.length) return hostSegs;
-    const names = new Set(hostSegs.map((x) => x.n));
-    if (hostSegs.length >= S.lots.length && S.lots.every((l) => names.has(l.name))) return hostSegs;
-    return S.lots.map((l, i) => { const c = PALETTE[i % PALETTE.length]; return { n: l.name, p: 1 / S.lots.length, c, t: inkOn(c) }; });
+    // пока крутится и после победы колесо должно точно совпадать с колесом ведущего
+    if (live && (live.winner || (live.spin && serverNow() < live.spin.at + live.spin.ms))) return hostSegs;
+    const names = new Set([...hostSegs.map((x) => x.n), ...(live && Array.isArray(live.out) ? live.out : [])].map((n) => n.toLowerCase()));
+    const wait = S.lots.slice(live ? +live.seen || 0 : 0).filter((x) => !names.has(x.name.toLowerCase()));
+    if (!wait.length) return hostSegs;
+    const n = hostSegs.length + wait.length;
+    return [...hostSegs.map((x) => ({ ...x, p: x.p * hostSegs.length / n })), ...wait.map((x, i) => { const c = PALETTE[(hostSegs.length + i) % PALETTE.length]; return { n: x.name, p: 1 / n, c, t: inkOn(c) }; })];
   }
   const place = (segs) => { let acc = 0; return segs.map((s) => { const start = acc * TAU; acc += s.p; return { ...s, start, end: acc * TAU }; }); };
   function readTheme() {
@@ -339,7 +343,9 @@
   const WEBM_SRC = (src) => '/wheel/' + (WEBM_OK ? src : src.replace(/\.webm$/i, '.mp4'));
   function paintHubImg(src) {
     const img = $('#hubImg'), vid = $('#hubVid'), isVid = /\.webm$/i.test(src || '');
-    if (src && !isVid) { if (img.getAttribute('src') !== WEBM_SRC(src)) img.src = WEBM_SRC(src); img.hidden = false; }
+    // своя картинка ведущего приходит с сервера, остальные лежат в каталоге колеса
+    const url = src && src[0] === '/' ? src : WEBM_SRC(src || '');
+    if (src && !isVid) { if (img.getAttribute('src') !== url) img.src = url; img.hidden = false; }
     else { img.hidden = true; img.removeAttribute('src'); }
     if (isVid) {
       if (vid.getAttribute('src') !== WEBM_SRC(src)) vid.src = WEBM_SRC(src);
@@ -381,7 +387,7 @@
     const live = S.live || { rot: 0 };
     hubPct = +live.hub || 24;
     $('.wheel-wrap').style.setProperty('--hub', hubPct + '%');
-    paintHubImg(live.hubImg || '');
+    paintHubImg(live.hubOwn ? `/api/lots/${encodeURIComponent(code)}/hub?v=${encodeURIComponent(live.hubOwn)}` : live.hubImg || '');
     const segs = place(shownSegs());
     const spin = live.spin;
     if (spin && serverNow() < spin.at + spin.ms) {
@@ -571,13 +577,13 @@
     });
   }
   function openWinner(name) {
-    const lot = S.lots.find((l) => l.name === name);
+    const lot = S.lots.find((l) => l.name.toLowerCase() === name.toLowerCase());
     $('#wName').textContent = name;
     $('#wStats').innerHTML = lot ? `${lot.img ? `<img class="lots-win-img" src="${esc(lot.img)}" alt="" referrerpolicy="no-referrer">` : ''}<div class="total-meta"><strong>Лот от: ${esc(lot.by)}</strong><span>Участников было на колесе: ${S.lots.length}${S.live && S.live.winner && S.live.winner.sum ? ' · донат ' + esc(S.live.winner.sum) : ''}</span></div>` : '';
     $('#wStats').hidden = !lot;
     const link = $('#wLink');
     link.hidden = !(lot && lot.link);
-    if (lot && lot.link) link.href = lot.link;
+    if (lot && lot.link) { link.href = lot.link; link.textContent = linkName(lot.link); }
     $('#winner').hidden = false;
     $('#wClose').focus({ preventScroll: true });
     if (!reduced) {
@@ -617,6 +623,8 @@
 
   // ---------- страница ----------
   // заголовок по буквам, как на всём сайте; длинное название мельче
+  // буквы собираются из готового текста, поэтому общий заголовок переводим заранее
+  const baseTitle = () => (window.CasualLang && window.CasualLang.t ? window.CasualLang.t('Сбор лотов') : 'Сбор лотов');
   function setTitle(title, again) {
     const head = $('#lotTitle');
     if (!again && head.dataset.t === title) return;
@@ -629,7 +637,7 @@
   }
   function paintHead() {
     const r = S.room;
-    const title = r.title || 'Сбор лотов';
+    const title = r.title || baseTitle();
     setTitle(title);
     document.title = `${title} · Казуал Хаб`;
     $('#lotLede').textContent = `Ведущий: ${r.owner}. Категория: ${kindOf().label}. Можно добавить ${r.perUser} ${plural(r.perUser, 'лот', 'лота', 'лотов')} на человека.`;
@@ -665,21 +673,34 @@
       <div class="lots-results" id="lotResults" hidden></div>`;
   }
   const lotMsg = (t) => { const m = $('#lotMsg'); if (m) { m.textContent = t || ''; m.hidden = !t; } };
+  // что ведущий вписал на колесо сам, в сборе не хранится, но зрители должны это видеть
+  function hostNames() {
+    const live = S.live;
+    if (!live) return [];
+    const lots = new Set(S.lots.map((l) => l.name.toLowerCase())), seen = new Set();
+    return [...(Array.isArray(live.segs) ? live.segs.map((x) => x.n) : []), ...(Array.isArray(live.out) ? live.out : [])].filter((n) => { const k = n.toLowerCase(); if (lots.has(k) || seen.has(k)) return false; seen.add(k); return true; });
+  }
   function paintResults() {
     const box = $('#lotResults');
     if (!box) return;
     box.hidden = !S.results.length;
-    const taken = new Set(S.lots.map((l) => l.name.toLowerCase()));
-    const html = S.results.map((g, i) => { const has = taken.has(g.name.toLowerCase()); return `<button type="button" class="lots-opt" data-pick="${i}"${has ? ' disabled' : ''}><img src="${esc(g.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"><span><b>${esc(g.name)}</b>${g.sub ? `<small>${esc(g.sub)}</small>` : ''}</span><i>${has ? 'уже есть' : ''}</i></button>`; }).join('');
+    const taken = new Set([...S.lots.map((l) => l.name), ...hostNames()].map((n) => n.toLowerCase()));
+    const html = S.results.map((g, i) => { const has = taken.has(g.name.toLowerCase()); return `<button type="button" class="lots-opt" data-pick="${i}"${has ? ' disabled' : ''}>${g.img ? `<img src="${esc(g.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : '<em aria-hidden="true">＋</em>'}<span><b>${esc(g.name)}</b>${g.sub ? `<small>${esc(g.sub)}</small>` : ''}</span><i>${has ? 'уже есть' : ''}</i></button>`; }).join('');
     if (box.dataset.sig !== html) { box.dataset.sig = html; box.innerHTML = html; }
   }
+  const linkName = (u) => (/steampowered\.com/.test(u) ? 'Открыть в Steam' : 'Открыть в Википедии');
   const lotImg = (l) => (l.img ? `<img src="${esc(l.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<em aria-hidden="true">${esc([...l.name][0] || '?')}</em>`);
-  const lotPic = (l) => (l.link ? `<a href="${esc(l.link)}" target="_blank" rel="noopener noreferrer" title="Открыть в Steam">${lotImg(l)}</a>` : `<span class="lots-pic">${lotImg(l)}</span>`);
+  const lotPic = (l) => (l.link ? `<a href="${esc(l.link)}" target="_blank" rel="noopener noreferrer" title="${linkName(l.link)}">${lotImg(l)}</a>` : `<span class="lots-pic">${lotImg(l)}</span>`);
   function paintList() {
     const box = $('#lotList');
-    const out = new Set(S.live && Array.isArray(S.live.out) ? S.live.out : []);
-    const n = S.lots.length;
-    const html = `<p class="board-stat"><b>${n}</b> ${plural(n, 'лот', 'лота', 'лотов')}</p>${n ? `<ul class="lots-list">${S.lots.map((l) => `<li data-lot="${esc(l.id)}" class="${out.has(l.name) ? 'out' : ''}">${lotPic(l)}<span class="lots-who"><b>${esc(l.name)}</b><small>${esc(l.by)}${out.has(l.name) ? ' · вылетел' : ''}</small></span></li>`).join('')}</ul>` : '<p class="lots-empty">Пока ни одного лота. Будь первым!</p>'}`;
+    const out = new Set((S.live && Array.isArray(S.live.out) ? S.live.out : []).map((x) => x.toLowerCase()));
+    const rows = [...S.lots, ...hostNames().map((name) => ({ id: 'host:' + name, name, by: 'Ведущий', img: '', link: '' }))];
+    // лот уже был на колесе, а теперь его там нет и он не вылетал: его убрал ведущий
+    const onWheel = new Set((S.live && Array.isArray(S.live.segs) ? S.live.segs : []).map((x) => x.n.toLowerCase()));
+    const seen = S.live ? +S.live.seen || 0 : 0;
+    const removed = new Set(S.lots.slice(0, seen).map((x) => x.name.toLowerCase()).filter((k) => !onWheel.has(k) && !out.has(k)));
+    const n = rows.length;
+    const html = `<p class="board-stat"><b>${n}</b> ${plural(n, 'лот', 'лота', 'лотов')}</p>${n ? `<ul class="lots-list">${rows.map((l) => { const k = l.name.toLowerCase(), gone = out.has(k), off = removed.has(k); return `<li data-lot="${esc(l.id)}" class="${gone || off ? 'out' : ''}">${lotPic(l)}<span class="lots-who"><b>${esc(l.name)}</b><small>${esc(l.by)}${gone ? ' · вылетел' : off ? ' · убран с колеса' : ''}</small></span></li>`; }).join('')}</ul>` : '<p class="lots-empty">Пока ни одного лота. Будь первым!</p>'}`;
     if (box.dataset.sig === html) return;
     box.dataset.sig = html;
     // как участники в Колесе: оставшиеся плывут на новое место, новые въезжают
@@ -707,7 +728,7 @@
   function watchOpen() {
     const open = isOpen();
     if (S.wasOpen !== undefined && S.wasOpen !== open) {
-      setTitle(S.room.title || 'Сбор лотов', true);
+      setTitle(S.room.title || baseTitle(), true);
       const rule = $('#lotRule');
       if (!reduced && rule && rule.animate) rule.animate([{ transform: 'translateY(10px) scale(.96)' }, { transform: 'none' }], { duration: 480, easing: 'cubic-bezier(.34, 1.56, .64, 1)' });
     }
@@ -717,7 +738,7 @@
     paintHead(); paintRule(); paintAdd(); paintResults(); paintList(); paintStatus(); wheel(); paintWinner(); syncBg(); watchOpen();
   }
   function paintGone(text) {
-    setTitle('Сбор лотов', true);
+    setTitle(baseTitle(), true);
     $('#lotLede').textContent = '';
     view.innerHTML = `<section class="card lots-gone"><p class="lots-empty">${esc(text)}</p><a class="btn primary" href="/wheel/">Открыть Колесо</a></section>`;
     canvas = null;
@@ -725,14 +746,18 @@
   }
 
   // ---------- связь с сервером ----------
-  let pollT = 0;
+  let pollT = 0, pollSeq = 0;
   async function poll() {
     clearTimeout(pollT);
+    // опрос один: устаревший ответ не затирает свежий и не запускает второй круг
+    const seq = ++pollSeq;
     let d = null;
     try { d = await api(`/lots/${encodeURIComponent(code)}${S.room ? '?v=' + S.room.ver : ''}`); }
     catch (e) {
+      if (seq !== pollSeq) return;
       if (e.status === 404) { paintGone('Такого сбора нет: ведущий удалил его или ссылка с ошибкой.'); return; }
     }
+    if (seq !== pollSeq) return;
     if (d) {
       S.offset = d.now - Date.now();
       S.room = d.room;
@@ -741,8 +766,9 @@
       paintAll();
       S.firstPoll = false;
     }
-    // новые лоты и прокрутка видны через пару секунд; в фоновой вкладке и после победы спрашиваем реже
-    const wait = document.hidden ? 8000 : S.live && S.live.winner ? 15000 : 2000;
+    // всё, что делает ведущий, видно через пару секунд; в фоновой вкладке и давно после победы спрашиваем реже
+    const done = S.live && S.live.winner && serverNow() - (+S.live.winner.at || 0) > 600000;
+    const wait = document.hidden ? 8000 : done ? 15000 : 2000;
     pollT = setTimeout(poll, wait);
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden && code && S.room) poll(); });
@@ -767,6 +793,7 @@
       const q = $('#lotQ');
       if (q) q.value = '';
       paintAll();
+      poll(); // ответ, который ещё в пути, старше этого: он не должен убрать новый лот из списка
     } catch (e) {
       lotMsg(e.message);
       if (btn) btn.disabled = false;
@@ -777,6 +804,11 @@
     const q = $('#lotQ');
     if (q && q.value.trim()) addLot({ name: q.value.trim() });
   }
+  // игры может не быть ни в одном каталоге: тогда хватит названия
+  const addAsIs = (v) => {
+    if (S.results.some((r) => r.name.toLowerCase() === v.toLowerCase())) return;
+    S.results.push({ name: v.slice(0, 60), img: '', sub: 'Добавить как есть, без картинки', payload: { custom: v } });
+  };
   let searchT = 0, searchSeq = 0;
   view.addEventListener('input', (e) => {
     if (e.target.id !== 'lotQ') return;
@@ -791,15 +823,16 @@
     searchT = setTimeout(async () => {
       const seq = ++searchSeq;
       try {
-        const d = await api(kind === 'game' ? '/steam/search?q=' + encodeURIComponent(v) : `/covers?kind=${kind}&q=${encodeURIComponent(v)}`);
+        const d = await api(kind === 'game' ? '/games/search?q=' + encodeURIComponent(v) : `/covers?kind=${kind}&q=${encodeURIComponent(v)}`);
         if (seq !== searchSeq) return;
-        // у игр свой поиск Steam, у остальных общий поиск по каталогам сайта
+        // у игр свой поиск (Steam и Википедия), у остальных общий поиск по каталогам сайта
         S.results = (d.items || []).map((x) => (kind === 'game'
-          ? { name: x.name, img: x.img, payload: { appId: x.appId } }
+          ? { name: x.name, img: x.img, sub: x.sub, payload: x.appId ? { appId: x.appId } : { wiki: x.wiki, lang: x.lang } }
           : { name: x.artist ? x.artist + ' — ' + x.title : x.title, img: x.thumb || x.art, sub: [x.sub, x.year].filter(Boolean).join(' · '), payload: { title: x.title, artist: x.artist || '' } }));
+        if (kind === 'game') addAsIs(v);
         paintResults();
         if (!S.results.length) lotMsg('Такого не нашлось. Попробуй написать иначе.');
-      } catch (er) { if (seq === searchSeq) lotMsg(er.message); }
+      } catch (er) { if (seq === searchSeq) { lotMsg(er.message); if (kind === 'game') { S.results = []; addAsIs(v); paintResults(); } } }
     }, 380);
   });
   view.addEventListener('keydown', (e) => {

@@ -1,7 +1,3 @@
-/* Админ-панель Казуал Хаба. Кто админ, решает сервер (/api/admin/me): остальным страница отвечает «нет доступа».
-   Первый вход — одноразовый пароль (секрет ADMIN_CODE в Cloudflare), сразу после него админ задаёт свой пин-код.
-   Дальше админка открывается пин-кодом на 12 часов на этом устройстве (вход привязан к сессии на сервере).
-   Забытый пин-код сбрасывается одноразовым паролем. */
 (() => {
   const $ = (s) => document.querySelector(s);
   const app = $('#app');
@@ -16,19 +12,16 @@
     if (!r.ok) throw Object.assign(new Error(d.error || 'Не получилось, попробуй ещё раз'), { status: r.status });
     return d;
   }, () => { throw Object.assign(new Error('Нет связи с сервером, проверь интернет и попробуй ещё раз'), { status: 0 }); });
-  // вход в админку закончился (12 часов прошло или вышли на другом устройстве): сервер отвечает «нет такого адреса»
   const lostAdmin = (x) => x && x.status === 404 && x.message === 'Нет такого адреса.';
   const lostSession = (x) => x && x.status === 401;
   const SHIELD = (s) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.5l8 3v6.2c0 4.9-3.4 8.6-8 10-4.6-1.4-8-5.1-8-10V5.5z"/><path d="M8.5 12l2.5 2.5 4.6-5"/></svg>`;
   const LOCK = (s) => `<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/><circle cx="12" cy="15.5" r="1.3" fill="currentColor"/></svg>`;
-  // запоминаем, что админка открывалась: кнопка «Админ» в шапке останется и после смены юзернейма
   const remember = () => { try { localStorage.setItem('casualhub.admin.v1', user.id); } catch (e) {} };
   let me = { handle: '' };
 
   function message(title, text, actions) {
     app.innerHTML = `<section class="card rise adm-lock"><span class="adm-ic">${SHIELD(30)}</span><h1 class="h2">${esc(title)}</h1><p class="muted">${text}</p>${actions || ''}</section>`;
   }
-  // окно с одной формой: заголовок, текст, поля, кнопка и ссылки под ней
   function gate({ icon, title, text, fields, button, links, onSubmit }) {
     app.innerHTML = `<section class="card rise adm-lock" id="admLock">
       <span class="adm-ic">${icon}</span>
@@ -42,8 +35,6 @@
     const form = $('#admForm'), err = $('#admErr'), box = $('#admLock');
     const first = form.querySelector('input');
     if (first) first.focus();
-    // в пин-коде только цифры
-    // буквы молча не пропадают: говорим, что тут нужны цифры (частая ошибка — вводить сюда пароль от аккаунта)
     let pinHint = false;
     form.querySelectorAll('input[data-pin]').forEach((i) => i.addEventListener('input', () => {
       const clean = i.value.replace(/\D/g, '').slice(0, 8);
@@ -60,7 +51,7 @@
       if (btn.disabled) return;
       btn.disabled = true; err.textContent = '';
       try { await onSubmit(form); } catch (x) {
-        if (!form.isConnected) return; // форма уже сменилась другим окном
+        if (!form.isConnected) return;
         err.textContent = x.message;
         const bad = form.querySelector('input');
         if (bad) bad.select();
@@ -73,7 +64,6 @@
   const pinField = (id, label, auto) => `<label class="vh" for="${id}">${esc(label)}</label><input class="adm-in adm-pin" id="${id}" data-pin type="password" inputmode="numeric" pattern="[0-9]*" autocomplete="${auto}" maxlength="8" placeholder="${esc(label)}">`;
   const need = (v, text) => { if (!v) throw new Error(text); };
 
-  // одноразовый пароль: первый вход или сброс забытого пин-кода
   function codeForm(reset, note) {
     if (!me.ready) {
       message(reset ? 'Сброс пин-кода' : 'Админ-панель', `${reset ? 'Сбросить пин-код можно одноразовым паролем, но он' : 'Одноразовый пароль'} сейчас не задан на сервере. Его добавляет владелец сайта в настройках хостинга, а потом нужно обновить эту страницу.`,
@@ -100,7 +90,6 @@
     const back = $('#admBack');
     if (back) back.addEventListener('click', pinForm);
   }
-  // свой пин-код: два раза, чтобы не ошибиться. Задать его можно только в первые 15 минут после одноразового пароля
   function pinSetup() {
     gate({
       icon: LOCK(30),
@@ -113,7 +102,7 @@
         need(/^\d{4,8}$/.test(a), 'Пин-код — от 4 до 8 цифр');
         need(a === b, 'Пин-коды не совпадают');
         try { await call('POST', '/admin/pin/set', { pin: a }); } catch (x) {
-          if (x.status === 403) { codeForm(false, x.message); return; } // 15 минут прошли: снова одноразовый пароль
+          if (x.status === 403) { codeForm(false, x.message); return; }
           throw x;
         }
         panel();
@@ -138,7 +127,6 @@
     $('#admForgot').addEventListener('click', () => codeForm(true));
   }
 
-  // сама панель: пока пусто, разделы появятся позже
   function panel() {
     remember();
     document.title = 'Админ-панель · Казуал Хаб';
@@ -165,10 +153,6 @@
     showTab();
   }
 
-  // ---------- окно админки в стиле сайта (вместо системных prompt/confirm) ----------
-  // dialog({ icon, title, who, text, field: { value, prefix, placeholder, label, type, max, filter, check, optional }, hint, button, danger, submit })
-  // submit(значение) — запрос на сервер; ошибка показывается в окне, окно закрывается, только когда всё получилось.
-  // Возвращает true (сделано) или null (закрыли или ничего не поменялось)
   function dialog(o) {
     return new Promise((resolve) => {
       const f = o.field;
@@ -185,7 +169,6 @@
         <p class="adm-dlg-err" role="alert"></p>
         <div class="adm-dlg-acts"><button type="button" class="btn ghost" data-x>Отмена</button><button type="submit" class="btn ${o.danger ? 'danger' : 'primary'}" data-ok></button></div>
       </form>`;
-      // все тексты — через textContent: имена и ники пользователей не превращаются в разметку
       m.querySelector('.adm-dlg-ic').textContent = o.icon || '✎';
       m.querySelector('#admDlgT').textContent = o.title;
       if (o.who) m.querySelector('.adm-dlg-who').textContent = o.who;
@@ -205,7 +188,6 @@
       document.body.classList.add('adm-lock-scroll');
       const back = document.activeElement;
       const val = () => (inp ? inp.value : '');
-      // проверка на лету: кнопка доступна, только когда значение подходит
       const validate = () => {
         if (!f || !f.check) { okBtn.disabled = false; return true; }
         const v = val();
@@ -219,7 +201,6 @@
           let dropped = false;
           if (f.filter) { const p = inp.selectionStart, before = inp.value; inp.value = f.filter(inp.value); if (inp.value !== before) { const k = Math.max(0, p - (before.length - inp.value.length)); inp.setSelectionRange(k, k); dropped = before.toLowerCase().replace(/^@+/, '') !== inp.value; } }
           validate();
-          // символы не пропадают молча: говорим, какие тут можно
           if (dropped && f.filterHint) { err.textContent = f.filterHint; form.classList.remove('shake'); void form.offsetWidth; form.classList.add('shake'); }
         });
         inp.focus();
@@ -236,7 +217,6 @@
         if (back && back.isConnected) back.focus({ preventScroll: true });
         resolve(v);
       };
-      // Esc закрывает, а Tab не уходит на страницу под окном, где бы ни был фокус (например, после клика по тексту окна)
       const onKey = (e) => {
         if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (!busy) close(null); return; }
         if (e.key !== 'Tab') return;
@@ -247,7 +227,6 @@
         else if (!e.shiftKey && (cur === last || !m.contains(cur))) { e.preventDefault(); first.focus(); }
       };
       document.addEventListener('keydown', onKey, true);
-      // клик мимо закрывает, только если и нажатие началось мимо окна: выделение текста в поле с вылетом за край окно не закрывает
       let downOut = false;
       m.addEventListener('pointerdown', (e) => { downOut = e.target === m; });
       m.addEventListener('click', (e) => { if (busy) return; if ((e.target === m && downOut) || e.target.closest('[data-x]')) close(null); });
@@ -259,13 +238,12 @@
         const label = okBtn.textContent; okBtn.textContent = 'Секунду…';
         try {
           const r = o.submit ? o.submit(val()) : true;
-          if (r === null) { busy = false; close(null); return; } // ничего не поменялось
+          if (r === null) { busy = false; close(null); return; }
           await r;
           busy = false;
           close(true);
         } catch (x) {
           busy = false;
-          // вход в админку уже закончился: окно ни при чём, снова спрашиваем пин-код
           if (lostAdmin(x) || lostSession(x)) { close(null); fail(x); return; }
           err.textContent = x.message;
           okBtn.textContent = label; okBtn.disabled = false;
@@ -277,14 +255,12 @@
   }
   const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  // ---------- разделы админки ----------
   const TABS = [['stats', '📊', 'Статистика'], ['users', '👥', 'Пользователи'], ['comments', '💬', 'Комментарии'], ['announce', '📢', 'Объявление'], ['log', '📜', 'Журнал']];
   let tab = 'stats';
   const sec = () => $('#admSec');
   const when = (t) => (t ? new Date(t).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—');
   const plural = (n, one, few, many) => { const a = Math.abs(n) % 100, b = a % 10; return a > 10 && a < 20 ? many : b > 1 && b < 5 ? few : b === 1 ? one : many; };
   const fail = (x) => {
-    // сессия аккаунта закончилась: пин-код тут не поможет
     if (lostSession(x)) { message('Вход закончился', 'Войди в аккаунт ещё раз, и админка снова откроется.', '<a class="btn primary" href="/opinion/#login">Войти</a>'); return; }
     if (lostAdmin(x)) { me.active = false; pinForm(); return; }
     const s = sec();
@@ -292,7 +268,6 @@
     const again = $('#admRetryTab');
     if (again) again.addEventListener('click', showTab);
   };
-  // быстрый клик по вкладкам: ответ на прошлую вкладку не должен перезаписать ту, что открыта сейчас
   let view = 0;
   const fresh = () => ++view;
   const stale = (my) => my !== view || !sec();
@@ -325,7 +300,6 @@
           <div class="adm-acts">${edit}${u.admin ? '' : hard}</div>
         </li>`;
   };
-  // q — поиск; страницы по 50 подгружаются кнопкой, чтобы старые аккаунты тоже можно было найти глазами
   async function users(q) {
     q = q || '';
     const my = fresh();
@@ -357,12 +331,10 @@
         const li = b.closest('[data-uid]'), id = li.dataset.uid, name = li.querySelector('.adm-who b').textContent, handle = b.dataset.h || (li.querySelector('.adm-who a') || {}).textContent || '';
         const act = b.dataset.act;
         const rename = (field, val) => call('POST', `/admin/rename/${encodeURIComponent(id)}`, { [field]: val });
-        // @юзернейм, ник или почта по отдельности: одно окно — одно изменение (те же правила, что у самого человека)
         let ok = null;
         if (act === 'set-handle') ok = await dialog({
           icon: '@', title: 'Новый юзернейм', who: name,
-          field: { value: b.dataset.h, prefix: '@', placeholder: 'yukomagod', max: 20, filterHint: 'В юзернейме только латинские буквы, цифры, «_» и «.» — без пробелов и кириллицы', filter: (v) => v.toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9_.]/g, ''), check: (v) => (/^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/.test(v) ? '' : 'От 3 до 20 символов: латинские буквы, цифры, «_» и «.» (точка не по краям)') },
-          // у админа вход в админку привязан к @: сменишь — он потеряет доступ, пока не вернёт прежний в настройках профиля
+          field: { value: b.dataset.h, prefix: '@', placeholder: 'username', max: 20, filterHint: 'В юзернейме только латинские буквы, цифры, «_» и «.» — без пробелов и кириллицы', filter: (v) => v.toLowerCase().replace(/^@+/, '').replace(/[^a-z0-9_.]/g, ''), check: (v) => (/^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/.test(v) ? '' : 'От 3 до 20 символов: латинские буквы, цифры, «_» и «.» (точка не по краям)') },
           hint: li.dataset.admin ? 'Осторожно: вход в админку привязан к @. После смены этот админ не откроет панель, пока не вернёт прежний @ в настройках профиля.' : 'По нему человека находят друзья и открывают его профиль: casualhub.pages.dev/u/…', button: 'Сохранить',
           submit: (v) => (v === b.dataset.h ? null : rename('handle', v)),
         });
@@ -378,7 +350,6 @@
           hint: 'На неё приходит код для входа. После смены все устройства человека подтверждаются заново.', button: 'Сохранить',
           submit: (v) => (v.trim().toLowerCase() === (b.dataset.m || '') ? null : rename('email', v.trim())),
         });
-        // удаление насовсем: нужно вписать его юзернейм, чтобы не удалить по ошибке
         else if (act === 'delete') ok = await dialog({
           icon: '🗑', danger: true, title: 'Удалить аккаунт насовсем?', who: `${name} · @${b.dataset.h}`,
           text: 'Пропадут все его оценки, фото, друзья, реакции, комментарии и ссылки на отзывы. Вернуть будет нельзя.',
@@ -471,7 +442,6 @@
     } catch (x) { if (!stale(my)) fail(x); }
   }
 
-  // ---------- тема: тот же выбор, что на остальных страницах (меню ☰ → «Тема») ----------
   (() => {
     const pick = $('#themePick'), btn = $('#themeBtn'), menu = $('#themeMenu');
     if (!pick || !btn || !menu || !window.CasualThemes) return;
@@ -494,7 +464,6 @@
       apply(b.dataset.themeId, true);
       pick.open = false;
     });
-    // меню тем не уходит за край экрана
     pick.addEventListener('toggle', () => {
       if (!pick.open) return;
       menu.style.translate = '';
@@ -517,7 +486,7 @@
     }
     if (!me.admin) { codeForm(false); return; }
     remember();
-    if (!me.pinSet) { pinSetup(); return; } // после одноразового пароля пин-код ещё не задан
+    if (!me.pinSet) { pinSetup(); return; }
     if (me.active) panel(); else pinForm();
   }
   start();

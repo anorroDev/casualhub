@@ -1,7 +1,3 @@
-/* Казуал Хаб: кто сейчас на сайте.
-   Пока вкладка открыта и видна, раз в минуту отмечаемся на сервере (/api/ping): вошедший — токеном,
-   гость — случайным id из своего браузера. В ответ приходит, сколько людей на сайте и кто из друзей в сети.
-   Страницы слушают событие «casual-online» и берут данные из window.CasualOnline. */
 (() => {
   const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
   const GUEST_KEY = 'casualhub.guestId.v1';
@@ -60,7 +56,6 @@
     ping: () => ping(),
   };
 
-  // объявление из админки: плашка вверху страницы, пока его не закрыли (закрытое не всплывает снова, пока не появится новое)
   const ANN_KEY = 'casualhub.announceSeen.v1';
   function announce(a) {
     let bar = document.getElementById('siteAnnounce');
@@ -97,15 +92,13 @@
     bar.querySelector('button').addEventListener('click', () => { try { localStorage.setItem(ANN_KEY, a.id); } catch (e) {} bar.remove(); });
   }
 
-  // сессии больше нет (сменили пароль на другом устройстве, выкинули из админки, забанили): без этого страницы молча переставали работать.
-  // Токен убираем, оценки в браузере остаются, плашка ведёт ко входу
   let goneShown = false;
   function sessionGone() {
     try {
       const u = read('ocenshik.user.v1'), t = read('casualhub.tokens.v1') || {};
       if (u && t[u.id]) { delete t[u.id]; localStorage.setItem('casualhub.tokens.v1', JSON.stringify(t)); }
     } catch (e) {}
-    if (goneShown || location.pathname.startsWith('/admin')) return; // в админке своё окно входа
+    if (goneShown || location.pathname.startsWith('/admin')) return;
     goneShown = true;
     if (!document.getElementById('annCss')) announce(null);
     const bar = document.createElement('div');
@@ -152,7 +145,6 @@
       }
     } catch (e) {} finally { busy = false; }
   }
-  // объявление из админки отдельным лёгким запросом раз в 15 секунд: новое появляется у всех почти сразу, без перезагрузки
   let annTimer = 0;
   async function pollAnnounce() {
     if (document.hidden) return;

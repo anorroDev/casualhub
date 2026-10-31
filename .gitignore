@@ -1,6 +1,3 @@
-# Azure CLI local configurations
-.azure/
-
 # Node / package manager
 node_modules/
 package-lock.json
@@ -21,5 +18,5 @@ Thumbs.db
 # Wrangler local dev state (local D1 database)
 .wrangler/
 
-# Local owner notes
+# Local notes
 *.local.md

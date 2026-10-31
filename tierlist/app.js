@@ -1,8 +1,8 @@
-/* Тир-листы Казуала: свои тир-листы из картинок, текста, оценок и стикеров, как на tiermaker.com.
+/* Тир-листы Казуала: свои тир-листы из картинок, текста, оценок и стикеров.
    Списки лежат в localStorage, картинки — в IndexedDB; после входа всё синхронизируется с аккаунтом, и тир-листы видят друзья
    (вкладка «Друзья», реакции и комментарии — как у оценок в Мнении). У гостя тир-листы живут только в этом браузере.
    Перетаскивание — мышью, на телефоне — нажатиями: карточка, потом ряд.
-   Адреса: без якоря — мои, #friends — друзья, #l=<id> — мой тир-лист, #f=<id друга>.<id> — тир-лист друга. */
+   Адреса: без якоря — мои, #friends — друзья, #f=<id автора>.<id> — тир-лист: свой открывается для правки, чужой для просмотра, поэтому адрес можно просто переслать; #l=<id> — тир-лист гостя и старые ссылки. */
 (() => {
   const BASE_KEY = 'casualhub.tierlists.v1', SYNC_BASE = 'casualhub.tier.sync.v1', PREFS_KEY = 'ocenshik.prefs.v1', RATINGS_KEY = 'ocenshik.ratings.v2';
   const $ = (s) => document.querySelector(s);
@@ -334,7 +334,9 @@
   const allItems = (l) => [...l.rows.flatMap((r) => r.items), ...l.pool];
   const whereIs = (l, id) => { const r = l.rows.find((x) => x.items.includes(id)); return r ? r.items : l.pool; };
   const imgOf = (it) => (it.kind === 'img' ? urls.get(it.img) || '' : it.kind === 'url' ? it.src : '');
-  const open = (id) => { location.hash = 'l=' + id; };
+  // адрес из строки браузера можно переслать другу: в нём указан автор
+  const ownHash = (id) => (me ? 'f=' + me + '.' + id : 'l=' + id);
+  const open = (id) => { location.hash = ownHash(id); };
 
   // ---------- главная раздела ----------
   function homeShell() {
@@ -391,7 +393,7 @@
     const none = pool.length ? 'Ничего не нашлось.' : S.tab === 'fav' ? 'Нажми ★ у тир-листа, и он появится здесь.' : 'Пока пусто. Начни с любого варианта рядом: тир-лист сохранится сам.';
     box.innerHTML = n ? `<p class="tl-stat"><b>${n}</b> ${plural(n, 'тир-лист', 'тир-листа', 'тир-листов')}</p><div class="tl-grid">${bySort(found, (l) => l.title || 'Без названия', (l) => l.at).map((l, k) => {
       const c = Object.keys(l.items).length;
-      return `<div class="tl-cell"><button type="button" class="tl-star" data-fav="${esc(l.id)}" aria-pressed="${l.fav}" aria-label="${l.fav ? 'Убрать из избранного' : 'В избранное'}" title="${l.fav ? 'Убрать из избранного' : 'В избранное'}">★</button><a class="tl-tile" href="#l=${esc(l.id)}" style="--k:${Math.min(k, 8)}"><span class="tl-mini" aria-hidden="true">${l.rows.slice(0, 5).map((r) => `<span class="tl-mini-r"><i style="background:${esc(r.color)}"></i><span>${r.items.slice(0, 7).map((id) => miniThumb(l.items[id])).join('')}</span></span>`).join('')}</span><b>${esc(l.title || 'Без названия')}</b><small>${cards(c)} · ${esc(fmtDate(l.at))}${l.private ? ' · скрыт от друзей' : ''}</small></a></div>`;
+      return `<div class="tl-cell"><button type="button" class="tl-star" data-fav="${esc(l.id)}" aria-pressed="${l.fav}" aria-label="${l.fav ? 'Убрать из избранного' : 'В избранное'}" title="${l.fav ? 'Убрать из избранного' : 'В избранное'}">★</button><a class="tl-tile" href="#${esc(ownHash(l.id))}" style="--k:${Math.min(k, 8)}"><span class="tl-mini" aria-hidden="true">${l.rows.slice(0, 5).map((r) => `<span class="tl-mini-r"><i style="background:${esc(r.color)}"></i><span>${r.items.slice(0, 7).map((id) => miniThumb(l.items[id])).join('')}</span></span>`).join('')}</span><b>${esc(l.title || 'Без названия')}</b><small>${cards(c)} · ${esc(fmtDate(l.at))}${l.private ? ' · скрыт от друзей' : ''}</small></a></div>`;
     }).join('')}</div>` : `<p class="tl-empty">${none}</p>`;
   }
   async function renderFriendsTab() {
@@ -984,7 +986,8 @@
     try { d = await api(`/tierlist/${encodeURIComponent(uid)}/${encodeURIComponent(id)}`); }
     catch (e) {
       if (S.built !== 'friend:' + uid + '.' + id) return;
-      view.innerHTML = `<section class="card"><p class="tl-empty">${esc(e.message)}</p><div class="tl-foot"><a class="btn small ghost" href="#friends">‹ Тир-листы друзей</a></div></section>`;
+      const why = e.status === 403 ? 'Этот тир-лист видят только друзья автора. Добавь автора в друзья или попроси ссылку для всех: кнопка «🔗 Ссылка» в самом тир-листе.' : e.message;
+      view.innerHTML = `<section class="card"><p class="tl-empty">${esc(why)}</p><div class="tl-foot"><a class="btn small ghost" href="#friends">‹ Тир-листы друзей</a></div></section>`;
       return;
     }
     const l = clean(d.list);
@@ -1039,7 +1042,7 @@
   }
 
   // ---------- реакции и комментарии ----------
-  const RX = [['fire', '🔥', 'огонь'], ['lol', '😂', 'ору'], ['love', '😍', 'обожаю'], ['goat', '🐐', 'легенда'], ['like', '👍', 'согласен'], ['moai', '🗿', 'база'],
+  const RX = [['fire', '🔥', 'огонь'], ['lol', '😂', 'ору'], ['love', '😍', 'обожаю'], ['goat', '🐐', 'GOAT'], ['like', '👍', 'согласен'], ['moai', '🗿', 'база'],
     ['think', '🤔', 'спорно'], ['cry', '😭', 'до слёз'], ['skull', '💀', 'жесть'], ['clown', '🤡', 'клоунада'], ['dislike', '👎', 'мимо'], ['nope', '🙅', 'не согласен']];
   let rxState = null;
   const rxIcon = (k) => (RX.find((x) => x[0] === k) || [])[1] || '';
@@ -1352,15 +1355,18 @@
   async function route() {
     const h = location.hash.slice(1);
     const fm = /^f=([^.]+)\.(\w+)$/.exec(h);
-    if (fm && fm[1] === me) { location.replace('#l=' + fm[2]); return; }
-    if (fm) {
+    if (fm && fm[1] !== me) {
       closeDialog();
-      if (!me) { S.built = ''; S.list = null; S.friend = null; S.tab = 'friends'; homeShell(); renderTabs(); await renderFriendsTab(); return; }
+      if (!me) {
+        S.built = ''; S.list = null; S.friend = null;
+        view.innerHTML = '<section class="card"><p class="tl-empty">Этот тир-лист видят только друзья автора. Войди в аккаунт, чтобы его открыть.</p><div class="tl-foot"><a class="btn small primary" href="/opinion/#login">Войти</a></div></section>';
+        return;
+      }
       if (S.built !== 'friend:' + fm[1] + '.' + fm[2]) await renderFriendList(fm[1], fm[2]);
       return;
     }
     S.friend = null;
-    const lm = /^l=(\w+)$/.exec(h);
+    const lm = fm ? [h, fm[2]] : /^l=(\w+)$/.exec(h);
     const l = lm ? lists.find((x) => x.id === lm[1]) : null;
     if (S.list && S.list !== l) discardBlank(S.list);
     if (lm && !l && !pulledOnce) {
@@ -1370,6 +1376,8 @@
       return;
     }
     if (l) {
+      // старый адрес своего тир-листа заменяем на тот, что можно переслать
+      if (h !== ownHash(l.id)) history.replaceState(null, '', '#' + ownHash(l.id));
       const same = S.list && S.list.id === l.id;
       S.list = l;
       if (!same) S.sel = '';
@@ -1377,7 +1385,14 @@
       if (S.list === l) renderEditor();
       return;
     }
-    if (lm) { history.replaceState(null, '', location.pathname); }
+    if (lm) {
+      // старые ссылки вели только на свой тир-лист: понять по такой, чей он, нельзя
+      S.list = null; S.sel = ''; S.built = 'gone';
+      document.body.classList.remove('tl-editing');
+      closeDialog();
+      view.innerHTML = '<section class="card"><p class="tl-empty">Такого тир-листа нет: его удалили или ссылка старая. Если её прислал друг, попроси скопировать адрес заново.</p><div class="tl-foot"><a class="btn small ghost" href="#">‹ Мои тир-листы</a></div></section>';
+      return;
+    }
     S.list = null; S.sel = '';
     closeDialog();
     S.tab = h === 'friends' ? 'friends' : h === 'fav' ? 'fav' : 'mine';
@@ -1448,7 +1463,7 @@
     setTimeout(() => document.documentElement.classList.remove('intro'), 1400);
   }
 
-  const openId = (/^#l=(\w+)$/.exec(location.hash) || [])[1];
+  const openId = (/^#(?:l=|f=[^.]+\.)(\w+)$/.exec(location.hash) || [])[1];
   lists.filter((l) => isBlank(l) && l.id !== openId).forEach(discardBlank);
   route().then(() => { if (me) runSync(true); });
 })();
