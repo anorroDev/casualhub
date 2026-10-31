@@ -90,3 +90,9 @@ CREATE INDEX IF NOT EXISTS admin_log_at ON admin_log(at);
 -- Гости на сайте для счётчика «сейчас на сайте»: случайный id браузера и время последней отметки
 CREATE TABLE IF NOT EXISTS presence (id TEXT PRIMARY KEY, at INTEGER NOT NULL);
 CREATE INDEX IF NOT EXISTS presence_at ON presence(at);
+
+-- Лоты по ссылке: сборы ведущих и лоты, которые добавили зрители. В live лежит то, что сейчас на колесе у ведущего
+CREATE TABLE IF NOT EXISTS lot_rooms (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, title TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'game', per_user INTEGER NOT NULL, ends_at INTEGER, closed INTEGER NOT NULL DEFAULT 0, ver INTEGER NOT NULL DEFAULT 1, live TEXT, created_at INTEGER NOT NULL);
+CREATE INDEX IF NOT EXISTS lot_rooms_owner ON lot_rooms(owner_id);
+CREATE TABLE IF NOT EXISTS lots (room_id TEXT NOT NULL, id TEXT NOT NULL, user_id TEXT NOT NULL, ref TEXT NOT NULL, name TEXT NOT NULL, img TEXT NOT NULL, link TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, PRIMARY KEY (room_id, id), UNIQUE (room_id, ref));
+CREATE INDEX IF NOT EXISTS lots_user ON lots(room_id, user_id);

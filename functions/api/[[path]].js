@@ -59,6 +59,10 @@ async function ensureScheme(env) {
     env.DB.prepare('CREATE TABLE IF NOT EXISTS comments (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, target TEXT NOT NULL, from_id TEXT NOT NULL, text TEXT NOT NULL, at INTEGER NOT NULL)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS comments_owner ON comments(owner_id, target, at)'),
     // тир-листы: data пустая — тир-лист удалён (отметка нужна, чтобы его не вернуло другое устройство)
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS lot_rooms (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, title TEXT NOT NULL, kind TEXT NOT NULL DEFAULT 'game', per_user INTEGER NOT NULL, ends_at INTEGER, closed INTEGER NOT NULL DEFAULT 0, ver INTEGER NOT NULL DEFAULT 1, live TEXT, created_at INTEGER NOT NULL)"),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS lot_rooms_owner ON lot_rooms(owner_id)'),
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS lots (room_id TEXT NOT NULL, id TEXT NOT NULL, user_id TEXT NOT NULL, ref TEXT NOT NULL, name TEXT NOT NULL, img TEXT NOT NULL, link TEXT NOT NULL DEFAULT '', created_at INTEGER NOT NULL, PRIMARY KEY (room_id, id), UNIQUE (room_id, ref))"),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS lots_user ON lots(room_id, user_id)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS tierlists (user_id TEXT NOT NULL, id TEXT NOT NULL, data TEXT, meta TEXT, private INTEGER NOT NULL DEFAULT 0, at INTEGER NOT NULL, PRIMARY KEY (user_id, id))'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS comments_from ON comments(from_id)'),
     // админы: кто уже ввёл одноразовый пароль; дальше вход в админку по своему пин-коду
@@ -530,6 +534,8 @@ const routes = {
       'DELETE FROM sessions WHERE user_id = ?1',
       'DELETE FROM shelves WHERE user_id = ?1',
       'DELETE FROM tierlists WHERE user_id = ?1',
+      'DELETE FROM lots WHERE user_id = ?1 OR room_id IN (SELECT id FROM lot_rooms WHERE owner_id = ?1)',
+      'DELETE FROM lot_rooms WHERE owner_id = ?1',
       'DELETE FROM photos WHERE user_id = ?1',
       'DELETE FROM friendships WHERE a = ?1 OR b = ?1',
       'DELETE FROM reactions WHERE owner_id = ?1 OR from_id = ?1',
@@ -1209,6 +1215,110 @@ const routes = {
     const { results } = await env.DB.prepare(`SELECT key, data FROM photos WHERE key IN (${list.map(() => '?').join(',')})`).bind(...list.map((k) => `${arg}:${k}`)).all();
     return json({ images: Object.fromEntries(results.map((x) => [x.key.slice(arg.length + 1), x.data])) });
   },
+  // ---------- лоты по ссылке: ведущий открывает сбор и выбирает категорию, зрители добавляют лоты, у каждого свой лимит ----------
+  async 'GET /steam/search'({ request, me }) {
+    if (burst('steam:' + me.id, 60, 60e3)) return tooMany(1);
+    const q = (new URL(request.url).searchParams.get('q') || '').trim().slice(0, 100);
+    if (q.length < 2) return json({ items: [] });
+    try {
+      const d = await cachedJson('https://store.steampowered.com/api/storesearch/?l=russian&cc=US&term=' + encodeURIComponent(q), null, 86400);
+      return json({ items: (d.items || []).filter((x) => x && x.type === 'app' && Number.isInteger(x.id) && x.name).slice(0, 8).map((x) => ({ appId: x.id, name: clip(x.name, LOT_NAME), img: httpsOnly(x.tiny_image) })) });
+    } catch (e) { return fail(502, 'Steam сейчас не отвечает, попробуй ещё раз.'); }
+  },
+  async 'POST /lots'({ env, request, me }) {
+    if (burst('lotroom:' + me.id, 20, 600e3)) return tooMany(10);
+    const b = await readBody(request);
+    const now = Date.now();
+    const id = shareId();
+    const old = await env.DB.prepare('SELECT id FROM lot_rooms WHERE owner_id = ?').bind(me.id).all();
+    // у ведущего один сбор: новая ссылка заменяет прошлую
+    await env.DB.batch([
+      ...old.results.flatMap((x) => [env.DB.prepare('DELETE FROM lots WHERE room_id = ?').bind(x.id), env.DB.prepare('DELETE FROM lot_rooms WHERE id = ?').bind(x.id)]),
+      env.DB.prepare('INSERT INTO lot_rooms (id, owner_id, title, kind, per_user, ends_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id, me.id, lotTitle(b.title), LOT_KINDS.includes(b.kind) ? b.kind : 'game', lotLimit(b.perUser), lotEnds(b.minutes, now), now),
+    ]);
+    return lotAnswer(env, id, me);
+  },
+  async 'GET /lots-mine'({ env, me }) {
+    const row = await env.DB.prepare('SELECT id FROM lot_rooms WHERE owner_id = ? ORDER BY created_at DESC LIMIT 1').bind(me.id).first();
+    if (!row) return json({ room: null, now: Date.now() });
+    return lotAnswer(env, row.id, me);
+  },
+  // открывается и без входа: посмотреть на колесо можно всем, у кого есть ссылка
+  async 'GET /lots/:code'({ env, request, arg }) {
+    if (burst('lotget:' + clientIp(request), 400, 60e3)) return tooMany(1);
+    let me = null;
+    try { me = await currentUser(env, request); } catch (e) {}
+    const v = new URL(request.url).searchParams.get('v');
+    return lotAnswer(env, arg, me && !me.banned ? me : null, v);
+  },
+  async 'POST /lots/:code'({ env, request, me, arg }) {
+    if (burst('lotadd:' + me.id, 30, 60e3)) return tooMany(1);
+    const room = await env.DB.prepare('SELECT * FROM lot_rooms WHERE id = ?').bind(arg).first();
+    if (!room) return fail(404, 'Такого сбора нет.');
+    const now = Date.now();
+    if (room.closed) return fail(403, 'Сбор закрыт, больше добавлять нельзя.');
+    if (room.ends_at && now >= room.ends_at) return fail(403, 'Время вышло, больше добавлять нельзя.');
+    const b = await readBody(request);
+    let lot;
+    try { lot = await lotItem(room.kind, b); }
+    catch (e) { return fail(502, 'Поиск сейчас не отвечает, попробуй ещё раз.'); }
+    if (lot.error) return fail(lot.status || 400, lot.error);
+    const r = await env.DB.prepare(`INSERT INTO lots (room_id, id, user_id, ref, name, img, link, created_at)
+      SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8 WHERE (SELECT COUNT(*) FROM lots WHERE room_id = ?1 AND user_id = ?3) < ?9 AND (SELECT COUNT(*) FROM lots WHERE room_id = ?1) < ?10
+      ON CONFLICT(room_id, ref) DO NOTHING`).bind(arg, randHex(8), me.id, lot.ref, lot.name, lot.img, lot.link, now, room.per_user, MAX_LOTS).run();
+    if (!r.meta.changes) {
+      const has = await env.DB.prepare('SELECT 1 FROM lots WHERE room_id = ? AND ref = ?').bind(arg, lot.ref).first();
+      if (has) return fail(409, 'Это уже добавили.');
+      const c = await env.DB.prepare('SELECT COUNT(*) AS n FROM lots WHERE room_id = ?').bind(arg).first();
+      return fail(403, c.n >= MAX_LOTS ? 'В этом сборе уже слишком много лотов.' : `Больше добавить нельзя: лимит ${room.per_user} на человека.`);
+    }
+    await env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(arg).run();
+    return lotAnswer(env, arg, me);
+  },
+  async 'DELETE /lots/:code/:id'({ env, me, arg }) {
+    const [code, id] = arg;
+    const room = await env.DB.prepare('SELECT * FROM lot_rooms WHERE id = ?').bind(code).first();
+    if (!room) return fail(404, 'Такого сбора нет.');
+    const own = room.owner_id === me.id;
+    if (!own && (room.closed || (room.ends_at && Date.now() >= room.ends_at))) return fail(403, 'Сбор уже закончился, лоты больше не меняются.');
+    const r = own
+      ? await env.DB.prepare('DELETE FROM lots WHERE room_id = ? AND id = ?').bind(code, id).run()
+      : await env.DB.prepare('DELETE FROM lots WHERE room_id = ? AND id = ? AND user_id = ?').bind(code, id, me.id).run();
+    if (!r.meta.changes) return fail(404, 'Этого лота уже нет.');
+    await env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(code).run();
+    return lotAnswer(env, code, me);
+  },
+  // ведущий: лимит, время, закрыть или открыть снова
+  async 'PATCH /lots/:code'({ env, request, me, arg }) {
+    if (burst('lotroom:' + me.id, 120, 600e3)) return tooMany(10);
+    const room = await env.DB.prepare('SELECT * FROM lot_rooms WHERE id = ? AND owner_id = ?').bind(arg, me.id).first();
+    if (!room) return fail(404, 'Такого сбора нет.');
+    const b = await readBody(request);
+    const now = Date.now();
+    let ends = room.ends_at, closed = room.closed;
+    if (b.minutes !== undefined) { ends = lotEnds(b.minutes, now); closed = 0; }
+    if (b.extra !== undefined) { ends = Math.max(room.ends_at || now, now) + Math.max(1, Math.min(1440, Math.round(+b.extra) || 1)) * 60e3; closed = 0; }
+    if (typeof b.closed === 'boolean') closed = b.closed ? 1 : 0;
+    await env.DB.prepare('UPDATE lot_rooms SET per_user = ?, title = ?, ends_at = ?, closed = ?, ver = ver + 1 WHERE id = ?')
+      .bind(b.perUser !== undefined ? lotLimit(b.perUser) : room.per_user, b.title !== undefined ? lotTitle(b.title) : room.title, ends, closed, arg).run();
+    return lotAnswer(env, arg, me);
+  },
+  async 'DELETE /lots/:code'({ env, me, arg }) {
+    const room = await env.DB.prepare('SELECT 1 FROM lot_rooms WHERE id = ? AND owner_id = ?').bind(arg, me.id).first();
+    if (!room) return fail(404, 'Такого сбора нет.');
+    await env.DB.batch([env.DB.prepare('DELETE FROM lots WHERE room_id = ?').bind(arg), env.DB.prepare('DELETE FROM lot_rooms WHERE id = ?').bind(arg)]);
+    return json({ ok: true });
+  },
+  // что сейчас на колесе у ведущего: зрители рисуют то же самое
+  async 'PUT /lots/:code/live'({ env, request, me, arg }) {
+    if (burst('lotlive:' + me.id, 240, 60e3)) return tooMany(1);
+    const live = cleanLive(await readBody(request));
+    const data = JSON.stringify(live);
+    if (data.length > 60000) return fail(413, 'Слишком много лотов на колесе.');
+    const r = await env.DB.prepare('UPDATE lot_rooms SET live = ? WHERE id = ? AND owner_id = ?').bind(data, arg, me.id).run();
+    if (!r.meta.changes) return fail(404, 'Такого сбора нет.');
+    return json({ ok: true });
+  },
   // поиск треков и альбомов по названию: только лицензионные каталоги, где исполнители настоящие
   async 'GET /music/search'({ env, request, me }) {
     if (burst('msearch:' + me.id, 40, 60e3)) return tooMany(1);
@@ -1506,6 +1616,62 @@ const tierMeta = (l) => ({
     items: r.items.slice(0, 7).map((id) => { const it = l.items[id]; return { name: clip(it.name, 24), ...(it.img ? { img: it.img } : {}), ...(it.src ? { src: it.src } : {}) }; }),
   })),
 });
+
+// ---------- лоты по ссылке ----------
+const LOT_NAME = 60, MAX_LOTS = 300;
+const LOT_KINDS = ['game', 'movie', 'anime', 'book', 'music', 'any'];
+const lotKey = (v) => String(v || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+// что именно добавляют: название и картинку берём из каталога, а не со слов браузера. Только в категории «что угодно» текст свободный
+async function lotItem(kind, b) {
+  if (kind === 'any') {
+    const name = clip(b.name, LOT_NAME).replace(SPOOF_RE, '').trim();
+    if (!lotKey(name)) return { error: 'Впиши название.' };
+    return { ref: 'any:' + lotKey(name), name, img: '', link: '' };
+  }
+  if (kind === 'game') {
+    const appId = b.appId;
+    if (!Number.isInteger(appId) || appId <= 0 || appId > 9999999999) return { error: 'Это не игра из Steam.' };
+    const g = ((await cachedJson(`https://store.steampowered.com/api/appdetails?appids=${appId}&l=russian&cc=US&filters=basic`, null, 86400)) || {})[appId];
+    if (!g || !g.success || !g.data || !g.data.name) return { status: 404, error: 'Такой игры нет в Steam.' };
+    if (g.data.type !== 'game') return { error: 'Это не игра, а дополнение или что-то другое. Выбери саму игру.' };
+    return { ref: 'steam:' + appId, name: clip(g.data.name, LOT_NAME).trim(), img: httpsOnly(g.data.header_image), link: `https://store.steampowered.com/app/${appId}/` };
+  }
+  const title = clip(b.title, 140).trim(), artist = clip(b.artist, 80).trim();
+  if (!lotKey(title)) return { error: 'Выбери из списка.' };
+  const found = await COVER_FIND[kind](artist ? artist + ' ' + title : title);
+  const hit = found.find((x) => lotKey(x.title) === lotKey(title) && (!artist || lotKey(x.artist) === lotKey(artist)));
+  if (!hit) return { error: 'Выбери из списка.' };
+  const name = clip(hit.artist ? hit.artist + ' — ' + hit.title : hit.title, LOT_NAME).trim();
+  return { ref: kind + ':' + lotKey(name), name, img: httpsOnly(hit.art), link: '' };
+}
+const lotLimit = (v) => Math.max(1, Math.min(5, Math.round(+v) || 3));
+const lotTitle = (v) => clip(v, 60).replace(SPOOF_RE, '').trim();
+const lotEnds = (minutes, now) => { const m = Math.round(+minutes) || 0; return m > 0 ? now + Math.min(m, 1440) * 60e3 : null; };
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
+function cleanLive(b) {
+  const finite = (v) => (Number.isFinite(+v) ? +v : 0);
+  const spin = b && b.spin && typeof b.spin === 'object' ? { from: finite(b.spin.from), to: finite(b.spin.to), ms: Math.max(0, Math.min(120000, finite(b.spin.ms))), at: finite(b.spin.at) } : null;
+  return {
+    segs: (Array.isArray(b && b.segs) ? b.segs : []).slice(0, MAX_LOTS).map((x) => ({ n: clip(x && x.n, LOT_NAME), p: Math.max(0, Math.min(1, finite(x && x.p))), c: HEX_COLOR.test(String(x && x.c)) ? x.c : '#64748B', t: HEX_COLOR.test(String(x && x.t)) ? x.t : '#FFFFFF' })),
+    rot: finite(b && b.rot), spin, pick: clip(b && b.pick, LOT_NAME), hub: Math.max(10, Math.min(60, finite(b && b.hub) || 24)),
+    status: clip(b && b.status, 140),
+    out: (Array.isArray(b && b.out) ? b.out : []).slice(0, MAX_LOTS).map((x) => clip(x, LOT_NAME)),
+    winner: b && b.winner && b.winner.n ? { n: clip(b.winner.n, LOT_NAME) } : null,
+  };
+}
+async function lotAnswer(env, id, me, knownVer) {
+  const row = await env.DB.prepare('SELECT r.*, u.username AS owner_name, u.banned AS owner_banned FROM lot_rooms r LEFT JOIN users u ON u.id = r.owner_id WHERE r.id = ?').bind(id).first();
+  if (!row || row.owner_banned) return fail(404, 'Такого сбора нет.');
+  const own = !!me && row.owner_id === me.id;
+  const out = { room: { id: row.id, title: row.title, kind: row.kind, perUser: row.per_user, endsAt: row.ends_at, closed: !!row.closed, ver: row.ver, own, owner: row.owner_name || '' }, now: Date.now(), live: null };
+  try { out.live = row.live ? JSON.parse(row.live) : null; } catch (e) {}
+  // список лотов отдаём, только если он поменялся: страница спрашивает часто
+  if (String(knownVer) !== String(row.ver)) {
+    const { results } = await env.DB.prepare('SELECT l.id, l.ref, l.name, l.img, l.link, l.user_id, u.username FROM lots l LEFT JOIN users u ON u.id = l.user_id WHERE l.room_id = ? ORDER BY l.created_at LIMIT ?').bind(id, MAX_LOTS).all();
+    out.lots = results.map((x) => ({ id: x.id, ref: x.ref, name: x.name, img: x.img, link: x.link, by: x.username || '', mine: !!me && x.user_id === me.id }));
+  }
+  return json(out);
+}
 
 // ---------- поиск музыки ----------
 const httpsOnly = (s) => (/^https:\/\/[^\s"'<>()\\]{1,500}$/.test(String(s || '')) ? String(s) : '');
@@ -1892,7 +2058,7 @@ async function canSee(env, me, uid) {
   return !!row && row.status === 'accepted';
 }
 
-const PUBLIC = new Set(['POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce']);
+const PUBLIC = new Set(['POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code']);
 // код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности
 const SHARE_RE = /^[A-Za-z0-9]{12}$/;
 function shareId() {
@@ -1936,6 +2102,9 @@ export async function onRequest({ request, env, params }) {
   if (!routes[key] && segs.length === 2 && segs[0] === 'tierlist-img' && TIER_IMG_RE.test(segs[1])) { key = `${request.method} /tierlist-img/:key`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'tierlist-imgs') { key = `${request.method} /tierlist-imgs/:uid`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'reacts') { key = `${request.method} /reacts/:id`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 2 && segs[0] === 'lots' && SHARE_RE.test(segs[1])) { key = `${request.method} /lots/:code`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'live') { key = `${request.method} /lots/:code/live`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && /^[0-9a-f]{16}$/.test(segs[2])) { key = `${request.method} /lots/:code/:id`; arg = [segs[1], segs[2]]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'share' && SHARE_RE.test(segs[1])) { key = `${request.method} /share/:id`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'share' && segs[2] === 'img' && SHARE_RE.test(segs[1])) { key = `${request.method} /share/:id/img`; arg = segs[1]; }
   const handler = routes[key];
