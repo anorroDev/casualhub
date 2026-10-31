@@ -2042,6 +2042,8 @@
 "Твой лимит исчерпан: {} из {}. Чтобы заменить лот, сначала убери его":"Your limit is used up: {} of {}. To swap a lot, remove it first",
 "Лот от: {}":"Lot from: {}",
 "вылетел":"out",
+"Пока идёт аук, держи эту вкладку открытой: лоты приезжают на колесо и зрители видят его, только пока она открыта":"While the auction runs, keep this tab open: lots reach the wheel and viewers see it only while it stays open",
+"Колесо показывается с задержкой в пару секунд и без звука":"The wheel is shown a couple of seconds late and without sound",
 "· Казуал Хаб":"· Casual Hub",
 "(прежние критерии":"(old criteria",
 "Выбрать аватарку":"Choose an avatar",

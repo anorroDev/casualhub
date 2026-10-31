@@ -2122,6 +2122,7 @@
     box.innerHTML = `<label class="lots-f">Ссылка для зрителей<div class="lots-row"><input class="inp" id="lotsUrl" readonly value="${esc(lotsLink())}"><button type="button" class="btn small primary" data-lots="copy">Скопировать</button></div></label>
       <p class="lots-note">Категория: ${esc(LOT_KIND_NAMES[lotsRoom.kind] || '')}</p>
       <div class="lots-row"><b>${lotsList.length}</b> ${lotsList.length % 10 === 1 && lotsList.length % 100 !== 11 ? 'лот' : lotsList.length % 10 > 1 && lotsList.length % 10 < 5 && (lotsList.length % 100 < 12 || lotsList.length % 100 > 14) ? 'лота' : 'лотов'} · <span id="lotsClock" class="${open ? 'lots-note' : 'lots-note bad'}">${lotsClockText(left, open)}</span></div>
+      <p class="lots-note">Пока идёт аук, держи эту вкладку открытой: лоты приезжают на колесо и зрители видят его, только пока она открыта.</p>
       <div class="lots-f"><span>Лотов на человека</span><div class="seg" role="group" aria-label="Лотов на человека">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-lots-limit="${n}" aria-pressed="${n === lotsRoom.perUser}">${n}</button>`).join('')}</div></div>
       <div class="lots-row">
         <button type="button" class="btn small ghost" data-lots="plus5">+5 минут</button>
