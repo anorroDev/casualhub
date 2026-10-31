@@ -1080,6 +1080,18 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
   <button type="button" class="fx-skip">Пропустить ›<i class="fx-prog" aria-hidden="true"></i></button>
 </div>
 
+<div class="sheet" id="lotsAsk" hidden role="dialog" aria-modal="true" aria-labelledby="lotsAskT">
+  <div class="sheet-card">
+    <h2 class="eyebrow" id="lotsAskT"><span class="dot" aria-hidden="true"></span>Сбор ещё идёт</h2>
+    <p class="lots-note" id="lotsAskText"></p>
+    <div class="sheet-actions">
+      <button type="button" class="btn primary" id="lotsAskClose">Закрыть сбор и крутить</button>
+      <button type="button" class="btn ghost" id="lotsAskSpin">Крутить, сбор не закрывать</button>
+      <button type="button" class="btn ghost" id="lotsAskNo">Подождать</button>
+    </div>
+  </div>
+</div>
+
 <div class="sheet" id="winner" hidden role="dialog" aria-modal="true" aria-labelledby="wName">
   <div class="sheet-card">
     <h2 class="eyebrow win-eyebrow"><span class="dot" aria-hidden="true"></span>Победитель</h2>

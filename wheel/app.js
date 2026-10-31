@@ -1528,7 +1528,7 @@
   }
 
   function bind() {
-    $('#spin').addEventListener('click', () => { clearTimeout(autoTimer); spin(); });
+    $('#spin').addEventListener('click', () => { clearTimeout(autoTimer); lotsSpinAsk(); });
 
     $('#mslots').addEventListener('click', (e) => {
       const pl = e.target.closest('[data-mplay]');
@@ -2034,7 +2034,7 @@
   // ---------- лоты по ссылке: зрители добавляют игры сами, а колесо видят вживую ----------
   const lotsAccount = (() => { try { const u = JSON.parse(localStorage.getItem('ocenshik.user.v1') || 'null'); const t = u && (JSON.parse(localStorage.getItem('casualhub.tokens.v1') || 'null') || {})[u.id]; return u && t ? { id: u.id, token: t } : null; } catch (e) { return null; } })();
   const LOTS_KEY = 'casualhub.lots.v1' + (lotsAccount ? ':' + lotsAccount.id : '');
-  let lotsRoom = null, lotsList = [], lotsOffset = 0, lotsMap = {}, lotsWinner = null, liveSpin = null, liveT = 0, liveSig = '', lotsPollT = 0, livePick = '', lotsPerNew = 3, lotsMinsNew = 10, lotsKindNew = 'game', lotsErr = '', lotsRooms = [];
+  let lotsRoom = null, lotsList = [], lotsOffset = 0, lotsMap = {}, lotsWinner = null, liveSpin = null, liveT = 0, liveSig = '', lotsPollT = 0, livePick = '', lotsPerNew = 3, lotsMinsNew = 10, lotsKindNew = 'game', lotsErr = '', lotsRooms = [], lotsAskedFor = null;
   const LOT_KIND_NAMES = { game: 'Игры из Steam', movie: 'Фильмы и сериалы', anime: 'Аниме', book: 'Книги', music: 'Музыка', any: 'Что угодно' };
   async function lotsApi(path, method = 'GET', body) {
     let r;
@@ -2104,6 +2104,26 @@
     liveSpin = { from: +from.toFixed(4), to: +to.toFixed(4), ms, at: Date.now() + lotsOffset };
     livePick = '';
     lotsLiveNow();
+  }
+  // таймер сбора ещё идёт: сначала спрашиваем. На один таймер один раз, чтобы не мешать следующим прокруткам
+  function lotsSpinAsk() {
+    if (S.spinning || !lotsRoom || !lotsRoom.endsAt || !lotsOpen() || lotsAskedFor === lotsRoom.endsAt || alive().length < 2) { spin(); return; }
+    $('#lotsAskText').textContent = `До конца сбора ${lotsMmss(lotsLeft())}, зрители ещё могут добавлять лоты. Крутить сейчас?`;
+    $('#lotsAsk').hidden = false;
+    $('#lotsAskNo').focus({ preventScroll: true });
+  }
+  function lotsAskInit() {
+    const box = $('#lotsAsk');
+    const hide = () => { box.hidden = true; };
+    $('#lotsAskNo').addEventListener('click', hide);
+    box.addEventListener('click', (e) => { if (e.target === box) hide(); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !box.hidden) hide(); });
+    $('#lotsAskSpin').addEventListener('click', () => { lotsAskedFor = lotsRoom && lotsRoom.endsAt; hide(); spin(); });
+    $('#lotsAskClose').addEventListener('click', async () => {
+      hide();
+      await lotsDo(() => lotsApi('/lots/' + lotsRoom.id, 'PATCH', { closed: true }));
+      spin();
+    });
   }
   function lotsPaint() {
     const box = $('#lotsBody');
@@ -2205,6 +2225,7 @@
   async function lotsInit() {
     const box = $('#lotsBody');
     if (!box) return;
+    lotsAskInit();
     lotsPaint();
     box.addEventListener('click', async (e) => {
       const per = e.target.closest('[data-lots-per], [data-lots-kind]');

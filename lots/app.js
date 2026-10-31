@@ -406,6 +406,7 @@
         // как у ведущего: на большой скорости имя меняется не чаще раза в 0,3 секунды
         if (now - nameAt >= 300) { nameAt = now; $('#ticker').textContent = last.n; }
         if (t < 1) { spinRaf = requestAnimationFrame(frame); return; }
+        spinRaf = 0;
         $('#ticker').textContent = last.n;
         canvas.style.transform = ''; canvas.style.willChange = '';
         paint(segs, spin.to);
@@ -579,6 +580,27 @@
     if (lot && lot.link) link.href = lot.link;
     $('#winner').hidden = false;
     $('#wClose').focus({ preventScroll: true });
+    if (!reduced) {
+      const b = $('#winner .sheet-card').getBoundingClientRect();
+      const cs = getComputedStyle(document.documentElement);
+      const colors = ['--good', '--mid', '--bad', '--accent'].map((v) => cs.getPropertyValue(v).trim() || '#3550E8').concat(['#EC4899', '#06B6D4']);
+      for (let i = 0; i < 44; i++) {
+        const s = document.createElement('i');
+        s.className = 'burst';
+        s.style.background = colors[i % colors.length];
+        s.style.left = `${b.left + b.width / 2 - 5}px`;
+        s.style.top = `${b.top + Math.min(90, b.height / 3)}px`;
+        document.body.appendChild(s);
+        const ang = (-170 + Math.random() * 160) * Math.PI / 180, d = 90 + Math.random() * 190, rot = (Math.random() - 0.5) * 900;
+        const dx = Math.cos(ang) * d, dy = Math.sin(ang) * d;
+        s.animate([
+          { transform: 'translate(0, 0) rotate(0) scale(.4)' },
+          { transform: `translate(${dx}px, ${dy}px) rotate(${rot / 2}deg) scale(1)`, offset: 0.45 },
+          { transform: `translate(${dx * 1.25}px, ${dy + 200}px) rotate(${rot}deg) scale(.5)`, opacity: 0 },
+        ], { duration: 1200 + Math.random() * 700, easing: 'cubic-bezier(.2, .7, .4, 1)' }).onfinish = () => s.remove();
+      }
+      $('#wName').animate([{ transform: 'translateY(26px) scaleY(.6)' }, { transform: 'none' }], { duration: 700, easing: 'cubic-bezier(.34, 1.56, .64, 1)', fill: 'backwards', delay: 80 });
+    }
   }
   function paintWinner() {
     const w = S.live && S.live.winner ? S.live.winner.n : '';
@@ -597,7 +619,17 @@
   function paintHead() {
     const r = S.room;
     const title = r.title || 'Сбор лотов';
-    $('#lotTitle').textContent = title;
+    const head = $('#lotTitle');
+    if (head.dataset.t !== title) {
+      head.dataset.t = title;
+      head.classList.toggle('lots-long', [...title].length > 22);
+      if (reduced) head.textContent = title;
+      else {
+        let i = 0;
+        head.setAttribute('aria-label', title);
+        head.innerHTML = title.split(' ').map((w) => `<span class="w" aria-hidden="true">${[...w].map((c) => `<span class="ch" style="--i:${i++}">${esc(c)}</span>`).join('')}</span>`).join(' ');
+      }
+    }
     document.title = `${title} · Казуал Хаб`;
     $('#lotLede').textContent = `Ведущий: ${r.owner}. Категория: ${kindOf().label}. Можно добавить ${r.perUser} ${plural(r.perUser, 'лот', 'лота', 'лотов')} на человека.`;
   }
@@ -637,7 +669,8 @@
     if (!box) return;
     box.hidden = !S.results.length;
     const taken = new Set(S.lots.map((l) => l.name.toLowerCase()));
-    box.innerHTML = S.results.map((g, i) => { const has = taken.has(g.name.toLowerCase()); return `<button type="button" class="lots-opt" data-pick="${i}"${has ? ' disabled' : ''}><img src="${esc(g.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"><span><b>${esc(g.name)}</b>${g.sub ? `<small>${esc(g.sub)}</small>` : ''}</span><i>${has ? 'уже есть' : ''}</i></button>`; }).join('');
+    const html = S.results.map((g, i) => { const has = taken.has(g.name.toLowerCase()); return `<button type="button" class="lots-opt" data-pick="${i}"${has ? ' disabled' : ''}><img src="${esc(g.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"><span><b>${esc(g.name)}</b>${g.sub ? `<small>${esc(g.sub)}</small>` : ''}</span><i>${has ? 'уже есть' : ''}</i></button>`; }).join('');
+    if (box.dataset.sig !== html) { box.dataset.sig = html; box.innerHTML = html; }
   }
   const lotImg = (l) => (l.img ? `<img src="${esc(l.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<em aria-hidden="true">${esc([...l.name][0] || '?')}</em>`);
   const lotPic = (l) => (l.link ? `<a href="${esc(l.link)}" target="_blank" rel="noopener noreferrer" title="Открыть в Steam">${lotImg(l)}</a>` : `<span class="lots-pic">${lotImg(l)}</span>`);
@@ -645,7 +678,21 @@
     const box = $('#lotList');
     const out = new Set(S.live && Array.isArray(S.live.out) ? S.live.out : []);
     const n = S.lots.length;
-    box.innerHTML = `<p class="board-stat"><b>${n}</b> ${plural(n, 'лот', 'лота', 'лотов')}</p>${n ? `<ul class="lots-list">${S.lots.map((l) => `<li class="${out.has(l.name) ? 'out' : ''}">${lotPic(l)}<span class="lots-who"><b>${esc(l.name)}</b><small>${esc(l.by)}${out.has(l.name) ? ' · вылетел' : ''}</small></span></li>`).join('')}</ul>` : '<p class="lots-empty">Пока ни одного лота. Будь первым!</p>'}`;
+    const html = `<p class="board-stat"><b>${n}</b> ${plural(n, 'лот', 'лота', 'лотов')}</p>${n ? `<ul class="lots-list">${S.lots.map((l) => `<li data-lot="${esc(l.id)}" class="${out.has(l.name) ? 'out' : ''}">${lotPic(l)}<span class="lots-who"><b>${esc(l.name)}</b><small>${esc(l.by)}${out.has(l.name) ? ' · вылетел' : ''}</small></span></li>`).join('')}</ul>` : '<p class="lots-empty">Пока ни одного лота. Будь первым!</p>'}`;
+    if (box.dataset.sig === html) return;
+    box.dataset.sig = html;
+    // как участники в Колесе: оставшиеся плывут на новое место, новые въезжают
+    const was = new Map([...box.querySelectorAll('[data-lot]')].map((li) => [li.dataset.lot, li.offsetTop]));
+    box.innerHTML = html;
+    if (reduced) return;
+    let k = 0;
+    box.querySelectorAll('[data-lot]').forEach((li) => {
+      const top = was.get(li.dataset.lot);
+      if (top != null) { if (Math.abs(top - li.offsetTop) > 1) li.animate([{ transform: `translateY(${top - li.offsetTop}px)` }, { transform: 'none' }], { duration: 460, easing: 'cubic-bezier(.2, .8, .2, 1)' }); }
+      else if (was.size && k < 14) li.animate([{ transform: 'translateX(-22px) scale(.97)' }, { transform: 'none' }], { duration: 480, delay: 30 * k++, easing: 'cubic-bezier(.34, 1.56, .64, 1)', fill: 'backwards' });
+      else if (!was.size && S.firstList !== false && k < 14) li.animate([{ transform: 'translateX(-22px) scale(.97)' }, { transform: 'none' }], { duration: 480, delay: 40 * k++, easing: 'cubic-bezier(.34, 1.56, .64, 1)', fill: 'backwards' });
+    });
+    S.firstList = false;
   }
   function paintStatus() {
     const live = S.live;
@@ -814,10 +861,37 @@
   ctx = canvas.getContext('2d');
   readTheme();
   resize();
-  new MutationObserver(() => { readTheme(); restSig = ''; shown = []; wheel(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { readTheme(); restSig = ''; shown = []; wheel(); });
-  addEventListener('resize', () => { resize(); restSig = ''; shown = []; wheel(); });
-  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { restSig = ''; shown = []; wheel(); });
+  // смена размера очищает холст, поэтому колесо рисуем заново сразу; посреди прокрутки — с её начального положения, поворачивает его CSS
+  const repaint = () => {
+    readTheme();
+    resize();
+    const spin = S.live && S.live.spin;
+    if (spinRaf && spin && serverNow() < spin.at + spin.ms) { paint(place(shownSegs()), spin.from); return; }
+    cancelAnimationFrame(tweenRaf);
+    restSig = ''; shown = [];
+    wheel();
+  };
+  new MutationObserver(repaint).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  matchMedia('(prefers-color-scheme: dark)').addEventListener('change', repaint);
+  addEventListener('resize', repaint);
+  if ('ResizeObserver' in window) new ResizeObserver(repaint).observe(canvas);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(repaint);
+  if (!reduced && !window.CasualSettled) {
+    document.documentElement.classList.add('intro');
+    setTimeout(() => document.documentElement.classList.remove('intro'), 1400);
+  }
+  if (!reduced) {
+    const tick = $('#ticker');
+    let lastName = tick.textContent, lastPop = 0;
+    new MutationObserver(() => {
+      const t = tick.textContent, now = performance.now();
+      if (t === lastName) return;
+      lastName = t;
+      if (now - lastPop < 70) return;
+      lastPop = now;
+      tick.animate([{ transform: 'translateY(0) scale(1)' }, { transform: 'translateY(-4px) scale(1.04)' }, { transform: 'translateY(0) scale(1)' }], { duration: 220, easing: 'cubic-bezier(.34, 1.56, .64, 1)' });
+    }).observe(tick, { childList: true, characterData: true, subtree: true });
+  }
   paint([], 0);
   paintSound();
   paintPlaying();

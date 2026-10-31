@@ -207,7 +207,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .page { max-width: 1180px; margin: 0 auto; padding-block: 20px 56px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 
 /* Top bar */
-.top { display: flex; align-items: center; gap: 8px; margin-bottom: 22px; animation: drop-in .6s var(--out) backwards; }
+.top { display: flex; flex-wrap: wrap; justify-content: flex-end; row-gap: 6px; align-items: center; gap: 8px; margin-bottom: 22px; animation: drop-in .6s var(--out) backwards; }
 .top .sp { flex: 1; }
 .online-chip { cursor: default; }
 @media (max-width: 560px) { .top .oc-t, .top .fb-t { display: none; } .top { flex-wrap: wrap; justify-content: flex-end; row-gap: 6px; } }
