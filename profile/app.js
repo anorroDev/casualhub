@@ -2391,7 +2391,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       const nb = $('#followBtn');
       if (nb) {
         nb.addEventListener('click', () => toggleFollow(p, nb));
-        if (on && !calm) nb.classList.add('ring'); // колокольчик качается, как на YouTube
+        if (on && !calm) nb.classList.add('bell-swing'); // колокольчик качается, как на YouTube (не 'ring': так зовётся кольцо совпадения вкусов)
         toast(on ? '🔔 Подписка есть: новые оценки друга появятся в Журнале Мнения' : 'Подписка отменена');
       }
       return;
