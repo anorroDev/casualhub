@@ -131,7 +131,7 @@
     Object.keys(items).forEach((id) => { if (!seen.has(id)) { seen.add(id); pool.push(id); } });
     return {
       id: typeof raw.id === 'string' && /^\w{1,40}$/.test(raw.id) ? raw.id : rid('t'),
-      title: str(raw.title, LIMIT.title), rows, pool, items, captions: !!raw.captions, private: !!raw.private,
+      title: str(raw.title, LIMIT.title), rows, pool, items, captions: !!raw.captions, private: !!raw.private, fav: !!raw.fav,
       at: Number.isFinite(+raw.at) && +raw.at > 0 ? +raw.at : Date.now(),
     };
   }
@@ -328,7 +328,7 @@
 
   // ---------- состояние страницы ----------
   const view = $('#view');
-  const S = { list: null, friend: null, sel: '', pop: '', dropped: '', armed: '', tab: 'mine', who: '', feed: null, feedAt: 0, built: '' };
+  const S = { list: null, friend: null, sel: '', pop: '', dropped: '', armed: '', tab: 'mine', who: '', feed: null, feedAt: 0, built: '', q: '', sort: 'new', shares: null };
   let drag = null, justDragged = false;
   const fmtDate = (t) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'short' });
   const allItems = (l) => [...l.rows.flatMap((r) => r.items), ...l.pool];
@@ -358,6 +358,11 @@
         <div class="views" role="tablist" aria-label="Чьи тир-листы">
           <button type="button" class="view-tab" role="tab" data-tab="mine" aria-selected="false">Мои</button>
           <button type="button" class="view-tab" role="tab" data-tab="friends" aria-selected="false">Друзья</button>
+          <button type="button" class="view-tab" role="tab" data-tab="fav" aria-selected="false">★ Избранное</button>
+        </div>
+        <div class="tl-find">
+          <input id="tlQ" type="search" maxlength="80" autocomplete="off" placeholder="Поиск по названию, рядам и карточкам" aria-label="Поиск тир-листов" value="${esc(S.q)}">
+          <div class="seg" role="group" aria-label="Сортировка"><button type="button" data-sort="new" aria-pressed="${S.sort === 'new'}">Новые</button><button type="button" data-sort="name" aria-pressed="${S.sort === 'name'}">А–Я</button></div>
         </div>
         <div id="tlPanel" role="tabpanel"></div>
       </section>
@@ -372,15 +377,22 @@
     if (src) return `<img src="${esc(src)}" alt="" loading="lazy" decoding="async">`;
     return `<span${it.img ? ` data-fi="${esc(it.img)}" data-fu="${esc(uid || '')}"` : ''}>${esc([...String(it.name || '')][0] || '?')}</span>`;
   }
+  const lower = (v) => String(v || '').toLowerCase();
+  const inQuery = (...texts) => { const q = lower(S.q.trim()); return !q || texts.some((x) => lower(x).includes(q)); };
+  const bySort = (arr, name, at) => [...arr].sort((a, b) => (S.sort === 'name' ? name(a).localeCompare(name(b), 'ru') : at(b) - at(a)));
+  const renderPanel = () => (S.tab === 'friends' ? (S.feed && S.feed.items && S.feed.friends ? paintFriends() : renderFriendsTab()) : renderMine());
   async function renderMine() {
     await loadUrls(lists.flatMap((l) => allItems(l).slice(0, 40).map((id) => l.items[id].img).filter(Boolean)));
     const box = $('#tlPanel');
-    if (!box || S.tab !== 'mine') return;
-    const n = lists.length;
-    box.innerHTML = n ? `<p class="tl-stat"><b>${n}</b> ${plural(n, 'тир-лист', 'тир-листа', 'тир-листов')}</p><div class="tl-grid">${[...lists].sort((a, b) => b.at - a.at).map((l, k) => {
+    if (!box || S.tab === 'friends') return;
+    const pool = S.tab === 'fav' ? lists.filter((l) => l.fav) : lists;
+    const found = pool.filter((l) => inQuery(l.title, ...l.rows.map((r) => r.label), ...Object.values(l.items).map((it) => it.name)));
+    const n = found.length;
+    const none = pool.length ? 'Ничего не нашлось.' : S.tab === 'fav' ? 'Нажми ★ у тир-листа, и он появится здесь.' : 'Пока пусто. Начни с любого варианта рядом: тир-лист сохранится сам.';
+    box.innerHTML = n ? `<p class="tl-stat"><b>${n}</b> ${plural(n, 'тир-лист', 'тир-листа', 'тир-листов')}</p><div class="tl-grid">${bySort(found, (l) => l.title || 'Без названия', (l) => l.at).map((l, k) => {
       const c = Object.keys(l.items).length;
-      return `<a class="tl-tile" href="#l=${esc(l.id)}" style="--k:${Math.min(k, 8)}"><span class="tl-mini" aria-hidden="true">${l.rows.slice(0, 5).map((r) => `<span class="tl-mini-r"><i style="background:${esc(r.color)}"></i><span>${r.items.slice(0, 7).map((id) => miniThumb(l.items[id])).join('')}</span></span>`).join('')}</span><b>${esc(l.title || 'Без названия')}</b><small>${cards(c)} · ${esc(fmtDate(l.at))}${l.private ? ' · скрыт от друзей' : ''}</small></a>`;
-    }).join('')}</div>` : '<p class="tl-empty">Пока пусто. Начни с любого варианта рядом: тир-лист сохранится сам.</p>';
+      return `<div class="tl-cell"><button type="button" class="tl-star" data-fav="${esc(l.id)}" aria-pressed="${l.fav}" aria-label="${l.fav ? 'Убрать из избранного' : 'В избранное'}" title="${l.fav ? 'Убрать из избранного' : 'В избранное'}">★</button><a class="tl-tile" href="#l=${esc(l.id)}" style="--k:${Math.min(k, 8)}"><span class="tl-mini" aria-hidden="true">${l.rows.slice(0, 5).map((r) => `<span class="tl-mini-r"><i style="background:${esc(r.color)}"></i><span>${r.items.slice(0, 7).map((id) => miniThumb(l.items[id])).join('')}</span></span>`).join('')}</span><b>${esc(l.title || 'Без названия')}</b><small>${cards(c)} · ${esc(fmtDate(l.at))}${l.private ? ' · скрыт от друзей' : ''}</small></a></div>`;
+    }).join('')}</div>` : `<p class="tl-empty">${none}</p>`;
   }
   async function renderFriendsTab() {
     const box = $('#tlPanel');
@@ -400,10 +412,10 @@
     if (!feed.items.length) { box.innerHTML = '<p class="tl-empty">Друзья пока не собрали ни одного тир-листа.</p>'; return; }
     const people = [...new Map(feed.items.map((x) => [x.user.id, x.user])).values()];
     if (S.who && !people.some((p) => p.id === S.who)) S.who = '';
-    const shown = feed.items.filter((x) => !S.who || x.user.id === S.who);
+    const shown = bySort(feed.items.filter((x) => (!S.who || x.user.id === S.who) && inQuery(x.title, x.user.username)), (x) => x.title || 'Без названия', (x) => x.at);
     box.innerHTML = `<p class="tl-stat"><b>${shown.length}</b> ${plural(shown.length, 'тир-лист', 'тир-листа', 'тир-листов')}</p>
       ${people.length > 1 ? `<div class="tl-chips tl-mt"><button type="button" class="tl-chip" data-who="" aria-pressed="${!S.who}">Все</button>${people.map((p) => `<button type="button" class="tl-chip" data-who="${esc(p.id)}" aria-pressed="${S.who === p.id}">${esc(p.username)}</button>`).join('')}</div>` : ''}
-      <div class="tl-grid">${shown.map((x, k) => `<a class="tl-tile" href="#f=${esc(x.user.id)}.${esc(x.id)}" style="--k:${Math.min(k, 8)}"><span class="tl-mini" aria-hidden="true">${(x.rows || []).slice(0, 5).map((r) => `<span class="tl-mini-r"><i style="background:${COLOR_RE.test(r.color) ? r.color : '#9AA0AE'}"></i><span>${(r.items || []).map((it) => miniThumb(it, x.user.id)).join('')}</span></span>`).join('')}</span><b>${esc(x.title || 'Без названия')}</b><small>${esc(x.user.username)} · ${cards(+x.count || 0)} · ${esc(fmtDate(x.at))}</small></a>`).join('')}</div>`;
+      ${shown.length ? '' : '<p class="tl-empty">Ничего не нашлось.</p>'}<div class="tl-grid">${shown.map((x, k) => `<a class="tl-tile" href="#f=${esc(x.user.id)}.${esc(x.id)}" style="--k:${Math.min(k, 8)}"><span class="tl-mini" aria-hidden="true">${(x.rows || []).slice(0, 5).map((r) => `<span class="tl-mini-r"><i style="background:${COLOR_RE.test(r.color) ? r.color : '#9AA0AE'}"></i><span>${(r.items || []).map((it) => miniThumb(it, x.user.id)).join('')}</span></span>`).join('')}</span><b>${esc(x.title || 'Без названия')}</b><small>${esc(x.user.username)} · ${cards(+x.count || 0)} · ${esc(fmtDate(x.at))}</small></a>`).join('')}</div>`;
     hydrateMini(box);
   }
   // картинки в карточках списка друзей подгружаются пачками, по человеку
@@ -497,6 +509,54 @@
   }
 
   // ---------- редактор ----------
+  // ссылка на тир-лист: кому её дашь, тот увидит его и без аккаунта
+  const shareOf = (l) => (S.shares && l ? S.shares.get('t.' + l.id) : '');
+  function paintShare() {
+    const a = $('#tlLink'), b = $('#tlUnlink');
+    if (!a || !S.list) return;
+    const has = shareOf(S.list);
+    a.textContent = has ? '🔗 Скопировать ссылку' : '🔗 Ссылка';
+    a.title = 'Ссылка, по которой тир-лист видно без аккаунта';
+    b.hidden = !has;
+  }
+  async function loadShares() {
+    if (!me || S.shares) return;
+    S.shares = new Map();
+    try { ((await api('/shares')).items || []).forEach((x) => S.shares.set(x.rid, x.id)); }
+    catch (e) { S.shares = null; return; }
+    paintShare();
+  }
+  async function shareList(l, b) {
+    if (!allItems(l).length) { toast('Сначала добавь карточки.'); return; }
+    b.disabled = true;
+    try {
+      await loadShares();
+      if (!S.shares) throw new Error('Нет связи, попробуй ещё раз.');
+      let id = shareOf(l);
+      if (!id) {
+        // тир-лист сначала должен дойти до сервера
+        clearTimeout(syncTimer);
+        await runSync(false);
+        id = (await api('/tierlist-share', 'POST', { id: l.id })).id;
+        S.shares.set('t.' + l.id, id);
+      }
+      paintShare();
+      const url = location.origin + '/r/' + id;
+      try { await navigator.clipboard.writeText(url); toast('Ссылка скопирована. Её увидит любой, кому ты её дашь.'); }
+      catch (e) { toast(url); }
+    } catch (e) { toast(e.message); } finally { b.disabled = false; }
+  }
+  async function unshareList(l, b) {
+    const id = shareOf(l);
+    if (!id) return;
+    b.disabled = true;
+    try {
+      await api('/share/' + encodeURIComponent(id), 'DELETE');
+      S.shares.delete('t.' + l.id);
+      paintShare();
+      toast('Ссылка закрыта: по ней тир-лист больше не откроется.');
+    } catch (e) { toast(e.message); } finally { b.disabled = false; }
+  }
   function renderEditor() {
     const l = S.list;
     if (S.built !== 'edit:' + l.id) {
@@ -508,10 +568,11 @@
             <a class="btn small ghost" href="#">‹ Все тир-листы</a>
             <label class="vh" for="tlTitle">Название тир-листа</label>
             <input class="tl-title" id="tlTitle" maxlength="${LIMIT.title}" placeholder="Название, например «Лучшие игры»" autocomplete="off">
+            <button type="button" class="tl-star on-bar" id="tlFav" data-do="fav" aria-pressed="false">★</button>
           </div>
           <div class="tl-tools">
             <span class="tl-group"><button type="button" class="btn small primary" data-do="add-img">＋ Картинки</button><button type="button" class="btn small ghost" data-do="add-text">＋ Текст</button><button type="button" class="btn small ghost" data-do="add-ratings">Из оценок</button><button type="button" class="btn small ghost" data-do="add-stickers">Стикеры</button></span>
-            <span class="tl-group"><button type="button" class="btn small ghost" data-do="png">Скачать PNG</button><button type="button" class="btn small ghost" data-do="copy">Скопировать картинку</button><button type="button" class="btn small ghost" data-do="file">Файл</button><button type="button" class="btn small ghost" data-do="clear">Всё убрать</button><button type="button" class="btn small danger" data-do="delete">Удалить</button></span>
+            <span class="tl-group"><button type="button" class="btn small ghost" data-do="png">Скачать PNG</button><button type="button" class="btn small ghost" data-do="copy">Скопировать картинку</button>${me ? '<button type="button" class="btn small ghost" id="tlLink" data-do="share">🔗 Ссылка</button><button type="button" class="btn small text" id="tlUnlink" data-do="unshare" hidden>Закрыть ссылку</button>' : ''}<button type="button" class="btn small ghost" data-do="file">Файл</button><button type="button" class="btn small ghost" data-do="clear">Всё убрать</button><button type="button" class="btn small danger" data-do="delete">Удалить</button></span>
           </div>
           <div class="tl-tools">
             <span class="tl-group"><label class="tl-check"><input type="checkbox" id="tlCaps"> Подписи</label>${me ? '<label class="tl-check"><input type="checkbox" id="tlShare"> Видно друзьям</label>' : ''}</span>
@@ -526,12 +587,14 @@
       </div>`;
       window.scrollTo(0, 0);
       boardIntro($('#tlBoard'));
-      if (me) mountSocial(me, l.id, true);
+      if (me) { mountSocial(me, l.id, true); loadShares(); }
     }
     const before = cardSpots();
     const title = $('#tlTitle');
     if (document.activeElement !== title) title.value = l.title;
     $('#tlCaps').checked = l.captions;
+    { const fv = $('#tlFav'), tip = l.fav ? 'Убрать из избранного' : 'В избранное'; fv.setAttribute('aria-pressed', String(l.fav)); fv.title = tip; fv.setAttribute('aria-label', tip); }
+    paintShare();
     const share = $('#tlShare');
     if (share) share.checked = !l.private;
     paintSync();
@@ -986,7 +1049,8 @@
     const { own, items } = rxState;
     const mine = items.find((x) => x.from.id === me) || {};
     const others = items.filter((x) => x.from.id !== me);
-    const list = others.length ? `<ul class="rx-list">${others.map((x) => `<li><b>${esc(x.from.username)}</b> ${rxIcon(x.emoji)} ${x.text ? `<span>${esc(x.text)}</span>` : ''}</li>`).join('')}</ul>` : '';
+    const shown = mine.text ? [mine, ...others] : others;
+    const list = shown.length ? `<ul class="rx-list">${shown.map((x) => `<li><b>${esc(x.from.username)}</b> ${rxIcon(x.emoji)} ${x.text ? `<span>${esc(x.text)}</span>` : ''}</li>`).join('')}</ul>` : '';
     if (own) {
       box.innerHTML = `<div class="rx-title">Реакции друзей</div>${list || '<p class="tl-note">Пока никто не отреагировал.</p>'}`;
       return;
@@ -994,7 +1058,6 @@
     const picked = RX.find((x) => x[0] === mine.emoji);
     box.innerHTML = `<div class="rx-title">Твоя реакция${picked ? `: <span>${picked[1]} ${picked[2]}</span>` : ''}</div>
       <div class="rx-btns">${RX.map(([k, ico, label]) => { const n = items.filter((x) => x.emoji === k).length; return `<button type="button" data-rx="${k}" aria-pressed="${mine.emoji === k}" title="${label}" aria-label="${label}${n ? ', ' + n : ''}"><span class="rx-e">${ico}</span>${n ? `<b>${n}</b>` : ''}</button>`; }).join('')}</div>
-      <form class="rx-form" data-rx-form><input type="text" maxlength="140" enterkeyhint="send" placeholder="Пара слов о тир-листе…" value="${esc(mine.text || '')}" aria-label="Комментарий к тир-листу"><button type="submit">${mine.text ? 'Изменить' : 'Отправить'}</button></form>
       ${list}`;
   }
   // выбранный смайлик разлетается веером над кнопкой и улетает вверх, уменьшаясь до нуля
@@ -1082,6 +1145,9 @@
     else if (a === 'add-row') { l.rows.push({ id: rid('r'), label: '', color: COLORS[COLORS.length - 1], items: [] }); touchList(l); renderEditor(); rowDialog(l.rows[l.rows.length - 1].id); }
     else if (a === 'png') { b.disabled = true; pngOut(l, false).finally(() => { b.disabled = false; }); }
     else if (a === 'copy') { b.disabled = true; pngOut(l, true).finally(() => { b.disabled = false; }); }
+    else if (a === 'fav') { l.fav = !l.fav; touchList(l); renderEditor(); }
+    else if (a === 'share') shareList(l, b);
+    else if (a === 'unshare') armed(b, 'unshare', 'Точно закрыть?', () => unshareList(l, b));
     else if (a === 'file') fileOut().catch(() => toast('Не получилось сохранить файл.'));
     else if (a === 'clear') armed(b, 'clear', 'Точно убрать?', () => { l.rows.forEach((r) => { l.pool.push(...r.items); r.items = []; }); S.sel = ''; touchList(l); renderEditor(); });
     else if (a === 'delete') armed(b, 'delete', 'Точно удалить?', () => {
@@ -1098,7 +1164,20 @@
     const nw = e.target.closest('[data-new]');
     if (nw) { startNew(nw.dataset.new); return; }
     const tab = e.target.closest('[data-tab]');
-    if (tab) { location.hash = tab.dataset.tab === 'friends' ? 'friends' : ''; return; }
+    if (tab) { location.hash = tab.dataset.tab === 'mine' ? '' : tab.dataset.tab; return; }
+    const star = e.target.closest('[data-fav]');
+    if (star) {
+      const fl = lists.find((x) => x.id === star.dataset.fav);
+      if (fl) { fl.fav = !fl.fav; touchList(fl); renderMine(); }
+      return;
+    }
+    const so = e.target.closest('[data-sort]');
+    if (so) {
+      S.sort = so.dataset.sort;
+      view.querySelectorAll('[data-sort]').forEach((x) => x.setAttribute('aria-pressed', String(x === so)));
+      renderPanel();
+      return;
+    }
     const who = e.target.closest('[data-who]');
     if (who) { S.who = who.dataset.who; paintFriends(); return; }
     const act = e.target.closest('[data-do]');
@@ -1108,7 +1187,7 @@
       const mine = rxState.items.find((x) => x.from.id === me) || {};
       const k = emo.dataset.rx, on = mine.emoji !== k;
       if (on) rxBurst(emo, rxIcon(k));
-      sendRx(on ? k : null, mine.text || '');
+      sendRx(on ? k : null, on ? mine.text || '' : '');
       return;
     }
     if (!S.list || justDragged) return;
@@ -1131,13 +1210,8 @@
     const ed = e.target.closest('[data-edit]');
     if (ed) rowDialog(ed.dataset.edit);
   });
-  view.addEventListener('submit', (e) => {
-    if (!e.target.matches('[data-rx-form]') || !rxState) return;
-    e.preventDefault();
-    const mine = rxState.items.find((x) => x.from.id === me) || {};
-    sendRx(mine.emoji || null, e.target.querySelector('input').value.trim());
-  });
   view.addEventListener('input', (e) => {
+    if (e.target.id === 'tlQ') { S.q = e.target.value; renderPanel(); return; }
     if (e.target.id === 'tlTitle' && S.list) { S.list.title = str(e.target.value, LIMIT.title); touchList(S.list); }
   });
   view.addEventListener('change', (e) => {
@@ -1306,7 +1380,7 @@
     if (lm) { history.replaceState(null, '', location.pathname); }
     S.list = null; S.sel = '';
     closeDialog();
-    S.tab = h === 'friends' ? 'friends' : 'mine';
+    S.tab = h === 'friends' ? 'friends' : h === 'fav' ? 'fav' : 'mine';
     const fresh = S.built !== 'home';
     homeShell();
     if (fresh) window.scrollTo(0, 0);

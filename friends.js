@@ -52,9 +52,6 @@
 .rx-btns button[aria-pressed="true"] { animation: rx-pop .45s cubic-bezier(.34, 1.56, .64, 1); }
 @keyframes rx-pop { 40% { transform: scale(1.15) rotate(-3deg); } }
 @media (prefers-reduced-motion: reduce) { #friendBoard .entry.fr-in, .rx-btns button[aria-pressed="true"] { animation: none; } }
-.rx-form { display: flex; gap: 6px; }
-.rx-form input { flex: 1; min-width: 0; height: 38px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink); font: inherit; font-size: 14px; }
-.rx-form button { flex: none; height: 38px; padding: 0 14px; border: 0; border-radius: 10px; background: var(--ink); color: var(--panel); font: inherit; font-size: 13.5px; font-weight: 700; cursor: pointer; }
 .rx-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .rx-list li { padding: 8px 11px; border-radius: 10px; background: var(--panel); border: 1px solid var(--line); font-size: 13.5px; overflow-wrap: anywhere; }
 .rx-list li b { font-weight: 700; }
@@ -676,7 +673,7 @@
     const withText = list.filter((x) => x.text || x.emoji);
     return withText.length ? `<ul class="rx-list">${withText.map((x) => `<li>${whoHTML(x.from)} ${rxIcon(x.emoji)} ${x.text ? `<span>${esc(x.text)}</span>` : ''}</li>`).join('')}</ul>` : '';
   };
-  // блок на доске друга: свои кнопки, своё поле и чужие реакции
+  // блок на доске друга: свои кнопки и реакции; подпись, оставленная раньше, тоже видна
   function rxBlock(uid, rid) {
     const list = reactsOf(uid, rid);
     const mine = list.find((x) => F.me && x.from.id === F.me.id) || {};
@@ -684,8 +681,7 @@
     const picked = RX.find((x) => x[0] === mine.emoji);
     return `<div class="rx-title">Твоя реакция${picked ? `: <span>${picked[1]} ${picked[2]}</span>` : ''}</div>
       <div class="rx-btns">${RX.map(([k, ico, label]) => { const n = list.filter((x) => x.emoji === k).length; return `<button type="button" data-rx-emoji="${k}" aria-pressed="${mine.emoji === k}" title="${label}" aria-label="${label}${n ? ', ' + n : ''}"><span class="rx-e">${ico}</span>${n ? `<b>${n}</b>` : ''}</button>`; }).join('')}</div>
-      <form class="rx-form" data-rx-form><input type="text" maxlength="140" enterkeyhint="send" placeholder="Пара слов о его оценке…" value="${esc(mine.text || '')}" aria-label="Комментарий к оценке"><button type="submit">${mine.text ? 'Изменить' : 'Отправить'}</button></form>
-      ${rxComments(others)}`;
+      ${rxComments(mine.text ? [mine, ...others] : others)}`;
   }
   // выбранный смайлик разлетается веером над кнопкой и улетает вверх, уменьшаясь до нуля
   function rxBurst(btn, ico) {
@@ -728,17 +724,7 @@
     const mine = reactsOf(uid, rid).find((x) => F.me && x.from.id === F.me.id) || {};
     const k = b.dataset.rxEmoji;
     if (mine.emoji !== k) rxBurst(b, rxIcon(k));
-    sendReact(uid, rid, mine.emoji === k ? null : k, mine.text || '');
-  });
-  fboard.addEventListener('submit', (e) => {
-    const form = e.target.closest('[data-rx-form]');
-    const uid = form && form.closest('.entry') && form.closest('.entry').dataset.uid;
-    if (!form || !uid) return;
-    e.preventDefault();
-    const rid = form.closest('.rx').dataset.rx;
-    const mine = reactsOf(uid, rid).find((x) => F.me && x.from.id === F.me.id) || {};
-    sendReact(uid, rid, mine.emoji || null, form.querySelector('input').value.trim());
-    form.querySelector('input').blur();
+    sendReact(uid, rid, mine.emoji === k ? null : k, mine.emoji === k ? '' : mine.text || '');
   });
   // свои оценки в рейтинге: что сказали друзья
   function decorateOwn() {

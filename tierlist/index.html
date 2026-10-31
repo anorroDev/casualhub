@@ -471,6 +471,18 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
 .tl-chip { height: 36px; padding: 0 14px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink-2); font-size: 13.5px; font-weight: 600; cursor: pointer; transition: transform .22s var(--spring), background-color .15s, border-color .15s, color .15s; }
 .tl-chip small { font-weight: 600; opacity: .65; }
 .tl-chip[aria-pressed="true"] { border-color: var(--ink); background: var(--ink); color: var(--panel); }
+.tl-find { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 14px; }
+.tl-find input { flex: 1 1 220px; min-width: 0; height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); color: var(--ink); font: inherit; font-size: 14px; }
+.tl-find input::placeholder { color: var(--ink-3); }
+.tl-find input:focus { outline: none; border-color: var(--accent); background: var(--panel); }
+.tl-cell { position: relative; min-width: 0; display: grid; }
+.tl-star { display: grid; place-items: center; width: 34px; height: 34px; padding: 0; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); color: var(--ink-3); font-size: 16px; line-height: 1; cursor: pointer; transition: transform .22s var(--spring), color .15s, border-color .15s; }
+.tl-star:hover { color: var(--mid); border-color: var(--mid); }
+.tl-star:active { transform: scale(.85); }
+.tl-star:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.tl-star[aria-pressed="true"] { color: var(--mid); border-color: var(--mid); }
+.tl-cell > .tl-star { position: absolute; top: 14px; right: 14px; z-index: 1; }
+.tl-star.on-bar { flex: none; width: 40px; height: 40px; }
 .tl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; margin-top: 14px; }
 .tl-tile { display: grid; gap: 3px; min-width: 0; padding: 8px 8px 12px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel-2); color: var(--ink); text-decoration: none; transition: transform .25s var(--spring), border-color .15s; animation: tl-rise .55s var(--spring) backwards calc(var(--k) * 45ms); }
 @media (hover: hover) { .tl-tile:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); } .tl-go:hover { transform: translateY(-2px); border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); } }
@@ -558,9 +570,6 @@ body.tl-dropping .tl-pool { border-color: var(--accent); box-shadow: inset 0 0 0
 .rx-btns button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); animation: rx-pop .45s var(--spring); }
 .rx-btns button:active { transform: scale(.94); }
 @keyframes rx-pop { 40% { transform: scale(1.15) rotate(-3deg); } }
-.rx-form { display: flex; gap: 6px; }
-.rx-form input { flex: 1; min-width: 0; height: 38px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); font-size: 14px; }
-.rx-form button { flex: none; height: 38px; padding: 0 14px; border: 0; border-radius: 10px; background: var(--ink); color: var(--panel); font-size: 13.5px; font-weight: 700; cursor: pointer; }
 .rx-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .rx-list li { padding: 8px 11px; border-radius: 10px; background: var(--panel-2); border: 1px solid var(--line); font-size: 13.5px; overflow-wrap: anywhere; }
 .rx-list li b { font-weight: 700; }

@@ -1,7 +1,7 @@
 // Казуал Хаб: страница отзыва по ссылке /r/<код>.
 // Собирается на сервере и не содержит ни одного скрипта: весь текст экранируется, а заголовок CSP
 // запрещает странице выполнять любой код. Поэтому даже если в оценке окажется что-то вредное,
-// оно покажется просто текстом. Ссылку создаёт хозяин оценки в Мнении (POST /api/share).
+// оно покажется просто текстом. Ссылку создаёт хозяин оценки в Мнении (POST /api/share) или тир-листа (POST /api/tierlist-share).
 import { cleanRating, readShelf, SAFE_URL, MUSIC_LINK_RE } from '../_lib/shelf.js';
 
 const SHARE_RE = /^[A-Za-z0-9]{12}$/;
@@ -9,13 +9,15 @@ const SHARE_RE = /^[A-Za-z0-9]{12}$/;
 const TEXT = {
   ru: {
     html: 'ru', locale: 'ru-RU', verdicts: ['Ужас', 'Провал', 'Плохо', 'Слабо', 'Средне', 'Нормально', 'Неплохо', 'Хорошо', 'Отлично', 'Шедевр'], notRated: 'Без оценки', notRatedLow: 'без оценки',
+    tierBy: 'Тир-лист от', tierSite: 'Тир-листы Казуала', tierUntitled: 'Без названия', tierPool: 'Не разложено', tierMake: 'Собрать свой тир-лист', tierFoot: 'Тир-лист открыт по ссылке. Свои можно собирать в Тир-листах Казуала, это бесплатно.', tierGoneTitle: 'Тир-лист недоступен', tierGone: 'Владелец закрыл ссылку или удалил тир-лист.', tierOpen: 'Открыть Тир-листы',
     site: 'Казуал Хаб', opinion: 'Мнение Казуала', outOf: 'из 10', ratingBy: 'оценка от', ratingByCap: 'Оценка от', fav: '★ В избранном', crit: 'Критерии', listen: '🎧 Слушать', pros: '➕ Плюсы', cons: '➖ Минусы', notes: 'Заметки',
-    rate: 'Оценить что-нибудь своё', foot: 'Отзыв открыт по ссылке. Свои оценки можно вести в Мнении Казуала, это бесплатно.', goneTitle: 'Отзыв недоступен', gone: 'Хозяин закрыл ссылку или удалил оценку.', open: 'Открыть Мнение Казуала', home: 'На главную', wait: 'Слишком много запросов, подожди минуту.',
+    rate: 'Оценить что-нибудь своё', foot: 'Отзыв открыт по ссылке. Свои оценки можно вести в Мнении Казуала, это бесплатно.', goneTitle: 'Ссылка недоступна', gone: 'Хозяин закрыл ссылку или удалил то, что она открывала.', open: 'Открыть Мнение Казуала', home: 'На главную', wait: 'Слишком много запросов, подожди минуту.',
   },
   en: {
     html: 'en', locale: 'en-GB', verdicts: ['Awful', 'Flop', 'Bad', 'Weak', 'Average', 'Okay', 'Not bad', 'Good', 'Great', 'Masterpiece'], notRated: 'Not rated', notRatedLow: 'not rated',
+    tierBy: 'Tier list by', tierSite: 'Casual Tier Lists', tierUntitled: 'Untitled', tierPool: 'Not placed', tierMake: 'Make your own tier list', tierFoot: 'This tier list is open by link. You can make your own in Casual Tier Lists for free.', tierGoneTitle: 'Tier list unavailable', tierGone: 'The owner closed the link or deleted the tier list.', tierOpen: 'Open Tier Lists',
     site: 'Casual Hub', opinion: 'Casual Opinion', outOf: 'out of 10', ratingBy: 'rated by', ratingByCap: 'Rated by', fav: '★ In favorites', crit: 'Criteria', listen: '🎧 Listen', pros: '➕ Pros', cons: '➖ Cons', notes: 'Notes',
-    rate: 'Rate something yourself', foot: 'This review is open by link. You can keep your own ratings in Casual Opinion for free.', goneTitle: 'Review unavailable', gone: 'The owner closed the link or deleted the rating.', open: 'Open Casual Opinion', home: 'Home', wait: 'Too many requests, wait a minute.',
+    rate: 'Rate something yourself', foot: 'This review is open by link. You can keep your own ratings in Casual Opinion for free.', goneTitle: 'Link unavailable', gone: 'The owner closed the link or deleted what it opened.', open: 'Open Casual Opinion', home: 'Home', wait: 'Too many requests, wait a minute.',
   },
 };
 const langOf = (request) => (/(?:^|;\s*)casualhub_lang=en\b/.test(request.headers.get('cookie') || '') ? TEXT.en : TEXT.ru);
@@ -93,11 +95,20 @@ h1 { font-family: Handjet, Onest, sans-serif; font-weight: 800; font-size: clamp
 .btn { display: inline-flex; align-items: center; justify-content: center; height: 46px; padding: 0 20px; border-radius: 14px; font-weight: 700; text-decoration: none; }
 .btn.primary { background: var(--ink); color: var(--bg); }
 .btn.ghost { border: 1px solid var(--line); color: var(--ink); background: var(--panel); }
+.wrap.wide { width: min(980px, 100%); }
+.tb { display: grid; gap: 6px; }
+.tr { display: grid; grid-template-columns: 76px minmax(0, 1fr); gap: 6px; }
+.tn { display: grid; place-items: center; min-height: 76px; padding: 6px; border-radius: 12px; background: var(--c, var(--cell)); color: var(--on-tier); font-weight: 800; text-align: center; overflow-wrap: anywhere; }
+.ti { display: flex; flex-wrap: wrap; gap: 6px; align-content: flex-start; min-height: 76px; padding: 6px; border-radius: 12px; background: var(--panel-2); }
+.tc { display: grid; gap: 2px; width: 72px; }
+.tc img { display: block; width: 72px; height: 72px; object-fit: cover; border-radius: 10px; background: var(--cell); }
+.tc span { display: grid; place-items: center; min-height: 72px; padding: 4px; border-radius: 10px; background: var(--cell); font-size: 12.5px; font-weight: 600; text-align: center; overflow-wrap: anywhere; }
+.tc small { font-size: 11.5px; line-height: 1.2; color: var(--ink-2); overflow-wrap: anywhere; }
 .foot { text-align: center; font-size: 12.5px; color: var(--ink-3); }
 .empty { text-align: center; display: grid; gap: 12px; justify-items: center; padding: 30px 20px; }
 @media (prefers-reduced-motion: reduce) { .card { animation: none; } }`;
 
-function page(T, title, body, meta) {
+function page(T, title, body, meta, tier) {
   return `<!doctype html>
 <html lang="${T.html}">
 <head>
@@ -113,17 +124,57 @@ ${meta || ''}
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Handjet:wght@600..800&family=Onest:wght@400..700&display=swap">
 <style>${CSS}</style>
 </head>
-<body><div class="wrap">
+<body><div class="wrap${tier ? ' wide' : ''}">
 <div class="top"><a class="brand" href="/"><svg viewBox="0 0 32 32" width="26" height="26" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#14161C"/><g fill="none" stroke-width="5"><path d="M9.21 24.19A9.6 9.6 0 0 1 8.75 11.1" stroke="#F26A55"/><path d="M9.45 10.38A9.6 9.6 0 0 1 22.55 10.38" stroke="#F2BA44"/><path d="M23.25 11.1A9.6 9.6 0 0 1 22.79 24.19" stroke="#43C97A"/></g><g><path d="M16 17.4L22.28 13.48" fill="none" stroke="#E8EAF0" stroke-width="2.4" stroke-linecap="round"/><circle cx="16" cy="17.4" r="3" fill="#E8EAF0"/></g></svg>casualhub</a><a class="pill" href="/opinion/">${T.opinion}</a></div>
 ${body}
-<p class="foot">${T.foot}</p>
+<p class="foot">${tier ? T.tierFoot : T.foot}</p>
 </div></body></html>`;
 }
 
-function notFound(T) {
-  return new Response(page(T, `${T.goneTitle} · ${T.site}`, `<main class="card empty"><h1>${T.goneTitle}</h1>
-<p class="by">${T.gone}</p>
-<div class="cta"><a class="btn primary" href="/opinion/">${T.open}</a><a class="btn ghost" href="/">${T.home}</a></div></main>`), { status: 404, headers: HEADERS });
+function notFound(T, tierPage) {
+  const head = tierPage ? T.tierGoneTitle : T.goneTitle;
+  return new Response(page(T, `${head} · ${T.site}`, `<main class="card empty"><h1>${head}</h1>
+<p class="by">${tierPage ? T.tierGone : T.gone}</p>
+<div class="cta"><a class="btn primary" href="${tierPage ? '/tierlist/' : '/opinion/'}">${tierPage ? T.tierOpen : T.open}</a><a class="btn ghost" href="/">${T.home}</a></div></main>`, '', tierPage), { status: 404, headers: HEADERS });
+}
+
+// тир-лист по ссылке: цвета и адреса картинок проверяются ещё раз, весь текст экранируется
+const TIER_COLOR_RE = /^#[0-9a-f]{6}$/i, TIER_SRC_RE = /^\/wheel\/hub\/(?!.*\.\.)[\w\-\/.]{1,120}\.(png|webp|gif|jpe?g)$/i, TIER_IMG_RE = /^ti_\w+$/;
+function tierResponse(request, T, id, user, l, at) {
+  const origin = new URL(request.url).origin;
+  const src = (it) => (it.kind === 'img' && TIER_IMG_RE.test(String(it.img)) ? `/api/share/${id}/img?k=${encodeURIComponent(it.img)}` : it.kind === 'url' && TIER_SRC_RE.test(String(it.src)) ? it.src : '');
+  const card = (key) => {
+    const it = l.items && l.items[key];
+    if (!it) return '';
+    const u = src(it);
+    if (!u) return `<div class="tc"><span>${esc(it.name || '?')}</span></div>`;
+    return `<div class="tc"><img src="${esc(u)}" alt="${esc(it.name || '')}" loading="lazy" decoding="async">${l.captions && it.name ? `<small>${esc(it.name)}</small>` : ''}</div>`;
+  };
+  const rows = (Array.isArray(l.rows) ? l.rows : []).map((row) => `<div class="tr"><div class="tn" style="--c:${TIER_COLOR_RE.test(String(row.color)) ? row.color : '#9AA0AE'}">${esc(row.label)}</div><div class="ti">${(row.items || []).map(card).join('')}</div></div>`).join('');
+  const pool = (Array.isArray(l.pool) ? l.pool : []).map(card).join('');
+  const name = l.title || T.tierUntitled;
+  const title = `${name} · ${T.tierSite}`;
+  const desc = `${T.tierBy} ${user.username} (@${user.uname})`;
+  const first = Object.values(l.items || {}).map(src).find(Boolean);
+  const meta = [
+    `<meta name="description" content="${esc(desc)}">`,
+    `<meta property="og:type" content="article">`,
+    `<meta property="og:site_name" content="${T.site}">`,
+    `<meta property="og:title" content="${esc(title)}">`,
+    `<meta property="og:description" content="${esc(desc)}">`,
+    `<meta property="og:url" content="${esc(origin + '/r/' + id)}">`,
+    first ? `<meta property="og:image" content="${esc(origin + first)}">` : '',
+    `<meta name="twitter:card" content="summary">`,
+  ].join('\n');
+  const when = at ? new Date(at).toLocaleDateString(T.locale, { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+  const body = `<main class="card">
+<h1>${esc(name)}</h1>
+<p class="by">${T.tierBy} <b>${esc(user.username)}</b> @${esc(user.uname)}${when ? ' · ' + esc(when) : ''}</p>
+<div class="tb">${rows}</div>
+${pool ? `<section><p class="label">${T.tierPool}</p><div class="ti">${pool}</div></section>` : ''}
+<div class="cta"><a class="btn primary" href="/tierlist/">${T.tierMake}</a><a class="btn ghost" href="/">${T.site}</a></div>
+</main>`;
+  return new Response(request.method === 'HEAD' ? null : page(T, title, body, meta, true), { headers: HEADERS });
 }
 
 export async function onRequest({ request, env, params }) {
@@ -137,7 +188,13 @@ export async function onRequest({ request, env, params }) {
     sh = await env.DB.prepare('SELECT owner_id, rid FROM shares WHERE id = ?').bind(id).first();
     if (!sh) return notFound(T);
     user = await env.DB.prepare('SELECT username, uname, banned FROM users WHERE id = ?').bind(sh.owner_id).first();
-    if (user && user.banned) return notFound(T); // отзывы забаненного по ссылке не открываются
+    if (user && user.banned) return notFound(T, sh.rid.startsWith('t.')); // отзывы забаненного по ссылке не открываются
+    if (sh.rid.startsWith('t.')) {
+      if (!user) return notFound(T, true);
+      const row = await env.DB.prepare('SELECT data, at FROM tierlists WHERE user_id = ? AND id = ?').bind(sh.owner_id, sh.rid.slice(2)).first();
+      if (!row || row.data == null) return notFound(T, true);
+      return tierResponse(request, T, id, user, JSON.parse(row.data), row.at);
+    }
     const shelf =readShelf(await env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(sh.owner_id).first());
     r = cleanRating(shelf.ratings.find((x) => x && x.id === sh.rid && !x.example));
   } catch (e) { return notFound(T); }

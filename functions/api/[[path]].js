@@ -1161,9 +1161,26 @@ const routes = {
       env.DB.prepare('DELETE FROM tierlists WHERE user_id = ? AND data IS NULL AND at < ?').bind(me.id, now - 183 * 864e5),
       env.DB.prepare('DELETE FROM comments WHERE owner_id = ? AND target = ?').bind(me.id, 't.' + arg),
       env.DB.prepare('DELETE FROM reactions WHERE owner_id = ? AND rid = ?').bind(me.id, 't.' + arg),
+      env.DB.prepare('DELETE FROM shares WHERE owner_id = ? AND rid = ?').bind(me.id, 't.' + arg),
       ...imgs.map((k) => env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(`${me.id}:${k}`)),
     ]);
     return json({ ok: true, at });
+  },
+  // ссылка на тир-лист: открывается у всех, у кого она есть, даже если тир-лист скрыт от друзей. Закрывается через DELETE /share/:id
+  async 'POST /tierlist-share'({ env, request, me }) {
+    if (burst('share:' + me.id, 30, 600e3)) return tooMany(10);
+    const { id } = await readBody(request);
+    if (typeof id !== 'string' || !TIER_ID_RE.test(id)) return fail(400, 'Нет такого тир-листа.');
+    const row = await env.DB.prepare('SELECT 1 FROM tierlists WHERE user_id = ? AND id = ? AND data IS NOT NULL').bind(me.id, id).first();
+    if (!row) return fail(404, 'Тир-лист ещё не дошёл до сервера. Подожди пару секунд и попробуй снова.');
+    const rid = 't.' + id;
+    const had = await env.DB.prepare('SELECT id FROM shares WHERE owner_id = ? AND rid = ?').bind(me.id, rid).first();
+    if (had) return json({ id: had.id });
+    const c = await env.DB.prepare('SELECT COUNT(*) AS n FROM shares WHERE owner_id = ?').bind(me.id).first();
+    if (c && c.n >= 500) return fail(413, 'Слишком много открытых ссылок. Закрой старые.');
+    const sid = shareId();
+    await env.DB.prepare('INSERT INTO shares (id, owner_id, rid, created_at) VALUES (?, ?, ?, ?)').bind(sid, me.id, rid, Date.now()).run();
+    return json({ id: sid });
   },
   // картинка карточки: квадрат 240×240, ключ придумывает браузер
   async 'PUT /tierlist-img/:key'({ env, request, me, arg }) {
@@ -1261,8 +1278,17 @@ const routes = {
     if (burst('shareimg:' + clientIp(request), 240, 60e3)) return new Response(null, { status: 429 });
     const sh = await env.DB.prepare('SELECT s.owner_id, s.rid, u.banned FROM shares s LEFT JOIN users u ON u.id = s.owner_id WHERE s.id = ?').bind(arg).first();
     if (!sh || sh.banned) return new Response(null, { status: 404 }); // отзывы забаненного по ссылке не открываются
-    const row = (await env.DB.prepare('SELECT data FROM photos WHERE key = ?').bind(`${sh.owner_id}:${sh.rid}.t`).first())
-      || (await env.DB.prepare('SELECT data FROM photos WHERE key = ?').bind(`${sh.owner_id}:${sh.rid}`).first());
+    let row;
+    if (sh.rid.startsWith('t.')) {
+      // картинка тир-листа: отдаём только те, что есть в этом тир-листе
+      const k = new URL(request.url).searchParams.get('k') || '';
+      const tl = await env.DB.prepare('SELECT data FROM tierlists WHERE user_id = ? AND id = ?').bind(sh.owner_id, sh.rid.slice(2)).first();
+      if (!tl || tl.data == null || !tierImgs(JSON.parse(tl.data)).includes(k)) return new Response(null, { status: 404 });
+      row = await env.DB.prepare('SELECT data FROM photos WHERE key = ?').bind(`${sh.owner_id}:${k}`).first();
+    } else {
+      row = (await env.DB.prepare('SELECT data FROM photos WHERE key = ?').bind(`${sh.owner_id}:${sh.rid}.t`).first())
+        || (await env.DB.prepare('SELECT data FROM photos WHERE key = ?').bind(`${sh.owner_id}:${sh.rid}`).first());
+    }
     const m = row && /^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z0-9+/]+=*)$/.exec(row.data);
     if (!m) return new Response(null, { status: 404 });
     const bin = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0));
@@ -1469,7 +1495,7 @@ function cleanTierList(raw, id) {
   if (!rows.length) return null;
   const pool = own(raw.pool);
   Object.keys(items).forEach((k) => { if (!seen.has(k)) { seen.add(k); pool.push(k); } });
-  return { id, title: clip(raw.title, 80).trim(), rows, pool, items, captions: !!raw.captions, private: !!raw.private, at: +raw.at || 0 };
+  return { id, title: clip(raw.title, 80).trim(), rows, pool, items, captions: !!raw.captions, private: !!raw.private, fav: !!raw.fav, at: +raw.at || 0 };
 }
 const tierImgs = (l) => Object.values((l && l.items) || {}).map((it) => it && it.img).filter((k) => typeof k === 'string' && TIER_IMG_RE.test(k));
 // короткое описание для ленты друзей: разбирать сами тир-листы ради карточек в списке было бы дорого
