@@ -45,7 +45,23 @@
   const pathCode = /^\/lots\/([A-Za-z0-9]{12})\/?$/.exec(location.pathname);
   const code = pathCode ? pathCode[1] : location.hash.slice(1);
   const view = $('#view');
-  const S = { room: null, lots: [], live: null, offset: 0, results: [], busy: false, winner: null, firstPoll: true };
+  const S = { room: null, lots: [], live: null, offset: 0, results: [], busy: false, winner: null, firstPoll: true, pending: null, replacing: null };
+  // за этим сбором следит мини-плеер на других страницах сайта (lots-follow.js): музыка не обрывается при переходе
+  const FOLLOW_KEY = 'casualhub.lots.follow.v1';
+  // on — эта страница открыта сейчас (мини-плеер молчит), heard — зритель включил звук (без этого мини-плеер не играет)
+  const keepFollow = () => { try { if (S.room && !S.room.own) localStorage.setItem(FOLLOW_KEY, JSON.stringify({ code, title: S.room.title || '', owner: S.room.owner || '', at: Date.now(), on: true, heard: canPlay() })); } catch (e) {} };
+  // страницу закрывают или уходят с неё: место в треке запоминается, на следующей странице музыка продолжится отсюда
+  addEventListener('pagehide', () => {
+    try {
+      const f = JSON.parse(localStorage.getItem(FOLLOW_KEY) || 'null');
+      if (!f || f.code !== code) return;
+      const y = EMB.yt.bg;
+      f.on = false; f.at = Date.now(); f.heard = canPlay();
+      f.bg = CH.bg.active && y && y.getCurrentTime ? { id: CH.bg.id, pos: +y.getCurrentTime() || 0, at: Date.now() } : null;
+      localStorage.setItem(FOLLOW_KEY, JSON.stringify(f));
+    } catch (e) {}
+  });
+  const dropFollow = () => { try { const f = JSON.parse(localStorage.getItem(FOLLOW_KEY) || 'null'); if (f && f.code === code) localStorage.removeItem(FOLLOW_KEY); } catch (e) {} };
   const serverNow = () => Date.now() + S.offset;
   const mine = () => S.lots.filter((l) => l.mine).length;
   const timeLeft = () => (S.room && S.room.endsAt ? S.room.endsAt - serverNow() : null);
@@ -213,7 +229,7 @@
     if (!box) return;
     const on = CH.win.active ? CH.win : CH.bg.active ? CH.bg : null;
     const p = on && presetOf(on.id);
-    box.textContent = 'Колесо показывается с задержкой в пару секунд.' + (p ? ' Сейчас играет: ' + p.title : '');
+    box.textContent = 'Колесо показывается с задержкой в пару секунд.' + (p ? ' Сейчас играет: ' + p.title : '') + (S.room && !S.room.own ? ' Музыка продолжит играть и на других страницах сайта, пока ты следишь за этим сбором.' : '');
   }
   const unlock = () => {
     if (unlocked) return;
@@ -640,7 +656,12 @@
     const title = r.title || baseTitle();
     setTitle(title);
     document.title = `${title} · Казуал Хаб`;
-    $('#lotLede').textContent = `Ведущий: ${r.owner}. Категория: ${kindOf().label}. Можно добавить ${r.perUser} ${plural(r.perUser, 'лот', 'лота', 'лотов')} на человека.`;
+    // правила, которые ведущий выбрал галочками; он может менять их вживую, зрители увидят перемену при ближайшем опросе
+    const rules = [
+      r.uniq ? (r.fuzzy ? 'Одна игра — один лот, похожие названия не пройдут.' : 'Одна игра — один лот.') : 'Одну игру можно добавить несколько раз.',
+      r.editOwn ? 'Свой лот можно убрать или заменить, пока идёт сбор.' : 'Добавленный лот убрать нельзя.',
+    ];
+    $('#lotLede').textContent = `Ведущий: ${r.owner}. Категория: ${kindOf().label}. Можно добавить ${r.perUser} ${plural(r.perUser, 'лот', 'лота', 'лотов')} на человека. ${rules.join(' ')}`;
   }
   function paintRule() {
     const box = $('#lotRule');
@@ -655,22 +676,55 @@
   function paintAdd() {
     const box = $('#lotAdd');
     const open = isOpen();
-    const state = !open ? 'off' : !token ? 'guest' : mine() >= S.room.perUser ? 'full' : 'on';
+    // заменить лот можно и при полном лимите; если ведущий запретил правки или лот уже не твой — замена отменяется
+    if (S.replacing && !(S.room.editOwn && open && S.lots.some((l) => l.id === S.replacing && l.mine))) S.replacing = null;
+    const state = !open ? 'off' : !token ? 'guest' : mine() >= S.room.perUser && !S.replacing ? 'full' : 'on';
     const n = S.room.perUser - mine();
-    if (box.dataset.state === state && state === 'on') {
-      $('#lotLeft').textContent = `Можешь добавить ещё ${n} ${plural(n, 'лот', 'лота', 'лотов')}`;
+    // перемена галочек ведущего не должна стирать то, что зритель уже набрал: в форме «on» от них зависит только подтверждение
+    const sig = state + '|' + (S.replacing || '') + (state === 'full' ? '|' + (S.room.editOwn ? 1 : 0) : '');
+    if (box.dataset.sig === sig && state === 'on') {
+      $('#lotLeft').textContent = S.replacing ? '' : `Можешь добавить ещё ${n} ${plural(n, 'лот', 'лота', 'лотов')}`;
       return;
     }
+    box.dataset.sig = sig;
     box.dataset.state = state;
+    if (state !== 'on') S.pending = null;
     if (state === 'off') { box.innerHTML = ''; S.results = []; return; }
     if (state === 'guest') { box.innerHTML = '<div class="example-bar"><span>Чтобы добавить лот, войди в аккаунт: так у каждого будет свой лимит.</span> <a class="btn small primary" href="/opinion/#login">Войти</a></div>'; return; }
-    if (state === 'full') { box.innerHTML = `<p class="lots-note">Твой лимит исчерпан: ${S.room.perUser} из ${S.room.perUser}. Удалить лот нельзя.</p>`; S.results = []; return; }
+    if (state === 'full') { box.innerHTML = `<p class="lots-note">Твой лимит исчерпан: ${S.room.perUser} из ${S.room.perUser}. ${S.room.editOwn ? 'Убрать или заменить лот можно в списке ниже.' : 'Убрать лот нельзя.'}</p>`; S.results = []; return; }
     const k = kindOf(), free = S.room.kind === 'any';
-    box.innerHTML = `<label class="label" for="lotQ">${k.add}</label>
+    const old = S.replacing && S.lots.find((l) => l.id === S.replacing);
+    box.innerHTML = `${old ? `<p class="lots-note lots-replacing">Выбери, чем заменить «${esc(old.name)}». <button type="button" class="lots-link" data-repl-cancel>Не заменять</button></p>` : ''}<label class="label" for="lotQ">${old ? 'Новый лот' : k.add}</label>
       <div class="add-row"><input class="inp" id="lotQ" type="${free ? 'text' : 'search'}" autocomplete="off" maxlength="${free ? 60 : 200}" enterkeyhint="${free ? 'done' : 'search'}" placeholder="${k.ph}">${free ? '<button type="button" class="btn primary" id="lotFree">Добавить</button>' : ''}</div>
-      <p class="lots-note" id="lotLeft">Можешь добавить ещё ${n} ${plural(n, 'лот', 'лота', 'лотов')}</p>
+      <p class="lots-note" id="lotLeft">${old ? '' : `Можешь добавить ещё ${n} ${plural(n, 'лот', 'лота', 'лотов')}`}</p>
       <p class="lots-note lots-off" id="lotMsg" hidden></p>
-      <div class="lots-results" id="lotResults" hidden></div>`;
+      <div class="lots-results" id="lotResults" hidden></div>
+      <div class="lots-confirm" id="lotConfirm" hidden></div>`;
+    paintConfirm();
+  }
+  // шаг подтверждения: лот встаёт на колесо только после нажатия «Подтвердить», случайный выбор из списка ничего не добавляет
+  function paintConfirm() {
+    const box = $('#lotConfirm');
+    if (!box) return;
+    const p = S.pending;
+    box.hidden = !p;
+    if (!p) { box.replaceChildren(); delete box.dataset.sig; return; } // без этого тот же лот второй раз не нарисовался бы
+    const old = p.replace && S.lots.find((l) => l.id === p.replace);
+    const sig = JSON.stringify([p.name, p.sub, p.img, old && old.name, S.room.editOwn]);
+    if (box.dataset.sig === sig) return;
+    box.dataset.sig = sig;
+    const pic = p.img ? `<img src="${esc(p.img)}" alt="" referrerpolicy="no-referrer">` : '<em aria-hidden="true">＋</em>';
+    box.innerHTML = `<div class="lots-conf-lot">${pic}<span><b>${esc(p.name)}</b>${p.sub ? `<small>${esc(p.sub)}</small>` : ''}</span></div>
+      <p class="lots-note">${old ? `Заменить «${esc(old.name)}» этим лотом?` : 'Добавить этот лот на колесо?'} ${S.room.editOwn ? 'Пока идёт сбор, его можно будет убрать или заменить.' : 'Потом убрать его будет нельзя.'}</p>
+      <div class="lots-conf-acts"><button type="button" class="btn primary" data-conf="yes">Подтвердить</button><button type="button" class="btn ghost" data-conf="no">Отмена</button></div>`;
+  }
+  function askConfirm(p) {
+    S.pending = { ...p, replace: S.replacing || null };
+    lotMsg('');
+    paintResults();
+    paintConfirm();
+    const y = $('#lotConfirm [data-conf="yes"]');
+    if (y) y.focus({ preventScroll: true });
   }
   const lotMsg = (t) => { const m = $('#lotMsg'); if (m) { m.textContent = t || ''; m.hidden = !t; } };
   // что ведущий вписал на колесо сам, в сборе не хранится, но зрители должны это видеть
@@ -683,7 +737,7 @@
   function paintResults() {
     const box = $('#lotResults');
     if (!box) return;
-    box.hidden = !S.results.length;
+    box.hidden = !S.results.length || !!S.pending;
     const taken = new Set([...S.lots.map((l) => l.name), ...hostNames()].map((n) => n.toLowerCase()));
     const html = S.results.map((g, i) => { const has = taken.has(g.name.toLowerCase()); return `<button type="button" class="lots-opt" data-pick="${i}"${has ? ' disabled' : ''}>${g.img ? `<img src="${esc(g.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : '<em aria-hidden="true">＋</em>'}<span><b>${esc(g.name)}</b>${g.sub ? `<small>${esc(g.sub)}</small>` : ''}</span><i>${has ? 'уже есть' : ''}</i></button>`; }).join('');
     if (box.dataset.sig !== html) { box.dataset.sig = html; box.innerHTML = html; }
@@ -700,7 +754,9 @@
     const seen = S.live ? +S.live.seen || 0 : 0;
     const removed = new Set(S.lots.slice(0, seen).map((x) => x.name.toLowerCase()).filter((k) => !onWheel.has(k) && !out.has(k)));
     const n = rows.length;
-    const html = `<p class="board-stat"><b>${n}</b> ${plural(n, 'лот', 'лота', 'лотов')}</p>${n ? `<ul class="lots-list">${rows.map((l) => { const k = l.name.toLowerCase(), gone = out.has(k), off = removed.has(k); return `<li data-lot="${esc(l.id)}" class="${gone || off ? 'out' : ''}">${lotPic(l)}<span class="lots-who"><b>${esc(l.name)}</b><small>${esc(l.by)}${gone ? ' · вылетел' : off ? ' · убран с колеса' : ''}</small></span></li>`; }).join('')}</ul>` : '<p class="lots-empty">Пока ни одного лота. Будь первым!</p>'}`;
+    // правки доступны, пока ведущий разрешает, сбор открыт, лот не вылетел и колесо не определило победителя
+    const canEdit = !!token && !!S.room.editOwn && isOpen() && !(S.live && S.live.winner);
+    const html = `<p class="board-stat"><b>${n}</b> ${plural(n, 'лот', 'лота', 'лотов')}</p>${n ? `<ul class="lots-list">${rows.map((l) => { const k = l.name.toLowerCase(), gone = out.has(k), off = removed.has(k); const edit = l.mine && canEdit && !gone ? `<span class="lots-acts"><button type="button" class="btn small ghost" data-replace="${esc(l.id)}"${S.replacing === l.id ? ' aria-pressed="true"' : ''}>Заменить</button><button type="button" class="btn small ghost danger" data-del="${esc(l.id)}">Убрать</button></span>` : ''; return `<li data-lot="${esc(l.id)}" class="${gone || off ? 'out' : ''}">${lotPic(l)}<span class="lots-who"><b>${esc(l.name)}</b><small>${esc(l.by)}${l.mine ? ' · твой' : ''}${gone ? ' · вылетел' : off ? ' · убран с колеса' : ''}</small></span>${edit}</li>`; }).join('')}</ul>` : '<p class="lots-empty">Пока ни одного лота. Будь первым!</p>'}`;
     if (box.dataset.sig === html) return;
     box.dataset.sig = html;
     // как участники в Колесе: оставшиеся плывут на новое место, новые въезжают
@@ -735,7 +791,7 @@
     S.wasOpen = open;
   }
   function paintAll() {
-    paintHead(); paintRule(); paintAdd(); paintResults(); paintList(); paintStatus(); wheel(); paintWinner(); syncBg(); watchOpen();
+    paintHead(); paintRule(); paintAdd(); paintConfirm(); paintResults(); paintList(); paintStatus(); wheel(); paintWinner(); syncBg(); watchOpen();
   }
   function paintGone(text) {
     setTitle(baseTitle(), true);
@@ -755,7 +811,7 @@
     try { d = await api(`/lots/${encodeURIComponent(code)}${S.room ? '?v=' + S.room.ver : ''}`); }
     catch (e) {
       if (seq !== pollSeq) return;
-      if (e.status === 404) { paintGone('Такого сбора нет: ведущий удалил его или ссылка с ошибкой.'); return; }
+      if (e.status === 404) { dropFollow(); paintGone('Такого сбора нет: ведущий удалил его или ссылка с ошибкой.'); return; }
     }
     if (seq !== pollSeq) return;
     if (d) {
@@ -763,6 +819,7 @@
       S.room = d.room;
       S.live = d.live;
       if (d.lots) S.lots = d.lots;
+      keepFollow();
       paintAll();
       S.firstPoll = false;
     }
@@ -780,29 +837,53 @@
     watchOpen();
   }, 1000);
 
-  async function addLot(payload, btn) {
+  // лот уходит на сервер только после подтверждения; replace — id своего лота, который заменяем
+  async function addLot(payload, btn, replace) {
     if (S.busy) return;
     S.busy = true;
     if (btn) btn.disabled = true;
     lotMsg('');
     try {
-      const d = await api(`/lots/${encodeURIComponent(code)}`, 'POST', payload);
-      S.lots = d.lots;
+      const d = replace ? await api(`/lots/${encodeURIComponent(code)}/${encodeURIComponent(replace)}`, 'PUT', payload) : await api(`/lots/${encodeURIComponent(code)}`, 'POST', payload);
+      S.lots = d.lots || S.lots;
       S.room = d.room;
       S.results = [];
+      S.pending = null;
+      S.replacing = null;
       const q = $('#lotQ');
       if (q) q.value = '';
       paintAll();
       poll(); // ответ, который ещё в пути, старше этого: он не должен убрать новый лот из списка
     } catch (e) {
+      // отказ (повтор, похожее название, правки запрещены): подтверждение закрывается, причина видна над списком
+      S.pending = null;
+      paintResults();
+      paintConfirm();
       lotMsg(e.message);
       if (btn) btn.disabled = false;
       poll();
     } finally { S.busy = false; }
   }
+  async function removeLot(id, btn) {
+    if (S.busy) return;
+    S.busy = true;
+    if (btn) btn.disabled = true;
+    try {
+      const d = await api(`/lots/${encodeURIComponent(code)}/${encodeURIComponent(id)}`, 'DELETE');
+      S.lots = d.lots || S.lots;
+      S.room = d.room;
+      if (S.replacing === id) S.replacing = null;
+      paintAll();
+      poll();
+    } catch (e) {
+      if (btn) { btn.disabled = false; delete btn.dataset.armed; btn.textContent = 'Убрать'; }
+      lotMsg(e.message);
+      poll();
+    } finally { S.busy = false; }
+  }
   function addFree() {
     const q = $('#lotQ');
-    if (q && q.value.trim()) addLot({ name: q.value.trim() });
+    if (q && q.value.trim()) askConfirm({ payload: { name: q.value.trim() }, name: q.value.trim().slice(0, 60), sub: '', img: '' });
   }
   // игры может не быть ни в одном каталоге: тогда хватит названия
   const addAsIs = (v) => {
@@ -818,7 +899,7 @@
     const kind = S.room.kind;
     if (kind === 'any') return;
     const link = kind === 'game' && /store\.steampowered\.com\/(?:agecheck\/)?app\/(\d{1,10})/.exec(v);
-    if (link) { searchSeq++; addLot({ appId: +link[1] }); return; }
+    if (link) { searchSeq++; S.results = []; paintResults(); askConfirm({ payload: { appId: +link[1] }, name: 'Игра по ссылке из Steam', sub: 'store.steampowered.com/app/' + link[1], img: '' }); return; }
     if (v.length < 2) { searchSeq++; S.results = []; paintResults(); return; }
     searchT = setTimeout(async () => {
       const seq = ++searchSeq;
@@ -841,7 +922,36 @@
   view.addEventListener('click', async (e) => {
     if (e.target.closest('#lotFree')) { addFree(); return; }
     const opt = e.target.closest('[data-pick]');
-    if (opt && S.results[+opt.dataset.pick]) { addLot(S.results[+opt.dataset.pick].payload, opt); return; }
+    if (opt && S.results[+opt.dataset.pick]) { const r = S.results[+opt.dataset.pick]; askConfirm({ payload: r.payload, name: r.name, sub: r.sub, img: r.img }); return; }
+    const conf = e.target.closest('[data-conf]');
+    if (conf) {
+      const p = S.pending;
+      if (conf.dataset.conf === 'yes' && p) addLot(p.payload, conf, p.replace);
+      else { S.pending = null; paintResults(); paintConfirm(); const q = $('#lotQ'); if (q) q.focus({ preventScroll: true }); }
+      return;
+    }
+    const rep = e.target.closest('[data-replace]');
+    if (rep) {
+      S.replacing = S.replacing === rep.dataset.replace ? null : rep.dataset.replace;
+      S.pending = null; S.results = [];
+      lotMsg('');
+      paintAdd(); paintList();
+      const q = $('#lotQ');
+      if (q) { q.value = ''; q.focus({ preventScroll: false }); q.scrollIntoView({ block: 'center', behavior: reduced ? 'auto' : 'smooth' }); }
+      return;
+    }
+    if (e.target.closest('[data-repl-cancel]')) { S.replacing = null; S.pending = null; S.results = []; paintAdd(); paintList(); return; }
+    const del = e.target.closest('[data-del]');
+    if (del) {
+      // убрать нужно подтвердить: лот вернуть нельзя, а лимит освободится
+      if (!del.dataset.armed) {
+        del.dataset.armed = '1';
+        del.textContent = 'Точно убрать?';
+        setTimeout(() => { if (del.isConnected) { delete del.dataset.armed; del.textContent = 'Убрать'; } }, 3000);
+        return;
+      }
+      removeLot(del.dataset.del, del);
+    }
   });
   // карточка закрылась — песня победы замолкает, возвращается фон
   const closeWinner = () => { if ($('#winner').hidden) return; $('#winner').hidden = true; if (CH.win.active) stopChannel('win'); syncBg(); };

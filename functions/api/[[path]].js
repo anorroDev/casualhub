@@ -71,6 +71,11 @@ async function ensureScheme(env) {
     // без него подсчёт фото человека и история аватарок читали всю таблицу на каждую загрузку
     env.DB.prepare('CREATE INDEX IF NOT EXISTS photos_user ON photos(user_id)'),
   ]);
+  // настройки сбора, которые ведущий меняет вживую: можно ли зрителям убирать и менять свои лоты, одна игра — один лот, похожие названия
+  const { results: lr } = await env.DB.prepare('PRAGMA table_info(lot_rooms)').all();
+  for (const [c, d] of [['edit_own', 'INTEGER NOT NULL DEFAULT 0'], ['uniq', 'INTEGER NOT NULL DEFAULT 1'], ['fuzzy', 'INTEGER NOT NULL DEFAULT 1']]) {
+    if (!lr.some((x) => x.name === c)) await env.DB.prepare(`ALTER TABLE lot_rooms ADD COLUMN ${c} ${d}`).run();
+  }
   const { results } = await env.DB.prepare('PRAGMA table_info(users)').all();
   if (!results.some((c) => c.name === 'email')) await env.DB.prepare('ALTER TABLE users ADD COLUMN email TEXT').run();
   await env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users(email)').run();
@@ -1213,7 +1218,7 @@ const routes = {
     const old = await env.DB.prepare('SELECT id FROM lot_rooms WHERE owner_id = ? ORDER BY created_at DESC LIMIT -1 OFFSET ?').bind(me.id, MAX_LOT_ROOMS - 1).all();
     await env.DB.batch([
       ...old.results.flatMap((x) => [env.DB.prepare('DELETE FROM lots WHERE room_id = ?').bind(x.id), env.DB.prepare('DELETE FROM lot_rooms WHERE id = ?').bind(x.id)]),
-      env.DB.prepare('INSERT INTO lot_rooms (id, owner_id, title, kind, per_user, ends_at, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(id, me.id, lotTitle(b.title), LOT_KINDS.includes(b.kind) ? b.kind : 'game', lotLimit(b.perUser), lotEnds(b.minutes, now), now),
+      env.DB.prepare('INSERT INTO lot_rooms (id, owner_id, title, kind, per_user, ends_at, created_at, edit_own, uniq, fuzzy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(id, me.id, lotTitle(b.title), LOT_KINDS.includes(b.kind) ? b.kind : 'game', lotLimit(b.perUser), lotEnds(b.minutes, now), now, b.editOwn === true ? 1 : 0, b.uniq === false ? 0 : 1, b.fuzzy === false ? 0 : 1),
     ]);
     return lotAnswer(env, id, me);
   },
@@ -1245,16 +1250,18 @@ const routes = {
     try { lot = await lotItem(room.kind, b); }
     catch (e) { return fail(502, 'Поиск сейчас не отвечает, попробуй ещё раз.'); }
     if (lot.error) return fail(lot.status || 400, lot.error);
-    // одна и та же игра могла прийти из разных источников
-    if (room.kind === 'game') {
-      const { results } = await env.DB.prepare('SELECT name FROM lots WHERE room_id = ?').bind(arg).all();
-      if (results.some((x) => lotKey(x.name) === lotKey(lot.name))) return fail(409, 'Это уже добавили.');
-    }
+    // «одна игра — один лот» (галочка ведущего): та же игра из любого источника и похожая по названию («outlast» и «ooutlast») не пройдёт
+    const { results: have } = await env.DB.prepare('SELECT name, ref FROM lots WHERE room_id = ?').bind(arg).all();
+    let ref = lot.ref;
+    if (room.uniq) {
+      const twin = lotTwin(room, [...have.map((x) => x.name), ...liveNames(room)], lot.name);
+      if (twin) return fail(409, lotKey(twin) === lotKey(lot.name) ? 'Это уже добавили.' : `Похоже на «${twin}», которое уже есть. Одна игра — один лот.`);
+    } else if (have.some((x) => x.ref === ref)) ref = ref + '~' + randHex(3); // ведущий разрешил повторы: у лота своя строка
     const r = await env.DB.prepare(`INSERT INTO lots (room_id, id, user_id, ref, name, img, link, created_at)
       SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8 WHERE (SELECT COUNT(*) FROM lots WHERE room_id = ?1 AND user_id = ?3) < ?9 AND (SELECT COUNT(*) FROM lots WHERE room_id = ?1) < ?10
-      ON CONFLICT(room_id, ref) DO NOTHING`).bind(arg, randHex(8), me.id, lot.ref, lot.name, lot.img, lot.link, now, room.per_user, MAX_LOTS).run();
+      ON CONFLICT(room_id, ref) DO NOTHING`).bind(arg, randHex(8), me.id, ref, lot.name, lot.img, lot.link, now, room.per_user, MAX_LOTS).run();
     if (!r.meta.changes) {
-      const has = await env.DB.prepare('SELECT 1 FROM lots WHERE room_id = ? AND ref = ?').bind(arg, lot.ref).first();
+      const has = await env.DB.prepare('SELECT 1 FROM lots WHERE room_id = ? AND ref = ?').bind(arg, ref).first();
       if (has) return fail(409, 'Это уже добавили.');
       const c = await env.DB.prepare('SELECT COUNT(*) AS n FROM lots WHERE room_id = ?').bind(arg).first();
       return fail(403, c.n >= MAX_LOTS ? 'В этом сборе уже слишком много лотов.' : `Больше добавить нельзя: лимит ${room.per_user} на человека.`);
@@ -1278,9 +1285,41 @@ const routes = {
       else if (extra < 0 && room.ends_at) ends = Math.max(now, room.ends_at + extra * 60e3);
     }
     if (typeof b.closed === 'boolean') closed = b.closed ? 1 : 0;
-    await env.DB.prepare('UPDATE lot_rooms SET per_user = ?, title = ?, ends_at = ?, closed = ?, ver = ver + 1 WHERE id = ?')
-      .bind(b.perUser !== undefined ? lotLimit(b.perUser) : room.per_user, b.title !== undefined ? lotTitle(b.title) : room.title, ends, closed, arg).run();
+    // галочки ведущего: зрители видят перемены при следующем опросе (раз в пару секунд)
+    const flag = (v, cur) => (typeof v === 'boolean' ? (v ? 1 : 0) : cur);
+    await env.DB.prepare('UPDATE lot_rooms SET per_user = ?, title = ?, ends_at = ?, closed = ?, edit_own = ?, uniq = ?, fuzzy = ?, ver = ver + 1 WHERE id = ?')
+      .bind(b.perUser !== undefined ? lotLimit(b.perUser) : room.per_user, b.title !== undefined ? lotTitle(b.title) : room.title, ends, closed, flag(b.editOwn, room.edit_own), flag(b.uniq, room.uniq), flag(b.fuzzy, room.fuzzy), arg).run();
     return lotAnswer(env, arg, me);
+  },
+  // зритель убирает свой лот или меняет его на другой — только если ведущий разрешил, пока сбор открыт и лот ещё не вылетел
+  async 'DELETE /lots/:code/:lot'({ env, me, arg }) {
+    if (burst('lotedit:' + me.id, 40, 60e3)) return tooMany(1);
+    const g = await lotEditable(env, arg[0], arg[1], me);
+    if (g.res) return g.res;
+    await env.DB.batch([env.DB.prepare('DELETE FROM lots WHERE room_id = ? AND id = ?').bind(arg[0], arg[1]), env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(arg[0])]);
+    return lotAnswer(env, arg[0], me);
+  },
+  async 'PUT /lots/:code/:lot'({ env, request, me, arg }) {
+    if (burst('lotedit:' + me.id, 40, 60e3)) return tooMany(1);
+    const g = await lotEditable(env, arg[0], arg[1], me);
+    if (g.res) return g.res;
+    const { room } = g;
+    let lot;
+    try { lot = await lotItem(room.kind, await readBody(request)); }
+    catch (e) { return fail(502, 'Поиск сейчас не отвечает, попробуй ещё раз.'); }
+    if (lot.error) return fail(lot.status || 400, lot.error);
+    // тот же лот («заменить» на него же) не считается повтором, остальные — считаются
+    const { results: have } = await env.DB.prepare('SELECT id, name, ref FROM lots WHERE room_id = ?').bind(arg[0]).all();
+    const others = have.filter((x) => x.id !== arg[1]);
+    let ref = lot.ref;
+    if (room.uniq) {
+      const twin = lotTwin(room, [...others.map((x) => x.name), ...liveNames(room).filter((n) => lotKey(n) !== lotKey(g.lot.name))], lot.name);
+      if (twin) return fail(409, lotKey(twin) === lotKey(lot.name) ? 'Это уже добавили.' : `Похоже на «${twin}», которое уже есть. Одна игра — один лот.`);
+    } else if (others.some((x) => x.ref === ref)) ref = ref + '~' + randHex(3);
+    try { await env.DB.prepare('UPDATE lots SET ref = ?, name = ?, img = ?, link = ? WHERE room_id = ? AND id = ?').bind(ref, lot.name, lot.img, lot.link, arg[0], arg[1]).run(); }
+    catch (e) { return fail(409, 'Это уже добавили.'); }
+    await env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(arg[0]).run();
+    return lotAnswer(env, arg[0], me);
   },
   async 'DELETE /lots/:code'({ env, me, arg }) {
     const room = await env.DB.prepare('SELECT 1 FROM lot_rooms WHERE id = ? AND owner_id = ?').bind(arg, me.id).first();
@@ -1613,6 +1652,64 @@ const tierMeta = (l) => ({
 const LOT_NAME = 60, MAX_LOTS = 300, MAX_LOT_ROOMS = 30;
 const LOT_KINDS = ['game', 'movie', 'anime', 'book', 'music', 'any'];
 const lotKey = (v) => String(v || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+// ---------- похожие названия: «outlast» и «ooutlast» — одна и та же игра ----------
+// Сравниваются не строки, а «отпечаток»: буквы без пробелов и знаков, кириллица-двойники латиницы («О» вместо «O»),
+// повторы букв сжаты («oo» → «o»), «III» = «3», год в скобках, пустые слова (the, edition…) отброшены.
+// Цифры и номера частей должны совпасть: «Outlast» и «Outlast 2» — разные игры, как «Hades» и «Hades II».
+const HOMO = { а: 'a', в: 'b', е: 'e', ё: 'e', к: 'k', м: 'm', н: 'h', о: 'o', р: 'p', с: 'c', т: 't', у: 'y', х: 'x', і: 'i', ї: 'i', ј: 'j', ѕ: 's' };
+const ROMAN = { i: 1, ii: 2, iii: 3, iv: 4, v: 5, vi: 6, vii: 7, viii: 8, ix: 9, x: 10 };
+const NOISE = new Set(['the', 'a', 'an', 'game', 'edition', 'remastered', 'definitive', 'deluxe', 'goty', 'hd']);
+function lotSig(name) {
+  let t = String(name || '').toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+  const years = [];
+  t = t.replace(/\b(?:19|20)\d\d\b/g, (y) => { years.push(y); return ' '; });
+  const words = t.replace(/[^\p{L}\p{N}]+/gu, ' ').trim().split(' ').filter(Boolean);
+  const nums = [];
+  let letters = '';
+  words.forEach((w, i) => {
+    if (/^\d+$/.test(w)) nums.push(String(+w));
+    else if (ROMAN[w] && i > 0) nums.push(String(ROMAN[w])); // римская цифра не первым словом: «Final Fantasy VII»
+    else if (!NOISE.has(w)) letters += [...w].map((c) => HOMO[c] || c).join('');
+  });
+  letters = letters.replace(/(.)\1+/gu, '$1'); // «ooutlast» → «outlast»
+  return { letters, nums: nums.join(','), year: years[0] || '' };
+}
+// расстояние Дамерау — Левенштейна: вставка, удаление, замена и перестановка соседних букв («outlsat»)
+function lotDist(a, b, max) {
+  if (Math.abs(a.length - b.length) > max) return max + 1;
+  const A = [...a], B = [...b];
+  let prev2 = null, prev = Array.from({ length: B.length + 1 }, (_, j) => j);
+  for (let i = 1; i <= A.length; i++) {
+    const cur = [i];
+    for (let j = 1; j <= B.length; j++) {
+      let v = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (A[i - 1] === B[j - 1] ? 0 : 1));
+      if (i > 1 && j > 1 && A[i - 1] === B[j - 2] && A[i - 2] === B[j - 1]) v = Math.min(v, prev2[j - 2] + 1);
+      cur[j] = v;
+    }
+    prev2 = prev; prev = cur;
+  }
+  return prev[B.length];
+}
+// одна ли это игра: точное совпадение всегда; при fuzzy — ещё и по сходству названий
+function lotSame(a, b, fuzzy) {
+  if (lotKey(a) === lotKey(b)) return true;
+  if (!fuzzy) return false;
+  const x = lotSig(a), y = lotSig(b);
+  if (!x.letters || !y.letters || x.nums !== y.nums) return false;
+  if (x.year && y.year && x.year !== y.year) return false; // Doom (1993) и Doom (2016)
+  const n = Math.max(x.letters.length, y.letters.length);
+  const max = n <= 4 ? 0 : n <= 8 ? 1 : n <= 15 ? 2 : 3;
+  return lotDist(x.letters, y.letters, max) <= max;
+}
+// что уже стоит на колесе у ведущего (в том числе вписанное им самим): сравниваем и с этим
+function liveNames(room) {
+  try {
+    const l = room.live ? JSON.parse(room.live) : null;
+    return l ? [...(Array.isArray(l.segs) ? l.segs.map((x) => x && x.n) : []), ...(Array.isArray(l.out) ? l.out : [])].filter((n) => typeof n === 'string' && n) : [];
+  } catch (e) { return []; }
+}
+// есть ли среди names такая же или похожая игра (кроме лота skip). Возвращает найденное название или ''
+const lotTwin = (room, names, name) => names.find((n) => lotSame(n, name, !!room.fuzzy)) || '';
 async function steamGames(q) {
   const d = await cachedJson('https://store.steampowered.com/api/storesearch/?l=russian&cc=US&term=' + encodeURIComponent(q), null, 86400);
   return (d.items || []).filter((x) => x && x.type === 'app' && Number.isInteger(x.id) && x.name && !/\b(soundtrack|ost|artbook|dlc)\b/i.test(x.name)).slice(0, 8).map((x) => ({ appId: x.id, name: clip(x.name, LOT_NAME), img: httpsOnly(x.tiny_image), sub: 'Steam' }));
@@ -1691,11 +1788,25 @@ function cleanLive(b) {
     winner: b && b.winner && b.winner.n ? { n: clip(b.winner.n, LOT_NAME), sum: clip(b.winner.sum, 40), at: finite(b.winner.at) } : null,
   };
 }
+async function lotEditable(env, code, lotId, me) {
+  const room = await env.DB.prepare('SELECT * FROM lot_rooms WHERE id = ?').bind(code).first();
+  if (!room) return { res: fail(404, 'Такого сбора нет.') };
+  const lot = await env.DB.prepare('SELECT id, user_id, name FROM lots WHERE room_id = ? AND id = ?').bind(code, lotId).first();
+  if (!lot) return { res: fail(404, 'Такого лота уже нет.') };
+  if (lot.user_id !== me.id) return { res: fail(403, 'Это не твой лот.') };
+  if (!room.edit_own) return { res: fail(403, 'Ведущий не разрешил убирать и менять лоты.') };
+  if (room.closed || (room.ends_at && Date.now() >= room.ends_at)) return { res: fail(403, 'Сбор закрыт: лоты уже нельзя менять.') };
+  // лот, который уже вылетел с колеса, или сбор, где объявлен победитель, — окончательные
+  let live = null;
+  try { live = room.live ? JSON.parse(room.live) : null; } catch (e) {}
+  if (live && ((Array.isArray(live.out) && live.out.some((n) => lotKey(n) === lotKey(lot.name))) || live.winner)) return { res: fail(403, 'Этот лот уже играл на колесе, его нельзя менять.') };
+  return { room, lot };
+}
 async function lotAnswer(env, id, me, knownVer) {
   const row = await env.DB.prepare('SELECT r.*, u.username AS owner_name, u.banned AS owner_banned FROM lot_rooms r LEFT JOIN users u ON u.id = r.owner_id WHERE r.id = ?').bind(id).first();
   if (!row || row.owner_banned) return fail(404, 'Такого сбора нет.');
   const own = !!me && row.owner_id === me.id;
-  const out = { room: { id: row.id, title: row.title, kind: row.kind, perUser: row.per_user, endsAt: row.ends_at, closed: !!row.closed, ver: row.ver, own, owner: row.owner_name || '' }, now: Date.now(), live: null };
+  const out = { room: { id: row.id, title: row.title, kind: row.kind, perUser: row.per_user, endsAt: row.ends_at, closed: !!row.closed, ver: row.ver, own, owner: row.owner_name || '', editOwn: !!row.edit_own, uniq: !!row.uniq, fuzzy: !!row.fuzzy }, now: Date.now(), live: null };
   try { out.live = row.live ? JSON.parse(row.live) : null; } catch (e) {}
   // список лотов отдаём, только если он поменялся: страница спрашивает часто
   if (String(knownVer) !== String(row.ver)) {
@@ -2131,6 +2242,7 @@ export async function onRequest({ request, env, params }) {
   if (!routes[key] && segs.length === 2 && segs[0] === 'tierlist-imgs') { key = `${request.method} /tierlist-imgs/:uid`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'reacts') { key = `${request.method} /reacts/:id`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'lots' && SHARE_RE.test(segs[1])) { key = `${request.method} /lots/:code`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && /^[0-9a-f]{16}$/.test(segs[2])) { key = `${request.method} /lots/:code/:lot`; arg = [segs[1], segs[2]]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'live') { key = `${request.method} /lots/:code/live`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'hub') { key = `${request.method} /lots/:code/hub`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'share' && SHARE_RE.test(segs[1])) { key = `${request.method} /share/:id`; arg = segs[1]; }

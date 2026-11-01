@@ -3,6 +3,8 @@
    «Тема», «⚙️ Настройки» (окно с импортом из Letterboxd и обновлением обложек) и GitHub. «Что нового» на широком экране стоит в самом углу страницы, на узком — тоже в меню.
    Кнопки переносятся целиком, поэтому их обработчики и счётчики (online.js, whatsnew.js) продолжают работать. */
 (() => {
+  // музыка чужого аука не обрывается при уходе со страницы зрителя: мини-плеер сам решает, нужно ли ему что-то делать
+  try { if (localStorage.getItem('casualhub.lots.follow.v1')) { const f = document.createElement('script'); f.src = '/lots-follow.js'; f.defer = true; document.head.appendChild(f); } } catch (e) {}
   const MOVE = '#howtoBtn, .howto-btn, .theme-pick, a[href*="github.com"]';
   const css = document.createElement('style');
   css.textContent = `
