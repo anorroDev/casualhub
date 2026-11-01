@@ -1781,7 +1781,7 @@ function catKind(c) {
   if (isMusicCat(c)) return 'music';
   const k = `${keyOf(c.name)} ${c.id}`;
   if (/игр|game/.test(k)) return 'game';
-  if (/фильм|сериал|кино|film|movie|series/.test(k)) return 'movie';
+  if (/фильм|сериал|кино|мульт|film|movie|series|cartoon|animat/.test(k)) return 'movie';
   if (/книг|литератур|book/.test(k)) return 'book';
   if (/аниме|манг|anime|manga/.test(k)) return 'anime';
   return '';
