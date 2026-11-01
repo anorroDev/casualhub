@@ -525,12 +525,15 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   const secOn = (p, k) => !(p.layout && p.layout.sections && p.layout.sections[k] === false);
   const hid = (p, k) => (secOn(p, k) ? '' : ' hidden');
   const catTitle = (p, key) => { const r = (p.allRatings || p.ratings).find((x) => keyOf(x.cat) === key); return r ? r.cat : key; };
-  const autoTitle = (p, sc) => `Топ-${sc.n}: ${sc.cat ? catTitle(p, sc.cat) : 'всё подряд'}`;
+  const autoTitle = (p, sc) => (sc.podium ? 'Любимое' : `Топ-${sc.n}: ${sc.cat ? catTitle(p, sc.cat) : 'всё подряд'}`);
   function scItems(p, sc) {
     const pool = p.ratings.filter((r) => !sc.cat || keyOf(r.cat) === sc.cat);
     if (sc.mode === 'pick') { const byId = new Map(pool.map((r) => [r.id, r])); return (sc.ids || []).map((id) => byId.get(id)).filter(Boolean).slice(0, sc.n); }
     return pool.filter((r) => r.total != null).sort((a, b) => b.total - a.total || b.at - a.at).slice(0, sc.n);
   }
+  // «Любимое» настраивается как витрина: по баллу или свой выбор, можно по одной теме; мест всегда три
+  const podiumCfg = (p) => ({ title: '', cat: '', mode: 'auto', ids: [], ...((p.layout && p.layout.podium) || {}) });
+  const podiumItems = (p) => scItems(p, { ...podiumCfg(p), n: 3 });
   function showcaseHTML(p, sc, d) {
     const items = scItems(p, sc);
     if (!items.length && p.kind !== 'me') return '';
@@ -578,6 +581,10 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     if (!sc && scs.length >= SC_MAX) { toast(`Витрин может быть не больше ${SC_MAX}`); return; }
     layoutEditor(p, sc ? { ...sc, ids: [...(sc.ids || [])], q: '' } : { id: 'sc' + Date.now().toString(36), title: '', cat: '', n: 5, mode: 'auto', ids: [], style: 'posters', q: '', isNew: true });
   }
+  function openPodiumForm(p) {
+    const c = podiumCfg(p);
+    layoutEditor(p, { id: 'podium', podium: true, title: c.title, cat: c.cat, n: 3, mode: c.mode === 'pick' ? 'pick' : 'auto', ids: [...(c.ids || [])], style: 'posters', q: '' });
+  }
   function layoutEditor(p, edit) {
     lyP = p;
     if (!p.layout) p.layout = { showcases: [], sections: {}, at: 0 };
@@ -612,7 +619,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     if (!p || !body) return;
     // форма сохранена или отменена — окно закрывается
     if (!lyEdit) { closeLayout(); return; }
-    $('#lyTitle').textContent = lyEdit.isNew ? 'Новая витрина' : 'Витрина';
+    $('#lyTitle').textContent = lyEdit.podium ? 'Любимое' : lyEdit.isNew ? 'Новая витрина' : 'Витрина';
     body.innerHTML = scFormHTML(p, lyEdit);
     hydratePhotos(p, body);
   }
@@ -651,9 +658,9 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     return `${scPreviewHTML(p, sc)}
       <label class="ly-f"><span class="label">Название</span><input id="scTitle" type="text" maxlength="60" value="${esc(sc.title)}" placeholder="${esc(autoTitle(p, sc))}" autocomplete="off"></label>
       <div class="ly-f"><span class="label">Тема</span><div class="chips">${[['', 'Все темы'], ...lyCats(p)].map(([k, t]) => `<button type="button" class="chip" data-f="cat" data-v="${esc(k)}" aria-pressed="${sc.cat === k}">${esc(t)}</button>`).join('')}</div></div>
-      <div class="ly-f"><span class="label">Сколько</span>${seg('n', [[3, 'Топ-3'], [5, 'Топ-5'], [10, 'Топ-10']])}</div>
+      ${sc.podium ? '' : `<div class="ly-f"><span class="label">Сколько</span>${seg('n', [[3, 'Топ-3'], [5, 'Топ-5'], [10, 'Топ-10']])}</div>`}
       <div class="ly-f"><span class="label">Что попадёт</span>${seg('mode', [['auto', 'Лучшие по баллу'], ['pick', 'Выберу сам']])}</div>
-      <div class="ly-f"><span class="label">Вид</span>${seg('style', [['posters', 'Постеры'], ['list', 'Список']])}</div>
+      ${sc.podium ? '' : `<div class="ly-f"><span class="label">Вид</span>${seg('style', [['posters', 'Постеры'], ['list', 'Список']])}</div>`}
       ${sc.mode === 'pick' ? `<div class="ly-f"><span class="label" id="scPicked">Выбрано ${sc.ids.length} из ${sc.n} · порядок как нажимаешь</span>
         <input id="scQ" class="search" type="search" placeholder="Найти по названию…" value="${esc(sc.q || '')}" autocomplete="off">
         <div class="ly-pickl${sc.ids.length >= sc.n ? ' full' : ''}" id="scPickList">${pickListHTML(p, sc)}</div></div>` : ''}
@@ -697,6 +704,12 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     if (act === 'save') {
       if (lyEdit.mode === 'pick' && !lyEdit.ids.length) { lyEdit.err = 'Выбери хотя бы одну оценку'; return drawLayout(); }
       const sc = { id: lyEdit.id, title: (lyEdit.title || '').trim().slice(0, 60), cat: lyEdit.cat, n: lyEdit.n, mode: lyEdit.mode, ids: lyEdit.mode === 'pick' ? lyEdit.ids.slice(0, lyEdit.n) : [], style: lyEdit.style };
+      if (lyEdit.podium) {
+        L.podium = { title: sc.title, cat: sc.cat, mode: sc.mode, ids: sc.ids.slice(0, 3) };
+        lyEdit = null;
+        saveLayout(p);
+        return closeLayout();
+      }
       const at = scs.findIndex((x) => x.id === sc.id);
       if (at >= 0) scs[at] = sc; else scs.push(sc);
       L.showcases = scs.slice(0, SC_MAX);
@@ -721,7 +734,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const name = esc(sc ? sc.title || autoTitle(p, sc) : WG_NAME[k]);
     return `<div class="wg" data-wg="${esc(k)}"${on ? '' : ' data-off'}>
       <button type="button" class="wg-btn wg-move" title="Зажми и перетащи куда угодно. Стрелками на клавиатуре тоже можно" aria-label="Переместить блок «${name}»">${WIC.move}</button>
-      <span class="wg-tools">${sc ? `<button type="button" class="wg-btn" data-wga="scedit" title="Изменить витрину" aria-label="Изменить витрину «${name}»">${WIC.pen}</button><button type="button" class="wg-btn danger" data-wga="scdel" title="Удалить витрину" aria-label="Удалить витрину «${name}»">${WIC.trash}</button>` : ''}<button type="button" class="wg-btn" data-wga="eye" aria-pressed="${!on}" title="${on ? 'Скрыть блок' : 'Показать блок'}" aria-label="${on ? 'Скрыть' : 'Показать'} блок «${name}»">${on ? WIC.eye : WIC.eyeOff}</button></span>
+      <span class="wg-tools">${sc ? `<button type="button" class="wg-btn" data-wga="scedit" title="Изменить витрину" aria-label="Изменить витрину «${name}»">${WIC.pen}</button><button type="button" class="wg-btn danger" data-wga="scdel" title="Удалить витрину" aria-label="Удалить витрину «${name}»">${WIC.trash}</button>` : k === 'podium' ? `<button type="button" class="wg-btn" data-wga="poedit" title="Изменить блок" aria-label="Изменить блок «Любимое»">${WIC.pen}</button>` : ''}<button type="button" class="wg-btn" data-wga="eye" aria-pressed="${!on}" title="${on ? 'Скрыть блок' : 'Показать блок'}" aria-label="${on ? 'Скрыть' : 'Показать'} блок «${name}»">${on ? WIC.eye : WIC.eyeOff}</button></span>
       <button type="button" class="wg-rs" title="Тяни, чтобы поменять ширину. Стрелками тоже можно" aria-label="Ширина блока «${name}»"><i></i></button>
       <button type="button" class="wg-rh" title="Тяни, чтобы поменять высоту. Двойной щелчок — высота по содержимому" aria-label="Высота блока «${name}»"><i></i></button>
       ${html}</div>`;
@@ -1007,6 +1020,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       b.title = on ? 'Скрыть блок' : 'Показать блок';
       saveLayout(p, true);
     } else if (a === 'scedit') openScForm(p, k.slice(3));
+    else if (a === 'poedit') openPodiumForm(p);
     else if (a === 'scdel') {
       L.showcases = (L.showcases || []).filter((x) => 'sc:' + x.id !== k);
       saveLayout(p);
@@ -1600,7 +1614,6 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const cats = new Map(); rs.forEach((r) => { const c = cats.get(r.cat) || { n: 0, sum: 0, k: 0 }; c.n++; if (r.total != null) { c.sum += r.total; c.k++; } cats.set(r.cat, c); });
     const hist = Array.from({ length: 10 }, (_, i) => rated.filter((r) => Math.min(10, Math.max(1, Math.round(r.total))) === i + 1).length);
     const hmax = Math.max(1, ...hist);
-    const top3 = rated.slice().sort((a, b) => b.total - a.total || b.at - a.at).slice(0, 3);
     let d = 1; // 0 — у шапки, она появляется первой
     const isMe = p.kind === 'me';
     if (!isMe) EDIT = false;
@@ -1620,12 +1633,13 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     W.stats = statsHTML(p, dd);
     d = dd.v;
     ((p.layout && p.layout.showcases) || []).forEach((sc) => { const h = showcaseHTML(p, sc, d++); if (h) W['sc:' + sc.id] = h; });
-    if (top3.length) W.podium = `<section class="card rise" style="--d:${d++}">
-            <div class="head"><h2 class="h2">Любимое</h2><span class="label">топ по баллу</span></div>
-            <div class="podium">${top3.map((r, k) => `<a class="pod p${k + 1}" href="${rateLink(p, r)}" title="Открыть оценку «${esc(r.name)}»" data-tier="${tierT(r.total)}">
+    const pcfg = podiumCfg(p), pod = podiumItems(p);
+    if (pod.length || (isMe && (EDIT || (p.layout && p.layout.podium)))) W.podium = `<section class="card rise" style="--d:${d++}">
+            <div class="head"><h2 class="h2">${esc(pcfg.title || 'Любимое')}</h2><span class="label">${pcfg.cat ? esc(catTitle(p, pcfg.cat)) + ' · ' : ''}${pcfg.mode === 'pick' ? 'мой выбор' : 'топ по баллу'}</span></div>
+            ${pod.length ? `<div class="podium n${pod.length}">${pod.map((r, k) => `<a class="pod p${k + 1}" href="${rateLink(p, r)}" title="Открыть оценку «${esc(r.name)}»" data-tier="${tierT(r.total)}">
               <div class="pic" data-photo="${r.photo ? esc(r.id) : ''}"><span class="place">${k + 1}</span><span class="ltr">${letter(r.name)}</span>${lbm(r)}</div>
               <strong>${esc(r.name)}</strong>
-              <div class="row"><small>${esc(r.cat)}</small>${badge(r.total)}</div></a>`).join('')}</div>
+              <div class="row"><small>${esc(r.cat)}</small>${badge(r.total)}</div></a>`).join('')}</div>` : '<p class="muted">Пока пусто: нет подходящих оценок. «Любимое» можно изменить в режиме редактирования профиля (кнопка с квадратиками).</p>'}
           </section>`;
     W.all = `<section class="card rise" id="allSec" style="--d:${d++}">
             <div class="head"><h2 class="h2">Все оценки</h2><span class="label" id="listStat"></span>

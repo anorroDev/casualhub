@@ -1933,6 +1933,13 @@ function cleanLayout(l) {
     }
   }
   const out = { showcases, sections, order, size, grid, at: +l.at };
+  // «Любимое»: по баллу или свой выбор, можно по одной теме; мест три
+  if (l.podium && typeof l.podium === 'object') {
+    out.podium = {
+      title: one(l.podium.title).slice(0, 60), cat: one(l.podium.cat).slice(0, 60), mode: l.podium.mode === 'pick' ? 'pick' : 'auto',
+      ids: (Array.isArray(l.podium.ids) ? l.podium.ids : []).filter((id) => typeof id === 'string' && RID_RE.test(id)).slice(0, 3),
+    };
+  }
   // цифры в профиле: id из каталога (count, s:plan, k:movie:done, c:<отпечаток категории>…)
   if (Array.isArray(l.stats)) out.stats = l.stats.filter((s) => typeof s === 'string' && /^[a-z]{1,10}(:[a-z0-9]{1,16}){0,2}$/.test(s)).slice(0, 12);
   if (Array.isArray(l.titles)) out.titles = l.titles.filter((t) => typeof t === 'string' && /^[\w:-]{1,40}$/.test(t)).slice(0, 4);
