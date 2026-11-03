@@ -1,5 +1,7 @@
 /* тема ставится до первой отрисовки, чтобы при обновлении страница не мелькала */
 try { var cp = JSON.parse(localStorage.getItem('ocenshik.prefs.v1') || 'null'); if (cp && cp.theme && cp.theme !== 'auto') document.documentElement.setAttribute('data-theme', cp.theme); } catch (e) {}
+/* экспериментальный вид (unslop) из меню тем */
+try { if (localStorage.getItem('casualhub.unslop.v1') === '1') document.documentElement.classList.add('unslop'); } catch (e) {}
 /* пока грузятся оценки, основная часть скрыта и появляется сразу готовой, без промежуточного вида */
 document.documentElement.classList.add('booting');
 setTimeout(function () { document.documentElement.classList.remove('booting'); }, 2500);

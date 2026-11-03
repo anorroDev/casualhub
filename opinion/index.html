@@ -540,6 +540,51 @@ html.booting .layout, html.booting .mnav, html.booting .offline-bar { visibility
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Handjet:wght@400..800&family=Onest:wght@400..700&display=block">
+<link rel="stylesheet" href="/unslop.css">
+<style id="unslop-page">
+/* Экспериментальный вид (unslop): действует, только когда в меню тем включён переключатель. Собрано из правок, которые убирают
+   цветные пятна, свечения, пружинные и вечные анимации, заглавные подписи. Обычный вид выше не меняется */
+@keyframes ch-in-u { from { opacity: 0; transform: translateY(.12em); } }
+html.unslop .avatar-upload-trigger:hover { transform: none; }
+html.unslop .avatar-upload-trigger:hover .avatar-camera-badge, html.unslop .profile-avatar-wrap:hover .avatar-camera-badge { transform: none; }
+html.unslop .backup-title { text-transform: none; letter-spacing: normal; }
+html.unslop .artist-ava { transition: transform .25s cubic-bezier(.22, 1, .36, 1), border-color .15s, color .15s; }
+html.unslop .artist-list li.artist-sep { text-transform: none; letter-spacing: normal; }
+html.unslop .cover-opt { transition: transform .25s cubic-bezier(.22, 1, .36, 1), border-color .15s; }
+html.unslop .crit-w { transition: transform .2s cubic-bezier(.22, 1, .36, 1), background-color .15s, color .15s, border-color .15s; }
+html.unslop .music-opt { transition: transform .22s cubic-bezier(.22, 1, .36, 1), background-color .12s; }
+html.unslop .board-more-body { box-shadow: 0 20px 44px -22px rgb(0 0 0 / .45); }
+html.unslop .tl-item { transition: transform .25s cubic-bezier(.22, 1, .36, 1); }
+html.unslop .tl-item:hover { transform: translateY(-1px); }
+html.unslop .stat-block h4 { text-transform: none; letter-spacing: normal; }
+html.unslop .sheet:not([hidden]) > .sheet-card { animation: sheet-pop .34s cubic-bezier(.22, 1, .36, 1) both; }
+html.unslop .theme-menu { box-shadow: 0 20px 44px -22px rgb(0 0 0 / .45); }
+html.unslop .label { text-transform: none; letter-spacing: normal; }
+html.unslop .label::first-letter { text-transform: uppercase; }
+html.unslop .eyebrow { text-transform: none; letter-spacing: normal; }
+html.unslop .crop-ratios button { transition: transform .2s cubic-bezier(.22, 1, .36, 1), background-color .15s, color .15s; }
+html.unslop .tag.ex { text-transform: none; letter-spacing: normal; }
+html.unslop .toast { box-shadow: 0 20px 44px -22px rgb(0 0 0 / .45); }
+:root.unslop { --spring: cubic-bezier(.22, 1, .36, 1); }
+html.unslop .title .ch { animation: ch-in-u .7s cubic-bezier(.22, 1, .36, 1) backwards calc(var(--i) * 40ms); transition: color .15s; }
+html.unslop .title .ch:hover { scale: none; }
+html.unslop .theme-btn:hover { box-shadow: 0 6px 18px -10px rgb(0 0 0 / .28); }
+html.unslop #wheelLink:hover svg { transform: none; }
+html.unslop .scale i { box-shadow: none; }
+html.unslop .theme-menu { box-shadow: 0 20px 44px -22px rgb(0 0 0 / .45); }
+html.unslop .theme-opt:hover i { transform: none; }
+html.unslop .card { background: var(--panel); }
+html.unslop .btn.primary { box-shadow: inset 0 1px 0 rgb(255 255 255 / .12); }
+html.unslop .chip-btn[aria-pressed="true"], html.unslop .status-chip[aria-pressed="true"] { box-shadow: inset 0 1px 0 rgb(255 255 255 / .12); }
+html.unslop .cell.on { box-shadow: none; }
+html.unslop .cell.knob { box-shadow: 0 0 0 2px var(--panel), 0 8px 18px -6px rgb(0 0 0 / .28); }
+html.unslop .total:not([data-tier="none"]) .badge.big { box-shadow: 0 12px 28px -12px rgb(0 0 0 / .28); }
+html.unslop .entry .badge { box-shadow: 0 8px 18px -10px rgb(0 0 0 / .28); }
+@media (hover: hover) { html.unslop .entry summary:hover .badge { transform: none; } }
+@supports selector(:has(a)) { @media (max-width: 979px) { html.unslop .mnav::before { box-shadow: inset 0 1px 0 rgb(255 255 255 / .12); } } }
+html.unslop .eyebrow .dot::after { animation: none; }
+html.unslop::before { display: none; }
+</style>
 </head><body>
 <style>
 /* Layout: two-panel console. Rater with a sticky score bar on the left, leaderboard on the right; one column on phones. */
@@ -1478,13 +1523,13 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
     </div>
     <div class="masthead-right">
       <div class="user-bar">
-        <button type="button" class="cmp-tray" id="cmpTrayBtn" hidden>⚖️ Сравнить (<span id="cmpCount">0</span>/2)</button>
+        <button type="button" class="cmp-tray" id="cmpTrayBtn" hidden><span class="u-old">⚖️ </span>Сравнить (<span id="cmpCount">0</span>/2)</button>
         <a class="theme-btn" id="homeLink" href="/" title="Главная Казуал Хаба" aria-label="Казуал Хаб, главная"><svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M13 8H3M7 4L3 8l4 4"/></svg><span class="hl-full">Казуал </span>Хаб</a>
         <a class="theme-btn" id="wheelLink" href="/wheel/" title="Колесо Казуала: колесо фортуны на выбывание"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><g transform="translate(8 8)"><path d="M0 0V-6.5A6.5 6.5 0 0 1 5.63-3.25Z" fill="#3550E8"/><path d="M0 0L5.63-3.25A6.5 6.5 0 0 1 5.63 3.25Z" fill="#EAA92C"/><path d="M0 0L5.63 3.25A6.5 6.5 0 0 1 0 6.5Z" fill="#2EAD60"/><path d="M0 0V6.5A6.5 6.5 0 0 1-5.63 3.25Z" fill="#EC4899"/><path d="M0 0L-5.63 3.25A6.5 6.5 0 0 1-5.63-3.25Z" fill="#9333EA"/><path d="M0 0L-5.63-3.25A6.5 6.5 0 0 1 0-6.5Z" fill="#06B6D4"/><circle r="2" fill="currentColor"/></g></svg><span class="wl-text">Колесо</span></a>
         <a class="theme-btn" id="githubLink" href="https://github.com/anorroDev/casualhub" target="_blank" rel="noopener" title="Код сайта на GitHub"><svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a>
         <span class="theme-btn online-chip" data-online-count title="Сколько людей сейчас на сайте: с аккаунтом и гости"><em aria-hidden="true"></em><b>—</b><span class="oc-t">&nbsp;на сайте</span></span>
         <a class="theme-btn fr-btn" href="/opinion/#friends" data-friends-btn title="Друзья"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="5.5" r="2.5"/><path d="M1.5 14c.6-2.6 2.3-4 4.5-4s3.9 1.4 4.5 4"/><path d="M10.5 3.2a2.5 2.5 0 0 1 0 4.6M12.5 10.3c1 .6 1.7 1.9 2 3.7"/></svg><span class="fb-t">Друзья</span><i class="fb-n fb-on" hidden></i><i class="fb-n fb-req" hidden></i></a>
-        <button type="button" class="theme-btn howto-btn" id="howtoBtn" title="Как пользоваться"><span aria-hidden="true">❓</span><span class="hb-t">Помощь</span></button>
+        <button type="button" class="theme-btn howto-btn" id="howtoBtn" title="Как пользоваться"><span aria-hidden="true"><span class="u-old">❓</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.3M12 16.8h.01"/></svg></span><span class="hb-t">Помощь</span></button>
         <details class="theme-pick" id="themePick">
           <summary class="theme-btn" id="themeBtn" title="Тема оформления">🌓 Тема</summary>
           <div class="theme-menu" id="themeMenu" role="group" aria-label="Тема оформления"></div>
@@ -1498,10 +1543,10 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
   <p class="offline-bar" id="offlineBar" role="status" hidden><strong>Сохранение здесь не работает.</strong> Страница открылась без доступа к хранилищу Claude, так бывает во встроенном браузере Telegram. Оценки пропадут после закрытия, фото и скачивание недоступны. Открой ссылку в Safari или в приложении Claude.</p>
   <div id="navAnchor" aria-hidden="true"></div>
   <nav class="mnav" id="mnav" aria-label="Разделы" style="grid-template-columns: repeat(4, minmax(0, 1fr));">
-    <button type="button" data-section="rate" aria-pressed="true"><span class="mi" aria-hidden="true">✏️</span><span>Оценка</span></button>
-    <button type="button" data-section="board" aria-pressed="false"><span class="mi" aria-hidden="true">🏆</span><span>Рейтинг<b id="mnavCount"></b></span></button>
-    <button type="button" data-section="stats" aria-pressed="false"><span class="mi" aria-hidden="true">📊</span><span>Стат.</span></button>
-    <button type="button" data-section="log" aria-pressed="false"><span class="mi" aria-hidden="true">📜</span><span>Журнал</span></button>
+    <button type="button" data-section="rate" aria-pressed="true"><span class="mi" aria-hidden="true"><span class="u-old">✏️</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg></span><span>Оценка</span></button>
+    <button type="button" data-section="board" aria-pressed="false"><span class="mi" aria-hidden="true"><span class="u-old">🏆</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4h8v5a4 4 0 0 1-8 0z"/><path d="M8 6H5a3 3 0 0 0 3 4M16 6h3a3 3 0 0 1-3 4M12 13v4M8.5 20h7"/></svg></span><span>Рейтинг<b id="mnavCount"></b></span></button>
+    <button type="button" data-section="stats" aria-pressed="false"><span class="mi" aria-hidden="true"><span class="u-old">📊</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20v-6M12 20V5M19 20v-10"/></svg></span><span>Стат.</span></button>
+    <button type="button" data-section="log" aria-pressed="false"><span class="mi" aria-hidden="true"><span class="u-old">📜</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></svg></span><span>Журнал</span></button>
   </nav>
 
   <main class="layout" id="layout" data-section="rate">
@@ -1573,11 +1618,11 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
 
       <div class="pc-grid">
         <div class="pc-col">
-          <label class="label pc-label-pro" for="itemPros">➕ Плюсы (каждый с новой строки)</label>
+          <label class="label pc-label-pro" for="itemPros"><span class="u-old">➕ </span>Плюсы (каждый с новой строки)</label>
           <textarea id="itemPros" rows="3" maxlength="1000" placeholder="+ Крутая атмосфера&#10;+ Отличный саундтрек"></textarea>
         </div>
         <div class="pc-col">
-          <label class="label pc-label-con" for="itemCons">➖ Минусы (каждый с новой строки)</label>
+          <label class="label pc-label-con" for="itemCons"><span class="u-old">➖ </span>Минусы (каждый с новой строки)</label>
           <textarea id="itemCons" rows="3" maxlength="1000" placeholder="- Затянутый финал&#10;- Мелкие баги"></textarea>
         </div>
       </div>
@@ -1614,7 +1659,7 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
         <div class="board-bar" id="subFilters" role="group" aria-label="Что показать">
           <div class="seg">
             <button type="button" data-sfilter="all" aria-pressed="true">Мои</button>
-            <button type="button" data-sfilter="mine" aria-pressed="false" title="Оценки друзей: всех сразу или одного">👥 Друзья</button>
+            <button type="button" data-sfilter="mine" aria-pressed="false" title="Оценки друзей: всех сразу или одного"><span class="u-old">👥 </span>Друзья</button>
             <button type="button" data-sfilter="fav" aria-pressed="false">★ Избранное</button>
           </div>
           <a class="btn small ghost" id="allRatingsLink" href="/profile/?all=1" title="Все оценки на отдельной странице: список, плитка, тир-лист, подробно">Все оценки</a>
@@ -1652,7 +1697,7 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
                 <span class="label">Жанры</span>
                 <div class="chips genre-chips" id="genreChips" role="group" aria-label="Жанры"></div>
               </div>
-              <button type="button" class="btn small ghost" id="randomBtn">🎲 Случайная оценка</button>
+              <button type="button" class="btn small ghost" id="randomBtn"><span class="u-old">🎲 </span>Случайная оценка</button>
             </div>
           </details>
           <div class="seg icon-seg" id="layoutGroup" role="group" aria-label="Вид списка">
@@ -1737,7 +1782,7 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
 <div class="sheet" id="compareModal" hidden>
   <div class="sheet-card cmp-card" role="dialog" aria-modal="true" aria-labelledby="cmpTitle">
     <div class="sheet-head">
-      <h3 id="cmpTitle">⚖️ Сравнение оценок</h3>
+      <h3 id="cmpTitle"><span class="u-old">⚖️ </span>Сравнение оценок</h3>
       <div style="display:flex;gap:6px;">
         <button type="button" class="btn small ghost" id="cmpClearBtn">Сбросить</button>
         <button type="button" class="mini-btn" id="cmpClose" aria-label="Закрыть">

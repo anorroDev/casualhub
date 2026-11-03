@@ -87,7 +87,7 @@
     bar.dataset.kind = a.kind || 'info';
     // текст объявления — только как текст, без разметки
     bar.innerHTML = '<i aria-hidden="true"></i><span></span><button type="button" aria-label="Закрыть объявление">✕</button>';
-    bar.querySelector('i').textContent = a.kind === 'warn' ? '⚠️' : a.kind === 'party' ? '🎉' : '📢';
+    bar.querySelector('i').innerHTML = a.kind === 'warn' ? '<span class="u-old">⚠️</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4 2.5 20h19z"/><path d="M12 10v4M12 17h.01"/></svg>' : a.kind === 'party' ? '<span class="u-old">🎉</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10v4h3l7 4V6l-7 4z"/><path d="M18 9.5a3.5 3.5 0 0 1 0 5"/></svg>' : '<span class="u-old">📢</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10v4h3l7 4V6l-7 4z"/><path d="M18 9.5a3.5 3.5 0 0 1 0 5"/></svg>';
     bar.querySelector('span').textContent = a.text;
     bar.querySelector('button').addEventListener('click', () => { try { localStorage.setItem(ANN_KEY, a.id); } catch (e) {} bar.remove(); });
   }
@@ -105,7 +105,7 @@
     bar.className = 'site-ann';
     bar.dataset.kind = 'warn';
     bar.setAttribute('role', 'alert');
-    bar.innerHTML = '<i aria-hidden="true">🔒</i><span>Вход в аккаунт закончился: оценки на этом устройстве целы, войди ещё раз, чтобы они снова синхронизировались. <a href="/opinion/#login">Войти</a></span><button type="button" aria-label="Закрыть">✕</button>';
+    bar.innerHTML = '<i aria-hidden="true"><span class="u-old">🔒</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></i><span>Вход в аккаунт закончился: оценки на этом устройстве целы, войди ещё раз, чтобы они снова синхронизировались. <a href="/opinion/#login">Войти</a></span><button type="button" aria-label="Закрыть">✕</button>';
     bar.querySelector('button').addEventListener('click', () => bar.remove());
     document.body.prepend(bar);
   }

@@ -31,12 +31,25 @@
     const bg = t.id === 'auto' ? `linear-gradient(135deg, ${p.bg} 50%, ${p.panel} 50%)` : p.bg;
     return `<button type="button" class="theme-opt tm${t.id === 'auto' ? ' tm-wide' : ''}" data-theme-id="${t.id}" aria-pressed="${t.id === current}" style="--ti:${i}">`
       + `<span class="tm-prev" style="--pb:${bg};--pp:${t.id === 'auto' ? '#FFFFFF' : p.panel};--pa:${p.accent}" aria-hidden="true"><span class="tm-panel"></span><span class="tm-btn"></span><span class="tm-dot"></span></span>`
-      + `<span class="tm-name">${t.icon} ${esc(t.name)}${t.id === 'auto' ? '<small>светлая днём, тёмная ночью — как в телефоне или компьютере</small>' : ''}</span></button>`;
+      + `<span class="tm-name"><span class="u-old">${t.icon} </span>${esc(t.name)}${t.id === 'auto' ? '<small>светлая днём, тёмная ночью — как в телефоне или компьютере</small>' : ''}</span></button>`;
   };
+  // экспериментальный вид (unslop): тише, без свечений, пятен фона и прыгающих анимаций; работает с любой темой
+  const UNSLOP_KEY = 'casualhub.unslop.v1';
+  const unslopOn = () => document.documentElement.classList.contains('unslop');
+  const expHTML = () => `<label class="tm-exp"><input type="checkbox" data-unslop${unslopOn() ? ' checked' : ''}><span class="tm-exp-t"><b>Экспериментальный вид</b><small>unslop: спокойнее, без свечений и прыгающих анимаций. Работает с любой темой</small></span></label>`;
   function menuHTML(current) {
     let i = 0;
-    return GROUPS.map(([g, title]) => (title ? `<span class="tm-group">${title}</span>` : '') + LIST.filter((t) => t.group === g).map((t) => card(t, current, i++)).join('')).join('');
+    return expHTML() + GROUPS.map(([g, title]) => (title ? `<span class="tm-group">${title}</span>` : '') + LIST.filter((t) => t.group === g).map((t) => card(t, current, i++)).join('')).join('');
   }
+  document.addEventListener('change', (e) => {
+    const c = e.target.closest && e.target.closest('[data-unslop]');
+    if (!c) return;
+    document.documentElement.classList.toggle('unslop', c.checked);
+    try { if (c.checked) localStorage.setItem(UNSLOP_KEY, '1'); else localStorage.removeItem(UNSLOP_KEY); } catch (er) {}
+    document.querySelectorAll('[data-unslop]').forEach((x) => { x.checked = c.checked; });
+  });
+  // включили в другой вкладке — эта тоже переключается
+  addEventListener('storage', (e) => { if (e.key === UNSLOP_KEY) { const on = e.newValue === '1'; document.documentElement.classList.toggle('unslop', on); document.querySelectorAll('[data-unslop]').forEach((x) => { x.checked = on; }); } });
 
   const css = document.createElement('style');
   css.textContent = `
@@ -57,7 +70,11 @@
 .theme-menu.tm-grid .tm-prev { transition: transform .25s cubic-bezier(.34, 1.56, .64, 1); }
 @keyframes tm-in { from { transform: translateY(10px) scale(.92); } }
 @media (prefers-reduced-motion: reduce) { .theme-pick[open] .theme-menu.tm-grid .theme-opt.tm { animation: none; } }
-.theme-menu.tm-grid .theme-opt.tm:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }`;
+.theme-menu.tm-grid .theme-opt.tm:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.theme-menu.tm-grid .tm-exp { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 10px; margin-bottom: 2px; padding: 8px 8px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
+.theme-menu.tm-grid .tm-exp input { flex: none; width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--accent); }
+.theme-menu.tm-grid .tm-exp-t { display: grid; gap: 2px; font-size: 13px; line-height: 1.25; color: var(--ink); }
+.theme-menu.tm-grid .tm-exp-t small { font-size: 11.5px; color: var(--ink-3); }`;
   document.head.appendChild(css);
 
   window.CasualThemes = { list: LIST, ids: LIST.map((t) => t.id), find: (id) => LIST.find((t) => t.id === id) || LIST[0], menuHTML };

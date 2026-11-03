@@ -75,7 +75,7 @@
     const LIMIT = 30;
     let showAll = false;
     el.innerHTML = `<div class="cm">
-      <div class="cm-head"><h3>💬 ${esc(opt.title || 'Комментарии')}</h3><span data-cm-n></span></div>
+      <div class="cm-head"><h3><span class="u-old">💬 </span>${esc(opt.title || 'Комментарии')}</h3><span data-cm-n></span></div>
       <ul class="cm-list" data-cm-list></ul>
       <form class="cm-form" data-cm-form>
         <textarea maxlength="${MAX}" rows="2" placeholder="${esc(opt.placeholder || 'Напиши комментарий…')}" aria-label="Текст комментария"></textarea>
@@ -90,7 +90,7 @@
       const items = c ? c.items : null;
       nEl.textContent = items && items.length ? `${items.length} ${plural(items.length, 'комментарий', 'комментария', 'комментариев')}` : '';
       if (!items) { list.innerHTML = '<li class="cm-empty">Загружаю…</li>'; return; }
-      if (!items.length) { list.innerHTML = `<li class="cm-empty">${esc(opt.empty || 'Пока пусто. Напиши первым!')}</li>`; return; }
+      if (!items.length) { list.innerHTML = `<li class="cm-empty">${esc(opt.empty || 'Пока пусто. Напиши первым')}</li>`; return; }
       const shown = showAll ? items : items.slice(-LIMIT);
       list.innerHTML = (items.length > shown.length ? `<li><button type="button" class="cm-more" data-cm-more>Показать ранние (${items.length - shown.length})</button></li>` : '') + shown.map((x) => itemHTML(x, x.id === freshId)).join('');
       hydrate();

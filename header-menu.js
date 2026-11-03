@@ -94,10 +94,10 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
   // href — куда вести со страниц, где пункт сам не работает; attr — атрибут, по которому его ловит Мнение
   const SETTINGS = [
     { title: 'Импорт', items: [
-      { icon: '🎬', name: 'Импорт из Letterboxd', desc: 'Перенести оценки фильмов из архива Letterboxd', href: '/opinion/#letterboxd', attr: 'data-lb-open' },
+      { icon: '<span class="u-old">🎬</span><svg class="u-new" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M8 4v16M16 4v16M3.5 9H8M3.5 15H8M16 9h4.5M16 15h4.5"/></svg>', name: 'Импорт из Letterboxd', desc: 'Перенести оценки фильмов из архива Letterboxd', href: '/opinion/#letterboxd', attr: 'data-lb-open' },
     ] },
     { title: 'Обложки и названия', items: [
-      { icon: '🔄', name: 'Обновить обложки и названия', desc: 'Подтянуть к сохранённым оценкам обложки, русские названия, год и жанры', href: '/opinion/#refresh', attr: 'data-refresh-open' },
+      { icon: '<span class="u-old">🔄</span><svg class="u-new" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.6-4.5L3.5 9M3.5 4v5h5M4 13a8 8 0 0 0 14.6 4.5l1.9-2.5M20.5 20v-5h-5"/></svg>', name: 'Обновить обложки и названия', desc: 'Подтянуть к сохранённым оценкам обложки, русские названия, год и жанры', href: '/opinion/#refresh', attr: 'data-refresh-open' },
     ] },
   ];
   const escH = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -108,7 +108,7 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
       setBox.className = 'hs-sheet';
       setBox.hidden = true;
       setBox.innerHTML = `<div class="hs-card" role="dialog" aria-modal="true" aria-labelledby="hsTitle">
-        <div class="hs-head"><h2 id="hsTitle">⚙️ Настройки</h2><button type="button" class="hs-x" data-hs="close" aria-label="Закрыть">✕</button></div>
+        <div class="hs-head"><h2 id="hsTitle"><span class="u-old">⚙️ </span>Настройки</h2><button type="button" class="hs-x" data-hs="close" aria-label="Закрыть">✕</button></div>
         <div class="hs-body">${SETTINGS.map((sec) => `<section class="hs-sec"><span class="hs-lab">${escH(sec.title)}</span>
           ${sec.items.map((it) => `<a class="hs-it" href="${escH(it.href)}" ${it.attr}><span class="hs-ic" aria-hidden="true">${it.icon}</span><span class="hs-t"><b>${escH(it.name)}</b><small>${escH(it.desc)}</small></span><span class="hs-go" aria-hidden="true">›</span></a>`).join('')}</section>`).join('')}
           <p class="hs-note">Скоро здесь появятся и другие настройки.</p></div></div>`;
@@ -224,7 +224,7 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     set.type = 'button';
     set.className = cls + ' hm-set';
     set.title = 'Импорт оценок, обложки и названия';
-    set.innerHTML = '<span aria-hidden="true">⚙️</span><span class="hm-t">Настройки</span>';
+    set.innerHTML = '<span aria-hidden="true"><span class="u-old">⚙️</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg></span><span class="hm-t">Настройки</span>';
     set.addEventListener('click', openSettings);
     panel.appendChild(set);
     // язык сайта (i18n.js): кнопка называет тот язык, на который переключит
@@ -234,7 +234,7 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
       lang.type = 'button';
       lang.className = cls + ' hm-lang';
       lang.title = en ? 'Switch to Russian' : 'Switch to English';
-      lang.innerHTML = `<span aria-hidden="true">🌐</span><span class="hm-t">${en ? 'Русский' : 'English'}</span>`;
+      lang.innerHTML = `<span aria-hidden="true"><span class="u-old">🌐</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></span><span class="hm-t">${en ? 'Русский' : 'English'}</span>`;
       lang.addEventListener('click', () => window.CasualLang.set(en ? 'ru' : 'en'));
       panel.appendChild(lang);
     }

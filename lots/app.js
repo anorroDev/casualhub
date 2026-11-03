@@ -219,7 +219,7 @@
   function paintSound() {
     const b = $('#lotSound'), v = $('#lotVol');
     if (!b) return;
-    b.textContent = !unlocked && snd.on ? '🔊 Включить звук' : snd.on ? '🔊 Звук включён' : '🔇 Звук выключен';
+    b.innerHTML = !unlocked && snd.on ? '<span class="u-old">🔊 </span>Включить звук' : snd.on ? '<span class="u-old">🔊 </span>Звук включён' : '<span class="u-old">🔇 </span>Звук выключен';
     b.className = 'btn small ' + (!unlocked && snd.on ? 'primary' : 'ghost');
     b.setAttribute('aria-pressed', String(!!(snd.on && unlocked)));
     if (document.activeElement !== v) v.value = snd.vol;
@@ -756,7 +756,7 @@
     const n = rows.length;
     // правки доступны, пока ведущий разрешает, сбор открыт, лот не вылетел и колесо не определило победителя
     const canEdit = !!token && !!S.room.editOwn && isOpen() && !(S.live && S.live.winner);
-    const html = `<p class="board-stat"><b>${n}</b> ${plural(n, 'лот', 'лота', 'лотов')}</p>${n ? `<ul class="lots-list">${rows.map((l) => { const k = l.name.toLowerCase(), gone = out.has(k), off = removed.has(k); const edit = l.mine && canEdit && !gone ? `<span class="lots-acts"><button type="button" class="btn small ghost" data-replace="${esc(l.id)}"${S.replacing === l.id ? ' aria-pressed="true"' : ''}>Заменить</button><button type="button" class="btn small ghost danger" data-del="${esc(l.id)}">Убрать</button></span>` : ''; return `<li data-lot="${esc(l.id)}" class="${gone || off ? 'out' : ''}">${lotPic(l)}<span class="lots-who"><b>${esc(l.name)}</b><small>${esc(l.by)}${l.mine ? ' · твой' : ''}${gone ? ' · вылетел' : off ? ' · убран с колеса' : ''}</small></span>${edit}</li>`; }).join('')}</ul>` : '<p class="lots-empty">Пока ни одного лота. Будь первым!</p>'}`;
+    const html = `<p class="board-stat"><b>${n}</b> ${plural(n, 'лот', 'лота', 'лотов')}</p>${n ? `<ul class="lots-list">${rows.map((l) => { const k = l.name.toLowerCase(), gone = out.has(k), off = removed.has(k); const edit = l.mine && canEdit && !gone ? `<span class="lots-acts"><button type="button" class="btn small ghost" data-replace="${esc(l.id)}"${S.replacing === l.id ? ' aria-pressed="true"' : ''}>Заменить</button><button type="button" class="btn small ghost danger" data-del="${esc(l.id)}">Убрать</button></span>` : ''; return `<li data-lot="${esc(l.id)}" class="${gone || off ? 'out' : ''}">${lotPic(l)}<span class="lots-who"><b>${esc(l.name)}</b><small>${esc(l.by)}${l.mine ? ' · твой' : ''}${gone ? ' · вылетел' : off ? ' · убран с колеса' : ''}</small></span>${edit}</li>`; }).join('')}</ul>` : '<p class="lots-empty">Пока ни одного лота. Будь первым</p>'}`;
     if (box.dataset.sig === html) return;
     box.dataset.sig = html;
     // как участники в Колесе: оставшиеся плывут на новое место, новые въезжают

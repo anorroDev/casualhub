@@ -58,8 +58,8 @@
 
   // вылет и щелчки всегда стандартные; выбирать можно фон страницы и трек победы
   const MUSIC_SLOTS = [
-    ['bg', '🎶 Фон', 'играет по кругу, пока ты на странице'],
-    ['win', '🏆 Победа', 'играет, когда есть победитель'],
+    ['bg', 'Фон', 'играет по кругу, пока ты на странице'],
+    ['win', 'Победа', 'играет, когда есть победитель'],
   ];
   // треки на выбор: ровно те ссылки, что дал хозяин колеса; играют через встроенные плееры YouTube и Spotify
   const PRESETS = [
@@ -1493,9 +1493,9 @@
       const has = !!(rec || pre);
       // один список на всё: треки, свой файл, загрузка своего, без музыки
       const opts = slotPresets(slot).map((p) => [`preset:${p.id}`, p.title])
-        .concat(rec ? [[rec.id, '📁 ' + rec.name]] : [])
-        .concat([['__upload', rec ? '📁 Загрузить другой файл…' : '📁 Загрузить свой файл…']])
-        .concat(slot === 'bg' ? [['', '🔇 Без музыки']] : []);
+        .concat(rec ? [[rec.id, rec.name]] : [])
+        .concat([['__upload', rec ? 'Загрузить другой файл…' : 'Загрузить свой файл…']])
+        .concat(slot === 'bg' ? [['', 'Без музыки']] : []);
       const label = on ? (slot === 'bg' ? 'Выключить' : 'Стоп') : (slot === 'bg' ? 'Включить' : 'Послушать');
       return `<div class="mcard${on ? ' on' : ''}">
         <div class="mc-head"><strong>${title}</strong><button type="button" class="mplay${on ? ' on' : ''}" data-mplay="${slot}"${has ? '' : ' disabled'} aria-label="${label}: ${title}">${on ? ICON.stop : ICON.play}${label}</button></div>

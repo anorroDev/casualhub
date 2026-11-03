@@ -1301,7 +1301,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
           : '<span class="tl-empty">—</span>'}</div></div>`;
       }).join('');
       const unrated = list.length - rated.length;
-      body.innerHTML = `<div class="tm-open"><button type="button" class="btn ghost" data-tiermaker title="Разложить оценки по рядам самому, а не по баллу">✍️ Свой тир-лист</button></div><div class="tl">${rows}</div>${unrated ? `<p class="muted">Без балла: ${unrated}. В тир-лист они не попадают.</p>` : ''}`;
+      body.innerHTML = `<div class="tm-open"><button type="button" class="btn ghost" data-tiermaker title="Разложить оценки по рядам самому, а не по баллу"><span class="u-old">✍️ </span>Свой тир-лист</button></div><div class="tl">${rows}</div>${unrated ? `<p class="muted">Без балла: ${unrated}. В тир-лист они не попадают.</p>` : ''}`;
     } else {
       const shown = list.slice(0, AST.limit);
       more.hidden = list.length <= AST.limit;
@@ -1515,7 +1515,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         <div class="rd-score"><b>${total != null ? fmt(total) : '—'}</b><small>из 10</small></div>
       </div>
       ${tools}
-      ${r.link && !ed ? `<a class="rd-listen" href="${esc(r.link)}" target="_blank" rel="noopener noreferrer">🎧 Слушать</a>` : ''}
+      ${r.link && !ed ? `<a class="rd-listen" href="${esc(r.link)}" target="_blank" rel="noopener noreferrer"><span class="u-old">🎧 </span>Слушать</a>` : ''}
       ${scores.length ? `<ul class="rd-crit">${scores.map((s, k) => { const v = ed ? rdEd.v[k] : Math.max(0, Math.min(10, Math.round(+s.v || 0))); return `<li data-tier="${tierV(v)}" data-k="${k}">
         <div class="rd-ct"><b>${esc(s.name)}${s.w && s.w !== 1 ? ` <small>×${String(s.w).replace('.', ',')}</small>` : ''}</b><span>${v || '—'}</span></div>
         ${s.desc ? `<small class="rd-desc">${esc(s.desc)}</small>` : ''}
@@ -1730,7 +1730,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     if (p.uid && token && window.CasualComments) window.CasualComments.mount($('#wallSec'), {
       uid: p.uid, target: 'wall', token, title: isMe ? 'Комментарии в твоём профиле' : `Комментарии в профиле ${p.name}`,
       placeholder: isMe ? 'Напиши что-нибудь у себя на стене…' : `Напиши что-нибудь ${p.name}…`,
-      empty: isMe ? 'Пока никто ничего не написал. Друзья могут оставить тут комментарий.' : 'Пока пусто. Напиши первым!',
+      empty: isMe ? 'Пока никто ничего не написал. Друзья могут оставить тут комментарий.' : 'Пока пусто. Напиши первым',
     });
     if (rs.length) wireList(p);
     wireJumps(p);
@@ -2104,7 +2104,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     m.className = 'hist-menu';
     m.setAttribute('role', 'dialog');
     m.setAttribute('aria-label', 'Аватар');
-    m.innerHTML = `<button type="button" class="btn primary" data-h="up">📷 Загрузить новую</button><span class="label">Прошлые аватарки</span><div class="hist-grid hg-ava" data-hist></div>`;
+    m.innerHTML = `<button type="button" class="btn primary" data-h="up"><span class="u-old">📷 </span>Загрузить новую</button><span class="label">Прошлые аватарки</span><div class="hist-grid hg-ava" data-hist></div>`;
     // меню живёт в body (внутри аватарки на него действовали бы её стили) и стоит под аватаркой; при прокрутке закрывается
     document.body.appendChild(m);
     const r = anchor.getBoundingClientRect();
@@ -2406,7 +2406,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       if (nb) {
         nb.addEventListener('click', () => toggleFollow(p, nb));
         if (on && !calm) nb.classList.add('bell-swing'); // колокольчик качается, как на YouTube (не 'ring': так зовётся кольцо совпадения вкусов)
-        toast(on ? '🔔 Подписка есть: новые оценки друга появятся в Журнале Мнения' : 'Подписка отменена');
+        toast(on ? 'Подписка есть: новые оценки друга появятся в Журнале Мнения' : 'Подписка отменена');
       }
       return;
     } catch (e) {

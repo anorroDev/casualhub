@@ -279,7 +279,7 @@ function calcPasswordStrength(pass) {
 
   if (score <= 1) return { score: 1, text: 'Слабый пароль', color: 'var(--bad)', width: '25%' };
   if (score <= 3) return { score: 2, text: 'Средний пароль: добавь цифры или знаки', color: 'var(--mid)', width: '65%' };
-  return { score: 3, text: 'Отличный надёжный пароль! 👍', color: 'var(--good)', width: '100%' };
+  return { score: 3, text: 'Отличный надёжный пароль', color: 'var(--good)', width: '100%' };
 }
 
 function processAvatarFile(file, callback) {
@@ -409,7 +409,7 @@ function registerUser(username, email, password, avatar, color, handle) {
   saveUsers();
   renderUserBar();
   renderBoard();
-  toast(`Добро пожаловать в клуб, ${username}! 🎉`);
+  toast(`Добро пожаловать в клуб, ${username}`);
   closeAuthModal();
   return true;
 }
@@ -478,7 +478,7 @@ function updateUserProfile(username, email, password, avatar, color, handle) {
   saveUsers();
   renderUserBar();
   renderBoard();
-  toast('Профиль обновлён ✨');
+  toast('Профиль обновлён');
   authActiveTab = 'profile';
   renderAuthModal();
   return true;
@@ -712,7 +712,7 @@ function renderAuthModal() {
           <div class="profile-titles">
             <h4 class="profile-name">${esc(state.user.name)}</h4>
             ${state.user.handle ? `<span class="profile-handle">@${esc(state.user.handle)}</span>` : ''}
-            ${state.user.email ? `<div class="profile-email-tag">✉ ${esc(state.user.email)}</div>` : '<div class="profile-meta">Почта не указана</div>'}
+            ${state.user.email ? `<div class="profile-email-tag"><span class="u-old">✉ </span>${esc(state.user.email)}</div>` : '<div class="profile-meta">Почта не указана</div>'}
             <div class="profile-meta">В клубе с ${esc(dateStr)}</div>
           </div>
         </div>
@@ -734,8 +734,8 @@ function renderAuthModal() {
 
         <a class="btn primary small" href="/profile/" style="width:100%;margin-bottom:8px;text-decoration:none;">Открыть страницу профиля</a>
         <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          <button type="button" class="btn ghost small" id="btnEditProfile" style="flex:1;">✏️ Настроить профиль</button>
-          <button type="button" class="btn ghost danger small" id="btnLogoutUser" style="flex:1;">🚪 Выйти</button>
+          <button type="button" class="btn ghost small" id="btnEditProfile" style="flex:1;"><span class="u-old">✏️ </span>Настроить профиль</button>
+          <button type="button" class="btn ghost danger small" id="btnLogoutUser" style="flex:1;"><span class="u-old">🚪 </span>Выйти</button>
         </div>
       </div>
 
@@ -765,16 +765,16 @@ function renderAuthModal() {
       ` : ''}
 
       <div style="margin-top:10px;">
-        <button type="button" class="btn ghost small" id="btnAddAccount" style="width:100%;">➕ Войти в другой аккаунт</button>
+        <button type="button" class="btn ghost small" id="btnAddAccount" style="width:100%;"><span class="u-old">➕ </span>Войти в другой аккаунт</button>
       </div>
 
       <div class="backup-section">
         <h4 class="backup-title">Резервная копия данных</h4>
         <div class="backup-actions">
-          <button type="button" class="btn ghost small" id="btnExportBackup">💾 Скачать копию (JSON)</button>
-          <label class="btn ghost small" for="fileImportBackup" style="cursor:pointer;">📥 Восстановить из файла</label>
+          <button type="button" class="btn ghost small" id="btnExportBackup"><span class="u-old">💾 </span>Скачать копию (JSON)</button>
+          <label class="btn ghost small" for="fileImportBackup" style="cursor:pointer;"><span class="u-old">📥 </span>Восстановить из файла</label>
           <input type="file" id="fileImportBackup" accept=".json" class="vh">
-          <button type="button" class="btn ghost small" data-lb-open>🎬 Импорт из Letterboxd</button>
+          <button type="button" class="btn ghost small" data-lb-open><span class="u-old">🎬 </span>Импорт из Letterboxd</button>
         </div>
       </div>
     `;
@@ -789,7 +789,7 @@ function renderAuthModal() {
         if (file) {
           processAvatarFile(file, dataUrl => {
             updateUserProfile(state.user.name, state.user.email, '', dataUrl, state.user.color);
-            toast('Аватарка успешно обновлена! 📷');
+            toast('Аватарка успешно обновлена');
           });
         }
         e.target.value = '';
@@ -937,10 +937,10 @@ function renderAuthModal() {
     <div class="backup-section">
       <h4 class="backup-title">Резервная копия базы</h4>
       <div class="backup-actions">
-        <button type="button" class="btn ghost small" id="btnExportBackup">💾 Скачать базу (JSON)</button>
-        <label class="btn ghost small" for="fileImportBackup" style="cursor:pointer;">📥 Загрузить базу</label>
+        <button type="button" class="btn ghost small" id="btnExportBackup"><span class="u-old">💾 </span>Скачать базу (JSON)</button>
+        <label class="btn ghost small" for="fileImportBackup" style="cursor:pointer;"><span class="u-old">📥 </span>Загрузить базу</label>
         <input type="file" id="fileImportBackup" accept=".json" class="vh">
-        <button type="button" class="btn ghost small" data-lb-open>🎬 Импорт из Letterboxd</button>
+        <button type="button" class="btn ghost small" data-lb-open><span class="u-old">🎬 </span>Импорт из Letterboxd</button>
       </div>
     </div>
   `;
@@ -2162,7 +2162,7 @@ function listenHTML(r) {
   const u = musicLinkOk(r && r.link);
   if (!u) return '';
   const src = /spotify/.test(u) ? 'Spotify' : /music\.youtube/.test(u) ? 'YouTube Music' : /soundcloud/.test(u) ? 'SoundCloud' : /music\.apple/.test(u) ? 'Apple Music' : /deezer/.test(u) ? 'Deezer' : 'YouTube';
-  return `<a class="e-listen" href="${esc(u)}" target="_blank" rel="noopener noreferrer">🎧 Слушать в ${src}</a>`;
+  return `<a class="e-listen" href="${esc(u)}" target="_blank" rel="noopener noreferrer"><span class="u-old">🎧 </span>Слушать в ${src}</a>`;
 }
 window.CasualListen = listenHTML;
 function entryHTML(r, rank, showCat) {
@@ -2176,8 +2176,8 @@ function entryHTML(r, rank, showCat) {
   const consList = splitLines(r.cons);
   const pcHTML = (prosList.length || consList.length)
     ? `<div class="e-pc-grid">
-        ${prosList.length ? `<div class="e-pc-box pro"><span class="label pc-label-pro">➕ Плюсы</span><ul>${prosList.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
-        ${consList.length ? `<div class="e-pc-box con"><span class="label pc-label-con">➖ Минусы</span><ul>${consList.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
+        ${prosList.length ? `<div class="e-pc-box pro"><span class="label pc-label-pro"><span class="u-old">➕ </span>Плюсы</span><ul>${prosList.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
+        ${consList.length ? `<div class="e-pc-box con"><span class="label pc-label-con"><span class="u-old">➖ </span>Минусы</span><ul>${consList.map(x => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
       </div>`
     : '';
   const inCmp = state.cmpIds.includes(r.id);
@@ -4992,7 +4992,7 @@ function renderTierView() {
         <button type="button" data-tlmode="scores" aria-pressed="${mode === 'scores'}">С оценками</button>
         <button type="button" data-tlmode="names" aria-pressed="${mode === 'names'}">С названиями</button>
       </div></div>
-      <div class="tl-acts"><button type="button" class="btn small ghost" data-tl="mine" title="Разложить оценки по рядам самому, а не по баллу">✍️ Свой тир-лист</button><button type="button" class="btn small primary" data-tl="png">Скачать PNG</button>${window.ClipboardItem && navigator.clipboard && navigator.clipboard.write ? '<button type="button" class="btn small ghost" data-tl="copy">Скопировать картинку</button>' : ''}</div>
+      <div class="tl-acts"><button type="button" class="btn small ghost" data-tl="mine" title="Разложить оценки по рядам самому, а не по баллу"><span class="u-old">✍️ </span>Свой тир-лист</button><button type="button" class="btn small primary" data-tl="png">Скачать PNG</button>${window.ClipboardItem && navigator.clipboard && navigator.clipboard.write ? '<button type="button" class="btn small ghost" data-tl="copy">Скопировать картинку</button>' : ''}</div>
     </div>
     ${list.length ? `<div class="tl" data-mode="${mode}">${tierBuckets(list).map(({ t, items }) => `<div class="tl-row">
       <div class="tl-head" style="--c:${t.col}"><b>${t.id}</b><small>${t.range}</small></div>
@@ -5199,7 +5199,7 @@ function toggleCompare(id) {
   }
   renderBoard();
   if (state.cmpIds.length === 2) openCompareModal();
-  else if (state.cmpIds.length === 1) toast('Выбери вторую оценку для сравнения ⚖️');
+  else if (state.cmpIds.length === 1) toast('Выбери вторую оценку для сравнения');
 }
 function updateCmpTray() {
   if (!el.cmpTrayBtn) return;
@@ -5208,7 +5208,7 @@ function updateCmpTray() {
   if (el.cmpCount) el.cmpCount.textContent = String(state.cmpIds.length);
 }
 function openCompareModal() {
-  if (state.cmpIds.length < 2) { toast('Выбери две оценки в рейтинге кнопкой «⚖️ Сравнить»'); return; }
+  if (state.cmpIds.length < 2) { toast('Выбери две оценки в рейтинге кнопкой «Сравнить»'); return; }
   const a = state.ratings.find(r => r.id === state.cmpIds[0]);
   const b = state.ratings.find(r => r.id === state.cmpIds[1]);
   if (!a || !b) return;
@@ -5407,7 +5407,7 @@ if (el.randomBtn) {
     if (pick) {
       if (state.bmode === 'tiers') { state.bmode = 'list'; }
       goToRating(pick.id);
-      toast(`🎲 Случайный выбор: ${pick.name}`);
+      toast(`Случайный выбор: ${pick.name}`);
     }
   });
 }

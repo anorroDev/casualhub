@@ -627,7 +627,7 @@
     const needLink = F.online && state.user && !F.me;
     // окно друзей открывает кнопка «Друзья» в шапке (там же видны заявки), вторая кнопка здесь не нужна;
     // остаётся только подсказка, если аккаунт ещё не подключён
-    if (needLink) chips.push(`<button type="button" class="sub-chip" data-fopen="1">👥 Подключить друзей</button>`);
+    if (needLink) chips.push(`<button type="button" class="sub-chip" data-fopen="1"><span class="u-old">👥 </span>Подключить друзей</button>`);
     else if (n) chips.push(`<button type="button" class="sub-chip" data-fopen="1">Заявки <b>+${n}</b></button>`);
     bar.innerHTML = chips.join('');
     if (window.CasualOnline) window.CasualOnline.paint(bar);
@@ -679,7 +679,7 @@
     if (!list.length) return '';
     const parts = RX.map(([k, ico]) => { const n = list.filter((x) => x.emoji === k).length; return n ? `${ico}${n}` : ''; }).filter(Boolean);
     const c = list.filter((x) => x.text).length;
-    if (c) parts.push(`💬${c}`);
+    if (c) parts.push(`<span class="u-old">💬${c}</span><span class="u-new"><span style="display:inline-flex;align-items:center;gap:3px"><svg class="x" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg>${c}</span></span>`);
     return `<span class="rx-sum" title="Реакции друзей">${parts.join(' ')}</span>`;
   }
   const rxComments = (list) => {
@@ -765,8 +765,8 @@
     const bd = scores.map((s) => `<li data-tier="${tierV(s.v)}"><span class="bd-name">${esc(s.name)}</span><span class="bd-bar" aria-hidden="true">${cellsHTML(s.v, 'bc', false)}</span><b class="bd-v">${s.v || '—'}</b>${s.note ? `<span class="bd-note">${esc(s.note)}</span>` : ''}</li>`).join('');
     const pros = splitLines(r.pros), cons = splitLines(r.cons);
     const pc = (pros.length || cons.length) ? `<div class="e-pc-grid">
-        ${pros.length ? `<div class="e-pc-box pro"><span class="label pc-label-pro">➕ Плюсы</span><ul>${pros.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
-        ${cons.length ? `<div class="e-pc-box con"><span class="label pc-label-con">➖ Минусы</span><ul>${cons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
+        ${pros.length ? `<div class="e-pc-box pro"><span class="label pc-label-pro"><span class="u-old">➕ </span>Плюсы</span><ul>${pros.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
+        ${cons.length ? `<div class="e-pc-box con"><span class="label pc-label-con"><span class="u-old">➖ </span>Минусы</span><ul>${cons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}
       </div>` : '';
     return `<li class="entry fr-in" style="--k:${Math.min(rank, 12)}" data-rid="${esc(r.id || '')}" data-uid="${esc(uid)}"><details><summary><span class="sum">
 <span class="rank">${rank}</span>

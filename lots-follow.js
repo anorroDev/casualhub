@@ -14,8 +14,8 @@
   const code = rec.code;
   const en = document.documentElement.lang === 'en';
   const T = en
-    ? { now: 'Host’s music', on: '🔊 Turn on the music', stop: 'Stop following this auction', open: 'Open the auction' }
-    : { now: 'Музыка ведущего', on: '🔊 Включить музыку', stop: 'Не следить за этим аукционом', open: 'Открыть аукцион' };
+    ? { now: 'Host’s music', on: 'Turn on the music', stop: 'Stop following this auction', open: 'Open the auction' }
+    : { now: 'Музыка ведущего', on: 'Включить музыку', stop: 'Не следить за этим аукционом', open: 'Открыть аукцион' };
   // те же треки, что в Колесе и на странице зрителя
   const PRESETS = [
     { id: 'vika', key: 'SXe1aTEJU2w', start: 0.6 },
@@ -52,7 +52,7 @@
       box.querySelector('.lf-x').addEventListener('click', () => end(true));
     }
     const link = box.querySelector('a');
-    link.textContent = '🎶 ' + T.now + (title ? ' · ' + title : '');
+    link.textContent = T.now + (title ? ' · ' + title : '');
     box.querySelector('.lf-on').hidden = !blocked;
     box.hidden = !(cur || blocked);
   }

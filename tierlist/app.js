@@ -347,10 +347,10 @@
       <section class="card" aria-label="Новый тир-лист">
         <div class="card-head"><h2 class="eyebrow"><span class="dot" aria-hidden="true"></span>Новый тир-лист</h2></div>
         <div class="tl-start-list">
-          <button type="button" class="tl-go" data-new="empty"><span class="tl-go-i" aria-hidden="true">＋</span><b>С нуля</b><small>Загрузи свои картинки или впиши текст</small></button>
-          <button type="button" class="tl-go" data-new="ratings"><span class="tl-go-i" aria-hidden="true">📊</span><b>Из моих оценок</b><small>Игры, фильмы, что угодно из Мнения</small></button>
-          <button type="button" class="tl-go" data-new="stickers"><span class="tl-go-i" aria-hidden="true">😎</span><b>Из стикеров</b><small>Папич, roflan, arthas и Twitch</small></button>
-          <button type="button" class="tl-go" data-new="file"><span class="tl-go-i" aria-hidden="true">📂</span><b>Из файла</b><small>Тир-лист, скачанный кнопкой «Файл»</small></button>
+          <button type="button" class="tl-go" data-new="empty"><span class="tl-go-i" aria-hidden="true"><span class="u-old">＋</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg></span><b>С нуля</b><small>Загрузи свои картинки или впиши текст</small></button>
+          <button type="button" class="tl-go" data-new="ratings"><span class="tl-go-i" aria-hidden="true"><span class="u-old">📊</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 20v-6M12 20V5M19 20v-10"/></svg></span><b>Из моих оценок</b><small>Игры, фильмы, что угодно из Мнения</small></button>
+          <button type="button" class="tl-go" data-new="stickers"><span class="tl-go-i" aria-hidden="true"><span class="u-old">😎</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8.5 14.5a4.5 4.5 0 0 0 7 0M9 9.5h.01M15 9.5h.01"/></svg></span><b>Из стикеров</b><small>Папич, roflan, arthas и Twitch</small></button>
+          <button type="button" class="tl-go" data-new="file"><span class="tl-go-i" aria-hidden="true"><span class="u-old">📂</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3.5 6.5A1.5 1.5 0 0 1 5 5h4l2 2.5h8a1.5 1.5 0 0 1 1.5 1.5v8.5A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/></svg></span><b>Из файла</b><small>Тир-лист, скачанный кнопкой «Файл»</small></button>
         </div>
         ${me ? '<p class="tl-note">Тир-листы хранятся в аккаунте, есть на всех твоих устройствах и видны друзьям. Скрыть тир-лист от друзей можно галочкой внутри него.</p>'
           : '<div class="tl-guest"><span>Сейчас тир-листы только в этом браузере. Войди, и они появятся на всех твоих устройствах, а друзья смогут их смотреть.</span><a class="btn small primary" href="/opinion/#login">Войти</a></div>'}
@@ -517,7 +517,7 @@
     const a = $('#tlLink'), b = $('#tlUnlink');
     if (!a || !S.list) return;
     const has = shareOf(S.list);
-    a.textContent = has ? '🔗 Скопировать ссылку' : '🔗 Ссылка';
+    a.innerHTML = has ? '<span class="u-old">🔗 </span>Скопировать ссылку' : '<span class="u-old">🔗 </span>Ссылка';
     a.title = 'Ссылка, по которой тир-лист видно без аккаунта';
     b.hidden = !has;
   }
@@ -574,7 +574,7 @@
           </div>
           <div class="tl-tools">
             <span class="tl-group"><button type="button" class="btn small primary" data-do="add-img">＋ Картинки</button><button type="button" class="btn small ghost" data-do="add-text">＋ Текст</button><button type="button" class="btn small ghost" data-do="add-ratings">Из оценок</button><button type="button" class="btn small ghost" data-do="add-stickers">Стикеры</button></span>
-            <span class="tl-group"><button type="button" class="btn small ghost" data-do="png">Скачать PNG</button><button type="button" class="btn small ghost" data-do="copy">Скопировать картинку</button>${me ? '<button type="button" class="btn small ghost" id="tlLink" data-do="share">🔗 Ссылка</button><button type="button" class="btn small text" id="tlUnlink" data-do="unshare" hidden>Закрыть ссылку</button>' : ''}<button type="button" class="btn small ghost" data-do="file">Файл</button><button type="button" class="btn small ghost" data-do="clear">Всё убрать</button><button type="button" class="btn small danger" data-do="delete">Удалить</button></span>
+            <span class="tl-group"><button type="button" class="btn small ghost" data-do="png">Скачать PNG</button><button type="button" class="btn small ghost" data-do="copy">Скопировать картинку</button>${me ? '<button type="button" class="btn small ghost" id="tlLink" data-do="share"><span class="u-old">🔗 </span>Ссылка</button><button type="button" class="btn small text" id="tlUnlink" data-do="unshare" hidden>Закрыть ссылку</button>' : ''}<button type="button" class="btn small ghost" data-do="file">Файл</button><button type="button" class="btn small ghost" data-do="clear">Всё убрать</button><button type="button" class="btn small danger" data-do="delete">Удалить</button></span>
           </div>
           <div class="tl-tools">
             <span class="tl-group"><label class="tl-check"><input type="checkbox" id="tlCaps"> Подписи</label>${me ? '<label class="tl-check"><input type="checkbox" id="tlShare"> Видно друзьям</label>' : ''}</span>
@@ -607,8 +607,8 @@
       + (l.rows.length < LIMIT.rows ? '<button type="button" class="btn small text tl-addrow" data-do="add-row">＋ Ряд</button>' : '');
     const n = l.pool.length;
     const poolScroll = (() => { const p = $('#tlDock .tl-items'); return p ? p.scrollTop : 0; })();
-    const selBar = S.sel ? `<span class="tl-selbar">${l.items[S.sel] && imgOf(l.items[S.sel]) ? '<button type="button" class="btn small ghost" data-do="sel-view">🔍 Посмотреть</button>' : ''}<button type="button" class="btn small ghost" data-do="sel-pool">Убрать из ряда</button></span>` : '';
-    $('#tlDock').innerHTML = `<div class="tl-row tl-pool" data-row=""><div class="tl-pool-h"><span>Без места · ${n}</span>${selBar}</div><div class="tl-items">${l.pool.map((id) => cardHTML(l, id)).join('') || `<span class="tl-drop">${Object.keys(l.items).length ? 'Всё разложено 👌' : 'Добавь карточки кнопками наверху'}</span>`}</div></div>`;
+    const selBar = S.sel ? `<span class="tl-selbar">${l.items[S.sel] && imgOf(l.items[S.sel]) ? '<button type="button" class="btn small ghost" data-do="sel-view"><span class="u-old">🔍 </span>Посмотреть</button>' : ''}<button type="button" class="btn small ghost" data-do="sel-pool">Убрать из ряда</button></span>` : '';
+    $('#tlDock').innerHTML = `<div class="tl-row tl-pool" data-row=""><div class="tl-pool-h"><span>Без места · ${n}</span>${selBar}</div><div class="tl-items">${l.pool.map((id) => cardHTML(l, id)).join('') || `<span class="tl-drop">${Object.keys(l.items).length ? 'Всё разложено<span class="u-old"> 👌</span>' : 'Добавь карточки кнопками наверху'}</span>`}</div></div>`;
     { const p = $('#tlDock .tl-items'); if (p) p.scrollTop = poolScroll; }
     flyCards(before);
     S.pop = '';
@@ -986,7 +986,7 @@
     try { d = await api(`/tierlist/${encodeURIComponent(uid)}/${encodeURIComponent(id)}`); }
     catch (e) {
       if (S.built !== 'friend:' + uid + '.' + id) return;
-      const why = e.status === 403 ? 'Этот тир-лист видят только друзья автора. Добавь автора в друзья или попроси ссылку для всех: кнопка «🔗 Ссылка» в самом тир-листе.' : e.message;
+      const why = e.status === 403 ? 'Этот тир-лист видят только друзья автора. Добавь автора в друзья или попроси ссылку для всех: кнопка «Ссылка» в самом тир-листе.' : e.message;
       view.innerHTML = `<section class="card"><p class="tl-empty">${esc(why)}</p><div class="tl-foot"><a class="btn small ghost" href="#friends">‹ Тир-листы друзей</a></div></section>`;
       return;
     }
@@ -1098,7 +1098,7 @@
       window.CasualComments.mount(cm, {
         uid, target: 't.' + id, token, title: 'Комментарии',
         placeholder: own ? 'Напиши что-нибудь об этом тир-листе…' : 'Напиши, что думаешь об этом тир-листе…',
-        empty: own ? 'Пока никто не написал. Друзья увидят этот тир-лист в своей вкладке «Друзья».' : 'Пока пусто. Напиши первым!',
+        empty: own ? 'Пока никто не написал. Друзья увидят этот тир-лист в своей вкладке «Друзья».' : 'Пока пусто. Напиши первым',
       });
     }
     paintRx();

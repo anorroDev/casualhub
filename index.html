@@ -544,6 +544,34 @@ h1, h2, p { margin: 0; }
 <script src="/whatsnew.js"></script>
 <script src="/online.js" defer></script><script src="/friends-panel.js" defer></script><script src="/header-menu.js" defer></script>
 <script src="/avatar-sync.js"></script>
+<link rel="stylesheet" href="/unslop.css">
+<style id="unslop-page">
+/* Экспериментальный вид (unslop): действует, только когда в меню тем включён переключатель. Собрано из правок, которые убирают
+   цветные пятна, свечения, пружинные и вечные анимации, заглавные подписи. Обычный вид выше не меняется */
+@keyframes ch-in-u { from { opacity: 0; transform: translateY(.12em); } }
+:root.unslop { --spring: cubic-bezier(.22, 1, .36, 1); }
+html.unslop .mark:hover svg { transform: none; }
+html.unslop .pill:hover { box-shadow: 0 6px 18px -10px rgb(0 0 0 / .28); }
+html.unslop .theme-menu { box-shadow: 0 20px 44px -22px rgb(0 0 0 / .45); }
+html.unslop .theme-opt:hover i { transform: none; }
+html.unslop .ch { animation: ch-in-u .75s cubic-bezier(.22, 1, .36, 1) backwards calc(var(--i) * 55ms); transition: color .15s; }
+html.unslop .ch:hover { scale: none; }
+html.unslop .meter i.on { box-shadow: none; }
+html.unslop .meter i.knob { box-shadow: 0 0 0 3px var(--bg), 0 8px 22px -6px rgb(0 0 0 / .28); }
+html.unslop .score { box-shadow: 0 10px 30px -12px rgb(0 0 0 / .28); }
+html.unslop .app::after { box-shadow: 0 36px 60px -34px rgb(0 0 0 / .28); }
+html.unslop .pv { background: radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--ink) 9%, transparent) 1px, transparent 1.5px) 0 0 / 14px 14px,
+    var(--panel-2); }
+html.unslop .pv-row { box-shadow: 0 1px 2px rgb(0 0 0 / .2); }
+html.unslop .pv-tag::first-letter { text-transform: uppercase; }
+html.unslop .pv-tag { text-transform: none; letter-spacing: normal; }
+html.unslop .app:hover .pv-tier b { transform: translateY(-1px); }
+html.unslop .wheel::before { box-shadow: 0 20px 44px -22px rgb(0 0 0 / .45); }
+html.unslop .fd:hover { transform: translateY(-1px); }
+html.unslop .app:hover .app-icon { transform: none; }
+html.unslop .chip.alert { animation: nudge 2.4s ease-in-out 1.6s 2; }
+html.unslop body::before { display: none; }
+</style>
 </head>
 <body>
 <div class="page">

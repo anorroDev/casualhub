@@ -695,6 +695,31 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
 </style>
 <script src="/whatsnew.js"></script>
 <script src="/online.js" defer></script><script src="/friends-panel.js" defer></script><script src="/header-menu.js" defer></script>
+<link rel="stylesheet" href="/unslop.css">
+<style id="unslop-page">
+/* Экспериментальный вид (unslop): действует, только когда в меню тем включён переключатель. Собрано из правок, которые убирают
+   цветные пятна, свечения, пружинные и вечные анимации, заглавные подписи. Обычный вид выше не меняется */
+@keyframes ch-in-u { from { opacity: 0; transform: translateY(.12em); } }
+html.unslop .theme-menu { box-shadow: 0 20px 44px -22px rgb(0 0 0 / .45); }
+html.unslop .label { text-transform: none; letter-spacing: normal; }
+html.unslop .label::first-letter { text-transform: uppercase; }
+html.unslop .eyebrow { text-transform: none; letter-spacing: normal; }
+html.unslop .sheet:not([hidden]) .sheet-card { animation: pop .35s cubic-bezier(.22, 1, .36, 1); }
+:root.unslop { --spring: cubic-bezier(.22, 1, .36, 1); }
+html.unslop .theme-btn:hover { box-shadow: 0 6px 18px -10px rgb(0 0 0 / .28); }
+html.unslop .theme-menu { box-shadow: 0 20px 44px -22px rgb(0 0 0 / .45); }
+html.unslop .theme-opt:hover i { transform: none; }
+html.unslop .title .ch { animation: ch-in-u .7s cubic-bezier(.22, 1, .36, 1) backwards calc(var(--i) * 40ms); transition: color .15s; }
+html.unslop .title .ch:hover { scale: none; }
+html.unslop .card { background: var(--panel); }
+html.unslop .eyebrow .dot::after { animation: none; }
+html.unslop .wheel-wrap::before { box-shadow: 0 20px 44px -22px rgb(0 0 0 / .45); }
+@media (hover: hover) { html.unslop .hub:hover:not(:disabled) { transform: translate(-50%, -50%); } }
+html.unslop .scorebar .badge[data-tier="good"], html.unslop .scorebar .badge[data-tier="bad"] { box-shadow: 0 12px 26px -12px rgb(0 0 0 / .28); }
+html.unslop .btn.primary { box-shadow: inset 0 1px 0 rgb(255 255 255 / .12); }
+@media (hover: hover) { html.unslop .th:hover { transform: translateY(-1px); } }
+html.unslop::before { display: none; }
+</style>
 </head>
 <body>
 <div class="page">
@@ -747,7 +772,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
         </div>
       </div>
       <div class="lots-sound">
-        <button type="button" class="btn small primary" id="lotSound">🔊 Включить звук</button>
+        <button type="button" class="btn small primary" id="lotSound"><span class="u-old">🔊 </span>Включить звук</button>
         <label class="lots-vol"><span class="vh">Громкость</span><input type="range" id="lotVol" min="0" max="100" step="1" aria-label="Громкость"></label>
       </div>
       <p class="lots-note lots-live-note" id="lotPlaying">Колесо показывается с задержкой в пару секунд.</p>
@@ -773,7 +798,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     <p class="fx-sum" hidden></p>
     <p class="fx-hint">Нажми в любом месте, чтобы пропустить</p>
   </div>
-  <button type="button" class="fx-mute" id="fxMute" hidden>🔇 Выключить музыку</button>
+  <button type="button" class="fx-mute" id="fxMute" hidden><span class="u-old">🔇 </span>Выключить музыку</button>
   <button type="button" class="fx-skip">Пропустить ›<i class="fx-prog" aria-hidden="true"></i></button>
 </div>
 
@@ -784,7 +809,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
     <div class="w-stats" id="wStats"></div>
     <div class="sheet-actions">
       <a class="btn primary" id="wLink" target="_blank" rel="noopener noreferrer" hidden>Открыть в Steam</a>
-      <button type="button" class="btn ghost" id="wMute" hidden>🔇 Выключить музыку</button>
+      <button type="button" class="btn ghost" id="wMute" hidden><span class="u-old">🔇 </span>Выключить музыку</button>
       <button type="button" class="btn ghost" id="wClose">Закрыть</button>
     </div>
   </div>

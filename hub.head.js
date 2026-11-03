@@ -1,5 +1,7 @@
 /* тема ставится до первой отрисовки, чтобы при обновлении страница не мелькала */
 try { var cp = JSON.parse(localStorage.getItem('ocenshik.prefs.v1') || 'null'); if (cp && cp.theme && cp.theme !== 'auto') document.documentElement.setAttribute('data-theme', cp.theme); } catch (e) {}
+/* экспериментальный вид (unslop) из меню тем */
+try { if (localStorage.getItem('casualhub.unslop.v1') === '1') document.documentElement.classList.add('unslop'); } catch (e) {}
 /* вступительные анимации не играют при обновлении (F5) и поверх сдвига между страницами: всё сразу на месте. Бесконечные не трогаем */
 function settleIntro(ms) {
   if (!document.getAnimations) return;

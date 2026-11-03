@@ -110,6 +110,8 @@
 "аниме":"anime",
 "Аниме":"Anime",
 "Аниме и манга":"Anime and manga",
+"Экспериментальный вид":"Experimental look",
+"unslop: спокойнее, без свечений и прыгающих анимаций. Работает с любой темой":"unslop: calmer, no glows or bouncy animations. Works with any theme",
 "Мультики":"Cartoons",
 "Мультфильмы":"Animated films",
 "Юмор":"Humor",

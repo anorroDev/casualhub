@@ -27,7 +27,7 @@
     wheel: {
       title: 'Колесо Казуала',
       steps: [
-        'Впиши участника в поле <b>«Имя или название»</b> и жми <b>«Добавить»</b>, или вставь сразу всех через <b>«Вставить списком»</b>. На телефоне это вкладка <b>«👥 Участники»</b>',
+        'Впиши участника в поле <b>«Имя или название»</b> и жми <b>«Добавить»</b>, или вставь сразу всех через <b>«Вставить списком»</b>. На телефоне это вкладка <b>«<span class="u-old">👥 </span>Участники»</b>',
         'Жми <b>«Крутить»</b> в центре колеса. Музыку можно ставить на паузу и перематывать прямо во время прокрутки',
         '<b>На выбывание</b>: на кого показала стрелка — вылетает, последний побеждает. <b>«Один победитель»</b> — выигрывает сразу тот, на ком остановилось',
         'Хочешь, чтобы лоты вписывали зрители? Открой блок <b>«Лоты по ссылке»</b>, выбери категорию, лимит и время и дай им ссылку. Когда сбор закончится, там же появится кнопка <b>«Крутить»</b>',
@@ -121,7 +121,7 @@ body.howto-lock { overflow: hidden; }
     const twin = pick.querySelector('summary');
     b.className = (twin && /\bpill\b/.test(twin.className) ? 'pill' : 'theme-btn') + ' howto-btn';
     b.title = 'Как пользоваться';
-    b.innerHTML = '<span aria-hidden="true">❓</span><span class="hb-t">Помощь</span>';
+    b.innerHTML = '<span aria-hidden="true"><span class="u-old">❓</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.3M12 16.8h.01"/></svg></span><span class="hb-t">Помощь</span>';
     pick.parentNode.insertBefore(b, pick);
     return b;
   }
@@ -136,9 +136,9 @@ body.howto-lock { overflow: hidden; }
     modal.hidden = true;
     modal.innerHTML = `<div class="howto" id="howto" role="dialog" aria-modal="true" aria-labelledby="howtoTitle">
       <button type="button" class="howto-close" aria-label="Закрыть">✕</button>
-      <div class="howto-head"><span class="howto-wave" aria-hidden="true">👋</span><span id="howtoTitle"><small>${conf.title}</small>Впервые тут? Всё просто:</span></div>
+      <div class="howto-head"><span class="howto-wave u-old" aria-hidden="true">👋</span><span id="howtoTitle"><small>${conf.title}</small>Впервые тут? Всё просто:</span></div>
       <ol>${conf.steps.map((s, i) => `<li><b>${i + 1}</b><span>${s}</span></li>`).join('')}</ol>
-      <div class="howto-acts"><button type="button" class="howto-ok">Понятно 👍</button></div>
+      <div class="howto-acts"><button type="button" class="howto-ok">Понятно<span class="u-old"> 👍</span></button></div>
     </div>`;
     document.body.appendChild(modal);
     const btn = document.getElementById('howtoBtn') || makeHeaderBtn();
@@ -148,7 +148,7 @@ body.howto-lock { overflow: hidden; }
     fab.className = 'howto-fab';
     fab.title = 'Как пользоваться';
     fab.setAttribute('aria-label', 'Как пользоваться: открыть подсказку');
-    fab.textContent = '❓';
+    fab.innerHTML = '<span class="u-old">❓</span><svg class="u-new" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.3M12 16.8h.01"/></svg>';
     fab.tabIndex = -1;
     document.body.appendChild(fab);
 

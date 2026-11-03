@@ -105,7 +105,7 @@
       <p class="tm-hint">${S.sel ? 'Теперь нажми на ряд — или на карточку, перед которой поставить. Нажми на нижний блок, чтобы убрать из рядов.' : (touch ? 'Нажми на карточку, а потом на ряд. Всё сохраняется само.' : 'Перетаскивай карточки по рядам или нажми на карточку, а потом на ряд. Всё сохраняется само.')}</p>`;
     sheet.querySelector('.tm-body').innerHTML = TIERS.map((t) => `<div class="tm-row" data-row="${t.id}"><div class="tm-lab" style="background:${t.col}">${t.id}</div>
         <div class="tm-items">${shown(t).map(itemHTML).join('') || `<span class="tm-empty">${touch ? 'пусто' : 'перетащи сюда'}</span>`}</div></div>`).join('')
-      + `<div class="tm-row tm-pool" data-row=""><div><div class="tm-pool-t">Без места · ${pool.length}</div><div class="tm-items">${pool.map(itemHTML).join('') || '<span class="tm-empty">Все разложены 👌</span>'}</div></div></div>`;
+      + `<div class="tm-row tm-pool" data-row=""><div><div class="tm-pool-t">Без места · ${pool.length}</div><div class="tm-items">${pool.map(itemHTML).join('') || '<span class="tm-empty">Все разложены<span class="u-old"> 👌</span></span>'}</div></div></div>`;
     hydrate();
   }
   const imgCache = new Map();
