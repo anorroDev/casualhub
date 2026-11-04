@@ -255,7 +255,7 @@
   }
   const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  const TABS = [['stats', '📊', 'Статистика'], ['users', '👥', 'Пользователи'], ['comments', '💬', 'Комментарии'], ['announce', '📢', 'Объявление'], ['log', '📜', 'Журнал']];
+  const TABS = [['stats', '📊', 'Статистика'], ['users', '👥', 'Пользователи'], ['comments', '💬', 'Комментарии'], ['announce', '📢', 'Объявление'], ['changes', '🛠', 'Изменения'], ['log', '📜', 'Журнал']];
   let tab = 'stats';
   const sec = () => $('#admSec');
   const when = (t) => (t ? new Date(t).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—');
@@ -275,7 +275,44 @@
     const s = sec();
     if (!s) return;
     s.innerHTML = '<p class="muted">Загружаю…</p>';
-    ({ stats, users, comments, announce, log })[tab]();
+    ({ stats, users, comments, announce, changes, log })[tab]();
+  }
+  let emos = null;
+  const emoOf = (x) => { if (!emos || !emos.length) return ''; let h = 0; for (const c of x.title) h = (h * 31 + c.charCodeAt(0)) >>> 0; return emos[h % emos.length]; };
+  const groupHTML = (g) => `<section class="log-day">${g.day || g.ver ? `<h3 class="log-date">${esc(g.day || '')}${g.ver ? `<span>версия ${esc(g.ver)}</span>` : ''}</h3>` : ''}
+      <article class="rel"><span class="rel-v">${esc(g.ver || '')}</span><div>${g.items.map((x) => `<p><b>${emoOf(x) ? `<img class="wn-emo" src="/wheel/${esc(emoOf(x))}" alt="" loading="lazy" decoding="async">` : ''}${esc(x.title)}</b> ${esc(x.body)}</p>`).join('')}</div></article></section>`;
+  // журнал изменений для админов: вид как у «Что нового»
+  async function changes() {
+    const my = fresh();
+    try {
+      if (!emos) {
+        try { const ix = await (await fetch('/wheel/hub/index.json')).json(); emos = (ix.groups || []).flatMap((g) => g.items || []).map((x) => x.src).filter((s) => /^hub\/roflan\/.+\.(png|webp)$/.test(s)).slice(0, 160); } catch (e) { emos = []; }
+      }
+      const d = await call('GET', '/admin/changes');
+      if (stale(my)) return;
+      if (d.needKey) {
+        sec().innerHTML = `<div class="head"><h2 class="h2">Изменения</h2></div>
+          <form class="adm-key" id="chgKey">
+            <p class="muted">Журнал закрыт ключом. Его нужно ввести один раз, дальше журнал увидят все админы.</p>
+            <input class="adm-in" id="chgKeyIn" autocomplete="off" spellcheck="false" placeholder="Ключ журнала" required>
+            <p class="adm-key-err" id="chgKeyErr" role="alert" hidden></p>
+            <button type="submit" class="btn primary small">Открыть журнал</button>
+          </form>`;
+        $('#chgKey').addEventListener('submit', async (e) => {
+          e.preventDefault();
+          // неверный ключ: форма остаётся, ошибка под полем
+          const err = $('#chgKeyErr');
+          err.hidden = true;
+          try { await call('POST', '/admin/changes-key', { key: $('#chgKeyIn').value }); showTab(); }
+          catch (x) { err.textContent = (x && (x.error || x.message)) || 'Ключ не подошёл.'; err.hidden = false; $('#chgKeyIn').focus(); }
+        });
+        return;
+      }
+      const groups = [];
+      for (const x of d.items) { const g = groups[groups.length - 1]; if (g && g.ver === x.ver && g.day === x.day) g.items.push(x); else groups.push({ ver: x.ver, day: x.day, items: [x] }); }
+      sec().innerHTML = `<div class="head"><h2 class="h2">Изменения</h2><span class="muted">Видны только в админке</span></div>
+        <div class="adm-wn">${groups.length ? `<div class="log-days">${groups.map(groupHTML).join('')}</div>` : '<p class="muted">Пока пусто.</p>'}</div>`;
+    } catch (x) { if (!stale(my)) fail(x); }
   }
   const mb = (n) => (n >= 1e9 ? (n / 1e9).toFixed(2).replace('.', ',') + ' ГБ' : Math.max(1, Math.round(n / 1e6)) + ' МБ');
   async function stats() {

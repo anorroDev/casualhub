@@ -131,7 +131,7 @@
     Object.keys(items).forEach((id) => { if (!seen.has(id)) { seen.add(id); pool.push(id); } });
     return {
       id: typeof raw.id === 'string' && /^\w{1,40}$/.test(raw.id) ? raw.id : rid('t'),
-      title: str(raw.title, LIMIT.title), rows, pool, items, captions: !!raw.captions, private: !!raw.private, fav: !!raw.fav,
+      title: str(raw.title, LIMIT.title), rows, pool, items, captions: !!raw.captions, private: raw.vis === 'private' || (raw.vis !== 'public' && !!raw.private), vis: raw.vis === 'public' || raw.vis === 'private' ? raw.vis : undefined, fav: !!raw.fav,
       at: Number.isFinite(+raw.at) && +raw.at > 0 ? +raw.at : Date.now(),
     };
   }
@@ -513,10 +513,13 @@
   // ---------- редактор ----------
   // ссылка на тир-лист: кому её дашь, тот увидит его и без аккаунта
   const shareOf = (l) => (S.shares && l ? S.shares.get('t.' + l.id) : '');
+  // кто видит: все (по адресу, даже без аккаунта), друзья или только хозяин
+  const visOf = (l) => (l && (l.vis === 'public' || l.vis === 'private') ? l.vis : l && l.private ? 'private' : 'friends');
   function paintShare() {
     const a = $('#tlLink'), b = $('#tlUnlink');
     if (!a || !S.list) return;
     const has = shareOf(S.list);
+    a.hidden = visOf(S.list) === 'private'; // «только я» ссылкой не делятся
     a.innerHTML = has ? '<span class="u-old">🔗 </span>Скопировать ссылку' : '<span class="u-old">🔗 </span>Ссылка';
     a.title = 'Ссылка, по которой тир-лист видно без аккаунта';
     b.hidden = !has;
@@ -577,7 +580,7 @@
             <span class="tl-group"><button type="button" class="btn small ghost" data-do="png">Скачать PNG</button><button type="button" class="btn small ghost" data-do="copy">Скопировать картинку</button>${me ? '<button type="button" class="btn small ghost" id="tlLink" data-do="share"><span class="u-old">🔗 </span>Ссылка</button><button type="button" class="btn small text" id="tlUnlink" data-do="unshare" hidden>Закрыть ссылку</button>' : ''}<button type="button" class="btn small ghost" data-do="file">Файл</button><button type="button" class="btn small ghost" data-do="clear">Всё убрать</button><button type="button" class="btn small danger" data-do="delete">Удалить</button></span>
           </div>
           <div class="tl-tools">
-            <span class="tl-group"><label class="tl-check"><input type="checkbox" id="tlCaps"> Подписи</label>${me ? '<label class="tl-check"><input type="checkbox" id="tlShare"> Видно друзьям</label>' : ''}</span>
+            <span class="tl-group"><label class="tl-check"><input type="checkbox" id="tlCaps"> Подписи</label>${me ? '<span class="seg tl-vis" id="tlVis" role="group" aria-label="Кто видит тир-лист"><button type="button" data-vis="public" title="Тир-лист откроется любому по адресу из строки браузера, даже без аккаунта"><span class="u-old">🌐 </span>Все</button><button type="button" data-vis="friends" title="Тир-лист видят друзья"><span class="u-old">👥 </span>Друзья</button><button type="button" data-vis="private" title="Тир-лист видишь только ты"><span class="u-old">🔒 </span>Только я</button></span>' : ''}</span>
             <span class="tl-sync" id="tlSync" aria-live="polite"></span>
           </div>
           <p class="tl-hint" id="tlHint" aria-live="polite"></p>
@@ -597,8 +600,7 @@
     $('#tlCaps').checked = l.captions;
     { const fv = $('#tlFav'), tip = l.fav ? 'Убрать из избранного' : 'В избранное'; fv.setAttribute('aria-pressed', String(l.fav)); fv.title = tip; fv.setAttribute('aria-label', tip); }
     paintShare();
-    const share = $('#tlShare');
-    if (share) share.checked = !l.private;
+    document.querySelectorAll('#tlVis [data-vis]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.vis === visOf(l))));
     paintSync();
     $('#tlHint').textContent = S.sel
       ? (touch ? 'Теперь нажми на ряд или на карточку, перед которой поставить.' : 'Теперь нажми на ряд или на карточку, перед которой поставить. Стрелки двигают, Delete удаляет карточку.')
@@ -986,6 +988,11 @@
     try { d = await api(`/tierlist/${encodeURIComponent(uid)}/${encodeURIComponent(id)}`); }
     catch (e) {
       if (S.built !== 'friend:' + uid + '.' + id) return;
+      // открытый всем тир-лист видят и без аккаунта, остальные — только друзья автора
+      if (e.status === 401) {
+        view.innerHTML = '<section class="card"><p class="tl-empty">Этот тир-лист видят только друзья автора. Войди в аккаунт, чтобы его открыть.</p><div class="tl-foot"><a class="btn small primary" href="/opinion/#login">Войти</a></div></section>';
+        return;
+      }
       const why = e.status === 403 ? 'Этот тир-лист видят только друзья автора. Добавь автора в друзья или попроси ссылку для всех: кнопка «Ссылка» в самом тир-листе.' : e.message;
       view.innerHTML = `<section class="card"><p class="tl-empty">${esc(why)}</p><div class="tl-foot"><a class="btn small ghost" href="#friends">‹ Тир-листы друзей</a></div></section>`;
       return;
@@ -1000,7 +1007,7 @@
         <section class="card tl-bar">
           <div class="tl-bar-top"><a class="btn small ghost" href="#friends">‹ Тир-листы друзей</a><h2 class="tl-view-title">${esc(l.title || 'Без названия')}</h2></div>
           <p class="tl-who"><a href="/profile/?id=${encodeURIComponent(uid)}">${esc(d.user.username)}</a><span>@${esc(d.user.handle)}</span><span>${cards(n)} · ${esc(fmtDate(l.at))}</span></p>
-          <div class="tl-tools"><span class="tl-group"><button type="button" class="btn small primary" data-do="clone">Собрать свой из этих карточек</button><button type="button" class="btn small ghost" data-do="f-png">Скачать PNG</button><button type="button" class="btn small ghost" data-do="f-copy">Скопировать картинку</button></span></div>
+          <div class="tl-tools"><span class="tl-group">${me ? '<button type="button" class="btn small primary" data-do="clone">Собрать свой из этих карточек</button>' : ''}<button type="button" class="btn small ghost" data-do="f-png">Скачать PNG</button><button type="button" class="btn small ghost" data-do="f-copy">Скопировать картинку</button></span></div>
         </section>
         <div class="tl-board" id="tlFriendBoard">${rowsHTML(l, true)}</div>
         ${l.pool.length ? `<div class="tl-row tl-pool"><div class="tl-pool-h"><span>Без места · ${l.pool.length}</span></div><div class="tl-items">${l.pool.map((x) => cardHTML(l, x, true)).join('')}</div></div>` : ''}
@@ -1009,7 +1016,8 @@
     };
     paint();
     boardIntro($('#tlFriendBoard'));
-    mountSocial(uid, id, false);
+    // реакции и комментарии — только у друзей автора
+    if (d.social !== false) mountSocial(uid, id, false); else { const so = view.querySelector('.tl-social'); if (so) so.remove(); }
     // картинки догружаются пачками: тир-лист виден сразу
     await fetchImgs(uid, l);
     if (S.friend && S.friend.list === l && S.built === 'friend:' + uid + '.' + id) {
@@ -1098,7 +1106,7 @@
       window.CasualComments.mount(cm, {
         uid, target: 't.' + id, token, title: 'Комментарии',
         placeholder: own ? 'Напиши что-нибудь об этом тир-листе…' : 'Напиши, что думаешь об этом тир-листе…',
-        empty: own ? 'Пока никто не написал. Друзья увидят этот тир-лист в своей вкладке «Друзья».' : 'Пока пусто. Напиши первым',
+        empty: own ? (S.list && visOf(S.list) === 'private' ? 'Этот тир-лист видишь только ты: комментировать его некому.' : 'Пока никто не написал. Друзья увидят этот тир-лист в своей вкладке «Друзья».') : 'Пока пусто. Напиши первым',
       });
     }
     paintRx();
@@ -1172,6 +1180,17 @@
   }
   let selAt = 0;
   view.addEventListener('click', (e) => {
+    const vb = e.target.closest('#tlVis [data-vis]');
+    if (vb && S.list) {
+      const v = vb.dataset.vis;
+      S.list.vis = v === 'friends' ? undefined : v;
+      S.list.private = v === 'private';
+      touchList(S.list);
+      document.querySelectorAll('#tlVis [data-vis]').forEach((b) => b.setAttribute('aria-pressed', String(b === vb)));
+      paintShare();
+      toast(v === 'public' ? 'Теперь тир-лист видят все: адрес из строки браузера откроется даже без аккаунта.' : v === 'private' ? 'Теперь этот тир-лист видишь только ты.' : 'Теперь этот тир-лист видят друзья.');
+      return;
+    }
     // чужой тир-лист только смотрят: нажатие сразу открывает картинку
     const seen = e.target.closest('.tl-view .tl-it');
     if (seen) {
@@ -1241,7 +1260,6 @@
   });
   view.addEventListener('change', (e) => {
     if (e.target.id === 'tlCaps' && S.list) { S.list.captions = e.target.checked; touchList(S.list); renderEditor(); }
-    if (e.target.id === 'tlShare' && S.list) { S.list.private = !e.target.checked; touchList(S.list); toast(S.list.private ? 'Теперь этот тир-лист видишь только ты.' : 'Теперь этот тир-лист видят друзья.'); }
     if (e.target.id === 'tlImgs' && S.list) { addFiles(e.target.files); e.target.value = ''; }
     if (e.target.id === 'tlFile') { if (e.target.files[0]) fileIn(e.target.files[0]); e.target.value = ''; }
   });
@@ -1379,11 +1397,6 @@
     const fm = /^f=([^.]+)\.(\w+)$/.exec(h);
     if (fm && fm[1] !== me) {
       closeDialog();
-      if (!me) {
-        S.built = ''; S.list = null; S.friend = null;
-        view.innerHTML = '<section class="card"><p class="tl-empty">Этот тир-лист видят только друзья автора. Войди в аккаунт, чтобы его открыть.</p><div class="tl-foot"><a class="btn small primary" href="/opinion/#login">Войти</a></div></section>';
-        return;
-      }
       if (S.built !== 'friend:' + fm[1] + '.' + fm[2]) await renderFriendList(fm[1], fm[2]);
       return;
     }

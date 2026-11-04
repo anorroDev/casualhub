@@ -40,7 +40,7 @@ export async function pageWithMeta(request, env, assetPath, load) {
       .on('meta[name="description"]', setContent(meta.description))
       .on('meta[property="og:title"]', setContent(meta.title))
       .on('meta[property="og:description"]', setContent(meta.description))
-      .on('meta[property="og:url"]', setContent(new URL(request.url).origin + new URL(request.url).pathname));
+      .on('meta[property="og:url"]', setContent(meta.url || new URL(request.url).origin + new URL(request.url).pathname));
     if (meta.image) {
       rw.on('meta[property="og:image"]', setContent(meta.image))
         .on('meta[property="og:image:width"]', { element(el) { el.remove(); } })

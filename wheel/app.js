@@ -2081,7 +2081,9 @@
   }
   const lotsLeft = () => (lotsRoom && lotsRoom.endsAt ? lotsRoom.endsAt - (Date.now() + lotsOffset) : null);
   const lotsOpen = () => !!lotsRoom && !lotsRoom.closed && (lotsRoom.endsAt == null || lotsLeft() > 0);
-  const lotsLink = () => (lotsRoom ? location.origin + '/lots/' + lotsRoom.id : '');
+  // после победы ссылка ведёт на итог: такой адрес мессенджер ещё не запомнил, и в предпросмотре будет победитель
+  const wTag = (s) => { let h = 5381; for (const c of String(s)) h = (h * 33 + c.codePointAt(0)) >>> 0; return h.toString(36); };
+  const lotsLink = () => (lotsRoom ? location.origin + '/lots/' + lotsRoom.id + (lotsWinner && lotsWinner.n ? '?w=' + wTag(lotsWinner.n) : '') : '');
   const lotsMmss = (ms) => { const t = Math.max(0, Math.ceil(ms / 1000)), m = Math.floor(t / 60); return m + ':' + String(t % 60).padStart(2, '0'); };
   function lotsTake(d) {
     if (d.now) lotsOffset = d.now - Date.now();
@@ -2413,7 +2415,8 @@
       if (lim) { lotsDo(() => lotsApi('/lots/' + lotsRoom.id, 'PATCH', { perUser: +lim.dataset.lotsLimit })); return; }
       const cp = e.target.closest('[data-lots-copy]');
       if (cp) {
-        const url = location.origin + '/lots/' + cp.dataset.lotsCopy;
+        const was = lotsRooms.find((x) => x.id === cp.dataset.lotsCopy);
+        const url = location.origin + '/lots/' + cp.dataset.lotsCopy + (was && was.winner ? '?w=' + wTag(was.winner) : '');
         try { await navigator.clipboard.writeText(url); msg('Ссылка скопирована.', 'ok'); } catch (er) { msg(url, 'ok'); }
         return;
       }

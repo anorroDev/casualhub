@@ -36,7 +36,7 @@
   // экспериментальный вид (unslop): тише, без свечений, пятен фона и прыгающих анимаций; работает с любой темой
   const UNSLOP_KEY = 'casualhub.unslop.v1';
   const unslopOn = () => document.documentElement.classList.contains('unslop');
-  const expHTML = () => `<label class="tm-exp"><input type="checkbox" data-unslop${unslopOn() ? ' checked' : ''}><span class="tm-exp-t"><b>Экспериментальный вид</b><small>unslop: спокойнее, без свечений и прыгающих анимаций. Работает с любой темой</small></span></label>`;
+  const expHTML = () => `<label class="tm-exp"><input type="checkbox" data-unslop${unslopOn() ? ' checked' : ''}><span class="tm-exp-t"><b>Казуальный вид</b><small>unslop: спокойнее, без свечений и прыгающих анимаций. Работает с любой темой</small></span></label>`;
   function menuHTML(current) {
     let i = 0;
     return expHTML() + GROUPS.map(([g, title]) => (title ? `<span class="tm-group">${title}</span>` : '') + LIST.filter((t) => t.group === g).map((t) => card(t, current, i++)).join('')).join('');

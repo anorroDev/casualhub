@@ -135,11 +135,21 @@ ${body}
 </div></body></html>`;
 }
 
+// закрытая ссылка тоже с предпросмотром: мессенджер не покажет пустую карточку
+const goneMeta = (T, head, tierPage) => [
+  `<meta name="description" content="${esc(tierPage ? T.tierGone : T.gone)}">`,
+  '<meta property="og:type" content="website">',
+  `<meta property="og:site_name" content="${T.site}">`,
+  `<meta property="og:title" content="${esc(head + ' · ' + T.site)}">`,
+  `<meta property="og:description" content="${esc(tierPage ? T.tierGone : T.gone)}">`,
+  `<meta property="og:image" content="https://casualhub.pages.dev/og/${tierPage ? 'tierlist' : 'opinion'}.jpg">`,
+  '<meta name="twitter:card" content="summary_large_image">',
+].join('\n');
 function notFound(T, tierPage) {
   const head = tierPage ? T.tierGoneTitle : T.goneTitle;
   return new Response(page(T, `${head} · ${T.site}`, `<main class="card empty"><h1>${head}</h1>
 <p class="by">${tierPage ? T.tierGone : T.gone}</p>
-<div class="cta"><a class="btn primary" href="${tierPage ? '/tierlist/' : '/opinion/'}">${tierPage ? T.tierOpen : T.open}</a><a class="btn ghost" href="/">${T.home}</a></div></main>`, '', tierPage), { status: 404, headers: HEADERS });
+<div class="cta"><a class="btn primary" href="${tierPage ? '/tierlist/' : '/opinion/'}">${tierPage ? T.tierOpen : T.open}</a><a class="btn ghost" href="/">${T.home}</a></div></main>`, goneMeta(T, head, tierPage), tierPage), { status: 404, headers: HEADERS });
 }
 
 // тир-лист по ссылке: цвета и адреса картинок проверяются ещё раз, весь текст экранируется
@@ -197,14 +207,14 @@ export async function onRequest({ request, env, params }) {
     if (user && user.banned) return notFound(T, sh.rid.startsWith('t.'));
     if (sh.rid.startsWith('t.')) {
       if (!user) return notFound(T, true);
-      const row = await env.DB.prepare('SELECT data, at FROM tierlists WHERE user_id = ? AND id = ?').bind(sh.owner_id, sh.rid.slice(2)).first();
-      if (!row || row.data == null) return notFound(T, true);
+      const row = await env.DB.prepare('SELECT data, at, private FROM tierlists WHERE user_id = ? AND id = ?').bind(sh.owner_id, sh.rid.slice(2)).first();
+      if (!row || row.data == null || row.private) return notFound(T, true); // «только я» по ссылке не открывается
       return tierResponse(request, T, id, user, JSON.parse(row.data), row.at);
     }
     const shelf =readShelf(await env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(sh.owner_id).first());
     r = cleanRating(shelf.ratings.find((x) => x && x.id === sh.rid && !x.example));
   } catch (e) { return notFound(T); }
-  if (!r || !user) return notFound(T);
+  if (!r || !user || r.vis === 'private') return notFound(T);
 
   const origin = new URL(request.url).origin;
   const t = typeof r.total === 'number' ? r.total : null;

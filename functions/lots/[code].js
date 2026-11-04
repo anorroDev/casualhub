@@ -17,8 +17,15 @@ export async function onRequest({ request, env, params, next }) {
     const who = room.owner || 'Ведущий';
     const title = room.title ? room.title + ' · Сбор лотов' : 'Сбор лотов · Казуал Хаб';
     if (winner) {
-      const lot = await env.DB.prepare('SELECT img FROM lots WHERE room_id = ? AND name = ?').bind(code, winner).first();
-      return { title, description: `Победитель: ${winner}. Вёл сбор ${who}.`, image: lot && /^https:\/\//.test(lot.img || '') ? lot.img : '' };
+      // победитель виден прямо в карточке ссылки; «?w=…» — свежий адрес для мессенджера, который запомнил ссылку до победы
+      const lot = await env.DB.prepare('SELECT l.img, u.username AS author FROM lots l LEFT JOIN users u ON u.id = l.user_id WHERE l.room_id = ? AND l.name = ?').bind(code, winner).first();
+      const u = new URL(request.url), w = /^\?w=[a-z0-9]{1,13}$/.test(u.search) ? u.search : '';
+      return {
+        title: `🏆 ${winner} — победитель${room.title ? ' · ' + room.title : ''}`,
+        description: `Аукцион «${room.title || 'Сбор лотов'}» закончился: победил ${winner}${lot && lot.author ? `, лот от ${lot.author}` : ''}. Вёл сбор ${who}.`,
+        image: lot && /^https:\/\//.test(lot.img || '') ? lot.img : '',
+        url: u.origin + u.pathname + w,
+      };
     }
     const open = !room.closed && (!room.ends_at || Date.now() < room.ends_at);
     const got = `Уже ${room.n} ${lotWord(room.n)}.`;

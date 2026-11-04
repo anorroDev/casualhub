@@ -2,6 +2,7 @@
 // Cloudflare Pages Functions, база D1 подключена как binding DB.
 
 import { clip, numOrNull, SAFE_URL, cleanRating, readShelf, stampOf, RID_RE, SPOOF_RE, MUSIC_LINK_RE } from '../_lib/shelf.js';
+import { NOTES } from '../_lib/admin-changes.js';
 
 const enc = new TextEncoder();
 const ITER = 10000;
@@ -76,6 +77,13 @@ async function ensureScheme(env) {
   for (const [c, d] of [['edit_own', 'INTEGER NOT NULL DEFAULT 0'], ['uniq', 'INTEGER NOT NULL DEFAULT 1'], ['fuzzy', 'INTEGER NOT NULL DEFAULT 1']]) {
     if (!lr.some((x) => x.name === c)) await env.DB.prepare(`ALTER TABLE lot_rooms ADD COLUMN ${c} ${d}`).run();
   }
+  // видимость оценок и тир-листов появилась позже самих таблиц
+  try {
+    const shelves = (await env.DB.prepare('PRAGMA table_info(shelves)').all()).results;
+    if (!shelves.some((c) => c.name === 'pub')) await env.DB.prepare('ALTER TABLE shelves ADD COLUMN pub TEXT').run();
+    const tiers = (await env.DB.prepare('PRAGMA table_info(tierlists)').all()).results;
+    if (!tiers.some((c) => c.name === 'pub')) await env.DB.prepare('ALTER TABLE tierlists ADD COLUMN pub INTEGER NOT NULL DEFAULT 0').run();
+  } catch (e) {}
   const { results } = await env.DB.prepare('PRAGMA table_info(users)').all();
   if (!results.some((c) => c.name === 'email')) await env.DB.prepare('ALTER TABLE users ADD COLUMN email TEXT').run();
   await env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users(email)').run();
@@ -567,6 +575,23 @@ const routes = {
     return json({ items: results.map((x) => ({ at: x.at, handle: x.uname || '', action: x.action, ok: !!x.ok, ip: x.ip ? String(x.ip).replace(/(\d+\.\d+)\.\d+\.\d+$/, '$1.*.*').replace(/^([0-9a-f]+:[0-9a-f]+):.*$/i, '$1:…') : '' })) });
   },
 
+  async 'GET /admin/changes'({ env, request, me }) {
+    if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+    const row = await env.DB.prepare("SELECT v FROM meta WHERE k = 'admin_notes_key'").first();
+    const items = row ? await openNotes(row.v) : null;
+    return json(items ? { items } : { needKey: true });
+  },
+  async 'POST /admin/changes-key'({ env, request, me }) {
+    if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+    if (burst('admkey:' + me.id, 10, 60e3)) return tooMany(1);
+    const { key } = await readBody(request);
+    const k = String(key || '').trim().slice(0, 100);
+    if (!(await openNotes(k))) return fail(400, 'Ключ не подходит.');
+    await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('admin_notes_key', ?)").bind(k).run();
+    await adminLog(env, request, me, 'changes:key', true);
+    return json({ ok: true });
+  },
+
   // смена ника и/или пароля из профиля на сайте
   async 'PUT /account'({ env, request, me }) {
     const { username, handle, password, email, current, hideOnline } = await readBody(request);
@@ -832,6 +857,7 @@ const routes = {
     if (catsOut) shelfData.cats = catsOut;
     if (profileOut) shelfData.profile = profileOut;
     const data = JSON.stringify(shelfData);
+    const pubIds = JSON.stringify(shelfData.ratings.filter((r) => r && r.vis === 'public' && !r.example).map((r) => r.id).slice(0, 5000));
     if (data.length > MAX_SHELF) return fail(413, 'Слишком много данных, убери длинные заметки.');
     // «оценки обновлены» — это когда менялись сами оценки, а не когда человек просто открыл сайт:
     // ничего не поменялось — не пишем вовсе; оценки поменялись — ставим время самой свежей оценки (её поставили, может, ночью без интернета)
@@ -845,8 +871,8 @@ const routes = {
         if (row && updated < +row.updated_at) updated = +row.updated_at; // время не идёт назад
       }
       await env.DB.prepare(
-        'INSERT INTO shelves (user_id, data, updated_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at'
-      ).bind(me.id, data, updated).run();
+        'INSERT INTO shelves (user_id, data, updated_at, pub) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at, pub = excluded.pub'
+      ).bind(me.id, data, updated, pubIds).run();
     }
     // фото стираем только у оценок, удалённых в этот раз, а не у всех прежних
     const oldDel = new Set(old.deleted.map((d) => d.id));
@@ -863,18 +889,19 @@ const routes = {
   },
 
   async 'GET /shelf/:id'({ env, me, arg }) {
-    if (!(await canSee(env, me, arg))) return fail(403, 'Оценки видны только друзьям.');
+    const friend = await canSee(env, me, arg);
+    if (!friend && !(await publicOf(env, arg)).ids.length) return fail(403, 'Оценки видны только друзьям.');
     const row = await env.DB.prepare('SELECT id, username, uname, created_at, last_seen, hide_online FROM users WHERE id = ?').bind(arg).first();
     if (!row) return fail(404, 'Пользователь не найден.');
     // число друзей — для значка «Душа компании»
     const fc = await env.DB.prepare("SELECT COUNT(*) AS n FROM friendships WHERE (a = ?1 OR b = ?1) AND status = 'accepted'").bind(arg).first();
-    const user = { ...pubUser(row), createdAt: row.created_at || null, friends: fc ? fc.n : 0, lastSeen: row.hide_online ? null : row.last_seen || null };
+    const user = { ...pubUser(row), createdAt: row.created_at || null, friends: fc ? fc.n : 0, lastSeen: row.hide_online || !friend ? null : row.last_seen || null };
     if (await env.DB.prepare('SELECT 1 FROM admins WHERE user_id = ?').bind(row.id).first()) user.admin = true;
     const shelf = await env.DB.prepare('SELECT data, updated_at FROM shelves WHERE user_id = ?').bind(arg).first();
     const s = readShelf(shelf);
     // свои категории видит только хозяин
     // друзьям — только очищенные оценки (вдруг в базе лежит что-то записанное до проверки типов)
-    return json({ user, ratings: arg === me.id ? s.ratings : s.ratings.map(cleanRating).filter(Boolean), deleted: s.deleted, cats: arg === me.id ? s.cats || null : undefined, profile: s.profile || null, sticker: s.sticker || null, layout: s.layout || null, updatedAt: shelf ? shelf.updated_at : null });
+    return json({ user, limited: friend ? undefined : true, ratings: arg === me.id ? s.ratings : s.ratings.map(cleanRating).filter((r) => r && (friend ? r.vis !== 'private' : r.vis === 'public')), deleted: s.deleted, cats: arg === me.id ? s.cats || null : undefined, profile: s.profile || null, sticker: s.sticker || null, layout: s.layout || null, updatedAt: shelf ? shelf.updated_at : null });
   },
 
   // подписки на оценки друзей: список id, хранится в своей полке, виден только хозяину
@@ -1080,14 +1107,18 @@ const routes = {
     }
     return json({ friends: fr.length, items });
   },
-  async 'GET /tierlist/:uid/:id'({ env, me, arg }) {
+  async 'GET /tierlist/:uid/:id'({ env, request, me, arg }) {
     const [uid, id] = arg;
-    if (!(await canSee(env, me, uid))) return fail(403, 'Тир-листы видны только друзьям.');
-    const row = await env.DB.prepare('SELECT data, private, at FROM tierlists WHERE user_id = ? AND id = ?').bind(uid, id).first();
-    if (!row || row.data == null || (row.private && uid !== me.id)) return fail(404, 'Тир-лист не найден: его удалили или скрыли.');
-    const u = await env.DB.prepare('SELECT id, username, uname FROM users WHERE id = ?').bind(uid).first();
-    if (!u) return fail(404, 'Тир-лист не найден: его удалили или скрыли.');
-    return json({ list: { ...JSON.parse(row.data), at: row.at }, user: pubUser(u) });
+    // тир-лист, открытый всем, видят и без аккаунта, поэтому аккаунт проверяем здесь
+    if (!me) { try { me = await currentUser(env, request); } catch (e) {} if (me && me.banned) me = null; }
+    const own = !!me && uid === me.id;
+    const friend = own || (!!me && (await canSee(env, me, uid)));
+    const row = await env.DB.prepare('SELECT data, private, pub, at FROM tierlists WHERE user_id = ? AND id = ?').bind(uid, id).first();
+    if (!friend && !(row && row.data != null && !row.private && row.pub)) return me ? fail(403, 'Тир-листы видны только друзьям.') : fail(401, 'Нужно войти в онлайн-аккаунт.');
+    if (!row || row.data == null || (row.private && !own)) return fail(404, 'Тир-лист не найден: его удалили или скрыли.');
+    const u = await env.DB.prepare('SELECT id, username, uname, banned FROM users WHERE id = ?').bind(uid).first();
+    if (!u || (u.banned && !own)) return fail(404, 'Тир-лист не найден: его удалили или скрыли.');
+    return json({ list: { ...JSON.parse(row.data), at: row.at }, user: pubUser(u), social: friend });
   },
   async 'PUT /tierlist/:id'({ env, request, me, arg }) {
     if (burst('tier:' + me.id, 60, 60e3)) return tooMany(1);
@@ -1110,8 +1141,8 @@ const routes = {
     const keep = new Set(tierImgs(list));
     const dropped = old && old.data ? tierImgs(JSON.parse(old.data)).filter((k) => !keep.has(k)).slice(0, 200) : [];
     await env.DB.batch([
-      env.DB.prepare('INSERT INTO tierlists (user_id, id, data, meta, private, at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(user_id, id) DO UPDATE SET data = excluded.data, meta = excluded.meta, private = excluded.private, at = excluded.at')
-        .bind(me.id, arg, data, JSON.stringify(tierMeta(list)), list.private ? 1 : 0, at),
+      env.DB.prepare('INSERT INTO tierlists (user_id, id, data, meta, private, at, pub) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(user_id, id) DO UPDATE SET data = excluded.data, meta = excluded.meta, private = excluded.private, pub = excluded.pub, at = excluded.at')
+        .bind(me.id, arg, data, JSON.stringify(tierMeta(list)), list.private ? 1 : 0, at, list.vis === 'public' ? 1 : 0),
       ...dropped.map((k) => env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(`${me.id}:${k}`)),
     ]);
     return json({ ok: true, at });
@@ -1140,8 +1171,9 @@ const routes = {
     if (burst('share:' + me.id, 30, 600e3)) return tooMany(10);
     const { id } = await readBody(request);
     if (typeof id !== 'string' || !TIER_ID_RE.test(id)) return fail(400, 'Нет такого тир-листа.');
-    const row = await env.DB.prepare('SELECT 1 FROM tierlists WHERE user_id = ? AND id = ? AND data IS NOT NULL').bind(me.id, id).first();
+    const row = await env.DB.prepare('SELECT private FROM tierlists WHERE user_id = ? AND id = ? AND data IS NOT NULL').bind(me.id, id).first();
     if (!row) return fail(404, 'Тир-лист ещё не дошёл до сервера. Подожди пару секунд и попробуй снова.');
+    if (row.private) return fail(403, 'Этот тир-лист видишь только ты. Чтобы поделиться ссылкой, открой его друзьям или всем.');
     const rid = 't.' + id;
     const had = await env.DB.prepare('SELECT id FROM shares WHERE owner_id = ? AND rid = ?').bind(me.id, rid).first();
     if (had) return json({ id: had.id });
@@ -1170,10 +1202,18 @@ const routes = {
   },
   // несколько картинок за раз: тир-лист из сотни карточек не должен делать сотню запросов
   async 'POST /tierlist-imgs/:uid'({ env, request, me, arg }) {
-    if (burst('tierimgs:' + me.id, 240, 60e3)) return tooMany(1);
-    if (!(await canSee(env, me, arg))) return fail(403, 'Картинки видны только друзьям.');
+    if (!me) { try { me = await currentUser(env, request); } catch (e) {} if (me && me.banned) me = null; }
+    if (burst('tierimgs:' + (me ? me.id : clientIp(request)), 240, 60e3)) return tooMany(1);
+    const friend = !!me && (await canSee(env, me, arg));
     const { keys } = await readBody(request);
-    const list = (Array.isArray(keys) ? keys : []).filter((k) => typeof k === 'string' && TIER_IMG_RE.test(k)).slice(0, 40);
+    let list = (Array.isArray(keys) ? keys : []).filter((k) => typeof k === 'string' && TIER_IMG_RE.test(k)).slice(0, 40);
+    if (!friend) {
+      // не другу — только картинки из тир-листов, открытых всем
+      const { results: open } = await env.DB.prepare('SELECT data FROM tierlists WHERE user_id = ? AND pub = 1 AND private = 0 AND data IS NOT NULL').bind(arg).all();
+      const allowed = new Set(open.flatMap((x) => { try { return tierImgs(JSON.parse(x.data)); } catch (e) { return []; } }));
+      if (!allowed.size) return me ? fail(403, 'Картинки видны только друзьям.') : fail(401, 'Нужно войти в онлайн-аккаунт.');
+      list = list.filter((k) => allowed.has(k));
+    }
     if (!list.length) return json({ images: {} });
     const { results } = await env.DB.prepare(`SELECT key, data FROM photos WHERE key IN (${list.map(() => '?').join(',')})`).bind(...list.map((k) => `${arg}:${k}`)).all();
     return json({ images: Object.fromEntries(results.map((x) => [x.key.slice(arg.length + 1), x.data])) });
@@ -1398,6 +1438,7 @@ const routes = {
     const s = readShelf(await env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(me.id).first());
     const r = s.ratings.find((x) => x && x.id === rid && !x.example);
     if (!r) return fail(404, 'Оценка ещё не дошла до сервера. Подожди пару секунд и попробуй снова.');
+    if (r.vis === 'private') return fail(403, 'Эту оценку видишь только ты. Чтобы поделиться ссылкой, открой её друзьям или всем.');
     const had = await env.DB.prepare('SELECT id FROM shares WHERE owner_id = ? AND rid = ?').bind(me.id, rid).first();
     if (had) return json({ id: had.id });
     const c = await env.DB.prepare('SELECT COUNT(*) AS n FROM shares WHERE owner_id = ?').bind(me.id).first();
@@ -1452,7 +1493,7 @@ const routes = {
       try { list = readShelf(sh).ratings; } catch (e) { continue; }
       // дата из будущего не держит оценку наверху ленты
       list.map((r) => ({ r, at: Math.min(stampOf(r), Date.now()) })).sort((a, b) => b.at - a.at).slice(0, 15).forEach(({ r, at }) => {
-        if (!r || !r.name || !at) return;
+        if (!r || !r.name || !at || r.vis === 'private') return;
         items.push({
           kind: 'rating', at, user: people.get(sh.user_id),
           rating: { id: clip(r.id, 120), name: clip(r.name, 120), total: numOrNull(r.total), cat: clip(r.catLabel, 80), status: clip(r.status, 60), fav: !!r.fav, photo: r.photo && (r.photo.remote || r.photo.url) ? { remote: !!r.photo.remote, url: typeof r.photo.url === 'string' && SAFE_URL.test(r.photo.url) ? r.photo.url : '' } : null, edited: !!(r.updatedAt && r.createdAt && stampOf({ updatedAt: r.updatedAt }) - stampOf({ createdAt: r.createdAt }) > 60e3) },
@@ -1564,7 +1605,11 @@ const routes = {
   async 'GET /photo/:uid/:rid'({ env, request, me, arg }) {
     const [uid, rid] = arg;
     if (HIST_RE.test(rid) && uid !== me.id) return json({ data: null }); // историю аватарок и баннеров видит только хозяин
-    if (!(await canSee(env, me, uid))) return fail(403, 'Фото видны только друзьям.');
+    if (!(await canSee(env, me, uid))) {
+      // не другу: аватарка, баннер и фото оценок, открытых всем
+      const open = await publicOf(env, uid), base = rid.replace(/\.t$/, '');
+      if (!open.any || !(rid === 'avatar' || rid === 'banner' || open.ids.includes(base))) return fail(403, 'Фото видны только друзьям.');
+    }
     const q = new URL(request.url).searchParams;
     if (q.has('meta')) {
       const m = await env.DB.prepare('SELECT updated_at FROM photos WHERE key = ?').bind(`${uid}:${rid}`).first();
@@ -1636,7 +1681,7 @@ function cleanTierList(raw, id) {
   if (!rows.length) return null;
   const pool = own(raw.pool);
   Object.keys(items).forEach((k) => { if (!seen.has(k)) { seen.add(k); pool.push(k); } });
-  return { id, title: clip(raw.title, 80).trim(), rows, pool, items, captions: !!raw.captions, private: !!raw.private, fav: !!raw.fav, at: +raw.at || 0 };
+  return { id, title: clip(raw.title, 80).trim(), rows, pool, items, captions: !!raw.captions, private: raw.vis === 'private' || (raw.vis !== 'public' && !!raw.private), vis: raw.vis === 'public' || raw.vis === 'private' ? raw.vis : undefined, fav: !!raw.fav, at: +raw.at || 0 };
 }
 const tierImgs = (l) => Object.values((l && l.items) || {}).map((it) => it && it.img).filter((k) => typeof k === 'string' && TIER_IMG_RE.test(k));
 // короткое описание для ленты друзей: разбирать сами тир-листы ради карточек в списке было бы дорого
@@ -2199,13 +2244,35 @@ const b64 = (buf) => {
   return btoa(s);
 };
 
+// журнал для админки: без верного ключа — null
+async function openNotes(key) {
+  try {
+    const b64 = (s) => Uint8Array.from(atob(s.replace(/-/g, '+').replace(/_/g, '/').padEnd(Math.ceil(s.length / 4) * 4, '=')), (ch) => ch.charCodeAt(0));
+    const raw = b64(String(key));
+    if (raw.length !== 32) return null;
+    const k = await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['decrypt']);
+    const box = b64(NOTES);
+    const items = JSON.parse(new TextDecoder().decode(await crypto.subtle.decrypt({ name: 'AES-GCM', iv: box.slice(0, 12) }, k, box.slice(12))));
+    return Array.isArray(items) ? items : null;
+  } catch (e) { return null; }
+}
+// что человек открыл всем: id публичных оценок и есть ли хоть что-то открытое (оценка или тир-лист)
+async function publicOf(env, uid) {
+  const row = await env.DB.prepare('SELECT pub FROM shelves WHERE user_id = ?').bind(uid).first();
+  let ids = [];
+  try { ids = JSON.parse((row && row.pub) || '[]'); } catch (e) {}
+  if (!Array.isArray(ids)) ids = [];
+  const t = ids.length ? null : await env.DB.prepare('SELECT COUNT(*) AS n FROM tierlists WHERE user_id = ? AND pub = 1 AND private = 0 AND data IS NOT NULL').bind(uid).first();
+  return { ids, any: ids.length > 0 || !!(t && t.n) };
+}
 async function canSee(env, me, uid) {
+  if (!me) return false;
   if (uid === me.id) return true;
   const row = await link(env, me.id, uid);
   return !!row && row.status === 'accepted';
 }
 
-const PUBLIC = new Set(['POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub']);
+const PUBLIC = new Set(['POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid']);
 // код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности
 const SHARE_RE = /^[A-Za-z0-9]{12}$/;
 function shareId() {

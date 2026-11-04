@@ -1529,7 +1529,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       : `${pros.length || cons.length ? `<div class="fr-pc">${pros.length ? `<div><span class="label">Плюсы</span><ul>${pros.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}${cons.length ? `<div><span class="label">Минусы</span><ul>${cons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}</div>` : ''}
       ${r.text ? `<p class="fr-note">${esc(r.text)}</p>` : ''}`}
       <div class="rd-foot"><span>${when ? dayFmt(when) : ''}</span><a class="btn ghost" href="${rateLink(p, r)}">Открыть в Мнении</a></div>
-      ${p.uid && token && !ed ? '<div class="rd-cm" id="rdComments"></div>' : ''}
+      ${p.uid && token && !ed && !p.limited ? '<div class="rd-cm" id="rdComments"></div>' : ''}
     </article>`;
     // ветка комментариев под оценкой: та же, что в Мнении у этой оценки
     if (p.uid && token && !ed && window.CasualComments) window.CasualComments.mount(rdBox.querySelector('#rdComments'), { uid: p.uid, target: 'r.' + r.id, token, title: 'Комментарии к оценке', placeholder: 'Что думаешь об этой оценке?' });
@@ -1712,7 +1712,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         <div class="who">
           <div class="name-row">${isMe && p.editingName
             ? `<form class="name-edit" id="nameEditForm"><input id="profileNameInput" type="text" value="${esc(p.name)}" minlength="2" maxlength="24" aria-label="Ник"><button type="submit" class="btn primary">Сохранить</button><button type="button" class="btn ghost" id="profileNameCancel">Отмена</button></form>`
-            : `<h1 class="name" id="profileName" aria-label="${esc(p.name)}"${isMe ? ' role="button" tabindex="0" title="Нажми, чтобы изменить ник"' : ''}>${nameHTML}</h1>`}${!isMe && p.uid && token ? bellHTML(p.followed) : ''}${stickerSlot(p)}</div>
+            : `<h1 class="name" id="profileName" aria-label="${esc(p.name)}"${isMe ? ' role="button" tabindex="0" title="Нажми, чтобы изменить ник"' : ''}>${nameHTML}</h1>`}${!isMe && p.uid && token && !p.limited ? bellHTML(p.followed) : ''}${stickerSlot(p)}</div>
           <p class="sub">${esc(p.sub)}</p>
           ${!isMe && p.uid ? `<p class="sub" data-seen="${esc(p.uid)}" data-last="${+p.lastSeen || ''}"></p>` : ''}
           ${titlesRowHTML(p, rs)}
@@ -1724,7 +1724,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
 
       <div class="wboard" id="wboard">${wgOrder(p, Object.keys(W)).map((k) => wgHTML(p, k, W[k])).join('')}</div>
       ${EDIT ? editBarHTML(p) : ''}
-      ${p.uid && token ? `<section class="card rise wall" id="wallSec" style="--d:${d++}" aria-label="Комментарии в профиле"></section>` : ''}`;
+      ${p.uid && token && !p.limited ? `<section class="card rise wall" id="wallSec" style="--d:${d++}" aria-label="Комментарии в профиле"></section>` : ''}`;
 
     // стена профиля в самом низу, как в Steam: пишут хозяин и его друзья
     if (p.uid && token && window.CasualComments) window.CasualComments.mount($('#wallSec'), {
@@ -2437,7 +2437,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       }).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
       const match = common.length ? Math.max(0, Math.min(100, Math.round(100 - (common.reduce((a, c) => a + Math.abs(c.diff), 0) / common.length) * 10))) : 0;
       render({
-        kind: 'friend', name: s.user.username, sub: [s.user.handle ? '@' + s.user.handle : '', s.updatedAt ? 'оценки обновлены ' + ago(s.updatedAt) : 'оценок пока нет'].filter(Boolean).join(' · '),
+        kind: 'friend', limited: !!s.limited, name: s.user.username, sub: [s.user.handle ? '@' + s.user.handle : '', s.limited ? 'видны оценки, открытые всем' : s.updatedAt ? 'оценки обновлены ' + ago(s.updatedAt) : 'оценок пока нет'].filter(Boolean).join(' · '),
         ratings, uid: s.user.id, common, match, layout: s.layout || null, followed: (fol.ids || []).includes(s.user.id), isAdmin: !!s.user.admin,
         friends: fr && !fr.hidden ? fr.friends || [] : null, createdAt: s.user.createdAt, lastSeen: s.user.lastSeen, sticker: s.sticker && s.sticker.src, friendCount: s.user.friends != null ? s.user.friends : null,
       });

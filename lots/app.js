@@ -956,6 +956,16 @@
   // карточка закрылась — песня победы замолкает, возвращается фон
   const closeWinner = () => { if ($('#winner').hidden) return; $('#winner').hidden = true; if (CH.win.active) stopChannel('win'); syncBg(); };
   $('#wClose').addEventListener('click', closeWinner);
+  // ссылка на итог: адрес с «?w=…» мессенджер ещё не видел, поэтому покажет карточку с победителем
+  const wTag = (s) => { let h = 5381; for (const c of String(s)) h = (h * 33 + c.codePointAt(0)) >>> 0; return h.toString(36); };
+  $('#wShare').addEventListener('click', async () => {
+    const w = S.live && S.live.winner && S.live.winner.n;
+    if (!w) return;
+    const b = $('#wShare'), path = '/lots/' + code + '?w=' + wTag(w);
+    try { await navigator.clipboard.writeText(location.origin + path); b.textContent = 'Ссылка скопирована'; }
+    catch (e) { history.replaceState(history.state, '', path); b.textContent = 'Скопируй адрес из строки браузера'; }
+    setTimeout(() => { b.innerHTML = '<span class="u-old">🔗 </span>Ссылка на итог'; }, 2600);
+  });
   // песню победы можно выключить и в заставке (нажатие не закрывает её), и в карточке
   const muteWin = (e) => { e.stopPropagation(); if (CH.win.active) stopChannel('win'); };
   $('#fxMute').addEventListener('click', muteWin);

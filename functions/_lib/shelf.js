@@ -46,6 +46,8 @@ export function cleanRating(r) {
   if (o.link != null && !(typeof o.link === 'string' && MUSIC_LINK_RE.test(o.link))) delete o.link;
   // artistAva — отпечаток фото исполнителя (короткая строка), не адрес
   if (o.artistAva != null && !(typeof o.artistAva === 'string' && /^[\w.-]{0,80}$/.test(o.artistAva))) delete o.artistAva;
+  // кто видит: все, только друзья (без поля) или только хозяин
+  if (o.vis !== 'public' && o.vis !== 'private') delete o.vis;
   return o;
 }
 

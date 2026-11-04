@@ -1254,11 +1254,24 @@ const state = {
   exportOpts: { desc: true, pc: true, notes: true, photo: true },
   view: 'board', logTab: 'mine', section: 'rate'
 };
+// кто видит оценку: последний выбор запоминается для следующих
+const VIS_HINT = { public: 'Её видят все: и друзья, и те, кто откроет твой профиль', friends: 'Её видят друзья: в профиле и ленте', private: 'Её видишь только ты, даже друзья не увидят' };
+function defaultVis() {
+  try { const v = localStorage.getItem('casualhub.vis.v1'); return v === 'public' || v === 'private' ? v : 'friends'; } catch (e) { return 'friends'; }
+}
+function paintVis() {
+  const box = document.getElementById('visChips');
+  if (!box) return;
+  const v = form.vis || 'friends';
+  box.querySelectorAll('[data-vis]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.vis === v)));
+  const hint = document.getElementById('visHint');
+  if (hint) hint.textContent = VIS_HINT[v] || VIS_HINT.friends;
+}
 function blankForm(cat) {
   return {
     editingId: null, cat: cat || (state.cats[0] ? state.cats[0].id : 'games'),
     name: '', artist: '', link: '', fav: false, status: '', meta: '', pros: '', cons: '',
-    note: '', scores: {}, notes: {}, openNotes: {}, weights: {}, extra: [], extraCatName: '', photo: null, ownOnly: false
+    note: '', scores: {}, notes: {}, openNotes: {}, weights: {}, extra: [], extraCatName: '', photo: null, ownOnly: false, vis: defaultVis()
   };
 }
 state.statsView = state.statsView || 'overview';
@@ -1485,6 +1498,7 @@ function updateNameState(err) {
   updateHead();
 }
 function renderForm() {
+  paintVis();
   if (el.name.value !== form.name) el.name.value = form.name;
   if (el.note.value !== form.note) el.note.value = form.note;
   if (el.meta && el.meta.value !== (form.meta || '')) el.meta.value = form.meta || '';
@@ -2461,6 +2475,7 @@ function loadIntoForm(r) {
   }
   form.fav = !!r.fav;
   form.status = fitStatus(r.status || '');
+  form.vis = r.vis === 'public' || r.vis === 'private' ? r.vis : 'friends';
   form.meta = r.meta || '';
   form.link = musicLinkOk(r.link);
   form.pros = r.pros || '';
@@ -2730,6 +2745,7 @@ async function save() {
     name, nameKey: keyOf(name), scores, total: t,
     fav: !!form.fav,
     status: (form.status || '').trim().slice(0, 40),
+    vis: form.vis === 'public' || form.vis === 'private' ? form.vis : undefined,
     meta: (form.meta || '').trim().slice(0, 80),
     ...(formMusic() && form.link ? { link: form.link } : {}),
     pros: (form.pros || '').trim().slice(0, 1000),
@@ -2838,6 +2854,7 @@ function normalizeRating(id, d) {
     name: d.name.slice(0, 140), nameKey: keyOf(d.name), scores, total: totalOf(scores),
     fav: d.fav === true,
     status: str(d.status).slice(0, 40),
+    ...(d.vis === 'public' || d.vis === 'private' ? { vis: d.vis } : {}), // кто видит: без поля — друзья
     meta: str(d.meta).slice(0, 80),
     ...(musicLinkOk(d.link) ? { link: musicLinkOk(d.link) } : {}),
     pros: str(d.pros).slice(0, 1000),
@@ -3040,7 +3057,7 @@ function saveDraft() {
     if (empty) localStorage.setItem(DRAFT_KEY, JSON.stringify({ v: 2, form: { cat: form.cat } }));
     else localStorage.setItem(DRAFT_KEY, JSON.stringify({ v: 2, form: {
       editingId: form.editingId, cat: form.cat, name: form.name, artist: form.artist, note: form.note,
-      fav: !!form.fav, status: form.status, meta: form.meta, link: form.link, pros: form.pros, cons: form.cons,
+      fav: !!form.fav, status: form.status, vis: form.vis, meta: form.meta, link: form.link, pros: form.pros, cons: form.cons,
       scores: form.scores, notes: form.notes, weights: form.weights, extra: form.extra, extraCatName: form.extraCatName,
       photo: form.photo && form.photo.kind === 'saved' ? draftPhoto(form.photo) : null
     } }));
@@ -3080,6 +3097,7 @@ function loadDraft() {
       fav: f.fav === true, status: str(f.status).slice(0, 40), meta: str(f.meta).slice(0, 80), link: musicLinkOk(f.link), pros: str(f.pros).slice(0, 1000), cons: str(f.cons).slice(0, 1000),
       extra: Array.isArray(f.extra) ? f.extra.filter(x => x && typeof x.id === 'string' && typeof x.name === 'string').map(x => ({ id: x.id, name: x.name, desc: str(x.desc).slice(0, 120) })) : [],
       extraCatName: str(f.extraCatName),
+      vis: f.vis === 'public' || f.vis === 'private' || f.vis === 'friends' ? f.vis : defaultVis(),
       weights: (() => { const o = {}; if (f.weights && typeof f.weights === 'object') for (const [k, v] of Object.entries(f.weights)) if ([2, 0.5].includes(v)) o[k] = v; return o; })(),
       photo: (() => { const n = f.photo && f.photo.kind === 'saved' ? normPhoto(f.photo) : null; return n ? Object.assign({ kind: 'saved' }, n) : null; })()
     });
@@ -5366,6 +5384,17 @@ if (el.statusChips) {
     const val = b.dataset.status.trim();
     form.status = form.status === val ? '' : val;
     renderForm();
+    scheduleDraft();
+  });
+}
+{
+  const box = document.getElementById('visChips');
+  if (box) box.addEventListener('click', e => {
+    const b = e.target.closest('button[data-vis]');
+    if (!b) return;
+    form.vis = b.dataset.vis;
+    try { localStorage.setItem('casualhub.vis.v1', form.vis); } catch (err) {}
+    paintVis();
     scheduleDraft();
   });
 }

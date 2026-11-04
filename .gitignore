@@ -19,4 +19,4 @@ Thumbs.db
 .wrangler/
 
 # Local notes
-*.local.md
+*.local.*
