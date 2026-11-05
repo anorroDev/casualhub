@@ -3,7 +3,22 @@
    (окна, сообщения сервера, подсказки). Новую строку достаточно дописать в словарь X. {} в ключе — любое значение.
    Текст, написанный людьми (оценки, комментарии, ники), не переводится: совпасть со словарём он может только дословно. */
 (() => {
-  const X = {"Этот тир-лист видишь только ты: комментировать его некому":"Only you see this tier list: there’s no one to comment",
+  const X = {"Всё, что ты отметил «В планах» в Мнении: фильмы, игры, сериалы и остальное. Нажми «+», и оно на колесе":"Everything you marked “Planned” in Opinion: films, games, series and the rest. Tap “+” and it’s on the wheel",
+"Пока пусто. Отметь фильм, игру или что угодно «В планах» в":"Nothing yet. Mark a film, a game or anything else “Planned” in",
+"Мнении":"Opinion",
+"и оно появится здесь":"and it shows up here",
+"Добавить все":"Add all",
+"Всё уже на колесе":"Everything is on the wheel",
+"Добавить на колесо":"Add to the wheel",
+"Убрать с колеса":"Take off the wheel",
+"Добавить на колесо: {}":"Add to the wheel: {}",
+"Убрать с колеса: {}":"Take off the wheel: {}",
+"{}» убран с колеса":"{}” is off the wheel",
+"{}» на колесе. Впиши сумму в списке":"{}” is on the wheel. Enter the amount in the list",
+"Из планов добавлено: {}. Впиши суммы в списке":"Added from plans: {}. Enter the amounts in the list",
+"Из планов добавлено: {}":"Added from plans: {}",
+"Другое":"Other",
+"Этот тир-лист видишь только ты: комментировать его некому":"Only you see this tier list: there’s no one to comment",
 "Кто видит оценку":"Who sees this rating",
 "Только я":"Only me",
 "Её видят все: и друзья, и те, кто откроет твой профиль":"Everyone sees it: friends and anyone who opens your profile",

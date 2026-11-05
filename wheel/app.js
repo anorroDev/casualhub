@@ -261,9 +261,11 @@
       .catch(() => {})
       .finally(() => { plansPulling = null; });
   }
+  // категория и год — отдельными кусками текста, чтобы английский словарь узнал название категории
   function planSub(r) {
     const year = (String(r.meta || '').match(/(?:^|\D)((?:19|20)\d{2})(?!\d)/) || [])[1];
-    return [r.catName, year].filter(Boolean).join(' · ');
+    const cat = r.catName ? esc(r.catName) : '';
+    return cat && year ? `${cat}<span> · ${year}</span>` : cat || year || '';
   }
   function renderPlans() {
     const box = $('#plans');
@@ -275,19 +277,19 @@
     if (plansCat !== '*' && !cats.has(plansCat)) plansCat = '*';
     $('#plansCats').innerHTML = cats.size > 1
       ? [['*', 'Все', all.length], ...[...cats.entries()].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0], 'ru')).map(([c, n]) => [c, c, n])]
-        .map(([v, l, n]) => `<button type="button" data-pcat="${esc(v)}" aria-pressed="${v === plansCat}">${esc(l)} ${n}</button>`).join('')
+        .map(([v, l, n]) => `<button type="button" data-pcat="${esc(v)}" aria-pressed="${v === plansCat}">${esc(l)} <b>${n}</b></button>`).join('')
       : '';
     const rows = plansCat === '*' ? all : all.filter((r) => (r.catName || 'Другое') === plansCat);
     $('#plansList').innerHTML = rows.map((r) => {
       const on = onWheel.has(nameKey(r.name));
       return `<li class="plrow${on ? ' on' : ''}">
-        <div class="e-text"><span class="e-name">${esc(r.name)}</span><span class="e-sub">${esc(planSub(r))}</span></div>
-        <button type="button" class="pl-btn" data-plan="${esc(r.id)}" aria-pressed="${on}" aria-label="${on ? 'Убрать с колеса' : 'На колесо'}: ${esc(r.name)}" title="${on ? 'Убрать с колеса' : 'Добавить на колесо'}">${on ? ICON.check : ICON.add}</button>
+        <div class="e-text"><span class="e-name">${esc(r.name)}</span><span class="e-sub">${planSub(r)}</span></div>
+        <button type="button" class="pl-btn" data-plan="${esc(r.id)}" aria-pressed="${on}" aria-label="${on ? 'Убрать с колеса' : 'Добавить на колесо'}: ${esc(r.name)}" title="${on ? 'Убрать с колеса' : 'Добавить на колесо'}">${on ? ICON.check : ICON.add}</button>
       </li>`;
     }).join('');
     if (!all.length) $('#plansList').innerHTML = '<li class="plans-empty">Пока пусто. Отметь фильм, игру или что угодно «В планах» в <a href="/opinion/">Мнении</a>, и оно появится здесь.</li>';
     const left = rows.filter((r) => !onWheel.has(nameKey(r.name))).length;
-    $('#plansAll').textContent = left ? `Добавить все (${left})` : 'Всё уже на колесе';
+    $('#plansAll').innerHTML = left ? `Добавить все <span>(${left})</span>` : 'Всё уже на колесе';
     $('#plansAll').disabled = !left;
     $('#plansAll').parentElement.hidden = !all.length;
   }
