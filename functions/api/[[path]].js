@@ -1917,6 +1917,8 @@ function cleanLive(b) {
     music: { bg: lotTrack(b && b.music && b.music.bg), win: lotTrack(b && b.music && b.music.win) },
     status: clip(b && b.status, 140),
     out: (Array.isArray(b && b.out) ? b.out : []).slice(0, MAX_LOTS).map((x) => clip(x, LOT_NAME)),
+    // что выпадало по очереди: каждый итог прокрутки (вылет или победа в режиме «Один победитель»)
+    hist: (Array.isArray(b && b.hist) ? b.hist : []).slice(-MAX_LOTS).map((x) => clip(x, LOT_NAME)),
     winner: b && b.winner && b.winner.n ? { n: clip(b.winner.n, LOT_NAME), sum: clip(b.winner.sum, 40), at: finite(b.winner.at) } : null,
   };
 }

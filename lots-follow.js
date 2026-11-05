@@ -69,6 +69,8 @@
             onStateChange: (e) => { if (e.data === 0) ended(); },
             onError: () => {
               if (cur && cur.p.alt && cur.p.alt.length) { yt.loadVideoById({ videoId: cur.p.alt.shift(), startSeconds: 0 }); return; }
+              // трек фона не играет на чужом сайте: пропускаем его, дальше следующий
+              if (cur && cur.ch === 'bg') { bgNext(true); return; }
               cur = null; paint();
             },
           },
@@ -118,9 +120,21 @@
       if (cur && st !== 1 && st !== 3) { blocked = true; paint(); }
     }, 2500);
   }
+  // фон идёт подряд: с трека ведущего дальше по списку и по кругу (VI KA — только на победе)
+  const BG_LIST = PRESETS.filter((p) => p.id !== 'vika');
+  const BG = { chosen: null, cur: '', bad: new Set() };
+  function bgNext(failed) {
+    if (failed && BG.cur) BG.bad.add(BG.cur);
+    const i = BG_LIST.findIndex((p) => p.id === BG.cur);
+    let next = '';
+    for (let k = 1; k <= BG_LIST.length; k++) { const p = BG_LIST[(i + k + BG_LIST.length) % BG_LIST.length]; if (!BG.bad.has(p.id)) { next = p.id; break; } }
+    BG.cur = next;
+    cur = null;
+    decide(lastLive);
+  }
   function ended() {
     if (!cur) return;
-    if (cur.ch === 'bg') { try { yt.seekTo(cur.p.start || 0); yt.playVideo(); } catch (e) {} return; }
+    if (cur.ch === 'bg') { bgNext(false); return; }
     cur = null; // трек победы доиграл: дальше снова фон
     decide(lastLive);
   }
@@ -136,10 +150,17 @@
     if (winKey && winKey !== seenWin && fresh && presetOf(m.win)) { seenWin = winKey; play({ ch: 'win', p: presetOf(m.win) }); return; }
     if (!win) seenWin = '';
     if (cur && cur.ch === 'win' && win) return; // победа ещё играет
-    const bg = m.bg === 'vika' ? null : presetOf(m.bg); // VI KA — только песня победы
+    const chosen = m.bg && m.bg !== 'vika' && presetOf(m.bg) ? m.bg : '';
+    const r = rd(FOLLOW_KEY);
+    if (chosen !== BG.chosen) {
+      // первый раз продолжаем тот трек списка, что играл на странице сбора
+      const was = BG.chosen === null && r && r.bg && BG_LIST.some((p) => p.id === r.bg.id) ? r.bg.id : '';
+      BG.chosen = chosen; BG.cur = chosen ? was || chosen : ''; BG.bad.clear();
+    }
+    const bg = presetOf(BG.cur);
     if (!bg) { play(null); return; }
     // с того места, где оборвалась музыка на прошлой странице
-    const r = rd(FOLLOW_KEY), keep = r && r.bg && r.bg.id === bg.id && Date.now() - r.bg.at < 90000 ? r.bg.pos + (Date.now() - r.bg.at) / 1000 : null;
+    const keep = r && r.bg && r.bg.id === bg.id && Date.now() - r.bg.at < 90000 ? r.bg.pos + (Date.now() - r.bg.at) / 1000 : null;
     if (!cur && keep != null) { if (r) { r.bg = null; wr(FOLLOW_KEY, r); } play({ ch: 'bg', p: bg }, keep); } else play({ ch: 'bg', p: bg });
   }
 

@@ -154,7 +154,7 @@
             onError: () => {
               const c = CH[ch];
               if (c.active && c.alts && c.alts.length) { EMB.yt[ch].loadVideoById({ videoId: c.alts.shift(), startSeconds: 0 }); return; }
-              channelFailed(ch);
+              channelFailed(ch, true); // сам YouTube отказал (например, ошибка 150)
             },
           },
         });
@@ -163,13 +163,14 @@
     return EMB.ready[ch];
   }
   const applyVolume = (ch) => { try { if (EMB.yt[ch] && EMB.yt[ch].setVolume) EMB.yt[ch].setVolume(Math.round(volume() * (ch === 'bg' ? 0.6 : 1) * 100)); } catch (e) {} };
-  function channelFailed(ch) {
+  // hard — YouTube ответил ошибкой; иначе просто не дождались звука (браузер не пустил)
+  function channelFailed(ch, hard) {
     const c = CH[ch];
     if (!c.active) return;
     const f = c.onFail;
     Object.assign(c, { active: false, id: '', onFail: null });
     paintPlaying();
-    if (f) f();
+    if (f) f(hard);
   }
   function stopChannel(ch) {
     const c = CH[ch];
@@ -182,6 +183,7 @@
     if (!c.active) return;
     if (c.loop) { try { EMB.yt[ch].seekTo(c.start || 0); EMB.yt[ch].playVideo(); } catch (e) {} return; }
     stopChannel(ch);
+    if (ch === 'bg') bgNext(false); // фон идёт подряд: за этим треком следующий из списка
     if (ch === 'win') syncBg();
   }
   async function playChannel(ch, p, opts = {}) {
@@ -206,12 +208,28 @@
     } catch (e) { channelFailed(ch); }
   }
   const liveMusic = () => (S.live && S.live.music) || {};
+  // фон: с трека, который выбрал ведущий, дальше подряд по списку и по кругу. VI KA — только песня победы.
+  // Трек, который YouTube не даёт играть на чужом сайте (ошибка 150), пропускается до следующей смены фона
+  const BG_LIST = PRESETS.filter((p) => p.id !== 'vika');
+  const BG = { chosen: '', cur: '', bad: new Set() };
+  function bgNext(failed) {
+    if (failed && BG.cur) BG.bad.add(BG.cur);
+    const i = BG_LIST.findIndex((p) => p.id === BG.cur);
+    let next = '';
+    for (let k = 1; k <= BG_LIST.length; k++) { const p = BG_LIST[(i + k + BG_LIST.length) % BG_LIST.length]; if (!BG.bad.has(p.id)) { next = p.id; break; } }
+    BG.cur = next;
+    syncBg();
+  }
   // фон играет, пока его выбрал ведущий и не звучит трек победы
   function syncBg() {
-    const p = liveMusic().bg === 'vika' ? null : presetOf(liveMusic().bg); // VI KA — только песня победы
+    const m = liveMusic().bg;
+    const chosen = m && m !== 'vika' && presetOf(m) ? m : '';
+    if (chosen !== BG.chosen) { BG.chosen = chosen; BG.cur = chosen; BG.bad.clear(); if (CH.bg.active) stopChannel('bg'); }
+    const p = presetOf(BG.cur);
     if (!canPlay() || !p || EMB.failed || CH.win.active) { if (CH.bg.active) stopChannel('bg'); return; }
     if (CH.bg.active && CH.bg.id === p.id) return;
-    playChannel('bg', p, { loop: true });
+    // не дождались звука — повторим при следующем обновлении; ошибка YouTube — следующий трек
+    playChannel('bg', p, { onFail: (hard) => { if (hard) bgNext(true); } });
   }
   // песню победы подгружаем заранее: на победе она заиграет сразу
   function cueWin() {
@@ -806,6 +824,22 @@
     });
     S.firstList = false;
   }
+  // что выпадало по очереди: видно всем. У снимков до появления истории — порядок вылета
+  function paintHist() {
+    const box = $('#lotHist');
+    if (!box) return;
+    const live = S.live || {};
+    const hist = Array.isArray(live.hist) && (live.hist.length || !(live.out || []).length) ? live.hist : Array.isArray(live.out) ? live.out : [];
+    const win = live.winner && live.winner.n;
+    const html = !hist.length && !win ? '' : `${win ? `<p class="hist-win"><span class="u-old">🏆 </span>Победитель: <b>${esc(win)}</b></p>` : ''}${hist.length ? `<ol class="hist-list">${hist.map((n, i) => {
+      const lot = S.lots.find((l) => l.name.toLowerCase() === String(n).toLowerCase());
+      return `<li><span class="hist-n">${i + 1}</span>${lot ? lotPic(lot) : `<span class="lots-pic"><em aria-hidden="true">${esc([...String(n)][0] || '?')}</em></span>`}<span class="lots-who"><b>${esc(n)}</b>${lot && lot.by ? `<small>${esc(lot.by)}</small>` : ''}</span></li>`;
+    }).join('')}</ol>` : ''}`;
+    if (box.dataset.sig === html) return;
+    box.dataset.sig = html;
+    box.hidden = !html;
+    $('#lotHistBody').innerHTML = html;
+  }
   function paintStatus() {
     const live = S.live;
     const n = shownSegs().length;
@@ -825,7 +859,7 @@
     S.wasOpen = open;
   }
   function paintAll() {
-    paintHead(); paintRule(); paintAdd(); paintConfirm(); paintResults(); paintList(); paintStatus(); wheel(); paintWinner(); syncBg(); watchOpen(); paintHost();
+    paintHead(); paintRule(); paintAdd(); paintConfirm(); paintResults(); paintList(); paintStatus(); wheel(); paintWinner(); syncBg(); watchOpen(); paintHost(); paintHist();
   }
   function paintGone(text) {
     setTitle(baseTitle(), true);
@@ -868,6 +902,7 @@
       seen: S.lots.length, ids: S.lots.map((l) => l.id),
       music: hostMusic(live.music),
       status: live.status || '', out, winner: live.winner || null,
+      hist: Array.isArray(live.hist) ? live.hist : [],
     }, over);
   }
   const hostMsg = (t) => { const m = $('#hostMsg'); if (m) { m.textContent = t || ''; m.hidden = !t; } };
@@ -917,7 +952,7 @@
     if (!r) return;
     if (H.pick === 'one') {
       hostRes = null;
-      hostPush(hostBody({ rot: r.to, spin: S.live && S.live.spin, pick: r.name, winner: { n: r.name, sum: '', at: serverNow() }, status: `Победитель: ${r.name}` }));
+      hostPush(hostBody({ rot: r.to, spin: S.live && S.live.spin, pick: r.name, winner: { n: r.name, sum: '', at: serverNow() }, status: `Победитель: ${r.name}`, hist: [...hostHist(), r.name] }));
       return;
     }
     hostPush(hostBody({ rot: r.to, spin: S.live && S.live.spin, pick: r.name, status: `Вылетает: ${r.name}` }));
@@ -926,13 +961,14 @@
       const out = [...liveOut(), r.name];
       const left = hostAlive(out);
       const winner = left.length === 1 ? { n: left[0].name, sum: '', at: serverNow() } : null;
-      hostPush(hostBody({ rot: r.to, spin: null, pick: '', out, winner, status: winner ? `Победитель: ${winner.n}` : `Вылетел: ${r.name}. Осталось ${left.length}` }));
+      hostPush(hostBody({ rot: r.to, spin: null, pick: '', out, winner, status: winner ? `Победитель: ${winner.n}` : `Вылетел: ${r.name}. Осталось ${left.length}`, hist: [...hostHist(), r.name] }));
     }, 1100);
   }
+  const hostHist = () => (S.live && Array.isArray(S.live.hist) ? S.live.hist : []);
   function hostReset() {
     if (!isHost() || hostSpinning()) return;
     if (CH.win.active) { stopChannel('win'); syncBg(); }
-    hostPush(hostBody({ out: [], winner: null, pick: '', spin: null, status: '' }));
+    hostPush(hostBody({ out: [], winner: null, pick: '', spin: null, status: '', hist: [] }));
   }
   async function hostRoom(body) {
     try {
