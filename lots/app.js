@@ -802,7 +802,8 @@
     // лот уже был на колесе, а теперь его там нет и он не вылетал: его убрал ведущий
     const removed = removedKeys();
     // убранное ведущим зрителям не показываем вовсе: обычно такой лот уже удалён из сбора, а старые сборы просто прячем
-    const rows = all.filter((l) => !(l.id && !String(l.id).startsWith('host:') && removed.has(l.name.toLowerCase())));
+    // вылетевшие в списке лотов не показываем: они уходят в «Что выпадало по очереди»
+    const rows = all.filter((l) => !out.has(l.name.toLowerCase()) && !(l.id && !String(l.id).startsWith('host:') && removed.has(l.name.toLowerCase())));
     const n = rows.length;
     // правки доступны, пока ведущий разрешает, сбор открыт, лот не вылетел и колесо не определило победителя
     const canEdit = !!token && !!S.room.editOwn && isOpen() && !(S.live && S.live.winner);
