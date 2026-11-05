@@ -2287,7 +2287,7 @@
   // Пока колесо крутится, ничего не трогаем
   function lotsImport() {
     if (!lotsRoom || S.spinning) return;
-    let changed = false, fresh = false;
+    let changed = false, fresh = false, stale = [];
     onLink(() => {
       const ids = new Set(lotsList.map((l) => l.id));
       const users = (itemId) => Object.keys(lotsMap).filter((k) => lotsMap[k] === itemId).length;
@@ -2316,7 +2316,12 @@
         fresh = true;
         if (r === 'added') { changed = true; if (scope === 'link') msg(`Новый лот: «${l.name}»`, 'ok'); }
       }
+      // лот уже стоял на колесе, а теперь его там нет: ведущий его убрал (крестиком или «Очистить всё»),
+      // но в сборе он остался — так было до того, как убранные лоты стали удаляться. Удаляем и его,
+      // иначе зрители не могут добавить ту же игру снова: поиск пишет «уже есть»
+      stale = lotsList.filter((l) => lotsMap[l.id] > 0 && !S.items.some((i) => i.id === lotsMap[l.id])).map((l) => l.id);
     });
+    if (stale.length) lotsHeal(stale);
     const st = JSON.stringify({ code: lotsRoom.id, map: lotsMap, names: lotsNames });
     if (st !== lotsStored) { lotsStored = st; try { localStorage.setItem(LOTS_KEY, st); } catch (e) {} }
     if (changed) { save(); if (scope === 'link') render(); } else if (fresh) lotsLiveSoon();
@@ -2517,6 +2522,19 @@
     const ids = Object.keys(lotsMap).filter((k) => gone.has(lotsMap[k]));
     if (!ids.length) return;
     lotsDo(() => lotsApi('/lots/' + lotsRoom.id + '/drop', 'POST', { ids }));
+  }
+  const healTried = new Set(); // каждый такой лот пробуем удалить один раз за открытие страницы
+  let healBusy = false;
+  function lotsHeal(lotIds) {
+    if (healBusy || !lotsRoom || !lotsAccount) return;
+    const ids = lotIds.filter((id) => !healTried.has(id));
+    if (!ids.length) return;
+    ids.forEach((id) => healTried.add(id));
+    healBusy = true;
+    const room = lotsRoom.id;
+    lotsApi('/lots/' + room + '/drop', 'POST', { ids })
+      .then((d) => { if (lotsRoom && lotsRoom.id === room) lotsTake(d); }, () => {})
+      .then(() => { healBusy = false; });
   }
   async function lotsDo(fn) {
     lotsErr = '';
