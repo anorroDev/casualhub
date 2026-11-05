@@ -2372,6 +2372,8 @@
       hubOwn: S.gif && S.gif === hubSent ? hubSent : '',
       // сколько лотов уже на колесе: остальные зрители видят сразу, не дожидаясь этой вкладки
       seen: lotsList.filter((l) => lotsMap[l.id]).length,
+      // те же лоты по id: номер в очереди сбивается, когда лоты удаляют, а id — нет
+      ids: lotsList.filter((l) => lotsMap[l.id]).map((l) => l.id),
       status: S.sample ? '' : (scope === 'link' ? $('#statusMain').textContent : linkStatus).slice(0, 140),
       out: S.items.filter((i) => i.out).map((i) => i.name), winner: won,
     };

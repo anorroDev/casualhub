@@ -508,6 +508,8 @@ const routes = {
     if (cleanHandle(confirm) !== u.uname) return fail(400, `Чтобы удалить, впиши его юзернейм @${u.uname}.`);
     const id = u.id;
     await env.DB.batch([
+      // до удаления лотов: у сборов, где они были, новая версия, и страницы сразу перечитают список
+      'UPDATE lot_rooms SET ver = ver + 1 WHERE id IN (SELECT room_id FROM lots WHERE user_id = ?1)',
       'DELETE FROM sessions WHERE user_id = ?1',
       'DELETE FROM shelves WHERE user_id = ?1',
       'DELETE FROM tierlists WHERE user_id = ?1',
@@ -1342,17 +1344,48 @@ const routes = {
   },
   // ведущий убрал лоты со своего колеса: из сбора они удаляются совсем — у зрителей пропадают без следа,
   // а место в лимите зрителя освобождается. Ведущему можно и после конца сбора
+  // Админ (с открытым входом в админку) может то же самое в любом сборе.
+  // names — строки, которые зрители видят как «Ведущий»: названия с колеса ведущего, которых нет среди лотов.
+  // Они убираются из последнего снимка колеса; если вкладка ведущего открыта и это его участник, она пришлёт его снова
   async 'POST /lots/:code/drop'({ env, request, me, arg }) {
     if (burst('lotdrop:' + me.id, 60, 60e3)) return tooMany(1);
-    const room = await env.DB.prepare('SELECT 1 FROM lot_rooms WHERE id = ? AND owner_id = ?').bind(arg, me.id).first();
+    const room = await env.DB.prepare('SELECT owner_id, live FROM lot_rooms WHERE id = ?').bind(arg).first();
     if (!room) return fail(404, 'Такого сбора нет.');
+    const admin = room.owner_id !== me.id;
+    if (admin && !(await adminActive(env, request, me))) return fail(404, 'Такого сбора нет.');
     const b = await readBody(request);
     const ids = [...new Set((Array.isArray(b.ids) ? b.ids : []).map(String).filter((x) => /^[0-9a-f]{16}$/.test(x)))].slice(0, MAX_LOTS);
+    const names = new Set((Array.isArray(b.names) ? b.names : []).slice(0, MAX_LOTS).map((x) => clip(x, LOT_NAME).toLowerCase()).filter(Boolean));
+    const q = ids.map((id) => env.DB.prepare('DELETE FROM lots WHERE room_id = ? AND id = ?').bind(arg, id));
+    // удалённые лоты сразу уходят и с колеса в снимке: сектор с id лота — по id, сектор старого снимка без id — по названию
+    const idSet = new Set(ids), lotNames = new Set();
+    let ordered = [];
     if (ids.length) {
-      await env.DB.batch([
-        ...ids.map((id) => env.DB.prepare('DELETE FROM lots WHERE room_id = ? AND id = ?').bind(arg, id)),
-        env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(arg),
-      ]);
+      ({ results: ordered } = await env.DB.prepare('SELECT id, name FROM lots WHERE room_id = ? ORDER BY created_at').bind(arg).all());
+      ordered.filter((x) => idSet.has(x.id)).forEach((x) => lotNames.add(String(x.name).toLowerCase()));
+    }
+    if ((names.size || lotNames.size) && room.live) {
+      let live = null;
+      try { live = JSON.parse(room.live); } catch (e) {}
+      if (live) {
+        // забранных ведущим лотов стало меньше: иначе следующий новый лот посчитался бы уже забранным
+        if (lotNames.size) {
+          const was = lotsSeen(live, ordered);
+          live.seen = Math.max(0, was.filter((x) => !idSet.has(x.id)).length);
+          if (Array.isArray(live.ids)) live.ids = live.ids.filter((x) => !idSet.has(x));
+        }
+        const low = (n) => String(n).toLowerCase();
+        const gone = (x) => (x.l ? idSet.has(x.l) || names.has(low(x.n)) : names.has(low(x.n)) || lotNames.has(low(x.n)));
+        const keep = (Array.isArray(live.segs) ? live.segs : []).filter((x) => x && !gone(x));
+        const sum = keep.reduce((a, x) => a + (+x.p || 0), 0);
+        live.segs = keep.map((x) => ({ ...x, p: sum > 0 ? (+x.p || 0) / sum : 1 / keep.length }));
+        live.out = (Array.isArray(live.out) ? live.out : []).filter((n) => !names.has(low(n)) && !lotNames.has(low(n)));
+        q.push(env.DB.prepare('UPDATE lot_rooms SET live = ? WHERE id = ?').bind(JSON.stringify(live), arg));
+      }
+    }
+    if (q.length) {
+      await env.DB.batch([...q, env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(arg)]);
+      if (admin) await adminLog(env, request, me, `lots ${arg}: removed ${ids.length} lots${names.size ? ', ' + names.size + ' host names' : ''}`, true);
     }
     return lotAnswer(env, arg, me);
   },
@@ -1405,7 +1438,7 @@ const routes = {
     if (burst('lotlive:' + me.id, 240, 60e3)) return tooMany(1);
     const live = cleanLive(await readBody(request));
     const data = JSON.stringify(live);
-    if (data.length > 72000) return fail(413, 'Слишком много лотов на колесе.'); // с id лотов у секторов
+    if (data.length > 90000) return fail(413, 'Слишком много лотов на колесе.'); // с id лотов у секторов и списком забранных
     const r = await env.DB.prepare('UPDATE lot_rooms SET live = ? WHERE id = ? AND owner_id = ?').bind(data, arg, me.id).run();
     if (!r.meta.changes) return fail(404, 'Такого сбора нет.');
     return json({ ok: true });
@@ -1783,15 +1816,23 @@ function lotsGone(room, lots) {
   const segs = Array.isArray(live.segs) ? live.segs : [];
   const ids = new Set(segs.map((x) => x && x.l).filter(Boolean));
   const names = new Set([...segs.map((x) => x && x.n), ...(Array.isArray(live.out) ? live.out : [])].filter((n) => typeof n === 'string').map((n) => n.toLowerCase()));
-  const seen = Math.max(0, Math.min(lots.length, Math.round(+live.seen || 0)));
-  return new Set(lots.slice(0, seen).filter((l) => !ids.has(l.id) && !names.has(String(l.name).toLowerCase())).map((l) => l.id));
+  return new Set(lotsSeen(live, lots).filter((l) => !ids.has(l.id) && !names.has(String(l.name).toLowerCase())).map((l) => l.id));
+}
+// лоты, которые вкладка ведущего уже забрала на колесо: по списку id; у снимков старой версии — первые seen по времени
+function lotsSeen(live, lots) {
+  if (Array.isArray(live.ids)) { const s = new Set(live.ids); return lots.filter((l) => s.has(l.id)); }
+  return lots.slice(0, Math.max(0, Math.min(lots.length, Math.round(+live.seen || 0))));
 }
 // перед добавлением или заменой: убранные ведущим лоты той же игры и свои убранные лоты удаляем,
 // чтобы игра не считалась занятой, а место в лимите освободилось. Возвращает оставшиеся лоты
 async function dropGone(env, room, have, lot, me) {
   const gone = lotsGone(room, have);
   if (!gone.size) return have;
-  const drop = have.filter((x) => gone.has(x.id) && (x.user_id === me.id || x.ref === lot.ref || lotSame(x.name, lot.name, !!room.fuzzy)));
+  // свои убранные — только по точному снимку (со списком забранных id): по номеру в очереди после удалений
+  // можно ошибиться и принять за убранный свой же лот, который ведущий ещё не забрал
+  let exact = false;
+  try { exact = Array.isArray(JSON.parse(room.live || 'null').ids); } catch (e) {}
+  const drop = have.filter((x) => gone.has(x.id) && ((exact && x.user_id === me.id) || x.ref === lot.ref || lotSame(x.name, lot.name, !!room.fuzzy)));
   if (!drop.length) return have;
   await env.DB.batch(drop.map((x) => env.DB.prepare('DELETE FROM lots WHERE room_id = ? AND id = ?').bind(room.id, x.id)));
   return have.filter((x) => !drop.includes(x));
@@ -1870,6 +1911,7 @@ function cleanLive(b) {
     hubImg: b && STICKER_RE.test(String(b.hubImg)) ? b.hubImg : '',
     hubOwn: b && /^g[a-z0-9]{1,30}$/.test(String(b.hubOwn)) ? b.hubOwn : '',
     seen: Math.max(0, Math.min(MAX_LOTS, Math.round(finite(b && b.seen)))),
+    ...(Array.isArray(b && b.ids) ? { ids: b.ids.slice(0, MAX_LOTS).map(String).filter((x) => /^[0-9a-f]{16}$/.test(x)) } : {}),
     music: { bg: lotTrack(b && b.music && b.music.bg), win: lotTrack(b && b.music && b.music.win) },
     status: clip(b && b.status, 140),
     out: (Array.isArray(b && b.out) ? b.out : []).slice(0, MAX_LOTS).map((x) => clip(x, LOT_NAME)),
@@ -1898,7 +1940,16 @@ async function lotAnswer(env, id, me, knownVer) {
   try { out.live = row.live ? JSON.parse(row.live) : null; } catch (e) {}
   // список лотов отдаём, только если он поменялся: страница спрашивает часто
   if (String(knownVer) !== String(row.ver)) {
-    const { results } = await env.DB.prepare('SELECT l.id, l.ref, l.name, l.img, l.link, l.user_id, u.username FROM lots l LEFT JOIN users u ON u.id = l.user_id WHERE l.room_id = ? ORDER BY l.created_at LIMIT ?').bind(id, MAX_LOTS).all();
+    let { results } = await env.DB.prepare('SELECT l.id, l.ref, l.name, l.img, l.link, l.user_id, u.id AS uid, u.username FROM lots l LEFT JOIN users u ON u.id = l.user_id WHERE l.room_id = ? ORDER BY l.created_at LIMIT ?').bind(id, MAX_LOTS).all();
+    // лоты аккаунтов, которых больше нет (удалены раньше, чем это начали чистить): убираем из сбора насовсем
+    if (results.some((x) => !x.uid)) {
+      await env.DB.batch([
+        env.DB.prepare('DELETE FROM lots WHERE room_id = ? AND user_id NOT IN (SELECT id FROM users)').bind(id),
+        env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(id),
+      ]);
+      results = results.filter((x) => x.uid);
+      out.room.ver = row.ver + 1;
+    }
     out.lots = results.map((x) => ({ id: x.id, ref: x.ref, name: x.name, img: x.img, link: x.link, by: x.username || '', mine: !!me && x.user_id === me.id }));
   }
   return json(out);

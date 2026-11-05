@@ -45,7 +45,7 @@
   const pathCode = /^\/lots\/([A-Za-z0-9]{12})\/?$/.exec(location.pathname);
   const code = pathCode ? pathCode[1] : location.hash.slice(1);
   const view = $('#view');
-  const S = { room: null, lots: [], live: null, offset: 0, results: [], busy: false, winner: null, firstPoll: true, pending: null, replacing: null };
+  const S = { room: null, lots: [], live: null, offset: 0, results: [], busy: false, winner: null, firstPoll: true, pending: null, replacing: null, admin: false };
   // за этим сбором следит мини-плеер на других страницах сайта (lots-follow.js): музыка не обрывается при переходе
   const FOLLOW_KEY = 'casualhub.lots.follow.v1';
   // on — эта страница открыта сейчас (мини-плеер молчит), heard — зритель включил звук (без этого мини-плеер не играет)
@@ -65,12 +65,17 @@
   const serverNow = () => Date.now() + S.offset;
   // лоты, которые ведущий убрал с колеса (они были на колесе, а теперь их там нет и они не вылетали).
   // Зрителям они не показываются, игру не занимают и в лимит не считаются: сервер удалит их при следующем добавлении
+  // лоты, которые вкладка ведущего уже забрала: по списку id, у снимков старой версии — первые seen
+  function seenLots(live) {
+    if (Array.isArray(live.ids)) { const s = new Set(live.ids); return S.lots.filter((l) => s.has(l.id)); }
+    return S.lots.slice(0, +live.seen || 0);
+  }
   function removedKeys() {
     const live = S.live;
     if (!live) return new Set();
     const out = new Set((Array.isArray(live.out) ? live.out : []).map((x) => x.toLowerCase()));
     const onWheel = new Set(liveSegs().map((x) => x.n.toLowerCase()));
-    return new Set(S.lots.slice(0, +live.seen || 0).map((x) => x.name.toLowerCase()).filter((k) => !onWheel.has(k) && !out.has(k)));
+    return new Set(seenLots(live).map((x) => x.name.toLowerCase()).filter((k) => !onWheel.has(k) && !out.has(k)));
   }
   const mine = () => { const gone = removedKeys(); return S.lots.filter((l) => l.mine && !gone.has(l.name.toLowerCase())).length; };
   const timeLeft = () => (S.room && S.room.endsAt ? S.room.endsAt - serverNow() : null);
@@ -282,7 +287,12 @@
     const segs = live && Array.isArray(live.segs) ? live.segs : [];
     if (exact) return segs;
     const byId = new Map(S.lots.map((l) => [l.id, l.name]));
-    return segs.map((x) => { const n = x.l && byId.get(x.l); return n && n !== x.n ? { ...x, n } : x; });
+    // сектор лота, которого в сборе уже нет (удалили, а вкладка ведущего ещё не обновила колесо), не показываем:
+    // иначе он висел бы на колесе и в списке как игра ведущего
+    const kept = segs.filter((x) => !(x.l && !byId.has(x.l)));
+    const sum = kept.reduce((a, x) => a + x.p, 0);
+    const scale = kept.length < segs.length && sum > 0 ? 1 / sum : 1;
+    return kept.map((x) => { const n = x.l && byId.get(x.l); return n && n !== x.n ? { ...x, n, p: x.p * scale } : scale !== 1 ? { ...x, p: x.p * scale } : x; });
   }
   // на колесе то же, что у ведущего. Новые лоты, которые его вкладка ещё не забрала, видны сразу: она может быть в фоне
   function shownSegs() {
@@ -291,7 +301,8 @@
     if (live && (live.winner || (live.spin && serverNow() < live.spin.at + live.spin.ms))) return liveSegs(true);
     const hostSegs = liveSegs();
     const names = new Set([...hostSegs.map((x) => x.n), ...(live && Array.isArray(live.out) ? live.out : [])].map((n) => n.toLowerCase()));
-    const wait = S.lots.slice(live ? +live.seen || 0 : 0).filter((x) => !names.has(x.name.toLowerCase()));
+    const taken = live ? new Set(seenLots(live).map((l) => l.id)) : new Set();
+    const wait = S.lots.filter((x) => !taken.has(x.id) && !names.has(x.name.toLowerCase()));
     if (!wait.length) return hostSegs;
     const n = hostSegs.length + wait.length;
     return [...hostSegs.map((x) => ({ ...x, p: x.p * hostSegs.length / n })), ...wait.map((x, i) => { const c = PALETTE[(hostSegs.length + i) % PALETTE.length]; return { n: x.name, p: 1 / n, c, t: inkOn(c) }; })];
@@ -776,7 +787,9 @@
     const n = rows.length;
     // правки доступны, пока ведущий разрешает, сбор открыт, лот не вылетел и колесо не определило победителя
     const canEdit = !!token && !!S.room.editOwn && isOpen() && !(S.live && S.live.winner);
-    const html = `<p class="board-stat"><b>${n}</b> ${plural(n, 'лот', 'лота', 'лотов')}</p>${n ? `<ul class="lots-list">${rows.map((l) => { const k = l.name.toLowerCase(), gone = out.has(k); const edit = l.mine && canEdit && !gone ? `<span class="lots-acts"><button type="button" class="btn small ghost" data-replace="${esc(l.id)}"${S.replacing === l.id ? ' aria-pressed="true"' : ''}>Заменить</button><button type="button" class="btn small ghost danger" data-del="${esc(l.id)}">Убрать</button></span>` : ''; return `<li data-lot="${esc(l.id)}" class="${gone ? 'out' : ''}">${lotPic(l)}<span class="lots-who"><b>${esc(l.name)}</b><small>${esc(l.by)}${l.mine ? ' · твой' : ''}${gone ? ' · вылетел' : ''}</small></span>${edit}</li>`; }).join('')}</ul>` : '<p class="lots-empty">Пока ни одного лота. Будь первым</p>'}`;
+    // админ с открытым входом в админку и хозяин сбора удаляют любой лот и строки «Ведущий»
+    const canMod = !!token && (S.admin || !!S.room.own);
+    const html = `<p class="board-stat"><b>${n}</b> ${plural(n, 'лот', 'лота', 'лотов')}</p>${n ? `<ul class="lots-list">${rows.map((l) => { const k = l.name.toLowerCase(), gone = out.has(k); const own = l.mine && canEdit && !gone ? `<button type="button" class="btn small ghost" data-replace="${esc(l.id)}"${S.replacing === l.id ? ' aria-pressed="true"' : ''}>Заменить</button><button type="button" class="btn small ghost danger" data-del="${esc(l.id)}">Убрать</button>` : ''; const host = String(l.id).startsWith('host:'); const modBtn = canMod && !own ? `<button type="button" class="btn small ghost danger" ${host ? `data-mod-name="${esc(l.name)}"` : `data-mod-lot="${esc(l.id)}"`} title="${S.admin ? 'Удалить как админ' : 'Удалить из сбора'}">Удалить</button>` : ''; const edit = own || modBtn ? `<span class="lots-acts">${own}${modBtn}</span>` : ''; return `<li data-lot="${esc(l.id)}" class="${gone ? 'out' : ''}">${lotPic(l)}<span class="lots-who"><b>${esc(l.name)}</b><small>${esc(l.by)}${l.mine ? ' · твой' : ''}${gone ? ' · вылетел' : ''}</small></span>${edit}</li>`; }).join('')}</ul>` : '<p class="lots-empty">Пока ни одного лота. Будь первым</p>'}`;
     if (box.dataset.sig === html) return;
     box.dataset.sig = html;
     // как участники в Колесе: оставшиеся плывут на новое место, новые въезжают
@@ -884,6 +897,21 @@
       poll();
     } finally { S.busy = false; }
   }
+  async function modDrop(body, btn) {
+    if (S.busy) return;
+    S.busy = true;
+    if (btn) btn.disabled = true;
+    try {
+      const d = await api(`/lots/${encodeURIComponent(code)}/drop`, 'POST', body);
+      S.lots = d.lots || S.lots;
+      S.room = d.room;
+      if (d.live !== undefined) S.live = d.live;
+      paintAll();
+    } catch (e) {
+      if (btn) { btn.disabled = false; delete btn.dataset.armed; btn.textContent = 'Удалить'; }
+      lotMsg(e.message);
+    } finally { S.busy = false; }
+  }
   async function removeLot(id, btn) {
     if (S.busy) return;
     S.busy = true;
@@ -961,6 +989,17 @@
       return;
     }
     if (e.target.closest('[data-repl-cancel]')) { S.replacing = null; S.pending = null; S.results = []; paintAdd(); paintList(); return; }
+    const mb = e.target.closest('[data-mod-lot], [data-mod-name]');
+    if (mb) {
+      if (!mb.dataset.armed) {
+        mb.dataset.armed = '1';
+        mb.textContent = 'Точно удалить?';
+        setTimeout(() => { if (mb.isConnected) { delete mb.dataset.armed; mb.textContent = 'Удалить'; } }, 3000);
+        return;
+      }
+      modDrop(mb.dataset.modLot ? { ids: [mb.dataset.modLot] } : { names: [mb.dataset.modName] }, mb);
+      return;
+    }
     const del = e.target.closest('[data-del]');
     if (del) {
       // убрать нужно подтвердить: лот вернуть нельзя, а лимит освободится
@@ -1080,6 +1119,8 @@
   paint([], 0);
   paintSound();
   paintPlaying();
+  // админ с открытым входом в админку видит кнопку «Удалить» у каждого лота
+  if (token && user) api('/admin/me').then((d) => { if (d && d.active) { S.admin = true; if (S.room) paintList(); } }, () => {});
   if (/^[A-Za-z0-9]{12}$/.test(code)) poll();
   else paintGone('В ссылке нет кода сбора. Попроси ведущего прислать её ещё раз.');
 })();
