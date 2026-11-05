@@ -415,6 +415,36 @@ details[open] > summary .chev { transform: rotate(180deg); }
 .oamt { font-size: 13px; font-variant-numeric: tabular-nums; }
 .orow .link-btn { font-size: 13px; }
 .actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 18px; }
+
+/* «В планах»: оценки из Мнения со статусом «В планах», одним нажатием на колесо */
+.plans .crit-tip a { color: var(--accent); font-weight: 600; }
+.plans-cats { margin-top: 14px; }
+.plans-cats:empty { display: none; }
+.plans-list { list-style: none; margin: 10px 0 0; padding: 0; max-height: min(62vh, 640px); overflow-y: auto; overscroll-behavior: contain; }
+.plrow { display: grid; grid-template-columns: minmax(0, 1fr) 36px; align-items: center; gap: 12px; padding: 9px 0; }
+.plrow + .plrow { border-top: 1px solid var(--line); }
+.plrow .e-name { font-size: 15px; }
+.plrow.on .e-name { color: var(--ink-2); }
+.pl-btn { width: 36px; height: 36px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 9px; background: var(--panel-2); color: var(--ink); cursor: pointer; transition: background-color .15s, border-color .15s, color .15s; }
+.pl-btn:hover { border-color: var(--accent); }
+.pl-btn[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--panel); }
+.pl-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.plans-empty { margin-top: 14px; padding: 16px; border: 1px dashed var(--line); border-radius: 14px; color: var(--ink-2); font-size: 14px; text-wrap: pretty; }
+.plans-empty a { color: var(--accent); font-weight: 600; }
+.plans .actions { margin-top: 12px; }
+/* на широком экране колесо слева, справа участники и под ними «В планах»; ещё шире — «В планах» третьей колонкой */
+@media (min-width: 980px) {
+  .layout:has(.plans:not([hidden])) { grid-template-rows: auto 1fr; }
+  .layout > .stage { grid-row: span 2; }
+  .layout > .plans { grid-column: 2; }
+}
+@media (min-width: 1440px) {
+  .page:has(.plans:not([hidden])) { max-width: 1560px; }
+  .layout:has(.plans:not([hidden])) { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, .78fr); grid-template-rows: none; }
+  .layout > .stage { grid-row: auto; }
+  .layout > .plans { grid-column: 3; grid-row: 1; position: sticky; top: 16px; }
+}
+@media (max-width: 979px) { .layout[data-section="wheel"] .plans { display: none; } }
 fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 fieldset:disabled { opacity: .6; }
 
@@ -1119,6 +1149,17 @@ html.unslop::before { display: none; }
           <button type="button" class="btn small danger" id="clear">Очистить всё</button>
         </div>
       </fieldset>
+    </section>
+
+    <section class="card plans" id="plans" aria-labelledby="plansTitle">
+      <div class="card-head">
+        <h2 class="eyebrow"><span class="dot" aria-hidden="true"></span><span id="plansTitle">В планах</span></h2>
+        <a class="btn text" href="/opinion/" title="Открыть Мнение">Мнение</a>
+      </div>
+      <p class="crit-tip">Всё, что ты отметил «В планах» в Мнении: фильмы, игры, сериалы и остальное. Нажми <b>+</b>, и оно на колесе.</p>
+      <div class="seg plans-cats" id="plansCats" role="group" aria-label="Категория"></div>
+      <ol class="plans-list" id="plansList"></ol>
+      <div class="actions"><button type="button" class="btn small ghost" id="plansAll">Добавить все</button></div>
     </section>
   </main>
 </div>
