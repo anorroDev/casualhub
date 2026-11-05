@@ -420,6 +420,7 @@ details[open] > summary .chev { transform: rotate(180deg); }
 .plans .crit-tip a { color: var(--accent); font-weight: 600; }
 .plans-cats { margin-top: 14px; }
 .plans-cats:empty { display: none; }
+.plans-cats b { font-weight: 600; opacity: .6; }
 .plans-list { list-style: none; margin: 10px 0 0; padding: 0; max-height: min(62vh, 640px); overflow-y: auto; overscroll-behavior: contain; }
 .plrow { display: grid; grid-template-columns: minmax(0, 1fr) 36px; align-items: center; gap: 12px; padding: 9px 0; }
 .plrow + .plrow { border-top: 1px solid var(--line); }
@@ -1156,7 +1157,7 @@ html.unslop::before { display: none; }
         <h2 class="eyebrow"><span class="dot" aria-hidden="true"></span><span id="plansTitle">В планах</span></h2>
         <a class="btn text" href="/opinion/" title="Открыть Мнение">Мнение</a>
       </div>
-      <p class="crit-tip">Всё, что ты отметил «В планах» в Мнении: фильмы, игры, сериалы и остальное. Нажми <b>+</b>, и оно на колесе.</p>
+      <p class="crit-tip">Всё, что ты отметил «В планах» в Мнении: фильмы, игры, сериалы и остальное. Нажми «+», и оно на колесе.</p>
       <div class="seg plans-cats" id="plansCats" role="group" aria-label="Категория"></div>
       <ol class="plans-list" id="plansList"></ol>
       <div class="actions"><button type="button" class="btn small ghost" id="plansAll">Добавить все</button></div>
