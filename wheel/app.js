@@ -2261,14 +2261,14 @@
       <div id="lotsRooms"></div>`;
     lotsPaintRooms();
   }
-  // все сборы ведущего: у каждого ссылка для зрителей и пульт
+  // все сборы ведущего: у каждого ссылка (по ней же ведущий открывает свой пульт)
   function lotsPaintRooms() {
     const box = $('#lotsRooms');
     if (!box) return;
     const now = Date.now() + lotsOffset;
     const rows = lotsRooms.map((r) => {
       const state = r.winner ? '🏆 ' + r.winner : r.closed ? 'закрыт' : r.endsAt && r.endsAt <= now ? 'время вышло' : 'открыт';
-      return `<li><span class="lots-room"><b>${esc(r.title || 'Без названия')}</b><small>${esc(LOT_KIND_NAMES[r.kind] || '')} · лотов: ${r.n} · ${esc(state)}</small></span><a class="btn small primary" href="/lots/${esc(r.id)}">Пульт</a><button type="button" class="btn small ghost" data-lots-copy="${esc(r.id)}">Ссылка</button><button type="button" class="btn text" data-lots-del="${esc(r.id)}">Удалить</button></li>`;
+      return `<li><span class="lots-room"><b>${esc(r.title || 'Без названия')}</b><small>${esc(LOT_KIND_NAMES[r.kind] || '')} · лотов: ${r.n} · ${esc(state)}</small></span><button type="button" class="btn small ghost" data-lots-copy="${esc(r.id)}">Ссылка</button><button type="button" class="btn text" data-lots-del="${esc(r.id)}">Удалить</button></li>`;
     });
     box.innerHTML = rows.length ? `<div class="lots-f"><span>Мои сборы</span><ul class="lots-rooms">${rows.join('')}</ul></div>` : '';
   }
