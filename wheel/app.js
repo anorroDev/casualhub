@@ -202,26 +202,64 @@
   }
 
   // ---------- «В планах» из Мнения ----------
-  // Мнение хранит оценки в localStorage этого же сайта. Берём свои (или гостевые, если не вошёл) со статусом «В планах»
+  // Свои оценки со статусом «В планах»: те, что лежат в этом браузере (их хранит Мнение), плюс те, что есть в аккаунте.
+  // С аккаунта приходят и оценки, поставленные на другом устройстве; из двух версий одной оценки берётся более свежая
   const PLAN_RATINGS_KEY = 'ocenshik.ratings.v2';
   const PLAN_USER_KEY = 'ocenshik.user.v1';
+  const PLAN_TOKENS_KEY = 'casualhub.tokens.v1';
+  const PLAN_DELETED_KEY = 'casualhub.deleted.v1'; // удалённые здесь, но ещё не отправленные в аккаунт
   let plansCat = '*';
+  let plansRemote = null; // { ratings, deleted } с сервера, пока не загрузилось — null
   const nameKey = (n) => String(n || '').trim().slice(0, 60).toLowerCase();
+  const planStamp = (r) => +new Date(r.updatedAt || r.createdAt || 0) || 0;
+  const readLS = (k, def) => { try { const v = JSON.parse(localStorage.getItem(k) || 'null'); return v == null ? def : v; } catch (e) { return def; } };
   function readPlans() {
-    let list = [], user = null;
-    try { list = JSON.parse(localStorage.getItem(PLAN_RATINGS_KEY) || '[]'); } catch (e) {}
-    try { user = JSON.parse(localStorage.getItem(PLAN_USER_KEY) || 'null'); } catch (e) {}
-    if (!Array.isArray(list)) return [];
+    const user = readLS(PLAN_USER_KEY, null);
+    let local = readLS(PLAN_RATINGS_KEY, []);
+    if (!Array.isArray(local)) local = [];
+    local = local.filter((r) => {
+      const a = r && r.author;
+      return r && !r.example && (user && user.id ? a && a.id === user.id : !a || a.name === 'Гость');
+    });
+    const byId = new Map(local.filter((r) => r.id).map((r) => [r.id, r]));
+    if (user && user.id && plansRemote) {
+      // удалённое на любом устройстве больше не показываем, если после удаления оценку не меняли
+      const gone = new Map();
+      [...plansRemote.deleted, ...readLS(PLAN_DELETED_KEY, [])].forEach((d) => { if (d && d.id) gone.set(d.id, Math.max(gone.get(d.id) || 0, +d.at || 0)); });
+      plansRemote.ratings.forEach((r) => {
+        if (!r || !r.id || r.example) return;
+        const loc = byId.get(r.id);
+        if (!loc || planStamp(r) > planStamp(loc)) byId.set(r.id, Object.assign({}, r, { catName: r.catName || r.catLabel }));
+      });
+      gone.forEach((at, id) => { const r = byId.get(id); if (r && planStamp(r) <= at) byId.delete(id); });
+    }
     const seen = new Set();
-    return list.filter((r) => {
-      if (!r || r.example || !/В планах/.test(r.status || '') || !String(r.name || '').trim()) return false;
-      const a = r.author;
-      if (user && user.id ? !(a && a.id === user.id) : !(!a || a.name === 'Гость')) return false;
+    return [...byId.values()].filter((r) => {
+      if (!/В планах/.test(r.status || '') || !String(r.name || '').trim()) return false;
       const k = nameKey(r.name);
       if (seen.has(k)) return false;
       seen.add(k);
       return true;
     });
+  }
+  // свои оценки из аккаунта; без входа ничего не делаем
+  let plansPulling = null, plansPulledAt = 0;
+  function pullPlans() {
+    const user = readLS(PLAN_USER_KEY, null);
+    const token = user && user.id && (readLS(PLAN_TOKENS_KEY, {}) || {})[user.id];
+    if (!token) { if (plansRemote) { plansRemote = null; renderPlans(); } return; }
+    if (plansPulling || Date.now() - plansPulledAt < 20e3) return;
+    const get = (url) => fetch(url, { headers: { authorization: 'Bearer ' + token }, cache: 'no-store' }).then((r) => (r.ok ? r.json() : null));
+    plansPulling = (user.serverId ? Promise.resolve(user.serverId) : get('/api/me').then((d) => d && d.user && d.user.id))
+      .then((sid) => sid && get('/api/shelf/' + encodeURIComponent(sid)))
+      .then((d) => {
+        if (!d || !Array.isArray(d.ratings)) return;
+        plansRemote = { ratings: d.ratings, deleted: Array.isArray(d.deleted) ? d.deleted : [] };
+        plansPulledAt = Date.now();
+        renderPlans();
+      })
+      .catch(() => {})
+      .finally(() => { plansPulling = null; });
   }
   function planSub(r) {
     const year = (String(r.meta || '').match(/(?:^|\D)((?:19|20)\d{2})(?!\d)/) || [])[1];
@@ -291,7 +329,13 @@
       plansAdd(plansCat === '*' ? all : all.filter((r) => (r.catName || 'Другое') === plansCat));
     });
     // оценки поменялись во вкладке с Мнением — список обновится сам
-    window.addEventListener('storage', (e) => { if (e.key === PLAN_RATINGS_KEY || e.key === PLAN_USER_KEY || e.key === null) renderPlans(); });
+    window.addEventListener('storage', (e) => {
+      if (e.key === PLAN_USER_KEY || e.key === PLAN_TOKENS_KEY) { plansPulledAt = 0; pullPlans(); }
+      if (e.key === PLAN_RATINGS_KEY || e.key === PLAN_USER_KEY || e.key === PLAN_DELETED_KEY || e.key === null) renderPlans();
+    });
+    // вернулся на вкладку (например, поставил оценку на телефоне) — подтягиваем аккаунт заново, не чаще раза в 20 секунд
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) pullPlans(); });
+    pullPlans();
   }
 
   function save() {
