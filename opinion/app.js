@@ -2408,6 +2408,8 @@ function renderBoard() {
   el.empty.hidden = state.ratings.length > 0;
   el.exampleBar.hidden = !(state.canWrite && state.ratings.some(r => r.example));
   el.mnavCount.textContent = state.ratings.length ? String(state.ratings.length) : '';
+  const visBtn = document.getElementById('visBulkBtn');
+  if (visBtn) visBtn.hidden = !(state.canWrite && state.ratings.some(ownRating));
   renderStats();
   updateCmpTray();
   if (pendingFocus) {
@@ -5276,6 +5278,122 @@ if (el.cmpClose) el.cmpClose.addEventListener('click', closeCompareModal);
 if (el.cmpClearBtn) el.cmpClearBtn.addEventListener('click', () => { state.cmpIds = []; closeCompareModal(); renderBoard(); });
 if (el.compareModal) el.compareModal.addEventListener('click', e => { if (e.target === el.compareModal) closeCompareModal(); });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && el.compareModal && !el.compareModal.hidden) closeCompareModal(); });
+
+/* ---------- Кто видит оценки: всем своим сразу или выбранным ---------- */
+// своя оценка: с аккаунтом — его, без аккаунта — гостевая; примеры не трогаем
+function ownRating(r) {
+  return !!r && !r.example && (state.user ? !!(r.author && r.author.id === state.user.id) : !r.author || r.author.name === 'Гость');
+}
+const VIS_LABEL = { public: 'Все', friends: 'Друзья', private: 'Только я' };
+const VIS_BULK_HINT = {
+  public: 'Их увидят и друзья, и те, кто откроет твой профиль',
+  friends: 'Их увидят друзья: в профиле и ленте',
+  private: 'Их не увидит никто, даже друзья'
+};
+const visOf = r => (r.vis === 'public' || r.vis === 'private' ? r.vis : 'friends');
+const vb = { scope: 'all', picked: new Set(), vis: '', q: '' };
+function visMine() { return state.ratings.filter(ownRating).sort((a, b) => a.name.localeCompare(b.name, 'ru')); }
+function visTargets() { return vb.scope === 'all' ? visMine() : visMine().filter(r => vb.picked.has(r.id)); }
+function visShown() {
+  const q = keyOf(vb.q);
+  return visMine().filter(r => !q || [r.nameKey, keyOf(catNameOf(r)), keyOf(r.status)].join(' ').includes(q));
+}
+function renderVisModal() {
+  const $v = id => document.getElementById(id);
+  $v('visScope').querySelectorAll('[data-scope]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.scope === vb.scope)));
+  $v('visPick').hidden = vb.scope !== 'pick';
+  if (vb.scope === 'pick') {
+    const shown = visShown();
+    $v('visList').innerHTML = shown.length ? shown.map(r => `<li><label class="vis-row">
+      <input type="checkbox" data-vid="${esc(r.id)}"${vb.picked.has(r.id) ? ' checked' : ''}>
+      <span class="vr-name">${esc(r.name)}<small>${esc(catNameOf(r))}</small></span>
+      <span class="vr-vis">${VIS_LABEL[visOf(r)]}</span>
+    </label></li>`).join('') : '<li class="vis-none">Ничего не нашлось</li>';
+    $v('visPicked').textContent = `Выбрано: ${vb.picked.size}`;
+  }
+  $v('visBulkChips').querySelectorAll('[data-vis]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.vis === vb.vis)));
+  $v('visBulkHint').textContent = vb.vis ? VIS_BULK_HINT[vb.vis] : '';
+  const n = visTargets().length;
+  const btn = $v('visApply');
+  btn.disabled = !n || !vb.vis;
+  btn.textContent = !n ? (vb.scope === 'pick' ? 'Отметь оценки' : 'Нет своих оценок')
+    : !vb.vis ? 'Выбери, кто видит'
+    : `Применить к ${n} ${plural(n, 'оценке', 'оценкам', 'оценкам')}`;
+}
+function openVisModal() {
+  if (!state.canWrite) return;
+  vb.scope = 'all'; vb.picked = new Set(); vb.vis = ''; vb.q = '';
+  document.getElementById('visSearch').value = '';
+  renderVisModal();
+  document.getElementById('visModal').hidden = false;
+  document.documentElement.classList.add('locked');
+}
+function closeVisModal() {
+  const m = document.getElementById('visModal');
+  if (!m || m.hidden) return;
+  m.hidden = true;
+  document.documentElement.classList.remove('locked');
+}
+async function applyVis() {
+  const list = visTargets(), v = vb.vis;
+  if (!list.length || !v) return;
+  // правке нужна дата новее прежней: по ней аккаунт и другие устройства понимают, какая версия свежее.
+  // Сдвигаем на секунду, а не на «сейчас»: иначе у всех этих оценок в списке встала бы сегодняшняя дата
+  const bump = r => {
+    const t = +new Date(r.updatedAt || r.createdAt || 0);
+    return new Date(t > 0 ? t + 1000 : Date.now()).toISOString();
+  };
+  const changed = list.filter(r => visOf(r) !== v);
+  const withVis = r => {
+    const d = Object.assign({}, r, { updatedAt: bump(r) });
+    if (v === 'friends') delete d.vis; else d.vis = v;
+    return d;
+  };
+  try {
+    if (state.mode === 'db') {
+      for (const r of changed) await putRating(r.id, withVis(r));
+    } else if (changed.length) {
+      const ids = new Set(changed.map(r => r.id));
+      state.ratings = state.ratings.map(r => (ids.has(r.id) ? withVis(r) : r));
+      saveLocalRatings(); // одно сохранение на все: аккаунт получит их одной отправкой
+      renderBoard();
+    }
+  } catch (e) { handleWriteError(e); return; }
+  closeVisModal();
+  toast(changed.length ? `Кто видит: ${VIS_LABEL[v]}. Изменено оценок: ${changed.length}` : `Эти оценки уже видят: ${VIS_LABEL[v]}`);
+}
+(() => {
+  const m = document.getElementById('visModal');
+  if (!m) return;
+  document.getElementById('visBulkBtn').addEventListener('click', openVisModal);
+  document.getElementById('visClose').addEventListener('click', closeVisModal);
+  m.addEventListener('click', e => { if (e.target === m) closeVisModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeVisModal(); });
+  document.getElementById('visScope').addEventListener('click', e => {
+    const b = e.target.closest('[data-scope]');
+    if (!b) return;
+    vb.scope = b.dataset.scope;
+    renderVisModal();
+    if (vb.scope === 'pick') document.getElementById('visSearch').focus({ preventScroll: true });
+  });
+  document.getElementById('visSearch').addEventListener('input', e => { vb.q = e.target.value; renderVisModal(); });
+  document.getElementById('visList').addEventListener('change', e => {
+    const c = e.target.closest('[data-vid]');
+    if (!c) return;
+    if (c.checked) vb.picked.add(c.dataset.vid); else vb.picked.delete(c.dataset.vid);
+    renderVisModal();
+  });
+  // «Отметить все» и «Снять все» — только то, что сейчас видно в списке (с учётом поиска)
+  document.getElementById('visAllOn').addEventListener('click', () => { visShown().forEach(r => vb.picked.add(r.id)); renderVisModal(); });
+  document.getElementById('visAllOff').addEventListener('click', () => { visShown().forEach(r => vb.picked.delete(r.id)); renderVisModal(); });
+  document.getElementById('visBulkChips').addEventListener('click', e => {
+    const b = e.target.closest('[data-vis]');
+    if (!b) return;
+    vb.vis = b.dataset.vis;
+    renderVisModal();
+  });
+  document.getElementById('visApply').addEventListener('click', applyVis);
+})();
 
 if (el.favBtn) {
   el.favBtn.addEventListener('click', () => {

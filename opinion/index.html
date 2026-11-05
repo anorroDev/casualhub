@@ -1200,6 +1200,23 @@ button.lg-ref:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .sheet-preview img { display: block; max-width: 100%; max-height: 56vh; width: auto; height: auto; border-radius: 8px; }
 .sheet-wait { color: var(--ink-2); font-size: 14px; text-align: center; }
 .sheet-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+/* «Кто видит оценки»: всем своим оценкам сразу или выбранным */
+.vis-card { width: min(520px, 100%); }
+.vis-card .label { margin-bottom: 8px; }
+.vis-pick { display: grid; gap: 8px; }
+.vis-pick .search { margin-top: 0; }
+.vis-pick-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; font-size: 13px; color: var(--ink-2); }
+.vis-pick-bar .btn.text { height: 30px; padding: 0 8px; }
+.vis-list { list-style: none; margin: 0; padding: 0 4px 0 0; max-height: min(42vh, 360px); overflow-y: auto; overscroll-behavior: contain; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.vis-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 2px; cursor: pointer; }
+li + li > .vis-row { border-top: 1px solid var(--line); }
+.vis-row input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.vis-row .vr-name { min-width: 0; font-size: 14px; font-weight: 600; overflow-wrap: anywhere; }
+.vis-row .vr-name small { display: block; font-size: 12px; font-weight: 500; color: var(--ink-3); }
+.vis-row .vr-vis { font-size: 12px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+.vis-none { padding: 14px 2px; font-size: 13.5px; color: var(--ink-3); }
+.vis-bulk-hint { margin-top: 8px; font-size: 12.5px; color: var(--ink-2); text-wrap: pretty; }
+.vis-bulk-hint:empty { display: none; }
 .sheet-actions .btn { flex: 1 1 auto; }
 .sheet-hint { font-size: 12.5px; color: var(--ink-2); }
 .sheet-text { min-height: 160px; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
@@ -1674,6 +1691,7 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
           </div>
           <a class="btn small ghost" id="allRatingsLink" href="/profile/?all=1" title="Все оценки на отдельной странице: список, плитка, тир-лист, подробно">Все оценки</a>
           <div class="board-tools">
+          <button type="button" class="btn small ghost" id="visBulkBtn" title="Кто видит оценки: все сразу или выбранные" hidden>Кто видит</button>
           <details class="board-more" id="boardMore">
             <summary class="btn small ghost">Фильтры<b id="boardMoreHint"></b></summary>
             <div class="board-more-body">
@@ -1801,6 +1819,44 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
       </div>
     </div>
     <div id="cmpBody"></div>
+  </div>
+</div>
+
+<div class="sheet" id="visModal" hidden>
+  <div class="sheet-card vis-card" role="dialog" aria-modal="true" aria-labelledby="visTitle">
+    <div class="sheet-head">
+      <h3 id="visTitle">Кто видит оценки</h3>
+      <button type="button" class="mini-btn" id="visClose" aria-label="Закрыть">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div>
+      <span class="label">Какие оценки</span>
+      <div class="seg" id="visScope" role="group" aria-label="Какие оценки">
+        <button type="button" data-scope="all" aria-pressed="true">Все мои</button>
+        <button type="button" data-scope="pick" aria-pressed="false">Выбрать</button>
+      </div>
+    </div>
+    <div class="vis-pick" id="visPick" hidden>
+      <div class="search"><input id="visSearch" type="search" placeholder="Найти оценку" aria-label="Найти оценку" autocomplete="off" enterkeyhint="search"></div>
+      <div class="vis-pick-bar">
+        <span id="visPicked"></span>
+        <span><button type="button" class="btn text" id="visAllOn">Отметить все</button><button type="button" class="btn text" id="visAllOff">Снять все</button></span>
+      </div>
+      <ul class="vis-list" id="visList"></ul>
+    </div>
+    <div>
+      <span class="label">Кто их видит</span>
+      <div class="status-chips" id="visBulkChips" role="group" aria-label="Кто их видит">
+        <button type="button" class="status-chip" data-vis="public" aria-pressed="false"><span class="u-old">🌐 </span>Все</button>
+        <button type="button" class="status-chip" data-vis="friends" aria-pressed="false"><span class="u-old">👥 </span>Друзья</button>
+        <button type="button" class="status-chip" data-vis="private" aria-pressed="false"><span class="u-old">🔒 </span>Только я</button>
+      </div>
+      <p class="vis-bulk-hint" id="visBulkHint"></p>
+    </div>
+    <div class="sheet-actions">
+      <button type="button" class="btn primary" id="visApply" disabled>Применить</button>
+    </div>
   </div>
 </div>
 
