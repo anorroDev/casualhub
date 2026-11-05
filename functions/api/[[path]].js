@@ -1291,7 +1291,8 @@ const routes = {
     catch (e) { return fail(502, 'Поиск сейчас не отвечает, попробуй ещё раз.'); }
     if (lot.error) return fail(lot.status || 400, lot.error);
     // «одна игра — один лот» (галочка ведущего): та же игра из любого источника и похожая по названию («outlast» и «ooutlast») не пройдёт
-    const { results: have } = await env.DB.prepare('SELECT name, ref FROM lots WHERE room_id = ?').bind(arg).all();
+    const { results: all } = await env.DB.prepare('SELECT id, user_id, name, ref FROM lots WHERE room_id = ? ORDER BY created_at').bind(arg).all();
+    const have = await dropGone(env, room, all, lot, me);
     let ref = lot.ref;
     if (room.uniq) {
       const twin = lotTwin(room, [...have.map((x) => x.name), ...liveNames(room)], lot.name);
@@ -1365,7 +1366,10 @@ const routes = {
     catch (e) { return fail(502, 'Поиск сейчас не отвечает, попробуй ещё раз.'); }
     if (lot.error) return fail(lot.status || 400, lot.error);
     // тот же лот («заменить» на него же) не считается повтором, остальные — считаются
-    const { results: have } = await env.DB.prepare('SELECT id, name, ref FROM lots WHERE room_id = ?').bind(arg[0]).all();
+    const { results: all } = await env.DB.prepare('SELECT id, user_id, name, ref FROM lots WHERE room_id = ? ORDER BY created_at').bind(arg[0]).all();
+    // свой заменяемый лот не трогаем, даже если он считается убранным
+    const kept = await dropGone(env, room, all.filter((x) => x.id !== arg[1]), lot, me);
+    const have = [...kept, ...all.filter((x) => x.id === arg[1])];
     const others = have.filter((x) => x.id !== arg[1]);
     let ref = lot.ref;
     if (room.uniq) {
@@ -1768,6 +1772,29 @@ function liveNames(room) {
     const l = room.live ? JSON.parse(room.live) : null;
     return l ? [...(Array.isArray(l.segs) ? l.segs.map((x) => x && x.n) : []), ...(Array.isArray(l.out) ? l.out : [])].filter((n) => typeof n === 'string' && n) : [];
   } catch (e) { return []; }
+}
+// лоты, которые ведущий уже убрал со своего колеса, а в сборе они остались: их удаляет вкладка ведущего,
+// но она может быть закрыта или старой версии. Лот был на колесе (среди первых live.seen по времени добавления),
+// а теперь его нет ни среди секторов (по id лота или названию), ни среди вылетевших. lots — по created_at
+function lotsGone(room, lots) {
+  let live = null;
+  try { live = room.live ? JSON.parse(room.live) : null; } catch (e) {}
+  if (!live) return new Set();
+  const segs = Array.isArray(live.segs) ? live.segs : [];
+  const ids = new Set(segs.map((x) => x && x.l).filter(Boolean));
+  const names = new Set([...segs.map((x) => x && x.n), ...(Array.isArray(live.out) ? live.out : [])].filter((n) => typeof n === 'string').map((n) => n.toLowerCase()));
+  const seen = Math.max(0, Math.min(lots.length, Math.round(+live.seen || 0)));
+  return new Set(lots.slice(0, seen).filter((l) => !ids.has(l.id) && !names.has(String(l.name).toLowerCase())).map((l) => l.id));
+}
+// перед добавлением или заменой: убранные ведущим лоты той же игры и свои убранные лоты удаляем,
+// чтобы игра не считалась занятой, а место в лимите освободилось. Возвращает оставшиеся лоты
+async function dropGone(env, room, have, lot, me) {
+  const gone = lotsGone(room, have);
+  if (!gone.size) return have;
+  const drop = have.filter((x) => gone.has(x.id) && (x.user_id === me.id || x.ref === lot.ref || lotSame(x.name, lot.name, !!room.fuzzy)));
+  if (!drop.length) return have;
+  await env.DB.batch(drop.map((x) => env.DB.prepare('DELETE FROM lots WHERE room_id = ? AND id = ?').bind(room.id, x.id)));
+  return have.filter((x) => !drop.includes(x));
 }
 // есть ли среди names такая же или похожая игра (кроме лота skip). Возвращает найденное название или ''
 const lotTwin = (room, names, name) => names.find((n) => lotSame(n, name, !!room.fuzzy)) || '';

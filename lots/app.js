@@ -63,7 +63,16 @@
   });
   const dropFollow = () => { try { const f = JSON.parse(localStorage.getItem(FOLLOW_KEY) || 'null'); if (f && f.code === code) localStorage.removeItem(FOLLOW_KEY); } catch (e) {} };
   const serverNow = () => Date.now() + S.offset;
-  const mine = () => S.lots.filter((l) => l.mine).length;
+  // лоты, которые ведущий убрал с колеса (они были на колесе, а теперь их там нет и они не вылетали).
+  // Зрителям они не показываются, игру не занимают и в лимит не считаются: сервер удалит их при следующем добавлении
+  function removedKeys() {
+    const live = S.live;
+    if (!live) return new Set();
+    const out = new Set((Array.isArray(live.out) ? live.out : []).map((x) => x.toLowerCase()));
+    const onWheel = new Set(liveSegs().map((x) => x.n.toLowerCase()));
+    return new Set(S.lots.slice(0, +live.seen || 0).map((x) => x.name.toLowerCase()).filter((k) => !onWheel.has(k) && !out.has(k)));
+  }
+  const mine = () => { const gone = removedKeys(); return S.lots.filter((l) => l.mine && !gone.has(l.name.toLowerCase())).length; };
   const timeLeft = () => (S.room && S.room.endsAt ? S.room.endsAt - serverNow() : null);
   const isOpen = () => !!S.room && !S.room.closed && (S.room.endsAt == null || timeLeft() > 0);
   const mmss = (ms) => { const s = Math.max(0, Math.ceil(ms / 1000)), m = Math.floor(s / 60); return m >= 60 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')}:${String(s % 60).padStart(2, '0')}` : `${m}:${String(s % 60).padStart(2, '0')}`; };
@@ -748,7 +757,8 @@
     const box = $('#lotResults');
     if (!box) return;
     box.hidden = !S.results.length || !!S.pending;
-    const taken = new Set([...S.lots.map((l) => l.name), ...hostNames()].map((n) => n.toLowerCase()));
+    const gone = removedKeys();
+    const taken = new Set([...S.lots.map((l) => l.name).filter((n) => !gone.has(n.toLowerCase())), ...hostNames()].map((n) => n.toLowerCase()));
     const html = S.results.map((g, i) => { const has = taken.has(g.name.toLowerCase()); return `<button type="button" class="lots-opt" data-pick="${i}"${has ? ' disabled' : ''}>${g.img ? `<img src="${esc(g.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : '<em aria-hidden="true">＋</em>'}<span><b>${esc(g.name)}</b>${g.sub ? `<small>${esc(g.sub)}</small>` : ''}</span><i>${has ? 'уже есть' : ''}</i></button>`; }).join('');
     if (box.dataset.sig !== html) { box.dataset.sig = html; box.innerHTML = html; }
   }
@@ -760,9 +770,7 @@
     const out = new Set((S.live && Array.isArray(S.live.out) ? S.live.out : []).map((x) => x.toLowerCase()));
     const all = [...S.lots, ...hostNames().map((name) => ({ id: 'host:' + name, name, by: 'Ведущий', img: '', link: '' }))];
     // лот уже был на колесе, а теперь его там нет и он не вылетал: его убрал ведущий
-    const onWheel = new Set(liveSegs().map((x) => x.n.toLowerCase()));
-    const seen = S.live ? +S.live.seen || 0 : 0;
-    const removed = new Set(S.lots.slice(0, seen).map((x) => x.name.toLowerCase()).filter((k) => !onWheel.has(k) && !out.has(k)));
+    const removed = removedKeys();
     // убранное ведущим зрителям не показываем вовсе: обычно такой лот уже удалён из сбора, а старые сборы просто прячем
     const rows = all.filter((l) => !(l.id && !String(l.id).startsWith('host:') && removed.has(l.name.toLowerCase())));
     const n = rows.length;
