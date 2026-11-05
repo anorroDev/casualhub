@@ -265,12 +265,22 @@
     return 0.2126 * r + 0.7152 * g + 0.0722 * b;
   };
   const inkOn = (c) => { const L = lum(c); return (L + 0.05) / (lum('#14161C') + 0.05) >= 1.05 / (L + 0.05) ? '#14161C' : '#FFFFFF'; };
+  // сектора ведущего. Лот, который зритель заменил, пока вкладка ведущего его не забрала (она в фоне или закрыта),
+  // показываем уже под новым названием: сектор знает id своего лота. Иначе на колесе висело бы старое название,
+  // а новый лот считался бы убранным ведущим
+  function liveSegs(exact) {
+    const live = S.live;
+    const segs = live && Array.isArray(live.segs) ? live.segs : [];
+    if (exact) return segs;
+    const byId = new Map(S.lots.map((l) => [l.id, l.name]));
+    return segs.map((x) => { const n = x.l && byId.get(x.l); return n && n !== x.n ? { ...x, n } : x; });
+  }
   // на колесе то же, что у ведущего. Новые лоты, которые его вкладка ещё не забрала, видны сразу: она может быть в фоне
   function shownSegs() {
     const live = S.live;
-    const hostSegs = live && Array.isArray(live.segs) ? live.segs : [];
     // пока крутится и после победы колесо должно точно совпадать с колесом ведущего
-    if (live && (live.winner || (live.spin && serverNow() < live.spin.at + live.spin.ms))) return hostSegs;
+    if (live && (live.winner || (live.spin && serverNow() < live.spin.at + live.spin.ms))) return liveSegs(true);
+    const hostSegs = liveSegs();
     const names = new Set([...hostSegs.map((x) => x.n), ...(live && Array.isArray(live.out) ? live.out : [])].map((n) => n.toLowerCase()));
     const wait = S.lots.slice(live ? +live.seen || 0 : 0).filter((x) => !names.has(x.name.toLowerCase()));
     if (!wait.length) return hostSegs;
@@ -732,7 +742,7 @@
     const live = S.live;
     if (!live) return [];
     const lots = new Set(S.lots.map((l) => l.name.toLowerCase())), seen = new Set();
-    return [...(Array.isArray(live.segs) ? live.segs.map((x) => x.n) : []), ...(Array.isArray(live.out) ? live.out : [])].filter((n) => { const k = n.toLowerCase(); if (lots.has(k) || seen.has(k)) return false; seen.add(k); return true; });
+    return [...liveSegs().map((x) => x.n), ...(Array.isArray(live.out) ? live.out : [])].filter((n) => { const k = n.toLowerCase(); if (lots.has(k) || seen.has(k)) return false; seen.add(k); return true; });
   }
   function paintResults() {
     const box = $('#lotResults');
@@ -750,7 +760,7 @@
     const out = new Set((S.live && Array.isArray(S.live.out) ? S.live.out : []).map((x) => x.toLowerCase()));
     const rows = [...S.lots, ...hostNames().map((name) => ({ id: 'host:' + name, name, by: 'Ведущий', img: '', link: '' }))];
     // лот уже был на колесе, а теперь его там нет и он не вылетал: его убрал ведущий
-    const onWheel = new Set((S.live && Array.isArray(S.live.segs) ? S.live.segs : []).map((x) => x.n.toLowerCase()));
+    const onWheel = new Set(liveSegs().map((x) => x.n.toLowerCase()));
     const seen = S.live ? +S.live.seen || 0 : 0;
     const removed = new Set(S.lots.slice(0, seen).map((x) => x.name.toLowerCase()).filter((k) => !onWheel.has(k) && !out.has(k)));
     const n = rows.length;

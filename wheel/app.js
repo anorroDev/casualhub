@@ -2348,8 +2348,15 @@
     const a = S.sample ? [] : segments();
     const left = alive();
     const won = lotsWinner || (S.pick !== 'one' && !S.spinning && S.items.length > 1 && left.length === 1 ? { n: left[0].name } : null);
+    // у сектора из лота — id этого лота: если зритель заменит лот, пока эта вкладка в фоне или закрыта,
+    // зрители сразу покажут новое название на месте старого. Сектор, на который легли два лота, остаётся без id
+    const lotOf = new Map(), twice = new Set();
+    for (const [lid, iid] of Object.entries(lotsMap)) {
+      if (!(iid > 0)) continue;
+      if (lotOf.has(iid)) twice.add(iid); else lotOf.set(iid, lid);
+    }
     return {
-      segs: a.map((x) => ({ n: x.item.name, p: +x.p.toFixed(6), c: colorOf(x.item).c, t: colorOf(x.item).t })),
+      segs: a.map((x) => ({ n: x.item.name, p: +x.p.toFixed(6), c: colorOf(x.item).c, t: colorOf(x.item).t, ...(lotOf.has(x.item.id) && !twice.has(x.item.id) ? { l: lotOf.get(x.item.id) } : {}) })),
       rot: +mod(S.rot, TAU).toFixed(4), spin: liveSpin, pick: livePick, hub: S.hub,
       // зрителям уходят только треки из списка: свои аудиофайлы лежат в браузере ведущего
       music: { bg: S.bgOn && presetOf(S.music.bg) ? presetOf(S.music.bg).id : '', win: presetOf(S.music.win) ? presetOf(S.music.win).id : '' },

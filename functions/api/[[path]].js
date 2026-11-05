@@ -1385,7 +1385,7 @@ const routes = {
     if (burst('lotlive:' + me.id, 240, 60e3)) return tooMany(1);
     const live = cleanLive(await readBody(request));
     const data = JSON.stringify(live);
-    if (data.length > 60000) return fail(413, 'Слишком много лотов на колесе.');
+    if (data.length > 72000) return fail(413, 'Слишком много лотов на колесе.'); // с id лотов у секторов
     const r = await env.DB.prepare('UPDATE lot_rooms SET live = ? WHERE id = ? AND owner_id = ?').bind(data, arg, me.id).run();
     if (!r.meta.changes) return fail(404, 'Такого сбора нет.');
     return json({ ok: true });
@@ -1822,7 +1822,7 @@ function cleanLive(b) {
   const finite = (v) => (Number.isFinite(+v) ? +v : 0);
   const spin = b && b.spin && typeof b.spin === 'object' ? { from: finite(b.spin.from), to: finite(b.spin.to), ms: Math.max(0, Math.min(120000, finite(b.spin.ms))), at: finite(b.spin.at) } : null;
   return {
-    segs: (Array.isArray(b && b.segs) ? b.segs : []).slice(0, MAX_LOTS).map((x) => ({ n: clip(x && x.n, LOT_NAME), p: Math.max(0, Math.min(1, finite(x && x.p))), c: HEX_COLOR.test(String(x && x.c)) ? x.c : '#64748B', t: HEX_COLOR.test(String(x && x.t)) ? x.t : '#FFFFFF' })),
+    segs: (Array.isArray(b && b.segs) ? b.segs : []).slice(0, MAX_LOTS).map((x) => ({ n: clip(x && x.n, LOT_NAME), p: Math.max(0, Math.min(1, finite(x && x.p))), c: HEX_COLOR.test(String(x && x.c)) ? x.c : '#64748B', t: HEX_COLOR.test(String(x && x.t)) ? x.t : '#FFFFFF', ...(/^[0-9a-f]{16}$/.test(String(x && x.l)) ? { l: x.l } : {}) })),
     rot: finite(b && b.rot), spin, pick: clip(b && b.pick, LOT_NAME), hub: Math.max(10, Math.min(60, finite(b && b.hub) || 24)),
     hubImg: b && STICKER_RE.test(String(b.hubImg)) ? b.hubImg : '',
     hubOwn: b && /^g[a-z0-9]{1,30}$/.test(String(b.hubOwn)) ? b.hubOwn : '',
