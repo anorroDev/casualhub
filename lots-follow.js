@@ -136,7 +136,7 @@
     if (winKey && winKey !== seenWin && fresh && presetOf(m.win)) { seenWin = winKey; play({ ch: 'win', p: presetOf(m.win) }); return; }
     if (!win) seenWin = '';
     if (cur && cur.ch === 'win' && win) return; // победа ещё играет
-    const bg = presetOf(m.bg);
+    const bg = m.bg === 'vika' ? null : presetOf(m.bg); // VI KA — только песня победы
     if (!bg) { play(null); return; }
     // с того места, где оборвалась музыка на прошлой странице
     const r = rd(FOLLOW_KEY), keep = r && r.bg && r.bg.id === bg.id && Date.now() - r.bg.at < 90000 ? r.bg.pos + (Date.now() - r.bg.at) / 1000 : null;

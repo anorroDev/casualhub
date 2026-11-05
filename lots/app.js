@@ -208,7 +208,7 @@
   const liveMusic = () => (S.live && S.live.music) || {};
   // фон играет, пока его выбрал ведущий и не звучит трек победы
   function syncBg() {
-    const p = presetOf(liveMusic().bg);
+    const p = liveMusic().bg === 'vika' ? null : presetOf(liveMusic().bg); // VI KA — только песня победы
     if (!canPlay() || !p || EMB.failed || CH.win.active) { if (CH.bg.active) stopChannel('bg'); return; }
     if (CH.bg.active && CH.bg.id === p.id) return;
     playChannel('bg', p, { loop: true });
@@ -866,7 +866,7 @@
       rot: live.spin ? +live.spin.to || 0 : +live.rot || 0,
       spin: null, pick: '', hub: +live.hub || 24, hubImg: live.hubImg || '', hubOwn: live.hubOwn || '',
       seen: S.lots.length, ids: S.lots.map((l) => l.id),
-      music: Object.assign({ bg: '', win: 'vika' }, live.music || {}),
+      music: hostMusic(live.music),
       status: live.status || '', out, winner: live.winner || null,
     }, over);
   }
@@ -1007,7 +1007,10 @@
     } catch (e) { hostMsg('Картинка не загрузилась: ' + (e.message || 'попробуй другую')); }
     hubBusy = false; paintHubPick(true);
   }
-  const presetOpts = (cur, none) => (none ? `<option value=""${cur ? '' : ' selected'}>Без музыки</option>` : '') + PRESETS.map((p) => `<option value="${p.id}"${p.id === cur ? ' selected' : ''}>${esc(p.title)}</option>`).join('');
+  // как в Колесе: VI KA звучит только на победе, фоном её не поставить
+  const WIN_TRACK = 'vika';
+  const presetOpts = (cur, none) => (none ? `<option value=""${cur ? '' : ' selected'}>Без музыки</option>` : '') + PRESETS.filter((p) => (none ? p.id !== WIN_TRACK : p.id === WIN_TRACK)).map((p) => `<option value="${p.id}"${p.id === cur ? ' selected' : ''}>${esc(p.title)}</option>`).join('');
+  const hostMusic = (m) => ({ bg: m && m.bg && m.bg !== WIN_TRACK && presetOf(m.bg) ? m.bg : '', win: WIN_TRACK });
   function paintHost() {
     const panel = $('#hostPanel'), room = $('#hostRoom');
     if (!panel || !room) return;
@@ -1024,7 +1027,7 @@
     $('#hostReset').disabled = spinning || !(liveOut().length || live.winner);
     $('#hostPick').querySelectorAll('[data-pick]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.pick === H.pick)));
     $('#hostDur').querySelectorAll('[data-dur]').forEach((x) => x.setAttribute('aria-pressed', String(+x.dataset.dur === H.dur)));
-    const m = Object.assign({ bg: '', win: 'vika' }, live.music || {});
+    const m = hostMusic(live.music);
     const bg = $('#hostBg'), win = $('#hostWin');
     if (bg.dataset.v !== m.bg) { bg.dataset.v = m.bg; bg.innerHTML = presetOpts(m.bg, true); }
     if (win.dataset.v !== m.win) { win.dataset.v = m.win; win.innerHTML = presetOpts(m.win, false); }
