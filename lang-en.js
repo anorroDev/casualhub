@@ -3,7 +3,8 @@
    (окна, сообщения сервера, подсказки). Новую строку достаточно дописать в словарь X. {} в ключе — любое значение.
    Текст, написанный людьми (оценки, комментарии, ники), не переводится: совпасть со словарём он может только дословно. */
 (() => {
-  const X = {"Всё, что ты отметил «В планах» в Мнении: фильмы, игры, сериалы и остальное. Нажми «+», и оно на колесе":"Everything you marked “Planned” in Opinion: films, games, series and the rest. Tap “+” and it’s on the wheel",
+  const X = {"Всё, что ты отметил «В планах» в":"Everything you marked “Planned” in",
+"фильмы, игры, сериалы и остальное. Нажми «+», и оно на колесе":"films, games, series and the rest. Tap “+” and it’s on the wheel",
 "Пока пусто. Отметь фильм, игру или что угодно «В планах» в":"Nothing yet. Mark a film, a game or anything else “Planned” in",
 "Мнении":"Opinion",
 "и оно появится здесь":"and it shows up here",

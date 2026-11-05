@@ -418,6 +418,22 @@ details[open] > summary .chev { transform: rotate(180deg); }
 
 /* «В планах»: оценки из Мнения со статусом «В планах», одним нажатием на колесо */
 .plans .crit-tip a { color: var(--accent); font-weight: 600; }
+/* шапка карточки сворачивает список, как «Лоты по ссылке»: стрелка поворачивается, тело плавно выезжает */
+.plans-sum { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -6px -10px; padding: 6px 10px; border-radius: 11px; list-style: none; cursor: pointer; }
+.plans-sum::-webkit-details-marker { display: none; }
+.plans-sum .eyebrow { margin: 0; }
+.plans-n { font-weight: 600; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.plans-n:empty { display: none; }
+.plans-sum .chev { flex: none; }
+@media (hover: hover) { .plans-sum:hover { background: var(--accent-soft); } }
+.plans-box[open] > .plans-body { animation: enter-up .2s cubic-bezier(.2, .8, .2, 1) both; }
+/* где браузер умеет, высота открывается и закрывается плавно */
+@supports (interpolate-size: allow-keywords) {
+  .plans-box { interpolate-size: allow-keywords; }
+  .plans-box::details-content { height: 0; overflow: clip; transition: height .28s cubic-bezier(.2, .8, .2, 1), content-visibility .28s allow-discrete; }
+  .plans-box[open]::details-content { height: auto; }
+}
+@media (prefers-reduced-motion: reduce) { .plans-box::details-content { transition: none; } .plans-box[open] > .plans-body { animation: none; } }
 .plans-cats { margin-top: 14px; }
 .plans-cats:empty { display: none; }
 .plans-cats b { font-weight: 600; opacity: .6; }
@@ -433,17 +449,11 @@ details[open] > summary .chev { transform: rotate(180deg); }
 .plans-empty { margin-top: 14px; padding: 16px; border: 1px dashed var(--line); border-radius: 14px; color: var(--ink-2); font-size: 14px; text-wrap: pretty; }
 .plans-empty a { color: var(--accent); font-weight: 600; }
 .plans .actions { margin-top: 12px; }
-/* на широком экране колесо слева, справа участники и под ними «В планах»; ещё шире — «В планах» третьей колонкой */
+/* на широком экране колесо слева, справа участники и сразу под ними «В планах» */
 @media (min-width: 980px) {
   .layout:has(.plans:not([hidden])) { grid-template-rows: auto 1fr; }
   .layout > .stage { grid-row: span 2; }
   .layout > .plans { grid-column: 2; }
-}
-@media (min-width: 1440px) {
-  .page:has(.plans:not([hidden])) { max-width: 1560px; }
-  .layout:has(.plans:not([hidden])) { grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, .78fr); grid-template-rows: none; }
-  .layout > .stage { grid-row: auto; }
-  .layout > .plans { grid-column: 3; grid-row: 1; position: sticky; top: 16px; }
 }
 @media (max-width: 979px) { .layout[data-section="wheel"] .plans { display: none; } }
 fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
@@ -1153,14 +1163,18 @@ html.unslop::before { display: none; }
     </section>
 
     <section class="card plans" id="plans" aria-labelledby="plansTitle">
-      <div class="card-head">
-        <h2 class="eyebrow"><span class="dot" aria-hidden="true"></span><span id="plansTitle">В планах</span></h2>
-        <a class="btn text" href="/opinion/" title="Открыть Мнение">Мнение</a>
-      </div>
-      <p class="crit-tip">Всё, что ты отметил «В планах» в Мнении: фильмы, игры, сериалы и остальное. Нажми «+», и оно на колесе.</p>
-      <div class="seg plans-cats" id="plansCats" role="group" aria-label="Категория"></div>
-      <ol class="plans-list" id="plansList"></ol>
-      <div class="actions"><button type="button" class="btn small ghost" id="plansAll">Добавить все</button></div>
+      <details class="plans-box" id="plansBox" open>
+        <summary class="plans-sum">
+          <h2 class="eyebrow"><span class="dot" aria-hidden="true"></span><span id="plansTitle">В планах</span> <span class="plans-n" id="plansN"></span></h2>
+          <svg class="chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+        </summary>
+        <div class="plans-body">
+          <p class="crit-tip">Всё, что ты отметил «В планах» в <a href="/opinion/">Мнении</a>: фильмы, игры, сериалы и остальное. Нажми «+», и оно на колесе.</p>
+          <div class="seg plans-cats" id="plansCats" role="group" aria-label="Категория"></div>
+          <ol class="plans-list" id="plansList"></ol>
+          <div class="actions"><button type="button" class="btn small ghost" id="plansAll">Добавить все</button></div>
+        </div>
+      </details>
     </section>
   </main>
 </div>

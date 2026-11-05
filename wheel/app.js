@@ -288,6 +288,7 @@
       </li>`;
     }).join('');
     if (!all.length) $('#plansList').innerHTML = '<li class="plans-empty">Пока пусто. Отметь фильм, игру или что угодно «В планах» в <a href="/opinion/">Мнении</a>, и оно появится здесь.</li>';
+    $('#plansN').textContent = all.length || '';
     const left = rows.filter((r) => !onWheel.has(nameKey(r.name))).length;
     $('#plansAll').innerHTML = left ? `Добавить все <span>(${left})</span>` : 'Всё уже на колесе';
     $('#plansAll').disabled = !left;
@@ -304,7 +305,12 @@
     save();
     render();
   }
+  const PLANS_OPEN_KEY = 'casualhub.wheelPlansOpen.v1'; // свёрнута ли карточка — только для этого браузера
   function bindPlans() {
+    try { if (localStorage.getItem(PLANS_OPEN_KEY) === '0') $('#plansBox').open = false; } catch (e) {}
+    $('#plansBox').addEventListener('toggle', () => {
+      try { localStorage.setItem(PLANS_OPEN_KEY, $('#plansBox').open ? '1' : '0'); } catch (e) {}
+    });
     $('#plansCats').addEventListener('click', (e) => {
       const b = e.target.closest('[data-pcat]');
       if (!b) return;
