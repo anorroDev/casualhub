@@ -758,15 +758,17 @@
   function paintList() {
     const box = $('#lotList');
     const out = new Set((S.live && Array.isArray(S.live.out) ? S.live.out : []).map((x) => x.toLowerCase()));
-    const rows = [...S.lots, ...hostNames().map((name) => ({ id: 'host:' + name, name, by: 'Ведущий', img: '', link: '' }))];
+    const all = [...S.lots, ...hostNames().map((name) => ({ id: 'host:' + name, name, by: 'Ведущий', img: '', link: '' }))];
     // лот уже был на колесе, а теперь его там нет и он не вылетал: его убрал ведущий
     const onWheel = new Set(liveSegs().map((x) => x.n.toLowerCase()));
     const seen = S.live ? +S.live.seen || 0 : 0;
     const removed = new Set(S.lots.slice(0, seen).map((x) => x.name.toLowerCase()).filter((k) => !onWheel.has(k) && !out.has(k)));
+    // убранное ведущим зрителям не показываем вовсе: обычно такой лот уже удалён из сбора, а старые сборы просто прячем
+    const rows = all.filter((l) => !(l.id && !String(l.id).startsWith('host:') && removed.has(l.name.toLowerCase())));
     const n = rows.length;
     // правки доступны, пока ведущий разрешает, сбор открыт, лот не вылетел и колесо не определило победителя
     const canEdit = !!token && !!S.room.editOwn && isOpen() && !(S.live && S.live.winner);
-    const html = `<p class="board-stat"><b>${n}</b> ${plural(n, 'лот', 'лота', 'лотов')}</p>${n ? `<ul class="lots-list">${rows.map((l) => { const k = l.name.toLowerCase(), gone = out.has(k), off = removed.has(k); const edit = l.mine && canEdit && !gone ? `<span class="lots-acts"><button type="button" class="btn small ghost" data-replace="${esc(l.id)}"${S.replacing === l.id ? ' aria-pressed="true"' : ''}>Заменить</button><button type="button" class="btn small ghost danger" data-del="${esc(l.id)}">Убрать</button></span>` : ''; return `<li data-lot="${esc(l.id)}" class="${gone || off ? 'out' : ''}">${lotPic(l)}<span class="lots-who"><b>${esc(l.name)}</b><small>${esc(l.by)}${l.mine ? ' · твой' : ''}${gone ? ' · вылетел' : off ? ' · убран с колеса' : ''}</small></span>${edit}</li>`; }).join('')}</ul>` : '<p class="lots-empty">Пока ни одного лота. Будь первым</p>'}`;
+    const html = `<p class="board-stat"><b>${n}</b> ${plural(n, 'лот', 'лота', 'лотов')}</p>${n ? `<ul class="lots-list">${rows.map((l) => { const k = l.name.toLowerCase(), gone = out.has(k); const edit = l.mine && canEdit && !gone ? `<span class="lots-acts"><button type="button" class="btn small ghost" data-replace="${esc(l.id)}"${S.replacing === l.id ? ' aria-pressed="true"' : ''}>Заменить</button><button type="button" class="btn small ghost danger" data-del="${esc(l.id)}">Убрать</button></span>` : ''; return `<li data-lot="${esc(l.id)}" class="${gone ? 'out' : ''}">${lotPic(l)}<span class="lots-who"><b>${esc(l.name)}</b><small>${esc(l.by)}${l.mine ? ' · твой' : ''}${gone ? ' · вылетел' : ''}</small></span>${edit}</li>`; }).join('')}</ul>` : '<p class="lots-empty">Пока ни одного лота. Будь первым</p>'}`;
     if (box.dataset.sig === html) return;
     box.dataset.sig = html;
     // как участники в Колесе: оставшиеся плывут на новое место, новые въезжают

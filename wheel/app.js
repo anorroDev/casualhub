@@ -1985,6 +1985,7 @@
       S.sample = false;
       save();
       render();
+      lotsDrop([id]);
     });
 
     $('#list').addEventListener('input', (e) => {
@@ -2035,12 +2036,14 @@
       delete b.dataset.armed;
       b.textContent = 'Очистить всё';
       clearTimeout(autoTimer);
+      const was = S.items.map((i) => i.id);
       S.items = [];
       S.outSeq = 0;
       S.sample = false;
       msg('');
       save();
       render();
+      lotsDrop(was);
       $('#name').focus();
     });
 
@@ -2505,6 +2508,15 @@
     if (lotsRoom.closed) return 'сбор закрыт';
     if (left == null) return 'без таймера';
     return open ? 'осталось ' + lotsMmss(left) : 'время вышло';
+  }
+  // ведущий убрал с колеса по ссылке то, что пришло из лотов: эти лоты удаляются из сбора,
+  // и у зрителей пропадают совсем, без пометки «убран». Основное колесо сбор не трогает
+  function lotsDrop(itemIds) {
+    if (scope !== 'link' || !lotsRoom || !lotsAccount) return;
+    const gone = new Set(itemIds);
+    const ids = Object.keys(lotsMap).filter((k) => gone.has(lotsMap[k]));
+    if (!ids.length) return;
+    lotsDo(() => lotsApi('/lots/' + lotsRoom.id + '/drop', 'POST', { ids }));
   }
   async function lotsDo(fn) {
     lotsErr = '';

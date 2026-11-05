@@ -1339,6 +1339,22 @@ const routes = {
     await env.DB.batch([env.DB.prepare('DELETE FROM lots WHERE room_id = ? AND id = ?').bind(arg[0], arg[1]), env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(arg[0])]);
     return lotAnswer(env, arg[0], me);
   },
+  // ведущий убрал лоты со своего колеса: из сбора они удаляются совсем — у зрителей пропадают без следа,
+  // а место в лимите зрителя освобождается. Ведущему можно и после конца сбора
+  async 'POST /lots/:code/drop'({ env, request, me, arg }) {
+    if (burst('lotdrop:' + me.id, 60, 60e3)) return tooMany(1);
+    const room = await env.DB.prepare('SELECT 1 FROM lot_rooms WHERE id = ? AND owner_id = ?').bind(arg, me.id).first();
+    if (!room) return fail(404, 'Такого сбора нет.');
+    const b = await readBody(request);
+    const ids = [...new Set((Array.isArray(b.ids) ? b.ids : []).map(String).filter((x) => /^[0-9a-f]{16}$/.test(x)))].slice(0, MAX_LOTS);
+    if (ids.length) {
+      await env.DB.batch([
+        ...ids.map((id) => env.DB.prepare('DELETE FROM lots WHERE room_id = ? AND id = ?').bind(arg, id)),
+        env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(arg),
+      ]);
+    }
+    return lotAnswer(env, arg, me);
+  },
   async 'PUT /lots/:code/:lot'({ env, request, me, arg }) {
     if (burst('lotedit:' + me.id, 40, 60e3)) return tooMany(1);
     const g = await lotEditable(env, arg[0], arg[1], me);
@@ -2318,6 +2334,7 @@ export async function onRequest({ request, env, params }) {
   if (!routes[key] && segs.length === 2 && segs[0] === 'lots' && SHARE_RE.test(segs[1])) { key = `${request.method} /lots/:code`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && /^[0-9a-f]{16}$/.test(segs[2])) { key = `${request.method} /lots/:code/:lot`; arg = [segs[1], segs[2]]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'live') { key = `${request.method} /lots/:code/live`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'drop') { key = `${request.method} /lots/:code/drop`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'hub') { key = `${request.method} /lots/:code/hub`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'share' && SHARE_RE.test(segs[1])) { key = `${request.method} /share/:id`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'share' && segs[2] === 'img' && SHARE_RE.test(segs[1])) { key = `${request.method} /share/:id/img`; arg = segs[1]; }
