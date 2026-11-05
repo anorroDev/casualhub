@@ -3,7 +3,17 @@
    (окна, сообщения сервера, подсказки). Новую строку достаточно дописать в словарь X. {} в ключе — любое значение.
    Текст, написанный людьми (оценки, комментарии, ники), не переводится: совпасть со словарём он может только дословно. */
 (() => {
-  const X = {"выбери категорию, лимит и время и дай им ссылку. Откроется страница сбора с твоим пультом: там кнопка":"block, choose a category, limit and time, and give them the link. The collection page opens with your host controls: there’s the",
+  const X = {"Картинка в центре":"Picture in the center",
+"Загрузить свою":"Upload your own",
+"Без картинки":"No picture",
+"Своя картинка ✓":"Your picture ✓",
+"Время сбора:":"Collection time:",
+"Отнять можно только у идущего таймера":"You can only take time off a running timer",
+"Нужна картинка: PNG, JPG, WebP или GIF":"Needs a picture: PNG, JPG, WebP or GIF",
+"Картинка не загрузилась: {}":"The picture didn’t upload: {}",
+"Каталог картинок не загрузился":"The picture catalog didn’t load",
+"Каталог картинок":"Picture catalog",
+"выбери категорию, лимит и время и дай им ссылку. Откроется страница сбора с твоим пультом: там кнопка":"block, choose a category, limit and time, and give them the link. The collection page opens with your host controls: there’s the",
 "таймер и правила, а зрители видят прокрутку вживую":"timer and rules, and viewers watch the spin live",
 "Фон для всех":"Background for everyone",
 "Песня победы":"Victory song",

@@ -708,6 +708,19 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
 .host-opts { display: grid; gap: 12px; }
 .host-music { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
 .host-music .inp { height: 40px; background: var(--panel); }
+.host-more > summary { display: inline-flex; align-items: center; gap: 6px; list-style: none; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--accent); }
+.host-more > summary::-webkit-details-marker { display: none; }
+.host-more .chev { color: var(--ink-3); transition: transform .18s ease; }
+.host-more[open] > summary .chev { transform: rotate(180deg); }
+.host-hub-body { display: grid; gap: 10px; margin-top: 10px; }
+.host-hub-body .seg b { font-weight: 600; opacity: .6; }
+#hostHubNone[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.host-hubs { display: grid; grid-template-columns: repeat(auto-fill, minmax(64px, 1fr)); grid-auto-rows: 64px; align-content: start; gap: 6px; max-height: 280px; overflow-y: auto; overscroll-behavior: contain; padding: 2px; }
+.host-hub { display: block; width: 100%; height: 64px; min-height: 0; padding: 0; border: 2px solid transparent; border-radius: 10px; background: var(--cell); overflow: hidden; cursor: pointer; }
+.host-hub img, .host-hub video { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.host-hub[aria-pressed="true"] { border-color: var(--accent); }
+.host-hub:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.host-clock { font-variant-numeric: tabular-nums; color: var(--ink); }
 .host-room { display: grid; gap: 12px; margin-top: 12px; padding: 12px; border: 1px dashed var(--line); border-radius: 14px; }
 .fx-mute { position: absolute; top: max(16px, env(safe-area-inset-top)); left: 16px; z-index: 2; height: 40px; padding: 0 16px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; transition: transform .22s var(--spring); }
 .fx-mute:active { transform: scale(.94); }
@@ -803,6 +816,18 @@ html.unslop::before { display: none; }
             <label class="lots-f">Песня победы<select class="inp" id="hostWin"></select></label>
           </div>
         </div>
+        <details class="host-more">
+          <summary>Картинка в центре <svg class="chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
+          <div class="host-hub-body">
+            <div class="lots-row">
+              <button type="button" class="btn small ghost" id="hostHubUp">Загрузить свою</button>
+              <button type="button" class="btn small ghost" id="hostHubNone" aria-pressed="false">Без картинки</button>
+              <input type="file" id="hostHubFile" accept="image/png,image/jpeg,image/webp,image/gif" hidden>
+            </div>
+            <div class="seg" id="hostHubTabs" role="group" aria-label="Каталог картинок"></div>
+            <div class="host-hubs" id="hostHubs"></div>
+          </div>
+        </details>
         <p class="lots-note lots-off" id="hostMsg" hidden></p>
       </div>
       <div class="lots-sound">

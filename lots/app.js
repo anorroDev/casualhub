@@ -943,6 +943,70 @@
       paintAll();
     } catch (e) { hostMsg(e.message); }
   }
+  function hostClockText() {
+    const r = S.room;
+    if (!r) return '';
+    if (r.closed) return 'сбор закрыт';
+    const left = timeLeft();
+    if (left == null) return 'без таймера';
+    return left > 0 ? 'осталось ' + mmss(left) : 'время вышло';
+  }
+  // картинка в центре колеса: из каталога Колеса или своя. Своя хранится на сервере у ведущего, зрителям она отдаётся по ссылке сбора
+  let hubGroups = [], hubTab = '', hubBusy = false;
+  fetch('/wheel/hub/index.json').then((r) => r.json()).then((d) => {
+    hubGroups = (d.groups || []).map((g) => ({ id: g.id, title: g.title || g.id, items: (g.items || []).filter((it) => it && /^hub\//.test(it.src || '')) })).filter((g) => g.items.length);
+    if (!hubTab && hubGroups[0]) hubTab = hubGroups[0].id;
+    paintHubPick(true);
+  }).catch(() => {});
+  function paintHubPick(force) {
+    const box = $('#hostHubs'), tabs = $('#hostHubTabs');
+    if (!box || !tabs || !isHost()) return;
+    const live = S.live || {};
+    const cur = live.hubOwn ? 'own' : live.hubImg || '';
+    const sig = JSON.stringify([hubTab, cur, hubGroups.length, hubBusy]);
+    if (!force && box.dataset.sig === sig) return;
+    box.dataset.sig = sig;
+    tabs.innerHTML = hubGroups.map((g) => `<button type="button" data-hub-tab="${esc(g.id)}" aria-pressed="${g.id === hubTab}">${esc(g.title)} <b>${g.items.length}</b></button>`).join('');
+    $('#hostHubNone').setAttribute('aria-pressed', String(!cur));
+    $('#hostHubUp').textContent = hubBusy ? 'Загружаю…' : cur === 'own' ? 'Своя картинка ✓' : 'Загрузить свою';
+    $('#hostHubUp').disabled = hubBusy;
+    const g = hubGroups.find((x) => x.id === hubTab);
+    // при загрузке видео не тянем все сразу: превью грузится, только когда плитка видна
+    box.innerHTML = g ? g.items.map((it) => {
+      const vid = /\.webm$/i.test(it.src), src = WEBM_SRC(it.src);
+      return `<button type="button" class="host-hub" data-hub="${esc(it.src)}" aria-pressed="${it.src === cur}" title="${esc(it.name || '')}">${vid ? `<video src="${esc(src)}#t=0.1" muted playsinline preload="none" data-lazy></video>` : `<img src="/wheel/${esc(it.src)}" alt="" loading="lazy" decoding="async">`}</button>`;
+    }).join('') : '<p class="lots-note">Каталог картинок не загрузился.</p>';
+    if (hubIo) box.querySelectorAll('video[data-lazy]').forEach((v) => hubIo.observe(v));
+  }
+  const hubIo = 'IntersectionObserver' in window ? new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { const v = e.target; hubIo.unobserve(v); v.preload = 'metadata'; try { v.load(); } catch (er) {} } }), { rootMargin: '80px' }) : null;
+  function hostHub(over) {
+    if (!isHost()) return;
+    hostPush(hostBody(Object.assign({ spin: S.live && hostSpinning() ? S.live.spin : null }, over)));
+  }
+  // своя картинка: квадрат до 480 px; небольшая гифка уходит как есть, чтобы двигалась
+  function hubData(file) {
+    if (file.type === 'image/gif' && file.size <= 1350 * 1024) return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(file); });
+    return createImageBitmap(file).then((bmp) => {
+      const side = Math.min(bmp.width, bmp.height), size = Math.min(side, 480);
+      const c = document.createElement('canvas');
+      c.width = c.height = size;
+      c.getContext('2d').drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, size, size);
+      const webp = c.toDataURL('image/webp', 0.85);
+      return webp.startsWith('data:image/webp') ? webp : c.toDataURL('image/jpeg', 0.85);
+    });
+  }
+  async function hubUpload(file) {
+    if (!file || hubBusy) return;
+    if (!/^image\//.test(file.type)) { hostMsg('Нужна картинка: PNG, JPG, WebP или GIF.'); return; }
+    hubBusy = true; paintHubPick(true);
+    try {
+      const data = await hubData(file);
+      await api('/lots-hub', 'PUT', { data });
+      hostHub({ hubImg: '', hubOwn: 'g' + Date.now().toString(36) });
+      hostMsg('');
+    } catch (e) { hostMsg('Картинка не загрузилась: ' + (e.message || 'попробуй другую')); }
+    hubBusy = false; paintHubPick(true);
+  }
   const presetOpts = (cur, none) => (none ? `<option value=""${cur ? '' : ' selected'}>Без музыки</option>` : '') + PRESETS.map((p) => `<option value="${p.id}"${p.id === cur ? ' selected' : ''}>${esc(p.title)}</option>`).join('');
   function paintHost() {
     const panel = $('#hostPanel'), room = $('#hostRoom');
@@ -966,15 +1030,18 @@
     if (win.dataset.v !== m.win) { win.dataset.v = m.win; win.innerHTML = presetOpts(m.win, false); }
     // сбор: ссылка, таймер, лимит и правила
     const r = S.room, open = isOpen(), url = location.origin + '/lots/' + code;
+    paintHubPick();
+    const clock = $('#hostClock');
+    if (clock) clock.textContent = hostClockText();
     const sig = JSON.stringify([open, r.closed, !!r.endsAt, r.perUser, r.editOwn, r.uniq, r.fuzzy]);
     if (room.dataset.sig === sig) return;
     room.dataset.sig = sig;
     room.innerHTML = `<div class="lots-f"><span>Ссылка для зрителей</span><div class="lots-row"><input class="inp" id="hostUrl" readonly value="${esc(url)}"><button type="button" class="btn small primary" data-host="copy">Скопировать</button></div></div>
-      <div class="lots-row">
+      <div class="lots-f"><span>Время сбора: <b class="host-clock" id="hostClock">${esc(hostClockText())}</b></span><div class="lots-row">
+        <button type="button" class="btn small ghost" data-host="minus"${open && r.endsAt ? '' : ' disabled title="Отнять можно только у идущего таймера"'}>−1 минута</button>
         <button type="button" class="btn small ghost" data-host="plus">+1 минута</button>
-        ${open && r.endsAt ? '<button type="button" class="btn small ghost" data-host="minus">−1 минута</button>' : ''}
         ${open ? '<button type="button" class="btn small ghost" data-host="close">Закрыть сбор</button>' : '<button type="button" class="btn small ghost" data-host="reopen">Открыть снова</button>'}
-      </div>
+      </div></div>
       <div class="lots-f"><span>Лотов на человека</span><div class="seg" role="group" aria-label="Лотов на человека">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-host-limit="${n}" aria-pressed="${n === r.perUser}">${n}</button>`).join('')}</div></div>
       <div class="lots-f"><span>Правила для зрителей</span>
         <label class="lots-chk"><input type="checkbox" data-host-rule="editOwn"${r.editOwn ? ' checked' : ''}><span>Зрители могут убирать и менять свои лоты (пока лот не вылетел)</span></label>
@@ -1000,6 +1067,11 @@
       hostSpin();
     });
     $('#hostReset').addEventListener('click', hostReset);
+    $('#hostHubTabs').addEventListener('click', (e) => { const t = e.target.closest('[data-hub-tab]'); if (!t) return; hubTab = t.dataset.hubTab; paintHubPick(true); });
+    $('#hostHubs').addEventListener('click', (e) => { const t = e.target.closest('[data-hub]'); if (!t) return; hostHub({ hubImg: t.dataset.hub, hubOwn: '' }); });
+    $('#hostHubNone').addEventListener('click', () => hostHub({ hubImg: '', hubOwn: '' }));
+    $('#hostHubUp').addEventListener('click', () => $('#hostHubFile').click());
+    $('#hostHubFile').addEventListener('change', (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; hubUpload(f); });
     $('#hostPick').addEventListener('click', (e) => { const x = e.target.closest('[data-pick]'); if (!x) return; H.pick = x.dataset.pick === 'one' ? 'one' : 'out'; keepHost(); paintHost(); });
     $('#hostDur').addEventListener('click', (e) => { const x = e.target.closest('[data-dur]'); if (!x) return; H.dur = DURS.includes(+x.dataset.dur) ? +x.dataset.dur : 8; keepHost(); paintHost(); });
     const music = () => { if (!isHost() || hostSpinning()) { paintHost(); return; } const m = { bg: $('#hostBg').value, win: $('#hostWin').value }; hostPush(hostBody({ music: m })); };
@@ -1061,6 +1133,7 @@
     paintRule();
     if (was !== 'off' && !isOpen()) { paintAdd(); paintList(); }
     watchOpen();
+    paintHost(); // время сбора на пульте идёт каждую секунду
   }, 1000);
 
   // лот уходит на сервер только после подтверждения; replace — id своего лота, который заменяем
