@@ -51,6 +51,8 @@
     x: svg('<path d="M6 6l12 12M18 6L6 18"/>', 16, 2),
     xs: svg('<path d="M6 6l12 12M18 6L6 18"/>', 11, 3),
     plus: svg('<path d="M12 5v14M5 12h14"/>', 20, 2),
+    add: svg('<path d="M12 5v14M5 12h14"/>', 16, 2.2),
+    check: svg('<path d="M5 12.5l4.5 4.5L19 7.5"/>', 16, 2.4),
     play: svg('<path d="M8 5l11 7-11 7z"/>', 16, 2),
     pause: svg('<path d="M8 5v14M16 5v14"/>', 16, 2.6),
     stop: svg('<rect x="6" y="6" width="12" height="12" rx="1.5"/>', 16, 2),
@@ -197,6 +199,99 @@
     S.items.push(it);
     freshRows.add(it.id); // строка въедет в список при следующей отрисовке
     return 'added';
+  }
+
+  // ---------- «В планах» из Мнения ----------
+  // Мнение хранит оценки в localStorage этого же сайта. Берём свои (или гостевые, если не вошёл) со статусом «В планах»
+  const PLAN_RATINGS_KEY = 'ocenshik.ratings.v2';
+  const PLAN_USER_KEY = 'ocenshik.user.v1';
+  let plansCat = '*';
+  const nameKey = (n) => String(n || '').trim().slice(0, 60).toLowerCase();
+  function readPlans() {
+    let list = [], user = null;
+    try { list = JSON.parse(localStorage.getItem(PLAN_RATINGS_KEY) || '[]'); } catch (e) {}
+    try { user = JSON.parse(localStorage.getItem(PLAN_USER_KEY) || 'null'); } catch (e) {}
+    if (!Array.isArray(list)) return [];
+    const seen = new Set();
+    return list.filter((r) => {
+      if (!r || r.example || !/В планах/.test(r.status || '') || !String(r.name || '').trim()) return false;
+      const a = r.author;
+      if (user && user.id ? !(a && a.id === user.id) : !(!a || a.name === 'Гость')) return false;
+      const k = nameKey(r.name);
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+  }
+  function planSub(r) {
+    const year = (String(r.meta || '').match(/(?:^|\D)((?:19|20)\d{2})(?!\d)/) || [])[1];
+    return [r.catName, year].filter(Boolean).join(' · ');
+  }
+  function renderPlans() {
+    const box = $('#plans');
+    if (!box) return;
+    const all = readPlans();
+    const onWheel = new Set(alive().map((i) => nameKey(i.name)));
+    const cats = new Map();
+    all.forEach((r) => { const c = r.catName || 'Другое'; cats.set(c, (cats.get(c) || 0) + 1); });
+    if (plansCat !== '*' && !cats.has(plansCat)) plansCat = '*';
+    $('#plansCats').innerHTML = cats.size > 1
+      ? [['*', 'Все', all.length], ...[...cats.entries()].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0], 'ru')).map(([c, n]) => [c, c, n])]
+        .map(([v, l, n]) => `<button type="button" data-pcat="${esc(v)}" aria-pressed="${v === plansCat}">${esc(l)} ${n}</button>`).join('')
+      : '';
+    const rows = plansCat === '*' ? all : all.filter((r) => (r.catName || 'Другое') === plansCat);
+    $('#plansList').innerHTML = rows.map((r) => {
+      const on = onWheel.has(nameKey(r.name));
+      return `<li class="plrow${on ? ' on' : ''}">
+        <div class="e-text"><span class="e-name">${esc(r.name)}</span><span class="e-sub">${esc(planSub(r))}</span></div>
+        <button type="button" class="pl-btn" data-plan="${esc(r.id)}" aria-pressed="${on}" aria-label="${on ? 'Убрать с колеса' : 'На колесо'}: ${esc(r.name)}" title="${on ? 'Убрать с колеса' : 'Добавить на колесо'}">${on ? ICON.check : ICON.add}</button>
+      </li>`;
+    }).join('');
+    if (!all.length) $('#plansList').innerHTML = '<li class="plans-empty">Пока пусто. Отметь фильм, игру или что угодно «В планах» в <a href="/opinion/">Мнении</a>, и оно появится здесь.</li>';
+    const left = rows.filter((r) => !onWheel.has(nameKey(r.name))).length;
+    $('#plansAll').textContent = left ? `Добавить все (${left})` : 'Всё уже на колесе';
+    $('#plansAll').disabled = !left;
+    $('#plansAll').parentElement.hidden = !all.length;
+  }
+  function plansAdd(list) {
+    if (S.spinning) return;
+    let added = 0;
+    list.forEach((r) => { if (addItem(r.name, 0, S.cur) === 'added') added++; });
+    if (!added) return;
+    msg(list.length === 1
+      ? `«${list[0].name}» на колесе.` + (S.mode === 'donate' ? ' Впиши сумму в списке.' : '')
+      : `Из планов добавлено: ${added}.` + (S.mode === 'donate' ? ' Впиши суммы в списке.' : ''), 'ok');
+    save();
+    render();
+  }
+  function bindPlans() {
+    $('#plansCats').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-pcat]');
+      if (!b) return;
+      plansCat = b.dataset.pcat;
+      renderPlans();
+    });
+    $('#plansList').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-plan]');
+      if (!b || S.spinning) return;
+      const r = readPlans().find((x) => String(x.id) === b.dataset.plan);
+      if (!r) return renderPlans();
+      const k = nameKey(r.name);
+      const ex = alive().find((i) => nameKey(i.name) === k);
+      if (ex) {
+        // убираем только то, что ещё не крутилось: у вылетевших своя история
+        S.items = S.items.filter((i) => i !== ex);
+        msg(`«${ex.name}» убран с колеса.`, 'ok');
+        save();
+        render();
+      } else plansAdd([r]);
+    });
+    $('#plansAll').addEventListener('click', () => {
+      const all = readPlans();
+      plansAdd(plansCat === '*' ? all : all.filter((r) => (r.catName || 'Другое') === plansCat));
+    });
+    // оценки поменялись во вкладке с Мнением — список обновится сам
+    window.addEventListener('storage', (e) => { if (e.key === PLAN_RATINGS_KEY || e.key === PLAN_USER_KEY || e.key === null) renderPlans(); });
   }
 
   function save() {
@@ -720,6 +815,7 @@
     updateTicker();
     $('#spin').disabled = S.spinning || a.length < 2;
     $('#restart').disabled = S.spinning || !outs.length;
+    renderPlans();
     if (!keep) idleStatus();
   }
 
@@ -1551,6 +1647,7 @@
   }
 
   function bind() {
+    bindPlans();
     $('#spin').addEventListener('click', () => { clearTimeout(autoTimer); lotsSpinAsk(); });
 
     $('#mslots').addEventListener('click', (e) => {
