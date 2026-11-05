@@ -2215,12 +2215,20 @@
     if (document.readyState === 'complete') watch(); else addEventListener('load', watch);
   }
 
-  // ---------- лоты по ссылке: зрители добавляют игры сами, а колесо видят вживую ----------
+  // ---------- лоты по ссылке: здесь ведущий только открывает сбор и видит список своих сборов ----------
+  // Колесо с лотами зрителей крутится на странице сбора (/lots/<код>): там у ведущего пульт, а у зрителей — просмотр.
+  // На этой странице только своё колесо, переключателя на колесо по ссылке больше нет
   const lotsAccount = (() => { try { const u = JSON.parse(localStorage.getItem('ocenshik.user.v1') || 'null'); const t = u && (JSON.parse(localStorage.getItem('casualhub.tokens.v1') || 'null') || {})[u.id]; return u && t ? { id: u.id, token: t } : null; } catch (e) { return null; } })();
-  const LOTS_KEY = 'casualhub.lots.v1' + (lotsAccount ? ':' + lotsAccount.id : '');
+  // хранилище прошлого колеса по ссылке: save() по-прежнему его пишет, данные никому не мешают
   const LINK_KEY = KEY + '.link' + (lotsAccount ? ':' + lotsAccount.id : '');
-  let lotsNames = {}, lotsEditNew = false, lotsUniqNew = true, lotsFuzzyNew = true;
-  let lotsRoom = null, lotsList = [], lotsOffset = 0, lotsMap = {}, lotsWinner = null, liveSpin = null, liveT = 0, liveSig = '', lotsPollT = 0, livePick = '', lotsPerNew = 3, lotsMinsNew = 10, lotsKindNew = 'game', lotsErr = '', lotsRooms = [], lotsAskedFor = null, lotsStored = '', lotsPollSeq = 0, hubSent = '', hubFailed = '', hubBusy = false;
+  let lotsEditNew = false, lotsUniqNew = true, lotsFuzzyNew = true, lotsPerNew = 3, lotsMinsNew = 10, lotsKindNew = 'game', lotsErr = '', lotsRooms = [], lotsOffset = 0;
+  // прокрутку, победителя и снимок для зрителей теперь ведёт страница сбора; здесь эти вызовы ничего не делают
+  let lotsWinner = null, livePick = '';
+  function lotsLiveSoon() {}
+  function lotsLiveNow() {}
+  function lotsSpin() {}
+  function lotsDrop() {}
+  function lotsSpinAsk() { spin(); }
   const LOT_KIND_NAMES = { game: 'Игры', movie: 'Фильмы и сериалы', anime: 'Аниме', book: 'Книги', music: 'Музыка', any: 'Что угодно' };
   async function lotsApi(path, method = 'GET', body) {
     let r;
@@ -2231,190 +2239,8 @@
     if (!r.ok) { const er = new Error(d.error || 'Сервер не ответил.'); er.status = r.status; throw er; }
     return d;
   }
-  const lotsLeft = () => (lotsRoom && lotsRoom.endsAt ? lotsRoom.endsAt - (Date.now() + lotsOffset) : null);
-  const lotsOpen = () => !!lotsRoom && !lotsRoom.closed && (lotsRoom.endsAt == null || lotsLeft() > 0);
   // после победы ссылка ведёт на итог: такой адрес мессенджер ещё не запомнил, и в предпросмотре будет победитель
   const wTag = (s) => { let h = 5381; for (const c of String(s)) h = (h * 33 + c.codePointAt(0)) >>> 0; return h.toString(36); };
-  const lotsLink = () => (lotsRoom ? location.origin + '/lots/' + lotsRoom.id + (lotsWinner && lotsWinner.n ? '?w=' + wTag(lotsWinner.n) : '') : '');
-  const lotsMmss = (ms) => { const t = Math.max(0, Math.ceil(ms / 1000)), m = Math.floor(t / 60); return m + ':' + String(t % 60).padStart(2, '0'); };
-  function lotsTake(d) {
-    if (d.now) lotsOffset = d.now - Date.now();
-    if (d.room !== undefined) lotsRoom = d.room;
-    if (d.lots) lotsList = d.lots;
-    lotsImport();
-    lotsPaint();
-  }
-  // какое колесо открыто: переключатель над колесом. Пока колесо крутится, переключать нельзя
-  function paintScope() {
-    const box = $('#wheelSwitch');
-    if (!box) return;
-    box.hidden = !lotsRoom;
-    $('#stageTitle').textContent = scope === 'link' ? 'Колесо по ссылке' : 'Колесо';
-    if (!lotsRoom) return;
-    const link = scope === 'link' ? S : stash;
-    const n = link.items.filter((i) => !i.out).length;
-    box.querySelectorAll('[data-scope]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.scope === scope)));
-    $('#wheelSwitchCount').textContent = n ? String(n) : '';
-  }
-  function leaveLink() {
-    if (scope !== 'link') return;
-    clearTimeout(autoTimer);
-    linkStatus = $('#statusMain').textContent;
-    swapWheel();
-    scope = 'main';
-    lastWinner = null;
-    $('#winner').hidden = true;
-  }
-  function setScope(next) {
-    if (next === scope || S.spinning) return false;
-    if (next === 'link' && !lotsRoom) return false;
-    if (next === 'main') leaveLink();
-    else {
-      clearTimeout(autoTimer);
-      swapWheel();
-      scope = 'link';
-      lastWinner = null;
-      $('#winner').hidden = true;
-    }
-    stopChannel('win');
-    resumeBg();
-    save();
-    render();
-    paintScope();
-    return true;
-  }
-  // новые лоты встают на колесо по ссылке (основное не трогаем), убранные и заменённые зрителями меняются там же.
-  // Пока колесо крутится, ничего не трогаем
-  function lotsImport() {
-    if (!lotsRoom || S.spinning) return;
-    let changed = false, fresh = false;
-    onLink(() => {
-      const ids = new Set(lotsList.map((l) => l.id));
-      const users = (itemId) => Object.keys(lotsMap).filter((k) => lotsMap[k] === itemId).length;
-      for (const id of Object.keys(lotsMap)) {
-        if (ids.has(id)) continue;
-        const itemId = lotsMap[id], it = itemId > 0 ? S.items.find((i) => i.id === itemId) : null;
-        if (it && !it.out && users(itemId) === 1) { S.items = S.items.filter((i) => i !== it); changed = true; }
-        delete lotsMap[id];
-        delete lotsNames[id];
-        fresh = true;
-      }
-      for (const l of lotsList) {
-        if (lotsMap[l.id]) {
-          const itemId = lotsMap[l.id], it = itemId > 0 ? S.items.find((i) => i.id === itemId) : null;
-          if (lotsNames[l.id] == null) lotsNames[l.id] = l.name;
-          else if (lotsNames[l.id] !== l.name) {
-            if (it && !it.out && users(itemId) === 1) { it.name = l.name.trim().slice(0, 60); changed = true; }
-            lotsNames[l.id] = l.name;
-          }
-          continue;
-        }
-        const r = addItem(l.name, 0, S.cur);
-        const it = S.items.find((i) => i.name.toLowerCase() === l.name.toLowerCase());
-        lotsMap[l.id] = it ? it.id : -1;
-        lotsNames[l.id] = l.name;
-        fresh = true;
-        if (r === 'added') { changed = true; if (scope === 'link') msg(`Новый лот: «${l.name}»`, 'ok'); }
-      }
-    });
-    const st = JSON.stringify({ code: lotsRoom.id, map: lotsMap, names: lotsNames });
-    if (st !== lotsStored) { lotsStored = st; try { localStorage.setItem(LOTS_KEY, st); } catch (e) {} }
-    if (changed) { save(); if (scope === 'link') render(); } else if (fresh) lotsLiveSoon();
-    paintScope();
-  }
-  // своя картинка лежит в браузере ведущего: зрителям уходит её копия, большая гифка — первым кадром
-  function lotsHubData(g) {
-    if (g.blob.type === 'image/gif' && g.blob.size <= 1350 * 1024) return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(fr.result); fr.onerror = rej; fr.readAsDataURL(g.blob); });
-    return createImageBitmap(g.blob).then((bmp) => {
-      const side = Math.min(bmp.width, bmp.height), size = Math.min(side, 480);
-      const c = document.createElement('canvas');
-      c.width = c.height = size;
-      c.getContext('2d').drawImage(bmp, (bmp.width - side) / 2, (bmp.height - side) / 2, side, side, 0, 0, size, size);
-      const webp = c.toDataURL('image/webp', 0.85);
-      return webp.startsWith('data:image/webp') ? webp : c.toDataURL('image/jpeg', 0.85);
-    });
-  }
-  function lotsHubSync() {
-    if (hubBusy || !lotsRoom) return;
-    const own = G.find((g) => g.id === S.gif), want = own ? own.id : '';
-    if (want === hubSent || (want && want === hubFailed)) return;
-    hubBusy = true;
-    (own ? lotsHubData(own).then((data) => lotsApi('/lots-hub', 'PUT', { data })) : lotsApi('/lots-hub', 'DELETE'))
-      .then(() => { hubSent = want; hubFailed = ''; }, (e) => {
-        if (want) { hubFailed = want; lotsErr = `Зрители не увидят твою картинку: ${e.message}`; lotsPaint(); } else hubSent = '';
-      })
-      .then(() => { hubBusy = false; lotsLiveNow(); });
-  }
-  // зрителям уходит всегда колесо по ссылке, какое бы ни было открыто у ведущего
-  function lotsLiveBody() { return onLink(lotsLiveBodyOf); }
-  function lotsLiveBodyOf() {
-    const a = S.sample ? [] : segments();
-    const left = alive();
-    const won = lotsWinner || (S.pick !== 'one' && !S.spinning && S.items.length > 1 && left.length === 1 ? { n: left[0].name } : null);
-    // у сектора из лота — id этого лота: если зритель заменит лот, пока эта вкладка в фоне или закрыта,
-    // зрители сразу покажут новое название на месте старого. Сектор, на который легли два лота, остаётся без id
-    const lotOf = new Map(), twice = new Set();
-    for (const [lid, iid] of Object.entries(lotsMap)) {
-      if (!(iid > 0)) continue;
-      if (lotOf.has(iid)) twice.add(iid); else lotOf.set(iid, lid);
-    }
-    return {
-      segs: a.map((x) => ({ n: x.item.name, p: +x.p.toFixed(6), c: colorOf(x.item).c, t: colorOf(x.item).t, ...(lotOf.has(x.item.id) && !twice.has(x.item.id) ? { l: lotOf.get(x.item.id) } : {}) })),
-      rot: +mod(S.rot, TAU).toFixed(4), spin: liveSpin, pick: livePick, hub: S.hub,
-      // зрителям уходят только треки из списка: свои аудиофайлы лежат в браузере ведущего
-      music: { bg: S.bgOn && presetOf(S.music.bg) ? presetOf(S.music.bg).id : '', win: presetOf(S.music.win) ? presetOf(S.music.win).id : '' },
-      hubImg: (() => { const b = BASE_HUBS.find((x) => x.id === S.gif); return b ? b.src.replace(/\.mp4$/i, '.webm') : ''; })(),
-      hubOwn: S.gif && S.gif === hubSent ? hubSent : '',
-      // сколько лотов уже на колесе: остальные зрители видят сразу, не дожидаясь этой вкладки
-      seen: lotsList.filter((l) => lotsMap[l.id]).length,
-      // те же лоты по id: номер в очереди сбивается, когда лоты удаляют, а id — нет
-      ids: lotsList.filter((l) => lotsMap[l.id]).map((l) => l.id),
-      status: S.sample ? '' : (scope === 'link' ? $('#statusMain').textContent : linkStatus).slice(0, 140),
-      out: S.items.filter((i) => i.out).map((i) => i.name), winner: won,
-    };
-  }
-  function lotsLiveNow() {
-    clearTimeout(liveT);
-    if (!lotsRoom || !lotsAccount) return;
-    lotsHubSync();
-    const body = lotsLiveBody(), sig = JSON.stringify(body);
-    if (sig === liveSig) return;
-    liveSig = sig;
-    lotsApi('/lots/' + lotsRoom.id + '/live', 'PUT', body).catch(() => { liveSig = ''; });
-  }
-  function lotsLiveSoon() {
-    if (!lotsRoom) return;
-    if (!S.spinning) { liveSpin = null; livePick = ''; }
-    clearTimeout(liveT);
-    liveT = setTimeout(lotsLiveNow, 500);
-  }
-  // сам момент старта уходит сразу и по общему времени: зрители крутят колесо синхронно
-  function lotsSpin(from, to, ms) {
-    if (!lotsRoom || scope !== 'link') return;
-    liveSpin = { from: +from.toFixed(4), to: +to.toFixed(4), ms, at: Date.now() + lotsOffset };
-    livePick = '';
-    lotsLiveNow();
-  }
-  // таймер сбора ещё идёт: сначала спрашиваем. На один таймер один раз, чтобы не мешать следующим прокруткам
-  function lotsSpinAsk() {
-    if (S.spinning || scope !== 'link' || !lotsRoom || !lotsRoom.endsAt || !lotsOpen() || lotsAskedFor === lotsRoom.endsAt || alive().length < 2) { spin(); return; }
-    $('#lotsAskText').textContent = `До конца сбора ${lotsMmss(lotsLeft())}, зрители ещё могут добавлять лоты. Крутить сейчас?`;
-    $('#lotsAsk').hidden = false;
-    $('#lotsAskNo').focus({ preventScroll: true });
-  }
-  function lotsAskInit() {
-    const box = $('#lotsAsk');
-    const hide = () => { box.hidden = true; };
-    $('#lotsAskNo').addEventListener('click', hide);
-    box.addEventListener('click', (e) => { if (e.target === box) hide(); });
-    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !box.hidden) hide(); });
-    $('#lotsAskSpin').addEventListener('click', () => { lotsAskedFor = lotsRoom && lotsRoom.endsAt; hide(); spin(); });
-    $('#lotsAskClose').addEventListener('click', async () => {
-      hide();
-      await lotsDo(() => lotsApi('/lots/' + lotsRoom.id, 'PATCH', { closed: true }));
-      spin();
-    });
-  }
   const lotsRules = (o) => `<div class="lots-f"><span>Правила для зрителей</span>
         <label class="lots-chk"><input type="checkbox" data-lots-rule="editOwn"${o.editOwn ? ' checked' : ''}><span>Зрители могут убирать и менять свои лоты (пока лот не вылетел)</span></label>
         <label class="lots-chk"><input type="checkbox" data-lots-rule="uniq"${o.uniq ? ' checked' : ''}><span>Одно название — один лот: никто не займёт два лота одной игрой</span></label>
@@ -2423,166 +2249,51 @@
   function lotsPaint() {
     const box = $('#lotsBody');
     if (!box) return;
-    paintScope();
-    if (!lotsAccount) { box.innerHTML = '<p class="lots-note">Войди в аккаунт, и можно будет дать зрителям ссылку: они сами добавят лоты, а твоё колесо будут видеть вживую.</p><a class="btn small primary" href="/opinion/#login">Войти</a>'; return; }
-    if (!lotsRoom) {
-      box.innerHTML = `<p class="lots-note">Дай ссылку зрителям: они сами добавят лоты, те встанут на колесо, а как оно крутится, будут видеть вживую.</p>
-        <label class="lots-f">Название<input class="inp" id="lotsTitle" maxlength="60" placeholder="Например, Аук Толика"></label>
-        <div class="lots-f"><span>Категория колеса</span><div class="seg" role="group" aria-label="Категория колеса">${Object.entries(LOT_KIND_NAMES).map(([k, t]) => `<button type="button" data-lots-kind="${k}" aria-pressed="${k === lotsKindNew}">${t}</button>`).join('')}</div></div>
-        <div class="lots-f"><span>Лотов на человека</span><div class="seg" role="group" aria-label="Лотов на человека">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-lots-per="${n}" aria-pressed="${n === lotsPerNew}">${n}</button>`).join('')}</div></div>
-        <label class="lots-f">Сколько минут можно вписывать (0 — пока не закроешь сам)<input class="inp lots-mins" id="lotsMins" type="number" inputmode="numeric" min="0" max="1440" value="${lotsMinsNew}"></label>
-        ${lotsRules({ editOwn: lotsEditNew, uniq: lotsUniqNew, fuzzy: lotsFuzzyNew && lotsUniqNew })}
-        <div class="dfoot"><button type="button" class="btn small primary" data-lots="create">Открыть сбор</button></div>
-        ${lotsErr ? `<p class="lots-note bad">${esc(lotsErr)}</p>` : ''}
-        <div id="lotsRooms"></div>`;
-      lotsPaintRooms();
-      return;
-    }
-    const left = lotsLeft(), open = lotsOpen();
-    box.innerHTML = `<label class="lots-f">Ссылка для зрителей<div class="lots-row"><input class="inp" id="lotsUrl" readonly value="${esc(lotsLink())}"><button type="button" class="btn small primary" data-lots="copy">Скопировать</button></div></label>
-      <p class="lots-note">Категория: ${esc(LOT_KIND_NAMES[lotsRoom.kind] || '')}</p>
-      <div class="lots-row"><b>${lotsList.length}</b> ${lotsList.length % 10 === 1 && lotsList.length % 100 !== 11 ? 'лот' : lotsList.length % 10 > 1 && lotsList.length % 10 < 5 && (lotsList.length % 100 < 12 || lotsList.length % 100 > 14) ? 'лота' : 'лотов'} · <span id="lotsClock" class="${open ? 'lots-note' : 'lots-note bad'}">${lotsClockText(left, open)}</span></div>
-      <p class="lots-note">Лоты зрителей лежат на отдельном колесе «По ссылке»: оно переключается над колесом, а основное остаётся как было.</p>
-      <p class="lots-note">Пока идёт сбор, вкладку можно закрыть: зрители всё равно видят лоты, а на твоё колесо они встанут, когда вернёшься. Открытой она нужна, только когда крутишь.</p>
-      <p class="lots-note">Зрители видят картинку в центре колеса, даже свою, и слышат музыку из списка. Свой аудиофайл играет только у тебя.</p>
-      <div class="lots-f"><span>Лотов на человека</span><div class="seg" role="group" aria-label="Лотов на человека">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-lots-limit="${n}" aria-pressed="${n === lotsRoom.perUser}">${n}</button>`).join('')}</div></div>
-      ${lotsRules(lotsRoom)}
-      <div class="lots-row">
-        ${open ? '' : '<button type="button" class="btn small primary" data-lots="spin">Крутить</button>'}
-        ${open && lotsRoom.endsAt ? '<button type="button" class="btn small ghost" data-lots="minus">−1 минута</button>' : ''}
-        <button type="button" class="btn small ghost" data-lots="plus">+1 минута</button>
-        ${open ? '<button type="button" class="btn small ghost" data-lots="close">Закрыть сбор</button>' : '<button type="button" class="btn small ghost" data-lots="reopen">Открыть снова</button>'}
-        <button type="button" class="btn text" data-lots="new">Новый сбор</button>
-      </div>
+    if (!lotsAccount) { box.innerHTML = '<p class="lots-note">Войди в аккаунт, и можно будет дать зрителям ссылку: они сами добавят лоты, а ты будешь крутить колесо с ними на странице сбора.</p><a class="btn small primary" href="/opinion/#login">Войти</a>'; return; }
+    box.innerHTML = `<p class="lots-note">Дай ссылку зрителям: они сами добавят лоты. Колесо с их лотами крутишь на странице сбора — там у тебя пульт ведущего, а зрители видят прокрутку вживую.</p>
+      <label class="lots-f">Название<input class="inp" id="lotsTitle" maxlength="60" placeholder="Например, Аук Толика"></label>
+      <div class="lots-f"><span>Категория колеса</span><div class="seg" role="group" aria-label="Категория колеса">${Object.entries(LOT_KIND_NAMES).map(([k, t]) => `<button type="button" data-lots-kind="${k}" aria-pressed="${k === lotsKindNew}">${t}</button>`).join('')}</div></div>
+      <div class="lots-f"><span>Лотов на человека</span><div class="seg" role="group" aria-label="Лотов на человека">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-lots-per="${n}" aria-pressed="${n === lotsPerNew}">${n}</button>`).join('')}</div></div>
+      <label class="lots-f">Сколько минут можно вписывать (0 — пока не закроешь сам)<input class="inp lots-mins" id="lotsMins" type="number" inputmode="numeric" min="0" max="1440" value="${lotsMinsNew}"></label>
+      ${lotsRules({ editOwn: lotsEditNew, uniq: lotsUniqNew, fuzzy: lotsFuzzyNew && lotsUniqNew })}
+      <div class="dfoot"><button type="button" class="btn small primary" data-lots="create">Открыть сбор</button></div>
       ${lotsErr ? `<p class="lots-note bad">${esc(lotsErr)}</p>` : ''}
       <div id="lotsRooms"></div>`;
     lotsPaintRooms();
   }
-  // все сборы ведущего: ссылка на каждый лежит здесь, сколько бы новых он ни открыл
+  // все сборы ведущего: у каждого ссылка для зрителей и пульт
   function lotsPaintRooms() {
     const box = $('#lotsRooms');
     if (!box) return;
     const now = Date.now() + lotsOffset;
     const rows = lotsRooms.map((r) => {
-      const on = lotsRoom && lotsRoom.id === r.id;
-      const room = on ? { ...r, ...lotsRoom, n: lotsList.length } : r;
-      const state = room.winner ? '🏆 ' + room.winner : room.closed ? 'закрыт' : room.endsAt && room.endsAt <= now ? 'время вышло' : 'открыт';
-      return `<li${on ? ' class="on"' : ''}><span class="lots-room"><b>${esc(room.title || 'Без названия')}</b><small>${esc(LOT_KIND_NAMES[room.kind] || '')} · лотов: ${room.n} · ${esc(state)}${on ? ' · сейчас на колесе' : ''}</small></span><button type="button" class="btn small ghost" data-lots-copy="${esc(r.id)}">Ссылка</button>${on || room.winner ? '' : `<button type="button" class="btn small ghost" data-lots-open="${esc(r.id)}">На колесо</button>`}<button type="button" class="btn text" data-lots-del="${esc(r.id)}">Удалить</button></li>`;
+      const state = r.winner ? '🏆 ' + r.winner : r.closed ? 'закрыт' : r.endsAt && r.endsAt <= now ? 'время вышло' : 'открыт';
+      return `<li><span class="lots-room"><b>${esc(r.title || 'Без названия')}</b><small>${esc(LOT_KIND_NAMES[r.kind] || '')} · лотов: ${r.n} · ${esc(state)}</small></span><a class="btn small primary" href="/lots/${esc(r.id)}">Пульт</a><button type="button" class="btn small ghost" data-lots-copy="${esc(r.id)}">Ссылка</button><button type="button" class="btn text" data-lots-del="${esc(r.id)}">Удалить</button></li>`;
     });
     box.innerHTML = rows.length ? `<div class="lots-f"><span>Мои сборы</span><ul class="lots-rooms">${rows.join('')}</ul></div>` : '';
   }
   async function lotsRefreshRooms() {
     try { const d = await lotsApi('/lots-mine'); lotsRooms = d.rooms || []; if (d.now) lotsOffset = d.now - Date.now(); lotsPaintRooms(); } catch (e) {}
   }
-  // снимаем лоты текущего сбора с колеса по ссылке; сам сбор и его ссылка остаются
-  function lotsDetach() {
-    const old = new Set(Object.values(lotsMap));
-    clearTimeout(lotsPollT);
-    lotsRoom = null; lotsList = []; lotsMap = {}; lotsNames = {}; lotsStored = ''; lotsErr = ''; lotsWinner = null; liveSpin = null; livePick = ''; liveSig = '';
-    $('#winner').hidden = true;
-    stopChannel('win');
-    resumeBg();
-    onLink(() => { if (old.size) S.items = S.items.filter((i) => !old.has(i.id)); });
-    leaveLink();
-    save();
-    render();
-    paintScope();
-    try { localStorage.setItem(LOTS_KEY, JSON.stringify({ code: '', map: {}, names: {} })); } catch (e) {}
-  }
-  // вернуть старый сбор на колесо: его лоты встают заново, а вылетевшие остаются вылетевшими
-  async function lotsResume(id) {
-    if (S.spinning) return;
-    lotsErr = '';
-    let d;
-    try { d = await lotsApi('/lots/' + id); } catch (e) { lotsErr = e.message; lotsPaint(); return; }
-    lotsDetach();
-    lotsTake(d);
-    const out = d.live && Array.isArray(d.live.out) ? d.live.out : [];
-    if (out.length) {
-      onLink(() => { S.items.forEach((i) => { if (out.includes(i.name)) { i.out = true; i.outOrder = ++S.outSeq; } }); });
-      save();
-    }
-    setScope('link');
-    lotsLiveNow();
-    lotsPoll();
-  }
-  function lotsClockText(left, open) {
-    if (lotsRoom.closed) return 'сбор закрыт';
-    if (left == null) return 'без таймера';
-    return open ? 'осталось ' + lotsMmss(left) : 'время вышло';
-  }
-  // ведущий убрал с колеса по ссылке то, что пришло из лотов: эти лоты удаляются из сбора,
-  // и у зрителей пропадают совсем, без пометки «убран». Основное колесо сбор не трогает
-  function lotsDrop(itemIds) {
-    if (scope !== 'link' || !lotsRoom || !lotsAccount) return;
-    const gone = new Set(itemIds);
-    const ids = Object.keys(lotsMap).filter((k) => gone.has(lotsMap[k]));
-    if (!ids.length) return;
-    lotsDo(() => lotsApi('/lots/' + lotsRoom.id + '/drop', 'POST', { ids }));
-  }
-  async function lotsDo(fn) {
-    lotsErr = '';
-    try { lotsTake(await fn()); } catch (e) { lotsErr = e.message; lotsPaint(); }
-  }
-  async function lotsPoll() {
-    clearTimeout(lotsPollT);
-    if (!lotsRoom) return;
-    const seq = ++lotsPollSeq, id = lotsRoom.id;
-    if (!S.spinning) {
-      try {
-        const d = await lotsApi('/lots/' + id + '?v=' + lotsRoom.ver);
-        // пока ждали ответ, ведущий мог перейти к другому сбору: старый ответ его не вернёт
-        if (seq !== lotsPollSeq || !lotsRoom || lotsRoom.id !== id) return;
-        lotsOffset = d.now - Date.now();
-        lotsRoom = d.room;
-        if (d.lots) lotsList = d.lots;
-        // лот мог прийти во время прокрутки: он встаёт на колесо, как только она кончится
-        lotsImport();
-        if (d.lots) lotsPaint();
-      } catch (e) {
-        if (seq !== lotsPollSeq) return;
-        // сбор удалили на другом устройстве
-        if (e.status === 404 && lotsRoom && lotsRoom.id === id && !S.spinning) { lotsDetach(); lotsPaint(); lotsRefreshRooms(); return; }
-      }
-    }
-    // и когда вкладка в фоне: лоты должны доезжать, пока ведущий занят другим окном
-    lotsPollT = setTimeout(lotsPoll, lotsOpen() ? 2000 : 8000);
-  }
   async function lotsInit() {
     const box = $('#lotsBody');
     if (!box) return;
-    lotsAskInit();
     lotsPaint();
-    $('#wheelSwitch').addEventListener('click', (e) => {
-      const b = e.target.closest('[data-scope]');
-      if (!b || b.dataset.scope === scope) return;
-      if (S.spinning) { msg('Дождись конца прокрутки, потом переключай колесо.', 'err'); return; }
-      setScope(b.dataset.scope);
-      msg('');
-    });
+    const keepForm = () => { lotsMinsNew = +$('#lotsMins').value || 0; const title = $('#lotsTitle').value; lotsPaint(); $('#lotsTitle').value = title; };
     box.addEventListener('change', (e) => {
       const c = e.target.closest('[data-lots-rule]');
       if (!c) return;
       const k = c.dataset.lotsRule, v = c.checked;
-      if (lotsRoom) { lotsDo(() => lotsApi('/lots/' + lotsRoom.id, 'PATCH', { [k]: v })); return; }
       if (k === 'editOwn') lotsEditNew = v; else if (k === 'uniq') lotsUniqNew = v; else lotsFuzzyNew = v;
-      lotsMinsNew = +$('#lotsMins').value || 0;
-      const title = $('#lotsTitle').value;
-      lotsPaint();
-      $('#lotsTitle').value = title;
+      keepForm();
     });
     box.addEventListener('click', async (e) => {
       const per = e.target.closest('[data-lots-per], [data-lots-kind]');
       if (per) {
         if (per.dataset.lotsPer) lotsPerNew = +per.dataset.lotsPer; else lotsKindNew = per.dataset.lotsKind;
-        lotsMinsNew = +$('#lotsMins').value || 0;
-        const title = $('#lotsTitle').value;
-        lotsPaint();
-        $('#lotsTitle').value = title;
+        keepForm();
         return;
       }
-      const lim = e.target.closest('[data-lots-limit]');
-      if (lim) { lotsDo(() => lotsApi('/lots/' + lotsRoom.id, 'PATCH', { perUser: +lim.dataset.lotsLimit })); return; }
       const cp = e.target.closest('[data-lots-copy]');
       if (cp) {
         const was = lotsRooms.find((x) => x.id === cp.dataset.lotsCopy);
@@ -2590,8 +2301,6 @@
         try { await navigator.clipboard.writeText(url); msg('Ссылка скопирована.', 'ok'); } catch (er) { msg(url, 'ok'); }
         return;
       }
-      const op = e.target.closest('[data-lots-open]');
-      if (op) { lotsResume(op.dataset.lotsOpen); return; }
       const del = e.target.closest('[data-lots-del]');
       if (del) {
         // удаление насовсем: ссылка перестанет открываться, поэтому нажать нужно дважды
@@ -2604,84 +2313,25 @@
         const id = del.dataset.lotsDel;
         try {
           await lotsApi('/lots/' + id, 'DELETE');
-          if (lotsRoom && lotsRoom.id === id) { lotsDetach(); lotsPaint(); }
           lotsRooms = lotsRooms.filter((r) => r.id !== id);
           lotsPaintRooms();
         } catch (er) { lotsErr = er.message; lotsPaint(); }
         return;
       }
-      const b = e.target.closest('[data-lots]');
+      const b = e.target.closest('[data-lots="create"]');
       if (!b) return;
-      const a = b.dataset.lots;
-      if (a === 'create') {
-        const minutes = Math.max(0, Math.min(1440, Math.round(+$('#lotsMins').value) || 0));
-        await lotsDo(() => lotsApi('/lots', 'POST', { title: $('#lotsTitle').value, kind: lotsKindNew, perUser: lotsPerNew, minutes, editOwn: lotsEditNew, uniq: lotsUniqNew, fuzzy: lotsFuzzyNew && lotsUniqNew }));
-        if (lotsRoom) {
-          // у зрителей своё колесо: основное (и пример на нём) остаётся как было
-          lotsMap = {}; lotsNames = {}; liveSig = ''; lotsWinner = null; setScope('link'); lotsLiveNow(); lotsPoll();
-          lotsRefreshRooms();
-        }
-      } else if (a === 'copy') {
-        try { await navigator.clipboard.writeText(lotsLink()); msg('Ссылка скопирована.', 'ok'); }
-        catch (er) { const u = $('#lotsUrl'); u.focus(); u.select(); msg('Скопируй ссылку из поля.', 'ok'); }
-      } else if (a === 'plus') lotsDo(() => lotsApi('/lots/' + lotsRoom.id, 'PATCH', { extra: 1 }));
-      else if (a === 'minus') lotsDo(() => lotsApi('/lots/' + lotsRoom.id, 'PATCH', { extra: -1 }));
-      else if (a === 'spin') {
-        if (S.spinning) return;
-        if (scope !== 'link') setScope('link');
-        if (alive().length < 2) { msg('Чтобы крутить, на колесе нужно хотя бы два лота.', 'err'); return; }
-        $('#stage').scrollIntoView({ block: 'center', behavior: 'smooth' });
-        clearTimeout(autoTimer);
-        spin();
-      }
-      else if (a === 'close') lotsDo(() => lotsApi('/lots/' + lotsRoom.id, 'PATCH', { closed: true }));
-      else if (a === 'reopen') lotsDo(() => lotsApi('/lots/' + lotsRoom.id, 'PATCH', { closed: false, ...(lotsLeft() != null && lotsLeft() <= 0 ? { extra: 5 } : {}) }));
-      else if (a === 'new') {
-        if (S.spinning) return;
-        lotsDetach();
-        lotsPaint();
+      const minutes = Math.max(0, Math.min(1440, Math.round(+$('#lotsMins').value) || 0));
+      b.disabled = true;
+      lotsErr = '';
+      try {
+        const d = await lotsApi('/lots', 'POST', { title: $('#lotsTitle').value, kind: lotsKindNew, perUser: lotsPerNew, minutes, editOwn: lotsEditNew, uniq: lotsUniqNew, fuzzy: lotsFuzzyNew && lotsUniqNew });
+        // пульт ведущего — на странице сбора: туда же зрители придут по ссылке
+        if (d.room && d.room.id) { location.href = '/lots/' + d.room.id; return; }
         lotsRefreshRooms();
-      }
+      } catch (er) { lotsErr = er.message; lotsPaint(); }
+      b.disabled = false;
     });
-    setInterval(() => { if (!lotsRoom) return; const c = $('#lotsClock'); if (!c) return; const open = lotsOpen(), t = lotsClockText(lotsLeft(), open); if (open !== (c.className === 'lots-note')) { lotsPaint(); return; } if (c.textContent !== t) c.textContent = t; }, 1000);
-    document.addEventListener('visibilitychange', () => { if (!document.hidden && lotsRoom) lotsPoll(); });
-    if (!lotsAccount) return;
-    try {
-      const d = await lotsApi('/lots-mine');
-      lotsRooms = d.rooms || [];
-      if (d.now) lotsOffset = d.now - Date.now();
-      let st = null;
-      try { st = JSON.parse(localStorage.getItem(LOTS_KEY) || 'null'); } catch (e) {}
-      // на этом устройстве сбор уже шёл: продолжаем его; с другого устройства подхватываем свежий открытый сбор
-      const pick = lotsRooms.find((r) => st && r.id === st.code) || (st && st.code === '' ? null : lotsRooms.find((r) => !r.winner && !r.closed && (!r.endsAt || r.endsAt > d.now)));
-      // сбор исчез (удалили на другом устройстве) или открылся другой: лоты прошлого с колеса по ссылке уходят
-      if (st && st.map && (!pick || pick.id !== st.code)) {
-        const gone = new Set(Object.values(st.map));
-        if (gone.size) { onLink(() => { S.items = S.items.filter((i) => !gone.has(i.id)); }); save(); if (scope === 'link') render(); }
-      }
-      if (pick) {
-        // что ведущий убрал с колеса, после обновления страницы туда не вернётся
-        if (st && st.code === pick.id) {
-          lotsMap = st.map || {};
-          lotsNames = st.names || {};
-          // раньше лоты стояли прямо на основном колесе: переезжают на своё
-          if (!st.names) {
-            const ids = new Set(Object.values(lotsMap).filter((v) => v > 0));
-            const moved = S.items.filter((i) => ids.has(i.id));
-            if (moved.length) {
-              S.items = S.items.filter((i) => !ids.has(i.id));
-              onLink(() => { S.items = moved; S.seq = Math.max(S.seq, ...moved.map((i) => i.id)); S.outSeq = Math.max(0, ...moved.map((i) => i.outOrder || 0)); });
-              save();
-              render();
-            }
-          }
-        }
-        lotsTake(await lotsApi('/lots/' + pick.id));
-        if (savedScope === 'link') setScope('link');
-        lotsLiveNow();
-        lotsPoll();
-      } else lotsPaintRooms();
-    } catch (e) {}
+    if (lotsAccount) lotsRefreshRooms();
   }
 
   window.claude?.hot?.snapshot?.(() => { const { spinning, ...rest } = S || {}; return rest; });

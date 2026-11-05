@@ -987,13 +987,6 @@ html.unslop::before { display: none; }
         <button type="button" class="btn text" id="restart">Вернуть всех</button></span>
       </div>
 
-      <div class="wheel-switch" id="wheelSwitch" hidden>
-        <div class="seg" role="group" aria-label="Какое колесо открыто">
-          <button type="button" data-scope="main" aria-pressed="true">Основное</button>
-          <button type="button" data-scope="link" aria-pressed="false">По ссылке <b id="wheelSwitchCount"></b></button>
-        </div>
-      </div>
-
       <div class="readout">
         <span class="label">Под стрелкой</span>
         <strong id="ticker">—</strong>
@@ -1191,18 +1184,6 @@ html.unslop::before { display: none; }
   </div>
   <button type="button" class="fx-mute" id="fxMute" hidden><span class="u-old">🔇 </span>Выключить музыку</button>
   <button type="button" class="fx-skip">Пропустить ›<i class="fx-prog" aria-hidden="true"></i></button>
-</div>
-
-<div class="sheet" id="lotsAsk" hidden role="dialog" aria-modal="true" aria-labelledby="lotsAskT">
-  <div class="sheet-card">
-    <h2 class="eyebrow" id="lotsAskT"><span class="dot" aria-hidden="true"></span>Сбор ещё идёт</h2>
-    <p class="lots-note" id="lotsAskText"></p>
-    <div class="sheet-actions">
-      <button type="button" class="btn primary" id="lotsAskClose">Закрыть сбор и крутить</button>
-      <button type="button" class="btn ghost" id="lotsAskSpin">Крутить, сбор не закрывать</button>
-      <button type="button" class="btn ghost" id="lotsAskNo">Подождать</button>
-    </div>
-  </div>
 </div>
 
 <div class="sheet" id="winner" hidden role="dialog" aria-modal="true" aria-labelledby="wName">

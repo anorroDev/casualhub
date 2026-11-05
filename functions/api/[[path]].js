@@ -1285,8 +1285,10 @@ const routes = {
     const room = await env.DB.prepare('SELECT * FROM lot_rooms WHERE id = ?').bind(arg).first();
     if (!room) return fail(404, 'Такого сбора нет.');
     const now = Date.now();
-    if (room.closed) return fail(403, 'Сбор закрыт, больше добавлять нельзя.');
-    if (room.ends_at && now >= room.ends_at) return fail(403, 'Время вышло, больше добавлять нельзя.');
+    // хозяин сбора вписывает свои лоты без лимита и после конца сбора: так он ставит на колесо и своих участников
+    const own = room.owner_id === me.id;
+    if (room.closed && !own) return fail(403, 'Сбор закрыт, больше добавлять нельзя.');
+    if (room.ends_at && now >= room.ends_at && !own) return fail(403, 'Время вышло, больше добавлять нельзя.');
     const b = await readBody(request);
     let lot;
     try { lot = await lotItem(room.kind, b); }
@@ -1302,7 +1304,7 @@ const routes = {
     } else if (have.some((x) => x.ref === ref)) ref = ref + '~' + randHex(3); // ведущий разрешил повторы: у лота своя строка
     const r = await env.DB.prepare(`INSERT INTO lots (room_id, id, user_id, ref, name, img, link, created_at)
       SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8 WHERE (SELECT COUNT(*) FROM lots WHERE room_id = ?1 AND user_id = ?3) < ?9 AND (SELECT COUNT(*) FROM lots WHERE room_id = ?1) < ?10
-      ON CONFLICT(room_id, ref) DO NOTHING`).bind(arg, randHex(8), me.id, ref, lot.name, lot.img, lot.link, now, room.per_user, MAX_LOTS).run();
+      ON CONFLICT(room_id, ref) DO NOTHING`).bind(arg, randHex(8), me.id, ref, lot.name, lot.img, lot.link, now, own ? MAX_LOTS : room.per_user, MAX_LOTS).run();
     if (!r.meta.changes) {
       const has = await env.DB.prepare('SELECT 1 FROM lots WHERE room_id = ? AND ref = ?').bind(arg, ref).first();
       if (has) return fail(409, 'Это уже добавили.');
