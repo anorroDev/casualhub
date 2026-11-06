@@ -47,7 +47,18 @@ function openAuthFromHash() {
     });
     return;
   }
-  // ссылки с главной и из профиля: #r=<оценка>, #friend=<друг>&r=<оценка>, #friends, #rating
+  // «Оценить» или «В планы» у чужой оценки на главной и в профиле: данные лежат в casualhub.take.v1
+  if (h === '#take') {
+    history.replaceState(null, '', location.pathname + location.search);
+    Promise.resolve(ready).catch(() => {}).then(async () => {
+      // категории из аккаунта приходят чуть позже загрузки: ждём модуль друзей, чтобы не создать категорию второй раз
+      for (let i = 0; i < 20 && !window.CasualFriends; i++) await new Promise(r => setTimeout(r, 150));
+      await new Promise(r => setTimeout(r, 600));
+      applyTake();
+    });
+    return;
+  }
+  // ссылки с главной и из профиля: #r=<оценка>, #friend=<друг>&r=<оценка>, #friends, #rating; &edit=1 — сразу её правка
   const q = new URLSearchParams(h.slice(1));
   if (!q.has('r') && !q.has('friend') && h !== '#friends' && h !== '#rating') return;
   history.replaceState(null, '', location.pathname + location.search);
@@ -60,6 +71,7 @@ function openAuthFromHash() {
     const id = q.get('r');
     for (let i = 0; i < 24 && !state.ratings.some(x => x.id === id); i++) await new Promise(r => setTimeout(r, 250));
     goToRating(id);
+    if (q.get('edit')) { const r = state.ratings.find(x => x.id === id); if (r && state.canWrite) loadIntoForm(r); }
     if (q.get('share')) { const r = state.ratings.find(x => x.id === id); if (r) openShare(exportFromRating(r)); }
     // страница ещё раскладывается после загрузки: доводим прокрутку до оценки ещё раз
     for (const ms of [700, 1400]) setTimeout(() => {

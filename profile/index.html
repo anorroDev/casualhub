@@ -866,6 +866,8 @@ body.prof-edit #app [data-photo] { cursor: inherit; }
 .rd-fields textarea { width: 100%; min-height: 60px; resize: vertical; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); color: var(--ink); font: inherit; font-size: 14.5px; line-height: 1.4; }
 .rd-fields textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .rd-card.editing { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
+.rd-foot .rc-take { margin-left: auto; }
+@media (max-width: 560px) { .rd-foot .rc-take, .rd-foot > .btn { flex: 1 1 100%; } .rd-foot .rc-take .rc-btn { flex: 1 1 0; } }
 .rd-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; padding-top: 14px; border-top: 1px solid var(--line); color: var(--ink-2); font-size: 14px; }
 @media (max-width: 560px) {
   .rd-card { padding: 16px; border-radius: 20px; gap: 14px; }
@@ -1038,6 +1040,7 @@ html.unslop::before { display: none; }
 <script src="/comments.js"></script>
 <script src="/photo-store.js"></script>
 <script src="/photo-view.js"></script>
+<script src="/rating-card.js"></script>
 <script src="/profile/app.js"></script>
 <script src="/tier-maker.js"></script>
 </body>

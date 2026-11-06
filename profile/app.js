@@ -1528,9 +1528,11 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         <label><span class="label">Заметка</span><textarea data-f="note" rows="3" maxlength="4000" placeholder="Что думаешь в целом">${esc(rdEd.note)}</textarea></label></div>`
       : `${pros.length || cons.length ? `<div class="fr-pc">${pros.length ? `<div><span class="label">Плюсы</span><ul>${pros.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}${cons.length ? `<div><span class="label">Минусы</span><ul>${cons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}</div>` : ''}
       ${r.text ? `<p class="fr-note">${esc(r.text)}</p>` : ''}`}
-      <div class="rd-foot"><span>${when ? dayFmt(when) : ''}</span><a class="btn ghost" href="${rateLink(p, r)}">Открыть в Мнении</a></div>
+      <div class="rd-foot"><span>${when ? dayFmt(when) : ''}</span>${p.kind !== 'me' && window.CasualRatingCard ? window.CasualRatingCard.takeHTML(r) : ''}<a class="btn ghost" href="${rateLink(p, r)}">Открыть в Мнении</a></div>
       ${p.uid && token && !ed && !p.limited ? '<div class="rd-cm" id="rdComments"></div>' : ''}
     </article>`;
+    // чужая оценка: «В планы» и «Оценить» забирают её себе (rating-card.js)
+    if (p.kind !== 'me' && window.CasualRatingCard) window.CasualRatingCard.bindTake(rdBox, r, () => openRating(p, r));
     // ветка комментариев под оценкой: та же, что в Мнении у этой оценки
     if (p.uid && token && !ed && window.CasualComments) window.CasualComments.mount(rdBox.querySelector('#rdComments'), { uid: p.uid, target: 'r.' + r.id, token, title: 'Комментарии к оценке', placeholder: 'Что думаешь об этой оценке?' });
     rdBox.hidden = false;

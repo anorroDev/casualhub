@@ -467,6 +467,8 @@ h1, h2, p { margin: 0; }
 .fd-text b { font-size: 14.5px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fd-text span { color: var(--ink-3); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .fd-text em { font-style: normal; color: var(--ink-2); font-weight: 600; }
+.fd-text .fd-who { cursor: pointer; border-radius: 4px; }
+.fd-text .fd-who:hover { color: var(--ink); text-decoration: underline; }
 .fd-score {
   --tier: var(--cell);
   display: inline-grid; place-items: center; min-width: 46px; height: 34px; padding: 0 7px; border-radius: 9px;
@@ -659,6 +661,7 @@ html.unslop body::before { display: none; }
 <script src="/themes.js"></script>
 <script src="/fx.js"></script>
 <script src="/howto.js"></script>
+<script src="/rating-card.js"></script>
 <script src="/hub.js"></script>
 <style>
 /* Theme swap: the new theme grows as a circle from the option that was tapped */

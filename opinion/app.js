@@ -2802,6 +2802,80 @@ async function save() {
   }
 }
 
+/* ---------- Чужая оценка себе: «В планы» и «Оценить» из профиля друга, с главной и из ленты друзей ---------- */
+// rating-card.js кладёт оценку в casualhub.take.v1 и открывает /opinion/#take; лента друзей зовёт applyTake сама
+const TAKE_KEY = 'casualhub.take.v1';
+// категория с тем же названием; нет такой — создаём: из шаблона, если он есть, иначе с критериями друга
+function takeCat(t) {
+  const want = keyOf(t.catName);
+  if (!want) return currentCat();
+  const have = state.cats.find(c => keyOf(c.name) === want);
+  if (have) return have;
+  if (state.cats.length >= MAX_CATS) return null;
+  const tpl = allTemplates().find(x => keyOf(x.name) === want);
+  const id = tpl ? tplCatId(tpl) : newId('k');
+  const same = state.cats.find(c => c.id === id);
+  if (same) return same;
+  const src = Array.isArray(t.criteria) && t.criteria.length ? t.criteria : NEW_CAT_CRITERIA;
+  const criteria = tpl ? tplCriteria(tpl, id) : src.slice(0, MAX_CRIT).map((c, i) => ({ id: `${id}-${i}`, name: str(c.name).slice(0, 60) || `Критерий ${i + 1}`, desc: str(c.desc).slice(0, 120), w: [0.5, 1, 2].includes(c.w) ? c.w : 1 }));
+  const cat = { id, name: str(t.catName).trim().slice(0, 40), criteria };
+  state.cats.push(cat);
+  scheduleCatSave(0);
+  renderCats();
+  return cat;
+}
+// t: { mode: 'plan' | 'rate', name, title, artist, catName, criteria, meta, link, photoUrl, w, h }; stay — не уходить с ленты друзей
+async function applyTake(t, stay) {
+  if (!t) {
+    try { t = JSON.parse(localStorage.getItem(TAKE_KEY) || 'null'); localStorage.removeItem(TAKE_KEY); } catch (_) { t = null; }
+    if (!t || Date.now() - (+t.at || 0) > 10 * 60e3) return false;
+  }
+  const name = str(t.name).trim().replace(/\s+/g, ' ').slice(0, 140);
+  if (!name) return false;
+  if (!state.canWrite) { toast('Сохранять оценки здесь может только владелец страницы'); return false; }
+  const k = keyOf(name);
+  const mine = state.ratings.filter(r => !r.example && r.nameKey === k);
+  const have = mine.find(r => keyOf(r.catName) === keyOf(t.catName)) || mine[0];
+  if (have) {
+    if (t.mode === 'plan') { toast('Это уже есть у тебя'); if (!stay) goToRating(have.id); return false; }
+    // уже есть (например, в планах): открываем её правку
+    if (!stay) goToRating(have.id);
+    loadIntoForm(have);
+    toast(`«${have.name}»: поставь баллы и сохрани`);
+    return true;
+  }
+  if (state.editCat) toggleEditCat();
+  const cat = takeCat(t);
+  if (!cat) { toast(`Можно создать до ${MAX_CATS} категорий`); return false; }
+  const photo = /^https:\/\//.test(str(t.photoUrl)) ? { id: t.photoUrl, data: '', w: clampInt(t.w, 0, 20000), h: clampInt(t.h, 0, 20000) } : null;
+  const music = isMusicCat(cat) && str(t.artist).trim();
+  if (t.mode === 'plan') {
+    const now = new Date().toISOString(), id = newId('r');
+    const doc = {
+      cat: cat.id, catName: cat.name, name, nameKey: k, scores: [], total: null, fav: false, status: 'В планах',
+      meta: str(t.meta).slice(0, 80), pros: '', cons: '', note: '', example: false, createdAt: now, updatedAt: now,
+      ...(musicLinkOk(t.link) ? { link: t.link } : {}),
+      ...(music ? { artist: str(t.artist).slice(0, 80), title: str(t.title || name).slice(0, 140) } : {}),
+      ...(photo ? { photo } : {})
+    };
+    try { await putRating(id, doc); } catch (e) { handleWriteError(e); return false; }
+    toast(`«${name}» в планах`);
+    if (!stay) goToRating(id);
+    return true;
+  }
+  // «Оценить»: новая оценка с тем же названием, описанием и обложкой; баллы ставишь сам
+  resetForm(cat.id);
+  if (music) { form.artist = str(t.artist).slice(0, 80); form.name = str(t.title || name).slice(0, 140); } else form.name = name;
+  form.meta = str(t.meta).slice(0, 80);
+  form.link = musicLinkOk(t.link);
+  if (photo) form.photo = Object.assign({ kind: 'saved' }, photo);
+  renderForm();
+  saveDraft();
+  if (isNarrow()) { setSection('rate'); scrollToSectionTop(); } else el.name.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  toast(`«${name}»: поставь баллы и сохрани`);
+  return true;
+}
+
 /* ---------- Storage ---------- */
 async function withRetry(fn) {
   try { return await fn(); }

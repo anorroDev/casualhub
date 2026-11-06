@@ -729,6 +729,18 @@
     const sum = fboard.querySelector(`.entry[data-rid="${CSS.escape(rid)}"] .rx-sum-slot`);
     if (sum) sum.innerHTML = rxSummary(reactsOf(uid, rid));
   }
+  // «В планы» и «Оценить» у оценки друга: прямо здесь, без перехода
+  fboard.addEventListener('click', async (e) => {
+    const b = e.target.closest('.e-take [data-take]');
+    const li = b && b.closest('.entry');
+    if (!li || !window.CasualRatingCard) return;
+    e.preventDefault();
+    const shelf = F.shelves.get(li.dataset.uid);
+    const r = shelf && (shelf.ratings || []).find((x) => x && x.id === li.dataset.rid);
+    if (!r) return;
+    const ok = await applyTake({ ...window.CasualRatingCard.srcOf(r), mode: b.dataset.take }, true);
+    if (ok && b.dataset.take === 'plan') { const box = li.querySelector('.e-take'); if (box) box.innerHTML = window.CasualRatingCard.takeHTML(r); }
+  });
   fboard.addEventListener('click', (e) => {
     const b = e.target.closest('[data-rx-emoji]');
     const uid = b && b.closest('.entry') && b.closest('.entry').dataset.uid;
@@ -775,7 +787,7 @@
 <span class="badge" data-tier="${tierT(t)}">${t != null ? fmt(t) : '—'}</span>
 ${ICON.chev}
 </span></summary>
-<div class="e-body">${friendPhoto(r, 'body', uid)}<ul class="bd">${bd}</ul>${window.CasualListen ? window.CasualListen(r) : ''}${pc}${r.note ? `<div class="e-note"><span class="label">Заметки</span><p>${esc(r.note)}</p></div>` : ''}<div class="rx" data-rx="${esc(r.id || '')}">${rxBlock(uid, r.id)}</div><div class="cm-slot" data-cm-uid="${esc(uid)}" data-cm-rid="${esc(r.id || '')}"></div></div>
+<div class="e-body">${friendPhoto(r, 'body', uid)}${window.CasualRatingCard && typeof applyTake === 'function' && uid !== (F.me && F.me.id) ? `<div class="e-take">${window.CasualRatingCard.takeHTML(r)}</div>` : ''}<ul class="bd">${bd}</ul>${window.CasualListen ? window.CasualListen(r) : ''}${pc}${r.note ? `<div class="e-note"><span class="label">Заметки</span><p>${esc(r.note)}</p></div>` : ''}<div class="rx" data-rx="${esc(r.id || '')}">${rxBlock(uid, r.id)}</div><div class="cm-slot" data-cm-uid="${esc(uid)}" data-cm-rid="${esc(r.id || '')}"></div></div>
 </details></li>`;
   }
 
