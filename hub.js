@@ -235,9 +235,9 @@
     const pic = r.photo && r.photo.url ? `<img src="${esc(r.photo.url)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fallback="${esc(String(r.name).charAt(0))}">`
       : r.photo && r.photo.remote ? '' : esc(String(r.name).charAt(0));
     const rx = it.reacts ? Object.keys(RXI).map((k) => (it.reacts[k] ? RXI[k] + it.reacts[k] : '')).concat(it.reacts.text ? ['💬' + it.reacts.text] : []).filter(Boolean).join(' ') : '';
-    const meta = [`<em class="fd-who" data-prof="${esc(it.user.id)}" title="Открыть профиль ${who}">${who}</em>`, r.cat && esc(r.cat), r.status && esc(r.status), rx, ago(it.at)].filter(Boolean).join(' · ');
+    const meta = [`<em class="fd-who" data-prof="${esc(it.user.id)}" data-handle="${esc(it.user.handle || '')}" title="Открыть профиль ${who}">${who}</em>`, r.cat && esc(r.cat), r.status && esc(r.status), rx, ago(it.at)].filter(Boolean).join(' · ');
     // оценка друга открывается окном прямо здесь (rating-card.js), без перехода в Мнение; ссылка остаётся на случай без скриптов
-    return `<li><a class="fd" href="/opinion/#friend=${encodeURIComponent(it.user.id)}&r=${encodeURIComponent(r.id)}" title="Открыть оценку у ${who}" data-rc="${esc(it.user.id + '|' + r.id)}" data-rc-who="${who}" data-rc-name="${esc(r.name)}" data-rc-cat="${esc(r.cat || '')}" data-rc-total="${r.total != null ? r.total : ''}">
+    return `<li><a class="fd" href="/opinion/#friend=${encodeURIComponent(it.user.id)}&r=${encodeURIComponent(r.id)}" title="Открыть оценку у ${who}" data-rc="${esc(it.user.id + '|' + r.id)}" data-rc-who="${who}" data-rc-handle="${esc(it.user.handle || '')}" data-rc-name="${esc(r.name)}" data-rc-cat="${esc(r.cat || '')}" data-rc-total="${r.total != null ? r.total : ''}">
       <span class="fd-pic" style="--fc:${colorOf(r.id || r.name)}"${r.photo && r.photo.remote ? ` data-ph="${esc(it.user.id + '|' + r.id)}"` : ''}>${pic || esc(String(r.name).charAt(0))}</span>
       <span class="fd-text"><b>${r.fav ? '★ ' : ''}${esc(r.name)}</b><span>${meta}</span></span>
       ${r.total != null ? `<span class="fd-score" data-tier="${tierT(r.total)}">${fmt(r.total)}</span>` : '<span class="fd-score none">без оценки</span>'}</a></li>`;
@@ -251,24 +251,26 @@
     $('#feedList').addEventListener('click', (e) => {
       if (e.button > 0 || e.metaKey || e.ctrlKey || e.shiftKey) return;
       const who = e.target.closest('[data-prof]');
-      if (who) { e.preventDefault(); location.href = '/profile/?id=' + encodeURIComponent(who.dataset.prof); return; }
+      if (who) { e.preventDefault(); location.href = profUrl(who.dataset.prof, who.dataset.handle); return; }
       const a = e.target.closest('a[data-rc]');
       if (!a || !window.CasualRatingCard) return;
       e.preventDefault();
       const [uid, rid] = a.dataset.rc.split('|');
-      window.CasualRatingCard.open({ uid, rid, who: a.dataset.rcWho, preview: { name: a.dataset.rcName, cat: a.dataset.rcCat, total: a.dataset.rcTotal === '' ? null : +a.dataset.rcTotal } });
+      window.CasualRatingCard.open({ uid, rid, who: a.dataset.rcWho, handle: a.dataset.rcHandle, preview: { name: a.dataset.rcName, cat: a.dataset.rcCat, total: a.dataset.rcTotal === '' ? null : +a.dataset.rcTotal } });
     });
   }
 
   // ---------- онлайн: сколько людей на сайте и кто из друзей в сети (online.js) ----------
   const hubFriends = new Map(); // id -> ник
+  const hubHandles = new Map(); // id -> юзернейм: ссылка на профиль по нему
+  const profUrl = (id, h) => (typeof h === 'string' && /^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/.test(h) ? '/profile/' + h : '/profile/?id=' + encodeURIComponent(id));
   function renderOnline() {
     const O = window.CasualOnline;
     if (!O || !O.ready) return;
     // общее число людей на сайте — в шапке, здесь только друзья, которые сейчас в сети
     const on = O.friendsOnline().filter((id) => hubFriends.has(id));
     $('#onlineText').innerHTML = on.length
-      ? `Из друзей в сети: ${on.slice(0, 5).map((id) => `<a href="/profile/?id=${encodeURIComponent(id)}">${esc(hubFriends.get(id))}</a>`).join(', ')}${on.length > 5 ? ` и ещё ${on.length - 5}` : ''}`
+      ? `Из друзей в сети: ${on.slice(0, 5).map((id) => `<a href="${profUrl(id, hubHandles.get(id))}">${esc(hubFriends.get(id))}</a>`).join(', ')}${on.length > 5 ? ` и ещё ${on.length - 5}` : ''}`
       : '';
     $('#onlineNow').hidden = !on.length;
   }
@@ -328,7 +330,7 @@
       .then((d) => {
         if (!d) return;
         const f = d.friends.length, inc = d.incoming.length;
-        d.friends.forEach((x) => hubFriends.set(x.id, x.username));
+        d.friends.forEach((x) => { hubFriends.set(x.id, x.username); if (x.handle) hubHandles.set(x.id, x.handle); });
         renderOnline();
         if (f) mMeta.insertAdjacentHTML('beforeend', chip(f, plural(f, 'друг', 'друга', 'друзей'), 'go', '/opinion/#friends'));
         if (inc) {

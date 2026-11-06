@@ -4,6 +4,7 @@
    Работает поверх основного скрипта: берёт state, el и помощники рендера оттуда, а функции
    аккаунтов, renderBoard и saveLocalRatings оборачивает своими хуками. Сервер: functions/api. */
 (() => {
+  const profUrl = (id, h) => (typeof h === 'string' && /^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/.test(h) ? '/profile/' + h : '/profile/?id=' + encodeURIComponent(id));
   const API = '/api';
   const TOKENS_KEY = 'casualhub.tokens.v1';   // { id локального профиля: токен сессии }
   const OLD_TOKEN_KEY = 'casualhub.token.v1'; // токен из версии с отдельным входом
@@ -738,7 +739,9 @@
     const shelf = F.shelves.get(li.dataset.uid);
     const r = shelf && (shelf.ratings || []).find((x) => x && x.id === li.dataset.rid);
     if (!r) return;
-    const ok = await applyTake({ ...window.CasualRatingCard.srcOf(r), mode: b.dataset.take }, true);
+    b.disabled = true;
+    const ok = await applyTake({ ...window.CasualRatingCard.srcOf(r, li.dataset.uid), mode: b.dataset.take }, true);
+    b.disabled = false;
     if (ok && b.dataset.take === 'plan') { const box = li.querySelector('.e-take'); if (box) box.innerHTML = window.CasualRatingCard.takeHTML(r); }
   });
   fboard.addEventListener('click', (e) => {
@@ -1034,7 +1037,7 @@ ${ICON.chev}
         </div>
         ${F.incoming.length ? `<div class="fr-sec"><span class="label">Заявки тебе</span><div class="fr-list">${F.incoming.map((u) => row(u, btn('accept', u.id, 'Принять', 'primary') + btn('remove', u.id, 'Отклонить'))).join('')}</div></div>` : ''}
         <div class="fr-sec"><span class="label">Друзья</span>
-          ${F.friends.length ? `<div class="fr-list">${F.friends.map((u) => row(u, F.removeArmed === u.id ? btn('remove', u.id, 'Точно удалить?', 'danger-solid') : btn('arm', u.id, 'Удалить', 'ghost danger'), seenOf(u) + when(u.updatedAt), `/profile/?id=${encodeURIComponent(u.id)}`)).join('')}</div>`
+          ${F.friends.length ? `<div class="fr-list">${F.friends.map((u) => row(u, F.removeArmed === u.id ? btn('remove', u.id, 'Точно удалить?', 'danger-solid') : btn('arm', u.id, 'Удалить', 'ghost danger'), seenOf(u) + when(u.updatedAt), profUrl(u.id, u.handle))).join('')}</div>`
             : '<p class="fr-muted">Пока никого. Нажми «Добавить друга» и введи его @юзернейм, друг увидит заявку у себя.</p>'}
         </div>
         ${F.outgoing.length ? `<div class="fr-sec"><span class="label">Ты отправил</span><div class="fr-list">${F.outgoing.map((u) => row(u, btn('remove', u.id, 'Отменить'), 'ждёт ответа')).join('')}</div></div>` : ''}

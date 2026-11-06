@@ -2824,7 +2824,18 @@ function takeCat(t) {
   renderCats();
   return cat;
 }
-// t: { mode: 'plan' | 'rate', name, title, artist, catName, criteria, meta, link, photoUrl, w, h }; stay — не уходить с ленты друзей
+// обложка друга, загруженная файлом: скачиваем её картинкой (как в rating-card.js)
+async function takePhoto(f) {
+  try {
+    const u = JSON.parse(localStorage.getItem('ocenshik.user.v1') || 'null');
+    const tk = u && (JSON.parse(localStorage.getItem('casualhub.tokens.v1') || '{}') || {})[u.id];
+    if (!tk || !f || !f.uid || !f.rid) return '';
+    const r = await fetch(`/api/photo/${encodeURIComponent(f.uid)}/${encodeURIComponent(f.rid)}`, { headers: { authorization: 'Bearer ' + tk }, cache: 'no-store' });
+    const d = r.ok ? await r.json() : null;
+    return d && typeof d.data === 'string' && d.data.startsWith('data:image/') ? d.data : '';
+  } catch (_) { return ''; }
+}
+// t: { mode: 'plan' | 'rate', name, title, artist, catName, criteria, meta, link, photoUrl, photoFrom, w, h }; stay — не уходить с ленты друзей
 async function applyTake(t, stay) {
   if (!t) {
     try { t = JSON.parse(localStorage.getItem(TAKE_KEY) || 'null'); localStorage.removeItem(TAKE_KEY); } catch (_) { t = null; }
@@ -2847,7 +2858,8 @@ async function applyTake(t, stay) {
   if (state.editCat) toggleEditCat();
   const cat = takeCat(t);
   if (!cat) { toast(`Можно создать до ${MAX_CATS} категорий`); return false; }
-  const photo = /^https:\/\//.test(str(t.photoUrl)) ? { id: t.photoUrl, data: '', w: clampInt(t.w, 0, 20000), h: clampInt(t.h, 0, 20000) } : null;
+  let photo = /^https:\/\//.test(str(t.photoUrl)) ? { id: t.photoUrl, data: '', w: clampInt(t.w, 0, 20000), h: clampInt(t.h, 0, 20000) } : null;
+  if (!photo && t.photoFrom) { const d = await takePhoto(t.photoFrom); if (d) photo = { id: d, data: d, w: clampInt(t.w, 0, 20000), h: clampInt(t.h, 0, 20000) }; }
   const music = isMusicCat(cat) && str(t.artist).trim();
   if (t.mode === 'plan') {
     const now = new Date().toISOString(), id = newId('r');

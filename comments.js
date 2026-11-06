@@ -2,6 +2,7 @@
    Видят и пишут хозяин и его друзья; удалить может автор и хозяин. Текст всегда вставляется как текст, не как разметка.
    Использование: CasualComments.mount(контейнер, { uid, target: 'wall' | 'r.<id оценки>', token, title, empty }) */
 (() => {
+  const profUrl = (id, h) => (typeof h === 'string' && /^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/.test(h) ? '/profile/' + h : '/profile/?id=' + encodeURIComponent(id));
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const MAX = 500;
   const COLORS = ['#3550E8', '#EAA92C', '#2EAD60', '#EC4899', '#9333EA', '#06B6D4', '#F97316', '#14B8A6'];
@@ -64,7 +65,7 @@
   function itemHTML(x, fresh) {
     const letter = esc((String(x.from.username || '?').trim()[0] || '?').toUpperCase());
     return `<li class="cm-item${fresh ? ' fresh' : ''}" data-cm="${esc(x.id)}">
-      <a class="cm-ava" href="/profile/?id=${encodeURIComponent(x.from.id)}" data-ava="${esc(x.from.id)}" style="--c:${colorOf(x.from.id)}" aria-label="Профиль ${esc(x.from.username)}">${letter}</a>
+      <a class="cm-ava" href="${profUrl(x.from.id, x.from.handle)}" data-ava="${esc(x.from.id)}" style="--c:${colorOf(x.from.id)}" aria-label="Профиль ${esc(x.from.username)}">${letter}</a>
       <div><div class="cm-meta"><b>${esc(x.from.username)}</b>${x.from.handle ? `<i>@${esc(x.from.handle)}</i>` : ''}<time datetime="${new Date(x.at).toISOString()}" title="${esc(new Date(x.at).toLocaleString('ru-RU'))}">${ago(x.at)}</time>${x.canDelete ? '<button type="button" class="cm-del" data-cm-del>Удалить</button>' : ''}</div>
       <p class="cm-text">${esc(x.text)}</p></div></li>`;
   }

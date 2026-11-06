@@ -4,6 +4,7 @@
    на остальных страницах — это: заявки, добавление по @юзернейму, список друзей, «в сети».
    Аватарки друзей с рамкой отсюда же берёт и окно Мнения (window.CasualFriendsUI). */
 (() => {
+  const profUrl = (id, h) => (typeof h === 'string' && /^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/.test(h) ? '/profile/' + h : '/profile/?id=' + encodeURIComponent(id));
   const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
   const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const COLORS = ['#3550E8', '#2EAD60', '#EAA92C', '#E4553F', '#9333EA', '#06B6D4', '#EC4899', '#F97316'];
@@ -231,7 +232,7 @@ a.fr-who:hover b { text-decoration: underline; }
         <div class="fr-sec"><span class="label">Друзья${S.friends.length ? ' · ' + S.friends.length : ''}</span>
           ${S.friends.length ? `<div class="fr-list">${S.friends.map((u) => row(u,
             S.armed === u.id ? btn('remove', u.id, 'Точно удалить?', 'danger-solid') : btn('arm', u.id, 'Удалить', 'danger'),
-            seenOf(u) + when(u.updatedAt), `/profile/?id=${encodeURIComponent(u.id)}`)).join('')}</div>`
+            seenOf(u) + when(u.updatedAt), profUrl(u.id, u.handle))).join('')}</div>`
             : '<p class="fr-muted">Пока никого. Нажми «Добавить друга» и введи его @юзернейм, друг увидит заявку у себя.</p>'}
         </div>
         ${S.outgoing.length ? `<div class="fr-sec"><span class="label">Ты отправил</span><div class="fr-list">${S.outgoing.map((u) => row(u, btn('remove', u.id, 'Отменить'), 'ждёт ответа')).join('')}</div></div>` : ''}

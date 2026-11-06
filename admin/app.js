@@ -1,4 +1,5 @@
 (() => {
+  const profUrl = (id, h) => (typeof h === 'string' && /^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/.test(h) ? '/profile/' + h : '/profile/?id=' + encodeURIComponent(id));
   const $ = (s) => document.querySelector(s);
   const app = $('#app');
   const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
@@ -332,7 +333,7 @@
     const hard = `<button type="button" class="btn ghost small" data-act="kick">Выкинуть с устройств</button><button type="button" class="btn small danger" data-act="delete" data-h="${esc(u.handle)}">🗑 Удалить</button><button type="button" class="btn small ${u.banned ? 'ghost' : 'danger'}" data-act="${u.banned ? 'unban' : 'ban'}">${u.banned ? 'Разбанить' : 'Забанить'}</button>`;
     const facts = [u.email, 'с ' + when(u.createdAt), 'был ' + when(u.lastSeen), 'оценок ' + u.ratings].filter(Boolean).map(esc).join(' · ');
     return `<li class="adm-row${u.banned ? ' banned' : ''}" style="--k:${Math.min(i, 12)}" data-uid="${esc(u.id)}"${u.admin ? ' data-admin="1"' : ''}>
-          <div class="adm-who"><b>${esc(u.username)}</b> <a href="/profile/?id=${encodeURIComponent(u.id)}">@${esc(u.handle)}</a>${u.admin ? ' <em class="adm-badge">админ</em>' : ''}${u.banned ? ` <em class="adm-badge bad">бан${u.banReason ? ': ' + esc(u.banReason) : ''}</em>` : ''}
+          <div class="adm-who"><b>${esc(u.username)}</b> <a href="${profUrl(u.id, u.handle)}">@${esc(u.handle)}</a>${u.admin ? ' <em class="adm-badge">админ</em>' : ''}${u.banned ? ` <em class="adm-badge bad">бан${u.banReason ? ': ' + esc(u.banReason) : ''}</em>` : ''}
             <small>${facts}</small></div>
           <div class="adm-acts">${edit}${u.admin ? '' : hard}</div>
         </li>`;

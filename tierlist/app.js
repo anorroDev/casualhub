@@ -4,6 +4,7 @@
    Перетаскивание — мышью, на телефоне — нажатиями: карточка, потом ряд.
    Адреса: без якоря — мои, #friends — друзья, #f=<id автора>.<id> — тир-лист: свой открывается для правки, чужой для просмотра, поэтому адрес можно просто переслать; #l=<id> — тир-лист гостя и старые ссылки. */
 (() => {
+  const profUrl = (id, h) => (typeof h === 'string' && /^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/.test(h) ? '/profile/' + h : '/profile/?id=' + encodeURIComponent(id));
   const BASE_KEY = 'casualhub.tierlists.v1', SYNC_BASE = 'casualhub.tier.sync.v1', PREFS_KEY = 'ocenshik.prefs.v1', RATINGS_KEY = 'ocenshik.ratings.v2';
   const $ = (s) => document.querySelector(s);
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -1006,7 +1007,7 @@
       view.innerHTML = `<div class="tl-editor tl-view">
         <section class="card tl-bar">
           <div class="tl-bar-top"><a class="btn small ghost" href="#friends">‹ Тир-листы друзей</a><h2 class="tl-view-title">${esc(l.title || 'Без названия')}</h2></div>
-          <p class="tl-who"><a href="/profile/?id=${encodeURIComponent(uid)}">${esc(d.user.username)}</a><span>@${esc(d.user.handle)}</span><span>${cards(n)} · ${esc(fmtDate(l.at))}</span></p>
+          <p class="tl-who"><a href="${profUrl(uid, d.user.handle)}">${esc(d.user.username)}</a><span>@${esc(d.user.handle)}</span><span>${cards(n)} · ${esc(fmtDate(l.at))}</span></p>
           <div class="tl-tools"><span class="tl-group">${me ? '<button type="button" class="btn small primary" data-do="clone">Собрать свой из этих карточек</button>' : ''}<button type="button" class="btn small ghost" data-do="f-png">Скачать PNG</button><button type="button" class="btn small ghost" data-do="f-copy">Скопировать картинку</button></span></div>
         </section>
         <div class="tl-board" id="tlFriendBoard">${rowsHTML(l, true)}</div>

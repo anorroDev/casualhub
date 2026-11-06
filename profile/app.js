@@ -48,8 +48,10 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   const token = user && tokens[user.id];
   const api = (path) => fetch('/api' + path, { headers: { authorization: 'Bearer ' + token } }).then((r) => (r.ok ? r.json() : r.json().then((d) => Promise.reject(d), () => Promise.reject({}))));
   const wantId = new URLSearchParams(location.search).get('id');
-  // профиль по имени: /u/<@юзернейм или ник> или /profile/?u=<имя>
-  const wantName = (new URLSearchParams(location.search).get('u') || (location.pathname.startsWith('/u/') ? (() => { try { return decodeURIComponent(location.pathname.slice(3).replace(/\/+$/, '')); } catch (e) { return ''; } })() : '')).trim().slice(0, 40);
+  const profUrl = (id, h) => (typeof h === 'string' && /^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/.test(h) ? '/profile/' + h : '/profile/?id=' + encodeURIComponent(id));
+  // профиль по имени: /profile/<юзернейм или ник>, /u/<@юзернейм или ник> или /profile/?u=<имя>
+  const pathName = (() => { const m = /^\/(?:profile|u)\/([^/]+)\/?$/.exec(location.pathname); if (!m || m[1] === 'index.html') return ''; try { return decodeURIComponent(m[1]); } catch (e) { return ''; } })();
+  const wantName = (new URLSearchParams(location.search).get('u') || pathName).trim().slice(0, 40);
 
   // жанры и теги из описания «2010, фантастика, боевик»: всё через запятую, кроме года
   const genresOf = (meta) => [...new Set(String(meta || '').split(/\s*[,;]\s*/).map((s) => s.trim().toLowerCase()).filter((s) => s && s.length <= 24 && !/^\d{4}$/.test(s)))];
@@ -1210,7 +1212,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   })();
   const keepAll = () => { try { localStorage.setItem(ALL_KEY, JSON.stringify({ view: AST.view, sort: AST.sort })); } catch (e) {} };
   const TIERS = [['S', 9.2, '9,2–10'], ['A', 8.2, '8,2–9,1'], ['B', 7, '7–8,1'], ['C', 5, '5–6,9'], ['D', -1, 'ниже 5']];
-  const allHref = (p) => (p.kind === 'me' || !p.uid ? '/profile/?all=1' : `/profile/?id=${encodeURIComponent(p.uid)}&all=1`);
+  const allHref = (p) => (p.kind === 'me' || !p.uid ? '/profile/?all=1' : profUrl(p.uid, p.handle) + (p.handle ? '?' : '&') + 'all=1');
   const cellsV = (v) => `<span class="cells" data-tier="${tierV(v)}" aria-hidden="true">${Array.from({ length: 10 }, (_, i) => `<i${i < v ? ' class="on"' : ''}></i>`).join('')}</span>`;
   const lines = (s) => String(s || '').split(/\r?\n/).map((x) => x.replace(/^[+\-•*]\s*/, '').trim()).filter(Boolean);
   let allP = null;
@@ -1218,7 +1220,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     allP = p;
     document.title = `Все оценки · ${p.name} · Казуал Хаб`;
     if (!$('#allBody')) {
-      app.innerHTML = `<section class="card rise all-top"><a class="btn ghost" href="${p.kind === 'me' || !p.uid ? '/profile/' : '/profile/?id=' + encodeURIComponent(p.uid)}">← Профиль</a>
+      app.innerHTML = `<section class="card rise all-top"><a class="btn ghost" href="${p.kind === 'me' || !p.uid ? '/profile/' : profUrl(p.uid, p.handle)}">← Профиль</a>
         <div><h1 class="h2">Все оценки</h1><p class="muted"><span id="allWho"></span> · <span id="allCount"></span></p></div></section>
         <section class="card rise all-card" style="--d:1">
           <div class="chips" id="allCats"></div>
@@ -1532,7 +1534,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       ${p.uid && token && !ed && !p.limited ? '<div class="rd-cm" id="rdComments"></div>' : ''}
     </article>`;
     // чужая оценка: «В планы» и «Оценить» забирают её себе (rating-card.js)
-    if (p.kind !== 'me' && window.CasualRatingCard) window.CasualRatingCard.bindTake(rdBox, r, () => openRating(p, r));
+    if (p.kind !== 'me' && window.CasualRatingCard) window.CasualRatingCard.bindTake(rdBox, r, () => openRating(p, r), p.uid);
     // ветка комментариев под оценкой: та же, что в Мнении у этой оценки
     if (p.uid && token && !ed && window.CasualComments) window.CasualComments.mount(rdBox.querySelector('#rdComments'), { uid: p.uid, target: 'r.' + r.id, token, title: 'Комментарии к оценке', placeholder: 'Что думаешь об этой оценке?' });
     rdBox.hidden = false;
@@ -1682,7 +1684,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
           </section>`;
     if (p.friends || isMe) W.friends = p.friends ? `<section class="card rise" style="--d:${d++}">
             <div class="head" id="friendsSec"><h2 class="h2">Друзья</h2><span class="label">${p.friends.length}</span></div>
-            ${p.friends.length ? `<div class="frs">${p.friends.map((f) => `<a class="fr" href="/profile/?id=${encodeURIComponent(f.id)}">
+            ${p.friends.length ? `<div class="frs">${p.friends.map((f) => `<a class="fr" href="${profUrl(f.id, f.handle)}">
                 <span class="av" data-uid="${esc(f.id)}" style="background-color:${colorOf(f.username)}">${letter(f.username)}</span>
                 <span class="tx"><b>${esc(f.username)} <i class="on-dot" data-on="${esc(f.id)}" data-last="${+f.lastSeen || ''}"></i></b><small><span data-seen="${esc(f.id)}" data-last="${+f.lastSeen || ''}" data-post=" · "></span>${f.handle ? '@' + esc(f.handle) : ''}${isMe ? `${f.handle ? ' · ' : ''}${f.updatedAt ? 'оценки обновлены ' + ago(f.updatedAt) : 'оценок пока нет'}` : ''}</small></span>${ICON.go}</a>`).join('')}</div>`
               : `<p class="muted">${isMe ? 'Пока никого. Добавить друга можно кнопкой «Друзья» в меню вверху.' : 'Пока никого.'}</p>`}
@@ -2440,10 +2442,16 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       const match = common.length ? Math.max(0, Math.min(100, Math.round(100 - (common.reduce((a, c) => a + Math.abs(c.diff), 0) / common.length) * 10))) : 0;
       render({
         kind: 'friend', limited: !!s.limited, name: s.user.username, sub: [s.user.handle ? '@' + s.user.handle : '', s.limited ? 'видны оценки, открытые всем' : s.updatedAt ? 'оценки обновлены ' + ago(s.updatedAt) : 'оценок пока нет'].filter(Boolean).join(' · '),
-        ratings, uid: s.user.id, common, match, layout: s.layout || null, followed: (fol.ids || []).includes(s.user.id), isAdmin: !!s.user.admin,
+        ratings, uid: s.user.id, handle: s.user.handle || '', common, match, layout: s.layout || null, followed: (fol.ids || []).includes(s.user.id), isAdmin: !!s.user.admin,
         friends: fr && !fr.hidden ? fr.friends || [] : null, createdAt: s.user.createdAt, lastSeen: s.user.lastSeen, sticker: s.sticker && s.sticker.src, friendCount: s.user.friends != null ? s.user.friends : null,
       });
       document.title = `${s.user.username} · Казуал Хаб`;
+      // в адресной строке — ник, а не id: такую ссылку удобно отправить
+      if (s.user.handle && /^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/.test(s.user.handle)) {
+        const q = new URLSearchParams(location.search); q.delete('id'); q.delete('u');
+        const want = '/profile/' + s.user.handle + (q.toString() ? '?' + q : '') + location.hash;
+        if (location.pathname + location.search + location.hash !== want) history.replaceState(history.state, '', want);
+      }
       api(`/photo/${encodeURIComponent(s.user.id)}/banner`).then((d) => { if (d.data) showBanner(d.data); }, () => {});
       api(`/photo/${encodeURIComponent(s.user.id)}/avatar`).then((d) => { if (d.data) setAvaEl(d.data); }, () => {});
     } catch (e) {
@@ -2463,7 +2471,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
           return;
         }
         // одинаковый ник у нескольких: выбрать, кого открыть
-        message('Кого открыть?', `Ник «${esc(wantName)}» у нескольких людей:`, (d.users || []).map((u) => `<a class="btn ghost" href="/profile/?id=${encodeURIComponent(u.id)}">${esc(u.username)} <small>@${esc(u.handle)}</small></a>`).join(''));
+        message('Кого открыть?', `Ник «${esc(wantName)}» у нескольких людей:`, (d.users || []).map((u) => `<a class="btn ghost" href="${profUrl(u.id, u.handle)}">${esc(u.username)} <small>@${esc(u.handle)}</small></a>`).join(''));
       } catch (e) {
         message('Не нашлось', esc(e && e.error ? e.error : 'Не получилось найти профиль.'), '<a class="btn primary" href="/profile/">Мой профиль</a>');
       }

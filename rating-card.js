@@ -17,6 +17,7 @@
   const dayFmt = (t) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
   let idSeq = 0;
   const newId = (p) => { idSeq = (idSeq + 1) % 1296; return p + Date.now().toString(36) + idSeq.toString(36) + Math.random().toString(36).slice(2, 6); };
+  const profUrl = (id, h) => (typeof h === 'string' && /^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/.test(h) ? '/profile/' + h : '/profile/?id=' + encodeURIComponent(id));
   const me = () => read('ocenshik.user.v1');
   const token = () => { const u = me(), t = read('casualhub.tokens.v1') || {}; return u && t[u.id] ? t[u.id] : ''; };
   const api = (path, o = {}) => fetch('/api' + path, { ...o, headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token() }, cache: 'no-store' })
@@ -32,7 +33,8 @@
   }
 
   // ---------- что забираем себе: одинаково из оценки с сервера и из профиля ----------
-  function srcOf(r) {
+  // uid — чей это; обложка-файл (photo.remote) лежит на сервере у друга, её скачиваем по uid и id оценки
+  function srcOf(r, uid) {
     const ph = r.photo || {};
     const url = typeof ph.url === 'string' && /^https:\/\//.test(ph.url) ? ph.url : typeof ph.id === 'string' && /^https:\/\//.test(ph.id) ? ph.id : '';
     const scores = (Array.isArray(r.scores) ? r.scores : []).filter((s) => s && s.name && s.id !== 'lb-score');
@@ -41,7 +43,7 @@
       catName: String(r.catName || r.catLabel || r.cat || '').trim(),
       criteria: scores.map((s) => ({ name: String(s.name).slice(0, 60), desc: String(s.desc || '').slice(0, 120), w: [0.5, 1, 2].includes(s.w) ? s.w : 1 })),
       meta: String(r.meta || '').slice(0, 80), link: typeof r.link === 'string' ? r.link : '',
-      photoUrl: url, w: ph.w || 0, h: ph.h || 0,
+      photoUrl: url, photoFrom: !url && ph.remote && uid && r.id ? { uid, rid: r.id } : null, w: ph.w || 0, h: ph.h || 0,
     };
   }
   // своя оценка этого же: сначала в той же категории, потом в любой
@@ -61,14 +63,15 @@
   }
   const PLUS = '<svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>';
   // кнопки внутри карточки: root — карточка, r — оценка друга, after — перерисовать кнопки после «В планы»
-  function bindTake(root, r, after) {
+  function bindTake(root, r, after, uid) {
     const box = root.querySelector('.rc-take');
     if (!box || box.dataset.bound) return;
     box.dataset.bound = '1';
     box.addEventListener('click', (e) => {
       const b = e.target.closest('[data-take]');
       if (!b) return;
-      take(r, b.dataset.take).then((ok) => { if (ok && after) after(); });
+      b.disabled = true;
+      take(r, b.dataset.take, uid).then((ok) => { b.disabled = false; if (ok && after) after(); });
     });
   }
   // в Мнение: оно само создаст категорию, заполнит форму или сохранит план
@@ -76,8 +79,21 @@
     try { localStorage.setItem(TAKE_KEY, JSON.stringify({ ...src, mode, at: Date.now() })); } catch (e) {}
     location.href = '/opinion/#take';
   }
-  async function take(r, mode) {
-    const src = srcOf(r);
+  // фото оценок хранятся в IndexedDB (photo-store.js), в самой оценке только ссылка — как в Мнении
+  function photoStore() {
+    if (window.CasualPhotos) return window.CasualPhotos.ready;
+    return new Promise((res) => { const s = document.createElement('script'); s.src = '/photo-store.js'; s.onload = () => res(window.CasualPhotos ? window.CasualPhotos.ready : false); s.onerror = () => res(false); document.head.appendChild(s); });
+  }
+  // отпечаток фото — как fp в friends.js: по нему сервер и Мнение понимают, что фото то же самое
+  const fpOf = (d) => { let h = 0x811c9dc5; for (let i = 0; i < d.length; i += 7) { h ^= d.charCodeAt(i); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(36) + '.' + d.length.toString(36); };
+  const thumbOf = (src) => new Promise((res) => {
+    const im = new Image();
+    im.onload = () => { const k = Math.min(1, 320 / Math.max(im.naturalWidth, im.naturalHeight)), cv = document.createElement('canvas'); cv.width = Math.max(1, Math.round(im.naturalWidth * k)); cv.height = Math.max(1, Math.round(im.naturalHeight * k)); cv.getContext('2d').drawImage(im, 0, 0, cv.width, cv.height); try { res(cv.toDataURL('image/jpeg', 0.8)); } catch (e) { res(''); } };
+    im.onerror = () => res('');
+    im.src = src;
+  });
+  async function take(r, mode, uid) {
+    const src = srcOf(r, uid);
     if (!src.name) return false;
     const mine = findMine(src);
     if (mode === 'rate') {
@@ -90,13 +106,23 @@
     const cats = Array.isArray(cs) ? cs : (cs && cs.items) || [];
     const cat = cats.find((c) => c && keyOf(c.name) === keyOf(src.catName));
     if (!cat) { toOpinion(src, 'plan'); return false; }
+    // обложка: ссылка остаётся ссылкой, файл скачиваем у друга и кладём к себе
+    let data = '', photo = src.photoUrl ? { id: src.photoUrl, data: '', w: src.w, h: src.h } : null;
+    if (!photo && src.photoFrom) {
+      data = await api(`/photo/${encodeURIComponent(src.photoFrom.uid)}/${encodeURIComponent(src.photoFrom.rid)}`).then((d) => (d && typeof d.data === 'string' && d.data.startsWith('data:image/') ? d.data : ''), () => '');
+      if (data) {
+        let key = '';
+        if (await photoStore()) { key = window.CasualPhotos.keyOf(data); if (!(await window.CasualPhotos.put(key, data))) key = ''; }
+        photo = key ? { ref: key, w: src.w, h: src.h } : { id: data, data, w: src.w, h: src.h };
+      }
+    }
     const u = me(), now = new Date().toISOString();
     const doc = {
       id: newId('r'), cat: cat.id, catName: cat.name, name: src.name.slice(0, 140), nameKey: keyOf(src.name),
       scores: [], total: null, fav: false, status: 'В планах', meta: src.meta, pros: '', cons: '', note: '', example: false,
       createdAt: now, updatedAt: now,
       author: u ? { id: u.id, name: u.name || u.username || '', avatar: u.avatar || String(u.name || '?').charAt(0).toUpperCase(), color: u.color || '#3550E8' } : { name: 'Гость' },
-      ...(src.photoUrl ? { photo: { id: src.photoUrl, data: '', w: src.w, h: src.h } } : {}),
+      ...(photo ? { photo } : {}),
       ...(/^https:\/\//.test(src.link) ? { link: src.link } : {}),
       ...(src.artist ? { artist: src.artist, title: src.title } : {}),
     };
@@ -107,9 +133,15 @@
     let sent = null;
     if (token()) {
       const c = { ...doc, catLabel: cat.name };
-      c.photo = src.photoUrl ? { url: src.photoUrl, w: src.w, h: src.h } : undefined;
+      c.photo = src.photoUrl ? { url: src.photoUrl, w: src.w, h: src.h } : data ? { remote: fpOf(data), w: src.w, h: src.h } : undefined;
       if (!c.photo) delete c.photo;
       sent = await api('/shelf', { method: 'PUT', body: JSON.stringify({ ratings: [c] }) }).then(() => true, () => false);
+      // сама картинка и её превью: друзья увидят обложку сразу, не дожидаясь Мнения
+      if (sent && data) {
+        await api('/photo/' + encodeURIComponent(doc.id), { method: 'PUT', body: JSON.stringify({ data }) }).catch(() => {});
+        const t = await thumbOf(data);
+        if (t) await api('/photo/' + encodeURIComponent(doc.id + '.t'), { method: 'PUT', body: JSON.stringify({ data: t }) }).catch(() => {});
+      }
     }
     toast(sent === false ? `«${doc.name}» в планах. В аккаунт уйдёт, когда откроешь Мнение` : `«${doc.name}» в планах`);
     return true;
@@ -136,7 +168,7 @@
     return box;
   }
   const LB_MARK = '<span class="rc-lb" aria-hidden="true"><i></i><i></i><i></i></span>';
-  function cardHTML(r, uid, who) {
+  function cardHTML(r, uid, who, handle) {
     const total = typeof r.total === 'number' ? r.total : null;
     const word = total != null ? WORDS[Math.max(1, Math.min(10, Math.round(total)))] : 'Без балла';
     const lb = r.src === 'letterboxd' || (r.scores || []).some((s) => s && s.id === 'lb-score');
@@ -160,7 +192,7 @@
         ${s.note ? `<em>${esc(s.note)}</em>` : ''}</li>`; }).join('')}</ul>` : ''}
       ${pros.length || cons.length ? `<div class="rc-pc">${pros.length ? `<div><span class="rc-label">Плюсы</span><ul>${pros.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}${cons.length ? `<div><span class="rc-label">Минусы</span><ul>${cons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}</div>` : ''}
       ${r.note ? `<p class="rc-note">${esc(r.note)}</p>` : ''}
-      <div class="rc-foot"><span class="rc-when">${when ? dayFmt(when) + ' · ' : ''}<a class="rc-who" href="/profile/?id=${encodeURIComponent(uid)}" title="Открыть профиль">${esc(who || 'друг')}</a></span>${takeHTML(r)}<a class="rc-btn ghost" href="/opinion/#friend=${encodeURIComponent(uid)}&amp;r=${encodeURIComponent(r.id)}">Открыть в Мнении</a></div>
+      <div class="rc-foot"><span class="rc-when">${when ? dayFmt(when) + ' · ' : ''}<a class="rc-who" href="${profUrl(uid, handle)}" title="Открыть профиль">${esc(who || 'друг')}</a></span>${takeHTML(r)}<a class="rc-btn ghost" href="/opinion/#friend=${encodeURIComponent(uid)}&amp;r=${encodeURIComponent(r.id)}">Открыть в Мнении</a></div>
       <div class="rc-cm" id="rcComments"></div>
     </article>`;
   }
@@ -168,7 +200,7 @@
     if (window.CasualComments) return Promise.resolve();
     return new Promise((res) => { const s = document.createElement('script'); s.src = '/comments.js'; s.onload = res; s.onerror = res; document.head.appendChild(s); });
   }
-  async function open({ uid, rid, who, preview }) {
+  async function open({ uid, rid, who, handle, preview }) {
     ensureBox();
     if (box.hidden) back = document.activeElement;
     const pv = preview || { name: '…' };
@@ -178,12 +210,12 @@
     document.body.style.overflow = 'hidden';
     box.querySelector('.rc-x').focus({ preventScroll: true });
     let r = null;
-    try { const s = await shelfOf(uid); r = (s.ratings || []).find((x) => x && x.id === rid) || null; if (!who && s.user) who = s.user.username; } catch (e) {}
+    try { const s = await shelfOf(uid); r = (s.ratings || []).find((x) => x && x.id === rid) || null; if (s.user) { who = who || s.user.username; handle = handle || s.user.handle; } } catch (e) {}
     if (box.hidden) return;
     if (!r) { box.querySelector('.rc-name p').textContent = 'Эта оценка не открылась: друг мог её удалить или скрыть.'; return; }
     const paint = () => {
-      box.innerHTML = cardHTML(r, uid, who);
-      bindTake(box, r, paint);
+      box.innerHTML = cardHTML(r, uid, who, handle);
+      bindTake(box, r, paint, uid);
       box.querySelector('.rc-x').focus({ preventScroll: true });
       // фото: ссылка сразу, загруженное — с сервера
       const pic = box.querySelector('#rcPic');
@@ -255,5 +287,5 @@ html.unslop .rc-label { letter-spacing: normal; text-transform: none; }
 @media (max-width: 560px) { .rc-card { padding: 16px; border-radius: 22px; } .rc-score b { min-width: 84px; font-size: 38px; } .rc-foot .rc-take, .rc-foot .rc-btn.ghost { flex: 1 1 100%; } .rc-take .rc-btn { flex: 1 1 0; } }`;
   document.head.appendChild(css);
 
-  window.CasualRatingCard = { open, close, takeHTML, bindTake, take, srcOf };
+  window.CasualRatingCard = { open, close, takeHTML, bindTake, take, srcOf, profUrl };
 })();
