@@ -25,8 +25,8 @@ const get = async (url) => {
 // название → код IMDb: год из описания помогает выбрать среди одноимённых
 // год известен — подходит только фильм того же года (±1): чужой рейтинг хуже, чем никакого
 const yearOk = (y, year) => !year || (y && Math.abs(y - year) <= 1);
-async function findId(name, year) {
-  const wd = async () => { const w = await wdFind(name, year, 'P345'); return w && TT.test(w.val) && yearOk(w.y, year) ? w.val : ''; };
+async function findId(name, year, trace) {
+  const wd = async () => { const w = await wdFind(name, year, 'P345', trace); return w && TT.test(w.val) && yearOk(w.y, year) ? w.val : ''; };
   if (CYR.test(name)) return wd();
   const d = await get(`https://v3.sg.media-imdb.com/suggestion/x/${encodeURIComponent(name.toLowerCase().slice(0, 80))}.json`);
   const list = (d.d || []).filter((x) => x && TT.test(x.id) && /movie|tvSeries|tvMiniSeries|tvMovie|video|tvSpecial|short/.test(x.qid || ''));
@@ -50,12 +50,14 @@ export async function imdbLookup(env, items, why) {
   let finds = 0, asks = 0;
   for (const x of list) {
     if (x.id) continue;
-    const fk = 'v2|' + titleKey(x.name) + '|' + (x.year || '');
+    const fk = 'v3|' + titleKey(x.name) + '|' + (x.year || '');
     const row = await env.DB.prepare('SELECT id, at FROM imdb_find WHERE k = ?').bind(fk).first();
     if (row && now - row.at < (row.id ? MONTH : MISS)) { x.id = row.id || ''; continue; }
     if (finds >= 8) { x.later = true; continue; }
     finds++;
-    try { x.id = await findId(x.name, x.year); } catch (e) { x.later = true; if (why) why[x.k] = String(e && e.message || e).slice(0, 200); continue; }
+    const tr = why ? [] : null;
+    try { x.id = await findId(x.name, x.year, tr); } catch (e) { x.later = true; if (why) why[x.k] = [...tr, String(e && e.message || e).slice(0, 200)]; continue; }
+    if (why) why[x.k] = tr;
     await env.DB.prepare('INSERT INTO imdb_find (k, id, at) VALUES (?1, ?2, ?3) ON CONFLICT(k) DO UPDATE SET id = ?2, at = ?3').bind(fk, x.id, now).run();
   }
   for (const x of list) {

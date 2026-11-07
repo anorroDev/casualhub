@@ -30,17 +30,38 @@ export function kindOf(cat) {
 
 // ---------- Wikidata ----------
 // название (русское или нет) → элемент Wikidata, у которого есть нужный код (IMDb, Steam, AniList); год из описания помогает выбрать
-export async function wdFind(name, year, prop) {
+export async function wdFind(name, year, prop, trace) {
+  const t = (x) => { if (trace) trace.push(x); };
   const lang = CYR.test(name) ? 'ru' : 'en';
   const s = await get(`https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&type=item&limit=8&language=${lang}&uselang=${lang}&search=${encodeURIComponent(name)}`);
   const ids = (s.search || []).map((x) => x.id).filter((id) => /^Q\d+$/.test(id)).slice(0, 8);
+  t('search ' + ids.join(',') + (s.error ? ' error ' + JSON.stringify(s.error).slice(0, 120) : ''));
   if (!ids.length) return null;
   // только код и год, без карточек целиком: так ответ маленький
-  const rows = await sparql(`SELECT ?i ?v (SAMPLE(YEAR(?d)) AS ?y) WHERE { VALUES ?i { ${ids.map((x) => 'wd:' + x).join(' ')} } ?i wdt:${prop} ?v. OPTIONAL { ?i wdt:P577|wdt:P580 ?d } } GROUP BY ?i ?v`);
-  const hits = ids.map((id) => rows.find((r) => QID(r.i.value) === id)).filter(Boolean);
+  let hits = [];
+  try {
+    const rows = await sparql(`SELECT ?i ?v (SAMPLE(YEAR(?d)) AS ?y) WHERE { VALUES ?i { ${ids.map((x) => 'wd:' + x).join(' ')} } ?i wdt:${prop} ?v. OPTIONAL { ?i wdt:P577|wdt:P580 ?d } } GROUP BY ?i ?v`);
+    t('sparql ' + rows.length);
+    hits = ids.map((id) => rows.find((r) => QID(r.i.value) === id)).filter(Boolean).map((r) => ({ q: QID(r.i.value), val: r.v.value, y: r.y ? +r.y.value : 0 }));
+  } catch (e) { t('sparql ' + (e && e.message)); }
+  // запасной путь: те же сведения по одному элементу через API Wikidata (ответы крошечные)
+  if (!hits.length) {
+    for (const id of ids.slice(0, 4)) {
+      const c = await get(`https://www.wikidata.org/w/api.php?action=wbgetclaims&format=json&entity=${id}&property=${prop}`).catch((e) => { t('claims ' + (e && e.message)); return {}; });
+      const v = (((c.claims || {})[prop] || [])[0] || {}).mainsnak;
+      if (!v || !v.datavalue) continue;
+      const d = await get(`https://www.wikidata.org/w/api.php?action=wbgetclaims&format=json&entity=${id}&property=P577`).catch(() => ({}));
+      const tm = ((((d.claims || {}).P577 || [])[0] || {}).mainsnak || {}).datavalue;
+      const y = tm && tm.value && /^[+-](\d{4})/.exec(tm.value.time || '');
+      hits.push({ q: id, val: String(v.datavalue.value), y: y ? +y[1] : 0 });
+      if (!year || (y && Math.abs(+y[1] - year) <= 1)) break;
+    }
+    t('claims ' + hits.length);
+  }
   if (!hits.length) return null;
-  const best = (year && hits.find((r) => r.y && Math.abs(+r.y.value - year) <= 1)) || hits[0];
-  return { q: QID(best.i.value), val: best.v.value, y: best.y ? +best.y.value : 0 };
+  const best = (year && hits.find((r) => r.y && Math.abs(r.y - year) <= 1)) || hits[0];
+  t('best ' + best.q + ' ' + best.val + ' ' + best.y);
+  return best;
 }
 // похожее на элемент: общие связи (редкая связь весит больше частой), потом общие жанры и известность
 const W = { P921: 3, P57: 2, P58: 1, P179: 4, P144: 3, P178: 2, P123: 1, P162: 1 };
