@@ -882,9 +882,10 @@
   const isKept = (name) => inList(H.keep, name) || (S.live && inList(S.live.keep, name));
   const isKicked = (name) => inList(H.kick, name) || (S.live && inList(S.live.kick, name));
   const DURS = [5, 8, 12, 20];
-  let hostRes = null, hostT = 0, hostArmT = 0, hostPushing = false;
+  let hostRes = null, hostT = 0, hostArmT = 0, hostPushing = false, hostAuto = false, hostAutoT = 0;
   const isHost = () => !!(token && S.room && S.room.own);
   const canControl = () => !!(token && S.room && (S.room.own || S.admin));
+  const stopAutoSpin = () => { hostAuto = false; clearTimeout(hostAutoT); paintHost(); };
   const low = (s) => String(s || '').toLowerCase();
   const rnd = () => { try { const u = new Uint32Array(1); crypto.getRandomValues(u); return u[0] / 4294967296; } catch (e) { return Math.random(); } };
   const liveOut = () => (S.live && Array.isArray(S.live.out) ? S.live.out : []);
@@ -936,11 +937,11 @@
     if (!same) hostPush(hostBody({ status: live && live.status ? live.status : '' }));
   }
   function hostSpin() {
-    if (!canControl() || hostSpinning()) return;
+    if (!isHost() || hostSpinning()) return;
     const live = S.live || {};
-    if (H.pick === 'out' && live.winner) { hostMsg('Победитель уже есть. Жми «Вернуть всех», чтобы крутить заново.'); return; }
+    if (H.pick === 'out' && live.winner) { stopAutoSpin(); hostMsg('Победитель уже есть. Жми «Вернуть всех», чтобы крутить заново.'); return; }
     const alive = hostAlive();
-    if (alive.length < 2) { hostMsg('Чтобы крутить, на колесе нужно хотя бы два лота.'); return; }
+    if (alive.length < 2) { stopAutoSpin(); hostMsg('Чтобы крутить, на колесе нужно хотя бы два лота.'); return; }
     const segs = place(alive.map((l) => hostSeg(l, 1 / alive.length)));
     let pool = alive.map((_, i) => i);
 
@@ -973,6 +974,7 @@
     if (!r) return;
     if (H.pick === 'one') {
       hostRes = null;
+      stopAutoSpin();
       hostPush(hostBody({ rot: r.to, spin: S.live && S.live.spin, pick: r.name, winner: { n: r.name, sum: '', at: serverNow() }, status: `Победитель: ${r.name}`, hist: [...hostHist(), r.name] }));
       return;
     }
@@ -983,11 +985,23 @@
       const left = hostAlive(out);
       const winner = left.length === 1 ? { n: left[0].name, sum: '', at: serverNow() } : null;
       hostPush(hostBody({ rot: r.to, spin: null, pick: '', out, winner, status: winner ? `Победитель: ${winner.n}` : `Вылетел: ${r.name}. Осталось ${left.length}`, hist: [...hostHist(), r.name] }));
+      if (winner || left.length < 2) {
+        stopAutoSpin();
+      } else if (hostAuto) {
+        paintHost();
+        clearTimeout(hostAutoT);
+        hostAutoT = setTimeout(() => {
+          if (hostAuto && isHost() && !hostSpinning()) {
+            hostSpin();
+          }
+        }, 2400);
+      }
     }, 1100);
   }
   const hostHist = () => (S.live && Array.isArray(S.live.hist) ? S.live.hist : []);
   function hostReset() {
-    if (!canControl() || hostSpinning()) return;
+    if (!isHost() || hostSpinning()) return;
+    stopAutoSpin();
     if (CH.win.active) { stopChannel('win'); syncBg(); }
     H.keep = []; H.kick = []; keepHost();
     hostPush(hostBody({ out: [], winner: null, pick: '', spin: null, status: '', hist: [], keep: [], kick: [] }));
@@ -1072,28 +1086,16 @@
   function paintHost() {
     const panel = $('#hostPanel'), room = $('#hostRoom');
     if (!panel || !room) return;
-    const host = isHost(), ctrl = canControl();
-    if (panel.hidden === ctrl) paintPlaying(); // подпись под колесом своя у ведущего и у зрителей
-    panel.hidden = !ctrl;
+    const host = isHost(), admin = !!S.admin;
+    panel.hidden = !host;
     room.hidden = !host;
-    if (!ctrl) return;
-    const live = S.live || {};
-    const spinning = hostSpinning(), aliveList = hostAlive(), alive = aliveList.length;
-    const b = $('#hostSpin');
-    const resetBtn = $('#hostReset');
-    if (b) b.style.display = host ? '' : 'none';
-    if (resetBtn) resetBtn.style.display = host ? '' : 'none';
-    if (b) {
-      b.disabled = spinning || alive < 2 || (H.pick === 'out' && !!live.winner);
-      if (!b.dataset.armed) b.textContent = spinning ? 'Крутится…' : 'Крутить';
-    }
-    if (resetBtn) resetBtn.disabled = spinning || !(liveOut().length || live.winner);
-    $('#hostPick').querySelectorAll('[data-pick]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.pick === H.pick)));
-    $('#hostDur').querySelectorAll('[data-dur]').forEach((x) => x.setAttribute('aria-pressed', String(+x.dataset.dur === H.dur)));
+
+    // Настройка лотов: доступна только администраторам
     const forceWrap = $('#hostForceWrap');
     if (forceWrap) {
-      forceWrap.hidden = !S.admin;
-      if (S.admin) {
+      forceWrap.hidden = !admin;
+      if (admin) {
+        const aliveList = hostAlive();
         if (aliveList.length) {
           const names = new Set(aliveList.map((l) => l.name));
           const before = H.keep.length + H.kick.length;
@@ -1114,13 +1116,40 @@
         if (kickBox && kickBox.dataset.sig !== kickHtml) { kickBox.dataset.sig = kickHtml; kickBox.innerHTML = kickHtml; }
       }
     }
+
+    if (!host) return;
+
+    const live = S.live || {};
+    const spinning = hostSpinning(), aliveList = hostAlive(), alive = aliveList.length;
+    const b = $('#hostSpin');
+    const autoBtn = $('#hostAutoSpin');
+    const resetBtn = $('#hostReset');
+    if (b) {
+      b.disabled = spinning || alive < 2 || (H.pick === 'out' && !!live.winner) || hostAuto;
+      if (!b.dataset.armed) b.textContent = spinning ? 'Крутится…' : 'Крутить';
+    }
+    if (autoBtn) {
+      autoBtn.style.display = H.pick === 'out' ? '' : 'none';
+      autoBtn.disabled = !hostAuto && (spinning || alive < 2 || !!live.winner);
+      if (hostAuto) {
+        autoBtn.textContent = 'Остановить';
+        autoBtn.classList.add('danger');
+        autoBtn.classList.remove('ghost');
+      } else {
+        autoBtn.textContent = 'Крутить до победителя';
+        autoBtn.classList.remove('danger');
+        autoBtn.classList.add('ghost');
+      }
+    }
+    if (resetBtn) resetBtn.disabled = spinning || !(liveOut().length || live.winner) || hostAuto;
+    $('#hostPick').querySelectorAll('[data-pick]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.pick === H.pick)));
+    $('#hostDur').querySelectorAll('[data-dur]').forEach((x) => x.setAttribute('aria-pressed', String(+x.dataset.dur === H.dur)));
     const m = hostMusic(live.music);
     const bg = $('#hostBg'), win = $('#hostWin');
     if (bg.dataset.v !== m.bg) { bg.dataset.v = m.bg; bg.innerHTML = presetOpts(m.bg, true); }
     if (win.dataset.v !== m.win) { win.dataset.v = m.win; win.innerHTML = presetOpts(m.win, false); }
     // сбор: ссылка, таймер, лимит и правила — только у хозяина
     paintHubPick();
-    if (!host) return;
     const r = S.room, open = isOpen(), url = location.origin + '/lots/' + code;
     const clock = $('#hostClock');
     if (clock) clock.textContent = hostClockText();
@@ -1144,6 +1173,7 @@
     const panel = $('#hostPanel');
     if (!panel) return;
     $('#hostSpin').addEventListener('click', () => {
+      stopAutoSpin();
       const b = $('#hostSpin');
       // сбор ещё идёт: зрители могут добавлять лоты, поэтому сначала спрашиваем
       if (isOpen() && S.room.endsAt && !b.dataset.armed) {
@@ -1157,13 +1187,27 @@
       clearTimeout(hostArmT);
       hostSpin();
     });
+    $('#hostAutoSpin')?.addEventListener('click', () => {
+      if (!isHost()) return;
+      if (hostAuto) {
+        stopAutoSpin();
+        return;
+      }
+      const live = S.live || {};
+      if (H.pick === 'out' && live.winner) { hostMsg('Победитель уже есть. Жми «Вернуть всех», чтобы крутить заново.'); return; }
+      const alive = hostAlive();
+      if (alive.length < 2) { hostMsg('Чтобы крутить, на колесе нужно хотя бы два лота.'); return; }
+      hostAuto = true;
+      paintHost();
+      hostSpin();
+    });
     $('#hostReset').addEventListener('click', hostReset);
     $('#hostHubTabs').addEventListener('click', (e) => { const t = e.target.closest('[data-hub-tab]'); if (!t) return; hubTab = t.dataset.hubTab; paintHubPick(true); });
     $('#hostHubs').addEventListener('click', (e) => { const t = e.target.closest('[data-hub]'); if (!t) return; hostHub({ hubImg: t.dataset.hub, hubOwn: '' }); });
     $('#hostHubNone').addEventListener('click', () => hostHub({ hubImg: '', hubOwn: '' }));
     $('#hostHubUp').addEventListener('click', () => $('#hostHubFile').click());
     $('#hostHubFile').addEventListener('change', (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; hubUpload(f); });
-    $('#hostPick').addEventListener('click', (e) => { const x = e.target.closest('[data-pick]'); if (!x) return; H.pick = x.dataset.pick === 'one' ? 'one' : 'out'; keepHost(); paintHost(); });
+    $('#hostPick').addEventListener('click', (e) => { const x = e.target.closest('[data-pick]'); if (!x) return; stopAutoSpin(); H.pick = x.dataset.pick === 'one' ? 'one' : 'out'; keepHost(); paintHost(); });
     $('#hostDur').addEventListener('click', (e) => { const x = e.target.closest('[data-dur]'); if (!x) return; H.dur = DURS.includes(+x.dataset.dur) ? +x.dataset.dur : 8; keepHost(); paintHost(); });
     const music = () => { if (!canControl() || hostSpinning()) { paintHost(); return; } const m = { bg: $('#hostBg').value, win: $('#hostWin').value }; hostPush(hostBody({ music: m })); };
     $('#hostBg').addEventListener('change', music);
