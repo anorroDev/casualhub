@@ -1594,7 +1594,9 @@ const routes = {
     if (burst('imdb:' + clientIp(request), 40, 60e3)) return tooMany(1);
     const { items } = await readBody(request);
     if (!Array.isArray(items)) return fail(400, 'Нужен список фильмов.');
-    return json({ items: await imdbLookup(env, items), on: !!env.OMDB_KEY });
+    // ?why=1 — причины сбоев поиска (для проверки)
+    const why = new URL(request.url).searchParams.get('why') ? {} : null;
+    return json({ items: await imdbLookup(env, items, why), on: !!env.OMDB_KEY, ...(why ? { why } : {}) });
   },
 
   // лента: свежие оценки друзей

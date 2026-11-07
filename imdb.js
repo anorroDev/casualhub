@@ -2,8 +2,9 @@
    по названию и году и спрашивает OMDb; здесь — плашка «IMDb 7,6», строка «IMDb · Rotten Tomatoes · Metacritic» для карточки
    и запоминание ответов в браузере на неделю. Запросы со всей страницы собираются в один. */
 (() => {
-  const KEY = 'casualhub.imdb.v1', WEEK = 7 * 864e5;
+  const KEY = 'casualhub.imdb.v2', WEEK = 7 * 864e5, DAY = 864e5;
   const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { return {}; } };
+  try { localStorage.removeItem('casualhub.imdb.v1'); } catch (e) {}
   let store = read(), saveT = 0;
   const keep = () => { clearTimeout(saveT); saveT = setTimeout(() => {
     // старое и лишнее не держим: не больше 1500 фильмов
@@ -28,7 +29,7 @@
         const r = await fetch('/api/imdb', { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token() }, body: JSON.stringify({ items: batch }) });
         const d = r.ok ? await r.json() : null;
         if (d && d.on === false) off = true; // ключ OMDb на сервере не задан: больше не спрашиваем
-        if (d && d.items) for (const x of batch) if (x.k in d.items) store[x.k] = { d: d.items[x.k], at: Date.now() };
+        if (d && d.items) for (const x of batch) if (x.k in d.items) store[x.k] = { d: d.items[x.k], at: d.items[x.k] ? Date.now() : Date.now() - WEEK + DAY };
         keep();
       } catch (e) {}
     }
