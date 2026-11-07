@@ -1587,18 +1587,37 @@ function saveArtists() {
   catch (_) { return false; }
 }
 function artistGet(name) { const k = keyOf(name); return k ? (artistsMap()[k] || null) : null; }
-function artistAvaUrl(r) { if (!r || !r.artist) return ''; const a = artistGet(r.artist); return a && a.ava ? a.ava : ''; }
+// несколько исполнителей в одном поле: «Kai Angel & 9mice», «A, B», «A feat. B», «A x B». У каждого своя аватарка в справочнике
+const ARTIST_SEP = /\s*(?:,|&|\+|\s(?:feat\.?|ft\.?|x|и|with)\s)\s*/i;
+function artistParts(s) {
+  // группа с «&» в названии (Simon & Garfunkel), уже известная целиком, не делится
+  if (artistsMap()[keyOf(s)]) return [String(s).trim()];
+  const out = [], seen = new Set();
+  for (const p of String(s || '').split(ARTIST_SEP)) { const t = p.trim(), k = keyOf(t); if (k && !seen.has(k)) { seen.add(k); out.push(t); } }
+  return out.slice(0, 4);
+}
+// последнее имя в поле — его и дописывают: подсказки и поиск только по нему
+function artistSplitLast(s) {
+  const m = /^([\s\S]*(?:,|&|\+|\s(?:feat\.?|ft\.?|x|и|with)(?=\s)))\s*([^,&+]*)$/i.exec(String(s || ''));
+  return m ? { head: m[1].replace(/\s+$/, ''), last: m[2] } : { head: '', last: String(s || '') };
+}
+const artistQ = () => artistSplitLast(form.artist || '').last.trim();
+// аватарка для оценки: первая, что есть у её исполнителей
+function artistFirst(artist) { for (const p of artistParts(artist)) { const a = artistGet(p); if (a && a.ava) return a; } return null; }
+function artistAvaUrl(r) { if (!r || !r.artist) return ''; const a = artistFirst(r.artist); return a ? a.ava : ''; }
+const artistFpOf = (artist) => { const a = artistFirst(artist); return a && a.fp ? a.fp : ''; };
 // все известные исполнители: из справочника и из оценок, частые сверху
 function artistList() {
   const m = new Map();
   for (const [k, a] of Object.entries(artistsMap())) if (a && a.name) m.set(k, { key: k, name: a.name, ava: a.ava || '', n: 0 });
   for (const r of state.ratings) {
     if (r.example || !r.artist) continue;
-    const k = keyOf(r.artist);
-    if (!k) continue;
-    const a = m.get(k) || { key: k, name: r.artist, ava: '', n: 0 };
-    a.n++;
-    m.set(k, a);
+    for (const part of artistParts(r.artist)) {
+      const k = keyOf(part);
+      const a = m.get(k) || { key: k, name: part, ava: '', n: 0 };
+      a.n++;
+      m.set(k, a);
+    }
   }
   return [...m.values()].sort((a, b) => b.n - a.n || a.name.localeCompare(b.name, 'ru'));
 }
@@ -1607,7 +1626,7 @@ function artistMiniHTML(a) {
 }
 // меняет все оценки исполнителя (имя, отпечаток аватарки); оценка получает свежую дату, чтобы правка дошла до других устройств
 async function patchArtistRatings(key, patchOf) {
-  const list = state.ratings.filter(r => !r.example && r.artist && keyOf(r.artist) === key);
+  const list = state.ratings.filter(r => !r.example && r.artist && artistParts(r.artist).some(x => keyOf(x) === key));
   if (!list.length) return 0;
   const now = new Date().toISOString();
   if (state.mode === 'db') {
@@ -1630,7 +1649,7 @@ function artistSetAva(name, data, quiet) {
   if (data) m[k] = Object.assign({}, cur, { ava: data, fp: avaFp(data) });
   else { m[k] = Object.assign({}, cur); delete m[k].ava; delete m[k].fp; }
   if (!saveArtists()) { if (prev) m[k] = prev; else delete m[k]; return false; }
-  if (!quiet) patchArtistRatings(k, () => ({ artistAva: m[k].fp || '' }));
+  if (!quiet) patchArtistRatings(k, (r) => ({ artistAva: artistFpOf(r.artist) }));
   renderArtist();
   renderBoard();
   return true;
@@ -1654,13 +1673,15 @@ async function artistRename(oldName, newName) {
   if (ok !== nk) delete m[ok];
   m[nk] = Object.assign({}, tgt, prev, (!prev.ava && tgt.ava) ? { ava: tgt.ava, fp: tgt.fp } : {}, { name });
   saveArtists();
-  const fpv = m[nk].fp || '';
+  // в совместных треках меняется только этот исполнитель
+  const swap = (artist) => { const ps = artistParts(artist); return ps.length > 1 ? ps.map(x => (keyOf(x) === ok ? name : x)).join(' & ') : name; };
   const n = await patchArtistRatings(ok, r => {
     const title = r.title || (r.name.startsWith(r.artist + ' — ') ? r.name.slice(r.artist.length + 3) : r.name);
-    const full = composeName(name, title).slice(0, 140);
-    return { artist: name, title, name: full, nameKey: keyOf(full), artistAva: fpv };
+    const artist = swap(r.artist);
+    const full = composeName(artist, title).slice(0, 140);
+    return { artist, title, name: full, nameKey: keyOf(full), artistAva: artistFpOf(artist) };
   });
-  if (keyOf(form.artist) === ok) form.artist = name;
+  if (artistParts(form.artist).some(x => keyOf(x) === ok)) form.artist = swap(form.artist);
   renderForm();
   toast(n ? `Исполнитель переименован, оценок: ${n}` : 'Исполнитель переименован');
   return true;
@@ -1689,13 +1710,26 @@ function renderArtist() {
   el.name.placeholder = music ? 'Начни писать, и трек найдётся' : 'Что оцениваешь?';
   if (!music) { hideArtistList(); return; }
   if (el.artist.value !== (form.artist || '')) el.artist.value = form.artist || '';
-  const a = artistGet(form.artist);
+  const parts = artistParts(form.artist);
+  const multi = parts.length > 1;
+  const a = multi ? null : artistGet(form.artist);
   const ava = a && a.ava ? a.ava : '';
   const letter = (form.artist || '').trim().charAt(0).toUpperCase();
-  el.artistAva.classList.toggle('has', !!ava);
-  el.artistAva.innerHTML = ava ? `<img src="${esc(ava)}" alt="">` : (letter ? esc(letter) : '♪');
-  const known = !!keyOf(form.artist) && artistList().some(x => x.key === keyOf(form.artist));
+  el.artistAva.classList.toggle('has', multi || !!ava);
+  el.artistAva.classList.toggle('multi', multi);
+  // несколько исполнителей: их аватарки кружками внахлёст
+  el.artistAva.innerHTML = multi ? parts.slice(0, 3).map(x => { const g = artistGet(x); return `<i>${g && g.ava ? `<img src="${esc(g.ava)}" alt="">` : esc(x.charAt(0).toUpperCase())}</i>`; }).join('')
+    : ava ? `<img src="${esc(ava)}" alt="">` : (letter ? esc(letter) : '♪');
+  const known = !multi && !!keyOf(form.artist) && artistList().some(x => x.key === keyOf(form.artist));
   el.artistEdit.hidden = !known || !!artistEditing;
+  // у каждого из нескольких — своя кнопка: аватарка и имя
+  const pb = $('artistParts');
+  if (pb) {
+    pb.hidden = !multi || !!artistEditing;
+    pb.innerHTML = multi ? parts.map((x, i) => { const g = artistGet(x) || { name: x }; return `<button type="button" data-apart="${i}" title="Аватарка и имя: ${esc(x)}">${artistMiniHTML({ name: x, ava: g.ava || '' })}<span>${esc(x)}</span></button>`; }).join('') : '';
+  }
+  const add = $('artistAdd');
+  if (add) add.hidden = !keyOf(form.artist) || parts.length >= 4 || !artistQ();
   scheduleGenius();
   if (artistEditing && keyOf(artistEditing) !== keyOf(form.artist)) closeArtistEdit();
 }
@@ -1711,11 +1745,11 @@ let artistNetTimer = 0, artistNetKey = '', artistNet = [];
 const artistNetSeen = new Map();
 function scheduleArtistNet() {
   clearTimeout(artistNetTimer);
-  if (!formMusic() || (form.artist || '').trim().length < 2) { artistNet = []; artistNetKey = ''; return; }
+  if (!formMusic() || artistQ().length < 2) { artistNet = []; artistNetKey = ''; return; }
   artistNetTimer = setTimeout(findArtistNet, 450);
 }
 async function findArtistNet() {
-  const q = (form.artist || '').trim(), k = keyOf(q);
+  const q = artistQ(), k = keyOf(q);
   if (!k || k === artistNetKey) return;
   artistNetKey = k;
   let list = artistNetSeen.get(k);
@@ -1736,17 +1770,19 @@ async function findArtistNet() {
     list = list.slice(0, 6);
     artistNetSeen.set(k, list);
   }
-  if (keyOf(form.artist) !== k) return;
+  if (keyOf(artistQ()) !== k) return;
   artistNet = list;
   if (document.activeElement === el.artist) showArtistList();
 }
 function showArtistList() {
-  const q = keyOf(el.artist.value);
-  const all = artistList();
+  const q = keyOf(artistSplitLast(el.artist.value).last);
+  // уже вписанные в это поле исполнители в подсказках не нужны
+  const already = new Set(artistParts(artistSplitLast(el.artist.value).head).map(keyOf));
+  const all = artistList().filter(a => !already.has(a.key));
   const list = all.filter(a => !q || a.key.includes(q)).slice(0, 8);
   // из интернета — только те, кого ещё нет среди своих и кто не совпадает с написанным
   const mine = new Set(all.map(a => a.key));
-  const net = q && keyOf(form.artist) === artistNetKey ? artistNet.filter(a => !mine.has(keyOf(a.name)) && keyOf(a.name) !== q) : [];
+  const net = q && keyOf(artistQ()) === artistNetKey ? artistNet.filter(a => !mine.has(keyOf(a.name)) && keyOf(a.name) !== q && !already.has(keyOf(a.name))) : [];
   if ((!list.length && !net.length) || (list.length === 1 && list[0].key === q && !net.length)) { hideArtistList(); return; }
   artistPick = Math.min(artistPick, list.length + net.length - 1);
   el.artistList.innerHTML = list.map((a, i) => `<li role="option" id="artOpt${i}" data-artist="${esc(a.name)}" aria-selected="${i === artistPick}">${artistMiniHTML(a)}<span>${esc(a.name)}</span>${a.n ? `<small>${a.n} ${plural(a.n, 'оценка', 'оценки', 'оценок')}</small>` : ''}</li>`).join('')
@@ -1756,16 +1792,20 @@ function showArtistList() {
   if (artistPick >= 0) el.artist.setAttribute('aria-activedescendant', 'artOpt' + artistPick); else el.artist.removeAttribute('aria-activedescendant');
 }
 function pickArtist(name) {
-  form.artist = name;
-  el.artist.value = name;
+  const { head } = artistSplitLast(form.artist || '');
+  const v = head ? head + ' ' + name : name;
+  form.artist = v;
+  el.artist.value = v;
   hideArtistList();
   renderArtist();
   updateNameState();
   scheduleDraft();
   scheduleCovers();
 }
-function openArtistEdit() {
-  const a = artistList().find(x => x.key === keyOf(form.artist));
+// who — какого из исполнителей поправить (у совместного трека их несколько)
+function openArtistEdit(who) {
+  const name = typeof who === 'string' && who ? who : form.artist;
+  const a = artistList().find(x => x.key === keyOf(name)) || (keyOf(name) ? { key: keyOf(name), name: name.trim(), ava: (artistGet(name) || {}).ava || '', n: 0 } : null);
   if (!a) return;
   artistEditing = a.name;
   el.artistEditBox.innerHTML = `<div class="row">${artistMiniHTML(a)}<input id="artistNewName" type="text" maxlength="80" value="${esc(a.name)}" aria-label="Имя исполнителя"></div>
@@ -1773,6 +1813,7 @@ function openArtistEdit() {
 <p>Имя и аватарка поменяются во всех оценках этого исполнителя${a.n ? ` (${a.n})` : ''}.</p>`;
   el.artistEditBox.hidden = false;
   el.artistEdit.hidden = true;
+  if ($('artistParts')) $('artistParts').hidden = true;
   const inp = $('artistNewName');
   inp.focus();
   inp.select();
@@ -2054,47 +2095,63 @@ async function applyMusicPick(c) {
 // работает только после входа в онлайн-аккаунт: запрос идёт через наш сервер, где лежит токен Genius
 let geniusTimer = null, geniusKey = '', geniusItems = [], geniusPauseUntil = 0;
 const geniusSkip = new Set(), geniusSeen = new Map(); // найденное по каждому имени, чтобы не спрашивать сервер повторно
+// кому ещё нужно фото: исполнители из поля без аватарки, не отказанные «Не нужно»
+function geniusNeed() {
+  return artistParts(form.artist).filter(x => x.length >= 2 && !(artistGet(x) || {}).ava && !geniusSkip.has(keyOf(x))).slice(0, 3);
+}
 function geniusWanted() {
-  const a = (form.artist || '').trim();
   const api = window.casualApi;
-  const known = artistGet(a);
-  return formMusic() && a.length >= 2 && !(known && known.ava) && !geniusSkip.has(keyOf(a)) && !!api && api.online() && Date.now() >= geniusPauseUntil;
+  return formMusic() && geniusNeed().length > 0 && !!api && api.online() && Date.now() >= geniusPauseUntil;
 }
 function scheduleGenius() {
   clearTimeout(geniusTimer);
   if (!geniusWanted()) { geniusItems = []; renderGenius(); return; }
-  if (keyOf(form.artist) === geniusKey) { renderGenius(); return; }
+  if (geniusNeed().map(keyOf).join('|') === geniusKey) { renderGenius(); return; }
   geniusTimer = setTimeout(findGenius, 1100); // ищем, когда имя дописано, а не на каждую букву
 }
+// geniusItems: [{ part, list }] — по группе на каждого исполнителя без фото
 async function findGenius() {
-  const k = keyOf(form.artist);
+  const need = geniusNeed(), k = need.map(keyOf).join('|');
   if (!k || k === geniusKey) return;
   geniusKey = k;
-  if (geniusSeen.has(k)) { geniusItems = geniusSeen.get(k); renderGenius(); return; }
-  try {
-    const r = await window.casualApi.get('/genius/artist?q=' + encodeURIComponent(form.artist.trim()));
-    const list = ((r && r.artists) || []).filter(a => a && typeof a.image === 'string' && /^https:\/\//.test(a.image)).slice(0, 3);
-    geniusSeen.set(k, list);
-    if (keyOf(form.artist) !== k) return;
-    geniusItems = list;
-  } catch (_) {
-    geniusItems = [];
-    geniusPauseUntil = Date.now() + 60e3; // сервер отказал: минуту не спрашиваем
+  const groups = [];
+  for (const part of need) {
+    const pk = keyOf(part);
+    let list = geniusSeen.get(pk);
+    if (!list) {
+      try {
+        const r = await window.casualApi.get('/genius/artist?q=' + encodeURIComponent(part));
+        list = ((r && r.artists) || []).filter(a => a && typeof a.image === 'string' && /^https:\/\//.test(a.image)).slice(0, 3);
+        geniusSeen.set(pk, list);
+      } catch (_) {
+        geniusPauseUntil = Date.now() + 60e3; // сервер отказал: минуту не спрашиваем
+        break;
+      }
+    }
+    if (list.length) groups.push({ part, list });
   }
+  if (geniusNeed().map(keyOf).join('|') !== k) return;
+  geniusItems = groups;
   renderGenius();
 }
 function renderGenius() {
   const box = $('artistSugg');
   if (!box) return;
-  const show = geniusItems.length > 0 && geniusWanted();
+  const need = new Set(geniusNeed().map(keyOf));
+  const groups = geniusItems.filter(g => need.has(keyOf(g.part)));
+  const show = groups.length > 0 && geniusWanted();
   box.hidden = !show;
   if (!show) { box.replaceChildren(); return; }
-  const src = [...new Set(geniusItems.map(a => a.source || 'Genius'))].join(' и ');
-  box.innerHTML = `<span>Фото с ${esc(src)}:</span>${geniusItems.map((a, i) => `<button type="button" data-genius="${i}" title="Поставить как аватарку исполнителя"><img src="${esc(a.image)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">${esc(a.name)}</button>`).join('')}<button type="button" class="x" data-genius="skip" aria-label="Не нужно">Не нужно</button>`;
+  const multi = artistParts(form.artist).length > 1;
+  box.innerHTML = groups.map((g) => {
+    const gi = geniusItems.indexOf(g);
+    const src = [...new Set(g.list.map(a => a.source || 'Genius'))].join(' и ');
+    return `<div class="sugg-group"><span>${multi ? `Фото для «${esc(g.part)}» с ${esc(src)}:` : `Фото с ${esc(src)}:`}</span>${g.list.map((a, i) => `<button type="button" data-genius="${gi}:${i}" title="Поставить как аватарку исполнителя"><img src="${esc(a.image)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">${esc(a.name)}</button>`).join('')}<button type="button" class="x" data-genius="skip:${gi}" aria-label="Не нужно">Не нужно</button></div>`;
+  }).join('');
 }
-async function pickGenius(i) {
-  const a = geniusItems[i];
-  if (!a || !keyOf(form.artist)) return;
+async function pickGenius(gi, i) {
+  const g = geniusItems[gi], a = g && g.list[i];
+  if (!a || !keyOf(g.part)) return;
   try {
     // картинки Genius и Deezer отдаются с разрешением CORS, поэтому сначала качаем напрямую, а через наш сервер — если не вышло
     let blob = null;
@@ -2108,11 +2165,15 @@ async function pickGenius(i) {
       blob = dataUrlToBlob(r.data);
     }
     const type = /^image\//.test(blob.type) ? blob.type : 'image/jpeg';
-    // выбрали фото — подставляем и точное имя исполнителя оттуда же («deathmerie» → deathmarried)
-    const name = String(a.name || '').trim().slice(0, 80) || form.artist.trim();
-    if (keyOf(name) !== keyOf(form.artist)) { form.artist = name; el.artist.value = name; updateNameState(); scheduleDraft(); scheduleCovers(); }
+    // выбрали фото — подставляем и точное имя исполнителя оттуда же («deathmerie» → deathmarried); в совместном — только его
+    const name = String(a.name || '').trim().slice(0, 80) || g.part.trim();
+    if (keyOf(name) !== keyOf(g.part)) {
+      const ps = artistParts(form.artist);
+      const v = ps.length > 1 ? ps.map(x => (keyOf(x) === keyOf(g.part) ? name : x)).join(' & ') : name;
+      form.artist = v; el.artist.value = v; updateNameState(); scheduleDraft(); scheduleCovers();
+    }
     if (!(await setArtistAvaFile(name, new File([blob], 'artist.jpg', { type }), `Аватарка исполнителя «${name}» поставлена`))) return;
-    geniusItems = [];
+    geniusItems = geniusItems.filter(x => x !== g);
     renderGenius();
   } catch (_) {
     toast('Фото исполнителя не загрузилось, можно поставить своё');
@@ -2762,8 +2823,8 @@ async function save() {
   if (artist) {
     doc.artist = artist;
     doc.title = title;
-    const a = artistGet(artist);
-    if (a && a.fp) doc.artistAva = a.fp;
+    const fpa = artistFpOf(artist);
+    if (fpa) doc.artistAva = fpa;
   }
   state.saving = true;
   updateHead();
@@ -5543,6 +5604,8 @@ if (el.artist) {
   el.artistList.addEventListener('click', e => { const o = e.target.closest('[data-artist]'); if (o) pickArtist(o.dataset.artist); });
   el.artistAva.addEventListener('click', () => {
     if (!keyOf(form.artist)) { toast('Сначала напиши исполнителя'); el.artist.focus(); return; }
+    const ps = artistParts(form.artist);
+    if (ps.length > 1) { openArtistEdit(ps.find(x => !(artistGet(x) || {}).ava) || ps[0]); return; }
     el.artistFile.click();
   });
   el.artistFile.addEventListener('change', async () => {
@@ -5553,12 +5616,24 @@ if (el.artist) {
     if (!(await setArtistAvaFile(name, f, `Аватарка исполнителя «${name.trim()}» сохранена`))) return;
     if (artistEditing) openArtistEdit();
   });
-  el.artistEdit.addEventListener('click', openArtistEdit);
+  el.artistEdit.addEventListener('click', () => openArtistEdit());
+  // совместный трек: имя исполнителя — его аватарка и правка
+  $('artistParts').addEventListener('click', e => { const b = e.target.closest('[data-apart]'); if (b) openArtistEdit(artistParts(form.artist)[+b.dataset.apart]); });
+  // «＋»: ещё один исполнитель через « & », подсказки сразу по новому имени
+  $('artistAdd').addEventListener('click', () => {
+    const v = (form.artist || '').trim() + ' & ';
+    form.artist = v; el.artist.value = v;
+    el.artist.focus();
+    el.artist.setSelectionRange(v.length, v.length);
+    renderArtist();
+    showArtistList();
+  });
   $('artistSugg').addEventListener('click', e => {
     const b = e.target.closest('[data-genius]');
     if (!b) return;
-    if (b.dataset.genius === 'skip') { geniusSkip.add(keyOf(form.artist)); geniusItems = []; renderGenius(); return; }
-    pickGenius(+b.dataset.genius);
+    const [what, n] = b.dataset.genius.split(':');
+    if (what === 'skip') { const g = geniusItems[+n]; if (g) geniusSkip.add(keyOf(g.part)); renderGenius(); return; }
+    pickGenius(+what, +n);
   });
   $('coverSugg').addEventListener('click', e => { const b = e.target.closest('[data-cover]'); if (b) pickCover(+b.dataset.cover); });
   el.artistEditBox.addEventListener('click', async e => {

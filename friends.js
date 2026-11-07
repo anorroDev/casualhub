@@ -319,15 +319,19 @@
         const seen = new Set();
         for (const x of state.ratings) {
           if (x.example || !x.artist || !x.artistAva) continue;
-          const rid = artistRid(x.artist);
-          if (seen.has(rid)) continue;
-          seen.add(rid);
-          const a = artistGet(x.artist);
-          if (a && a.fp === x.artistAva) continue;
-          try {
-            const ph = await api('/photo/' + encodeURIComponent(F.me.id) + '/' + encodeURIComponent(rid));
-            if (ph && ph.data) { artistSetAva(x.artist, ph.data, true); sent[rid] = avaFp(ph.data); photos++; }
-          } catch (e) {}
+          // совместный трек: у каждого исполнителя своя картинка art.<хеш имени>; качаем тех, у кого её здесь нет
+          const parts = typeof artistParts === 'function' ? artistParts(x.artist) : [x.artist];
+          if (parts.length > 1 ? artistFpOf(x.artist) === x.artistAva : (artistGet(x.artist) || {}).fp === x.artistAva) continue;
+          for (const part of parts) {
+            const rid = artistRid(part);
+            if (seen.has(rid)) continue;
+            seen.add(rid);
+            if (parts.length > 1 && (artistGet(part) || {}).ava) continue;
+            try {
+              const ph = await api('/photo/' + encodeURIComponent(F.me.id) + '/' + encodeURIComponent(rid));
+              if (ph && ph.data) { artistSetAva(part, ph.data, true); sent[rid] = avaFp(ph.data); photos++; }
+            } catch (e) {}
+          }
         }
       } catch (e) { console.error('artist avatars', e); } // не мешаем сохранить полученные оценки
     }
@@ -639,7 +643,7 @@
     const p = r.photo;
     // без своего фото у трека друга видна аватарка исполнителя
     if (!p) return kind === 'thumb' && r.artist && r.artistAva && uid && typeof artistRid === 'function'
-      ? `<img class="e-thumb ava f-photo" data-fphoto="${esc(uid + '|' + artistRid(r.artist))}" alt="" decoding="async">` : '';
+      ? `<img class="e-thumb ava f-photo" data-fphoto="${esc(uid + '|' + artistRid(typeof artistParts === 'function' ? artistParts(r.artist)[0] || r.artist : r.artist))}" alt="" decoding="async">` : '';
     const cls = kind === 'thumb' ? 'e-thumb' : 'e-photo';
     const size = kind === 'body' && p.w && p.h ? ` width="${+p.w}" height="${+p.h}"` : '';
     const alt = kind === 'body' ? `Фото: ${esc(r.name)}` : '';
