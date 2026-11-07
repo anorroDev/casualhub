@@ -2,6 +2,7 @@
 // Cloudflare Pages Functions, база D1 подключена как binding DB.
 
 import { clip, numOrNull, SAFE_URL, cleanRating, readShelf, stampOf, RID_RE, SPOOF_RE, MUSIC_LINK_RE } from '../_lib/shelf.js';
+import { computeRecs, seedSig, titleKey } from '../_lib/recs.js';
 import { NOTES } from '../_lib/admin-changes.js';
 
 const enc = new TextEncoder();
@@ -34,6 +35,19 @@ async function freeHandle(env, base, selfId) {
 }
 // что отдаём о человеке: друзьям — ник и юзернейм, себе — ещё почту и дату регистрации
 const pubUser = (u) => ({ id: u.id, username: u.username, handle: u.handle || u.uname });
+// таблица советов создаётся при первом обращении
+let recsMade = false;
+async function recsTable(env) {
+  if (recsMade) return;
+  await env.DB.prepare('CREATE TABLE IF NOT EXISTS recs (user_id TEXT PRIMARY KEY, data TEXT, sig TEXT, at INTEGER NOT NULL DEFAULT 0, hidden TEXT)').run();
+  recsMade = true;
+}
+// что показать: без убранного и без того, что человек уже успел добавить к себе
+function recsView(d, hidden, ratings) {
+  const hide = new Set(hidden), mine = new Set(ratings.map((r) => titleKey(r.name)));
+  const keep = (x) => x && !hide.has(x.key) && !mine.has(titleKey(x.title)) && !(x.orig && mine.has(titleKey(x.orig)));
+  return { at: d.at, movie: (d.movie || []).filter(keep), game: (d.game || []).filter(keep), anime: (d.anime || []).filter(keep), friends: (d.friends || []).filter(keep) };
+}
 const ownUser = (u) => ({ ...pubUser(u), email: u.email || '', createdAt: u.created_at || u.createdAt || null, hideOnline: !!u.hide_online });
 
 // Таблицы создаются и обновляются сами при первом запросе,
@@ -1530,6 +1544,48 @@ const routes = {
     if (!m) return new Response(null, { status: 404 });
     const bin = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0));
     return new Response(bin, { headers: { 'content-type': m[1], 'cache-control': 'public, max-age=600', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'" } });
+  },
+
+  // советы «Тебе может понравиться» (functions/_lib/recs.js): подбор долгий, поэтому хранится сутки и пересчитывается, когда меняются любимые оценки
+  async 'GET /recs'({ env, request, me }) {
+    await recsTable(env);
+    const ratings = (readShelf(await env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(me.id).first()).ratings || []).filter((r) => r && !r.example);
+    const sig = seedSig(ratings);
+    const row = await env.DB.prepare('SELECT data, sig, at, hidden FROM recs WHERE user_id = ?').bind(me.id).first();
+    const hidden = row && row.hidden ? JSON.parse(row.hidden) : [];
+    const age = row && row.data ? Date.now() - row.at : Infinity;
+    const force = new URL(request.url).searchParams.get('fresh') === '1';
+    const fresh = age < 864e5 && (row.sig === sig || age < 1800e3);
+    if ((fresh && !force) || burst('recsbuild:' + me.id, force ? 4 : 8, 3600e3)) {
+      if (row && row.data) return json(recsView(JSON.parse(row.data), hidden, ratings));
+      return fail(429, 'Советы скоро будут, попробуй чуть позже.');
+    }
+    const { results: fr } = await env.DB.prepare(
+      "SELECT CASE WHEN f.a = ?1 THEN f.b ELSE f.a END AS id, u.username, u.uname FROM friendships f JOIN users u ON u.id = (CASE WHEN f.a = ?1 THEN f.b ELSE f.a END) WHERE (f.a = ?1 OR f.b = ?1) AND f.status = 'accepted'"
+    ).bind(me.id).all();
+    const people = new Map(fr.slice(0, 90).map((x) => [x.id, pubUser(x)]));
+    const friends = [];
+    if (people.size) {
+      const ids = [...people.keys()];
+      const { results: shelves } = await env.DB.prepare(`SELECT user_id, data FROM shelves WHERE user_id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all();
+      for (const sh of shelves) { try { friends.push({ user: people.get(sh.user_id), ratings: readShelf(sh).ratings }); } catch (e) {} }
+    }
+    const data = await computeRecs({ ratings, friends, hidden });
+    await env.DB.prepare('INSERT INTO recs (user_id, data, sig, at, hidden) VALUES (?1, ?2, ?3, ?4, ?5) ON CONFLICT(user_id) DO UPDATE SET data = ?2, sig = ?3, at = ?4')
+      .bind(me.id, JSON.stringify(data), sig, data.at, JSON.stringify(hidden)).run();
+    return json(recsView(data, hidden, ratings));
+  },
+  // «Не интересно»: совет больше не показывается
+  async 'POST /recs/hide'({ env, request, me }) {
+    const { key } = await readBody(request);
+    if (typeof key !== 'string' || !/^[\p{L}\p{N}:._-]{1,200}$/u.test(key)) return fail(400, 'Нет такого совета.');
+    await recsTable(env);
+    const row = await env.DB.prepare('SELECT hidden FROM recs WHERE user_id = ?').bind(me.id).first();
+    const hidden = row && row.hidden ? JSON.parse(row.hidden) : [];
+    if (!hidden.includes(key)) hidden.push(key);
+    await env.DB.prepare('INSERT INTO recs (user_id, data, sig, at, hidden) VALUES (?1, NULL, NULL, 0, ?2) ON CONFLICT(user_id) DO UPDATE SET hidden = ?2')
+      .bind(me.id, JSON.stringify(hidden.slice(-500))).run();
+    return json({ ok: true });
   },
 
   // лента: свежие оценки друзей
