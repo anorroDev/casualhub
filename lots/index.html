@@ -706,6 +706,9 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
 .host-main { display: flex; flex-wrap: wrap; gap: 8px; }
 .host-main #hostSpin { flex: 1 1 200px; }
 .host-opts { display: grid; gap: 12px; }
+.host-dur-head { display: flex; justify-content: space-between; align-items: center; font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.host-dur-val { color: var(--accent); font-variant-numeric: tabular-nums; font-size: 14px; }
+.host-dur-slider { width: 100%; accent-color: var(--accent); height: 6px; cursor: pointer; }
 .host-force-panel { display: grid; gap: 10px; margin-top: 14px; padding: 12px 14px; border: 1px dashed var(--line); border-radius: 14px; background: var(--panel-2); }
 .host-force-panel[hidden] { display: none !important; }
 .host-force-title { font-size: 13px; font-weight: 700; color: var(--ink-2); text-transform: uppercase; letter-spacing: .04em; }
@@ -833,7 +836,7 @@ html.unslop::before { display: none; }
         </div>
         <div class="host-opts">
           <div class="lots-f"><span>Как выбирать</span><div class="seg" id="hostPick" role="group" aria-label="Как выбирать"><button type="button" data-pick="out" aria-pressed="true">На выбывание</button><button type="button" data-pick="one" aria-pressed="false">Один победитель</button></div></div>
-          <div class="lots-f"><span>Длительность спина</span><div class="seg" id="hostDur" role="group" aria-label="Длительность спина"><button type="button" data-dur="5">5 с</button><button type="button" data-dur="8">8 с</button><button type="button" data-dur="12">12 с</button><button type="button" data-dur="20">20 с</button></div></div>
+          <div class="lots-f host-dur-wrap"><div class="host-dur-head"><span>Длительность спина:</span><b class="host-dur-val" id="hostDurVal">8 с</b></div><input type="range" class="host-dur-slider" id="hostDurSlider" min="1" max="30" step="1" value="8" aria-label="Длительность спина в секундах"></div>
           <div class="host-music">
             <label class="lots-f">Фон для всех<select class="inp" id="hostBg"></select></label>
             <label class="lots-f">Песня победы<select class="inp" id="hostWin"></select></label>

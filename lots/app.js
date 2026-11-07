@@ -875,13 +875,13 @@
   // На колесе все лоты сбора, кроме вылетевших; шансы у всех равные. Режим и длительность хранятся в этом браузере
   const HOST_KEY = 'casualhub.lots.host.v1';
   const H = Object.assign({ pick: 'out', dur: 8, keep: [], kick: [] }, read(HOST_KEY) || {});
+  H.dur = Math.max(1, Math.min(30, Math.round(+H.dur) || 8));
   if (!Array.isArray(H.keep)) H.keep = [];
   if (!Array.isArray(H.kick)) H.kick = [];
   const keepHost = () => { try { localStorage.setItem(HOST_KEY, JSON.stringify({ pick: H.pick, dur: H.dur, keep: H.keep, kick: H.kick })); } catch (e) {} };
   const inList = (arr, name) => Array.isArray(arr) && arr.some((x) => low(x) === low(name));
   const isKept = (name) => inList(H.keep, name) || (S.live && inList(S.live.keep, name));
   const isKicked = (name) => inList(H.kick, name) || (S.live && inList(S.live.kick, name));
-  const DURS = [5, 8, 12, 20];
   let hostRes = null, hostT = 0, hostArmT = 0, hostPushing = false, hostAuto = false, hostAutoT = 0;
   const isHost = () => !!(token && S.room && S.room.own);
   const canControl = () => !!(token && S.room && (S.room.own || S.admin));
@@ -1143,7 +1143,12 @@
     }
     if (resetBtn) resetBtn.disabled = spinning || !(liveOut().length || live.winner) || hostAuto;
     $('#hostPick').querySelectorAll('[data-pick]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.pick === H.pick)));
-    $('#hostDur').querySelectorAll('[data-dur]').forEach((x) => x.setAttribute('aria-pressed', String(+x.dataset.dur === H.dur)));
+    const durSlider = $('#hostDurSlider'), durVal = $('#hostDurVal');
+    if (durSlider) {
+      durSlider.value = H.dur;
+      durSlider.disabled = spinning || hostAuto;
+    }
+    if (durVal) durVal.textContent = `${H.dur} с`;
     const m = hostMusic(live.music);
     const bg = $('#hostBg'), win = $('#hostWin');
     if (bg.dataset.v !== m.bg) { bg.dataset.v = m.bg; bg.innerHTML = presetOpts(m.bg, true); }
@@ -1208,7 +1213,13 @@
     $('#hostHubUp').addEventListener('click', () => $('#hostHubFile').click());
     $('#hostHubFile').addEventListener('change', (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; hubUpload(f); });
     $('#hostPick').addEventListener('click', (e) => { const x = e.target.closest('[data-pick]'); if (!x) return; stopAutoSpin(); H.pick = x.dataset.pick === 'one' ? 'one' : 'out'; keepHost(); paintHost(); });
-    $('#hostDur').addEventListener('click', (e) => { const x = e.target.closest('[data-dur]'); if (!x) return; H.dur = DURS.includes(+x.dataset.dur) ? +x.dataset.dur : 8; keepHost(); paintHost(); });
+    $('#hostDurSlider')?.addEventListener('input', (e) => {
+      const v = Math.max(1, Math.min(30, Math.round(+e.target.value) || 8));
+      H.dur = v;
+      const durVal = $('#hostDurVal');
+      if (durVal) durVal.textContent = `${v} с`;
+      keepHost();
+    });
     const music = () => { if (!canControl() || hostSpinning()) { paintHost(); return; } const m = { bg: $('#hostBg').value, win: $('#hostWin').value }; hostPush(hostBody({ music: m })); };
     $('#hostBg').addEventListener('change', music);
     $('#hostWin').addEventListener('change', music);
