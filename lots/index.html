@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="ru">
 <head>
 <meta charset="utf-8">
@@ -706,6 +706,14 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
 .host-main { display: flex; flex-wrap: wrap; gap: 8px; }
 .host-main #hostSpin { flex: 1 1 200px; }
 .host-opts { display: grid; gap: 12px; }
+.host-force-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 10px; }
+.host-force-col { display: grid; gap: 6px; align-content: start; padding: 10px; border: 1px dashed var(--line); border-radius: 12px; background: var(--panel); }
+.host-force-col > span { font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
+.host-force-list { display: grid; gap: 2px; max-height: 200px; overflow-y: auto; overscroll-behavior: contain; }
+.host-force-list .lots-chk { padding: 5px 6px; border-radius: 8px; transition: background-color .15s; }
+.host-force-list .lots-chk:hover { background: var(--panel-2); }
+.host-force-list .lots-chk:has(input:checked) { background: color-mix(in srgb, var(--accent) 12%, var(--panel)); }
+.host-force-empty { font-size: 12.5px; color: var(--ink-3); padding: 4px 2px; }
 .host-music { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 10px; }
 .host-music .inp { height: 40px; background: var(--panel); }
 .host-more > summary { display: inline-flex; align-items: center; gap: 6px; list-style: none; cursor: pointer; font-size: 14px; font-weight: 600; color: var(--accent); }
@@ -823,6 +831,13 @@ html.unslop::before { display: none; }
           <div class="host-music">
             <label class="lots-f">Фон для всех<select class="inp" id="hostBg"></select></label>
             <label class="lots-f">Песня победы<select class="inp" id="hostWin"></select></label>
+          </div>
+          <div class="lots-f" id="hostForceWrap" hidden>
+            <span>Настройка лотов</span>
+            <div class="host-force-grid">
+              <div class="host-force-col"><span>Остаются</span><div id="hostForceKeep" class="host-force-list"></div></div>
+              <div class="host-force-col"><span>Выбывают</span><div id="hostForceKick" class="host-force-list"></div></div>
+            </div>
           </div>
         </div>
         <details class="host-more">

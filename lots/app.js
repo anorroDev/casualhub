@@ -809,7 +809,7 @@
     const canEdit = !!token && !!S.room.editOwn && isOpen() && !(S.live && S.live.winner);
     // админ с открытым входом в админку и хозяин сбора удаляют любой лот и строки «Ведущий»
     const canMod = !!token && (S.admin || !!S.room.own);
-    const html = `<p class="board-stat"><b>${n}</b> ${plural(n, 'лот', 'лота', 'лотов')}</p>${n ? `<ul class="lots-list">${rows.map((l) => { const k = l.name.toLowerCase(), gone = out.has(k); const own = l.mine && canEdit && !gone ? `<button type="button" class="btn small ghost" data-replace="${esc(l.id)}"${S.replacing === l.id ? ' aria-pressed="true"' : ''}>Заменить</button><button type="button" class="btn small ghost danger" data-del="${esc(l.id)}">Убрать</button>` : ''; const host = String(l.id).startsWith('host:'); const modBtn = canMod && !own ? `<button type="button" class="btn small ghost danger" ${host ? `data-mod-name="${esc(l.name)}"` : `data-mod-lot="${esc(l.id)}"`} title="${S.admin ? 'Удалить как админ' : 'Удалить из сбора'}">Удалить</button>` : ''; const edit = own || modBtn ? `<span class="lots-acts">${own}${modBtn}</span>` : ''; return `<li data-lot="${esc(l.id)}" class="${gone ? 'out' : ''}">${lotPic(l)}<span class="lots-who"><b>${esc(l.name)}</b><small>${esc(l.by)}${l.mine ? ' · твой' : ''}${gone ? ' · вылетел' : ''}</small></span>${edit}</li>`; }).join('')}</ul>` : '<p class="lots-empty">Пока ни одного лота. Будь первым</p>'}`;
+    const html = `<p class="board-stat"><b>${n}</b> ${plural(n, 'лот', 'лота', 'лотов')}</p>${n ? `<ul class="lots-list">${rows.map((l) => { const k = l.name.toLowerCase(), gone = out.has(k); const own = l.mine && canEdit && !gone ? `<button type="button" class="btn small ghost" data-replace="${esc(l.id)}"${S.replacing === l.id ? ' aria-pressed="true"' : ''}>Заменить</button><button type="button" class="btn small ghost danger" data-del="${esc(l.id)}">Убрать</button>` : ''; const host = String(l.id).startsWith('host:'); const modBtn = canMod && !own ? `<button type="button" class="btn small ghost danger" ${host ? `data-mod-name="${esc(l.name)}"` : `data-mod-lot="${esc(l.id)}"`} title="Удалить из сбора">Удалить</button>` : ''; const edit = own || modBtn ? `<span class="lots-acts">${own}${modBtn}</span>` : ''; return `<li data-lot="${esc(l.id)}" class="${gone ? 'out' : ''}">${lotPic(l)}<span class="lots-who"><b>${esc(l.name)}</b><small>${esc(l.by)}${l.mine ? ' · твой' : ''}${gone ? ' · вылетел' : ''}</small></span>${edit}</li>`; }).join('')}</ul>` : '<p class="lots-empty">Пока ни одного лота. Будь первым</p>'}`;
     if (box.dataset.sig === html) return;
     box.dataset.sig = html;
     // как участники в Колесе: оставшиеся плывут на новое место, новые въезжают
@@ -874,11 +874,17 @@
   // Зрители видят то же, что и раньше: снимок колеса (live) на сервере. Теперь его пишет эта страница у хозяина сбора.
   // На колесе все лоты сбора, кроме вылетевших; шансы у всех равные. Режим и длительность хранятся в этом браузере
   const HOST_KEY = 'casualhub.lots.host.v1';
-  const H = Object.assign({ pick: 'out', dur: 8 }, read(HOST_KEY) || {});
-  const keepHost = () => { try { localStorage.setItem(HOST_KEY, JSON.stringify(H)); } catch (e) {} };
+  const H = Object.assign({ pick: 'out', dur: 8, keep: [], kick: [] }, read(HOST_KEY) || {});
+  if (!Array.isArray(H.keep)) H.keep = [];
+  if (!Array.isArray(H.kick)) H.kick = [];
+  const keepHost = () => { try { localStorage.setItem(HOST_KEY, JSON.stringify({ pick: H.pick, dur: H.dur, keep: H.keep, kick: H.kick })); } catch (e) {} };
+  const inList = (arr, name) => Array.isArray(arr) && arr.some((x) => low(x) === low(name));
+  const isKept = (name) => inList(H.keep, name) || (S.live && inList(S.live.keep, name));
+  const isKicked = (name) => inList(H.kick, name) || (S.live && inList(S.live.kick, name));
   const DURS = [5, 8, 12, 20];
   let hostRes = null, hostT = 0, hostArmT = 0, hostPushing = false;
   const isHost = () => !!(token && S.room && S.room.own);
+  const canControl = () => !!(token && S.room && (S.room.own || S.admin));
   const low = (s) => String(s || '').toLowerCase();
   const rnd = () => { try { const u = new Uint32Array(1); crypto.getRandomValues(u); return u[0] / 4294967296; } catch (e) { return Math.random(); } };
   const liveOut = () => (S.live && Array.isArray(S.live.out) ? S.live.out : []);
@@ -904,6 +910,8 @@
       music: hostMusic(live.music),
       status: live.status || '', out, winner: live.winner || null,
       hist: Array.isArray(live.hist) ? live.hist : [],
+      keep: Array.isArray(H.keep) ? H.keep : [],
+      kick: Array.isArray(H.kick) ? H.kick : [],
     }, over);
   }
   const hostMsg = (t) => { const m = $('#hostMsg'); if (m) { m.textContent = t || ''; m.hidden = !t; } };
@@ -928,13 +936,25 @@
     if (!same) hostPush(hostBody({ status: live && live.status ? live.status : '' }));
   }
   function hostSpin() {
-    if (!isHost() || hostSpinning()) return;
+    if (!canControl() || hostSpinning()) return;
     const live = S.live || {};
     if (H.pick === 'out' && live.winner) { hostMsg('Победитель уже есть. Жми «Вернуть всех», чтобы крутить заново.'); return; }
     const alive = hostAlive();
     if (alive.length < 2) { hostMsg('Чтобы крутить, на колесе нужно хотя бы два лота.'); return; }
     const segs = place(alive.map((l) => hostSeg(l, 1 / alive.length)));
-    const k = Math.min(segs.length - 1, Math.floor(rnd() * segs.length)), s = segs[k];
+    let pool = alive.map((_, i) => i);
+
+    const activeKeep = (S.live && Array.isArray(S.live.keep) && S.live.keep.length) ? S.live.keep : H.keep;
+    const activeKick = (S.live && Array.isArray(S.live.kick) && S.live.kick.length) ? S.live.kick : H.kick;
+
+    if (H.pick === 'out') {
+      const kickIdx = pool.filter((i) => inList(activeKick, alive[i].name));
+      const freeIdx = pool.filter((i) => !inList(activeKeep, alive[i].name));
+      if (kickIdx.length) pool = kickIdx;
+      else if (freeIdx.length) pool = freeIdx;
+    }
+    let k = pool[Math.min(pool.length - 1, Math.floor(rnd() * pool.length))];
+    const s = segs[k];
     // стрелка вверху: под ней окажется случайная точка выпавшего сектора, не у самого края
     const a = s.start + (0.12 + 0.76 * rnd()) * (s.end - s.start);
     const from = mod(live.spin ? +live.spin.to || 0 : +live.rot || 0, TAU);
@@ -967,9 +987,10 @@
   }
   const hostHist = () => (S.live && Array.isArray(S.live.hist) ? S.live.hist : []);
   function hostReset() {
-    if (!isHost() || hostSpinning()) return;
+    if (!canControl() || hostSpinning()) return;
     if (CH.win.active) { stopChannel('win'); syncBg(); }
-    hostPush(hostBody({ out: [], winner: null, pick: '', spin: null, status: '', hist: [] }));
+    H.keep = []; H.kick = []; keepHost();
+    hostPush(hostBody({ out: [], winner: null, pick: '', spin: null, status: '', hist: [], keep: [], kick: [] }));
   }
   async function hostRoom(body) {
     try {
@@ -1051,26 +1072,56 @@
   function paintHost() {
     const panel = $('#hostPanel'), room = $('#hostRoom');
     if (!panel || !room) return;
-    const host = isHost();
-    if (panel.hidden === host) paintPlaying(); // подпись под колесом своя у ведущего и у зрителей
-    panel.hidden = !host;
+    const host = isHost(), ctrl = canControl();
+    if (panel.hidden === ctrl) paintPlaying(); // подпись под колесом своя у ведущего и у зрителей
+    panel.hidden = !ctrl;
     room.hidden = !host;
-    if (!host) return;
+    if (!ctrl) return;
     const live = S.live || {};
-    const spinning = hostSpinning(), alive = hostAlive().length;
+    const spinning = hostSpinning(), aliveList = hostAlive(), alive = aliveList.length;
     const b = $('#hostSpin');
-    b.disabled = spinning || alive < 2 || (H.pick === 'out' && !!live.winner);
-    if (!b.dataset.armed) b.textContent = spinning ? 'Крутится…' : 'Крутить';
-    $('#hostReset').disabled = spinning || !(liveOut().length || live.winner);
+    const resetBtn = $('#hostReset');
+    if (b) b.style.display = host ? '' : 'none';
+    if (resetBtn) resetBtn.style.display = host ? '' : 'none';
+    if (b) {
+      b.disabled = spinning || alive < 2 || (H.pick === 'out' && !!live.winner);
+      if (!b.dataset.armed) b.textContent = spinning ? 'Крутится…' : 'Крутить';
+    }
+    if (resetBtn) resetBtn.disabled = spinning || !(liveOut().length || live.winner);
     $('#hostPick').querySelectorAll('[data-pick]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.pick === H.pick)));
     $('#hostDur').querySelectorAll('[data-dur]').forEach((x) => x.setAttribute('aria-pressed', String(+x.dataset.dur === H.dur)));
+    const forceWrap = $('#hostForceWrap');
+    if (forceWrap) {
+      forceWrap.hidden = !S.admin;
+      if (S.admin) {
+        if (aliveList.length) {
+          const names = new Set(aliveList.map((l) => l.name));
+          const before = H.keep.length + H.kick.length;
+          H.keep = aliveList.filter((l) => inList(H.keep, l.name)).map((l) => l.name);
+          H.kick = aliveList.filter((l) => inList(H.kick, l.name)).map((l) => l.name);
+          if (H.keep.length + H.kick.length !== before) keepHost();
+        }
+        const activeKeep = (S.live && Array.isArray(S.live.keep)) ? S.live.keep : H.keep;
+        const activeKick = (S.live && Array.isArray(S.live.kick)) ? S.live.kick : H.kick;
+        const row = (name, kind) => {
+          const on = kind === 'keep' ? inList(activeKeep, name) : inList(activeKick, name);
+          return `<label class="lots-chk"><input type="checkbox" data-force-lot="${esc(name)}" data-force-kind="${kind}"${on ? ' checked' : ''}><span>${esc(name)}</span></label>`;
+        };
+        const keepBox = $('#hostForceKeep'), kickBox = $('#hostForceKick');
+        const keepHtml = aliveList.length ? aliveList.map((l) => row(l.name, 'keep')).join('') : '<span class="host-force-empty">Пока пусто</span>';
+        const kickHtml = aliveList.length ? aliveList.map((l) => row(l.name, 'kick')).join('') : '<span class="host-force-empty">Пока пусто</span>';
+        if (keepBox && keepBox.dataset.sig !== keepHtml) { keepBox.dataset.sig = keepHtml; keepBox.innerHTML = keepHtml; }
+        if (kickBox && kickBox.dataset.sig !== kickHtml) { kickBox.dataset.sig = kickHtml; kickBox.innerHTML = kickHtml; }
+      }
+    }
     const m = hostMusic(live.music);
     const bg = $('#hostBg'), win = $('#hostWin');
     if (bg.dataset.v !== m.bg) { bg.dataset.v = m.bg; bg.innerHTML = presetOpts(m.bg, true); }
     if (win.dataset.v !== m.win) { win.dataset.v = m.win; win.innerHTML = presetOpts(m.win, false); }
-    // сбор: ссылка, таймер, лимит и правила
-    const r = S.room, open = isOpen(), url = location.origin + '/lots/' + code;
+    // сбор: ссылка, таймер, лимит и правила — только у хозяина
     paintHubPick();
+    if (!host) return;
+    const r = S.room, open = isOpen(), url = location.origin + '/lots/' + code;
     const clock = $('#hostClock');
     if (clock) clock.textContent = hostClockText();
     const sig = JSON.stringify([open, r.closed, !!r.endsAt, r.perUser, r.editOwn, r.uniq, r.fuzzy]);
@@ -1114,9 +1165,27 @@
     $('#hostHubFile').addEventListener('change', (e) => { const f = e.target.files && e.target.files[0]; e.target.value = ''; hubUpload(f); });
     $('#hostPick').addEventListener('click', (e) => { const x = e.target.closest('[data-pick]'); if (!x) return; H.pick = x.dataset.pick === 'one' ? 'one' : 'out'; keepHost(); paintHost(); });
     $('#hostDur').addEventListener('click', (e) => { const x = e.target.closest('[data-dur]'); if (!x) return; H.dur = DURS.includes(+x.dataset.dur) ? +x.dataset.dur : 8; keepHost(); paintHost(); });
-    const music = () => { if (!isHost() || hostSpinning()) { paintHost(); return; } const m = { bg: $('#hostBg').value, win: $('#hostWin').value }; hostPush(hostBody({ music: m })); };
+    const music = () => { if (!canControl() || hostSpinning()) { paintHost(); return; } const m = { bg: $('#hostBg').value, win: $('#hostWin').value }; hostPush(hostBody({ music: m })); };
     $('#hostBg').addEventListener('change', music);
     $('#hostWin').addEventListener('change', music);
+    $('#hostForceWrap')?.addEventListener('change', async (e) => {
+      const inp = e.target.closest('input[data-force-lot]');
+      if (!inp || !S.admin) return;
+      const name = inp.dataset.forceLot;
+      const kind = inp.dataset.forceKind;
+      if (kind === 'keep') {
+        H.keep = inp.checked ? [...H.keep.filter((n) => low(n) !== low(name)), name] : H.keep.filter((n) => low(n) !== low(name));
+        if (inp.checked) H.kick = H.kick.filter((n) => low(n) !== low(name));
+      } else {
+        H.kick = inp.checked ? [...H.kick.filter((n) => low(n) !== low(name)), name] : H.kick.filter((n) => low(n) !== low(name));
+        if (inp.checked) H.keep = H.keep.filter((n) => low(n) !== low(name));
+      }
+      keepHost();
+      paintHost();
+      if (canControl() && !hostSpinning()) {
+        await hostPush(hostBody({ keep: H.keep, kick: H.kick }));
+      }
+    });
     const room = $('#hostRoom');
     room.addEventListener('click', async (e) => {
       const lim = e.target.closest('[data-host-limit]');
@@ -1155,6 +1224,10 @@
       S.offset = d.now - Date.now();
       S.room = d.room;
       S.live = d.live;
+      if (d.live) {
+        if (Array.isArray(d.live.keep)) H.keep = d.live.keep;
+        if (Array.isArray(d.live.kick)) H.kick = d.live.kick;
+      }
       if (d.lots) S.lots = d.lots;
       keepFollow();
       paintAll();
@@ -1426,7 +1499,7 @@
   paintSound();
   paintPlaying();
   // админ с открытым входом в админку видит кнопку «Удалить» у каждого лота
-  if (token && user) api('/admin/me').then((d) => { if (d && d.active) { S.admin = true; if (S.room) paintList(); } }, () => {});
+  if (token && user) api('/admin/me').then((d) => { if (d && d.active) { S.admin = true; if (S.room) { paintList(); paintHost(); paintPlaying(); } } }, () => {});
   if (/^[A-Za-z0-9]{12}$/.test(code)) poll();
   else paintGone('В ссылке нет кода сбора. Попроси ведущего прислать её ещё раз.');
 })();

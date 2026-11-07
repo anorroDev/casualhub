@@ -1,4 +1,4 @@
-// Казуал Хаб: онлайн-аккаунты, друзья и оценки друзей.
+﻿// Казуал Хаб: онлайн-аккаунты, друзья и оценки друзей.
 // Cloudflare Pages Functions, база D1 подключена как binding DB.
 
 import { clip, numOrNull, SAFE_URL, cleanRating, readShelf, stampOf, RID_RE, SPOOF_RE, MUSIC_LINK_RE } from '../_lib/shelf.js';
@@ -1293,7 +1293,7 @@ const routes = {
     let me = null;
     try { me = await currentUser(env, request); } catch (e) {}
     const v = new URL(request.url).searchParams.get('v');
-    return lotAnswer(env, arg, me && !me.banned ? me : null, v);
+    return lotAnswer(env, arg, me && !me.banned ? me : null, v, request);
   },
   async 'POST /lots/:code'({ env, request, me, arg }) {
     if (burst('lotadd:' + me.id, 30, 60e3)) return tooMany(1);
@@ -1453,11 +1453,29 @@ const routes = {
   },
   async 'PUT /lots/:code/live'({ env, request, me, arg }) {
     if (burst('lotlive:' + me.id, 240, 60e3)) return tooMany(1);
+    const room = await env.DB.prepare('SELECT owner_id, live FROM lot_rooms WHERE id = ?').bind(arg).first();
+    if (!room) return fail(404, 'Такого сбора нет.');
+    const isOwner = room.owner_id === me.id;
+    const isAdmin = await adminActive(env, request, me);
+    if (!isOwner && !isAdmin) return fail(403, 'Недостаточно прав.');
     const live = cleanLive(await readBody(request));
+    if (!isOwner) {
+      let oldLive = null;
+      try { oldLive = JSON.parse(room.live || 'null'); } catch (e) {}
+      if (oldLive) {
+        live.spin = oldLive.spin;
+        live.rot = oldLive.rot;
+        live.status = oldLive.status;
+        live.winner = oldLive.winner;
+        live.out = oldLive.out;
+        live.hist = oldLive.hist;
+        live.segs = oldLive.segs;
+        live.pick = oldLive.pick;
+      }
+    }
     const data = JSON.stringify(live);
-    if (data.length > 90000) return fail(413, 'Слишком много лотов на колесе.'); // с id лотов у секторов и списком забранных
-    const r = await env.DB.prepare('UPDATE lot_rooms SET live = ? WHERE id = ? AND owner_id = ?').bind(data, arg, me.id).run();
-    if (!r.meta.changes) return fail(404, 'Такого сбора нет.');
+    if (data.length > 90000) return fail(413, 'Слишком много лотов на колесе.');
+    await env.DB.prepare('UPDATE lot_rooms SET live = ? WHERE id = ?').bind(data, arg).run();
     return json({ ok: true });
   },
   // поиск треков и альбомов по названию: только лицензионные каталоги, где исполнители настоящие
@@ -1987,6 +2005,8 @@ function cleanLive(b) {
     // что выпадало по очереди: каждый итог прокрутки (вылет или победа в режиме «Один победитель»)
     hist: (Array.isArray(b && b.hist) ? b.hist : []).slice(-MAX_LOTS).map((x) => clip(x, LOT_NAME)),
     winner: b && b.winner && b.winner.n ? { n: clip(b.winner.n, LOT_NAME), sum: clip(b.winner.sum, 40), at: finite(b.winner.at) } : null,
+    keep: (Array.isArray(b && b.keep) ? b.keep : []).slice(0, MAX_LOTS).map((x) => clip(x, LOT_NAME)),
+    kick: (Array.isArray(b && b.kick) ? b.kick : []).slice(0, MAX_LOTS).map((x) => clip(x, LOT_NAME)),
   };
 }
 async function lotEditable(env, code, lotId, me) {
@@ -2003,12 +2023,16 @@ async function lotEditable(env, code, lotId, me) {
   if (live && ((Array.isArray(live.out) && live.out.some((n) => lotKey(n) === lotKey(lot.name))) || live.winner)) return { res: fail(403, 'Этот лот уже играл на колесе, его нельзя менять.') };
   return { room, lot };
 }
-async function lotAnswer(env, id, me, knownVer) {
+async function lotAnswer(env, id, me, knownVer, request) {
   const row = await env.DB.prepare('SELECT r.*, u.username AS owner_name, u.banned AS owner_banned FROM lot_rooms r LEFT JOIN users u ON u.id = r.owner_id WHERE r.id = ?').bind(id).first();
   if (!row || row.owner_banned) return fail(404, 'Такого сбора нет.');
   const own = !!me && row.owner_id === me.id;
   const out = { room: { id: row.id, title: row.title, kind: row.kind, perUser: row.per_user, endsAt: row.ends_at, closed: !!row.closed, ver: row.ver, own, owner: row.owner_name || '', editOwn: !!row.edit_own, uniq: !!row.uniq, fuzzy: !!row.fuzzy }, now: Date.now(), live: null };
   try { out.live = row.live ? JSON.parse(row.live) : null; } catch (e) {}
+  if (out.live && !own && !(me && request && await adminActive(env, request, me))) {
+    delete out.live.keep;
+    delete out.live.kick;
+  }
   // список лотов отдаём, только если он поменялся: страница спрашивает часто
   if (String(knownVer) !== String(row.ver)) {
     let { results } = await env.DB.prepare('SELECT l.id, l.ref, l.name, l.img, l.link, l.user_id, u.id AS uid, u.username FROM lots l LEFT JOIN users u ON u.id = l.user_id WHERE l.room_id = ? ORDER BY l.created_at LIMIT ?').bind(id, MAX_LOTS).all();
