@@ -30,7 +30,7 @@ export function kindOf(cat) {
 
 // ---------- Wikidata ----------
 // название (русское или нет) → элемент Wikidata, у которого есть нужный код (IMDb, Steam, AniList); год из описания помогает выбрать
-async function wdFind(name, year, prop) {
+export async function wdFind(name, year, prop) {
   const lang = CYR.test(name) ? 'ru' : 'en';
   const s = await get(`https://www.wikidata.org/w/api.php?action=wbsearchentities&format=json&type=item&limit=8&language=${lang}&uselang=${lang}&search=${encodeURIComponent(name)}`);
   const ids = (s.search || []).map((x) => x.id).filter((id) => /^Q\d+$/.test(id)).slice(0, 8);
@@ -40,7 +40,7 @@ async function wdFind(name, year, prop) {
   const hits = ids.map((id) => rows.find((r) => QID(r.i.value) === id)).filter(Boolean);
   if (!hits.length) return null;
   const best = (year && hits.find((r) => r.y && Math.abs(+r.y.value - year) <= 1)) || hits[0];
-  return { q: QID(best.i.value), val: best.v.value };
+  return { q: QID(best.i.value), val: best.v.value, y: best.y ? +best.y.value : 0 };
 }
 // похожее на элемент: общие связи (редкая связь весит больше частой), потом общие жанры и известность
 const W = { P921: 3, P57: 2, P58: 1, P179: 4, P144: 3, P178: 2, P123: 1, P162: 1 };

@@ -1516,6 +1516,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
           <p>${esc([word, n ? `${n} ${plural(n, 'критерий', 'критерия', 'критериев')}` : '', r.status, r.meta].filter(Boolean).join(' · '))}${r.lb ? ' <span class="lb-src">· <span class="lb-mark"><i></i><i></i><i></i></span>из Letterboxd</span>' : ''}</p></div>
         <div class="rd-score"><b>${total != null ? fmt(total) : '—'}</b><small>из 10</small></div>
       </div>
+      ${window.CasualIMDb && window.CasualIMDb.isMovie(r.cat) && !ed ? `<div class="imdb-slot" data-imdb-row="1" data-imdb-n="${esc(r.name)}" data-imdb-y="${window.CasualIMDb.yearOf(r.meta) || ''}"></div>` : ''}
       ${tools}
       ${r.link && !ed ? `<a class="rd-listen" href="${esc(r.link)}" target="_blank" rel="noopener noreferrer"><span class="u-old">🎧 </span>Слушать</a>` : ''}
       ${scores.length ? `<ul class="rd-crit">${scores.map((s, k) => { const v = ed ? rdEd.v[k] : Math.max(0, Math.min(10, Math.round(+s.v || 0))); return `<li data-tier="${tierV(v)}" data-k="${k}">
@@ -1533,6 +1534,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       <div class="rd-foot"><span>${when ? dayFmt(when) : ''}</span>${p.kind !== 'me' && window.CasualRatingCard ? window.CasualRatingCard.takeHTML(r) : ''}<a class="btn ghost" href="${rateLink(p, r)}">Открыть в Мнении</a></div>
       ${p.uid && token && !ed && !p.limited ? '<div class="rd-cm" id="rdComments"></div>' : ''}
     </article>`;
+    if (window.CasualIMDb) window.CasualIMDb.fill(rdBox);
     // чужая оценка: «В планы» и «Оценить» забирают её себе (rating-card.js)
     if (p.kind !== 'me' && window.CasualRatingCard) window.CasualRatingCard.bindTake(rdBox, r, () => openRating(p, r), p.uid);
     // ветка комментариев под оценкой: та же, что в Мнении у этой оценки

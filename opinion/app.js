@@ -2240,6 +2240,14 @@ function listenHTML(r) {
   return `<a class="e-listen" href="${esc(u)}" target="_blank" rel="noopener noreferrer"><span class="u-old">🎧 </span>Слушать в ${src}</a>`;
 }
 window.CasualListen = listenHTML;
+// рейтинг IMDb у фильмов и сериалов (imdb.js): запомненное — сразу, остальное дорисует fill после отрисовки рейтинга
+function imdbSlot(r) {
+  const I = window.CasualIMDb;
+  if (!I || r.example || catKind(state.cats.find(c => c.id === r.cat) || { id: r.cat, name: r.catName || '' }) !== 'movie') return '';
+  const x = { name: r.lbName || r.name, year: I.yearOf(r.meta) };
+  const d = I.peek(x);
+  return `<span class="imdb-slot" data-imdb-n="${esc(x.name)}" data-imdb-y="${x.year || ''}"${d !== undefined ? ' data-done' : ''}>${d ? I.badge(d) : ''}</span>`;
+}
 function entryHTML(r, rank, showCat) {
   const t = r.total;
   const n = r.scores.filter(s => s.v > 0).length;
@@ -2279,7 +2287,7 @@ function entryHTML(r, rank, showCat) {
 <details${state.open.has(r.id) ? ' open' : ''}>
 <summary><span class="sum">
 <span class="rank">${rank == null ? '—' : rank}</span>
-<span class="e-main">${pUrl ? `<img class="e-thumb" data-photo="thumb" src="${esc(pUrl)}" alt="" loading="lazy" decoding="async">` : aUrl ? `<img class="e-thumb ava" src="${esc(aUrl)}" alt="" loading="lazy" decoding="async">` : ''}<span class="e-text"><span class="e-name">${r.fav ? '<span class="fav-star-inline" title="В избранном">★</span>' : ''}${esc(r.name)}</span><span class="e-sub"><span>${esc(meta)}</span>${showCat ? `<span class="tag">${esc(catNameOf(r))}</span>` : ''}${r.status ? `<span class="tag status-tag">${esc(r.status)}</span>` : ''}${r.meta ? `<span class="tag meta-tag">${esc(r.meta)}</span>` : ''}${r.author && r.author.name ? `<span class="tag author-tag" title="Автор: ${esc(r.author.name)}">${renderAuthorMini(r.author)} ${esc(r.author.name)}</span>` : ''}${r.example ? '<span class="tag ex">пример</span>' : ''}${notes ? `<span class="has-note" title="Есть заметки">${ICON.noteSm}<span class="vh">есть заметки</span></span>` : ''}</span></span></span>
+<span class="e-main">${pUrl ? `<img class="e-thumb" data-photo="thumb" src="${esc(pUrl)}" alt="" loading="lazy" decoding="async">` : aUrl ? `<img class="e-thumb ava" src="${esc(aUrl)}" alt="" loading="lazy" decoding="async">` : ''}<span class="e-text"><span class="e-name">${r.fav ? '<span class="fav-star-inline" title="В избранном">★</span>' : ''}${esc(r.name)}</span><span class="e-sub"><span>${esc(meta)}</span>${imdbSlot(r)}${showCat ? `<span class="tag">${esc(catNameOf(r))}</span>` : ''}${r.status ? `<span class="tag status-tag">${esc(r.status)}</span>` : ''}${r.meta ? `<span class="tag meta-tag">${esc(r.meta)}</span>` : ''}${r.author && r.author.name ? `<span class="tag author-tag" title="Автор: ${esc(r.author.name)}">${renderAuthorMini(r.author)} ${esc(r.author.name)}</span>` : ''}${r.example ? '<span class="tag ex">пример</span>' : ''}${notes ? `<span class="has-note" title="Есть заметки">${ICON.noteSm}<span class="vh">есть заметки</span></span>` : ''}</span></span></span>
 <span class="spark" aria-hidden="true">${spark}</span>
 <span class="badge" data-tier="${tierT(t)}">${t != null ? fmt(t) : '—'}</span>
 ${ICON.chev}
@@ -2473,6 +2481,7 @@ function renderBoard() {
   if (visBtn) visBtn.hidden = !(state.canWrite && state.ratings.some(ownRating));
   renderStats();
   updateCmpTray();
+  if (window.CasualIMDb) window.CasualIMDb.fill(el.board);
   if (pendingFocus) {
     const t = el.board.querySelector(pendingFocus);
     pendingFocus = null;

@@ -3,6 +3,7 @@
 
 import { clip, numOrNull, SAFE_URL, cleanRating, readShelf, stampOf, RID_RE, SPOOF_RE, MUSIC_LINK_RE } from '../_lib/shelf.js';
 import { computeRecs, seedSig, titleKey } from '../_lib/recs.js';
+import { imdbLookup } from '../_lib/imdb.js';
 import { NOTES } from '../_lib/admin-changes.js';
 
 const enc = new TextEncoder();
@@ -1588,6 +1589,14 @@ const routes = {
     return json({ ok: true });
   },
 
+  // рейтинг IMDb у фильмов (functions/_lib/imdb.js): виден всем, даже без входа; OMDb отвечает по ключу OMDB_KEY
+  async 'POST /imdb'({ env, request }) {
+    if (burst('imdb:' + clientIp(request), 40, 60e3)) return tooMany(1);
+    const { items } = await readBody(request);
+    if (!Array.isArray(items)) return fail(400, 'Нужен список фильмов.');
+    return json({ items: await imdbLookup(env, items), on: !!env.OMDB_KEY });
+  },
+
   // лента: свежие оценки друзей
   async 'GET /feed'({ env, me }) {
     const { results: fr } = await env.DB.prepare(
@@ -2426,7 +2435,7 @@ async function canSee(env, me, uid) {
   return !!row && row.status === 'accepted';
 }
 
-const PUBLIC = new Set(['POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid']);
+const PUBLIC = new Set(['POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid']);
 // код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности
 const SHARE_RE = /^[A-Za-z0-9]{12}$/;
 function shareId() {

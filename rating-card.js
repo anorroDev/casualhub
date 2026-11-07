@@ -185,6 +185,7 @@
           <p>${esc([word, n ? `${n} ${plural(n, 'критерий', 'критерия', 'критериев')}` : '', r.status, r.meta].filter(Boolean).join(' · '))}${lb ? ' · из Letterboxd' : ''}</p></div>
         <div class="rc-score"><b>${total != null ? fmt(total) : '—'}</b><small>из 10</small></div>
       </div>
+      ${window.CasualIMDb && window.CasualIMDb.isMovie(cat) ? `<div class="imdb-slot" data-imdb-row="1" data-imdb-n="${esc(r.name)}" data-imdb-y="${window.CasualIMDb.yearOf(r.meta) || ''}"></div>` : ''}
       ${scores.length ? `<ul class="rc-crit">${scores.map((s) => { const v = Math.max(0, Math.min(10, Math.round(+s.v || 0))); return `<li data-tier="${tierV(v)}">
         <div class="rc-ct"><b>${esc(s.name)}</b><span>${v || '—'}</span></div>
         ${s.desc ? `<small class="rc-desc">${esc(s.desc)}</small>` : ''}
@@ -216,6 +217,7 @@
     const paint = () => {
       box.innerHTML = cardHTML(r, uid, who, handle);
       bindTake(box, r, paint, uid);
+      if (window.CasualIMDb) window.CasualIMDb.fill(box);
       box.querySelector('.rc-x').focus({ preventScroll: true });
       // фото: ссылка сразу, загруженное — с сервера
       const pic = box.querySelector('#rcPic');

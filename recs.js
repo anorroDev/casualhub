@@ -40,7 +40,7 @@
     return `<article class="rt" data-key="${esc(x.key)}">
       ${pc}<button type="button" class="rt-x" data-rec-hide title="Не интересно" aria-label="Не интересно: ${esc(x.title)}">✕</button>
       <b class="rt-t" title="${esc(x.title)}${x.orig ? ' / ' + esc(x.orig) : ''}">${esc(x.title)}</b>
-      <small class="rt-m">${esc(meta)}</small>
+      <small class="rt-m">${esc(meta)}${x.kind === 'movie' && /^tt\d+$/.test(x.code || '') ? ` <span class="imdb-slot" data-imdb-id="${esc(x.code)}"></span>` : ''}</small>
       <small class="rt-why">${why}</small>
       <span class="rt-acts"><button type="button" class="rt-b" data-rec="plan">В планы</button><button type="button" class="rt-b primary" data-rec="rate">Оценить</button></span>
     </article>`;
@@ -54,6 +54,7 @@
     list.forEach((x) => items.set(x.key, x));
     row.innerHTML = list.map(tile).join('');
     row.scrollLeft = 0;
+    if (window.CasualIMDb) window.CasualIMDb.fill(row);
     // фото друга, загруженное файлом, подтягиваем превью
     row.querySelectorAll('[data-ph]').forEach((el) => {
       const [u, id] = el.dataset.ph.split('|');
