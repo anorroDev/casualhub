@@ -313,6 +313,8 @@ fieldset:disabled { opacity: .6; }
 
 /* Wheel stage */
 .readout { display: grid; justify-items: center; gap: 4px; margin: 10px 0 16px; min-width: 0; text-align: center; }
+.tick-row { display: inline-flex; align-items: center; justify-content: center; gap: 10px; max-width: 100%; min-width: 0; }
+#tickerImg { flex: none; width: 66px; height: 44px; border-radius: 8px; object-fit: cover; background: var(--cell); box-shadow: 0 0 0 1px var(--line); }
 #ticker { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-display); font-weight: 800; font-size: clamp(30px, 6vw, 44px); line-height: .95; }
 .wheel-wrap { position: relative; width: min(100%, 560px); max-width: 100%; aspect-ratio: 1; margin: 0 auto; container-type: inline-size; }
 #wheel { display: block; width: 100%; height: 100%; }
@@ -409,9 +411,39 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
   .opt { height: 40px; }
   .inp { font-size: 16px; }
 }
+.mnav { display: none; }
 @media (max-width: 979px) {
   body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+  .mnav {
+    position: sticky; top: env(safe-area-inset-top, 0px); z-index: 9;
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px;
+    margin-bottom: 16px; padding: 4px;
+    background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
+    box-shadow: 0 10px 24px -18px rgba(0, 0, 0, .45);
+  }
+  .mnav[hidden] { display: none; }
+  .mnav button {
+    display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 0; height: 42px; padding: 0 6px;
+    border: 0; border-radius: 10px; background: transparent; color: var(--ink-2);
+    font: inherit; font-size: 14.5px; font-weight: 600; white-space: nowrap; cursor: pointer;
+  }
+  .mnav button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+  .mnav button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .mnav b { margin-left: 5px; font-weight: 600; opacity: .6; font-variant-numeric: tabular-nums; }
   .layout[data-section="wheel"] .board, .layout[data-section="list"] .stage { display: none; }
+}
+@supports selector(:has(a)) {
+  @media (max-width: 979px) {
+    .mnav { isolation: isolate; }
+    .mnav::before {
+      content: ""; position: absolute; z-index: -1; top: 4px; bottom: 4px; left: 4px;
+      width: calc((100% - 8px - 4px) / 2); border-radius: 10px; background: var(--ink);
+      transition: transform .45s var(--spring, ease);
+    }
+    .mnav:has(button:nth-child(2)[aria-pressed="true"])::before { transform: translateX(calc(100% + 4px)); }
+    .mnav button { transition: color .25s; }
+    .mnav button[aria-pressed="true"] { background: transparent; }
+  }
 }
 @media (max-width: 560px) {
   .page { padding-block: 18px 40px; }
@@ -655,7 +687,10 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
 .lots-acts .btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 .lots-replacing { padding: 8px 10px; border-radius: 10px; background: var(--accent-soft); color: var(--ink); }
 .lots-link { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
-@media (max-width: 520px) { .lots-list li { grid-template-columns: 70px minmax(0, 1fr); } .lots-list li .lots-acts { grid-column: 1 / -1; justify-content: flex-start; } }
+@media (max-width: 560px) {
+  .total-meta strong { white-space: normal; overflow-wrap: anywhere; }
+  #tickerImg { width: 54px; height: 36px; }
+}
 .lots-opt:active:not(:disabled) { transform: scale(.98); }
 .lots-opt:disabled { cursor: default; color: var(--ink-3); }
 .lots-opt img, .lots-opt em { width: 92px; height: 43px; border-radius: 6px; object-fit: cover; background: var(--cell); }
@@ -749,6 +784,8 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
 .host-room { display: grid; gap: 12px; margin-top: 12px; padding: 12px; border: 1px dashed var(--line); border-radius: 14px; }
 .fx-mute { position: absolute; top: max(16px, env(safe-area-inset-top)); left: 16px; z-index: 2; height: 40px; padding: 0 16px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; transition: transform .22s var(--spring); }
 .fx-mute:active { transform: scale(.94); }
+/* телефон: список лотов компактнее, кнопки в той же строке */
+@media (max-width: 520px) { .lots-list li { grid-template-columns: 64px minmax(0, 1fr) auto; } .lots-list li img, .lots-list li > em { width: 64px; height: 30px; } .lots-list li .lots-acts { flex-wrap: nowrap; } }
 </style>
 <script src="/whatsnew.js"></script>
 <script src="/online.js" defer></script><script src="/friends-panel.js" defer></script><script src="/header-menu.js" defer></script>
@@ -802,7 +839,12 @@ html.unslop::before { display: none; }
     </div>
   </header>
 
-  <main class="layout" id="view">
+  <nav class="mnav" id="mnav" aria-label="Разделы">
+    <button type="button" data-section="wheel" aria-pressed="true"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="1.5"/><path d="M12 3.5v7M12 13.5v7M3.5 12h7M13.5 12h7"/></svg><span>Колесо</span></button>
+    <button type="button" data-section="list" aria-pressed="false"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12M8 12h12M8 18h12"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/></svg><span>Лоты<b id="mnavCount"></b></span></button>
+  </nav>
+
+  <main class="layout" id="view" data-section="wheel">
     <section class="card stage" id="stage" aria-labelledby="stageTitle">
       <div class="card-head">
         <h2 class="eyebrow"><span class="dot" aria-hidden="true"></span><span id="stageTitle">Колесо</span></h2>
@@ -810,7 +852,7 @@ html.unslop::before { display: none; }
 
       <div class="readout">
         <span class="label">Под стрелкой</span>
-        <strong id="ticker">—</strong>
+        <span class="tick-row"><img id="tickerImg" alt="" referrerpolicy="no-referrer" hidden><strong id="ticker">—</strong></span>
       </div>
 
       <div class="wheel-wrap">
@@ -867,7 +909,7 @@ html.unslop::before { display: none; }
         <button type="button" class="btn small primary" id="lotSound"><span class="u-old">🔊 </span>Включить звук</button>
         <label class="lots-vol"><span class="vh">Громкость</span><input type="range" id="lotVol" min="0" max="100" step="1" aria-label="Громкость"></label>
       </div>
-      <p class="lots-note lots-live-note" id="lotPlaying">Колесо показывается с задержкой в пару секунд.</p>
+      <p class="lots-note lots-live-note" id="lotPlaying">Колесо крутится у всех одновременно, как у ведущего.</p>
       <div class="mp-offscreen" aria-hidden="true"><div id="yt-bg"></div><div id="yt-win"></div></div>
     </section>
 

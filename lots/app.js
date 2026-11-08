@@ -261,7 +261,7 @@
     if (!box) return;
     const on = CH.win.active ? CH.win : CH.bg.active ? CH.bg : null;
     const p = on && presetOf(on.id);
-    box.textContent = (S.room && S.room.own ? 'Ты ведущий: крутишь здесь, зрители видят прокрутку через пару секунд.' : 'Колесо показывается с задержкой в пару секунд.') + (p ? ' Сейчас играет: ' + p.title : '') + (S.room && !S.room.own ? ' Музыка продолжит играть и на других страницах сайта, пока ты следишь за этим сбором.' : '');
+    box.textContent = (S.room && S.room.own ? 'Ты ведущий: колесо закрутится через 2–3 секунды после нажатия, у тебя и у зрителей одновременно.' : 'Колесо крутится у всех одновременно, как у ведущего.') + (p ? ' Сейчас играет: ' + p.title : '') + (S.room && !S.room.own ? ' Музыка продолжит играть и на других страницах сайта, пока ты следишь за этим сбором.' : '');
   }
   const unlock = () => {
     if (unlocked) return;
@@ -325,6 +325,33 @@
     const n = hostSegs.length + wait.length;
     return [...hostSegs.map((x) => ({ ...x, p: x.p * hostSegs.length / n })), ...wait.map((x, i) => { const c = PALETTE[(hostSegs.length + i) % PALETTE.length]; return { n: x.name, p: 1 / n, c, t: inkOn(c) }; })];
   }
+  // ---------- обложки лотов: на секторах колеса и под стрелкой ----------
+  const pics = new Map();
+  let lastPaint = null, picT = 0;
+  function picOf(seg) {
+    if (!seg) return '';
+    const lot = (seg.l && S.lots.find((x) => x.id === seg.l)) || S.lots.find((x) => x.name.toLowerCase() === String(seg.n).toLowerCase());
+    return lot && /^https:\/\//.test(lot.img || '') ? lot.img : '';
+  }
+  // картинка грузится один раз; когда загрузилась, колесо перерисовывается в том же положении
+  function picImg(url) {
+    let im = pics.get(url);
+    if (im) return im.complete && im.naturalWidth ? im : null;
+    im = new Image();
+    im.decoding = 'async';
+    im.referrerPolicy = 'no-referrer';
+    im.onload = () => { clearTimeout(picT); picT = setTimeout(() => { if (lastPaint && !tweenRaf && !pulseRaf) paint(lastPaint.segs, lastPaint.rot); }, 60); };
+    im.src = url;
+    pics.set(url, im);
+    return null;
+  }
+  // под стрелкой: название и обложка лота
+  function showTick(seg) {
+    $('#ticker').textContent = seg ? seg.n : '—';
+    const im = $('#tickerImg'), url = seg ? picOf(seg) : '';
+    if (!im) return;
+    if (url) { if (im.getAttribute('src') !== url) im.src = url; im.hidden = false; } else { im.hidden = true; im.removeAttribute('src'); }
+  }
   const place = (segs) => { let acc = 0; return segs.map((s) => { const start = acc * TAU; acc += s.p; return { ...s, start, end: acc * TAU }; }); };
   function readTheme() {
     const cs = getComputedStyle(document.documentElement);
@@ -365,17 +392,39 @@
       for (const s of segs) { const a = rot + s.start; ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(Math.cos(a) * R, Math.sin(a) * R); ctx.stroke(); }
     }
     ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
-    const inner = (hubPct / 100) * c + 6 * dpr, pad = 12 * dpr, maxW = Math.round(R - inner - pad);
+    const inner = (hubPct / 100) * c + 6 * dpr, pad = 12 * dpr;
+    lastPaint = { segs, rot };
     for (const s of segs) {
       const ang = s.end - s.start;
       const fs = Math.round(Math.min(R * 0.072, R * 0.68 * Math.min(ang, 1.2) * 0.55));
-      if (fs < 9 * dpr) continue;
-      const font = `600 ${fs}px ${FONT}`;
+      // обложка у края: высота по ширине сектора, пропорции 3:2
+      const url = picOf(s), im = url && picImg(url);
+      const ph = Math.min(R * (segs.length <= 4 ? 0.19 : segs.length <= 6 ? 0.15 : 0.115) * (canvas.clientWidth < 420 ? 0.78 : 1), 2 * (R - pad) * Math.sin(Math.min(ang, 1.2) / 2) * 0.62), pw = ph * 1.5;
+      const withPic = !!im && ph >= 15 * dpr;
+      if (fs < 9 * dpr && !withPic) continue;
       ctx.save();
       ctx.rotate(rot + (s.start + s.end) / 2);
-      const label = fit(s.n, maxW, font);
-      ctx.fillStyle = s.t;
-      ctx.fillText(label, R - pad, 0);
+      let right = R - pad;
+      if (withPic) {
+        const x = right - pw, y = -ph / 2, rr = Math.min(6 * dpr, ph * 0.18);
+        const sw = im.naturalWidth, sh = im.naturalHeight, k = Math.min(sw / 1.5, sh);
+        ctx.save();
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x, y, pw, ph, rr); else ctx.rect(x, y, pw, ph);
+        ctx.clip();
+        ctx.drawImage(im, (sw - k * 1.5) / 2, (sh - k) / 2, k * 1.5, k, x, y, pw, ph);
+        ctx.restore();
+        ctx.lineWidth = Math.max(1, dpr); ctx.strokeStyle = 'rgba(0,0,0,.35)';
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x, y, pw, ph, rr); else ctx.rect(x, y, pw, ph);
+        ctx.stroke();
+        right = x - 6 * dpr;
+      }
+      const room = Math.round(right - inner);
+      if (fs >= 9 * dpr && room > fs * 1.5) {
+        ctx.fillStyle = s.t;
+        ctx.fillText(fit(s.n, room, `600 ${fs}px ${FONT}`), right, 0);
+      }
       ctx.restore();
     }
     ctx.beginPath(); ctx.arc(0, 0, R + ring / 2, 0, TAU);
@@ -418,7 +467,7 @@
     } else if (!vid.hidden) { vid.pause(); vid.hidden = true; vid.removeAttribute('src'); vid.load(); }
     $('#lotHub').classList.toggle('has-gif', !!src);
   }
-  function setTicker(segs, rot) { const t = $('#ticker'); if (t) t.textContent = segs.length ? segAt(rot, segs).n : '—'; }
+  function setTicker(segs, rot) { showTick(segs.length ? segAt(rot, segs) : null); }
   function setSpinning(on) { $('#stage').classList.toggle('is-spinning', on); $('#lotHub').classList.toggle('spinning', on); }
   function stopMotion() { cancelAnimationFrame(spinRaf); cancelAnimationFrame(tweenRaf); cancelAnimationFrame(pulseRaf); spinRaf = tweenRaf = pulseRaf = 0; canvas.style.transform = ''; canvas.style.willChange = ''; }
   // сектор ушедшего лота сужается до нуля, соседи расступаются, как у ведущего
@@ -466,18 +515,27 @@
       paint(segs, spin.from);
       setSpinning(true);
       canvas.style.willChange = 'transform';
-      let last = segAt(spin.from, segs), nameAt = 0;
+      let last = segAt(spin.from, segs), nameAt = 0, counting = false;
       const frame = (now) => {
+        // ведущий запускает прокрутку на пару секунд вперёд, чтобы все успели её получить: до старта идёт отсчёт
+        const wait = spin.at - serverNow();
+        if (wait > 0) {
+          const sec = String(Math.ceil(wait / 1000));
+          counting = true;
+          if ($('#ticker').textContent !== sec) { $('#ticker').textContent = sec; const im = $('#tickerImg'); if (im) im.hidden = true; }
+          spinRaf = requestAnimationFrame(frame);
+          return;
+        }
         const t = reduced ? 1 : Math.min(1, (serverNow() - spin.at) / spin.ms);
         const rot = spin.from + (spin.to - spin.from) * (1 - Math.pow(1 - t, 4));
         canvas.style.transform = `rotate(${rot - spin.from}rad)`;
         const cur = segAt(rot, segs);
         if (cur !== last) { last = cur; kick(); tickSound(); }
         // как у ведущего: на большой скорости имя меняется не чаще раза в 0,3 секунды
-        if (now - nameAt >= 300) { nameAt = now; $('#ticker').textContent = last.n; }
+        if (now - nameAt >= 300 || counting) { counting = false; nameAt = now; showTick(last); }
         if (t < 1) { spinRaf = requestAnimationFrame(frame); return; }
         spinRaf = 0;
-        $('#ticker').textContent = last.n;
+        showTick(last);
         canvas.style.transform = ''; canvas.style.willChange = '';
         paint(segs, spin.to);
         setSpinning(false);
@@ -805,6 +863,7 @@
     // вылетевшие в списке лотов не показываем: они уходят в «Что выпадало по очереди»
     const rows = all.filter((l) => !out.has(l.name.toLowerCase()) && !(l.id && !String(l.id).startsWith('host:') && removed.has(l.name.toLowerCase())));
     const n = rows.length;
+    $('#mnavCount').textContent = n ? String(n) : '';
     // правки доступны, пока ведущий разрешает, сбор открыт, лот не вылетел и колесо не определило победителя
     const canEdit = !!token && !!S.room.editOwn && isOpen() && !(S.live && S.live.winner);
     // админ с открытым входом в админку и хозяин сбора удаляют любой лот и строки «Ведущий»
@@ -862,7 +921,24 @@
   function paintAll() {
     paintHead(); paintRule(); paintAdd(); paintConfirm(); paintResults(); paintList(); paintStatus(); wheel(); paintWinner(); syncBg(); watchOpen(); paintHost(); paintHist();
   }
+  // телефон: колесо и список лотов — разные вкладки, переключатель вверху
+  let section = 'wheel';
+  function paintSection() {
+    view.dataset.section = section;
+    document.querySelectorAll('#mnav [data-section]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.section === section)));
+  }
+  $('#mnav').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-section]');
+    if (!b || section === b.dataset.section) return;
+    section = b.dataset.section;
+    paintSection();
+    const y = view.getBoundingClientRect().top + window.scrollY - $('#mnav').offsetHeight - 24;
+    if (window.scrollY > y) window.scrollTo(0, Math.max(0, y));
+    if (section === 'wheel') { resize(); restSig = ''; wheel(); }
+  });
+  paintSection();
   function paintGone(text) {
+    $('#mnav').hidden = true;
     setTitle(baseTitle(), true);
     $('#lotLede').textContent = '';
     view.innerHTML = `<section class="card lots-gone"><p class="lots-empty">${esc(text)}</p><a class="btn primary" href="/wheel/">Открыть Колесо</a></section>`;
@@ -882,6 +958,7 @@
   const inList = (arr, name) => Array.isArray(arr) && arr.some((x) => low(x) === low(name));
   const isKept = (name) => inList(H.keep, name) || (S.live && inList(S.live.keep, name));
   const isKicked = (name) => inList(H.kick, name) || (S.live && inList(S.live.kick, name));
+  const LEAD = 2600;
   let hostRes = null, hostT = 0, hostArmT = 0, hostPushing = false, hostAuto = false, hostAutoT = 0;
   const isHost = () => !!(token && S.room && S.room.own);
   const canControl = () => !!(token && S.room && (S.room.own || S.admin));
@@ -961,12 +1038,13 @@
     const from = mod(live.spin ? +live.spin.to || 0 : +live.rot || 0, TAU);
     const ms = H.dur * 1000;
     const to = from + (3 + Math.round(H.dur * 0.6)) * TAU + mod(-Math.PI / 2 - a - from, TAU);
-    const at = serverNow();
+    // старт через LEAD: зрители спрашивают сервер раз в 2 секунды и успевают получить прокрутку до её начала
+    const at = Math.round(serverNow() + LEAD);
     hostRes = { name: alive[k].name, to, at, ms };
     if (CH.win.active) { stopChannel('win'); syncBg(); }
     hostPush(hostBody({ rot: from, spin: { from: +from.toFixed(4), to: +to.toFixed(4), ms, at }, pick: '', winner: H.pick === 'one' ? null : live.winner || null, status: 'Колесо крутится' }));
     clearTimeout(hostT);
-    hostT = setTimeout(hostFinish, ms + 150);
+    hostT = setTimeout(hostFinish, LEAD + ms + 150);
   }
   // прокрутка кончилась: выпавший сектор мигает, потом вылетает (или сразу побеждает в режиме «Один победитель»)
   function hostFinish() {
@@ -994,7 +1072,7 @@
           if (hostAuto && isHost() && !hostSpinning()) {
             hostSpin();
           }
-        }, 2400);
+        }, 900);
       }
     }, 1100);
   }
@@ -1264,11 +1342,22 @@
 
   // ---------- связь с сервером ----------
   let pollT = 0, pollSeq = 0;
+  // часы сервера: ответ шёл туда и обратно, поэтому время сервера — на середине пути. Из последних ответов берём
+  // самый быстрый (у него меньше всего погрешность), а во время прокрутки поправку не трогаем, чтобы колесо не дёргалось
+  const clock = [];
+  function clockSample(now, t0, t1) {
+    if (!+now) return;
+    clock.push({ off: now - (t0 + t1) / 2, rtt: t1 - t0 });
+    if (clock.length > 10) clock.shift();
+    if (spinRaf && clock.length > 1) return;
+    S.offset = clock.reduce((a, b) => (b.rtt < a.rtt ? b : a)).off;
+  }
   async function poll() {
     clearTimeout(pollT);
     // опрос один: устаревший ответ не затирает свежий и не запускает второй круг
     const seq = ++pollSeq;
     let d = null;
+    const t0 = Date.now();
     try { d = await api(`/lots/${encodeURIComponent(code)}${S.room ? '?v=' + S.room.ver : ''}`); }
     catch (e) {
       if (seq !== pollSeq) return;
@@ -1276,7 +1365,7 @@
     }
     if (seq !== pollSeq) return;
     if (d) {
-      S.offset = d.now - Date.now();
+      clockSample(d.now, t0, Date.now());
       S.room = d.room;
       S.live = d.live;
       if (d.live) {
