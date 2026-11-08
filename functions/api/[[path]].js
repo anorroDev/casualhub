@@ -1999,7 +1999,9 @@ function cleanLive(b) {
     hubOwn: b && /^g[a-z0-9]{1,30}$/.test(String(b.hubOwn)) ? b.hubOwn : '',
     seen: Math.max(0, Math.min(MAX_LOTS, Math.round(finite(b && b.seen)))),
     ...(Array.isArray(b && b.ids) ? { ids: b.ids.slice(0, MAX_LOTS).map(String).filter((x) => /^[0-9a-f]{16}$/.test(x)) } : {}),
-    music: { bg: lotTrack(b && b.music && b.music.bg), win: lotTrack(b && b.music && b.music.win) },
+    // музыка ведущего: трек, позиция в секундах на момент at (часы сервера), пауза и автопереключение
+    music: (() => { const m = (b && b.music) || {}; return { bg: lotTrack(m.bg), win: lotTrack(m.win), cur: lotTrack(m.cur), pos: Math.max(0, Math.min(36000, finite(m.pos))), at: finite(m.at), pause: m.pause === true, auto: m.auto !== false }; })(),
+    pics: !(b && b.pics === false),
     status: clip(b && b.status, 140),
     out: (Array.isArray(b && b.out) ? b.out : []).slice(0, MAX_LOTS).map((x) => clip(x, LOT_NAME)),
     // что выпадало по очереди: каждый итог прокрутки (вылет или победа в режиме «Один победитель»)

@@ -162,7 +162,14 @@
     }
     return EMB.ready[ch];
   }
-  const applyVolume = (ch) => { try { if (EMB.yt[ch] && EMB.yt[ch].setVolume) EMB.yt[ch].setVolume(Math.round(volume() * (ch === 'bg' ? 0.6 : 1) * 100)); } catch (e) {} };
+  const applyVolume = (ch) => {
+    try {
+      const y = EMB.yt[ch];
+      if (!y || !y.setVolume) return;
+      y.setVolume(Math.round(volume() * (ch === 'bg' ? 0.6 : 1) * 100));
+      if (canPlay()) y.unMute(); else y.mute();
+    } catch (e) {}
+  };
   // hard — YouTube ответил ошибкой; иначе просто не дождались звука (браузер не пустил)
   function channelFailed(ch, hard) {
     const c = CH[ch];
@@ -181,7 +188,11 @@
   function channelEnded(ch) {
     const c = CH[ch];
     if (!c.active) return;
-    if (c.loop) { try { EMB.yt[ch].seekTo(c.start || 0); EMB.yt[ch].playVideo(); } catch (e) {} return; }
+    if (c.loop) {
+      try { EMB.yt[ch].seekTo(c.start || 0); EMB.yt[ch].playVideo(); } catch (e) {}
+      if (ch === 'bg' && hostSide()) hostMusicPush({ pos: c.start || 0 });
+      return;
+    }
     stopChannel(ch);
     if (ch === 'bg') bgNext(false); // фон идёт подряд: за этим треком следующий из списка
     if (ch === 'win') syncBg();
@@ -189,13 +200,14 @@
   async function playChannel(ch, p, opts = {}) {
     const c = CH[ch];
     Object.assign(c, { active: true, id: p.id, loop: !!opts.loop, onFail: opts.onFail || null, alts: (p.alt || []).slice(), start: p.start || 0 });
+    const from = opts.at != null ? opts.at : p.start || 0;
     paintPlaying();
     try {
       const y = await ytPlayer(ch);
       if (!c.active || c.id !== p.id) return;
       applyVolume(ch);
-      if (EMB.cued[ch] === p.key) y.seekTo(p.start || 0, true);
-      else y.loadVideoById({ videoId: p.key, startSeconds: p.start || 0 });
+      if (EMB.cued[ch] === p.key) y.seekTo(from, true);
+      else y.loadVideoById({ videoId: p.key, startSeconds: from });
       EMB.cued[ch] = null;
       y.playVideo();
       // телефоны молча блокируют звук: если трек так и не заиграл, на победе звучит стандартная фанфара
@@ -207,29 +219,99 @@
       }, 4000);
     } catch (e) { channelFailed(ch); }
   }
-  const liveMusic = () => (S.live && S.live.music) || {};
+  // музыка ведущего: какой трек (cur), с какой секунды (pos) в момент at по часам сервера, на паузе ли, переключать ли треки сами (auto)
+  function normMusic(m) {
+    m = m || {};
+    const bg = m.bg && m.bg !== 'vika' && presetOf(m.bg) ? m.bg : '';
+    const cur = bg && m.cur && m.cur !== 'vika' && presetOf(m.cur) ? m.cur : bg;
+    return { bg, win: 'vika', cur, pos: +m.pos || 0, at: +m.at || 0, pause: !!m.pause, auto: m.auto !== false };
+  }
+  const liveMusic = () => normMusic(S.live && S.live.music);
+  const hostSide = () => !!(token && S.room && S.room.own);
+  // где сейчас трек по часам ведущего, в секундах видео
+  function musicAt(m) {
+    if (!m.at) return (presetOf(m.cur) || {}).start || 0;
+    return m.pause ? m.pos : m.pos + Math.max(0, serverNow() - m.at) / 1000;
+  }
   // фон: с трека, который выбрал ведущий, дальше подряд по списку и по кругу. VI KA — только песня победы.
   // Трек, который YouTube не даёт играть на чужом сайте (ошибка 150), пропускается до следующей смены фона
   const BG_LIST = PRESETS.filter((p) => p.id !== 'vika');
-  const BG = { chosen: '', cur: '', bad: new Set() };
+  const BG = { key: '', cur: '', local: false, bad: new Set(), dur: {} };
+  function nextTrack(id) {
+    const i = BG_LIST.findIndex((p) => p.id === id);
+    for (let k = 1; k <= BG_LIST.length; k++) { const p = BG_LIST[(i + k + BG_LIST.length) % BG_LIST.length]; if (!BG.bad.has(p.id)) return p.id; }
+    return '';
+  }
   function bgNext(failed) {
     if (failed && BG.cur) BG.bad.add(BG.cur);
-    const i = BG_LIST.findIndex((p) => p.id === BG.cur);
-    let next = '';
-    for (let k = 1; k <= BG_LIST.length; k++) { const p = BG_LIST[(i + k + BG_LIST.length) % BG_LIST.length]; if (!BG.bad.has(p.id)) { next = p.id; break; } }
-    BG.cur = next;
+    const next = nextTrack(BG.cur);
+    // ведущий объявляет следующий трек всем; зритель, если ведущий ещё не успел, переходит сам и потом сверяется
+    if (hostSide() && next) { hostMusicPush({ cur: next, pause: false }); return; }
+    BG.cur = next; BG.local = true; BG.localAt = Date.now();
     syncBg();
   }
-  // фон играет, пока его выбрал ведущий и не звучит трек победы
+  // фон играет, пока его выбрал ведущий, он не на паузе и не звучит трек победы. Позиция — по часам ведущего
   function syncBg() {
-    const m = liveMusic().bg;
-    const chosen = m && m !== 'vika' && presetOf(m) ? m : '';
-    if (chosen !== BG.chosen) { BG.chosen = chosen; BG.cur = chosen; BG.bad.clear(); if (CH.bg.active) stopChannel('bg'); }
+    const m = liveMusic();
+    const key = [m.bg, m.cur, m.at, m.pause].join('|');
+    if (key !== BG.key) { BG.key = key; BG.cur = m.cur; BG.local = false; if (!m.bg) BG.bad.clear(); }
+    // свой трек — только мостик, пока ведущий не объявит следующий; потом снова как у ведущего (если его трек здесь играет)
+    if (BG.local && m.cur && m.cur !== BG.cur && !BG.bad.has(m.cur) && Date.now() - (BG.localAt || 0) > 6000) { BG.cur = m.cur; BG.local = false; }
     const p = presetOf(BG.cur);
-    if (!canPlay() || !p || EMB.failed || CH.win.active) { if (CH.bg.active) stopChannel('bg'); return; }
-    if (CH.bg.active && CH.bg.id === p.id) return;
+    if (!(canPlay() || hostSide()) || !p || EMB.failed || CH.win.active || m.pause) { if (CH.bg.active) stopChannel('bg'); paintTrack(); return; }
+    if (CH.bg.active && CH.bg.id === p.id) {
+      CH.bg.loop = !m.auto;
+      applyVolume('bg');
+      // разошлись больше чем на 2,5 секунды (перемотка ведущего, фоновая вкладка) — догоняем
+      const y = EMB.yt.bg, want = musicAt(m), dur = BG.dur[p.id] || 0;
+      if (!BG.local && y && y.getCurrentTime && (!dur || want < dur - 1)) {
+        try { const st = y.getPlayerState(); if ((st === 1 || st === 2) && Math.abs(y.getCurrentTime() - want) > 2.5) y.seekTo(want, true); } catch (e) {}
+      }
+      paintTrack();
+      return;
+    }
     // не дождались звука — повторим при следующем обновлении; ошибка YouTube — следующий трек
-    playChannel('bg', p, { onFail: (hard) => { if (hard) bgNext(true); } });
+    playChannel('bg', p, { loop: !m.auto, at: BG.local ? p.start || 0 : musicAt(m), onFail: (hard) => { if (hard) bgNext(true); } });
+    paintTrack();
+  }
+  const tsec = (s) => { s = Math.max(0, Math.floor(s || 0)); const h = Math.floor(s / 3600), mi = Math.floor(s / 60) % 60, se = String(s % 60).padStart(2, '0'); return h ? `${h}:${String(mi).padStart(2, '0')}:${se}` : `${mi}:${se}`; };
+  // что играет и где: у ведущего — полоса с перемоткой, у зрителей — та же полоса без управления
+  let seeking = false;
+  function paintTrack() {
+    const m = liveMusic(), id = BG.cur || m.cur, p = m.bg && presetOf(id);
+    const y = EMB.yt.bg;
+    let pos = musicAt(m);
+    if (CH.bg.active && CH.bg.id === id && y && y.getCurrentTime) { try { pos = y.getCurrentTime() || pos; const d = y.getDuration(); if (d > 0) BG.dur[id] = d; } catch (e) {} }
+    const dur = (p && BG.dur[id]) || 0;
+    const host = hostSide();
+    const hp = $('#hostPlayer');
+    if (hp) {
+      hp.hidden = !host || !p;
+      if (host && p) {
+        $('#hostTrack').textContent = p.title;
+        const pb = $('#hostPlay');
+        pb.innerHTML = m.pause ? PLAY_IC : PAUSE_IC;
+        pb.setAttribute('aria-label', m.pause ? 'Продолжить музыку для всех' : 'Пауза для всех');
+        pb.title = pb.getAttribute('aria-label');
+        $('#hostAutoNext').checked = m.auto;
+        const sk = $('#hostSeek');
+        sk.disabled = !dur;
+        sk.max = String(Math.round(dur) || 1);
+        if (!seeking) { sk.value = String(Math.round(Math.min(pos, dur || pos))); $('#hostPos').textContent = tsec(pos); }
+        $('#hostDurT').textContent = dur ? tsec(dur) : '—:—';
+        sk.style.setProperty('--fill', dur ? Math.min(100, (seeking ? +sk.value : pos) / dur * 100).toFixed(2) + '%' : '0%');
+      }
+    }
+    const vt = $('#lotTrack');
+    if (vt) {
+      vt.hidden = host || !p;
+      if (!host && p) {
+        $('#lotTrackName').textContent = (m.pause ? 'На паузе: ' : '') + p.title;
+        $('#lotTrackPos').textContent = tsec(pos);
+        $('#lotTrackDur').textContent = dur ? tsec(dur) : '—:—';
+        $('#lotTrackBar').style.width = dur ? Math.min(100, pos / dur * 100).toFixed(2) + '%' : '0%';
+      }
+    }
   }
   // песню победы подгружаем заранее: на победе она заиграет сразу
   function cueWin() {
@@ -328,8 +410,9 @@
   // ---------- обложки лотов: на секторах колеса и под стрелкой ----------
   const pics = new Map();
   let lastPaint = null, picT = 0;
+  const picsOn = () => !(S.live && S.live.pics === false);
   function picOf(seg) {
-    if (!seg) return '';
+    if (!seg || !picsOn()) return '';
     const lot = (seg.l && S.lots.find((x) => x.id === seg.l)) || S.lots.find((x) => x.name.toLowerCase() === String(seg.n).toLowerCase());
     return lot && /^https:\/\//.test(lot.img || '') ? lot.img : '';
   }
@@ -495,9 +578,12 @@
     };
     tweenRaf = requestAnimationFrame(frame);
   }
+  let lastPics = true;
   function wheel() {
     if (!canvas) return;
     const live = S.live || { rot: 0 };
+    // ведущий включил или выключил обложки: колесо перерисовывается
+    if (picsOn() !== lastPics) { lastPics = picsOn(); restSig = ''; if (!spinRaf && lastPaint) paint(lastPaint.segs, lastPaint.rot); }
     hubPct = +live.hub || 24;
     $('.wheel-wrap').style.setProperty('--hub', hubPct + '%');
     paintHubImg(live.hubOwn ? `/api/lots/${encodeURIComponent(code)}/hub?v=${encodeURIComponent(live.hubOwn)}` : live.hubImg || '');
@@ -990,6 +1076,7 @@
       hist: Array.isArray(live.hist) ? live.hist : [],
       keep: Array.isArray(H.keep) ? H.keep : [],
       kick: Array.isArray(H.kick) ? H.kick : [],
+      pics: live.pics !== false,
     }, over);
   }
   const hostMsg = (t) => { const m = $('#hostMsg'); if (m) { m.textContent = t || ''; m.hidden = !t; } };
@@ -1160,7 +1247,19 @@
   // как в Колесе: VI KA звучит только на победе, фоном её не поставить
   const WIN_TRACK = 'vika';
   const presetOpts = (cur, none) => (none ? `<option value=""${cur ? '' : ' selected'}>Без музыки</option>` : '') + PRESETS.filter((p) => (none ? p.id !== WIN_TRACK : p.id === WIN_TRACK)).map((p) => `<option value="${p.id}"${p.id === cur ? ' selected' : ''}>${esc(p.title)}</option>`).join('');
-  const hostMusic = (m) => ({ bg: m && m.bg && m.bg !== WIN_TRACK && presetOf(m.bg) ? m.bg : '', win: WIN_TRACK });
+  const hostMusic = (m) => normMusic(m);
+  const PLAY_IC = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>', PAUSE_IC = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><rect x="6.5" y="5" width="4" height="14" rx="1"/><rect x="13.5" y="5" width="4" height="14" rx="1"/></svg>';
+  // музыка меняется сразу, даже во время прокрутки: снимок колеса уходит тот же, меняется только музыка
+  function hostMusicPush(patch) {
+    if (!canControl()) return;
+    const live = S.live || {};
+    const cur = normMusic(live.music);
+    const m = Object.assign({}, cur, { pos: musicAt(cur), at: Math.round(serverNow()) }, patch);
+    if (patch.cur && patch.pos == null) m.pos = (presetOf(patch.cur) || {}).start || 0;
+    if (patch.bg != null && !patch.cur) { m.cur = patch.bg; m.pos = (presetOf(patch.bg) || {}).start || 0; m.pause = false; }
+    const keep = hostSpinning() ? { spin: live.spin, rot: +live.rot || 0 } : {};
+    hostPush(hostBody(Object.assign({ music: m, pick: live.pick || '', status: live.status || '' }, keep)));
+  }
   function paintHost() {
     const panel = $('#hostPanel'), room = $('#hostRoom');
     if (!panel || !room) return;
@@ -1183,13 +1282,14 @@
         }
         const activeKeep = (S.live && Array.isArray(S.live.keep)) ? S.live.keep : H.keep;
         const activeKick = (S.live && Array.isArray(S.live.kick)) ? S.live.kick : H.kick;
-        const row = (name, kind) => {
-          const on = kind === 'keep' ? inList(activeKeep, name) : inList(activeKick, name);
-          return `<label class="lots-chk"><input type="checkbox" data-force-lot="${esc(name)}" data-force-kind="${kind}"${on ? ' checked' : ''}><span>${esc(name)}</span></label>`;
+        const row = (l, kind) => {
+          const name = l.name, on = kind === 'keep' ? inList(activeKeep, name) : inList(activeKick, name);
+          const pic = /^https:\/\//.test(l.img || '') ? `<img class="hf-pic" src="${esc(l.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<em class="hf-pic" aria-hidden="true">${esc([...name][0] || '?')}</em>`;
+          return `<label class="lots-chk hf-row"><input type="checkbox" data-force-lot="${esc(name)}" data-force-kind="${kind}"${on ? ' checked' : ''}>${pic}<span>${esc(name)}</span></label>`;
         };
         const keepBox = $('#hostForceKeep'), kickBox = $('#hostForceKick');
-        const keepHtml = aliveList.length ? aliveList.map((l) => row(l.name, 'keep')).join('') : '<span class="host-force-empty">Пока пусто</span>';
-        const kickHtml = aliveList.length ? aliveList.map((l) => row(l.name, 'kick')).join('') : '<span class="host-force-empty">Пока пусто</span>';
+        const keepHtml = aliveList.length ? aliveList.map((l) => row(l, 'keep')).join('') : '<span class="host-force-empty">Пока пусто</span>';
+        const kickHtml = aliveList.length ? aliveList.map((l) => row(l, 'kick')).join('') : '<span class="host-force-empty">Пока пусто</span>';
         if (keepBox && keepBox.dataset.sig !== keepHtml) { keepBox.dataset.sig = keepHtml; keepBox.innerHTML = keepHtml; }
         if (kickBox && kickBox.dataset.sig !== kickHtml) { kickBox.dataset.sig = kickHtml; kickBox.innerHTML = kickHtml; }
       }
@@ -1228,6 +1328,9 @@
     }
     if (durVal) durVal.textContent = `${H.dur} с`;
     const m = hostMusic(live.music);
+    const pics = $('#hostPics');
+    if (pics) pics.checked = live.pics !== false;
+    paintTrack();
     const bg = $('#hostBg'), win = $('#hostWin');
     if (bg.dataset.v !== m.bg) { bg.dataset.v = m.bg; bg.innerHTML = presetOpts(m.bg, true); }
     if (win.dataset.v !== m.win) { win.dataset.v = m.win; win.innerHTML = presetOpts(m.win, false); }
@@ -1298,9 +1401,22 @@
       if (durVal) durVal.textContent = `${v} с`;
       keepHost();
     });
-    const music = () => { if (!canControl() || hostSpinning()) { paintHost(); return; } const m = { bg: $('#hostBg').value, win: $('#hostWin').value }; hostPush(hostBody({ music: m })); };
-    $('#hostBg').addEventListener('change', music);
-    $('#hostWin').addEventListener('change', music);
+    $('#hostBg').addEventListener('change', (e) => hostMusicPush({ bg: e.target.value }));
+    $('#hostWin').addEventListener('change', () => hostMusicPush({}));
+    // пауза и продолжение для всех: позиция замирает и идёт дальше с того же места
+    $('#hostPlay').addEventListener('click', () => { const m = liveMusic(); hostMusicPush({ pause: !m.pause }); });
+    $('#hostNext').addEventListener('click', () => { const m = liveMusic(); const n = nextTrack(BG.cur || m.cur); if (n) hostMusicPush({ cur: n, pause: false }); });
+    $('#hostAutoNext').addEventListener('change', (e) => hostMusicPush({ auto: e.target.checked }));
+    // перемотка: пока тянешь, полоса не прыгает; отпустил — все переходят на это место
+    const sk = $('#hostSeek');
+    sk.addEventListener('input', () => { seeking = true; $('#hostPos').textContent = tsec(+sk.value); sk.style.setProperty('--fill', (+sk.value / (+sk.max || 1) * 100).toFixed(2) + '%'); });
+    sk.addEventListener('change', () => { seeking = false; const v = +sk.value; try { if (CH.bg.active && EMB.yt.bg) EMB.yt.bg.seekTo(v, true); } catch (e) {} hostMusicPush({ pos: v }); });
+    $('#hostPics').addEventListener('change', (e) => {
+      if (!canControl()) return;
+      const live = S.live || {};
+      const keep = hostSpinning() ? { spin: live.spin, rot: +live.rot || 0 } : {};
+      hostPush(hostBody(Object.assign({ pics: e.target.checked, pick: live.pick || '', status: live.status || '' }, keep)));
+    });
     $('#hostForceWrap')?.addEventListener('change', async (e) => {
       const inp = e.target.closest('input[data-force-lot]');
       if (!inp || !S.admin) return;
@@ -1391,6 +1507,7 @@
     if (was !== 'off' && !isOpen()) { paintAdd(); paintList(); }
     watchOpen();
     paintHost(); // время сбора на пульте идёт каждую секунду
+    syncBg();
   }, 1000);
 
   // лот уходит на сервер только после подтверждения; replace — id своего лота, который заменяем

@@ -784,6 +784,32 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
 .host-room { display: grid; gap: 12px; margin-top: 12px; padding: 12px; border: 1px dashed var(--line); border-radius: 14px; }
 .fx-mute { position: absolute; top: max(16px, env(safe-area-inset-top)); left: 16px; z-index: 2; height: 40px; padding: 0 16px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); color: var(--ink); font: inherit; font-size: 14px; font-weight: 700; cursor: pointer; transition: transform .22s var(--spring); }
 .fx-mute:active { transform: scale(.94); }
+/* музыка: плеер ведущего и полоса трека у зрителей */
+.host-player { display: grid; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); }
+.hp-row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 10px; }
+.hp-btn { width: 40px; height: 40px; padding: 0; display: inline-grid; place-items: center; }
+.hp-mid { display: grid; gap: 4px; min-width: 0; }
+.hp-name { font-size: 13.5px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hp-bar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.hp-seek { --fill: 0%; width: 100%; height: 18px; margin: 0; background: transparent; accent-color: var(--accent); cursor: pointer; -webkit-appearance: none; appearance: none; }
+.hp-seek::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: linear-gradient(to right, var(--accent) var(--fill), var(--line) var(--fill)); }
+.hp-seek::-moz-range-track { height: 4px; border-radius: 4px; background: var(--line); }
+.hp-seek::-moz-range-progress { height: 4px; border-radius: 4px; background: var(--accent); }
+.hp-seek::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border-radius: 50%; background: var(--accent); border: 0; }
+.hp-seek::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--accent); border: 0; }
+.hp-seek:disabled { cursor: default; opacity: .5; }
+.hp-seek:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 6px; }
+.host-pics { margin-top: 2px; }
+.lots-track { display: grid; gap: 4px; width: min(100%, 420px); margin: 10px auto 0; }
+.lots-track[hidden] { display: none; }
+.lt-line { height: 4px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.lt-line i { display: block; height: 100%; width: 0; background: var(--accent); transition: width 1s linear; }
+.hf-row { align-items: center !important; }
+.hf-pic { flex: none; width: 46px; height: 22px; border-radius: 4px; object-fit: cover; background: var(--cell); display: grid; place-items: center; font-style: normal; font-size: 12px; font-weight: 800; color: var(--accent); }
+.hf-row { min-width: 0; }
+.hf-row span { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#hostForceKeep, #hostForceKick { overflow-x: hidden; }
+.host-force-col { min-width: 0; }
 /* телефон: список лотов компактнее, кнопки в той же строке */
 @media (max-width: 520px) { .lots-list li { grid-template-columns: 64px minmax(0, 1fr) auto; } .lots-list li img, .lots-list li > em { width: 64px; height: 30px; } .lots-list li .lots-acts { flex-wrap: nowrap; } }
 </style>
@@ -883,6 +909,18 @@ html.unslop::before { display: none; }
             <label class="lots-f">Фон для всех<select class="inp" id="hostBg"></select></label>
             <label class="lots-f">Песня победы<select class="inp" id="hostWin"></select></label>
           </div>
+          <div class="host-player" id="hostPlayer" hidden>
+            <div class="hp-row">
+              <button type="button" class="btn small ghost hp-btn" id="hostPlay" aria-label="Пауза для всех"></button>
+              <div class="hp-mid">
+                <b class="hp-name" id="hostTrack"></b>
+                <div class="hp-bar"><span id="hostPos">0:00</span><input type="range" class="hp-seek" id="hostSeek" min="0" max="1" step="1" value="0" aria-label="Перемотка трека для всех"><span id="hostDurT">—:—</span></div>
+              </div>
+              <button type="button" class="btn small ghost hp-btn" id="hostNext" aria-label="Следующий трек" title="Следующий трек"><svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M5.5 5.5v13l9-6.5z"/><rect x="16" y="5.5" width="2.6" height="13" rx="1"/></svg></button>
+            </div>
+            <label class="lots-chk"><input type="checkbox" id="hostAutoNext" checked><span>Переключать треки сами: после конца трека — следующий. Без галочки трек повторяется</span></label>
+          </div>
+          <label class="lots-chk host-pics"><input type="checkbox" id="hostPics" checked><span>Обложки лотов на колесе</span></label>
         </div>
         <details class="host-more">
           <summary>Картинка в центре <svg class="chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></summary>
@@ -908,6 +946,10 @@ html.unslop::before { display: none; }
       <div class="lots-sound">
         <button type="button" class="btn small primary" id="lotSound"><span class="u-old">🔊 </span>Включить звук</button>
         <label class="lots-vol"><span class="vh">Громкость</span><input type="range" id="lotVol" min="0" max="100" step="1" aria-label="Громкость"></label>
+      </div>
+      <div class="lots-track" id="lotTrack" hidden>
+        <b class="hp-name" id="lotTrackName"></b>
+        <div class="hp-bar"><span id="lotTrackPos">0:00</span><span class="lt-line"><i id="lotTrackBar"></i></span><span id="lotTrackDur">—:—</span></div>
       </div>
       <p class="lots-note lots-live-note" id="lotPlaying">Колесо крутится у всех одновременно, как у ведущего.</p>
       <div class="mp-offscreen" aria-hidden="true"><div id="yt-bg"></div><div id="yt-win"></div></div>
