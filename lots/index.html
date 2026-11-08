@@ -271,6 +271,8 @@ svg { flex: none; }
 }
 
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+/* «Вернуть всех» в шапке колеса — только у ведущего, как в Колесе Казуала */
+#hostReset[hidden] { display: none; }
 .eyebrow { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
 .eyebrow .dot { width: 9px; height: 9px; border-radius: 2px; background: var(--accent); transition: background-color .15s; }
 .stage.is-spinning .eyebrow .dot { background: var(--mid); }
@@ -886,6 +888,7 @@ html.unslop::before { display: none; }
     <section class="card stage" id="stage" aria-labelledby="stageTitle">
       <div class="card-head">
         <h2 class="eyebrow"><span class="dot" aria-hidden="true"></span><span id="stageTitle">Колесо</span></h2>
+        <button type="button" class="btn text" id="hostReset" hidden>Вернуть всех</button>
       </div>
 
       <div class="readout">
@@ -912,7 +915,6 @@ html.unslop::before { display: none; }
         <div class="host-main">
           <button type="button" class="btn primary" id="hostSpin">Крутить</button>
           <button type="button" class="btn ghost" id="hostAutoSpin">Крутить до победителя</button>
-          <button type="button" class="btn ghost" id="hostReset">Вернуть всех</button>
         </div>
         <div class="host-opts">
           <div class="lots-f"><span>Как выбирать</span><div class="seg" id="hostPick" role="group" aria-label="Как выбирать"><button type="button" data-pick="out" aria-pressed="true">На выбывание</button><button type="button" data-pick="one" aria-pressed="false">Один победитель</button></div></div>

@@ -1266,6 +1266,7 @@
     const host = isHost(), admin = !!S.admin;
     panel.hidden = !host;
     room.hidden = !host;
+    $('#hostReset').hidden = !host;
 
     // Настройка лотов: доступна только администраторам
     const forceWrap = $('#hostForceWrap');
