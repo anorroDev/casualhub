@@ -711,7 +711,19 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
 .lots-who b { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lots-who small { font-size: 12.5px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lots-empty { margin: 14px 0; font-size: 14px; color: var(--ink-2); text-align: center; }
-.lots-hub { cursor: default; pointer-events: none; }
+/* центр колеса — кнопка «Крутить», как в Колесе; нажать может только ведущий, у зрителей там только картинка */
+.lots-hub:not(.can-spin) { cursor: default; pointer-events: none; }
+.lots-hub:not(.can-spin) .hub-label { display: none; }
+.lots-hub:disabled:not(.has-gif) { background: var(--accent); }
+.lots-hub.can-spin:disabled:not(.has-gif) { background: var(--cell); }
+.hub.has-gif .hub-label {
+  position: absolute; left: 50%; bottom: 9%; transform: translateX(-50%); white-space: nowrap;
+  padding: .2em .7em .25em; border-radius: 999px; background: var(--accent); color: var(--panel);
+  font-size: clamp(13px, 3.2cqw, 19px); transition: opacity .2s;
+  box-shadow: 0 3px 8px -2px color-mix(in srgb, var(--ink) 55%, transparent);
+}
+.hub.has-gif:disabled:not(.spinning) .hub-label { background: var(--cell); color: var(--ink-3); }
+.hub.spinning .hub-label { opacity: 0; }
 .lots-gone { grid-column: 1 / -1; display: grid; justify-items: center; gap: 14px; text-align: center; }
 .lots-gone .lots-empty { margin: 8px 0 0; }
 .lots-gone a { text-decoration: none; }
@@ -884,7 +896,7 @@ html.unslop::before { display: none; }
       <div class="wheel-wrap">
         <svg class="pointer" id="pointer" viewBox="0 0 40 48" aria-hidden="true"><path d="M4 3h32L20 45z"/></svg>
         <canvas id="wheel" aria-label="Колесо ведущего"></canvas>
-        <div class="hub lots-hub" id="lotHub"><img id="hubImg" alt="" hidden><video id="hubVid" muted loop playsinline hidden></video></div>
+        <button type="button" class="hub lots-hub" id="lotHub" disabled><img id="hubImg" alt="" hidden><video id="hubVid" muted loop playsinline hidden></video><span class="hub-label" id="hubLabel">Крутить</span></button>
       </div>
 
       <div class="scorebar">

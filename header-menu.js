@@ -61,6 +61,9 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
 .hs-lab { font-size: 11.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3, #8b8f9c); }
 .hs-it { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line, #2b2e38); border-radius: 14px; background: var(--panel-2, #23262f); color: var(--ink, #f3f4f6); text-decoration: none; transition: border-color .15s, transform .15s; }
 .hs-it:hover { border-color: var(--accent, #3550E8); transform: translateY(-1px); }
+.hs-tg { cursor: pointer; }
+.hs-tg:hover { transform: none; }
+.hs-tg input { flex: none; width: 20px; height: 20px; margin: 0 2px 0 auto; accent-color: var(--accent, #3550E8); cursor: pointer; }
 .hs-ic { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 20px; background: color-mix(in srgb, var(--accent, #3550E8) 16%, transparent); }
 .hs-t { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .hs-t b { font-size: 14.5px; }
@@ -100,6 +103,8 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
       { icon: '<span class="u-old">🔄</span><svg class="u-new" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.6-4.5L3.5 9M3.5 4v5h5M4 13a8 8 0 0 0 14.6 4.5l1.9-2.5M20.5 20v-5h-5"/></svg>', name: 'Обновить обложки и названия', desc: 'Подтянуть к сохранённым оценкам обложки, русские названия, год и жанры', href: '/opinion/#refresh', attr: 'data-refresh-open' },
     ] },
   ];
+  const EX_KEY = 'casualhub.examples.v1';
+  const examplesOn = () => { try { return localStorage.getItem(EX_KEY) !== '0'; } catch (e) { return true; } };
   const escH = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   let setBox = null;
   function openSettings() {
@@ -111,11 +116,18 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
         <div class="hs-head"><h2 id="hsTitle"><span class="u-old">⚙️ </span>Настройки</h2><button type="button" class="hs-x" data-hs="close" aria-label="Закрыть">✕</button></div>
         <div class="hs-body">${SETTINGS.map((sec) => `<section class="hs-sec"><span class="hs-lab">${escH(sec.title)}</span>
           ${sec.items.map((it) => `<a class="hs-it" href="${escH(it.href)}" ${it.attr}><span class="hs-ic" aria-hidden="true">${it.icon}</span><span class="hs-t"><b>${escH(it.name)}</b><small>${escH(it.desc)}</small></span><span class="hs-go" aria-hidden="true">›</span></a>`).join('')}</section>`).join('')}
+          <section class="hs-sec"><span class="hs-lab">Примеры</span>
+          <label class="hs-it hs-tg"><span class="hs-t"><b>Показывать примеры</b><small>Пример участников в пустом Колесе при первом заходе. Выключишь — он уберётся и больше не появится</small></span><input type="checkbox" data-examples${examplesOn() ? ' checked' : ''}></label></section>
           <p class="hs-note">Скоро здесь появятся и другие настройки.</p></div></div>`;
       document.body.appendChild(setBox);
+      // настройка общая для всего сайта: хранится в браузере, страница (Колесо) узнаёт о ней сразу
+      setBox.querySelector('[data-examples]').addEventListener('change', (e) => {
+        try { localStorage.setItem(EX_KEY, e.target.checked ? '1' : '0'); } catch (er) {}
+        window.dispatchEvent(new CustomEvent('casualhub:examples', { detail: e.target.checked }));
+      });
       setBox.addEventListener('click', (e) => {
         // пункт: окно закрывается, а сам пункт открывает своё окно (в Мнении) или ведёт туда
-        if (e.target === setBox || e.target.closest('[data-hs="close"], .hs-it')) closeSettings();
+        if (e.target === setBox || e.target.closest('[data-hs="close"], a.hs-it')) closeSettings();
       });
       document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && setBox && !setBox.hidden) closeSettings(); });
     }

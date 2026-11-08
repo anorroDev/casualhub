@@ -352,6 +352,53 @@
     rest.forEach((n) => picIO.observe(n));
   }
 
+  // ---------- обложки на колесе: у участников, добавленных из «В планах» ----------
+  const wheelPics = new Map(); // ссылка → Image
+  const itemSrc = new Map(); // id оценки → картинка ('' — нет), пока ищется — Promise
+  let picRepaint = 0;
+  function planRating(id) {
+    if (planById.has(id)) return planById.get(id);
+    const own = (readLS(PLAN_RATINGS_KEY, []) || []).find((r) => r && String(r.id) === id);
+    return own || (plansRemote ? plansRemote.ratings.find((r) => r && String(r.id) === id) : null) || null;
+  }
+  function picImg(url) {
+    let im = wheelPics.get(url);
+    if (im) return im.complete && im.naturalWidth ? im : null;
+    im = new Image();
+    im.decoding = 'async';
+    im.referrerPolicy = 'no-referrer';
+    // догрузилась — колесо перерисуется, когда стоит (во время прокрутки canvas только поворачивается)
+    im.onload = () => { clearTimeout(picRepaint); picRepaint = setTimeout(() => { if (!S.spinning) { draw(); updateTicker(); } }, 60); };
+    im.src = url;
+    wheelPics.set(url, im);
+    return null;
+  }
+  function itemPicUrl(it) {
+    if (!it || !it.plan) return '';
+    if (it.pic) return it.pic;
+    const have = itemSrc.get(it.plan);
+    if (typeof have === 'string') return have;
+    if (!have) {
+      const r = planRating(it.plan);
+      if (!r) { itemSrc.set(it.plan, ''); return ''; }
+      itemSrc.set(it.plan, planPicSrc(r).then((src) => {
+        itemSrc.set(it.plan, src || '');
+        planPicDone.set(it.plan, src || '');
+        if (src && !S.spinning) { picImg(src); }
+        return src;
+      }));
+    }
+    return '';
+  }
+  const itemPic = (it) => { const u = itemPicUrl(it); return u ? picImg(u) : null; };
+  function showTick(it) {
+    $('#ticker').textContent = it ? it.name : '—';
+    const im = $('#tickerImg'), u = it ? itemPicUrl(it) : '';
+    if (!im) return;
+    if (u && im.getAttribute('src') !== u) im.src = u;
+    im.hidden = !u;
+  }
+
   function renderPlans() {
     const box = $('#plans');
     if (!box) return;
@@ -402,7 +449,13 @@
   function plansAdd(list) {
     if (S.spinning) return;
     let added = 0;
-    list.forEach((r) => { if (addItem(r.name, 0, S.cur) === 'added') added++; });
+    list.forEach((r) => {
+      if (addItem(r.name, 0, S.cur) !== 'added') return;
+      added++;
+      const it = S.items[S.items.length - 1], src = planPicDone.get(String(r.id));
+      it.plan = String(r.id);
+      if (src && /^https:\/\//.test(src)) it.pic = src.slice(0, 500);
+    });
     if (!added) return;
     msg(list.length === 1
       ? `«${list[0].name}» на колесе.` + (S.mode === 'donate' ? ' Впиши сумму в списке.' : '')
@@ -451,6 +504,19 @@
     pullPlans();
   }
 
+  const examplesOn = () => { try { return localStorage.getItem('casualhub.examples.v1') !== '0'; } catch (e) { return true; } };
+  function dropSample() {
+    S.items = []; S.outSeq = 0; S.sample = false;
+  }
+  // примеры выключили в «Настройках» прямо на этой странице или в другой вкладке
+  function examplesChanged() {
+    if (examplesOn() || !S.sample || S.spinning) return;
+    dropSample();
+    save();
+    render();
+  }
+  window.addEventListener('casualhub:examples', examplesChanged);
+  window.addEventListener('storage', (e) => { if (e.key === 'casualhub.examples.v1') examplesChanged(); });
   function save() {
     try {
       const { spinning, ...rest } = S;
@@ -619,13 +685,39 @@
     for (const s of segs) {
       const ang = s.end - s.start;
       const fs = Math.round(Math.min(R * 0.072, R * 0.68 * Math.min(ang, 1.2) * 0.55));
-      if (fs < 9 * dpr) continue;
+      // обложка у обода, как постер (2:3), подпись — ближе к центру; когда секторов мало, обложка крупнее
+      const im = itemPic(s.item);
+      const ph = Math.min(R * (segs.length <= 4 ? 0.2 : segs.length <= 6 ? 0.17 : 0.14) * (canvas.clientWidth < 420 ? 0.8 : 1), 2 * (R - pad) * Math.sin(Math.min(ang, 1.2) / 2) * 0.66), pw = ph * 0.68;
+      const withPic = !!im && ph >= 18 * dpr;
+      if (fs < 9 * dpr && !withPic) continue;
       const font = `600 ${fs}px ${FONT}`;
       ctx.save();
       ctx.rotate(rot + (s.start + s.end) / 2);
-      ctx.font = font;
-      ctx.fillStyle = colorOf(s.item).t;
-      ctx.fillText(fit(s.item.name, maxW, font), R - pad, 0);
+      let right = R - pad;
+      if (withPic) {
+        // постер стоит вертикально к ободу: поворачиваем его, чтобы верх смотрел наружу
+        const cx = right - ph / 2, rr = Math.min(6 * dpr, pw * 0.16);
+        const sw = im.naturalWidth, sh = im.naturalHeight, k = Math.min(sw / 0.68, sh);
+        ctx.save();
+        ctx.translate(cx, 0);
+        ctx.rotate(Math.PI / 2);
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(-pw / 2, -ph / 2, pw, ph, rr); else ctx.rect(-pw / 2, -ph / 2, pw, ph);
+        ctx.save();
+        ctx.clip();
+        ctx.drawImage(im, (sw - k * 0.68) / 2, (sh - k) / 2, k * 0.68, k, -pw / 2, -ph / 2, pw, ph);
+        ctx.restore();
+        ctx.lineWidth = Math.max(1, dpr); ctx.strokeStyle = 'rgba(0,0,0,.35)';
+        ctx.stroke();
+        ctx.restore();
+        right -= ph + 6 * dpr;
+      }
+      const room = Math.round(Math.min(maxW, right - inner));
+      if (fs >= 9 * dpr && room > fs * 1.5) {
+        ctx.font = font;
+        ctx.fillStyle = colorOf(s.item).t;
+        ctx.fillText(fit(s.item.name, room, font), right, 0);
+      }
       ctx.restore();
     }
 
@@ -745,7 +837,7 @@
     lotsSpin(from, to, dur);
     const t0 = performance.now();
     let last = segAt(from, segs), nameAt = t0;
-    $('#ticker').textContent = last.item.name;
+    showTick(last.item);
 
     // колесо рисуется один раз, а крутит его видеокарта: canvas поворачивается целиком, без перерисовки в каждом кадре
     drawRot = from;
@@ -758,11 +850,11 @@
       const cur = segAt(S.rot, segs);
       if (cur !== last) { last = cur; tick(); }
       // на большой скорости имена мелькали бы и резали глаза: новое не чаще раза в 0,3 секунды, а к концу прокрутки — каждое
-      if (now - nameAt >= 300 && $('#ticker').textContent !== last.item.name) { nameAt = now; $('#ticker').textContent = last.item.name; }
+      if (now - nameAt >= 300 && $('#ticker').textContent !== last.item.name) { nameAt = now; showTick(last.item); }
       canvas.style.transform = `rotate(${S.rot - from}rad)`;
       if (t < 1) bgFrame(frame);
       else {
-        $('#ticker').textContent = last.item.name;
+        showTick(last.item);
         drawRot = null;
         canvas.style.transform = '';
         canvas.style.willChange = '';
@@ -863,7 +955,7 @@
   }
   function updateTicker() {
     const segs = segments();
-    $('#ticker').textContent = segs.length ? segAt(S.rot, segs).item.name : '—';
+    showTick(segs.length ? segAt(S.rot, segs).item : null);
   }
   function updateMeta() {
     const n = alive().length;
@@ -2267,7 +2359,9 @@
     if (!S.music.win) S.music.win = 'preset:' + DEFAULT_WIN;
     // на победе из списка остался только VI KA: другие треки из списка заменяем на него
     if (presetOf(S.music.win) && presetOf(S.music.win).id !== DEFAULT_WIN) S.music.win = 'preset:' + DEFAULT_WIN;
-    if (!d) { S.sample = true; SAMPLE.forEach(([n, a]) => S.items.push(makeItem(n, a, S.cur))); }
+    // пример участников — только при первом заходе и если примеры не выключены в «Настройках»; выключены — пример убирается
+    if (!d && examplesOn()) { S.sample = true; SAMPLE.forEach(([n, a]) => S.items.push(makeItem(n, a, S.cur))); }
+    if (S.sample && !examplesOn()) dropSample();
     $('#cur').innerHTML = CODES.map((c) => `<option value="${c}">${CUR[c].sym} ${c}</option>`).join('');
     $('#cur').value = S.cur;
     if (!/\/wheel(\/|\/index\.html)?$/.test(location.pathname)) { $('#backLink').hidden = true; $('#opinionLink').hidden = true; } // вне сайта ссылкам некуда вести

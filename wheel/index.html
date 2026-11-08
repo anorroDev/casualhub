@@ -457,6 +457,10 @@ fieldset:disabled { opacity: .6; }
 
 /* Wheel stage */
 .readout { display: grid; justify-items: center; gap: 4px; margin: 10px 0 16px; min-width: 0; text-align: center; }
+/* под стрелкой рядом с названием — обложка участника из «В планах» */
+.tick-row { display: inline-flex; align-items: center; justify-content: center; gap: 10px; max-width: 100%; min-width: 0; }
+#tickerImg { flex: none; width: 34px; height: 50px; border-radius: 6px; object-fit: cover; background: var(--panel-2); box-shadow: 0 0 0 1px var(--line); }
+#tickerImg[hidden] { display: none; }
 #ticker { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--font-display); font-weight: 800; font-size: clamp(30px, 6vw, 44px); line-height: .95; }
 .wheel-wrap { position: relative; width: min(100%, 560px); max-width: 100%; aspect-ratio: 1; margin: 0 auto; container-type: inline-size; }
 #wheel { display: block; width: 100%; height: 100%; }
@@ -985,7 +989,7 @@ html.unslop::before { display: none; }
 
       <div class="readout">
         <span class="label">Под стрелкой</span>
-        <strong id="ticker">—</strong>
+        <span class="tick-row"><img id="tickerImg" alt="" referrerpolicy="no-referrer" hidden><strong id="ticker">—</strong></span>
       </div>
 
       <div class="wheel-wrap">

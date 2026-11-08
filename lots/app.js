@@ -1305,6 +1305,11 @@
     if (b) {
       b.disabled = spinning || alive < 2 || (H.pick === 'out' && !!live.winner) || hostAuto;
       if (!b.dataset.armed) b.textContent = spinning ? 'Крутится…' : 'Крутить';
+      // центр колеса крутит так же, как кнопка в пульте
+      const hub = $('#lotHub');
+      hub.classList.add('can-spin');
+      hub.disabled = b.disabled;
+      $('#hubLabel').textContent = b.dataset.armed ? 'Точно?' : 'Крутить';
     }
     if (autoBtn) {
       autoBtn.style.display = H.pick === 'out' ? '' : 'none';
@@ -1372,6 +1377,12 @@
       delete b.dataset.armed;
       clearTimeout(hostArmT);
       hostSpin();
+    });
+    $('#lotHub').addEventListener('click', () => {
+      const b = $('#hostSpin');
+      if (!isHost() || b.disabled) return;
+      b.click();
+      $('#hubLabel').textContent = b.dataset.armed ? 'Точно?' : 'Крутить';
     });
     $('#hostAutoSpin')?.addEventListener('click', () => {
       if (!isHost()) return;

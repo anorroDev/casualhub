@@ -3171,14 +3171,18 @@ async function initStorage() {
         const inline = savedRatings.some(r => r && (photoDataOf(r.photo) || (r.author && /^data:/.test(r.author.avatar || ''))));
         // одна битая запись не должна оставить человека без всех оценок (пустой список потом затёр бы сохранённые)
         state.ratings = savedRatings.map(r => (r && typeof r.id === 'string' ? normalizeRating(r.id, r) : null)).filter(Boolean);
-        if (inline && state.photoStore) saveLocalRatings();
+        // примеров (Ведьмак и Интерстеллар) в Мнении больше нет: оставшиеся с прошлых заходов убираем
+        const hadExamples = state.ratings.some(r => r.example);
+        if (hadExamples) state.ratings = state.ratings.filter(r => !r.example);
+        if ((inline && state.photoStore) || hadExamples) saveLocalRatings();
         // черновик с сохранённым фото: оно тоже в IndexedDB
         if (form.photo && form.photo.ref && !form.photo.data) {
           const d = await window.CasualPhotos.get(form.photo.ref);
           if (typeof d === 'string') form.photo = { kind: 'saved', id: d, data: d, w: form.photo.w, h: form.photo.h };
         }
       } else {
-        state.ratings = clone(STARTER_RATINGS).map(r => normalizeRating(r.id, r));
+        // первый заход: рейтинг пустой, без примеров
+        state.ratings = [];
         saveLocalRatings();
       }
     } catch (_) {}
@@ -5790,7 +5794,7 @@ window.addEventListener('storage', async e => {
       const list = JSON.parse(e.newValue);
       if (!Array.isArray(list)) return;
       await hydratePhotos(list);
-      state.ratings = list.map(r => (r && typeof r.id === 'string' ? normalizeRating(r.id, r) : null)).filter(Boolean);
+      state.ratings = list.map(r => (r && typeof r.id === 'string' ? normalizeRating(r.id, r) : null)).filter(r => r && !r.example);
       renderBoard();
       updateNameState();
     } else if (e.key === STORAGE_KEYS.CATS && !state.editCat && !catTimer) {
