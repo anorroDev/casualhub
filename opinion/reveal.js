@@ -58,7 +58,8 @@ function openAuthFromHash() {
     });
     return;
   }
-  // ссылки с главной и из профиля: #r=<оценка>, #friend=<друг>&r=<оценка>, #friends, #rating; &edit=1 — сразу её правка
+  // ссылки с главной и из профиля: #r=<оценка>, #friend=<друг>&r=<оценка>, #friends, #rating; &edit=1 — сразу её правка,
+  // &rate=1 — «Оценить» у плана: правка со статусом «Просмотрено», остаётся поставить баллы
   const q = new URLSearchParams(h.slice(1));
   if (!q.has('r') && !q.has('friend') && h !== '#friends' && h !== '#rating') return;
   history.replaceState(null, '', location.pathname + location.search);
@@ -70,8 +71,13 @@ function openAuthFromHash() {
     // своя оценка могла прийти из аккаунта чуть позже загрузки: ждём её несколько секунд
     const id = q.get('r');
     for (let i = 0; i < 24 && !state.ratings.some(x => x.id === id); i++) await new Promise(r => setTimeout(r, 250));
-    goToRating(id);
-    if (q.get('edit')) { const r = state.ratings.find(x => x.id === id); if (r && state.canWrite) loadIntoForm(r); }
+    const toForm = !!(q.get('edit') || q.get('rate')) && state.canWrite;
+    goToRating(id, toForm);
+    if (toForm) {
+      const r = state.ratings.find(x => x.id === id);
+      // форма оценки открыта сверху — список обратно к оценке не прокручиваем
+      if (r && state.canWrite) { loadIntoForm(r, { rate: !!q.get('rate') }); return; }
+    }
     if (q.get('share')) { const r = state.ratings.find(x => x.id === id); if (r) openShare(exportFromRating(r)); }
     // страница ещё раскладывается после загрузки: доводим прокрутку до оценки ещё раз
     for (const ms of [700, 1400]) setTimeout(() => {

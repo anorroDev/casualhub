@@ -40,7 +40,7 @@ async function omdb(env, id) {
   const d = await get(`https://www.omdbapi.com/?i=${id}&apikey=${encodeURIComponent(env.OMDB_KEY)}`);
   if (!d || d.Response !== 'True') return { id, none: true };
   const by = (src) => ((d.Ratings || []).find((x) => x && x.Source === src) || {}).Value || '';
-  return { id, r: num(d.imdbRating), v: num(d.imdbVotes), rt: by('Rotten Tomatoes').replace(/[^\d%]/g, '').slice(0, 5), mc: num(d.Metascore), type: d.Type === 'series' ? 'series' : 'movie' };
+  return { id, r: num(d.imdbRating), v: num(d.imdbVotes), rt: by('Rotten Tomatoes').replace(/[^\d%]/g, '').slice(0, 5), mc: num(d.Metascore), type: d.Type === 'series' ? 'series' : 'movie', p: /^https:\/\//.test(d.Poster || '') ? d.Poster.slice(0, 400) : '' };
 }
 // items: [{ k, id?, name, year }] → { [k]: { id, r, v, rt, mc } | null }. За один раз ищем не больше 8 кодов и спрашиваем OMDb не больше 15 раз
 export async function imdbLookup(env, items, why) {
@@ -63,14 +63,16 @@ export async function imdbLookup(env, items, why) {
   for (const x of list) {
     if (!x.id) { out[x.k] = x.later ? undefined : null; continue; }
     const row = await env.DB.prepare('SELECT data, at FROM imdb_info WHERE id = ?').bind(x.id).first();
-    if (row && now - row.at < WEEK) { const d = JSON.parse(row.data); out[x.k] = d.none ? null : d; continue; }
-    if (!env.OMDB_KEY || asks >= 15) { out[x.k] = row ? JSON.parse(row.data) : undefined; continue; }
+    const old = row ? JSON.parse(row.data) : null, was = old ? (old.none ? null : old) : undefined;
+    // свежая запись без постера (сохранена до того, как он появился) переспрашивается, пока хватает запросов
+    if (row && now - row.at < WEEK && (old.none || 'p' in old)) { out[x.k] = was; continue; }
+    if (!env.OMDB_KEY || asks >= 15) { out[x.k] = was; continue; }
     asks++;
     try {
       const d = await omdb(env, x.id);
       await env.DB.prepare('INSERT INTO imdb_info (id, data, at) VALUES (?1, ?2, ?3) ON CONFLICT(id) DO UPDATE SET data = ?2, at = ?3').bind(x.id, JSON.stringify(d), now).run();
       out[x.k] = d.none ? null : d;
-    } catch (e) { out[x.k] = row ? JSON.parse(row.data) : undefined; }
+    } catch (e) { out[x.k] = was; }
   }
   // undefined — «ещё не знаем, спроси позже», null — «у этого фильма рейтинга нет»
   return out;

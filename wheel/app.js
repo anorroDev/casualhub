@@ -251,7 +251,7 @@
     if (plansPulling || Date.now() - plansPulledAt < 20e3) return;
     const get = (url) => fetch(url, { headers: { authorization: 'Bearer ' + token }, cache: 'no-store' }).then((r) => (r.ok ? r.json() : null));
     plansPulling = (user.serverId ? Promise.resolve(user.serverId) : get('/api/me').then((d) => d && d.user && d.user.id))
-      .then((sid) => sid && get('/api/shelf/' + encodeURIComponent(sid)))
+      .then((sid) => { planSid = sid || ''; return sid && get('/api/shelf/' + encodeURIComponent(sid)); })
       .then((d) => {
         if (!d || !Array.isArray(d.ratings)) return;
         plansRemote = { ratings: d.ratings, deleted: Array.isArray(d.deleted) ? d.deleted : [] };
@@ -261,16 +261,103 @@
       .catch(() => {})
       .finally(() => { plansPulling = null; });
   }
-  // категория и год — отдельными кусками текста, чтобы английский словарь узнал название категории
+  // категория и год — отдельными кусками текста, чтобы английский словарь узнал название категории; у фильмов рядом рейтинг IMDb
   function planSub(r) {
     const year = (String(r.meta || '').match(/(?:^|\D)((?:19|20)\d{2})(?!\d)/) || [])[1];
     const cat = r.catName ? esc(r.catName) : '';
-    return cat && year ? `${cat}<span> · ${year}</span>` : cat || year || '';
+    const I = window.CasualIMDb;
+    let imdb = '';
+    if (I && I.isMovie(r.catName)) {
+      const x = { name: r.name, year: +year || 0 }, d = I.peek(x);
+      imdb = d !== undefined ? I.badge(d) : `<span class="imdb-slot" data-imdb-n="${esc(r.name)}" data-imdb-y="${year || ''}"></span>`;
+    }
+    const cy = cat && year ? `${cat}<span> · ${year}</span>` : cat || year || '';
+    return `<span>${cy}</span>${imdb}`;
   }
+  // жанры — из описания оценки («2006, боевик, триллер»), как в фильтре жанров Мнения
+  const planGenres = (r) => [...new Set(String(r.meta || '').split(/\s*[,;]\s*/).map((x) => x.trim().toLowerCase()).filter((x) => x && x.length <= 24 && !/^\d{4}$/.test(x)))];
+  const planAdded = (r) => +new Date(r.createdAt || r.updatedAt || 0) || 0;
+  let plansPane = false, plansGenre = '', plansWhen = '', plansSort = 'new';
+  const plansInCat = (all) => (plansCat === '*' ? all : all.filter((r) => (r.catName || 'Другое') === plansCat));
+  function plansRows(all) {
+    let rows = plansInCat(all);
+    if (plansGenre) rows = rows.filter((r) => planGenres(r).includes(plansGenre));
+    if (plansWhen) {
+      const now = Date.now(), D = 864e5;
+      rows = rows.filter((r) => { const t = planAdded(r); return t && (plansWhen === 'old' ? now - t > 365 * D : now - t <= +plansWhen * D); });
+    }
+    const byName = (x, y) => x.name.localeCompare(y.name, 'ru', { sensitivity: 'base', numeric: true });
+    return rows.slice().sort(plansSort === 'name' ? byName : plansSort === 'old' ? (x, y) => planAdded(x) - planAdded(y) || byName(x, y) : (x, y) => planAdded(y) - planAdded(x) || byName(x, y));
+  }
+  // вкладки: «Имена» и «Донаты» — режим колеса, «В планах» — список из Мнения на месте участников
+  function paintPane() {
+    $('#boardPane').hidden = plansPane;
+    $('#plans').hidden = !plansPane;
+    document.querySelectorAll('.view-tab').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.pane === 'plans' ? plansPane : !plansPane && b.dataset.mode === S.mode)));
+  }
+
+  // ---------- обложки в «В планах» ----------
+  // своё фото — прямо в оценке или в IndexedDB (photo-store.js), из аккаунта — превью с сервера, у фильма без фото — постер с IMDb
+  const planPics = new Map(); // id → Promise картинки ('' — нет)
+  const planPicDone = new Map(); // id → картинка, когда уже известна
+  const planById = new Map();
+  let planSid = '';
+  function planToken() {
+    const user = readLS(PLAN_USER_KEY, null);
+    return (user && user.id && (readLS(PLAN_TOKENS_KEY, {}) || {})[user.id]) || '';
+  }
+  function planThumb(r) {
+    const user = readLS(PLAN_USER_KEY, null), token = planToken(), sid = (user && user.serverId) || planSid;
+    if (!token || !sid) return Promise.resolve('');
+    return fetch(`/api/photo/${encodeURIComponent(sid)}/${encodeURIComponent(r.id)}?thumb=1`, { headers: { authorization: 'Bearer ' + token } })
+      .then((x) => (x.ok ? x.json() : null))
+      .then((d) => (d && typeof d.data === 'string' && /^data:image\//.test(d.data) ? d.data : ''), () => '');
+  }
+  function planPoster(r) {
+    const I = window.CasualIMDb;
+    if (!I || !I.isMovie(r.catName)) return Promise.resolve('');
+    const x = { name: r.name, year: I.yearOf(r.meta) || 0 };
+    return I.want([x]).then((m) => { const d = m.get(I.keyOf(x)); return d && /^https:\/\//.test(d.p || '') ? d.p : ''; }, () => '');
+  }
+  function planPicSrc(r) {
+    const ph = r.photo;
+    if (ph && typeof ph.data === 'string' && /^data:image\//.test(ph.data)) return Promise.resolve(ph.data);
+    const link = ph && (ph.url || (typeof ph.id === 'string' && /^https:\/\//.test(ph.id) ? ph.id : ''));
+    if (link) return Promise.resolve(link);
+    const P = window.CasualPhotos;
+    const own = ph && P && P.isKey(ph.ref) ? P.get(ph.ref).then((d) => (typeof d === 'string' ? d : ''), () => '') : Promise.resolve('');
+    return own.then((d) => d || (ph ? planThumb(r) : '')).then((d) => d || planPoster(r)).catch(() => '');
+  }
+  const putPic = (n, src) => {
+    if (!src || !n.isConnected || n.querySelector('img')) return;
+    const im = new Image(); im.alt = ''; im.decoding = 'async'; im.src = src;
+    n.textContent = '';
+    n.appendChild(im);
+  };
+  let picIO = null;
+  function hydratePlanPics() {
+    const list = $('#plansList');
+    if (picIO) picIO.disconnect();
+    const load = (n) => {
+      const id = n.dataset.pic, r = planById.get(id);
+      if (!r) return;
+      if (!planPics.has(id)) planPics.set(id, planPicSrc(r).then((src) => { planPicDone.set(id, src); return src; }));
+      planPics.get(id).then((src) => putPic(n, src));
+    };
+    const nodes = [...list.querySelectorAll('[data-pic]')];
+    nodes.forEach((n) => { const src = planPicDone.get(n.dataset.pic); if (src) putPic(n, src); });
+    const rest = nodes.filter((n) => !planPicDone.has(n.dataset.pic));
+    if (!('IntersectionObserver' in window)) { rest.forEach(load); return; }
+    picIO = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { picIO.unobserve(e.target); load(e.target); } }), { root: list, rootMargin: '240px 0px' });
+    rest.forEach((n) => picIO.observe(n));
+  }
+
   function renderPlans() {
     const box = $('#plans');
     if (!box) return;
     const all = readPlans();
+    $('#plansN').textContent = all.length || '';
+    if (!plansPane) return; // список рисуем, только когда вкладка открыта
     const onWheel = new Set(alive().map((i) => nameKey(i.name)));
     const cats = new Map();
     all.forEach((r) => { const c = r.catName || 'Другое'; cats.set(c, (cats.get(c) || 0) + 1); });
@@ -279,20 +366,38 @@
       ? [['*', 'Все', all.length], ...[...cats.entries()].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0], 'ru')).map(([c, n]) => [c, c, n])]
         .map(([v, l, n]) => `<button type="button" data-pcat="${esc(v)}" aria-pressed="${v === plansCat}">${esc(l)} <b>${n}</b></button>`).join('')
       : '';
-    const rows = plansCat === '*' ? all : all.filter((r) => (r.catName || 'Другое') === plansCat);
+    // жанры — только те, что есть в выбранной категории; выбранный, но пропавший жанр сбрасывается
+    const gn = new Map();
+    plansInCat(all).forEach((r) => planGenres(r).forEach((g) => gn.set(g, (gn.get(g) || 0) + 1)));
+    if (plansGenre && !gn.has(plansGenre)) plansGenre = '';
+    $('#plansGenre').innerHTML = '<option value="">Все жанры</option>' + [...gn.entries()].sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0], 'ru'))
+      .map(([g, n]) => `<option value="${esc(g)}"${g === plansGenre ? ' selected' : ''}>${esc(g)} (${n})</option>`).join('');
+    $('#plansGenreBox').hidden = !gn.size;
+    $('#plansWhen').value = plansWhen;
+    $('#plansSort').value = plansSort;
+    $('#plansFilt').hidden = all.length < 2;
+    const rows = plansRows(all);
+    planById.clear();
+    rows.forEach((r) => planById.set(String(r.id), r));
     $('#plansList').innerHTML = rows.map((r) => {
       const on = onWheel.has(nameKey(r.name));
-      return `<li class="plrow${on ? ' on' : ''}">
+      const added = planAdded(r) ? new Date(planAdded(r)).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+      return `<li class="plrow${on ? ' on' : ''}"${added ? ` title="Добавлено в планы ${added}"` : ''}>
+        <span class="pl-pic" data-pic="${esc(r.id)}" aria-hidden="true">${esc((String(r.name).trim()[0] || '?').toUpperCase())}</span>
         <div class="e-text"><span class="e-name">${esc(r.name)}</span><span class="e-sub">${planSub(r)}</span></div>
         <button type="button" class="pl-btn" data-plan="${esc(r.id)}" aria-pressed="${on}" aria-label="${on ? 'Убрать с колеса' : 'Добавить на колесо'}: ${esc(r.name)}" title="${on ? 'Убрать с колеса' : 'Добавить на колесо'}">${on ? ICON.check : ICON.add}</button>
       </li>`;
     }).join('');
+    const filtered = plansGenre || plansWhen;
     if (!all.length) $('#plansList').innerHTML = '<li class="plans-empty">Пока пусто. Отметь фильм, игру или что угодно «В планах» в <a href="/opinion/">Мнении</a>, и оно появится здесь.</li>';
-    $('#plansN').textContent = all.length || '';
+    else if (!rows.length) $('#plansList').innerHTML = '<li class="plans-empty">Под эти фильтры ничего не подходит.</li>';
+    $('#plansShown').innerHTML = filtered && all.length ? `Показано ${rows.length} из ${plansInCat(all).length} · <button type="button" id="plansReset">Сбросить фильтры</button>` : '';
     const left = rows.filter((r) => !onWheel.has(nameKey(r.name))).length;
     $('#plansAll').innerHTML = left ? `Добавить все <span>(${left})</span>` : 'Всё уже на колесе';
     $('#plansAll').disabled = !left;
-    $('#plansAll').parentElement.hidden = !all.length;
+    $('#plansAll').parentElement.hidden = !rows.length;
+    if (window.CasualIMDb) window.CasualIMDb.fill($('#plansList'));
+    hydratePlanPics();
   }
   function plansAdd(list) {
     if (S.spinning) return;
@@ -305,16 +410,19 @@
     save();
     render();
   }
-  const PLANS_OPEN_KEY = 'casualhub.wheelPlansOpen.v1'; // свёрнута ли карточка — только для этого браузера
   function bindPlans() {
-    try { if (localStorage.getItem(PLANS_OPEN_KEY) === '0') $('#plansBox').open = false; } catch (e) {}
-    $('#plansBox').addEventListener('toggle', () => {
-      try { localStorage.setItem(PLANS_OPEN_KEY, $('#plansBox').open ? '1' : '0'); } catch (e) {}
-    });
     $('#plansCats').addEventListener('click', (e) => {
       const b = e.target.closest('[data-pcat]');
       if (!b) return;
       plansCat = b.dataset.pcat;
+      renderPlans();
+    });
+    $('#plansGenre').addEventListener('change', (e) => { plansGenre = e.target.value; renderPlans(); });
+    $('#plansWhen').addEventListener('change', (e) => { plansWhen = e.target.value; renderPlans(); });
+    $('#plansSort').addEventListener('change', (e) => { plansSort = e.target.value; renderPlans(); });
+    $('#plansShown').addEventListener('click', (e) => {
+      if (!e.target.closest('#plansReset')) return;
+      plansGenre = ''; plansWhen = '';
       renderPlans();
     });
     $('#plansList').addEventListener('click', (e) => {
@@ -332,10 +440,7 @@
         render();
       } else plansAdd([r]);
     });
-    $('#plansAll').addEventListener('click', () => {
-      const all = readPlans();
-      plansAdd(plansCat === '*' ? all : all.filter((r) => (r.catName || 'Другое') === plansCat));
-    });
+    $('#plansAll').addEventListener('click', () => plansAdd(plansRows(readPlans()).filter((r) => !alive().some((i) => nameKey(i.name) === nameKey(r.name)))));
     // оценки поменялись во вкладке с Мнением — список обновится сам
     window.addEventListener('storage', (e) => {
       if (e.key === PLAN_USER_KEY || e.key === PLAN_TOKENS_KEY) { plansPulledAt = 0; pullPlans(); }
@@ -809,7 +914,7 @@
 
   function render(keep) {
     const don = S.mode === 'donate';
-    document.querySelectorAll('.view-tab').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.mode === S.mode)));
+    paintPane();
     $('#amountWrap').hidden = !don;
     $('#curTabs').hidden = !don;
     $('#ratesBox').hidden = !don;
@@ -1843,7 +1948,16 @@
     });
 
     document.querySelectorAll('.view-tab').forEach((b) => b.addEventListener('click', () => {
-      if (S.spinning || S.mode === b.dataset.mode) return;
+      if (b.dataset.pane === 'plans') {
+        if (plansPane) return;
+        plansPane = true;
+        paintPane();
+        renderPlans();
+        return;
+      }
+      const wasPlans = plansPane;
+      plansPane = false;
+      if (S.spinning || S.mode === b.dataset.mode) { if (wasPlans) paintPane(); return; }
       S.mode = b.dataset.mode;
       msg('');
       save();

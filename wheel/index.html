@@ -418,27 +418,30 @@ details[open] > summary .chev { transform: rotate(180deg); }
 
 /* «В планах»: оценки из Мнения со статусом «В планах», одним нажатием на колесо */
 .plans .crit-tip a { color: var(--accent); font-weight: 600; }
-/* шапка карточки сворачивает список, как «Лоты по ссылке»: стрелка поворачивается, тело плавно выезжает */
-.plans-sum { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: -6px -10px; padding: 6px 10px; border-radius: 11px; list-style: none; cursor: pointer; }
-.plans-sum::-webkit-details-marker { display: none; }
-.plans-sum .eyebrow { margin: 0; }
-.plans-n { font-weight: 600; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+/* третья вкладка рядом с «Имена» и «Донаты»: число планов маленьким индексом */
+.plans-n { margin-left: 4px; font-family: var(--font-body); font-size: .36em; font-weight: 700; color: var(--ink-3); font-variant-numeric: tabular-nums; vertical-align: super; line-height: 0; }
 .plans-n:empty { display: none; }
-.plans-sum .chev { flex: none; }
-@media (hover: hover) { .plans-sum:hover { background: var(--accent-soft); } }
-.plans-box[open] > .plans-body { animation: enter-up .2s cubic-bezier(.2, .8, .2, 1) both; }
-/* где браузер умеет, высота открывается и закрывается плавно */
-@supports (interpolate-size: allow-keywords) {
-  .plans-box { interpolate-size: allow-keywords; }
-  .plans-box::details-content { height: 0; overflow: clip; transition: height .28s cubic-bezier(.2, .8, .2, 1), content-visibility .28s allow-discrete; }
-  .plans-box[open]::details-content { height: auto; }
-}
-@media (prefers-reduced-motion: reduce) { .plans-box::details-content { transition: none; } .plans-box[open] > .plans-body { animation: none; } }
+.plans:not([hidden]) { display: block; animation: enter-up .2s cubic-bezier(.2, .8, .2, 1) both; }
+@media (prefers-reduced-motion: reduce) { .plans:not([hidden]) { animation: none; } }
 .plans-cats { margin-top: 14px; }
+.plans-filt { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 12px; }
+.plans-filt .pf { display: grid; gap: 4px; min-width: 0; }
+.plans-filt .pf[hidden] { display: none; }
+.plans-filt .label { font-size: 11.5px; }
+.plans-filt .inp { height: 36px; padding: 0 8px; font-size: 13.5px; min-width: 0; width: 100%; text-overflow: ellipsis; }
+.plans-shown { margin-top: 10px; font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.plans-shown:empty { display: none; }
+.plans-shown button { padding: 0; border: 0; background: none; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; }
+@media (max-width: 520px) { .plans-filt { grid-template-columns: 1fr 1fr; } .plans-filt .pf:first-child { grid-column: 1 / -1; } }
 .plans-cats:empty { display: none; }
 .plans-cats b { font-weight: 600; opacity: .6; }
 .plans-list { list-style: none; margin: 10px 0 0; padding: 0; max-height: min(62vh, 640px); overflow-y: auto; overscroll-behavior: contain; }
-.plrow { display: grid; grid-template-columns: minmax(0, 1fr) 36px; align-items: center; gap: 12px; padding: 9px 0; }
+.plrow { display: grid; grid-template-columns: 40px minmax(0, 1fr) 36px; align-items: center; gap: 12px; padding: 8px 0; }
+/* обложка: своё фото из Мнения, превью из аккаунта или постер с IMDb; пока нет — первая буква */
+.pl-pic { width: 40px; height: 54px; display: grid; place-items: center; overflow: hidden; border-radius: 7px; background: var(--panel-2); border: 1px solid var(--line); color: var(--ink-3); font-family: var(--font-display); font-weight: 800; font-size: 18px; font-style: normal; }
+.pl-pic img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.plrow .e-sub { display: flex; flex-wrap: wrap; align-items: center; gap: 3px 8px; }
+.plrow .e-sub .imdb-b { height: 18px; }
 .plrow + .plrow { border-top: 1px solid var(--line); }
 .plrow .e-name { font-size: 15px; }
 .plrow.on .e-name { color: var(--ink-2); }
@@ -449,13 +452,6 @@ details[open] > summary .chev { transform: rotate(180deg); }
 .plans-empty { margin-top: 14px; padding: 16px; border: 1px dashed var(--line); border-radius: 14px; color: var(--ink-2); font-size: 14px; text-wrap: pretty; }
 .plans-empty a { color: var(--accent); font-weight: 600; }
 .plans .actions { margin-top: 12px; }
-/* на широком экране колесо слева, справа участники и сразу под ними «В планах» */
-@media (min-width: 980px) {
-  .layout:has(.plans:not([hidden])) { grid-template-rows: auto 1fr; }
-  .layout > .stage { grid-row: span 2; }
-  .layout > .plans { grid-column: 2; }
-}
-@media (max-width: 979px) { .layout[data-section="wheel"] .plans { display: none; } }
 fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 fieldset:disabled { opacity: .6; }
 
@@ -685,7 +681,7 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
 /* Section tabs scale with their card instead of wrapping onto a second line */
 .card:has(> .views) { container-type: inline-size; }
 .views { flex-wrap: nowrap; gap: 2px clamp(10px, 4cqi, 22px); }
-.view-tab { font-size: clamp(24px, 10cqi, 46px); white-space: nowrap; }
+.view-tab { font-size: clamp(21px, 8.6cqi, 46px); white-space: nowrap; }
 
 /* ===== Polish: depth, light and motion, same language as the hub and Мнение. Everything that moves is transform or opacity ===== */
 :root {
@@ -1091,7 +1087,9 @@ html.unslop::before { display: none; }
         <div class="views" role="tablist" aria-label="Режим">
           <button type="button" class="view-tab" role="tab" data-mode="simple" id="tab-simple">Имена</button>
           <button type="button" class="view-tab" role="tab" data-mode="donate" id="tab-donate">Донаты</button>
+          <button type="button" class="view-tab" role="tab" data-pane="plans" id="tab-plans">В планах<sup class="plans-n" id="plansN"></sup></button>
         </div>
+        <div id="boardPane">
         <p class="crit-tip" id="modeHint"></p>
 
         <div class="board-head">
@@ -1152,23 +1150,27 @@ html.unslop::before { display: none; }
         <div class="actions">
           <button type="button" class="btn small danger" id="clear">Очистить всё</button>
         </div>
-      </fieldset>
-    </section>
+        </div>
 
-    <section class="card plans" id="plans" aria-labelledby="plansTitle">
-      <details class="plans-box" id="plansBox" open>
-        <summary class="plans-sum">
-          <h2 class="eyebrow"><span class="dot" aria-hidden="true"></span><span id="plansTitle">В планах</span> <span class="plans-n" id="plansN"></span></h2>
-          <svg class="chev" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
-        </summary>
-        <div class="plans-body">
+        <div class="plans" id="plans" hidden>
           <p class="crit-tip">Всё, что ты отметил «В планах» в <a href="/opinion/">Мнении</a>: фильмы, игры, сериалы и остальное. Нажми «+», и оно на колесе.</p>
           <div class="seg plans-cats" id="plansCats" role="group" aria-label="Категория"></div>
+          <div class="plans-filt" id="plansFilt">
+            <label class="pf" id="plansGenreBox"><span class="label">Жанр</span><select class="inp" id="plansGenre" aria-label="Жанр"></select></label>
+            <label class="pf"><span class="label">Добавлено</span><select class="inp" id="plansWhen" aria-label="Когда добавлено">
+              <option value="">Когда угодно</option><option value="7">За неделю</option><option value="30">За месяц</option><option value="91">За 3 месяца</option><option value="365">За год</option><option value="old">Больше года назад</option>
+            </select></label>
+            <label class="pf"><span class="label">Порядок</span><select class="inp" id="plansSort" aria-label="Порядок">
+              <option value="new">Сначала новые</option><option value="old">Сначала старые</option><option value="name">По названию</option>
+            </select></label>
+          </div>
+          <p class="plans-shown" id="plansShown" role="status"></p>
           <ol class="plans-list" id="plansList"></ol>
           <div class="actions"><button type="button" class="btn small ghost" id="plansAll">Добавить все</button></div>
         </div>
-      </details>
+      </fieldset>
     </section>
+
   </main>
 </div>
 
@@ -1208,6 +1210,8 @@ html.unslop::before { display: none; }
 <script src="/themes.js"></script>
 <script src="/fx.js"></script>
 <script src="/howto.js"></script>
+<script src="/photo-store.js"></script>
+<script src="/imdb.js"></script>
 <script src="/wheel/app.js"></script>
 <script src="/wheel/motion.js"></script>
 </body>

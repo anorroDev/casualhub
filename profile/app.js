@@ -1504,7 +1504,9 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const when = r.created || r.at;
     const tools = !own ? '' : ed
       ? `<div class="rd-tools"><span class="rd-hint">Нажми на деление, чтобы поставить балл. Ещё раз на последнее закрашенное — сбросить</span><span class="rd-tb"><button type="button" class="btn ghost" data-rd="cancel">Отмена</button><button type="button" class="btn primary" data-rd="save">Сохранить</button></span></div>`
-      : `<div class="rd-tools"><button type="button" class="btn primary rd-edit" data-rd="edit">${RD_IC.edit}Изменить</button><span class="rd-ib">
+      : `<div class="rd-tools">${/В планах/.test(r.status || '') && r.total == null
+        ? `<a class="btn primary rd-edit" href="/opinion/#r=${encodeURIComponent(r.id)}&amp;rate=1" title="Откроется оценка в Мнении">${RD_IC.star}Оценить</a>`
+        : `<button type="button" class="btn primary rd-edit" data-rd="edit">${RD_IC.edit}Изменить</button>`}<span class="rd-ib">
         <button type="button" class="rd-i fav${r.fav ? ' on' : ''}" data-rd="fav" aria-pressed="${r.fav}" title="${r.fav ? 'Убрать из избранного' : 'В избранное'}" aria-label="${r.fav ? 'Убрать из избранного' : 'В избранное'}">${RD_IC.star}</button>
         ${token && p.uid ? `<button type="button" class="rd-i" data-rd="link" title="Поделиться ссылкой: отзыв увидит кто угодно, даже без аккаунта" aria-label="Поделиться ссылкой">${RD_IC.link}</button>` : ''}
         <a class="rd-i" href="/opinion/#r=${encodeURIComponent(r.id)}&amp;share=1" title="Картинка или текст: откроется в Мнении" aria-label="Картинка или текст">${RD_IC.share}</a></span></div>`;

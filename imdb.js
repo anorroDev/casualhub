@@ -20,6 +20,9 @@
   const token = () => { try { const u = JSON.parse(localStorage.getItem('ocenshik.user.v1') || 'null'); return u ? (JSON.parse(localStorage.getItem('casualhub.tokens.v1') || '{}') || {})[u.id] || '' : ''; } catch (e) { return ''; } };
 
   let queue = new Map(), waiters = [], timer = 0, off = false;
+  // запись без постера (из прошлой версии) за открытие страницы переспрашиваем один раз
+  const tried = new Set();
+  const fresh = (k, s) => s && Date.now() - s.at < WEEK && (s.d == null || 'p' in s.d || tried.has(k));
   async function flush() {
     timer = 0;
     const batch = [...queue.values()].slice(0, 40), ws = waiters;
@@ -41,7 +44,8 @@
     for (const x of items) {
       const k = keyOf(x);
       const s = store[k];
-      if (s && Date.now() - s.at < WEEK) { out.set(k, s.d); continue; }
+      if (fresh(k, s)) { out.set(k, s.d); continue; }
+      tried.add(k);
       if (!queue.has(k)) need.push({ k, id: x.id || '', name: x.name || '', year: x.year || 0 });
     }
     if (!need.length || off) return Promise.resolve(out);
@@ -52,7 +56,7 @@
     });
   }
   // что уже известно о фильме, без запроса: undefined — пока неизвестно
-  function peek(x) { const s = store[keyOf(x)]; return s && Date.now() - s.at < WEEK ? s.d : undefined; }
+  function peek(x) { const k = keyOf(x), s = store[k]; return fresh(k, s) ? s.d : undefined; }
   // пустые места .imdb-slot на странице (data-imdb-id или data-imdb-n + data-imdb-y) заполняются плашками одним запросом
   function fill(root) {
     const slots = [...(root || document).querySelectorAll('.imdb-slot:empty:not([data-done])')].slice(0, 80);

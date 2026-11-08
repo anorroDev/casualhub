@@ -2272,7 +2272,7 @@ function entryHTML(r, rank, showCat) {
   const ib = (act, icon, label, on, cls) => `<button type="button" class="btn small ghost ib${cls ? ' ' + cls : ''}${on ? ' on' : ''}" data-act="${act}" title="${label}" aria-label="${label}"${on != null ? ` aria-pressed="${!!on}"` : ''}>${icon}</button>`;
   const actions = confirming
     ? `<span class="confirm-q">Удалить «${esc(r.name)}» из рейтинга?</span><button type="button" class="btn small danger-solid" data-act="del-yes">Удалить</button><button type="button" class="btn small ghost" data-act="del-no">Отмена</button>`
-    : (state.canWrite ? `<span class="e-main-acts"><button type="button" class="btn small primary act-edit" data-act="edit">${ICON.edit}Изменить</button><button type="button" class="btn small act-del" data-act="del">${ICON.trash}Удалить</button></span>` : '')
+    : (state.canWrite ? `<span class="e-main-acts">${/В планах/.test(r.status || '') && r.total == null ? `<button type="button" class="btn small primary act-edit" data-act="rate">${ICON.star}Оценить</button>` : `<button type="button" class="btn small primary act-edit" data-act="edit">${ICON.edit}Изменить</button>`}<button type="button" class="btn small act-del" data-act="del">${ICON.trash}Удалить</button></span>` : '')
       + '<span class="e-icons">'
       + (state.canWrite ? ib('fav-card', ICON.star, r.fav ? 'Убрать из избранного' : 'В избранное', r.fav, 'fav') : '')
       + ib('cmp', ICON.scale, inCmp ? 'Выбрано для сравнения' : 'Сравнить', inCmp)
@@ -2461,6 +2461,7 @@ function renderBoard() {
     const hay = [r.nameKey, keyOf(r.meta), keyOf(r.status), keyOf(r.note), keyOf(r.pros), keyOf(r.cons), keyOf(r.author && r.author.name)].join(' ');
     return hay.includes(q);
   });
+  if (state.pinId) { const i = list.findIndex(r => r.id === state.pinId); if (i > 0) list.unshift(...list.splice(i, 1)); }
   const showCat = state.filter === 'all' && showFilters;
   const isTiers = state.bmode === 'tiers';
   el.board.classList.toggle('grid-mode', state.bmode === 'grid');
@@ -2529,7 +2530,7 @@ function resetForm(cat) {
   renderForm();
   saveDraft();
 }
-function loadIntoForm(r) {
+function loadIntoForm(r, opts) {
   revokeFormPhoto();
   const cat = state.cats.find(c => c.id === r.cat) || null;
   const ids = new Set(cat ? cat.criteria.map(c => c.id) : []);
@@ -2547,6 +2548,8 @@ function loadIntoForm(r) {
   }
   form.fav = !!r.fav;
   form.status = fitStatus(r.status || '');
+  // «Оценить» у плана: статус сразу «Просмотрено» (или «Завершено»), осталось поставить баллы
+  if (opts && opts.rate && /В планах/.test(form.status)) form.status = fitStatus('Завершено');
   form.vis = r.vis === 'public' || r.vis === 'private' ? r.vis : 'friends';
   form.meta = r.meta || '';
   form.link = musicLinkOk(r.link);
@@ -2569,7 +2572,7 @@ function loadIntoForm(r) {
   saveDraft();
   if (isNarrow()) { setSection('rate'); scrollToSectionTop(); }
   else el.rater.scrollIntoView({ behavior: smoothScroll(), block: 'start' });
-  toast(`Открыто для правки: ${r.name}`);
+  toast(opts && opts.rate ? `Оцени: ${r.name}` : `Открыто для правки: ${r.name}`);
 }
 // Раньше шаблон переписывал категорию вместе с её оценками: у оценок оставались старые критерии,
 // а категория становилась, например, «Музыкой». Такие оценки (ни одного общего критерия с категорией)
@@ -3973,6 +3976,7 @@ el.sortGroup.addEventListener('click', e => {
   const b = e.target.closest('button[data-sort]');
   if (!b) return;
   state.sort = b.dataset.sort;
+  state.pinId = null;
   syncSort(); savePrefs(); renderBoard();
 });
 {
@@ -4002,6 +4006,7 @@ el.board.addEventListener('click', e => {
   const sel = `.entry[data-id="${CSS.escape(id)}"] [data-act=`;
   switch (b.dataset.act) {
     case 'edit': loadIntoForm(r); break;
+    case 'rate': loadIntoForm(r, { rate: true }); break;
     // чуть новее (без сдвига в списке): при равном времени другое устройство со старой копией вернуло бы прежнее избранное
     case 'fav-card': r.fav = !r.fav; r.updatedAt = new Date((+new Date(r.updatedAt || r.createdAt || 0) || Date.now()) + 1000).toISOString(); saveLocalRatings(); renderBoard(); toast(r.fav ? `★ В избранном: ${r.name}` : `Убрано из избранного`); break;
     case 'cmp': toggleCompare(r.id); break;
@@ -4946,7 +4951,7 @@ function setLogTab() {
   renderLogStat();
 }
 const smoothScroll = () => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
-function goToRating(id) {
+function goToRating(id, quiet) {
   const r = state.ratings.find(x => x.id === id);
   if (!r) { toast('Этой оценки уже нет в рейтинге'); return; }
   if (isNarrow()) setSection('board'); else setView('board');
@@ -4957,9 +4962,11 @@ function goToRating(id) {
   if (!hasGenres(r)) state.genres = [];
   state.open.add(id);
   state.flashId = id;
+  state.pinId = id; // открытая по ссылке оценка стоит первой в списке, пока не сменят сортировку
   renderBoard();
   const li = el.board.querySelector(`.entry[data-id="${CSS.escape(id)}"]`);
-  if (li) {
+  // quiet: сразу откроется форма оценки — к списку не прокручиваем
+  if (li && !quiet) {
     li.scrollIntoView({ behavior: smoothScroll(), block: 'center' });
     li.querySelector('summary').focus({ preventScroll: true });
   }

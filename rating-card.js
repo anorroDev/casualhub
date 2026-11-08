@@ -97,7 +97,7 @@
     if (!src.name) return false;
     const mine = findMine(src);
     if (mode === 'rate') {
-      if (mine) { location.href = `/opinion/#r=${encodeURIComponent(mine.id)}&edit=1`; return false; }
+      if (mine) { location.href = `/opinion/#r=${encodeURIComponent(mine.id)}&${planned(mine) ? 'rate' : 'edit'}=1`; return false; }
       toOpinion(src, 'rate');
       return false;
     }
