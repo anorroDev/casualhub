@@ -99,6 +99,11 @@ async function ensureScheme(env) {
     const tiers = (await env.DB.prepare('PRAGMA table_info(tierlists)').all()).results;
     if (!tiers.some((c) => c.name === 'pub')) await env.DB.prepare('ALTER TABLE tierlists ADD COLUMN pub INTEGER NOT NULL DEFAULT 0').run();
   } catch (e) {}
+  // сеансы для «Настройки → Безопасность»: когда вошли, когда заходили, с какого браузера и из какой страны
+  const { results: sc } = await env.DB.prepare('PRAGMA table_info(sessions)').all();
+  for (const [c, t] of [['created_at', 'INTEGER'], ['seen_at', 'INTEGER'], ['ua', 'TEXT'], ['country', 'TEXT']]) {
+    if (!sc.some((x) => x.name === c)) await env.DB.prepare(`ALTER TABLE sessions ADD COLUMN ${c} ${t}`).run();
+  }
   const { results } = await env.DB.prepare('PRAGMA table_info(users)').all();
   if (!results.some((c) => c.name === 'email')) await env.DB.prepare('ALTER TABLE users ADD COLUMN email TEXT').run();
   await env.DB.prepare('CREATE UNIQUE INDEX IF NOT EXISTS users_email ON users(email)').run();
@@ -180,18 +185,34 @@ async function currentUser(env, request) {
   const th = await sha256(m[1]);
   const now = Date.now();
   const u = await env.DB.prepare(
-    'SELECT u.id, u.username, u.uname AS handle, u.email, u.created_at, u.hide_online, u.banned, u.ban_reason, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?'
+    'SELECT u.id, u.username, u.uname AS handle, u.email, u.created_at, u.hide_online, u.banned, u.ban_reason, s.expires_at, s.seen_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?'
   ).bind(th, now).first();
   // кто заходит, тот не вылетает: меньше 20 дней до конца сессии — продлеваем на 30 (запись раз в ~10 дней)
-  if (u && u.expires_at - now < 20 * 864e5) await env.DB.prepare('UPDATE sessions SET expires_at = ? WHERE token_hash = ?').bind(now + SESSION_DAYS * 864e5, th).run();
+  if (u && u.expires_at - now < 20 * 864e5) await env.DB.prepare('UPDATE sessions SET expires_at = ?, seen_at = ? WHERE token_hash = ?').bind(now + SESSION_DAYS * 864e5, now, th).run();
+  // «заходил» для списка устройств: запись не чаще раза в час на сеанс
+  else if (u && (!u.seen_at || now - u.seen_at > 3600e3)) await env.DB.prepare('UPDATE sessions SET seen_at = ? WHERE token_hash = ?').bind(now, th).run();
   if (Math.random() < 0.002) await env.DB.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(now).run(); // старые сессии не копятся
   return u;
 }
-async function newSession(env, userId) {
-  const token = randHex(32);
-  await env.DB.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)')
-    .bind(await sha256(token), userId, Date.now() + SESSION_DAYS * 864e5).run();
+async function newSession(env, userId, request) {
+  const token = randHex(32), now = Date.now();
+  const ua = request ? deviceLabel(request.headers.get('user-agent')) : '';
+  const country = request && request.cf && /^[A-Z]{2}$/.test(request.cf.country || '') ? request.cf.country : '';
+  await env.DB.prepare('INSERT INTO sessions (token_hash, user_id, expires_at, created_at, seen_at, ua, country) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(await sha256(token), userId, now + SESSION_DAYS * 864e5, now, now, ua, country).run();
   return token;
+}
+// «Chrome · Windows»: по этому человек узнаёт свои устройства в списке сеансов
+function deviceLabel(ua) {
+  ua = String(ua || '');
+  const os = /iPhone/.test(ua) ? 'iPhone' : /iPad/.test(ua) ? 'iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS X|Macintosh/.test(ua) ? 'macOS' : /CrOS/.test(ua) ? 'ChromeOS' : /Linux/.test(ua) ? 'Linux' : '';
+  const br = /Edg\//.test(ua) ? 'Edge' : /OPR\/|Opera/.test(ua) ? 'Opera' : /SamsungBrowser/.test(ua) ? 'Samsung Internet' : /Firefox\/|FxiOS/.test(ua) ? 'Firefox' : /CriOS|Chrome\//.test(ua) ? 'Chrome' : /Safari\//.test(ua) ? 'Safari' : '';
+  return [br, os].filter(Boolean).join(' · ').slice(0, 60);
+}
+// хеш токена этого запроса: какой из сеансов — «это устройство»
+async function tokenHash(request) {
+  const m = (request.headers.get('authorization') || '').match(/^Bearer ([0-9a-f]{64})$/);
+  return m ? sha256(m[1]) : '';
 }
 const LIMITS = {
   loginIp: { max: 30, win: 15 * 60e3 },
@@ -295,7 +316,7 @@ async function createUser(env, d) {
   const id = randHex(12), now = Date.now();
   await env.DB.prepare('INSERT INTO users (id, username, uname, pass_hash, salt, created_at, email, nkey) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
     .bind(id, d.name, d.uname, d.passHash, d.salt, now, d.mail, d.name.toLowerCase()).run();
-  return { token: await newSession(env, id), user: ownUser({ id, username: d.name, uname: d.uname, email: d.mail, created_at: now }) };
+  return { token: await newSession(env, id, d.request), user: ownUser({ id, username: d.name, uname: d.uname, email: d.mail, created_at: now }) };
 }
 async function link(env, x, y) {
   const [a, b] = pair(x, y);
@@ -325,7 +346,7 @@ const routes = {
     const uname = wanted || await freeHandle(env, toHandle(name)); // старые версии сайта юзернейм не присылают
     const salt = randHex(16);
     const passHash = await hashPass(pass, salt);
-    return json(await createUser(env, { name, uname, mail, passHash, salt }));
+    return json(await createUser(env, { name, uname, mail, passHash, salt, request }));
   },
   // вход по почте или по нику
   async 'POST /login'({ env, request }) {
@@ -353,7 +374,7 @@ const routes = {
       env.DB.prepare('UPDATE attempts SET count = MAX(0, count - 1) WHERE key = ?').bind(ipKey),
       env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND expires_at < ?').bind(u.id, Date.now()),
     ]);
-    return json({ token: await newSession(env, u.id), user: ownUser(u) });
+    return json({ token: await newSession(env, u.id, request), user: ownUser(u) });
   },
 
   async 'POST /logout'({ env, request }) {
@@ -670,6 +691,52 @@ const routes = {
       await env.DB.prepare('DELETE FROM admin_sessions WHERE user_id = ?').bind(me.id).run();
     }
     return json({ user: ownUser(out) });
+  },
+
+  // ---------- Настройки → Безопасность: сеансы и удаление аккаунта ----------
+  async 'GET /sessions'({ env, request, me }) {
+    const cur = await tokenHash(request);
+    const { results } = await env.DB.prepare('SELECT token_hash, created_at, seen_at, ua, country FROM sessions WHERE user_id = ? AND expires_at > ? ORDER BY COALESCE(seen_at, created_at, 0) DESC LIMIT 50').bind(me.id, Date.now()).all();
+    return json({ sessions: results.map((s) => ({ id: s.token_hash.slice(0, 16), current: s.token_hash === cur, created: s.created_at || null, seen: s.seen_at || null, ua: s.ua || '', country: s.country || '' })) });
+  },
+  async 'DELETE /sessions/:id'({ env, request, me, arg }) {
+    const cur = await tokenHash(request);
+    if (cur.startsWith(arg)) return fail(400, 'Это устройство: чтобы выйти здесь, нажми «Выйти из аккаунта».');
+    const r = await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND substr(token_hash, 1, 16) = ?').bind(me.id, arg).run();
+    return json({ ok: true, n: r.meta.changes || 0 });
+  },
+  async 'POST /sessions/others'({ env, request, me }) {
+    const cur = await tokenHash(request);
+    const r = await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?').bind(me.id, cur).run();
+    return json({ ok: true, n: r.meta.changes || 0 });
+  },
+  // удалить свой аккаунт: текущий пароль и юзернейм, всё на сервере стирается сразу и навсегда
+  async 'POST /account/delete'({ env, request, me }) {
+    const { password, confirm } = await readBody(request);
+    const u = await env.DB.prepare('SELECT id, uname, pass_hash, salt FROM users WHERE id = ?').bind(me.id).first();
+    if (!u) return fail(404, 'Нет такого аккаунта.');
+    if (await isAdminAccount(env, u)) return fail(400, 'Аккаунт администратора так удалить нельзя.');
+    const wait = await bump(env, 'acc:' + me.id, 'loginAcc');
+    if (wait) return tooMany(wait);
+    const pass = String(password || '');
+    if (pass.length > 200 || !sameHex(await hashPass(pass, u.salt), u.pass_hash)) return fail(403, 'Текущий пароль не подходит.');
+    if (cleanHandle(confirm) !== u.uname) return fail(400, `Чтобы удалить, впиши свой юзернейм @${u.uname}.`);
+    await env.DB.batch([
+      'UPDATE lot_rooms SET ver = ver + 1 WHERE id IN (SELECT room_id FROM lots WHERE user_id = ?1)',
+      'DELETE FROM sessions WHERE user_id = ?1',
+      'DELETE FROM shelves WHERE user_id = ?1',
+      'DELETE FROM tierlists WHERE user_id = ?1',
+      'DELETE FROM lots WHERE user_id = ?1 OR room_id IN (SELECT id FROM lot_rooms WHERE owner_id = ?1)',
+      'DELETE FROM lot_rooms WHERE owner_id = ?1',
+      'DELETE FROM photos WHERE user_id = ?1',
+      'DELETE FROM friendships WHERE a = ?1 OR b = ?1',
+      'DELETE FROM reactions WHERE owner_id = ?1 OR from_id = ?1',
+      'DELETE FROM comments WHERE owner_id = ?1 OR from_id = ?1',
+      'DELETE FROM shares WHERE owner_id = ?1',
+      'DELETE FROM attempts WHERE key = \'acc:\' || ?1',
+      'DELETE FROM users WHERE id = ?1',
+    ].map((q) => env.DB.prepare(q).bind(u.id)));
+    return json({ ok: true });
   },
 
   async 'POST /ping'({ env, request }) {
@@ -2512,6 +2579,7 @@ export async function onRequest({ request, env, params }) {
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'live') { key = `${request.method} /lots/:code/live`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'drop') { key = `${request.method} /lots/:code/drop`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'hub') { key = `${request.method} /lots/:code/hub`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 2 && segs[0] === 'sessions' && /^[0-9a-f]{16}$/.test(segs[1])) { key = `${request.method} /sessions/:id`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'share' && SHARE_RE.test(segs[1])) { key = `${request.method} /share/:id`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'share' && segs[2] === 'img' && SHARE_RE.test(segs[1])) { key = `${request.method} /share/:id/img`; arg = segs[1]; }
   const handler = routes[key];

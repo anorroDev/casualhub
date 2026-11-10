@@ -49,28 +49,6 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
 .hm-admin { border-color: color-mix(in srgb, #E4553F 55%, var(--line, #2b2e38)) !important; color: var(--ink, #f3f4f6) !important; }
 .hm-admin svg { color: #E4553F; flex: none; }
 .wn-corner [data-whatsnew] { box-shadow: 0 10px 24px -14px rgba(0, 0, 0, .6); }
-/* окно «Настройки» */
-.hs-sheet { position: fixed; inset: 0; z-index: 110; display: grid; place-items: center; padding: 16px; background: rgba(8, 10, 14, .6); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
-.hs-sheet[hidden] { display: none; }
-.hs-card { width: min(480px, 100%); max-height: calc(100dvh - 32px); display: grid; grid-template-rows: auto minmax(0, 1fr); gap: 12px; padding: 18px; border: 1px solid var(--line, #2b2e38); border-radius: 20px; background: var(--panel, #1b1d24); color: var(--ink, #f3f4f6); box-shadow: 0 30px 70px -28px rgba(0, 0, 0, .7); animation: hm-in .24s cubic-bezier(.34, 1.56, .64, 1); }
-.hs-head { display: flex; align-items: center; gap: 10px; }
-.hs-head h2 { flex: 1; margin: 0; font-size: 19px; }
-.hs-x { flex: none; width: 36px; height: 36px; border: 1px solid var(--line, #2b2e38); border-radius: 50%; background: transparent; color: inherit; font-size: 15px; cursor: pointer; }
-.hs-body { overflow: auto; display: grid; gap: 16px; align-content: start; }
-.hs-sec { display: grid; gap: 6px; }
-.hs-lab { font-size: 11.5px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3, #8b8f9c); }
-.hs-it { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: 1px solid var(--line, #2b2e38); border-radius: 14px; background: var(--panel-2, #23262f); color: var(--ink, #f3f4f6); text-decoration: none; transition: border-color .15s, transform .15s; }
-.hs-it:hover { border-color: var(--accent, #3550E8); transform: translateY(-1px); }
-.hs-tg { cursor: pointer; }
-.hs-tg:hover { transform: none; }
-.hs-tg input { flex: none; width: 20px; height: 20px; margin: 0 2px 0 auto; accent-color: var(--accent, #3550E8); cursor: pointer; }
-.hs-ic { flex: none; width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 20px; background: color-mix(in srgb, var(--accent, #3550E8) 16%, transparent); }
-.hs-t { flex: 1; min-width: 0; display: grid; gap: 2px; }
-.hs-t b { font-size: 14.5px; }
-.hs-t small { font-size: 12.5px; color: var(--ink-2, #b9bdc8); line-height: 1.3; }
-.hs-go { flex: none; font-size: 22px; color: var(--ink-3, #8b8f9c); }
-.hs-note { margin: 0; font-size: 12.5px; color: var(--ink-3, #8b8f9c); }
-@media (prefers-reduced-motion: reduce) { .hs-card { animation: none; } }
 `;
   document.head.appendChild(css);
   // ссылка на страницу, где ты уже находишься (кнопка своего профиля на своём профиле, логотип на главной):
@@ -93,53 +71,15 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     '/tierlist/': '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1" y="1.5" width="4" height="3.6" rx="1" fill="#2EAD60"/><rect x="6" y="1.5" width="9" height="3.6" rx="1" fill="currentColor" opacity=".55"/><rect x="1" y="6.2" width="4" height="3.6" rx="1" fill="#EAA92C"/><rect x="6" y="6.2" width="6" height="3.6" rx="1" fill="currentColor" opacity=".55"/><rect x="1" y="10.9" width="4" height="3.6" rx="1" fill="#E4553F"/><rect x="6" y="10.9" width="3" height="3.6" rx="1" fill="currentColor" opacity=".55"/></svg>',
   };
   const NAMES = { '/opinion/': 'Мнение', '/wheel/': 'Колесо', '/tierlist/': 'Тир-листы' };
-  // окно «Настройки»: разделы и пункты. Новая настройка — ещё один пункт здесь.
-  // href — куда вести со страниц, где пункт сам не работает; attr — атрибут, по которому его ловит Мнение
-  const SETTINGS = [
-    { title: 'Импорт', items: [
-      { icon: '<span class="u-old">🎬</span><svg class="u-new" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="4" width="17" height="16" rx="2"/><path d="M8 4v16M16 4v16M3.5 9H8M3.5 15H8M16 9h4.5M16 15h4.5"/></svg>', name: 'Импорт из Letterboxd', desc: 'Перенести оценки фильмов из архива Letterboxd', href: '/opinion/#letterboxd', attr: 'data-lb-open' },
-    ] },
-    { title: 'Обложки и названия', items: [
-      { icon: '<span class="u-old">🔄</span><svg class="u-new" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14.6-4.5L3.5 9M3.5 4v5h5M4 13a8 8 0 0 0 14.6 4.5l1.9-2.5M20.5 20v-5h-5"/></svg>', name: 'Обновить обложки и названия', desc: 'Подтянуть к сохранённым оценкам обложки, русские названия, год и жанры', href: '/opinion/#refresh', attr: 'data-refresh-open' },
-    ] },
-  ];
-  const EX_KEY = 'casualhub.examples.v1';
-  const examplesOn = () => { try { return localStorage.getItem(EX_KEY) !== '0'; } catch (e) { return true; } };
-  const escH = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-  let setBox = null;
-  function openSettings() {
-    if (!setBox) {
-      setBox = document.createElement('div');
-      setBox.className = 'hs-sheet';
-      setBox.hidden = true;
-      setBox.innerHTML = `<div class="hs-card" role="dialog" aria-modal="true" aria-labelledby="hsTitle">
-        <div class="hs-head"><h2 id="hsTitle"><span class="u-old">⚙️ </span>Настройки</h2><button type="button" class="hs-x" data-hs="close" aria-label="Закрыть">✕</button></div>
-        <div class="hs-body">${SETTINGS.map((sec) => `<section class="hs-sec"><span class="hs-lab">${escH(sec.title)}</span>
-          ${sec.items.map((it) => `<a class="hs-it" href="${escH(it.href)}" ${it.attr}><span class="hs-ic" aria-hidden="true">${it.icon}</span><span class="hs-t"><b>${escH(it.name)}</b><small>${escH(it.desc)}</small></span><span class="hs-go" aria-hidden="true">›</span></a>`).join('')}</section>`).join('')}
-          <section class="hs-sec"><span class="hs-lab">Примеры</span>
-          <label class="hs-it hs-tg"><span class="hs-t"><b>Показывать примеры</b><small>Пример топа на главной и участники в пустом Колесе. Выключишь — они уберутся и больше не появятся</small></span><input type="checkbox" data-examples${examplesOn() ? ' checked' : ''}></label></section>
-          <p class="hs-note">Скоро здесь появятся и другие настройки.</p></div></div>`;
-      document.body.appendChild(setBox);
-      // настройка общая для всего сайта: хранится в браузере, страница (Колесо) узнаёт о ней сразу
-      setBox.querySelector('[data-examples]').addEventListener('change', (e) => {
-        try { localStorage.setItem(EX_KEY, e.target.checked ? '1' : '0'); } catch (er) {}
-        window.dispatchEvent(new CustomEvent('casualhub:examples', { detail: e.target.checked }));
-      });
-      setBox.addEventListener('click', (e) => {
-        // пункт: окно закрывается, а сам пункт открывает своё окно (в Мнении) или ведёт туда
-        if (e.target === setBox || e.target.closest('[data-hs="close"], a.hs-it')) closeSettings();
-      });
-      document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && setBox && !setBox.hidden) closeSettings(); });
-    }
-    setBox.hidden = false;
-    document.documentElement.style.overflow = 'hidden';
-    setBox.querySelector('.hs-x').focus({ preventScroll: true });
+  // окно «Настройки» живёт в /settings.js и грузится при первом открытии: страницам оно не нужно, пока его не открыли
+  let setLoad = null;
+  function openSettings(section) {
+    const sec = typeof section === 'string' ? section : undefined;
+    if (window.CasualSettings) { window.CasualSettings.open(sec); return; }
+    if (!setLoad) setLoad = new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = '/settings.js'; sc.onload = res; sc.onerror = () => { setLoad = null; rej(); }; document.head.appendChild(sc); });
+    setLoad.then(() => window.CasualSettings.open(sec), () => {});
   }
-  function closeSettings() {
-    if (!setBox || setBox.hidden) return;
-    setBox.hidden = true;
-    document.documentElement.style.overflow = '';
-  }
+  window.CasualOpenSettings = openSettings;
 
   const ADMINS = ['YW5vcnJv', 'eXVrb21hZ29k'].map((x) => atob(x));
   function adminBtn(cls) {
@@ -231,11 +171,11 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
       gh.innerHTML = GH_ICON + '<span class="hm-t">GitHub</span>';
       panel.appendChild(gh);
     }
-    // «Настройки»: окно с импортом из Letterboxd и обновлением обложек (пункты — в SETTINGS выше)
+    // «Настройки»: аккаунт, безопасность, приватность, вид, данные (окно — /settings.js)
     const set = document.createElement('button');
     set.type = 'button';
     set.className = cls + ' hm-set';
-    set.title = 'Импорт оценок, обложки и названия';
+    set.title = 'Аккаунт, безопасность, тема и данные';
     set.innerHTML = '<span aria-hidden="true"><span class="u-old">⚙️</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg></span><span class="hm-t">Настройки</span>';
     set.addEventListener('click', openSettings);
     panel.appendChild(set);
@@ -277,7 +217,9 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
       if (adm) panel.appendChild(adm);
     };
     placeWn();
-    if (location.hash === '#settings') { history.replaceState(null, '', location.pathname + location.search); openSettings(); }
+    // /…#settings открывает настройки, #settings-security — сразу нужный раздел
+    const sh = location.hash.match(/^#settings(?:-([a-z]+))?$/);
+    if (sh) { history.replaceState(null, '', location.pathname + location.search); openSettings(sh[1]); }
     let rq = 0;
     addEventListener('resize', () => { cancelAnimationFrame(rq); rq = requestAnimationFrame(placeWn); });
 
