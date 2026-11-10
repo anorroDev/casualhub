@@ -240,13 +240,7 @@
     }
     F.token = uid ? readTokens()[uid] || null : null;
     F.me = null;
-    // нет онлайн-сессии (старый аккаунт или сессия потерялась): подключаем сам, паролем из профиля
-    F.autoLinkTried = F.autoLinkTried || new Set();
-    if (F.online && !F.token && state.user && !F.autoLinkTried.has(state.user.id)
-        && String(state.user.pass || '').length >= 6) {
-      F.autoLinkTried.add(state.user.id);
-      if (await linkCurrent(state.user.pass, true)) return;
-    }
+    // старый профиль без онлайн-сессии подключается к аккаунту при входе (loginUser ниже): пароля в браузере больше нет
     if (F.online && F.token) {
       try {
         F.me = (await api('/me')).user;
@@ -378,17 +372,19 @@
     setTokenFor(localId, r.token);
     state.user.serverId = r.user.id;
     delete state.user.pass;
+    delete state.user.passHash;
     saveUsers();
     F.linkError = '';
     await syncSession();
     return true;
   }
 
-  // профиль подключён к аккаунту: пароль из браузера стираем (его могли сохранить старые версии сайта)
+  // профиль подключён к аккаунту: пароль и его хеш из браузера стираем (их могли сохранить старые версии сайта)
   function forgetPass() {
     let ch = false;
-    state.users.forEach((u) => { if (u.serverId && u.pass && readTokens()[u.id]) { delete u.pass; ch = true; } });
-    if (state.user && state.user.pass && state.user.serverId) { delete state.user.pass; ch = true; }
+    const drop = (u) => { if (u && u.serverId && (u.pass !== undefined || u.passHash)) { delete u.pass; delete u.passHash; ch = true; } };
+    state.users.forEach((u) => { if (readTokens()[u.id]) drop(u); });
+    drop(state.user);
     if (ch) saveUsers();
   }
 
@@ -1202,9 +1198,12 @@ ${ICON.chev}
   }
   const cleanNick = (s) => String(s || '').trim().replace(/\s+/g, ' ');
 
+  // без сервера аккаунт не заводится и не входит: локальных профилей с паролем в браузере больше нет
+  const OFFLINE_REG = 'Сервер сейчас не отвечает. Попробуй зарегистрироваться через пару минут.';
+  const OFFLINE_LOGIN = 'Сервер сейчас не отвечает. Попробуй войти через пару минут.';
   if (typeof orig.register === 'function') {
     window.registerUser = async function (username, email, password, avatar, color, handle) {
-      if (!F.online) return orig.register.apply(this, arguments);
+      if (F.online === false) { toast(OFFLINE_REG); return false; }
       const nick = cleanNick(username);
       const em = String(email || '').trim().toLowerCase();
       const pass = String(password || '').trim();
@@ -1217,7 +1216,7 @@ ${ICON.chev}
       let r;
       try { r = await api('/register', 'POST', { username: nick, handle: h, password: pass, email: em }, null); }
       catch (e) {
-        if (e.status === 0 || e.status === 503) return orig.register.call(this, nick, email, password, avatar, color, h);
+        if (e.status === 0 || e.status === 503) { toast(OFFLINE_REG); return false; }
         toast(e.status === 409 && /почт/.test(e.message) ? `${e.message} Если это твой аккаунт, войди на вкладке «Вход».` : e.message);
         return false;
       }
@@ -1236,7 +1235,7 @@ ${ICON.chev}
 
   if (typeof orig.login === 'function') {
     window.loginUser = async function (identifier, password) {
-      if (!F.online) return orig.login.apply(this, arguments);
+      if (F.online === false) { toast(OFFLINE_LOGIN); return false; }
       const ident = String(identifier || '').trim();
       const pass = String(password || '').trim();
       if (!ident) return orig.login.apply(this, arguments);
@@ -1268,7 +1267,7 @@ ${ICON.chev}
           state.users.push(u);
         }
         u.serverId = r.user.id;
-        delete u.pass; // пароль проверяет сервер, в браузере он не хранится
+        delete u.pass; delete u.passHash; // пароль проверяет сервер, в браузере не хранится ни он, ни его хеш
         setTokenFor(u.id, r.token);
         state.user = u;
         adoptAccount(r.user);
@@ -1280,13 +1279,13 @@ ${ICON.chev}
         await syncSession();
         return true;
       }
-      // сервер недоступен: обычный вход на этом устройстве
-      if (err && (err.status === 0 || err.status === 503)) return orig.login.apply(this, arguments);
+      // сервер недоступен: без него не входим
+      if (err && (err.status === 0 || err.status === 503)) { toast(OFFLINE_LOGIN); return false; }
       // бан, «письмо не ушло», «слишком много попыток»: сервер сам сказал, что не так. «Неверный пароль» — только при 401
       if (err && err.status !== 401) { toast(err.message); return false; }
-      // старый аккаунт, созданный до онлайн-входа: входим локально и тихо подключаем к друзьям
-      if (local && !local.serverId && (!local.pass || local.pass === pass)) {
-        const ok = orig.login.apply(this, arguments);
+      // старый профиль, заведённый до онлайн-входа: пароль сверяется с его хешем, затем профиль подключается к аккаунту
+      if (local && !local.serverId) {
+        const ok = await orig.login.apply(this, arguments);
         if (ok) await linkCurrent(pass);
         return ok;
       }
@@ -1342,7 +1341,7 @@ ${ICON.chev}
       const before = state.user.avatar;
       // почта берётся из аккаунта: пустое или неверное поле её не сбрасывает
       const ok = orig.update.call(this, nick, F.me.email || email, password, avatar, color, F.me.handle);
-      if (state.user && state.user.pass) { delete state.user.pass; saveUsers(); }
+      if (state.user && (state.user.pass !== undefined || state.user.passHash)) { delete state.user.pass; delete state.user.passHash; saveUsers(); }
       if (ok && pass) toast('Пароль сменён. На других устройствах нужно войти заново.');
       // сменили аватар здесь: он уходит в аккаунт, чтобы его видели другие устройства и друзья
       if (ok && state.user && state.user.avatar !== before && window.CasualAvatar) {

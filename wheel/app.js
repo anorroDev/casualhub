@@ -86,7 +86,7 @@
     const v = x * 100;
     return (v > 0 && v < 10 ? v.toFixed(1).replace('.', ',') : String(Math.round(v))) + '%';
   };
-  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const esc = window.CasualUtil.esc; // общий, /util.js
   const mod = (a, m) => ((a % m) + m) % m;
   const nearest = (v, list) => list.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a));
   const rnd = () => {

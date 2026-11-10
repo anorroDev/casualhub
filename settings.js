@@ -3,9 +3,9 @@
    /sessions, /account/delete), остальное хранится в этом браузере. Новый пункт — в SECTIONS и render-функцию раздела. */
 (() => {
   const API = '/api';
-  const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
+  const read = window.CasualUtil.read; // общий, /util.js
   const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
-  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const esc = window.CasualUtil.esc; // общий, /util.js
   const user = () => read('ocenshik.user.v1');
   const token = () => { const u = user(); return u && u.id ? (read('casualhub.tokens.v1') || {})[u.id] || null : null; };
   async function api(path, method = 'GET', body) {

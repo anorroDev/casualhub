@@ -5,8 +5,8 @@
    Аватарки друзей с рамкой отсюда же берёт и окно Мнения (window.CasualFriendsUI). */
 (() => {
   const profUrl = (id, h) => (typeof h === 'string' && /^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/.test(h) ? '/profile/' + h : '/profile/?id=' + encodeURIComponent(id));
-  const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const read = window.CasualUtil.read; // общий, /util.js
+  const esc = window.CasualUtil.esc; // общий, /util.js
   const COLORS = ['#3550E8', '#2EAD60', '#EAA92C', '#E4553F', '#9333EA', '#06B6D4', '#EC4899', '#F97316'];
   const colorOf = (s) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.codePointAt(0)) >>> 0; return COLORS[h % COLORS.length]; };
   const token = () => { const u = read('ocenshik.user.v1'); const t = read('casualhub.tokens.v1') || {}; return (u && t[u.id]) || null; };

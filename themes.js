@@ -23,7 +23,7 @@
     T('graphite', 'Графит', '🖤', 'dark', '#000000', '#0E0E0F', '#FFB020'),
   ];
   const GROUPS = [['auto', ''], ['light', 'Светлые'], ['dark', 'Тёмные']];
-  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const esc = window.CasualUtil.esc; // общий, /util.js
 
   // карточка темы: маленькая «страница» в её цветах — фон, панель и акцентная кнопка
   const card = (t, current, i) => {

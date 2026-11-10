@@ -2,7 +2,7 @@
    «Забыли пароль?» и ссылки из писем (#reset=… — новый пароль, #verify=… — подтверждение почты).
    Письма работают, только если на сервере подключена почта (GET /api/auth/options → mail). */
 (() => {
-  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const esc = window.CasualUtil.esc; // общий, /util.js
   async function post(path, body) {
     const r = await fetch('/api' + path, { method: 'POST', cache: 'no-store', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body || {}) });
     let d = {};

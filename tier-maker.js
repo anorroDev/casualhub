@@ -10,7 +10,7 @@
     { id: 'C', col: '#F28E4C' }, { id: 'D', col: '#F26A55' },
   ];
   const AUTO = { S: 9.2, A: 8.2, B: 7, C: 5, D: -Infinity }; // «По баллам» — как в обычном тир-листе
-  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const esc = window.CasualUtil.esc; // общий, /util.js
   const readAll = () => { try { return JSON.parse(localStorage.getItem(KEY) || '{}') || {}; } catch (e) { return {}; } };
   const keep = () => { try { const all = readAll(); all[S.scope] = { rows: S.rows, at: Date.now() }; localStorage.setItem(KEY, JSON.stringify(all)); } catch (e) {} };
 

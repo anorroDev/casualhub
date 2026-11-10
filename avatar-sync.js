@@ -3,7 +3,7 @@
 (() => {
   const ANIM_KEY = 'casualhub.avatarAnim.v1'; // анимированный аватар целиком; в профиле и оценках лежит его первый кадр
   const SEEN_KEY = 'casualhub.avatarSeen.v1'; // { id аккаунта: когда аватар в аккаунте менялся } — чтобы не качать его на каждом заходе
-  const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
+  const read = window.CasualUtil.read; // общий, /util.js
   const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); return true; } catch (e) { return false; } };
   const isImg = (a) => typeof a === 'string' && /^(data:image\/|https?:\/\/)/.test(a);
   const sigOf = (a) => (typeof a === 'string' ? a.slice(-48) : '');

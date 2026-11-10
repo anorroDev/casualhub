@@ -2,8 +2,8 @@
   const profUrl = (id, h) => (typeof h === 'string' && /^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/.test(h) ? '/profile/' + h : '/profile/?id=' + encodeURIComponent(id));
   const $ = (s) => document.querySelector(s);
   const app = $('#app');
-  const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
-  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const read = window.CasualUtil.read; // общий, /util.js
+  const esc = window.CasualUtil.esc; // общий, /util.js
   const user = read('ocenshik.user.v1');
   const token = user && (read('casualhub.tokens.v1') || {})[user.id];
   const call = (method, path, body) => fetch('/api' + path, {
@@ -260,7 +260,7 @@
   let tab = 'stats';
   const sec = () => $('#admSec');
   const when = (t) => (t ? new Date(t).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—');
-  const plural = (n, one, few, many) => { const a = Math.abs(n) % 100, b = a % 10; return a > 10 && a < 20 ? many : b > 1 && b < 5 ? few : b === 1 ? one : many; };
+  const plural = window.CasualUtil.plural; // общий, /util.js
   const fail = (x) => {
     if (lostSession(x)) { message('Вход закончился', 'Войди в аккаунт ещё раз, и админка снова откроется.', '<a class="btn primary" href="/opinion/#login">Войти</a>'); return; }
     if (lostAdmin(x)) { me.active = false; pinForm(); return; }

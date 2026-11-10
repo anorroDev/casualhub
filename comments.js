@@ -3,11 +3,11 @@
    Использование: CasualComments.mount(контейнер, { uid, target: 'wall' | 'r.<id оценки>', token, title, empty }) */
 (() => {
   const profUrl = (id, h) => (typeof h === 'string' && /^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/.test(h) ? '/profile/' + h : '/profile/?id=' + encodeURIComponent(id));
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const esc = window.CasualUtil.esc; // общий, /util.js
   const MAX = 500;
   const COLORS = ['#3550E8', '#EAA92C', '#2EAD60', '#EC4899', '#9333EA', '#06B6D4', '#F97316', '#14B8A6'];
   const colorOf = (id) => COLORS[[...String(id)].reduce((a, c) => a + c.charCodeAt(0), 0) % COLORS.length];
-  const plural = (n, a, b, c) => { const m = n % 10, h = n % 100; return m === 1 && h !== 11 ? a : m >= 2 && m <= 4 && (h < 10 || h >= 20) ? b : c; };
+  const plural = window.CasualUtil.plural; // общий, /util.js
   const ago = (t) => {
     const s = Math.max(0, (Date.now() - t) / 1000);
     if (s < 60) return 'только что';

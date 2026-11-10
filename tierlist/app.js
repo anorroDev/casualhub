@@ -7,7 +7,7 @@
   const profUrl = (id, h) => (typeof h === 'string' && /^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/.test(h) ? '/profile/' + h : '/profile/?id=' + encodeURIComponent(id));
   const BASE_KEY = 'casualhub.tierlists.v1', SYNC_BASE = 'casualhub.tier.sync.v1', PREFS_KEY = 'ocenshik.prefs.v1', RATINGS_KEY = 'ocenshik.ratings.v2';
   const $ = (s) => document.querySelector(s);
-  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const esc = window.CasualUtil.esc; // общий, /util.js
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const touch = matchMedia('(pointer: coarse)').matches;
   const rid = (p) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
@@ -16,9 +16,9 @@
   const LIMIT = { rows: 20, items: 500, title: 80, label: 40, name: 80, file: 20 * 1024 * 1024, json: 80 * 1024 * 1024 };
   const COLOR_RE = /^#[0-9a-f]{6}$/i, SRC_RE = /^\/wheel\/hub\/(?!.*\.\.)[\w\-/.]+\.(png|webp|gif|jpe?g)$/i, DATA_RE = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/;
   const ITEM_RE = /^(?!__proto__$|constructor$|prototype$)[\w.:-]{1,80}$/;
-  const plural = (n, one, few, many) => { const a = Math.abs(n) % 100, b = a % 10; return a > 10 && a < 20 ? many : b > 1 && b < 5 ? few : b === 1 ? one : many; };
+  const plural = window.CasualUtil.plural; // общий, /util.js
   const cards = (n) => `${n} ${plural(n, 'карточка', 'карточки', 'карточек')}`;
-  const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
+  const read = window.CasualUtil.read; // общий, /util.js
   const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
   // ---------- аккаунт ----------

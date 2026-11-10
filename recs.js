@@ -4,11 +4,11 @@
 (() => {
   const box = document.getElementById('recs');
   if (!box) return;
-  const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
+  const read = window.CasualUtil.read; // общий, /util.js
   const user = read('ocenshik.user.v1');
   const token = user && (read('casualhub.tokens.v1') || {})[user.id];
   if (!token) return;
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const esc = window.CasualUtil.esc; // общий, /util.js
   const fmt = (n) => Number(n).toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const api = (path, o = {}) => fetch('/api' + path, { ...o, headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token }, cache: 'no-store' }).then((r) => (r.ok ? r.json() : Promise.reject(r.status)));
   const KIND = { movie: 'фильм', game: 'игра', anime: 'аниме' };

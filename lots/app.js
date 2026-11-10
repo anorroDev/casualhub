@@ -3,9 +3,9 @@
    Прокрутку страница рисует сама по общему времени сервера. */
 (() => {
   const $ = (s) => document.querySelector(s);
-  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const plural = (n, one, few, many) => { const a = Math.abs(n) % 100, b = a % 10; return a > 10 && a < 20 ? many : b > 1 && b < 5 ? few : b === 1 ? one : many; };
-  const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
+  const esc = window.CasualUtil.esc; // общий, /util.js
+  const plural = window.CasualUtil.plural; // общий, /util.js
+  const read = window.CasualUtil.read; // общий, /util.js
   const PREFS_KEY = 'ocenshik.prefs.v1';
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const TAU = Math.PI * 2;
