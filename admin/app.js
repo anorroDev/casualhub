@@ -256,7 +256,7 @@
   }
   const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  const TABS = [['stats', '📊', 'Статистика'], ['users', '👥', 'Пользователи'], ['comments', '💬', 'Комментарии'], ['announce', '📢', 'Объявление'], ['changes', '🛠', 'Изменения'], ['log', '📜', 'Журнал']];
+  const TABS = [['stats', '📊', 'Статистика'], ['users', '👥', 'Пользователи'], ['comments', '💬', 'Комментарии'], ['announce', '📢', 'Объявление'], ['mail', '✉️', 'Почта'], ['changes', '🛠', 'Изменения'], ['log', '📜', 'Журнал']];
   let tab = 'stats';
   const sec = () => $('#admSec');
   const when = (t) => (t ? new Date(t).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—');
@@ -276,7 +276,7 @@
     const s = sec();
     if (!s) return;
     s.innerHTML = '<p class="muted">Загружаю…</p>';
-    ({ stats, users, comments, announce, changes, log })[tab]();
+    ({ stats, users, comments, announce, mail, changes, log })[tab]();
   }
   let emos = null;
   const emoOf = (x) => { if (!emos || !emos.length) return ''; let h = 0; for (const c of x.title) h = (h * 31 + c.charCodeAt(0)) >>> 0; return emos[h % emos.length]; };
@@ -426,6 +426,36 @@
       });
     } catch (x) { if (!stale(my)) fail(x); }
   }
+  // почта сайта (Resend): подключена ли, последняя отправка и её ответ, тестовое письмо себе
+  async function mail() {
+    const my = fresh();
+    try {
+      const d = await call('GET', '/admin/mail');
+      if (stale(my)) return;
+      const last = d.last;
+      const kinds = { reset: 'сброс пароля', verify: 'подтверждение почты', test: 'тестовое' };
+      sec().innerHTML = `<div class="head"><h2 class="h2">Почта</h2><span class="label">${d.on ? 'подключена' : 'не подключена'}</span></div>
+        <p class="muted">Письма для «Забыли пароль?» и подтверждения почты уходят через Resend. Ключ задаётся в Cloudflare (MAIL_KEY), здесь не показывается.</p>
+        <ul class="adm-mail">
+          <li><b>Ключ</b> ${d.hasKey ? (d.keyLooksRight ? 'есть' : 'есть, но не похож на ключ Resend (должен начинаться с re_)') : 'нет'}</li>
+          <li><b>Отправитель</b> ${d.from ? esc(d.from) : 'не задан (MAIL_FROM)'}</li>
+          <li><b>Последнее письмо</b> ${last ? `${esc(when(last.at))} · ${esc(kinds[last.kind] || last.kind || '')} · ${esc(last.to || '')} · ${last.ok ? '<span class="adm-ok">ушло</span>' : `<span class="adm-bad">не ушло (${esc(last.status)})</span>`}` : 'пока не отправлялось'}</li>
+          ${last && !last.ok ? `<li><b>Ответ Resend</b> ${esc(last.msg || '—')}</li>` : ''}
+        </ul>
+        <div class="adm-ann-row"><button type="button" class="btn primary" id="admMailTest"${d.on ? '' : ' disabled'}>Отправить тестовое письмо себе${d.to ? ' (' + esc(d.to) + ')' : ''}</button></div>
+        <p class="adm-err" id="admMailMsg" role="status"></p>`;
+      $('#admMailTest').addEventListener('click', async (e) => {
+        const b = e.currentTarget, m = $('#admMailMsg');
+        b.disabled = true; m.textContent = 'Отправляю…';
+        try {
+          const r = await call('POST', '/admin/mail-test');
+          m.textContent = r.ok ? `Ушло на ${r.to}. Проверь почту, в том числе «Спам».` : 'Не ушло. Ответ Resend — в строке выше.';
+          setTimeout(mail, r.ok ? 1500 : 0);
+        } catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else { m.textContent = x.message; b.disabled = false; } }
+      });
+    } catch (x) { if (!stale(my)) fail(x); }
+  }
+
   async function announce() {
     const my = fresh();
     try {

@@ -223,19 +223,40 @@ const BAD_CODE = 'Код не подходит. Возьми свежий из �
 const mailOn = (env) => !!(env.MAIL_KEY && env.MAIL_FROM);
 const langOf = (request) => (/(?:^|;\s*)casualhub_lang=en(?:;|$)/.test(request.headers.get('cookie') || '') ? 'en' : 'ru');
 const escMail = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-async function sendMail(env, to, subject, lines, btn, url) {
+// маска для журнала почты: первые буквы и домен
+const maskMail = (m) => { const [a, d] = String(m || '').split('@'); return d ? a.slice(0, 2) + '…@' + d : ''; };
+async function noteMail(env, rec) {
+  try { await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('mail_last', ?)").bind(JSON.stringify({ ...rec, at: Date.now() })).run(); } catch (e) {}
+}
+async function sendMail(env, to, subject, lines, btn, url, kind) {
   const text = [...lines, '', btn + ': ' + url].join('\n');
   const html = `<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#14161c">`
     + `<p style="font-size:20px;font-weight:700;margin:0 0 16px">Casual Hub</p>`
     + lines.map((l) => `<p style="font-size:15px;line-height:1.5;margin:0 0 12px">${escMail(l)}</p>`).join('')
     + `<p style="margin:20px 0"><a href="${escMail(url)}" style="display:inline-block;padding:12px 20px;border-radius:12px;background:#3550E8;color:#fff;text-decoration:none;font-weight:600">${escMail(btn)}</a></p>`
     + `<p style="font-size:12px;color:#6b7080;word-break:break-all;margin:0">${escMail(url)}</p></div>`;
-  const r = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: { authorization: 'Bearer ' + env.MAIL_KEY, 'content-type': 'application/json' },
-    body: JSON.stringify({ from: env.MAIL_FROM, to: [to], subject, text, html }),
-  });
-  if (!r.ok) throw new Error('mail ' + r.status);
+  let r, body = '';
+  try {
+    r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { authorization: 'Bearer ' + String(env.MAIL_KEY).trim(), 'content-type': 'application/json' },
+      body: JSON.stringify({ from: String(env.MAIL_FROM).trim().replace(/^["'«](.*)["'»]$/s, '$1').trim(), to: [to], subject, text, html }),
+    });
+    body = await r.text();
+  } catch (e) {
+    await noteMail(env, { ok: false, kind, to: maskMail(to), status: 0, msg: 'Нет связи с Resend: ' + String(e && e.message || e).slice(0, 200) });
+    throw new Error('mail network');
+  }
+  let d = {};
+  try { d = JSON.parse(body); } catch (e) {}
+  if (!r.ok) {
+    // ответ Resend целиком (без ключа): «домен не подтверждён», «неверный отправитель» и т. п.
+    await noteMail(env, { ok: false, kind, to: maskMail(to), status: r.status, msg: String(d.message || d.error || body || '').slice(0, 300) });
+    const err = new Error('mail ' + r.status);
+    err.resend = String(d.message || '').slice(0, 300);
+    throw err;
+  }
+  await noteMail(env, { ok: true, kind, to: maskMail(to), status: r.status, id: d.id || '' });
 }
 async function mailToken(env, userId, kind, email, minutes) {
   const t = randHex(32), now = Date.now();
@@ -706,6 +727,29 @@ const routes = {
     return json({ items: results.map((x) => ({ at: x.at, handle: x.uname || '', action: x.action, ok: !!x.ok, ip: x.ip ? String(x.ip).replace(/(\d+\.\d+)\.\d+\.\d+$/, '$1.*.*').replace(/^([0-9a-f]+:[0-9a-f]+):.*$/i, '$1:…') : '' })) });
   },
 
+  // почта: подключена ли, с какого адреса, чем кончилась последняя отправка (ключ не показывается)
+  async 'GET /admin/mail'({ env, request, me }) {
+    if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+    const row = await env.DB.prepare("SELECT v FROM meta WHERE k = 'mail_last'").first();
+    let last = null;
+    try { last = row ? JSON.parse(row.v) : null; } catch (e) {}
+    return json({ on: mailOn(env), hasKey: !!env.MAIL_KEY, keyLooksRight: /^re_/.test(String(env.MAIL_KEY || '').trim()), from: String(env.MAIL_FROM || ''), to: maskMail(me.email), last });
+  },
+  async 'POST /admin/mail-test'({ env, request, me }) {
+    if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+    if (burst('mailtest:' + me.id, 5, 60e3)) return tooMany(1);
+    if (!mailOn(env)) return fail(400, 'Почта не подключена: нет MAIL_KEY или MAIL_FROM.');
+    if (!me.email) return fail(400, 'У твоего аккаунта нет почты.');
+    try {
+      await sendMail(env, me.email, 'Тестовое письмо Казуал Хаба', ['Это проверка почты из админки. Если ты это читаешь, письма с сайта доходят.'], 'Открыть сайт', new URL(request.url).origin + '/', 'test');
+    } catch (e) {
+      const row = await env.DB.prepare("SELECT v FROM meta WHERE k = 'mail_last'").first();
+      return json({ ok: false, last: row ? JSON.parse(row.v) : null });
+    }
+    await adminLog(env, request, me, 'mail:test', true);
+    return json({ ok: true, to: maskMail(me.email) });
+  },
+
   async 'GET /admin/changes'({ env, request, me }) {
     if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
     const row = await env.DB.prepare("SELECT v FROM meta WHERE k = 'admin_notes_key'").first();
@@ -875,7 +919,7 @@ const routes = {
         await sendMail(env, mail, en ? 'Reset your Casual Hub password' : 'Сброс пароля в Казуал Хабе',
           en ? [`Someone asked to reset the password for @${u.uname}.`, 'The link works for one hour and only once. If it wasn’t you, just ignore this email: your password stays the same.']
              : [`Кто-то попросил сбросить пароль аккаунта @${u.uname}.`, 'Ссылка работает час и один раз. Если это был не ты, просто не обращай внимания: пароль останется прежним.'],
-          en ? 'Set a new password' : 'Задать новый пароль', url);
+          en ? 'Set a new password' : 'Задать новый пароль', url, 'reset');
       } catch (e) {}
     }
     return json({ ok: true });
@@ -912,8 +956,8 @@ const routes = {
       await sendMail(env, me.email, en ? 'Confirm your email for Casual Hub' : 'Подтверди почту в Казуал Хабе',
         en ? [`This email was added to @${me.handle}.`, 'Confirm it so you can reset your password by email if you ever forget it. The link works for 24 hours.']
            : [`Эту почту указали в аккаунте @${me.handle}.`, 'Подтверди её, чтобы при случае можно было сбросить пароль по почте. Ссылка работает сутки.'],
-        en ? 'Confirm email' : 'Подтвердить почту', url);
-    } catch (e) { return fail(502, 'Письмо не ушло, попробуй через пару минут.'); }
+        en ? 'Confirm email' : 'Подтвердить почту', url, 'verify');
+    } catch (e) { return fail(502, 'Письмо не ушло, попробуй через пару минут.' + (e.resend ? ' Resend: ' + e.resend : '')); }
     return json({ ok: true });
   },
   async 'POST /email/verify'({ env, request }) {
