@@ -697,17 +697,18 @@ const routes = {
       if (Math.random() < 0.05) await env.DB.prepare('DELETE FROM presence WHERE at < ?').bind(now - 864e5).run();
     }
     let friends = [];
-    if (me) {
-      const { results } = await env.DB.prepare(
-        "SELECT u.id, u.last_seen FROM friendships f JOIN users u ON u.id = (CASE WHEN f.a = ?1 THEN f.b ELSE f.a END) WHERE (f.a = ?1 OR f.b = ?1) AND f.status = 'accepted' AND (u.hide_online IS NULL OR u.hide_online = 0) AND u.last_seen > ?2"
-      ).bind(me.id, now - ONLINE_MS).all();
-      friends = results.map((x) => ({ id: x.id, at: x.last_seen }));
-    }
     // заявки в друзья, которые ждут ответа: красная цифра на кнопке «Друзья»
     let incoming = 0;
     if (me) {
-      const c = await env.DB.prepare("SELECT COUNT(*) AS n FROM friendships WHERE (a = ?1 OR b = ?1) AND status = 'pending' AND requested_by != ?1").bind(me.id).first();
-      incoming = c ? c.n : 0;
+      // друзья в сети и заявки — одним походом в базу
+      const [fr, inc] = await env.DB.batch([
+        env.DB.prepare(
+          "SELECT u.id, u.last_seen FROM friendships f JOIN users u ON u.id = (CASE WHEN f.a = ?1 THEN f.b ELSE f.a END) WHERE (f.a = ?1 OR f.b = ?1) AND f.status = 'accepted' AND (u.hide_online IS NULL OR u.hide_online = 0) AND u.last_seen > ?2"
+        ).bind(me.id, now - ONLINE_MS),
+        env.DB.prepare("SELECT COUNT(*) AS n FROM friendships WHERE (a = ?1 OR b = ?1) AND status = 'pending' AND requested_by != ?1").bind(me.id),
+      ]);
+      friends = (fr.results || []).map((x) => ({ id: x.id, at: x.last_seen }));
+      incoming = (inc.results && inc.results[0] && inc.results[0].n) || 0;
     }
     const sentToken = /^Bearer /.test(request.headers.get('authorization') || '');
     return json({ online: Math.max(onlineCache.n, me ? 1 : 0), friends, incoming, window: ONLINE_MS, announce: await currentAnnounce(env), ...(sentToken ? { authed: !!me } : {}) });
