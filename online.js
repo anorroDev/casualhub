@@ -88,7 +88,8 @@
     // текст объявления — только как текст, без разметки
     bar.innerHTML = '<i aria-hidden="true"></i><span></span><button type="button" aria-label="Закрыть объявление">✕</button>';
     bar.querySelector('i').innerHTML = a.kind === 'warn' ? '<span class="u-old">⚠️</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4 2.5 20h19z"/><path d="M12 10v4M12 17h.01"/></svg>' : a.kind === 'party' ? '<span class="u-old">🎉</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10v4h3l7 4V6l-7 4z"/><path d="M18 9.5a3.5 3.5 0 0 1 0 5"/></svg>' : '<span class="u-old">📢</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10v4h3l7 4V6l-7 4z"/><path d="M18 9.5a3.5 3.5 0 0 1 0 5"/></svg>';
-    bar.querySelector('span').textContent = a.text;
+    // текст — в свой span, а не в первый попавшийся: внутри значка тоже есть span (эмодзи для обычного вида)
+    bar.querySelector(':scope > span').textContent = a.text;
     bar.querySelector('button').addEventListener('click', () => { try { localStorage.setItem(ANN_KEY, a.id); } catch (e) {} bar.remove(); });
   }
 
