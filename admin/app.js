@@ -331,9 +331,12 @@
   const userRow = (u, i) => {
     const edit = `<button type="button" class="btn ghost small" data-act="set-handle" data-h="${esc(u.handle)}" title="Сменить @юзернейм">@ Юзернейм</button><button type="button" class="btn ghost small" data-act="set-nick" title="Сменить ник">✎ Ник</button><button type="button" class="btn ghost small" data-act="set-mail" data-m="${esc(u.email)}" title="Сменить почту">✉ Почта</button>`;
     const hard = `<button type="button" class="btn ghost small" data-act="kick">Выкинуть с устройств</button><button type="button" class="btn small danger" data-act="delete" data-h="${esc(u.handle)}">🗑 Удалить</button><button type="button" class="btn small ${u.banned ? 'ghost' : 'danger'}" data-act="${u.banned ? 'unban' : 'ban'}">${u.banned ? 'Разбанить' : 'Забанить'}</button>`;
-    const facts = [u.email, 'с ' + when(u.createdAt), 'был ' + when(u.lastSeen), 'оценок ' + u.ratings].filter(Boolean).map(esc).join(' · ');
+    const facts = [u.email, 'с ' + when(u.createdAt), 'был ' + when(u.lastSeen), 'оценок ' + u.ratings, 'входов ' + (u.sessions || 0)].filter(Boolean).map(esc).join(' · ');
+    // безопасность аккаунта одним взглядом: почта подтверждена, двухфакторная защита
+    const sec = (u.email ? (u.emailOk ? ' <em class="adm-badge ok" title="Почта подтверждена письмом">✓ почта</em>' : ' <em class="adm-badge mute" title="Почта не подтверждена">почта не подтверждена</em>') : ' <em class="adm-badge mute">без почты</em>')
+      + (u.twoFactor ? ' <em class="adm-badge ok" title="Вход с кодом из приложения">🔐 2FA</em>' : '');
     return `<li class="adm-row${u.banned ? ' banned' : ''}" style="--k:${Math.min(i, 12)}" data-uid="${esc(u.id)}"${u.admin ? ' data-admin="1"' : ''}>
-          <div class="adm-who"><b>${esc(u.username)}</b> <a href="${profUrl(u.id, u.handle)}">@${esc(u.handle)}</a>${u.admin ? ' <em class="adm-badge">админ</em>' : ''}${u.banned ? ` <em class="adm-badge bad">бан${u.banReason ? ': ' + esc(u.banReason) : ''}</em>` : ''}
+          <div class="adm-who"><b>${esc(u.username)}</b> <a href="${profUrl(u.id, u.handle)}">@${esc(u.handle)}</a>${u.admin ? ' <em class="adm-badge">админ</em>' : ''}${sec}${u.banned ? ` <em class="adm-badge bad">бан${u.banReason ? ': ' + esc(u.banReason) : ''}</em>` : ''}
             <small>${facts}</small></div>
           <div class="adm-acts">${edit}${u.admin ? '' : hard}</div>
         </li>`;

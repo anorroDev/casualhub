@@ -597,12 +597,13 @@ const routes = {
     const offset = Math.max(0, Math.min(1e6, Math.floor(+sp.get('offset') || 0)));
     const like = '%' + raw.toLowerCase().replace(/^@+/, '').replace(/[\\%_]/g, '\\$&') + '%';
     const { results } = await env.DB.prepare(
-      `SELECT u.id, u.username, u.uname, u.email, u.created_at, u.last_seen, u.banned, u.ban_reason, a.user_id AS adm, (SELECT ${SHELF_COUNT} FROM shelves WHERE shelves.user_id = u.id) AS ratings
+      `SELECT u.id, u.username, u.uname, u.email, u.created_at, u.last_seen, u.banned, u.ban_reason, u.email_ok, (u.totp IS NOT NULL AND u.totp != '') AS tfa, a.user_id AS adm, (SELECT ${SHELF_COUNT} FROM shelves WHERE shelves.user_id = u.id) AS ratings,
+              (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id AND s.expires_at > ?4) AS sess
          FROM users u LEFT JOIN admins a ON a.user_id = u.id
         WHERE ?1 = '' OR u.uname LIKE ?2 ESCAPE '\\' OR u.nkey LIKE ?2 ESCAPE '\\' OR u.email LIKE ?2 ESCAPE '\\' OR u.id = ?1
         ORDER BY u.created_at DESC LIMIT 51 OFFSET ?3`
-    ).bind(raw, like, offset).all();
-    return json({ more: results.length > 50, users: results.slice(0, 50).map((u) => ({ id: u.id, username: u.username, handle: u.uname, email: u.email || '', createdAt: u.created_at, lastSeen: u.last_seen || null, banned: !!u.banned, banReason: u.ban_reason || '', ratings: u.ratings || 0, admin: !!u.adm || ADMIN_HANDLES.includes(String(u.uname).toLowerCase()) })) });
+    ).bind(raw, like, offset, Date.now()).all();
+    return json({ more: results.length > 50, users: results.slice(0, 50).map((u) => ({ id: u.id, username: u.username, handle: u.uname, email: u.email || '', createdAt: u.created_at, lastSeen: u.last_seen || null, banned: !!u.banned, banReason: u.ban_reason || '', ratings: u.ratings || 0, admin: !!u.adm || ADMIN_HANDLES.includes(String(u.uname).toLowerCase()), emailOk: !!u.email_ok, twoFactor: !!u.tfa, sessions: u.sess || 0 })) });
   },
   async 'POST /admin/ban/:id'({ env, request, me, arg }) {
     if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
