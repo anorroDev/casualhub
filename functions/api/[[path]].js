@@ -6,6 +6,7 @@ import { computeRecs, seedSig, titleKey } from '../_lib/recs.js';
 import { imdbLookup } from '../_lib/imdb.js';
 import { NOTES } from '../_lib/admin-changes.js';
 import { LOT_NAME, MAX_LOTS, STICKER_RE, cleanLive, LIVE_OWNER, liveBusy, liveLots, spinLive, resetLive, stopAuto, settledLive, liveTx, liveView } from '../_lib/lots-live.js';
+import { ONLINE_MS, GUEST_RE, onlineCount, friendsAndIncoming, touchUsers, touchGuests } from '../_lib/presence.js';
 
 const enc = new TextEncoder();
 const ITER = 10000;
@@ -617,6 +618,7 @@ const routes = {
       env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(u.id),
     ]);
     else await env.DB.prepare('UPDATE users SET banned = NULL, ban_reason = NULL WHERE id = ?').bind(u.id).run();
+    if (on) await pokePresence(env, { what: 'drop', ids: [u.id] });
     await adminLog(env, request, me, (on ? 'ban ' : 'unban ') + u.uname, true);
     return json({ ok: true });
   },
@@ -678,6 +680,7 @@ const routes = {
       'DELETE FROM shares WHERE owner_id = ?1',
       'DELETE FROM users WHERE id = ?1',
     ].map((q) => env.DB.prepare(q).bind(id)));
+    await pokePresence(env, { what: 'drop', ids: [u.id] });
     await adminLog(env, request, me, `delete account @${u.uname} «${u.username}»`, true);
     return json({ ok: true });
   },
@@ -688,6 +691,7 @@ const routes = {
     if (!u) return fail(404, 'Нет такого аккаунта.');
     if (u.id === me.id || (await isAdminAccount(env, u))) return fail(400, 'Админа выкинуть нельзя.');
     await env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(u.id).run();
+    await pokePresence(env, { what: 'drop', ids: [u.id] });
     await adminLog(env, request, me, 'kick ' + u.uname, true);
     return json({ ok: true });
   },
@@ -723,6 +727,7 @@ const routes = {
       const v = { id: randHex(6), text: t, kind: ['info', 'warn', 'party'].includes(kind) ? kind : 'info', at: Date.now(), until: h ? Date.now() + h * 3600e3 : 0, by: me.handle };
       await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('announce', ?)").bind(JSON.stringify(v)).run();
     }
+    await pokePresence(env, { what: 'announce' });
     announceCache.at = 0;
     await adminLog(env, request, me, t ? 'announce: ' + t.slice(0, 60) : 'announce off', true);
     return json({ ok: true });
@@ -834,6 +839,8 @@ const routes = {
       await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?').bind(me.id, m ? await sha256(m[1]) : '').run();
       await env.DB.prepare('DELETE FROM admin_sessions WHERE user_id = ?').bind(me.id).run();
     }
+    if (pass) await pokePresence(env, { what: 'drop', ids: [me.id] });
+    else if (hideOnline != null) await pokePresence(env, { what: 'users', ids: [me.id] });
     return json({ user: ownUser(out) });
   },
 
@@ -847,11 +854,13 @@ const routes = {
     const cur = await tokenHash(request);
     if (cur.startsWith(arg)) return fail(400, 'Это устройство: чтобы выйти здесь, нажми «Выйти из аккаунта».');
     const r = await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND substr(token_hash, 1, 16) = ?').bind(me.id, arg).run();
+    await pokePresence(env, { what: 'drop', ids: [me.id] });
     return json({ ok: true, n: r.meta.changes || 0 });
   },
   async 'POST /sessions/others'({ env, request, me }) {
     const cur = await tokenHash(request);
     const r = await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?').bind(me.id, cur).run();
+    await pokePresence(env, { what: 'drop', ids: [me.id] });
     return json({ ok: true, n: r.meta.changes || 0 });
   },
   // ---------- двухфакторная защита ----------
@@ -948,6 +957,7 @@ const routes = {
       env.DB.prepare('DELETE FROM admin_sessions WHERE user_id = ?').bind(row.user_id),
       env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind('login-acc:' + row.user_id),
     ]);
+    await pokePresence(env, { what: 'drop', ids: [row.user_id] });
     return json({ ok: true });
   },
   async 'POST /email/verify-send'({ env, request, me }) {
@@ -1009,49 +1019,49 @@ const routes = {
       'DELETE FROM mail_tokens WHERE user_id = ?1',
       'DELETE FROM users WHERE id = ?1',
     ].map((q) => env.DB.prepare(q).bind(u.id)));
+    await pokePresence(env, { what: 'drop', ids: [me.id] });
     return json({ ok: true });
   },
 
+  // присутствие вживую: WebSocket к комнате PresenceDO. Токен — в подпротоколе ['casualhub', 'bearer.<токен>'],
+  // гость — ['casualhub', 'guest.<id>'] (id из localStorage, как в POST /ping). Кто это, решает этот маршрут
+  async 'GET /presence/ws'({ env, request }) {
+    if (!presenceOn(env)) return fail(404, 'Нет такого адреса.');
+    if ((request.headers.get('upgrade') || '').toLowerCase() !== 'websocket') return fail(426, 'Нужен WebSocket.');
+    if (burst('presws:' + clientIp(request), 120, 60e3)) return tooMany(1);
+    const protos = (request.headers.get('sec-websocket-protocol') || '').split(',').map((x) => x.trim());
+    const bearer = protos.find((x) => /^bearer\.[0-9a-f]{64}$/.test(x));
+    const guest = (protos.find((x) => /^guest\.[a-z0-9]{12,40}$/.test(x)) || '').slice(6);
+    let me = null;
+    if (bearer) {
+      try { me = await currentUser(env, new Request(request.url, { headers: { authorization: 'Bearer ' + bearer.slice(7) } })); } catch (e) {}
+      if (me && me.banned) me = null;
+    }
+    const headers = new Headers({ upgrade: 'websocket', 'x-rt-uid': me ? me.id : '', 'x-rt-hide': me && me.hide_online ? '1' : '', 'x-rt-guest': me ? '' : guest, 'x-rt-bearer': bearer ? '1' : '', 'x-rt-proto': protos.includes('casualhub') ? 'casualhub' : '' });
+    for (const k of ['sec-websocket-key', 'sec-websocket-version', 'sec-websocket-extensions']) { const v = request.headers.get(k); if (v) headers.set(k, v); }
+    return presenceRoom(env).fetch('https://rt/ws', { headers });
+  },
   async 'POST /ping'({ env, request }) {
     const ip = clientIp(request);
     if (burst('ping:' + ip, 150, 60e3)) return json({ online: onlineCache.n, friends: [] });
     const now = Date.now();
     const me = await currentUser(env, request);
-    if (me) {
-      // пишем не чаще раза в 45 секунд: база не тратится на каждую вкладку
-      await env.DB.prepare('UPDATE users SET last_seen = ?1 WHERE id = ?2 AND (last_seen IS NULL OR last_seen < ?3)').bind(now, me.id, now - 45e3).run();
-    } else {
+    if (me) await touchUsers(env, [me.id], now);
+    else {
       const { guest } = await readBody(request);
-      if (typeof guest === 'string' && /^[a-z0-9]{12,40}$/.test(guest) && !burst('pingw:' + ip, 60, 60e3) && !burst('pingw:all', 400, 60e3)) {
-        await env.DB.prepare('INSERT INTO presence (id, at) VALUES (?1, ?2) ON CONFLICT(id) DO UPDATE SET at = ?2 WHERE at < ?3').bind('g:' + guest, now, now - 45e3).run();
-      }
+      if (typeof guest === 'string' && GUEST_RE.test(guest) && !burst('pingw:' + ip, 60, 60e3) && !burst('pingw:all', 400, 60e3)) await touchGuests(env, [guest], now);
     }
     // число на сайте считается не чаще раза в 20 секунд на сервер
     if (onlineCache.at < now - 20e3) {
-      const [a, b] = await env.DB.batch([
-        env.DB.prepare('SELECT COUNT(*) AS n FROM users WHERE last_seen > ?').bind(now - ONLINE_MS),
-        env.DB.prepare('SELECT COUNT(*) AS n FROM presence WHERE at > ?').bind(now - ONLINE_MS),
-      ]);
-      onlineCache.n = ((a.results[0] || {}).n || 0) + ((b.results[0] || {}).n || 0);
+      onlineCache.n = await onlineCount(env, now);
       onlineCache.at = now;
       if (Math.random() < 0.05) await env.DB.prepare('DELETE FROM presence WHERE at < ?').bind(now - 864e5).run();
     }
-    let friends = [];
-    // заявки в друзья, которые ждут ответа: красная цифра на кнопке «Друзья»
-    let incoming = 0;
-    if (me) {
-      // друзья в сети и заявки — одним походом в базу
-      const [fr, inc] = await env.DB.batch([
-        env.DB.prepare(
-          "SELECT u.id, u.last_seen FROM friendships f JOIN users u ON u.id = (CASE WHEN f.a = ?1 THEN f.b ELSE f.a END) WHERE (f.a = ?1 OR f.b = ?1) AND f.status = 'accepted' AND (u.hide_online IS NULL OR u.hide_online = 0) AND u.last_seen > ?2"
-        ).bind(me.id, now - ONLINE_MS),
-        env.DB.prepare("SELECT COUNT(*) AS n FROM friendships WHERE (a = ?1 OR b = ?1) AND status = 'pending' AND requested_by != ?1").bind(me.id),
-      ]);
-      friends = (fr.results || []).map((x) => ({ id: x.id, at: x.last_seen }));
-      incoming = (inc.results && inc.results[0] && inc.results[0].n) || 0;
-    }
+    // друзья в сети и заявки в друзья, которые ждут ответа (красная цифра на кнопке «Друзья»)
+    const { friends, incoming } = me ? await friendsAndIncoming(env, me.id, now) : { friends: [], incoming: 0 };
     const sentToken = /^Bearer /.test(request.headers.get('authorization') || '');
-    return json({ online: Math.max(onlineCache.n, me ? 1 : 0), friends, incoming, window: ONLINE_MS, announce: await currentAnnounce(env), ...(sentToken ? { authed: !!me } : {}) });
+    // rt — страница может подключить комнату присутствия (WebSocket) и больше не спрашивать раз в минуту
+    return json({ online: Math.max(onlineCache.n, me ? 1 : 0), friends, incoming, window: ONLINE_MS, announce: await currentAnnounce(env), rt: presenceOn(env), ...(sentToken ? { authed: !!me } : {}) });
   },
 
   async 'GET /friends'({ env, me }) {
@@ -1129,10 +1139,12 @@ const routes = {
       if (row.requested_by === me.id) return fail(409, 'Заявка уже отправлена.');
       // встречная заявка: просто принимаем
       await env.DB.prepare("UPDATE friendships SET status = 'accepted' WHERE a = ? AND b = ?").bind(a, b).run();
+      await pokePresence(env, { what: 'users', ids: [me.id, other.id] });
       return json({ status: 'accepted', user: other });
     }
     await env.DB.prepare("INSERT INTO friendships (a, b, status, requested_by, created_at) VALUES (?, ?, 'pending', ?, ?)")
       .bind(a, b, me.id, Date.now()).run();
+    await pokePresence(env, { what: 'users', ids: [other.id] });
     return json({ status: 'pending', user: other });
   },
 
@@ -1142,6 +1154,7 @@ const routes = {
     if (!row || row.status !== 'pending' || row.requested_by === me.id) return fail(404, 'Заявка не найдена.');
     const [a, b] = pair(me.id, String(userId));
     await env.DB.prepare("UPDATE friendships SET status = 'accepted' WHERE a = ? AND b = ?").bind(a, b).run();
+    await pokePresence(env, { what: 'users', ids: [me.id, String(userId)] });
     return json({ ok: true });
   },
 
@@ -1150,6 +1163,7 @@ const routes = {
     const { userId } = await readBody(request);
     const [a, b] = pair(me.id, String(userId || ''));
     await env.DB.prepare('DELETE FROM friendships WHERE a = ? AND b = ?').bind(a, b).run();
+    await pokePresence(env, { what: 'users', ids: [me.id, String(userId || '')] });
     return json({ ok: true });
   },
 
@@ -1899,6 +1913,7 @@ const routes = {
     await env.DB.prepare(
       'INSERT INTO reactions (owner_id, rid, from_id, emoji, text, at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(owner_id, rid, from_id) DO UPDATE SET emoji = excluded.emoji, text = excluded.text, at = excluded.at'
     ).bind(uid, rid, me.id, emoji, text || null, now).run();
+    await pokePresence(env, { what: 'notify', to: uid, n: { kind: 'react', from: pubUser(me), rid, emoji, text } });
     return json({ ok: true, at: now });
   },
   // все реакции на оценки человека: видят он сам и его друзья
@@ -2120,6 +2135,7 @@ const routes = {
     await hit(env, 'cm:' + me.id, 'comment');
     const id = randHex(10), now = Date.now();
     await env.DB.prepare('INSERT INTO comments (id, owner_id, target, from_id, text, at) VALUES (?, ?, ?, ?, ?, ?)').bind(id, uid, target, me.id, text, now).run();
+    if (uid !== me.id) await pokePresence(env, { what: 'notify', to: uid, n: { kind: 'comment', from: pubUser(me), target, text: text.slice(0, 140) } });
     return json({ item: { id, text, at: now, from: pubUser(me), canDelete: true } });
   },
   // удалить может автор комментария и хозяин профиля, на чьей стене или оценке он написан
@@ -2401,6 +2417,18 @@ async function lotEditable(env, code, lotId, me) {
 // Откат: LOTS_RT = "0" — всё снова идёт через опрос, снимок в D1 тот же
 const rtOn = (env) => !!env.LOT_RT && env.LOTS_RT !== '0';
 const rtRoom = (env, code) => env.LOT_RT.get(env.LOT_RT.idFromName(code));
+// ---------- присутствие вживую (Durable Object PresenceDO в том же Worker'е, одна комната на весь сайт) ----------
+// «В сети» по подключению и отключению, счётчик «N на сайте», объявление, заявки в друзья и уведомления о реакциях
+// и комментариях приходят по WebSocket. Включено, когда есть привязка PRESENCE и переменная PRESENCE_RT не "0".
+// Откат: PRESENCE_RT = "0" — страницы снова спрашивают сервер раз в минуту (POST /ping) и объявление раз в 15 секунд
+const presenceOn = (env) => !!env.PRESENCE && env.PRESENCE_RT !== '0';
+const presenceRoom = (env) => env.PRESENCE.get(env.PRESENCE.idFromName('global'));
+// что-то поменялось у людей: { what: 'users' | 'drop' | 'announce' | 'notify', ids?, to?, n? }
+async function pokePresence(env, body) {
+  if (!presenceOn(env)) return;
+  try { await presenceRoom(env).fetch('https://rt/poke', { method: 'POST', body: JSON.stringify(body) }); }
+  catch (e) { console.error('presence poke', body && body.what, e && e.message); }
+}
 // после записи в D1 комната перечитывает снимок, рассылает его и заводит будильник. what: live | lots | room | gone
 async function pokeRoom(env, code, what) {
   if (!rtOn(env)) return;
@@ -2852,14 +2880,13 @@ async function canSee(env, me, uid) {
   return !!row && row.status === 'accepted';
 }
 
-const PUBLIC = new Set(['GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid']);
+const PUBLIC = new Set(['GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid']);
 // код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности
 const SHARE_RE = /^[A-Za-z0-9]{12}$/;
 function shareId() {
   const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   return [...crypto.getRandomValues(new Uint8Array(24))].filter((b) => b < 248).slice(0, 12).map((b) => abc[b % 62]).join('').padEnd(12, 'x');
 }
-const ONLINE_MS = 150e3; // «в сети» — заходил за последние 2,5 минуты
 const onlineCache = { n: 0, at: 0 };
 const announceCache = { v: null, at: 0 };
 async function currentAnnounce(env) {

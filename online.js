@@ -1,8 +1,13 @@
+/* Казуал Хаб: «в сети», счётчик «N на сайте», заявки в друзья, объявление сайта и уведомления о реакциях и комментариях.
+   С комнатой присутствия (ответ POST /ping с rt: true) всё приходит по WebSocket сразу: друг открыл сайт или закрыл
+   последнюю вкладку, объявление, новая заявка, реакция. Без неё — как раньше: пинг раз в минуту, объявление раз в 15 секунд.
+   Вкладку спрятали дольше чем на 2,5 минуты — сокет закрывается, «в сети» значит «сейчас на сайте». */
 (() => {
   const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
   const GUEST_KEY = 'casualhub.guestId.v1';
   const WINDOW = 150e3; // «в сети» — заходил за последние 2,5 минуты, как на сервере
-  const st = { online: 0, friends: new Map(), incoming: 0, ready: false };
+  // on — друзья, у кого сайт открыт сейчас (по сокету), left — закрыли последнюю вкладку: уже не «в сети»
+  const st = { online: 0, friends: new Map(), incoming: 0, ready: false, on: new Set(), left: new Set() };
 
   const token = () => {
     const u = read('ocenshik.user.v1');
@@ -20,10 +25,12 @@
   }
   // «в сети» / «был(а) 5 мин назад» по времени последнего захода
   function seen(id, lastSeen) {
+    if (st.on.has(id)) return { on: true, text: 'в сети' };
     const t = Math.max(st.friends.get(id) || 0, +lastSeen || 0);
     if (!t) return { on: false, text: '' };
     const m = Math.floor((Date.now() - t) / 60e3);
-    if (Date.now() - t < WINDOW) return { on: true, text: 'в сети' };
+    if (Date.now() - t < WINDOW && !st.left.has(id)) return { on: true, text: 'в сети' };
+    if (m < 1) return { on: false, text: 'был(а) только что' };
     if (m < 60) return { on: false, text: `был(а) ${m} мин назад` };
     const h = Math.floor(m / 60);
     if (h < 24) return { on: false, text: `был(а) ${h} ч назад` };
@@ -111,10 +118,11 @@
     document.body.prepend(bar);
   }
 
-  let timer = 0, busy = false;
+  let timer = 0, busy = false, pingAt = 0;
   async function ping() {
     if (busy || document.hidden) return;
     busy = true;
+    pingAt = Date.now();
     try {
       const t = token();
       const r = await fetch('/api/ping', {
@@ -125,34 +133,153 @@
       if (r.ok) {
         const d = await r.json();
         if (t && d.authed === false) sessionGone();
-        st.online = +d.online || 0;
-        st.friends = new Map((d.friends || []).map((x) => [x.id, +x.at || Date.now()]));
-        st.incoming = +d.incoming || 0;
-        st.ready = true;
-        paint(document);
-        // общий счётчик «N на сайте» на всех страницах
-        const bump = (n, v) => { if (n.textContent === String(v)) return; n.textContent = v; n.classList.remove('bump'); void n.offsetWidth; n.classList.add('bump'); };
-        document.querySelectorAll('[data-online-count]').forEach((el) => { bump(el.querySelector('b'), st.online); el.hidden = false; });
-        // кнопка «Друзья»: зелёная цифра — друзья в сети, красная — заявки, которые ждут ответа
-        const on = [...st.friends.keys()].filter((id) => seen(id).on).length;
-        document.querySelectorAll('[data-friends-btn]').forEach((el) => {
-          const g = el.querySelector('.fb-on'), r = el.querySelector('.fb-req');
-          if (g) { g.hidden = !on; if (on) bump(g, on); }
-          if (r) { r.hidden = !st.incoming; if (st.incoming) bump(r, st.incoming); }
-          el.title = 'Друзья' + (on ? ` · в сети: ${on}` : '') + (st.incoming ? ` · заявок: ${st.incoming}` : '');
-        });
-        announce(d.announce);
-        document.dispatchEvent(new CustomEvent('casual-online', { detail: { online: st.online, friends: [...st.friends.keys()] } }));
+        // пока сокет жив, он главнее: ответ пинга, который был в пути, ничего не меняет
+        if (rtLive()) return;
+        apply(d, false);
+        if (d.rt) startRT();
       }
     } catch (e) {} finally { busy = false; }
+  }
+  // снимок присутствия: ответ пинга или state из сокета (там у друзей ещё on — сайт открыт прямо сейчас)
+  function apply(d, fromRT) {
+    st.online = +d.online || 0;
+    st.friends = new Map((d.friends || []).map((x) => [x.id, +x.at || Date.now()]));
+    // комната знает точно, у кого сайт открыт сейчас: остальные недавно ушли, даже если заходили минуту назад
+    st.on = new Set(fromRT ? (d.friends || []).filter((x) => x.on).map((x) => x.id) : []);
+    st.left = new Set(fromRT ? (d.friends || []).filter((x) => !x.on).map((x) => x.id) : []);
+    st.incoming = +d.incoming || 0;
+    st.ready = true;
+    render();
+    announce(d.announce);
+  }
+  function render() {
+    paint(document);
+    // общий счётчик «N на сайте» на всех страницах
+    const bump = (n, v) => { if (!n || n.textContent === String(v)) return; n.textContent = v; n.classList.remove('bump'); void n.offsetWidth; n.classList.add('bump'); };
+    document.querySelectorAll('[data-online-count]').forEach((el) => { bump(el.querySelector('b'), st.online); el.hidden = false; });
+    // кнопка «Друзья»: зелёная цифра — друзья в сети, красная — заявки, которые ждут ответа
+    const on = new Set([...st.friends.keys(), ...st.on].filter((id) => seen(id).on)).size;
+    document.querySelectorAll('[data-friends-btn]').forEach((el) => {
+      const g = el.querySelector('.fb-on'), r = el.querySelector('.fb-req');
+      if (g) { g.hidden = !on; if (on) bump(g, on); }
+      if (r) { r.hidden = !st.incoming; if (st.incoming) bump(r, st.incoming); }
+      el.title = 'Друзья' + (on ? ` · в сети: ${on}` : '') + (st.incoming ? ` · заявок: ${st.incoming}` : '');
+    });
+    document.dispatchEvent(new CustomEvent('casual-online', { detail: { online: st.online, friends: [...new Set([...st.friends.keys(), ...st.on])] } }));
+  }
+
+  // ---------- присутствие вживую: WebSocket к комнате PresenceDO ----------
+  let rt = null, rtToken = null, hideT = 0;
+  const rtLive = () => !!(rt && rt.live());
+  function startRT() {
+    if (rt) return;
+    const go = () => {
+      if (rt || !window.CasualRT || document.hidden) return;
+      rtToken = token();
+      rt = window.CasualRT.open('/api/presence/ws', {
+        protocols: () => { const t = token(); rtToken = t; return t ? ['casualhub', 'bearer.' + t] : ['casualhub', 'guest.' + guestId()]; },
+        onMessage: onRT,
+        // сокет жив — пинг и опрос объявления не нужны; оборвался — снова они, пока он переподключается
+        onStatus: (open) => { clearInterval(timer); clearInterval(annTimer); if (!open && !document.hidden) { timer = setInterval(ping, 60e3); annTimer = setInterval(pollAnnounce, 15e3); } },
+      });
+    };
+    if (window.CasualRT) { go(); return; }
+    if (document.querySelector('script[src="/ws-client.js"]')) return;
+    const sc = document.createElement('script');
+    sc.src = '/ws-client.js';
+    sc.onload = go;
+    document.head.appendChild(sc);
+  }
+  function stopRT() { if (rt) { rt.close(); rt = null; } }
+  function onRT(m) {
+    if (m.t === 'state') {
+      if (rtToken && m.authed === false) sessionGone();
+      apply(m, true);
+    } else if (m.t === 'friend') {
+      if (m.on) { st.on.add(m.id); st.left.delete(m.id); } else { st.on.delete(m.id); st.left.add(m.id); }
+      st.friends.set(m.id, +m.at || Date.now());
+      render();
+    } else if (m.t === 'count') { st.online = +m.online || 0; render(); }
+    else if (m.t === 'announce') announce(m.announce);
+    else if (m.t === 'notify') notify(m);
+  }
+  // вошёл или вышел в этой вкладке или в другой: сокет переподключается уже с новым токеном (или гостем)
+  setInterval(() => { if (rt && token() !== rtToken) { stopRT(); startRT(); } }, 5000);
+
+  // ---------- уведомление: друг отреагировал или написал, пока ты на сайте ----------
+  const RXI = { fire: '🔥', skull: '💀', nope: '🙅', lol: '😂', love: '😍', like: '👍', dislike: '👎', think: '🤔', cry: '😭', clown: '🤡', moai: '🗿', goat: '🐐' };
+  const CM_ICON = '<span class="u-old">💬</span><svg class="u-new" viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12z"/></svg>';
+  const ratingName = (rid) => { const rs = read('ocenshik.ratings.v2'); const r = Array.isArray(rs) && rs.find((x) => x && x.id === rid); return r && r.name ? String(r.name).slice(0, 80) : ''; };
+  let noteT = 0;
+  function notify(n) {
+    const who = (n.from && (n.from.username || (n.from.handle ? '@' + n.from.handle : ''))) || 'Друг';
+    let what = '', href = '/', ico = '', sub = n.text || '';
+    if (n.kind === 'react') {
+      const tier = /^t\./.test(n.rid || ''), name = tier ? '' : ratingName(n.rid);
+      ico = (n.emoji && RXI[n.emoji]) || '';
+      href = tier ? '/tierlist/#l=' + encodeURIComponent(n.rid.slice(2)) : '/opinion/#r=' + encodeURIComponent(n.rid || '');
+      what = tier ? (ico ? `${ico} на твой тир-лист` : 'комментарий к твоему тир-листу')
+        : n.emoji === 'nope' ? '🙅 «не согласен» на твою оценку' : ico ? `${ico} на твою оценку` : name ? `комментарий к «${name}»` : 'комментарий к твоей оценке';
+      // как в ленте на главной: под реакцией — на какую оценку и что дописал друг
+      if (ico && name) sub = [`«${name}»`, n.text].filter(Boolean).join(' · ');
+    } else {
+      const t = String(n.target || '');
+      if (t === 'wall') { what = 'написал на твоей стене'; href = '/profile/#wallSec'; }
+      else if (t.startsWith('t.')) { what = 'комментарий к твоему тир-листу'; href = '/tierlist/#l=' + encodeURIComponent(t.slice(2)); }
+      else { const name = ratingName(t.slice(2)); what = name ? `комментарий к «${name}»` : 'комментарий к твоей оценке'; href = '/opinion/#r=' + encodeURIComponent(t.slice(2)); }
+    }
+    if (!document.getElementById('noteCss')) {
+      const css = document.createElement('style');
+      css.id = 'noteCss';
+      css.textContent = `.site-note { position: fixed; z-index: 95; top: max(12px, env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); width: min(440px, calc(100vw - 32px)); box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 10px 8px 10px 12px; border-radius: 14px; border: 1px solid var(--line, #2a2b30); background: var(--panel, #17181c); color: var(--ink, #f2f2f2); box-shadow: 0 12px 32px rgb(0 0 0 / .28); font-size: 14px; line-height: 1.35; animation: note-in .35s cubic-bezier(.34, 1.56, .64, 1); }
+.site-note i { flex: none; width: 28px; font-style: normal; font-size: 20px; line-height: 1; text-align: center; color: var(--accent, #3550E8); }
+.site-note a { flex: 1; min-width: 0; display: grid; gap: 2px; color: inherit; text-decoration: none; }
+.site-note b { font-weight: 700; overflow-wrap: anywhere; }
+.site-note small { overflow: hidden; color: var(--ink-2, #b5b5b5); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.site-note small:empty { display: none; }
+.site-note button { flex: none; width: 30px; height: 30px; border: 0; border-radius: 50%; background: transparent; color: var(--ink-2, #b5b5b5); font: inherit; cursor: pointer; }
+.site-note button:hover { background: color-mix(in srgb, var(--ink, #fff) 10%, transparent); color: var(--ink, #fff); }
+@keyframes note-in { from { transform: translate(-50%, -16px) scale(.96); } }
+@media (prefers-reduced-motion: reduce) { .site-note { animation: none; } }`;
+      document.head.appendChild(css);
+    }
+    let box = document.getElementById('siteNote');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'siteNote';
+      box.className = 'site-note';
+      box.setAttribute('role', 'status');
+      box.innerHTML = '<i aria-hidden="true"></i><a><b></b><small></small></a><button type="button" aria-label="Закрыть уведомление">✕</button>';
+      box.querySelector('button').addEventListener('click', () => { clearTimeout(noteT); box.remove(); });
+      document.body.appendChild(box);
+    }
+    // имя и текст — только как текст: их написал человек
+    box.querySelector('i').innerHTML = n.kind === 'react' && ico ? '' : CM_ICON;
+    if (n.kind === 'react' && ico) box.querySelector('i').textContent = ico;
+    box.querySelector('a').href = href;
+    box.querySelector('b').textContent = `${who}: ${what}`;
+    box.querySelector('small').textContent = sub;
+    clearTimeout(noteT);
+    noteT = setTimeout(() => box.remove(), 9000);
+    document.dispatchEvent(new CustomEvent('casual-notify', { detail: n }));
   }
   let annTimer = 0;
   async function pollAnnounce() {
     if (document.hidden) return;
     try { const r = await fetch('/api/announce', { cache: 'no-store' }); if (r.ok) announce((await r.json()).announce); } catch (e) {}
   }
-  const start = () => { clearInterval(timer); clearInterval(annTimer); ping(); timer = setInterval(ping, 60e3); annTimer = setInterval(pollAnnounce, 15e3); };
-  document.addEventListener('visibilitychange', () => { if (document.hidden) { clearInterval(timer); clearInterval(annTimer); } else start(); });
+  const start = () => {
+    clearInterval(timer); clearInterval(annTimer);
+    if (rtLive()) return;
+    // вкладку то прячут, то открывают (на телефоне — при каждом переключении): пинг не чаще раза в 15 секунд
+    if (Date.now() - pingAt > 15e3) ping();
+    timer = setInterval(ping, 60e3); annTimer = setInterval(pollAnnounce, 15e3);
+  };
+  document.addEventListener('visibilitychange', () => {
+    clearTimeout(hideT);
+    if (document.hidden) { clearInterval(timer); clearInterval(annTimer); hideT = setTimeout(stopRT, WINDOW); }
+    else start();
+  });
   // объявление закрыли в другой вкладке — убираем и здесь
   addEventListener('storage', (e) => { if (e.key === ANN_KEY) { const bar = document.getElementById('siteAnnounce'); if (bar && bar.dataset.id === e.newValue) bar.remove(); } });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true }); else start();

@@ -1,5 +1,6 @@
-# Worker casualhub-rt: комната лотов вживую (Durable Object LotRoomDO). Выкладка: npx wrangler deploy -c rt/wrangler.toml
-# Сайт (Pages) подключает его привязкой LOT_RT в корневом wrangler.toml. Порядок и откат — в README, раздел «Лоты вживую».
+# Worker casualhub-rt: сайт вживую — комнаты лотов (LotRoomDO) и присутствия (PresenceDO). Выкладка: npx wrangler deploy -c rt/wrangler.toml
+# Сайт (Pages) подключает его привязками LOT_RT и PRESENCE в корневом wrangler.toml. Порядок и откат — в README,
+# раздел «Сайт вживую».
 name = "casualhub-rt"
 main = "worker.js"
 compatibility_date = "2025-04-01"
@@ -16,7 +17,15 @@ database_id = "b4b84c20-3c2a-499c-8e46-d82f9ba9daf5"
 name = "LOT_ROOM"
 class_name = "LotRoomDO"
 
+[[durable_objects.bindings]]
+name = "PRESENCE_ROOM"
+class_name = "PresenceDO"
+
 # хранилище комнат — SQLite: такие Durable Objects есть и на бесплатном плане Workers
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["LotRoomDO"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["PresenceDO"]

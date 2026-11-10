@@ -1,4 +1,6 @@
-// Казуал Хаб: Worker casualhub-rt — комната лотов вживую (Durable Object LotRoomDO, одна на сбор: idFromName(код)).
+// Казуал Хаб: Worker casualhub-rt — сайт вживую. Две комнаты (Durable Objects):
+//   LotRoomDO — колесо лотов, одна на сбор (idFromName(код)), описание сразу ниже;
+//   PresenceDO — присутствие, одна на весь сайт (idFromName('global')), описание у класса.
 // Из интернета он недоступен (workers_dev = false, маршрутов нет): к нему ходят только Pages Functions через привязку.
 //   POST /poke — API сайта что-то записал в D1 (снимок, лоты, сбор): комната перечитывает, рассылает и заводит будильник
 //   GET  /ws   — WebSocket зрителя; роль (viewer / host / admin) уже проверил маршрут /api/lots/:code/ws
@@ -11,6 +13,7 @@
 // keep/kick — только админу),
 // gone (сбор удалён), error {code, msg}
 import { cleanLive, liveTx, settledLive, liveWake, liveLots, liveView, spinLive, resetLive, stopAuto } from '../functions/_lib/lots-live.js';
+import { ONLINE_MS, GUEST_RE, onlineCount, friendsAndIncoming, friendIds, readAnnounce, touchUsers, touchGuests } from '../functions/_lib/presence.js';
 
 const ROLES = ['viewer', 'host', 'admin'];
 const MAX_MSG = 2048, RATE_N = 10, RATE_MS = 1000; // не больше 10 сообщений в секунду с сокета, каждое до 2 КБ
@@ -156,6 +159,212 @@ export class LotRoomDO {
   }
   async webSocketError(ws) {
     this.drop(ws, 1011, 'error');
+  }
+}
+
+// ---------- присутствие вживую ----------
+// PresenceDO — одна комната на весь сайт: каждая открытая вкладка держит с ней WebSocket. Сокет помечен «u:<id>»
+// (аккаунт), «g:<id>» (гость) или «anon». Кто это, решил маршрут /api/presence/ws. Источник правды «в сети» — D1
+// (users.last_seen и presence): раз в 45 секунд комната отмечает всех подключённых, поэтому счётчик «N на сайте»
+// и «был(а) N мин назад» одинаковы и у страниц на сокете, и у тех, что ещё спрашивают POST /ping.
+//   POST /poke {what}: announce — объявление поменялось; users {ids} — у людей поменялись друзья, заявки или «скрывать,
+//   что в сети»; drop {ids} — сеансы закрыты, сокеты этих людей переподключаются; notify {to, n} — реакция или комментарий.
+// Комната → клиент (JSON):
+//   state {online, friends: [{id, at, on}], incoming, announce, window, now, authed?} — при подключении и когда у человека
+//         поменялись друзья или заявки. Как ответ POST /ping, плюс on — друг сейчас на сайте с открытой вкладкой;
+//   friend {id, on, at} — друг открыл первую вкладку или закрыл последнюю (тех, кто скрывает «в сети», не видно);
+//   count {online} — сколько людей на сайте; announce {announce} — объявление (null — снято или истекло);
+//   notify {kind: 'react' | 'comment', from: {id, username, handle}, rid?, emoji?, target?, text} — тебе ответили.
+//   reconnect — переподключись (сеанс закрыли): страница подключается заново с тем токеном, что есть, или гостем.
+// Клиент → комната: только строка "ping" (ответ "pong" без пробуждения комнаты), остальное не нужно.
+const BEAT_MS = 45000, SOON_MS = 3000, CACHE_MS = 5000;
+const UID_RE = /^[0-9a-f]{24}$/;
+const short = (v, n) => String(v == null ? '' : v).slice(0, n);
+export class PresenceDO {
+  constructor(ctx, env) {
+    this.ctx = ctx;
+    this.env = env;
+    this.dead = new WeakSet(); // закрытые сокеты, которые ещё могут попасться в списке
+    this.rate = new Map();
+    this.friends = new Map(); // id → id друзей; после сна читается заново
+    this.cnt = { n: 0, at: 0 };
+    this.ann = { v: null, at: 0 };
+    ctx.setWebSocketAutoResponse(new WebSocketRequestResponsePair('ping', 'pong'));
+  }
+  // живые сокеты: без закрытых и без отозванных (метка во вложении переживает сон комнаты)
+  live(tag) { return (tag ? this.ctx.getWebSockets(tag) : this.ctx.getWebSockets()).filter((w) => !this.dead.has(w) && !(w.deserializeAttachment() || {}).revoked); }
+  send(ws, text) {
+    if (this.dead.has(ws)) return;
+    try { ws.send(text); } catch (e) { this.dead.add(ws); }
+  }
+  drop(ws, code, why) {
+    this.dead.add(ws);
+    this.rate.delete(ws);
+    try { ws.close(code, why); } catch (e) {}
+  }
+  // сеанс закрыт: страница переподключается сама (уже как гость, если токен больше не действует), а этому сокету
+  // комната больше ничего не шлёт, даже если закрытие до браузера не дошло
+  revoke(ws) {
+    this.send(ws, JSON.stringify({ t: 'reconnect' }));
+    try { ws.serializeAttachment({ ...(ws.deserializeAttachment() || {}), revoked: true }); } catch (e) {}
+    this.drop(ws, 4401, 'session');
+  }
+  broadcast(text) { for (const w of this.live()) this.send(w, text); }
+  isOn(id) { return this.live('u:' + id).some((w) => !(w.deserializeAttachment() || {}).hide); }
+  async online(now) {
+    if (now - this.cnt.at > CACHE_MS) this.cnt = { n: await onlineCount(this.env, now), at: now };
+    return this.cnt.n;
+  }
+  async announce(now) {
+    if (now - this.ann.at > CACHE_MS) this.ann = { v: await readAnnounce(this.env, now), at: now };
+    return this.ann.v;
+  }
+  async fetch(request) {
+    const url = new URL(request.url);
+    if (url.pathname === '/ws') return this.connect(request);
+    if (url.pathname === '/poke' && request.method === 'POST') { await this.poke(await request.json().catch(() => ({}))); return new Response('ok'); }
+    return new Response('not found', { status: 404 });
+  }
+  async connect(request) {
+    if ((request.headers.get('upgrade') || '').toLowerCase() !== 'websocket') return new Response('websocket only', { status: 426 });
+    const h = (k) => request.headers.get(k) || '';
+    const uid = UID_RE.test(h('x-rt-uid')) ? h('x-rt-uid') : '';
+    const guest = !uid && GUEST_RE.test(h('x-rt-guest')) ? h('x-rt-guest') : '';
+    const hide = !!uid && h('x-rt-hide') === '1', bearer = h('x-rt-bearer') === '1';
+    const first = !!uid && !this.live('u:' + uid).length;
+    const [client, server] = Object.values(new WebSocketPair());
+    this.ctx.acceptWebSocket(server, [uid ? 'u:' + uid : guest ? 'g:' + guest : 'anon']);
+    server.serializeAttachment({ uid, guest, hide, bearer });
+    const now = Date.now();
+    try {
+      if (uid) await touchUsers(this.env, [uid], now);
+      else if (guest) await touchGuests(this.env, [guest], now);
+      if (uid || guest) this.cnt.at = 0; // счётчик пересчитать: пришёл кто-то новый
+      this.send(server, JSON.stringify(await this.stateFor(uid, bearer)));
+      if (first && !hide) await this.tellFriends(uid, true, now);
+    } catch (e) { console.error('presence connect', e && e.message); }
+    await this.soon();
+    const proto = h('x-rt-proto');
+    return new Response(null, { status: 101, webSocket: client, headers: proto ? { 'sec-websocket-protocol': proto } : {} });
+  }
+  // то же, что отвечает POST /ping, плюс on у друзей, которые сейчас на сокете
+  async stateFor(uid, bearer) {
+    const now = Date.now();
+    const st = { t: 'state', online: await this.online(now), friends: [], incoming: 0, announce: await this.announce(now), window: ONLINE_MS, now };
+    if (bearer) st.authed = !!uid;
+    if (uid) {
+      const q = await friendsAndIncoming(this.env, uid, now);
+      st.online = Math.max(st.online, 1);
+      st.friends = q.friends.map((f) => ({ ...f, on: this.isOn(f.id) }));
+      st.incoming = q.incoming;
+    }
+    return st;
+  }
+  // друг открыл первую вкладку или закрыл последнюю: сказать его друзьям, у кого сайт открыт
+  async tellFriends(uid, on, at) {
+    let ids = this.friends.get(uid);
+    if (!ids) {
+      ids = await friendIds(this.env, uid);
+      if (this.friends.size > 5000) this.friends.clear();
+      this.friends.set(uid, ids);
+    }
+    const text = JSON.stringify({ t: 'friend', id: uid, on, at });
+    for (const f of ids) for (const w of this.live('u:' + f)) this.send(w, text);
+  }
+  // пересчитать счётчик чуть позже: кто-то пришёл или ушёл, а пачка подключений не должна дёргать базу на каждое
+  async soon() {
+    const at = Date.now() + SOON_MS, cur = await this.ctx.storage.getAlarm();
+    if (!cur || cur > at) await this.ctx.storage.setAlarm(at);
+  }
+  // раз в 45 секунд, пока кто-то подключён: отметить всех «заходил сейчас», разослать счётчик и объявление, если поменялись
+  async alarm() {
+    const socks = this.live();
+    if (!socks.length) return; // все ушли: будильник больше не нужен, комната засыпает
+    const now = Date.now(), uids = new Set(), guests = new Set();
+    for (const w of socks) { const a = w.deserializeAttachment() || {}; if (a.uid) uids.add(a.uid); else if (a.guest) guests.add(a.guest); }
+    try {
+      await touchUsers(this.env, [...uids], now);
+      await touchGuests(this.env, [...guests], now);
+      this.cnt.at = 0; this.ann.at = 0;
+      const n = await this.online(now), a = await this.announce(now);
+      const sent = (await this.ctx.storage.get('sent')) || {};
+      if (sent.n !== n) this.broadcast(JSON.stringify({ t: 'count', online: n }));
+      const sig = JSON.stringify(a);
+      if (sent.a !== undefined && sent.a !== sig) this.broadcast(JSON.stringify({ t: 'announce', announce: a }));
+      await this.ctx.storage.put('sent', { n, a: sig });
+    } catch (e) { console.error('presence beat', e && e.message); }
+    await this.ctx.storage.setAlarm(now + BEAT_MS);
+  }
+  async poke(b) {
+    const what = b && b.what, now = Date.now();
+    if (what === 'announce') {
+      this.ann.at = 0;
+      const a = await this.announce(now);
+      const sent = (await this.ctx.storage.get('sent')) || {};
+      await this.ctx.storage.put('sent', { ...sent, a: JSON.stringify(a) });
+      this.broadcast(JSON.stringify({ t: 'announce', announce: a }));
+      return;
+    }
+    if (what === 'notify') {
+      const to = String(b.to || ''), n = b.n || {};
+      if (!UID_RE.test(to) || !['react', 'comment'].includes(n.kind)) return;
+      const from = n.from || {};
+      const msg = { t: 'notify', kind: n.kind, from: { id: short(from.id, 24), username: short(from.username, 40), handle: short(from.handle, 32) }, text: short(n.text, 200) };
+      if (n.kind === 'react') { msg.rid = short(n.rid, 90); msg.emoji = n.emoji ? short(n.emoji, 16) : null; } else msg.target = short(n.target, 90);
+      const text = JSON.stringify(msg);
+      for (const w of this.live('u:' + to)) this.send(w, text);
+      return;
+    }
+    const ids = [...new Set((Array.isArray(b && b.ids) ? b.ids : []).map(String).filter((x) => UID_RE.test(x)))].slice(0, 50);
+    if (what === 'drop') {
+      // сеансы закрыты: сокеты этих людей переподключаются, а закрытые входят уже как гости
+      for (const id of ids) {
+        this.friends.delete(id);
+        const socks = this.live('u:' + id), shown = socks.some((w) => !(w.deserializeAttachment() || {}).hide);
+        for (const w of socks) this.revoke(w);
+        if (shown) await this.tellFriends(id, false, now);
+      }
+      return;
+    }
+    if (what === 'users') {
+      // поменялись друзья, заявки или «скрывать, что я в сети»: свежий state тем, у кого сайт открыт
+      for (const id of ids) this.friends.delete(id);
+      for (const id of ids) {
+        const socks = this.live('u:' + id);
+        if (!socks.length) continue;
+        const row = await this.env.DB.prepare('SELECT hide_online FROM users WHERE id = ?').bind(id).first();
+        if (!row) { for (const w of socks) this.revoke(w); continue; }
+        const hide = !!row.hide_online, was = !socks.some((w) => !(w.deserializeAttachment() || {}).hide);
+        for (const w of socks) { const a = w.deserializeAttachment() || {}; if (a.hide !== hide) w.serializeAttachment({ ...a, hide }); }
+        if (was !== hide) await this.tellFriends(id, !hide, now);
+        const plain = JSON.stringify(await this.stateFor(id, false)), full = JSON.stringify(await this.stateFor(id, true));
+        for (const w of socks) this.send(w, (w.deserializeAttachment() || {}).bearer ? full : plain);
+      }
+    }
+  }
+  async webSocketMessage(ws, msg) {
+    // от страниц комнате ничего не нужно, кроме "ping" (на него отвечает сама платформа): всё остальное — повод закрыть
+    const now = Date.now(), r = this.rate.get(ws) || [now, 0];
+    if (now - r[0] > RATE_MS) { r[0] = now; r[1] = 0; }
+    r[1]++;
+    this.rate.set(ws, r);
+    if (r[1] > RATE_N || typeof msg !== 'string' || msg.length > 256) this.drop(ws, 1008, 'unexpected');
+  }
+  async webSocketClose(ws, code) {
+    const a = ws.deserializeAttachment() || {};
+    this.drop(ws, code === 1005 || code === 1006 ? 1000 : code, 'bye');
+    try {
+      // закрыта последняя вкладка: «был(а) только что», друзья видят, что ушёл
+      if (a.uid && !this.live('u:' + a.uid).length) {
+        const now = Date.now();
+        await this.env.DB.prepare('UPDATE users SET last_seen = ? WHERE id = ?').bind(now, a.uid).run();
+        if (!a.hide) await this.tellFriends(a.uid, false, now);
+      }
+      await this.soon();
+    } catch (e) { console.error('presence close', e && e.message); }
+  }
+  async webSocketError(ws) {
+    await this.webSocketClose(ws, 1011);
   }
 }
 
