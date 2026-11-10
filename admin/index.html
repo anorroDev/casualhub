@@ -380,6 +380,12 @@ body.adm-lock-scroll { overflow: hidden; }
 .adm-mail li { padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); overflow-wrap: anywhere; }
 .adm-mail b { display: block; margin-bottom: 2px; font-size: 12px; color: var(--ink-3); }
 .adm-ok { color: #2EAD60; font-weight: 700; } .adm-bad { color: #E4553F; font-weight: 700; }
+/* «Копии»: идущая копия и список готовых; подробности через точку */
+.adm-bk-run { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 14px 0 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); font-size: 14px; }
+.adm-bk-run span { color: var(--ink-2); }
+.adm-bk-run span::before { content: '·'; margin-right: 8px; color: var(--ink-3); }
+.adm-bk small span + span::before { content: '·'; margin: 0 6px; color: var(--ink-3); }
+.adm-bk { margin-top: 12px; }
 </style>
 <script src="/whatsnew.js"></script><script src="/online.js" defer></script><script src="/friends-panel.js" defer></script><script src="/header-menu.js" defer></script>
 <link rel="stylesheet" href="/base.css">

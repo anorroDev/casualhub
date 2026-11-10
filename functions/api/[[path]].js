@@ -738,6 +738,38 @@ const routes = {
     return json({ items: results.map((x) => ({ at: x.at, handle: x.uname || '', action: x.action, ok: !!x.ok, ip: x.ip ? String(x.ip).replace(/(\d+\.\d+)\.\d+\.\d+$/, '$1.*.*').replace(/^([0-9a-f]+:[0-9a-f]+):.*$/i, '$1:…') : '' })) });
   },
 
+  // резервные копии базы: готовые и идущая (саму копию делает BackupDO, здесь только посредник)
+  async 'GET /admin/backup'({ env, request, me }) {
+    if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+    const r = await backupCall(env, '/status');
+    if (!r) return json({ on: false });
+    if (r.down || !r.ok) return fail(503, BACKUP_DOWN);
+    return json({ on: true, ...(await r.json()) });
+  },
+  async 'POST /admin/backup'({ env, request, me }) {
+    if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+    const r = await backupCall(env, '/start', { method: 'POST', headers: { 'x-backup-by': '@' + me.handle } });
+    if (!r) return fail(503, BACKUP_OFF);
+    if (r.down || !r.ok) return fail(503, BACKUP_DOWN);
+    const d = await r.json();
+    await adminLog(env, request, me, d.running ? 'backup: already running' : 'backup ' + d.id, true);
+    return json(d);
+  },
+  // скачать копию одним файлом JSON Lines: без id — последнюю. Байты идут из R2 насквозь, сервер их не разбирает
+  async 'GET /admin/export'({ env, request, me }) {
+    if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+    const id = new URL(request.url).searchParams.get('id') || '';
+    if (id && !BACKUP_ID_RE.test(id)) return fail(404, 'Такой копии нет.');
+    const r = await backupCall(env, '/export' + (id ? '?id=' + id : ''));
+    if (!r) return fail(503, BACKUP_OFF);
+    if (r.status === 404) return fail(404, id ? 'Такой копии нет.' : 'Копий пока нет: первая появится ночью или по кнопке «Сделать копию сейчас».');
+    if (r.down || !r.ok) return fail(503, BACKUP_DOWN);
+    await adminLog(env, request, me, 'export ' + (r.headers.get('x-backup-id') || id), true);
+    const headers = { 'content-type': 'application/x-ndjson; charset=utf-8', 'content-disposition': r.headers.get('content-disposition') || 'attachment; filename="casualhub-backup.ndjson"', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' };
+    if (r.headers.get('content-length')) headers['content-length'] = r.headers.get('content-length');
+    return new Response(r.body, { headers });
+  },
+
   // почта: подключена ли, с какого адреса, чем кончилась последняя отправка (ключ не показывается)
   async 'GET /admin/mail'({ env, request, me }) {
     if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
@@ -2423,6 +2455,23 @@ const rtRoom = (env, code) => env.LOT_RT.get(env.LOT_RT.idFromName(code));
 // Откат: PRESENCE_RT = "0" — страницы снова спрашивают сервер раз в минуту (POST /ping) и объявление раз в 15 секунд
 const presenceOn = (env) => !!env.PRESENCE && env.PRESENCE_RT !== '0';
 const presenceRoom = (env) => env.PRESENCE.get(env.PRESENCE.idFromName('global'));
+// ---------- резервные копии (Durable Object BackupDO в том же Worker'е, rt/backup.js) ----------
+// Копию каждую ночь делает сама комната по cron, здесь только админка: состояние, «Сделать копию сейчас» и скачать.
+// Без привязки BACKUP копий нет: вкладка «Копии» так и пишет
+const BACKUP_ID_RE = /^\d{4}-\d\d-\d\dT\d\d-\d\d-\d\dZ(-\d{1,3})?$/;
+const BACKUP_OFF = 'Копии не включены: нужен Worker casualhub-rt с хранилищем R2, порядок в README, раздел «Резервные копии».';
+// запрос к комнате копий: null — копий нет (нет привязки или у Worker'а нет R2), { down } — комната не ответила
+async function backupCall(env, path, init) {
+  if (!env.BACKUP) return null;
+  try {
+    const r = await env.BACKUP.get(env.BACKUP.idFromName('backup')).fetch('https://rt' + path, init);
+    return r.headers.get('x-backup-off') ? null : r;
+  } catch (e) {
+    console.error('backup room', path, e && e.message);
+    return { down: true };
+  }
+}
+const BACKUP_DOWN = 'Не получилось достучаться до копий, попробуй ещё раз через минуту.';
 // что-то поменялось у людей: { what: 'users' | 'drop' | 'announce' | 'notify', ids?, to?, n? }
 async function pokePresence(env, body) {
   if (!presenceOn(env)) return;

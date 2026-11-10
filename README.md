@@ -81,7 +81,7 @@
 
 ## Сайт вживую (casualhub-rt)
 
-Две комнаты — Durable Objects в отдельном Worker'е `casualhub-rt` (папка `rt/`): лоты и присутствие.
+Две комнаты — Durable Objects в отдельном Worker'е `casualhub-rt` (папка `rt/`): лоты и присутствие. Там же живёт ночная копия базы, она описана в разделе «Резервные копии».
 
 **Комната лотов** — `LotRoomDO`, одна на сбор. Она доводит прокрутки по будильникам: вылет, победа и следующая прокрутка «до победителя» идут без вкладки ведущего и без опроса. Снимок по-прежнему лежит в `lot_rooms.live` (D1), поэтому страницы, которые опрашивают сервер, видят то же самое. WebSocket: `GET /api/lots/:code/ws`, протокол описан в начале `rt/worker.js`. Страница сбора и мини-плеер на других страницах (`lots-follow.js`) подключаются через `ws-client.js`, если сервер ответил `rt: true`: снимок приходит сразу, опрос остаётся страховкой раз в минуту. Сокет оборвался — страница опрашивает сервер, пока он переподключается (паузы 1, 2, 4… до 30 секунд). Опрос идёт с ETag: если ничего не поменялось, сервер отвечает 304 без тела.
 
@@ -91,12 +91,31 @@
 
 **Включить** (по порядку, иначе сборка сайта упадёт на привязке к несуществующему Worker'у):
 
-1. `npx wrangler login`, затем `npx wrangler deploy -c rt/wrangler.toml`.
-2. В корневом `wrangler.toml` убрать `#` у обоих блоков `durable_objects.bindings` и у `[vars]`, закоммитить — сайт выложится с привязками.
+1. `npx wrangler login`, затем `npx wrangler r2 bucket create casualhub-backups` (хранилище для копий, см. «Резервные копии») и `npx wrangler deploy -c rt/wrangler.toml`.
+2. В корневом `wrangler.toml` убрать `#` у всех трёх блоков `durable_objects.bindings` и у `[vars]`, закоммитить — сайт выложится с привязками.
 
 **Откат:** `LOTS_RT = "0"` (лоты) или `PRESENCE_RT = "0"` (присутствие) в `wrangler.toml`. Сайт перестаёт обращаться к этой комнате и отвечает `rt: false`, всё идёт через опрос.
 
 Хранилище комнат — SQLite, такие Durable Objects есть и на бесплатном плане Workers.
+
+## Резервные копии
+
+Каждую ночь в 01:00 UTC (04:00 по Москве) `casualhub-rt` копирует базу D1 в хранилище R2 `casualhub-backups`. Копию делает комната `BackupDO` (`rt/backup.js`) по будильникам, кусками по несколько мегабайт: так она укладывается в лимиты и бесплатного плана, какой бы большой ни была база. В копию идут строки всех таблиц, кроме входов на устройствах, лимитов, одноразовых ссылок из писем, «кто сейчас на сайте» и кэша IMDb; схема в копии полная. Хранятся последние 14 копий (`BACKUP_KEEP` в `rt/wrangler.toml`). База бесплатного D1 — до 500 МБ, так что 14 копий влезают в бесплатные 10 ГБ R2.
+
+**Где смотреть:** админка → «Копии». Там список копий, кнопка «Сделать копию сейчас» и «Скачать»: копия приходит одним файлом JSON Lines (`GET /api/admin/export?id=…`, только при `adminActive`). Если копия не получилась, там же написано почему. Формат файла описан в начале `rt/backup.js`.
+
+**Включить:** в панели Cloudflare подключить R2 (бесплатная подписка), затем шаги из «Сайт вживую». Без R2 закомментируйте в `rt/wrangler.toml` блоки `[[r2_buckets]]` и `[triggers]`: комнаты лотов и присутствия работают и без копий, а вкладка «Копии» пишет «не включены».
+
+**Перед большой выкладкой** — «Сделать копию сейчас» в админке или `npx wrangler d1 export casualhub --remote --output casualhub-before.sql` (это работает и без `casualhub-rt`, но, пока идёт выгрузка, база не отвечает).
+
+**Откатить неудачную запись** проще всего встроенным Time Travel у D1: `npx wrangler d1 time-travel restore casualhub --timestamp=<unix-время>`. Он хранит 7 дней на бесплатном плане и 30 на платном и перезаписывает базу на месте.
+
+**Восстановить из копии** — лучше в новую пустую базу:
+
+1. Взять копию: «Скачать» в админке. Если сайт лежит вместе с базой, скачать из R2 (панель Cloudflare → R2 → `casualhub-backups` → `backups/<время>/`) все куски `part-00000.ndjson`, `part-00001.ndjson`… в одну папку.
+2. `node rt/restore.mjs <файл или папка с кусками> restore.sql` — проверит, что копия целая, и соберёт SQL: длинные значения дописываются по кускам, потому что одна команда в D1 не может быть длиннее 100 КБ.
+3. `npx wrangler d1 create casualhub-restore`, затем `npx wrangler d1 execute casualhub-restore --remote --file restore.sql`.
+4. Проверить и переключить сайт на новую базу: `database_id` в обоих `wrangler.toml`. Входы на устройствах не восстанавливаются, так что все войдут заново.
 
 ## Запуск локально
 
@@ -107,9 +126,11 @@ npx wrangler pages dev .
 С комнатами — два процесса на общей локальной базе. Если перезапустили первый, перезапустите и второй: иначе он теряет привязку к комнатам.
 
 ```bash
-npx wrangler dev -c rt/wrangler.toml --port 8792 --persist-to .wrangler/state
+npx wrangler dev -c rt/wrangler.toml --port 8792 --persist-to .wrangler/state --test-scheduled
 ```
 
 ```bash
-npx wrangler pages dev . --persist-to .wrangler/state --do LOT_RT=LotRoomDO@casualhub-rt --do PRESENCE=PresenceDO@casualhub-rt --binding LOTS_RT=1 --binding PRESENCE_RT=1
+npx wrangler pages dev . --persist-to .wrangler/state --do LOT_RT=LotRoomDO@casualhub-rt --do PRESENCE=PresenceDO@casualhub-rt --do BACKUP=BackupDO@casualhub-rt --binding LOTS_RT=1 --binding PRESENCE_RT=1
 ```
+
+Ночную копию локально запускает `curl "http://127.0.0.1:8792/__scheduled?cron=0+1+*+*+*"`. R2 при этом тоже локальный, в `.wrangler/state`.

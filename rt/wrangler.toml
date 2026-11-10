@@ -1,6 +1,6 @@
-# Worker casualhub-rt: сайт вживую — комнаты лотов (LotRoomDO) и присутствия (PresenceDO). Выкладка: npx wrangler deploy -c rt/wrangler.toml
-# Сайт (Pages) подключает его привязками LOT_RT и PRESENCE в корневом wrangler.toml. Порядок и откат — в README,
-# раздел «Сайт вживую».
+# Worker casualhub-rt: сайт вживую — комнаты лотов (LotRoomDO) и присутствия (PresenceDO), а ещё ночная копия базы (BackupDO).
+# Выкладка: npx wrangler deploy -c rt/wrangler.toml. Сайт (Pages) подключает его привязками LOT_RT, PRESENCE и BACKUP
+# в корневом wrangler.toml. Порядок и откат — в README, разделы «Сайт вживую» и «Резервные копии».
 name = "casualhub-rt"
 main = "worker.js"
 compatibility_date = "2025-04-01"
@@ -21,6 +21,24 @@ class_name = "LotRoomDO"
 name = "PRESENCE_ROOM"
 class_name = "PresenceDO"
 
+[[durable_objects.bindings]]
+name = "BACKUP_ROOM"
+class_name = "BackupDO"
+
+# куда класть копии. Хранилище создаётся заранее: npx wrangler r2 bucket create casualhub-backups.
+# Без R2 на аккаунте закомментируйте этот блок и [triggers]: комнаты лотов и присутствия работают и без копий
+[[r2_buckets]]
+binding = "BACKUPS"
+bucket_name = "casualhub-backups"
+
+# копия каждую ночь в 01:00 UTC (04:00 по Москве)
+[triggers]
+crons = ["0 1 * * *"]
+
+[vars]
+# сколько последних копий хранить: при базе до 500 МБ (предел бесплатного D1) 14 копий влезают в бесплатные 10 ГБ R2
+BACKUP_KEEP = "14"
+
 # хранилище комнат — SQLite: такие Durable Objects есть и на бесплатном плане Workers
 [[migrations]]
 tag = "v1"
@@ -29,3 +47,7 @@ new_sqlite_classes = ["LotRoomDO"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["PresenceDO"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["BackupDO"]

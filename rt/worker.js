@@ -1,6 +1,7 @@
-// Казуал Хаб: Worker casualhub-rt — сайт вживую. Две комнаты (Durable Objects):
+// Казуал Хаб: Worker casualhub-rt — сайт вживую. Три комнаты (Durable Objects):
 //   LotRoomDO — колесо лотов, одна на сбор (idFromName(код)), описание сразу ниже;
-//   PresenceDO — присутствие, одна на весь сайт (idFromName('global')), описание у класса.
+//   PresenceDO — присутствие, одна на весь сайт (idFromName('global')), описание у класса;
+//   BackupDO — ночная копия базы в R2 (rt/backup.js), её будит cron раз в сутки (scheduled внизу).
 // Из интернета он недоступен (workers_dev = false, маршрутов нет): к нему ходят только Pages Functions через привязку.
 //   POST /poke — API сайта что-то записал в D1 (снимок, лоты, сбор): комната перечитывает, рассылает и заводит будильник
 //   GET  /ws   — WebSocket зрителя; роль (viewer / host / admin) уже проверил маршрут /api/lots/:code/ws
@@ -14,6 +15,7 @@
 // gone (сбор удалён), error {code, msg}
 import { cleanLive, liveTx, settledLive, liveWake, liveLots, liveView, spinLive, resetLive, stopAuto } from '../functions/_lib/lots-live.js';
 import { ONLINE_MS, GUEST_RE, onlineCount, friendsAndIncoming, friendIds, readAnnounce, touchUsers, touchGuests } from '../functions/_lib/presence.js';
+export { BackupDO } from './backup.js';
 
 const ROLES = ['viewer', 'host', 'admin'];
 const MAX_MSG = 2048, RATE_N = 10, RATE_MS = 1000; // не больше 10 сообщений в секунду с сокета, каждое до 2 КБ
@@ -371,4 +373,11 @@ export class PresenceDO {
 export default {
   // своих адресов у Worker'а нет: всё идёт через привязку в Pages
   fetch() { return new Response('Not found', { status: 404 }); },
+  // раз в сутки (triggers в rt/wrangler.toml): начать копию базы. Сам cron только будит комнату — на бесплатном плане
+  // у него 10 мс процессора, а у будильников комнаты по 30 секунд
+  async scheduled(event, env, ctx) {
+    if (!env.BACKUPS || !env.BACKUP_ROOM) return; // хранилище R2 не подключено: копий нет, комнаты лотов и присутствия работают
+    const room = env.BACKUP_ROOM.get(env.BACKUP_ROOM.idFromName('backup'));
+    ctx.waitUntil(room.fetch('https://rt/start', { method: 'POST', headers: { 'x-backup-by': 'cron' } }));
+  },
 };
