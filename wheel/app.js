@@ -917,6 +917,7 @@
       S.spinning = false;
       lock(false);
       save();
+      lastWinner = pick.item; // до отрисовки: «Экспорт» в шапке колеса появляется сразу
       render(true);
       setStatus(`Победитель: <b>${esc(pick.item.name)}</b>`, winSub(pick.item), 'good');
       showWinner(pick.item);

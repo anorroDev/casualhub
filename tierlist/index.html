@@ -604,8 +604,8 @@ body.tl-dropping .tl-pool { border-color: var(--accent); box-shadow: inset 0 0 0
 @media (max-width: 560px) {
   .tl-title { height: 46px; flex-basis: 100%; font-size: 26px; }
   .tl-tools { display: grid; gap: 6px; }
-  .tl-group { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
-  .tl-group > * { flex: none; }
+  /* все кнопки на виду: в прокручиваемой строке «Файл», «Всё убрать» и «Удалить» уезжали за край экрана */
+  .tl-tools .tl-group .btn { flex: 1 1 auto; }
   .tl-row { grid-template-columns: 58px minmax(0, 1fr); min-height: 76px; }
   .tl-lab { font-size: 30px; }
   .tl-lab.mid { font-size: 18px; }
