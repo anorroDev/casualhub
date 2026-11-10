@@ -446,7 +446,7 @@
   function cardHTML(l, id, readOnly) {
     const it = l.items[id], src = imgOf(it), sel = S.sel === id, just = S.pop === id;
     const cap = l.captions && it.name && it.kind !== 'text' ? `<small>${esc(it.name)}</small>` : '';
-    const face = src ? `<img src="${esc(src)}" alt="" draggable="false" decoding="async">` : `<span class="tl-txt">${esc(it.name || '?')}</span>`;
+    const face = src ? `<img src="${esc(src)}" alt="" draggable="false" loading="lazy" decoding="async">` : `<span class="tl-txt">${esc(it.name || '?')}</span>`;
     if (readOnly) return `<div class="tl-it" title="${esc(it.name)}"><span class="tl-card"><span class="tl-face">${face}</span>${cap}</span></div>`;
     return `<div class="tl-it${sel ? ' sel' : ''}${just ? ' pop' : ''}" data-id="${esc(id)}"><button type="button" class="tl-card" aria-pressed="${sel}" title="${esc(it.name)}" aria-label="${esc(it.name || 'Картинка')}"><span class="tl-face">${face}</span>${cap}</button><button type="button" class="tl-x" aria-label="Удалить карточку" title="Удалить карточку">✕</button></div>`;
   }

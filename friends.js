@@ -641,13 +641,13 @@
     const p = r.photo;
     // без своего фото у трека друга видна аватарка исполнителя
     if (!p) return kind === 'thumb' && r.artist && r.artistAva && uid && typeof artistRid === 'function'
-      ? `<img class="e-thumb ava f-photo" data-fphoto="${esc(uid + '|' + artistRid(typeof artistParts === 'function' ? artistParts(r.artist)[0] || r.artist : r.artist))}" alt="" decoding="async">` : '';
+      ? `<img loading="lazy" class="e-thumb ava f-photo" data-fphoto="${esc(uid + '|' + artistRid(typeof artistParts === 'function' ? artistParts(r.artist)[0] || r.artist : r.artist))}" alt="" decoding="async">` : '';
     const cls = kind === 'thumb' ? 'e-thumb' : 'e-photo';
     const size = kind === 'body' && p.w && p.h ? ` width="${+p.w}" height="${+p.h}"` : '';
     const alt = kind === 'body' ? `Фото: ${esc(r.name)}` : '';
     if (photoLink(p)) return `<img class="${cls}" src="${esc(photoLink(p))}" alt="${alt}" loading="lazy" decoding="async" referrerpolicy="no-referrer"${size}>`;
     if (!p.remote || !uid) return '';
-    return `<img class="${cls} f-photo" data-fphoto="${esc(uid + '|' + r.id + (kind === 'thumb' ? '|t' : ''))}" alt="${alt}" decoding="async"${size}>`;
+    return `<img loading="lazy" class="${cls} f-photo" data-fphoto="${esc(uid + '|' + r.id + (kind === 'thumb' ? '|t' : ''))}" alt="${alt}" decoding="async"${size}>`;
   }
   const photoCache = new Map(); // "uid|rid" -> Promise<data URL | ''>
   let photoObs = null;

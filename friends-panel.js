@@ -46,6 +46,9 @@
 a.fr-who { color: inherit; text-decoration: none; margin: -4px; padding: 4px; border-radius: 10px; transition: background-color .15s; }
 a.fr-who:hover { background: color-mix(in srgb, var(--ink, #fff) 6%, transparent); }
 a.fr-who:hover b { text-decoration: underline; }
+/* @юзернейм не влез после ника — переносится целиком, а не рвётся посреди слова; отступ держит ник, чтобы на новой строке @ не съезжал вправо */
+.fr-who > span > b, .fr-sug > span > b { margin-right: 6px; }
+.fr-who > span > b + i, .fr-sug > span > b + i { display: inline-block; margin-left: 0; }
 .fp-sheet { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg, #0d0f14) 70%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); overscroll-behavior: contain; }
 .fp-sheet[hidden] { display: none; }
 .fp-card { width: min(560px, 100%); max-height: min(720px, calc(100dvh - 32px)); overflow: auto; overscroll-behavior: contain; display: grid; gap: 14px; padding: 18px; background: var(--panel, #1b1d24); color: var(--ink, #f3f4f6); border: 1px solid var(--line, #2b2e38); border-radius: 20px; box-shadow: 0 30px 70px -30px rgba(0, 0, 0, .6); animation: fp-pop .3s cubic-bezier(.34, 1.56, .64, 1); font-family: inherit; }

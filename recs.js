@@ -58,7 +58,7 @@
     // фото друга, загруженное файлом, подтягиваем превью
     row.querySelectorAll('[data-ph]').forEach((el) => {
       const [u, id] = el.dataset.ph.split('|');
-      api(`/photo/${encodeURIComponent(u)}/${encodeURIComponent(id)}?thumb=1`).then((d) => { if (d && d.data && el.isConnected) el.innerHTML = `<img src="${esc(d.data)}" alt="">`; }, () => {});
+      api(`/photo/${encodeURIComponent(u)}/${encodeURIComponent(id)}?thumb=1`).then((d) => { if (d && d.data && el.isConnected) el.innerHTML = `<img src="${esc(d.data)}" alt="" loading="lazy" decoding="async">`; }, () => {});
     });
     // обложка не открылась: вместо неё первая буква названия
     row.querySelectorAll('.rt').forEach((t) => { const img = t.querySelector('.rt-pic img'), x = items.get(t.dataset.key); if (img && x) img.onerror = () => { const s = document.createElement('span'); s.textContent = [...String(x.title)][0] || '?'; img.replaceWith(s); }; });

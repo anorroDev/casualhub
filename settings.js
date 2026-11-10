@@ -139,6 +139,9 @@ label.st-row { cursor: pointer; }
   .st-back { display: inline-flex; align-items: center; }
   .st-head h3 { font-size: 18px; text-align: center; }
   .st-body { padding: 0 14px calc(24px + env(safe-area-inset-bottom)); }
+  /* не влезает подпись и кнопка (Русский/English на 320 px) — кнопка уходит под подпись, а не вылезает вбок */
+  .st-row { flex-wrap: wrap; }
+  .st-row > .st-t { min-width: min-content; }
 }
 @media (min-width: 720px) { .st-nav-x { display: none; } }
 @media (prefers-reduced-motion: reduce) { .st-card { animation: none; } .st-sw, .st-sw::after { transition: none; } }

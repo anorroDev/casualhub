@@ -1655,7 +1655,7 @@ function artistList() {
   return [...m.values()].sort((a, b) => b.n - a.n || a.name.localeCompare(b.name, 'ru'));
 }
 function artistMiniHTML(a) {
-  return `<span class="artist-mini">${a.ava ? `<img src="${esc(a.ava)}" alt="">` : esc((a.name.trim().charAt(0) || '?').toUpperCase())}</span>`;
+  return `<span class="artist-mini">${a.ava ? `<img src="${esc(a.ava)}" alt="" loading="lazy" decoding="async">` : esc((a.name.trim().charAt(0) || '?').toUpperCase())}</span>`;
 }
 // меняет все оценки исполнителя (имя, отпечаток аватарки); оценка получает свежую дату, чтобы правка дошла до других устройств
 async function patchArtistRatings(key, patchOf) {
@@ -1751,8 +1751,8 @@ function renderArtist() {
   el.artistAva.classList.toggle('has', multi || !!ava);
   el.artistAva.classList.toggle('multi', multi);
   // несколько исполнителей: их аватарки кружками внахлёст
-  el.artistAva.innerHTML = multi ? parts.slice(0, 3).map(x => { const g = artistGet(x); return `<i>${g && g.ava ? `<img src="${esc(g.ava)}" alt="">` : esc(x.charAt(0).toUpperCase())}</i>`; }).join('')
-    : ava ? `<img src="${esc(ava)}" alt="">` : (letter ? esc(letter) : '♪');
+  el.artistAva.innerHTML = multi ? parts.slice(0, 3).map(x => { const g = artistGet(x); return `<i>${g && g.ava ? `<img src="${esc(g.ava)}" alt="" loading="lazy" decoding="async">` : esc(x.charAt(0).toUpperCase())}</i>`; }).join('')
+    : ava ? `<img src="${esc(ava)}" alt="" loading="lazy" decoding="async">` : (letter ? esc(letter) : '♪');
   const known = !multi && !!keyOf(form.artist) && artistList().some(x => x.key === keyOf(form.artist));
   el.artistEdit.hidden = !known || !!artistEditing;
   // у каждого из нескольких — своя кнопка: аватарка и имя
@@ -2358,7 +2358,7 @@ function renderTierBoard(list) {
       ? items.map(r => {
           const pUrl = resolvePhotoUrl(r.photo) || artistAvaUrl(r);
           return `<button type="button" class="tier-item" data-tier-goto="${esc(r.id)}" title="${esc(r.name)} (${r.total != null ? fmt(r.total) : '—'})">
-            ${pUrl ? `<img src="${esc(pUrl)}" alt="">` : ''}
+            ${pUrl ? `<img src="${esc(pUrl)}" alt="" loading="lazy" decoding="async">` : ''}
             <span>${r.fav ? '★ ' : ''}${esc(r.name)}</span>
             <b>${r.total != null ? fmt(r.total) : '—'}</b>
           </button>`;

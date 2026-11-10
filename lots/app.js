@@ -906,7 +906,7 @@
     const sig = JSON.stringify([p.name, p.sub, p.img, old && old.name, S.room.editOwn]);
     if (box.dataset.sig === sig) return;
     box.dataset.sig = sig;
-    const pic = p.img ? `<img src="${esc(p.img)}" alt="" referrerpolicy="no-referrer">` : '<em aria-hidden="true">＋</em>';
+    const pic = p.img ? `<img src="${esc(p.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : '<em aria-hidden="true">＋</em>';
     box.innerHTML = `<div class="lots-conf-lot">${pic}<span><b>${esc(p.name)}</b>${p.sub ? `<small>${esc(p.sub)}</small>` : ''}</span></div>
       <p class="lots-note">${old ? `Заменить «${esc(old.name)}» этим лотом?` : 'Добавить этот лот на колесо?'} ${S.room.editOwn ? 'Пока идёт сбор, его можно будет убрать или заменить.' : 'Потом убрать его будет нельзя.'}</p>
       <div class="lots-conf-acts"><button type="button" class="btn primary" data-conf="yes">Подтвердить</button><button type="button" class="btn ghost" data-conf="no">Отмена</button></div>`;

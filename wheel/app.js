@@ -1361,7 +1361,7 @@
       `<button type="button" class="th add" id="gifPick" aria-label="Загрузить гифку">${ICON.plus}<span>Гифка</span></button>` +
       `<button type="button" class="th" data-gif="" aria-pressed="${!src}">Без гифки</button>` +
       G.map((g) => `<span class="thw">
-        <button type="button" class="th" data-gif="${g.id}" aria-pressed="${g.id === S.gif}" title="${esc(g.name)}"><img src="${g.url}" alt="${esc(g.name)}"></button>
+        <button type="button" class="th" data-gif="${g.id}" aria-pressed="${g.id === S.gif}" title="${esc(g.name)}"><img src="${g.url}" alt="${esc(g.name)}" loading="lazy" decoding="async"></button>
         <button type="button" class="th-x" data-del="${g.id}" aria-label="Удалить ${esc(g.name)}">${ICON.xs}</button>
       </span>`).join('');
   }
