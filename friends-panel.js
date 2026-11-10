@@ -5,8 +5,8 @@
    Аватарки друзей с рамкой отсюда же берёт и окно Мнения (window.CasualFriendsUI). */
 (() => {
   const profUrl = (id, h) => (typeof h === 'string' && /^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/.test(h) ? '/profile/' + h : '/profile/?id=' + encodeURIComponent(id));
-  const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const read = window.CasualUtil.read; // общий, /util.js
+  const esc = window.CasualUtil.esc; // общий, /util.js
   const COLORS = ['#3550E8', '#2EAD60', '#EAA92C', '#E4553F', '#9333EA', '#06B6D4', '#EC4899', '#F97316'];
   const colorOf = (s) => { let h = 0; for (const c of String(s)) h = (h * 31 + c.codePointAt(0)) >>> 0; return COLORS[h % COLORS.length]; };
   const token = () => { const u = read('ocenshik.user.v1'); const t = read('casualhub.tokens.v1') || {}; return (u && t[u.id]) || null; };
@@ -46,6 +46,9 @@
 a.fr-who { color: inherit; text-decoration: none; margin: -4px; padding: 4px; border-radius: 10px; transition: background-color .15s; }
 a.fr-who:hover { background: color-mix(in srgb, var(--ink, #fff) 6%, transparent); }
 a.fr-who:hover b { text-decoration: underline; }
+/* @юзернейм не влез после ника — переносится целиком, а не рвётся посреди слова; отступ держит ник, чтобы на новой строке @ не съезжал вправо */
+.fr-who > span > b, .fr-sug > span > b { margin-right: 6px; }
+.fr-who > span > b + i, .fr-sug > span > b + i { display: inline-block; margin-left: 0; }
 .fp-sheet { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg, #0d0f14) 70%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); overscroll-behavior: contain; }
 .fp-sheet[hidden] { display: none; }
 .fp-card { width: min(560px, 100%); max-height: min(720px, calc(100dvh - 32px)); overflow: auto; overscroll-behavior: contain; display: grid; gap: 14px; padding: 18px; background: var(--panel, #1b1d24); color: var(--ink, #f3f4f6); border: 1px solid var(--line, #2b2e38); border-radius: 20px; box-shadow: 0 30px 70px -30px rgba(0, 0, 0, .6); animation: fp-pop .3s cubic-bezier(.34, 1.56, .64, 1); font-family: inherit; }

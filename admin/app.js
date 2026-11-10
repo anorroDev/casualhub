@@ -2,8 +2,8 @@
   const profUrl = (id, h) => (typeof h === 'string' && /^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/.test(h) ? '/profile/' + h : '/profile/?id=' + encodeURIComponent(id));
   const $ = (s) => document.querySelector(s);
   const app = $('#app');
-  const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
-  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const read = window.CasualUtil.read; // общий, /util.js
+  const esc = window.CasualUtil.esc; // общий, /util.js
   const user = read('ocenshik.user.v1');
   const token = user && (read('casualhub.tokens.v1') || {})[user.id];
   const call = (method, path, body) => fetch('/api' + path, {
@@ -256,11 +256,11 @@
   }
   const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  const TABS = [['stats', '📊', 'Статистика'], ['users', '👥', 'Пользователи'], ['comments', '💬', 'Комментарии'], ['announce', '📢', 'Объявление'], ['mail', '✉️', 'Почта'], ['changes', '🛠', 'Изменения'], ['log', '📜', 'Журнал']];
+  const TABS = [['stats', '📊', 'Статистика'], ['users', '👥', 'Пользователи'], ['comments', '💬', 'Комментарии'], ['announce', '📢', 'Объявление'], ['mail', '✉️', 'Почта'], ['backup', '💾', 'Копии'], ['changes', '🛠', 'Изменения'], ['log', '📜', 'Журнал']];
   let tab = 'stats';
   const sec = () => $('#admSec');
   const when = (t) => (t ? new Date(t).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—');
-  const plural = (n, one, few, many) => { const a = Math.abs(n) % 100, b = a % 10; return a > 10 && a < 20 ? many : b > 1 && b < 5 ? few : b === 1 ? one : many; };
+  const plural = window.CasualUtil.plural; // общий, /util.js
   const fail = (x) => {
     if (lostSession(x)) { message('Вход закончился', 'Войди в аккаунт ещё раз, и админка снова откроется.', '<a class="btn primary" href="/opinion/#login">Войти</a>'); return; }
     if (lostAdmin(x)) { me.active = false; pinForm(); return; }
@@ -276,7 +276,7 @@
     const s = sec();
     if (!s) return;
     s.innerHTML = '<p class="muted">Загружаю…</p>';
-    ({ stats, users, comments, announce, mail, changes, log })[tab]();
+    ({ stats, users, comments, announce, mail, backup, changes, log })[tab]();
   }
   let emos = null;
   const emoOf = (x) => { if (!emos || !emos.length) return ''; let h = 0; for (const c of x.title) h = (h * 31 + c.charCodeAt(0)) >>> 0; return emos[h % emos.length]; };
@@ -456,6 +456,60 @@
           setTimeout(mail, r.ok ? 1500 : 0);
         } catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else { m.textContent = x.message; b.disabled = false; } }
       });
+    } catch (x) { if (!stale(my)) fail(x); }
+  }
+
+  // резервные копии базы: каждую ночь их делает casualhub-rt (rt/backup.js), здесь — список, «Сделать копию сейчас» и скачать
+  const size = (n) => (n < 1e6 ? Math.max(1, Math.round(n / 1e3)) + ' КБ' : mb(n));
+  const rowsText = (n) => `${n} ${plural(n, 'строка', 'строки', 'строк')}`;
+  let backupT = 0;
+  async function backup() {
+    const my = fresh();
+    clearTimeout(backupT);
+    try {
+      const d = await call('GET', '/admin/backup');
+      if (stale(my)) return;
+      if (!d.on) {
+        sec().innerHTML = `<div class="head"><h2 class="h2">Копии</h2><span class="label">не включены</span></div>
+          <p class="muted">Копию базы каждую ночь делает Worker casualhub-rt и кладёт в хранилище R2. Пока он не выложен вместе с хранилищем, копий нет. Порядок — в README, раздел «Резервные копии».</p>`;
+        return;
+      }
+      const run = d.run, facts = (list) => list.map((x) => `<span>${esc(x)}</span>`).join('');
+      sec().innerHTML = `<div class="head"><h2 class="h2">Копии</h2><span class="label">каждую ночь, хранятся последние ${d.keep}</span></div>
+        <p class="muted">В копии все оценки, фото, тир-листы, лоты и аккаунты. Пароли, 2FA и пин-коды в ней зашифрованы ключом BACKUP_KEY, которого в хранилище нет. Входы на устройствах в копию не попадают: после восстановления все войдут заново. Файл — JSON Lines, восстановление описано в README.</p>
+        ${d.secrets === 'blank' ? '<p class="adm-err">Ключ BACKUP_KEY не задан: пароли, 2FA и пин-коды в копию не попадают, после восстановления их придётся сбрасывать. Как задать ключ — в README, раздел «Резервные копии».</p>' : ''}
+        ${run ? `<p class="adm-bk-run" role="status"><b>Делаю копию</b>${facts((run.of ? [run.table ? 'таблица ' + run.table : 'дописываю', `${Math.min(run.step + 1, run.of)} из ${run.of}`, rowsText(run.rows)].concat(run.bytes ? [size(run.bytes)] : []) : ['начинаю']).concat(run.fails ? ['повторяю после ошибки'] : []))}</p>` : ''}
+        ${d.error ? `<p class="adm-err">Копия ${esc(when(d.error.at))} не получилась: ${esc(d.error.msg)}</p>` : ''}
+        <div class="adm-ann-row"><button type="button" class="btn primary" id="admBkNow"${run ? ' disabled' : ''}>Сделать копию сейчас</button></div>
+        <p class="adm-err" id="admBkMsg" role="status"></p>
+        ${d.runs.length ? `<ul class="adm-list adm-bk">${d.runs.map((r, i) => `<li class="adm-row" style="--k:${Math.min(i, 12)}">
+            <div class="adm-who"><b>${esc(when(r.done))}</b><small>${facts([size(r.bytes), rowsText(r.rows), r.by === 'cron' ? 'ночная' : 'вручную ' + r.by].concat(r.secrets === 'blank' ? ['без паролей'] : []))}</small></div>
+            <div class="adm-acts"><button type="button" class="btn ghost small" data-bk="${esc(r.id)}">Скачать</button></div>
+          </li>`).join('')}</ul>` : '<p class="muted">Копий пока нет: первая появится ночью или по кнопке выше.</p>'}`;
+      const msg = $('#admBkMsg');
+      $('#admBkNow').addEventListener('click', async (e) => {
+        const btn = e.currentTarget;
+        btn.disabled = true;
+        try { await call('POST', '/admin/backup'); backup(); }
+        catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else { msg.textContent = x.message; btn.disabled = false; } }
+      });
+      sec().querySelectorAll('[data-bk]').forEach((b) => b.addEventListener('click', async () => {
+        const label = b.textContent;
+        b.disabled = true; b.textContent = 'Скачиваю…'; msg.textContent = '';
+        try {
+          // через fetch, а не ссылкой: админке нужен заголовок с токеном
+          const r = await fetch('/api/admin/export?id=' + encodeURIComponent(b.dataset.bk), { headers: { authorization: 'Bearer ' + token } })
+            .catch(() => { throw Object.assign(new Error('Нет связи с сервером, проверь интернет и попробуй ещё раз'), { status: 0 }); });
+          if (!r.ok) { const x = await r.json().catch(() => ({})); throw Object.assign(new Error(x.error || 'Не получилось скачать копию'), { status: r.status }); }
+          const url = URL.createObjectURL(await r.blob()), a = document.createElement('a');
+          a.href = url; a.download = `casualhub-${b.dataset.bk}.ndjson`;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(url), 60e3);
+        } catch (x) { if (lostAdmin(x) || lostSession(x)) { fail(x); return; } msg.textContent = x.message; }
+        b.disabled = false; b.textContent = label;
+      }));
+      // пока копия идёт, вкладка обновляется сама
+      if (run) backupT = setTimeout(() => { if (!stale(my) && tab === 'backup') backup(); }, 3000);
     } catch (x) { if (!stale(my)) fail(x); }
   }
 

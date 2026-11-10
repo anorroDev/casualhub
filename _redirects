@@ -7,10 +7,13 @@
 /tier/*      /tierlist/:splat 301
 # служебные файлы репозитория сайту не нужны
 /README.md    /  302
+/CLAUDE.md    /  302
+/.claude/*    /  302
 /wrangler.toml /  302
 /.github/*    /  302
 /.gitignore   /  302
 /functions/*  /  302
+/rt/*        /  302
 # убранные повторы стикеров: у кого такой остался в профиле, увидит оставшийся вариант
 /wheel/hub/papich/papich-013.webp  /wheel/hub/papich/papich-005.webp  301
 /wheel/hub/papich/papich-025.webp  /wheel/hub/papich/papich-008.webp  301

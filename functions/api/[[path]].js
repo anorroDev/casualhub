@@ -5,6 +5,8 @@ import { clip, numOrNull, SAFE_URL, cleanRating, readShelf, stampOf, RID_RE, SPO
 import { computeRecs, seedSig, titleKey } from '../_lib/recs.js';
 import { imdbLookup } from '../_lib/imdb.js';
 import { NOTES } from '../_lib/admin-changes.js';
+import { LOT_NAME, MAX_LOTS, STICKER_RE, cleanLive, LIVE_OWNER, liveBusy, liveLots, spinLive, resetLive, stopAuto, settledLive, liveTx, liveView } from '../_lib/lots-live.js';
+import { ONLINE_MS, GUEST_RE, onlineCount, friendsAndIncoming, touchUsers, touchGuests } from '../_lib/presence.js';
 
 const enc = new TextEncoder();
 const ITER = 10000;
@@ -285,10 +287,12 @@ function burst(key, max, winMs) {
   return b.n > max ? Math.ceil((b.reset - now) / 1000) : 0;
 }
 
-async function currentUser(env, request) {
-  const m = (request.headers.get('authorization') || '').match(/^Bearer ([0-9a-f]{64})$/);
-  if (!m) return null;
-  const th = await sha256(m[1]);
+const bearerOf = (request) => { const m = (request.headers.get('authorization') || '').match(/^Bearer ([0-9a-f]{64})$/); return m ? m[1] : null; };
+// token — когда он пришёл не заголовком (у WebSocket — в подпротоколе). request — всегда настоящий запрос:
+// из него берутся браузер и страна для списка устройств
+async function currentUser(env, request, token = bearerOf(request)) {
+  if (!token) return null;
+  const th = await sha256(token);
   const now = Date.now();
   const u = await env.DB.prepare(
     'SELECT u.id, u.username, u.uname AS handle, u.email, u.created_at, u.hide_online, u.banned, u.ban_reason, u.totp, u.totp_pending, u.email_ok, s.expires_at, s.seen_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?'
@@ -350,14 +354,30 @@ const PIN_SET_MS = 15 * 60e3;
 const adminRow = (env, me) => (me ? env.DB.prepare('SELECT user_id, pin_hash, pin_salt, pin_until FROM admins WHERE user_id = ?').bind(me.id).first() : null);
 const isAdmin = async (env, me) => !!(await adminRow(env, me));
 const ADMIN_TTL = 12 * 3600e3;
-const tokenHashOf = async (request) => { const m = (request.headers.get('authorization') || '').match(/^Bearer ([0-9a-f]{64})$/); return m ? sha256(m[1]) : null; };
-async function adminActive(env, request, me) {
+const tokenHashOf = async (request, token = bearerOf(request)) => (token ? sha256(token) : null);
+// открыт ли вход в админку — для частых запросов (опрос сбора раз в 2 секунды): ответ помнится 30 секунд на токен,
+// чтобы не ходить за ним в базу каждый раз. «Выйти из админки» забывает его сразу (в этом экземпляре функции; в других —
+// через те же 30 секунд). Для действий админа — только adminActive
+const adminSeen = new Map();
+async function adminActiveCached(env, request, me) {
+  if (!me || !adminCandidate(me, env)) return false;
+  const th = await tokenHashOf(request), now = Date.now();
+  if (!th) return false;
+  const hit = adminSeen.get(th);
+  if (hit && hit[1] > now) return hit[0];
+  const ok = await adminActive(env, request, me);
+  if (adminSeen.size > 200) adminSeen.clear();
+  adminSeen.set(th, [ok, now + 30e3]);
+  return ok;
+}
+async function adminActive(env, request, me, token) {
   if (!(await isAdmin(env, me)) || !adminCandidate(me, env)) return false;
-  const th = await tokenHashOf(request);
+  const th = await tokenHashOf(request, token || undefined);
   return !!(th && (await env.DB.prepare('SELECT 1 FROM admin_sessions WHERE token_hash = ? AND user_id = ? AND until > ?').bind(th, me.id, Date.now()).first()));
 }
 async function openAdmin(env, request, me) {
   const th = await tokenHashOf(request), now = Date.now();
+  adminSeen.delete(th);
   await env.DB.batch([
     env.DB.prepare('INSERT OR REPLACE INTO admin_sessions (token_hash, user_id, until) VALUES (?, ?, ?)').bind(th, me.id, now + ADMIN_TTL),
     env.DB.prepare('DELETE FROM admin_sessions WHERE until < ?').bind(now),
@@ -559,7 +579,7 @@ const routes = {
   async 'POST /admin/lock'({ env, request, me }) {
     if (!adminCandidate(me, env)) return fail(404, 'Нет такого адреса.');
     const th = await tokenHashOf(request);
-    if (th) await env.DB.prepare('DELETE FROM admin_sessions WHERE token_hash = ?').bind(th).run();
+    if (th) { await env.DB.prepare('DELETE FROM admin_sessions WHERE token_hash = ?').bind(th).run(); adminSeen.delete(th); }
     await adminLog(env, request, me, 'lock', true);
     return json({ ok: true });
   },
@@ -617,6 +637,7 @@ const routes = {
       env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(u.id),
     ]);
     else await env.DB.prepare('UPDATE users SET banned = NULL, ban_reason = NULL WHERE id = ?').bind(u.id).run();
+    if (on) await pokePresence(env, { what: 'drop', ids: [u.id] });
     await adminLog(env, request, me, (on ? 'ban ' : 'unban ') + u.uname, true);
     return json({ ok: true });
   },
@@ -678,6 +699,7 @@ const routes = {
       'DELETE FROM shares WHERE owner_id = ?1',
       'DELETE FROM users WHERE id = ?1',
     ].map((q) => env.DB.prepare(q).bind(id)));
+    await pokePresence(env, { what: 'drop', ids: [u.id] });
     await adminLog(env, request, me, `delete account @${u.uname} «${u.username}»`, true);
     return json({ ok: true });
   },
@@ -688,6 +710,7 @@ const routes = {
     if (!u) return fail(404, 'Нет такого аккаунта.');
     if (u.id === me.id || (await isAdminAccount(env, u))) return fail(400, 'Админа выкинуть нельзя.');
     await env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(u.id).run();
+    await pokePresence(env, { what: 'drop', ids: [u.id] });
     await adminLog(env, request, me, 'kick ' + u.uname, true);
     return json({ ok: true });
   },
@@ -723,6 +746,7 @@ const routes = {
       const v = { id: randHex(6), text: t, kind: ['info', 'warn', 'party'].includes(kind) ? kind : 'info', at: Date.now(), until: h ? Date.now() + h * 3600e3 : 0, by: me.handle };
       await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('announce', ?)").bind(JSON.stringify(v)).run();
     }
+    await pokePresence(env, { what: 'announce' });
     announceCache.at = 0;
     await adminLog(env, request, me, t ? 'announce: ' + t.slice(0, 60) : 'announce off', true);
     return json({ ok: true });
@@ -731,6 +755,38 @@ const routes = {
     if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
     const { results } = await env.DB.prepare('SELECT l.at, l.ip, l.action, l.ok, u.uname FROM admin_log l LEFT JOIN users u ON u.id = l.user_id ORDER BY l.at DESC LIMIT 60').all();
     return json({ items: results.map((x) => ({ at: x.at, handle: x.uname || '', action: x.action, ok: !!x.ok, ip: x.ip ? String(x.ip).replace(/(\d+\.\d+)\.\d+\.\d+$/, '$1.*.*').replace(/^([0-9a-f]+:[0-9a-f]+):.*$/i, '$1:…') : '' })) });
+  },
+
+  // резервные копии базы: готовые и идущая (саму копию делает BackupDO, здесь только посредник)
+  async 'GET /admin/backup'({ env, request, me }) {
+    if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+    const r = await backupCall(env, '/status');
+    if (!r) return json({ on: false });
+    if (r.down || !r.ok) return fail(503, BACKUP_DOWN);
+    return json({ on: true, ...(await r.json()) });
+  },
+  async 'POST /admin/backup'({ env, request, me }) {
+    if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+    const r = await backupCall(env, '/start', { method: 'POST', headers: { 'x-backup-by': '@' + me.handle } });
+    if (!r) return fail(503, BACKUP_OFF);
+    if (r.down || !r.ok) return fail(503, BACKUP_DOWN);
+    const d = await r.json();
+    await adminLog(env, request, me, d.running ? 'backup: already running' : 'backup ' + d.id, true);
+    return json(d);
+  },
+  // скачать копию одним файлом JSON Lines: без id — последнюю. Байты идут из R2 насквозь, сервер их не разбирает
+  async 'GET /admin/export'({ env, request, me }) {
+    if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+    const id = new URL(request.url).searchParams.get('id') || '';
+    if (id && !BACKUP_ID_RE.test(id)) return fail(404, 'Такой копии нет.');
+    const r = await backupCall(env, '/export' + (id ? '?id=' + id : ''));
+    if (!r) return fail(503, BACKUP_OFF);
+    if (r.status === 404) return fail(404, id ? 'Такой копии нет.' : 'Копий пока нет: первая появится ночью или по кнопке «Сделать копию сейчас».');
+    if (r.down || !r.ok) return fail(503, BACKUP_DOWN);
+    await adminLog(env, request, me, 'export ' + (r.headers.get('x-backup-id') || id), true);
+    const headers = { 'content-type': 'application/x-ndjson; charset=utf-8', 'content-disposition': r.headers.get('content-disposition') || 'attachment; filename="casualhub-backup.ndjson"', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff' };
+    if (r.headers.get('content-length')) headers['content-length'] = r.headers.get('content-length');
+    return new Response(r.body, { headers });
   },
 
   // почта: подключена ли, с какого адреса, чем кончилась последняя отправка (ключ не показывается)
@@ -834,6 +890,8 @@ const routes = {
       await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?').bind(me.id, m ? await sha256(m[1]) : '').run();
       await env.DB.prepare('DELETE FROM admin_sessions WHERE user_id = ?').bind(me.id).run();
     }
+    if (pass) await pokePresence(env, { what: 'drop', ids: [me.id] });
+    else if (hideOnline != null) await pokePresence(env, { what: 'users', ids: [me.id] });
     return json({ user: ownUser(out) });
   },
 
@@ -847,11 +905,13 @@ const routes = {
     const cur = await tokenHash(request);
     if (cur.startsWith(arg)) return fail(400, 'Это устройство: чтобы выйти здесь, нажми «Выйти из аккаунта».');
     const r = await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND substr(token_hash, 1, 16) = ?').bind(me.id, arg).run();
+    await pokePresence(env, { what: 'drop', ids: [me.id] });
     return json({ ok: true, n: r.meta.changes || 0 });
   },
   async 'POST /sessions/others'({ env, request, me }) {
     const cur = await tokenHash(request);
     const r = await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?').bind(me.id, cur).run();
+    await pokePresence(env, { what: 'drop', ids: [me.id] });
     return json({ ok: true, n: r.meta.changes || 0 });
   },
   // ---------- двухфакторная защита ----------
@@ -948,6 +1008,7 @@ const routes = {
       env.DB.prepare('DELETE FROM admin_sessions WHERE user_id = ?').bind(row.user_id),
       env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind('login-acc:' + row.user_id),
     ]);
+    await pokePresence(env, { what: 'drop', ids: [row.user_id] });
     return json({ ok: true });
   },
   async 'POST /email/verify-send'({ env, request, me }) {
@@ -1009,49 +1070,49 @@ const routes = {
       'DELETE FROM mail_tokens WHERE user_id = ?1',
       'DELETE FROM users WHERE id = ?1',
     ].map((q) => env.DB.prepare(q).bind(u.id)));
+    await pokePresence(env, { what: 'drop', ids: [me.id] });
     return json({ ok: true });
   },
 
+  // присутствие вживую: WebSocket к комнате PresenceDO. Токен — в подпротоколе ['casualhub', 'bearer.<токен>'],
+  // гость — ['casualhub', 'guest.<id>'] (id из localStorage, как в POST /ping). Кто это, решает этот маршрут
+  async 'GET /presence/ws'({ env, request }) {
+    if (!presenceOn(env)) return fail(404, 'Нет такого адреса.');
+    if ((request.headers.get('upgrade') || '').toLowerCase() !== 'websocket') return fail(426, 'Нужен WebSocket.');
+    if (burst('presws:' + clientIp(request), 120, 60e3)) return tooMany(1);
+    const protos = (request.headers.get('sec-websocket-protocol') || '').split(',').map((x) => x.trim());
+    const bearer = protos.find((x) => /^bearer\.[0-9a-f]{64}$/.test(x));
+    const guest = (protos.find((x) => /^guest\.[a-z0-9]{12,40}$/.test(x)) || '').slice(6);
+    let me = null;
+    if (bearer) {
+      try { me = await currentUser(env, request, bearer.slice(7)); } catch (e) {}
+      if (me && me.banned) me = null;
+    }
+    const headers = new Headers({ upgrade: 'websocket', 'x-rt-uid': me ? me.id : '', 'x-rt-hide': me && me.hide_online ? '1' : '', 'x-rt-guest': me ? '' : guest, 'x-rt-bearer': bearer ? '1' : '', 'x-rt-proto': protos.includes('casualhub') ? 'casualhub' : '' });
+    for (const k of ['sec-websocket-key', 'sec-websocket-version', 'sec-websocket-extensions']) { const v = request.headers.get(k); if (v) headers.set(k, v); }
+    return presenceRoom(env).fetch('https://rt/ws', { headers });
+  },
   async 'POST /ping'({ env, request }) {
     const ip = clientIp(request);
     if (burst('ping:' + ip, 150, 60e3)) return json({ online: onlineCache.n, friends: [] });
     const now = Date.now();
     const me = await currentUser(env, request);
-    if (me) {
-      // пишем не чаще раза в 45 секунд: база не тратится на каждую вкладку
-      await env.DB.prepare('UPDATE users SET last_seen = ?1 WHERE id = ?2 AND (last_seen IS NULL OR last_seen < ?3)').bind(now, me.id, now - 45e3).run();
-    } else {
+    if (me) await touchUsers(env, [me.id], now);
+    else {
       const { guest } = await readBody(request);
-      if (typeof guest === 'string' && /^[a-z0-9]{12,40}$/.test(guest) && !burst('pingw:' + ip, 60, 60e3) && !burst('pingw:all', 400, 60e3)) {
-        await env.DB.prepare('INSERT INTO presence (id, at) VALUES (?1, ?2) ON CONFLICT(id) DO UPDATE SET at = ?2 WHERE at < ?3').bind('g:' + guest, now, now - 45e3).run();
-      }
+      if (typeof guest === 'string' && GUEST_RE.test(guest) && !burst('pingw:' + ip, 60, 60e3) && !burst('pingw:all', 400, 60e3)) await touchGuests(env, [guest], now);
     }
     // число на сайте считается не чаще раза в 20 секунд на сервер
     if (onlineCache.at < now - 20e3) {
-      const [a, b] = await env.DB.batch([
-        env.DB.prepare('SELECT COUNT(*) AS n FROM users WHERE last_seen > ?').bind(now - ONLINE_MS),
-        env.DB.prepare('SELECT COUNT(*) AS n FROM presence WHERE at > ?').bind(now - ONLINE_MS),
-      ]);
-      onlineCache.n = ((a.results[0] || {}).n || 0) + ((b.results[0] || {}).n || 0);
+      onlineCache.n = await onlineCount(env, now);
       onlineCache.at = now;
       if (Math.random() < 0.05) await env.DB.prepare('DELETE FROM presence WHERE at < ?').bind(now - 864e5).run();
     }
-    let friends = [];
-    // заявки в друзья, которые ждут ответа: красная цифра на кнопке «Друзья»
-    let incoming = 0;
-    if (me) {
-      // друзья в сети и заявки — одним походом в базу
-      const [fr, inc] = await env.DB.batch([
-        env.DB.prepare(
-          "SELECT u.id, u.last_seen FROM friendships f JOIN users u ON u.id = (CASE WHEN f.a = ?1 THEN f.b ELSE f.a END) WHERE (f.a = ?1 OR f.b = ?1) AND f.status = 'accepted' AND (u.hide_online IS NULL OR u.hide_online = 0) AND u.last_seen > ?2"
-        ).bind(me.id, now - ONLINE_MS),
-        env.DB.prepare("SELECT COUNT(*) AS n FROM friendships WHERE (a = ?1 OR b = ?1) AND status = 'pending' AND requested_by != ?1").bind(me.id),
-      ]);
-      friends = (fr.results || []).map((x) => ({ id: x.id, at: x.last_seen }));
-      incoming = (inc.results && inc.results[0] && inc.results[0].n) || 0;
-    }
+    // друзья в сети и заявки в друзья, которые ждут ответа (красная цифра на кнопке «Друзья»)
+    const { friends, incoming } = me ? await friendsAndIncoming(env, me.id, now) : { friends: [], incoming: 0 };
     const sentToken = /^Bearer /.test(request.headers.get('authorization') || '');
-    return json({ online: Math.max(onlineCache.n, me ? 1 : 0), friends, incoming, window: ONLINE_MS, announce: await currentAnnounce(env), ...(sentToken ? { authed: !!me } : {}) });
+    // rt — страница может подключить комнату присутствия (WebSocket) и больше не спрашивать раз в минуту
+    return json({ online: Math.max(onlineCache.n, me ? 1 : 0), friends, incoming, window: ONLINE_MS, announce: await currentAnnounce(env), rt: presenceOn(env), ...(sentToken ? { authed: !!me } : {}) });
   },
 
   async 'GET /friends'({ env, me }) {
@@ -1129,10 +1190,12 @@ const routes = {
       if (row.requested_by === me.id) return fail(409, 'Заявка уже отправлена.');
       // встречная заявка: просто принимаем
       await env.DB.prepare("UPDATE friendships SET status = 'accepted' WHERE a = ? AND b = ?").bind(a, b).run();
+      await pokePresence(env, { what: 'users', ids: [me.id, other.id] });
       return json({ status: 'accepted', user: other });
     }
     await env.DB.prepare("INSERT INTO friendships (a, b, status, requested_by, created_at) VALUES (?, ?, 'pending', ?, ?)")
       .bind(a, b, me.id, Date.now()).run();
+    await pokePresence(env, { what: 'users', ids: [other.id] });
     return json({ status: 'pending', user: other });
   },
 
@@ -1142,6 +1205,7 @@ const routes = {
     if (!row || row.status !== 'pending' || row.requested_by === me.id) return fail(404, 'Заявка не найдена.');
     const [a, b] = pair(me.id, String(userId));
     await env.DB.prepare("UPDATE friendships SET status = 'accepted' WHERE a = ? AND b = ?").bind(a, b).run();
+    await pokePresence(env, { what: 'users', ids: [me.id, String(userId)] });
     return json({ ok: true });
   },
 
@@ -1150,6 +1214,7 @@ const routes = {
     const { userId } = await readBody(request);
     const [a, b] = pair(me.id, String(userId || ''));
     await env.DB.prepare('DELETE FROM friendships WHERE a = ? AND b = ?').bind(a, b).run();
+    await pokePresence(env, { what: 'users', ids: [me.id, String(userId || '')] });
     return json({ ok: true });
   },
 
@@ -1618,7 +1683,7 @@ const routes = {
       ...old.results.flatMap((x) => [env.DB.prepare('DELETE FROM lots WHERE room_id = ?').bind(x.id), env.DB.prepare('DELETE FROM lot_rooms WHERE id = ?').bind(x.id)]),
       env.DB.prepare('INSERT INTO lot_rooms (id, owner_id, title, kind, per_user, ends_at, created_at, edit_own, uniq, fuzzy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(id, me.id, lotTitle(b.title), LOT_KINDS.includes(b.kind) ? b.kind : 'game', lotLimit(b.perUser), lotEnds(b.minutes, now), now, b.editOwn === true ? 1 : 0, b.uniq === false ? 0 : 1, b.fuzzy === false ? 0 : 1),
     ]);
-    return lotAnswer(env, id, me);
+    return lotAnswer(env, id, me, null, request);
   },
   async 'GET /lots-mine'({ env, me }) {
     const { results } = await env.DB.prepare('SELECT r.id, r.title, r.kind, r.per_user, r.ends_at, r.closed, r.live, r.created_at, (SELECT COUNT(*) FROM lots l WHERE l.room_id = r.id) AS n FROM lot_rooms r WHERE r.owner_id = ? ORDER BY r.created_at DESC LIMIT ?').bind(me.id, MAX_LOT_ROOMS).all();
@@ -1634,7 +1699,7 @@ const routes = {
     let me = null;
     try { me = await currentUser(env, request); } catch (e) {}
     const v = new URL(request.url).searchParams.get('v');
-    return lotAnswer(env, arg, me && !me.banned ? me : null, v, request);
+    return lotAnswer(env, arg, me && !me.banned ? me : null, v, request, true);
   },
   async 'POST /lots/:code'({ env, request, me, arg }) {
     if (burst('lotadd:' + me.id, 30, 60e3)) return tooMany(1);
@@ -1668,7 +1733,8 @@ const routes = {
       return fail(403, c.n >= MAX_LOTS ? 'В этом сборе уже слишком много лотов.' : `Больше добавить нельзя: лимит ${room.per_user} на человека.`);
     }
     await env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(arg).run();
-    return lotAnswer(env, arg, me);
+    await pokeRoom(env, arg, 'lots');
+    return lotAnswer(env, arg, me, null, request);
   },
   // ведущий: лимит, время, закрыть или открыть снова
   async 'PATCH /lots/:code'({ env, request, me, arg }) {
@@ -1690,15 +1756,17 @@ const routes = {
     const flag = (v, cur) => (typeof v === 'boolean' ? (v ? 1 : 0) : cur);
     await env.DB.prepare('UPDATE lot_rooms SET per_user = ?, title = ?, ends_at = ?, closed = ?, edit_own = ?, uniq = ?, fuzzy = ?, ver = ver + 1 WHERE id = ?')
       .bind(b.perUser !== undefined ? lotLimit(b.perUser) : room.per_user, b.title !== undefined ? lotTitle(b.title) : room.title, ends, closed, flag(b.editOwn, room.edit_own), flag(b.uniq, room.uniq), flag(b.fuzzy, room.fuzzy), arg).run();
-    return lotAnswer(env, arg, me);
+    await pokeRoom(env, arg, 'room');
+    return lotAnswer(env, arg, me, null, request);
   },
   // зритель убирает свой лот или меняет его на другой — только если ведущий разрешил, пока сбор открыт и лот ещё не вылетел
-  async 'DELETE /lots/:code/:lot'({ env, me, arg }) {
+  async 'DELETE /lots/:code/:lot'({ env, request, me, arg }) {
     if (burst('lotedit:' + me.id, 40, 60e3)) return tooMany(1);
     const g = await lotEditable(env, arg[0], arg[1], me);
     if (g.res) return g.res;
     await env.DB.batch([env.DB.prepare('DELETE FROM lots WHERE room_id = ? AND id = ?').bind(arg[0], arg[1]), env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(arg[0])]);
-    return lotAnswer(env, arg[0], me);
+    await pokeRoom(env, arg[0], 'lots');
+    return lotAnswer(env, arg[0], me, null, request);
   },
   // ведущий убрал лоты со своего колеса: из сбора они удаляются совсем — у зрителей пропадают без следа,
   // а место в лимите зрителя освобождается. Ведущему можно и после конца сбора
@@ -1745,7 +1813,8 @@ const routes = {
       await env.DB.batch([...q, env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(arg)]);
       if (admin) await adminLog(env, request, me, `lots ${arg}: removed ${ids.length} lots${names.size ? ', ' + names.size + ' host names' : ''}`, true);
     }
-    return lotAnswer(env, arg, me);
+    await pokeRoom(env, arg, 'lots');
+    return lotAnswer(env, arg, me, null, request);
   },
   async 'PUT /lots/:code/:lot'({ env, request, me, arg }) {
     if (burst('lotedit:' + me.id, 40, 60e3)) return tooMany(1);
@@ -1770,12 +1839,14 @@ const routes = {
     try { await env.DB.prepare('UPDATE lots SET ref = ?, name = ?, img = ?, link = ? WHERE room_id = ? AND id = ?').bind(ref, lot.name, lot.img, lot.link, arg[0], arg[1]).run(); }
     catch (e) { return fail(409, 'Это уже добавили.'); }
     await env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(arg[0]).run();
-    return lotAnswer(env, arg[0], me);
+    await pokeRoom(env, arg[0], 'lots');
+    return lotAnswer(env, arg[0], me, null, request);
   },
   async 'DELETE /lots/:code'({ env, me, arg }) {
     const room = await env.DB.prepare('SELECT 1 FROM lot_rooms WHERE id = ? AND owner_id = ?').bind(arg, me.id).first();
     if (!room) return fail(404, 'Такого сбора нет.');
     await env.DB.batch([env.DB.prepare('DELETE FROM lots WHERE room_id = ?').bind(arg), env.DB.prepare('DELETE FROM lot_rooms WHERE id = ?').bind(arg)]);
+    await pokeRoom(env, arg, 'gone');
     return json({ ok: true });
   },
   // что сейчас на колесе у ведущего: зрители рисуют то же самое
@@ -1792,32 +1863,84 @@ const routes = {
     const bin = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0));
     return new Response(bin, { headers: { 'content-type': m[1], 'cache-control': 'public, max-age=600', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'" } });
   },
+  // снимок колеса от ведущего: только то, что видно на его пульте (лоты на колесе, картинка в центре, музыка, обложки).
+  // Прокрутку, вылеты и победителя пишет сервер (POST /lots/:code/spin), их отсюда не поменять.
+  // reset — «Вернуть всех», auto: false — остановить «до победителя» (ведущий или админ).
+  // keep/kick («Настройка лотов») принимаются только от админа с открытым входом в админку; от админа, который
+  // не хозяин сбора, — только они, остальное остаётся как было
   async 'PUT /lots/:code/live'({ env, request, me, arg }) {
     if (burst('lotlive:' + me.id, 240, 60e3)) return tooMany(1);
-    const room = await env.DB.prepare('SELECT owner_id, live FROM lot_rooms WHERE id = ?').bind(arg).first();
-    if (!room) return fail(404, 'Такого сбора нет.');
-    const isOwner = room.owner_id === me.id;
-    const isAdmin = await adminActive(env, request, me);
-    if (!isOwner && !isAdmin) return fail(403, 'Недостаточно прав.');
-    const live = cleanLive(await readBody(request));
-    if (!isOwner) {
-      let oldLive = null;
-      try { oldLive = JSON.parse(room.live || 'null'); } catch (e) {}
-      if (oldLive) {
-        live.spin = oldLive.spin;
-        live.rot = oldLive.rot;
-        live.status = oldLive.status;
-        live.winner = oldLive.winner;
-        live.out = oldLive.out;
-        live.hist = oldLive.hist;
-        live.segs = oldLive.segs;
-        live.pick = oldLive.pick;
+    const b = await readBody(request);
+    // вкладка ведущего со старой страницей (до прокрутки на сервере) шлёт свою прокрутку и вылеты: сервер их не берёт, и колесо
+    // крутилось бы только у неё. Нынешняя страница шлёт v: 2, старой отвечаем «обнови страницу» — она покажет это ведущему
+    if (b.v !== LIVE_CLIENT) return fail(409, 'Сайт обновился — обнови страницу, тогда колесо увидят все.');
+    let isOwner = false, isAdmin = null, refused = '';
+    const r = await liveTx(env, arg, async (live, room) => {
+      refused = '';
+      isOwner = room.owner_id === me.id;
+      if (isAdmin === null) isAdmin = !!(adminCandidate(me, env) && (await adminActive(env, request, me)));
+      if (!isOwner && !isAdmin) return { err: [403, 'Недостаточно прав.'] };
+      const clean = cleanLive(b), now = Date.now();
+      // «Вернуть всех» посреди прокрутки не выйдет, но остальное из того же запроса (картинка, музыка, обложки) применяется
+      if (b.reset === true) { const x = resetLive(live, now); if (x.err) refused = x.err[1]; }
+      if (b.auto === false) stopAuto(live);
+      if (isOwner) {
+        for (const k of LIVE_OWNER) if (b[k] !== undefined && clean[k] !== undefined) live[k] = clean[k];
+        // пока колесо крутится, сектора те же, что в начале прокрутки: иначе стрелка остановится не там
+        if (Array.isArray(b.segs) && !liveBusy(live, now)) live.segs = clean.segs.map((x) => ({ ...x, p: 1 / clean.segs.length }));
       }
+      if (isAdmin) {
+        if (Array.isArray(b.keep)) live.keep = clean.keep;
+        if (Array.isArray(b.kick)) live.kick = clean.kick;
+      }
+      return { live };
+    });
+    if (r.err) return fail(...r.err);
+    if (r.big) return fail(413, 'Слишком много лотов на колесе.');
+    if (isAdmin && !isOwner && (Array.isArray(b.keep) || Array.isArray(b.kick))) await adminLog(env, request, me, `lots ${arg}: keep ${(r.live.keep || []).length}, kick ${(r.live.kick || []).length}`, true);
+    await pokeRoom(env, arg, 'live');
+    return json(refused ? { ok: true, refused } : { ok: true });
+  },
+  // прокрутка: цель выбирает сервер (равные шансы, но с правилами админа keep/kick), всем уходит одна и та же прокрутка.
+  // Вылет и победу после остановки тоже записывает сервер: комната лотов (Durable Object) — по будильнику,
+  // а без неё — первый же запрос к сбору, от ведущего или зрителя. auto: true — «до победителя», следующие прокрутки
+  // сервер начинает сам, вкладка ведущего для этого не нужна
+  async 'POST /lots/:code/spin'({ env, request, me, arg }) {
+    if (burst('lotspin:' + me.id, 30, 60e3)) return tooMany(1);
+    const b = await readBody(request);
+    let allowed = null;
+    const r = await liveTx(env, arg, async (live, room) => {
+      if (allowed === null) allowed = room.owner_id === me.id || !!(adminCandidate(me, env) && (await adminActive(env, request, me)));
+      if (!allowed) return { err: [403, 'Недостаточно прав.'] };
+      return spinLive(live, await liveLots(env, arg), b.mode, b.dur, Date.now(), b.auto === true);
+    });
+    if (r.err) return fail(...r.err);
+    if (r.big) return fail(413, 'Слишком много лотов на колесе.');
+    await pokeRoom(env, arg, 'live');
+    return lotAnswer(env, arg, me, null, request);
+  },
+  // колесо вживую: WebSocket к комнате лотов (Durable Object в Worker'е casualhub-rt). Смотреть может любой со ссылкой.
+  // Токен браузер передаёт в подпротоколе (заголовок Authorization у WebSocket не поставить): ['casualhub', 'bearer.<токен>'].
+  // Роль решает этот маршрут, комната ей доверяет: она доступна только через привязку, не из интернета
+  async 'GET /lots/:code/ws'({ env, request, arg }) {
+    if (!rtOn(env)) return fail(404, 'Нет такого адреса.');
+    if ((request.headers.get('upgrade') || '').toLowerCase() !== 'websocket') return fail(426, 'Нужен WebSocket.');
+    if (burst('lotws:' + clientIp(request), 120, 60e3)) return tooMany(1);
+    const room = await env.DB.prepare('SELECT r.owner_id, u.banned FROM lot_rooms r LEFT JOIN users u ON u.id = r.owner_id WHERE r.id = ?').bind(arg).first();
+    if (!room || room.banned) return fail(404, 'Такого сбора нет.');
+    const protos = (request.headers.get('sec-websocket-protocol') || '').split(',').map((x) => x.trim());
+    const bearer = protos.find((x) => /^bearer\.[0-9a-f]{64}$/.test(x));
+    let me = null;
+    if (bearer) {
+      const token = bearer.slice(7);
+      try { me = await currentUser(env, request, token); } catch (e) {}
+      if (me && me.banned) me = null;
+      if (me && adminCandidate(me, env) && (await adminActive(env, request, me, token))) me.rtRole = 'admin';
     }
-    const data = JSON.stringify(live);
-    if (data.length > 90000) return fail(413, 'Слишком много лотов на колесе.');
-    await env.DB.prepare('UPDATE lot_rooms SET live = ? WHERE id = ?').bind(data, arg).run();
-    return json({ ok: true });
+    const role = me ? me.rtRole || (room.owner_id === me.id ? 'host' : 'viewer') : 'viewer';
+    const headers = new Headers({ upgrade: 'websocket', 'x-rt-code': arg, 'x-rt-role': role, 'x-rt-uid': me ? me.id : '', 'x-rt-ip': clientIp(request), 'x-rt-proto': protos.includes('casualhub') ? 'casualhub' : '' });
+    for (const k of ['sec-websocket-key', 'sec-websocket-version', 'sec-websocket-extensions']) { const v = request.headers.get(k); if (v) headers.set(k, v); }
+    return rtRoom(env, arg).fetch('https://rt/ws', { headers });
   },
   // поиск треков и альбомов по названию: только лицензионные каталоги, где исполнители настоящие
   async 'GET /music/search'({ env, request, me }) {
@@ -1846,6 +1969,7 @@ const routes = {
     await env.DB.prepare(
       'INSERT INTO reactions (owner_id, rid, from_id, emoji, text, at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(owner_id, rid, from_id) DO UPDATE SET emoji = excluded.emoji, text = excluded.text, at = excluded.at'
     ).bind(uid, rid, me.id, emoji, text || null, now).run();
+    await pokePresence(env, { what: 'notify', to: uid, n: { kind: 'react', from: pubUser(me), rid, emoji, text } });
     return json({ ok: true, at: now });
   },
   // все реакции на оценки человека: видят он сам и его друзья
@@ -2067,6 +2191,7 @@ const routes = {
     await hit(env, 'cm:' + me.id, 'comment');
     const id = randHex(10), now = Date.now();
     await env.DB.prepare('INSERT INTO comments (id, owner_id, target, from_id, text, at) VALUES (?, ?, ?, ?, ?, ?)').bind(id, uid, target, me.id, text, now).run();
+    if (uid !== me.id) await pokePresence(env, { what: 'notify', to: uid, n: { kind: 'comment', from: pubUser(me), target, text: text.slice(0, 140) } });
     return json({ item: { id, text, at: now, from: pubUser(me), canDelete: true } });
   },
   // удалить может автор комментария и хозяин профиля, на чьей стене или оценке он написан
@@ -2175,7 +2300,7 @@ const tierMeta = (l) => ({
 });
 
 // ---------- лоты по ссылке ----------
-const LOT_NAME = 60, MAX_LOTS = 300, MAX_LOT_ROOMS = 30;
+const MAX_LOT_ROOMS = 30;
 const LOT_KINDS = ['game', 'movie', 'anime', 'book', 'music', 'any'];
 const lotKey = (v) => String(v || '').toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
 // ---------- похожие названия: «outlast» и «ooutlast» — одна и та же игра ----------
@@ -2328,30 +2453,6 @@ async function lotItem(kind, b) {
 const lotLimit = (v) => Math.max(1, Math.min(5, Math.round(+v) || 3));
 const lotTitle = (v) => clip(v, 60).replace(SPOOF_RE, '').trim();
 const lotEnds = (minutes, now) => { const m = Math.round(+minutes) || 0; return m > 0 ? now + Math.min(m, 1440) * 60e3 : null; };
-const HEX_COLOR = /^#[0-9a-f]{6}$/i;
-const lotTrack = (v) => (typeof v === 'string' && /^[a-z0-9]{1,16}$/.test(v) ? v : '');
-function cleanLive(b) {
-  const finite = (v) => (Number.isFinite(+v) ? +v : 0);
-  const spin = b && b.spin && typeof b.spin === 'object' ? { from: finite(b.spin.from), to: finite(b.spin.to), ms: Math.max(0, Math.min(120000, finite(b.spin.ms))), at: finite(b.spin.at) } : null;
-  return {
-    segs: (Array.isArray(b && b.segs) ? b.segs : []).slice(0, MAX_LOTS).map((x) => ({ n: clip(x && x.n, LOT_NAME), p: Math.max(0, Math.min(1, finite(x && x.p))), c: HEX_COLOR.test(String(x && x.c)) ? x.c : '#64748B', t: HEX_COLOR.test(String(x && x.t)) ? x.t : '#FFFFFF', ...(/^[0-9a-f]{16}$/.test(String(x && x.l)) ? { l: x.l } : {}) })),
-    rot: finite(b && b.rot), spin, pick: clip(b && b.pick, LOT_NAME), hub: Math.max(10, Math.min(60, finite(b && b.hub) || 24)),
-    hubImg: b && STICKER_RE.test(String(b.hubImg)) ? b.hubImg : '',
-    hubOwn: b && /^g[a-z0-9]{1,30}$/.test(String(b.hubOwn)) ? b.hubOwn : '',
-    seen: Math.max(0, Math.min(MAX_LOTS, Math.round(finite(b && b.seen)))),
-    ...(Array.isArray(b && b.ids) ? { ids: b.ids.slice(0, MAX_LOTS).map(String).filter((x) => /^[0-9a-f]{16}$/.test(x)) } : {}),
-    // музыка ведущего: трек, позиция в секундах на момент at (часы сервера), пауза и автопереключение
-    music: (() => { const m = (b && b.music) || {}; return { bg: lotTrack(m.bg), win: lotTrack(m.win), cur: lotTrack(m.cur), pos: Math.max(0, Math.min(36000, finite(m.pos))), at: finite(m.at), pause: m.pause === true, auto: m.auto !== false }; })(),
-    pics: !(b && b.pics === false),
-    status: clip(b && b.status, 140),
-    out: (Array.isArray(b && b.out) ? b.out : []).slice(0, MAX_LOTS).map((x) => clip(x, LOT_NAME)),
-    // что выпадало по очереди: каждый итог прокрутки (вылет или победа в режиме «Один победитель»)
-    hist: (Array.isArray(b && b.hist) ? b.hist : []).slice(-MAX_LOTS).map((x) => clip(x, LOT_NAME)),
-    winner: b && b.winner && b.winner.n ? { n: clip(b.winner.n, LOT_NAME), sum: clip(b.winner.sum, 40), at: finite(b.winner.at) } : null,
-    keep: (Array.isArray(b && b.keep) ? b.keep : []).slice(0, MAX_LOTS).map((x) => clip(x, LOT_NAME)),
-    kick: (Array.isArray(b && b.kick) ? b.kick : []).slice(0, MAX_LOTS).map((x) => clip(x, LOT_NAME)),
-  };
-}
 async function lotEditable(env, code, lotId, me) {
   const room = await env.DB.prepare('SELECT * FROM lot_rooms WHERE id = ?').bind(code).first();
   if (!room) return { res: fail(404, 'Такого сбора нет.') };
@@ -2366,16 +2467,60 @@ async function lotEditable(env, code, lotId, me) {
   if (live && ((Array.isArray(live.out) && live.out.some((n) => lotKey(n) === lotKey(lot.name))) || live.winner)) return { res: fail(403, 'Этот лот уже играл на колесе, его нельзя менять.') };
   return { room, lot };
 }
-async function lotAnswer(env, id, me, knownVer, request) {
+// ---------- комната лотов вживую (Durable Object LotRoomDO в Worker'е casualhub-rt) ----------
+// Включена, когда у Pages есть привязка LOT_RT и переменная LOTS_RT не "0". Тогда в ответе сбора rt: true — новые
+// страницы подключают WebSocket, а прокрутки, вылеты и «до победителя» доводит комната по будильникам.
+// Откат: LOTS_RT = "0" — всё снова идёт через опрос, снимок в D1 тот же
+const rtOn = (env) => !!env.LOT_RT && env.LOTS_RT !== '0';
+// версия страницы сбора, которую понимает PUT /lots/:code/live: прокрутку и вылеты ведёт сервер (lots/app.js шлёт v: 2)
+const LIVE_CLIENT = 2;
+const rtRoom = (env, code) => env.LOT_RT.get(env.LOT_RT.idFromName(code));
+// ---------- присутствие вживую (Durable Object PresenceDO в том же Worker'е, одна комната на весь сайт) ----------
+// «В сети» по подключению и отключению, счётчик «N на сайте», объявление, заявки в друзья и уведомления о реакциях
+// и комментариях приходят по WebSocket. Включено, когда есть привязка PRESENCE и переменная PRESENCE_RT не "0".
+// Откат: PRESENCE_RT = "0" — страницы снова спрашивают сервер раз в минуту (POST /ping) и объявление раз в 15 секунд
+const presenceOn = (env) => !!env.PRESENCE && env.PRESENCE_RT !== '0';
+const presenceRoom = (env) => env.PRESENCE.get(env.PRESENCE.idFromName('global'));
+// ---------- резервные копии (Durable Object BackupDO в том же Worker'е, rt/backup.js) ----------
+// Копию каждую ночь делает сама комната по cron, здесь только админка: состояние, «Сделать копию сейчас» и скачать.
+// Без привязки BACKUP копий нет: вкладка «Копии» так и пишет
+const BACKUP_ID_RE = /^\d{4}-\d\d-\d\dT\d\d-\d\d-\d\dZ(-\d{1,3})?$/;
+const BACKUP_OFF = 'Копии не включены: нужен Worker casualhub-rt с хранилищем R2, порядок в README, раздел «Резервные копии».';
+// запрос к комнате копий: null — копий нет (нет привязки или у Worker'а нет R2), { down } — комната не ответила
+async function backupCall(env, path, init) {
+  if (!env.BACKUP) return null;
+  try {
+    const r = await env.BACKUP.get(env.BACKUP.idFromName('backup')).fetch('https://rt' + path, init);
+    return r.headers.get('x-backup-off') ? null : r;
+  } catch (e) {
+    console.error('backup room', path, e && e.message);
+    return { down: true };
+  }
+}
+const BACKUP_DOWN = 'Не получилось достучаться до копий, попробуй ещё раз через минуту.';
+// что-то поменялось у людей: { what: 'users' | 'drop' | 'announce' | 'notify', ids?, to?, n? }
+async function pokePresence(env, body) {
+  if (!presenceOn(env)) return;
+  try { await presenceRoom(env).fetch('https://rt/poke', { method: 'POST', body: JSON.stringify(body) }); }
+  catch (e) { console.error('presence poke', body && body.what, e && e.message); }
+}
+// после записи в D1 комната перечитывает снимок, рассылает его и заводит будильник. what: live | lots | room | gone
+async function pokeRoom(env, code, what) {
+  if (!rtOn(env)) return;
+  try { await rtRoom(env, code).fetch('https://rt/poke', { method: 'POST', headers: { 'x-rt-code': code }, body: JSON.stringify({ what }) }); }
+  catch (e) { console.error('lots rt poke', code, what, e && e.message); }
+}
+// conditional — ответ с ETag: опрос без перемен получает 304 без тела, а не снимок до 90 КБ
+async function lotAnswer(env, id, me, knownVer, request, conditional) {
   const row = await env.DB.prepare('SELECT r.*, u.username AS owner_name, u.banned AS owner_banned FROM lot_rooms r LEFT JOIN users u ON u.id = r.owner_id WHERE r.id = ?').bind(id).first();
   if (!row || row.owner_banned) return fail(404, 'Такого сбора нет.');
   const own = !!me && row.owner_id === me.id;
-  const out = { room: { id: row.id, title: row.title, kind: row.kind, perUser: row.per_user, endsAt: row.ends_at, closed: !!row.closed, ver: row.ver, own, owner: row.owner_name || '', editOwn: !!row.edit_own, uniq: !!row.uniq, fuzzy: !!row.fuzzy }, now: Date.now(), live: null };
-  try { out.live = row.live ? JSON.parse(row.live) : null; } catch (e) {}
-  if (out.live && !own && !(me && request && await adminActive(env, request, me))) {
-    delete out.live.keep;
-    delete out.live.kick;
-  }
+  const out = { room: { id: row.id, title: row.title, kind: row.kind, perUser: row.per_user, endsAt: row.ends_at, closed: !!row.closed, ver: row.ver, own, owner: row.owner_name || '', editOwn: !!row.edit_own, uniq: !!row.uniq, fuzzy: !!row.fuzzy }, now: Date.now(), live: null, rt: rtOn(env) };
+  // прокрутка кончилась, а итог ещё не записан: записывает тот запрос, который первым это заметил, — от ведущего или зрителя
+  const settled = await settledLive(env, id, row.live);
+  if (settled.wrote) await pokeRoom(env, id, 'live');
+  // выпавший лот не отдаём; «Настройка лотов» — только для админа: ни ведущий, ни зрители этих списков не получают
+  out.live = liveView(settled.live, !!(request && (await adminActiveCached(env, request, me))));
   // список лотов отдаём, только если он поменялся: страница спрашивает часто
   if (String(knownVer) !== String(row.ver)) {
     let { results } = await env.DB.prepare('SELECT l.id, l.ref, l.name, l.img, l.link, l.user_id, u.id AS uid, u.username FROM lots l LEFT JOIN users u ON u.id = l.user_id WHERE l.room_id = ? ORDER BY l.created_at LIMIT ?').bind(id, MAX_LOTS).all();
@@ -2390,7 +2535,14 @@ async function lotAnswer(env, id, me, knownVer, request) {
     }
     out.lots = results.map((x) => ({ id: x.id, ref: x.ref, name: x.name, img: x.img, link: x.link, by: x.username || '', mine: !!me && x.user_id === me.id }));
   }
-  return json(out);
+  if (!conditional) return json(out);
+  // метка — от всего ответа, кроме часов сервера: в нём и то, что видит именно этот человек (свой сбор, свои лоты)
+  const tag = '"' + (await sha256(JSON.stringify({ ...out, now: 0 }))).slice(0, 32) + '"';
+  const seen = (request.headers.get('if-none-match') || '').split(',').map((x) => x.trim().replace(/^W\//, ''));
+  if (seen.includes(tag)) return new Response(null, { status: 304, headers: { etag: tag, 'cache-control': 'no-store' } });
+  const res = json(out);
+  res.headers.set('etag', tag);
+  return res;
 }
 
 // ---------- поиск музыки ----------
@@ -2522,7 +2674,6 @@ function cleanLayout(l) {
   if (Array.isArray(l.titles)) out.titles = l.titles.filter((t) => typeof t === 'string' && /^[\w:-]{1,40}$/.test(t)).slice(0, 4);
   return out;
 }
-const STICKER_RE = /^hub\/(?!.*\.\.)[\w\-\/.]{1,100}\.(png|gif|webp|webm|jpe?g)$/; // путь картинки из каталога колеса
 // 🔥 огонь, 💀 жесть, 🙅 не согласен, 😂 ору, 😍 обожаю, 👍 согласен, 👎 мимо, 🤔 спорно, 😭 до слёз, 🤡 клоунада, 🗿 база, 🐐 GOAT
 const REACTIONS = ['fire', 'skull', 'nope', 'lol', 'love', 'like', 'dislike', 'think', 'cry', 'clown', 'moai', 'goat'];
 const GENIUS_IMG = /^https:\/\/(images|assets|t2)\.genius\.com\/|^https:\/\/images\.rapgenius\.com\/|^https:\/\/(cdn-images|e-cdns-images)\.dzcdn\.net\//;
@@ -2804,14 +2955,13 @@ async function canSee(env, me, uid) {
   return !!row && row.status === 'accepted';
 }
 
-const PUBLIC = new Set(['GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid']);
+const PUBLIC = new Set(['GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid']);
 // код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности
 const SHARE_RE = /^[A-Za-z0-9]{12}$/;
 function shareId() {
   const abc = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
   return [...crypto.getRandomValues(new Uint8Array(24))].filter((b) => b < 248).slice(0, 12).map((b) => abc[b % 62]).join('').padEnd(12, 'x');
 }
-const ONLINE_MS = 150e3; // «в сети» — заходил за последние 2,5 минуты
 const onlineCache = { n: 0, at: 0 };
 const announceCache = { v: null, at: 0 };
 async function currentAnnounce(env) {
@@ -2851,6 +3001,8 @@ export async function onRequest({ request, env, params }) {
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && /^[0-9a-f]{16}$/.test(segs[2])) { key = `${request.method} /lots/:code/:lot`; arg = [segs[1], segs[2]]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'live') { key = `${request.method} /lots/:code/live`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'drop') { key = `${request.method} /lots/:code/drop`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'spin') { key = `${request.method} /lots/:code/spin`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'ws') { key = `${request.method} /lots/:code/ws`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'hub') { key = `${request.method} /lots/:code/hub`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'sessions' && /^[0-9a-f]{16}$/.test(segs[1])) { key = `${request.method} /sessions/:id`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'share' && SHARE_RE.test(segs[1])) { key = `${request.method} /share/:id`; arg = segs[1]; }

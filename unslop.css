@@ -33,6 +33,9 @@ html.unslop .theme-menu.tm-grid .theme-opt.tm:hover .tm-prev { transform: transl
 html.unslop .theme-menu.tm-grid .tm-prev { transition: transform .25s cubic-bezier(.22, 1, .36, 1); }
 /* online.js */
 html.unslop .site-ann { animation: ann-in .5s cubic-bezier(.22, 1, .36, 1); }
+html.unslop .site-note { animation: note-in-u .3s cubic-bezier(.22, 1, .36, 1); box-shadow: 0 6px 18px rgb(0 0 0 / .18); }
+html.unslop .site-note i { color: var(--ink-2); }
+@keyframes note-in-u { from { transform: translate(-50%, -8px); } }
 /* whatsnew.js */
 html.unslop .wn-card { animation: wn-pop .32s cubic-bezier(.22, 1, .36, 1); }
 /* comments.js */

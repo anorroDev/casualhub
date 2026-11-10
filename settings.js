@@ -3,9 +3,9 @@
    /sessions, /account/delete), остальное хранится в этом браузере. Новый пункт — в SECTIONS и render-функцию раздела. */
 (() => {
   const API = '/api';
-  const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
+  const read = window.CasualUtil.read; // общий, /util.js
   const write = (k, v) => { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} };
-  const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const esc = window.CasualUtil.esc; // общий, /util.js
   const user = () => read('ocenshik.user.v1');
   const token = () => { const u = user(); return u && u.id ? (read('casualhub.tokens.v1') || {})[u.id] || null : null; };
   async function api(path, method = 'GET', body) {
@@ -139,6 +139,9 @@ label.st-row { cursor: pointer; }
   .st-back { display: inline-flex; align-items: center; }
   .st-head h3 { font-size: 18px; text-align: center; }
   .st-body { padding: 0 14px calc(24px + env(safe-area-inset-bottom)); }
+  /* не влезает подпись и кнопка (Русский/English на 320 px) — кнопка уходит под подпись, а не вылезает вбок */
+  .st-row { flex-wrap: wrap; }
+  .st-row > .st-t { min-width: min-content; }
 }
 @media (min-width: 720px) { .st-nav-x { display: none; } }
 @media (prefers-reduced-motion: reduce) { .st-card { animation: none; } .st-sw, .st-sw::after { transition: none; } }

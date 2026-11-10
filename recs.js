@@ -4,11 +4,11 @@
 (() => {
   const box = document.getElementById('recs');
   if (!box) return;
-  const read = (k) => { try { return JSON.parse(localStorage.getItem(k) || 'null'); } catch (e) { return null; } };
+  const read = window.CasualUtil.read; // общий, /util.js
   const user = read('ocenshik.user.v1');
   const token = user && (read('casualhub.tokens.v1') || {})[user.id];
   if (!token) return;
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const esc = window.CasualUtil.esc; // общий, /util.js
   const fmt = (n) => Number(n).toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const api = (path, o = {}) => fetch('/api' + path, { ...o, headers: { 'content-type': 'application/json', authorization: 'Bearer ' + token }, cache: 'no-store' }).then((r) => (r.ok ? r.json() : Promise.reject(r.status)));
   const KIND = { movie: 'фильм', game: 'игра', anime: 'аниме' };
@@ -58,7 +58,7 @@
     // фото друга, загруженное файлом, подтягиваем превью
     row.querySelectorAll('[data-ph]').forEach((el) => {
       const [u, id] = el.dataset.ph.split('|');
-      api(`/photo/${encodeURIComponent(u)}/${encodeURIComponent(id)}?thumb=1`).then((d) => { if (d && d.data && el.isConnected) el.innerHTML = `<img src="${esc(d.data)}" alt="">`; }, () => {});
+      api(`/photo/${encodeURIComponent(u)}/${encodeURIComponent(id)}?thumb=1`).then((d) => { if (d && d.data && el.isConnected) el.innerHTML = `<img src="${esc(d.data)}" alt="" loading="lazy" decoding="async">`; }, () => {});
     });
     // обложка не открылась: вместо неё первая буква названия
     row.querySelectorAll('.rt').forEach((t) => { const img = t.querySelector('.rt-pic img'), x = items.get(t.dataset.key); if (img && x) img.onerror = () => { const s = document.createElement('span'); s.textContent = [...String(x.title)][0] || '?'; img.replaceWith(s); }; });

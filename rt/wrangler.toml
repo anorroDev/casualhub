@@ -1,0 +1,55 @@
+# Worker casualhub-rt: сайт вживую — комнаты лотов (LotRoomDO) и присутствия (PresenceDO), а ещё ночная копия базы (BackupDO).
+# Выкладка: npx wrangler deploy -c rt/wrangler.toml. Сайт (Pages) подключает его привязками LOT_RT, PRESENCE и BACKUP
+# в корневом wrangler.toml. Порядок и откат — в README, разделы «Сайт вживую» и «Резервные копии».
+name = "casualhub-rt"
+main = "worker.js"
+compatibility_date = "2025-04-01"
+# из интернета Worker недоступен: к нему ходит только сайт через привязку
+workers_dev = false
+preview_urls = false
+
+[[d1_databases]]
+binding = "DB"
+database_name = "casualhub"
+database_id = "b4b84c20-3c2a-499c-8e46-d82f9ba9daf5"
+
+[[durable_objects.bindings]]
+name = "LOT_ROOM"
+class_name = "LotRoomDO"
+
+[[durable_objects.bindings]]
+name = "PRESENCE_ROOM"
+class_name = "PresenceDO"
+
+[[durable_objects.bindings]]
+name = "BACKUP_ROOM"
+class_name = "BackupDO"
+
+# куда класть копии. Хранилище создаётся заранее: npx wrangler r2 bucket create casualhub-backups.
+# Без R2 на аккаунте закомментируйте этот блок и [triggers]: комнаты лотов и присутствия работают и без копий
+[[r2_buckets]]
+binding = "BACKUPS"
+bucket_name = "casualhub-backups"
+
+# копия каждую ночь в 01:00 UTC
+[triggers]
+crons = ["0 1 * * *"]
+
+[vars]
+# сколько последних копий хранить: при базе до 500 МБ (предел бесплатного D1) 14 копий влезают в бесплатные 10 ГБ R2
+BACKUP_KEEP = "14"
+# ключ, которым в копиях шифруются пароли, 2FA и пин-коды, — секрет, здесь его нет:
+# npx wrangler secret put BACKUP_KEY -c rt/wrangler.toml (README, «Резервные копии»). Без него эти поля в копии пустые
+
+# хранилище комнат — SQLite: такие Durable Objects есть и на бесплатном плане Workers
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LotRoomDO"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["PresenceDO"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["BackupDO"]

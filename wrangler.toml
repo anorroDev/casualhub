@@ -6,3 +6,27 @@ compatibility_date = "2024-01-01"
 binding = "DB"
 database_name = "casualhub"
 database_id = "b4b84c20-3c2a-499c-8e46-d82f9ba9daf5"
+
+# Сайт вживую: комнаты лотов и присутствия (Durable Objects) живут в отдельном Worker'е casualhub-rt (папка rt/),
+# там же ночная копия базы (BACKUP, вкладка «Копии» в админке).
+# Включать только после того, как он выложен (npx wrangler deploy -c rt/wrangler.toml), иначе сборка сайта упадёт.
+# Тогда убрать # у строк ниже. Откат без выкладки Worker'а: LOTS_RT = "0" (лоты) и PRESENCE_RT = "0" (присутствие) —
+# страницы снова на опросе.
+# [[durable_objects.bindings]]
+# name = "LOT_RT"
+# class_name = "LotRoomDO"
+# script_name = "casualhub-rt"
+#
+# [[durable_objects.bindings]]
+# name = "PRESENCE"
+# class_name = "PresenceDO"
+# script_name = "casualhub-rt"
+#
+# [[durable_objects.bindings]]
+# name = "BACKUP"
+# class_name = "BackupDO"
+# script_name = "casualhub-rt"
+#
+# [vars]
+# LOTS_RT = "1"
+# PRESENCE_RT = "1"

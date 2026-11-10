@@ -1,6 +1,7 @@
 /* Казуал Хаб: музыка чужого аука не обрывается, когда зритель уходит с /lots/ на другую страницу сайта.
    Страница зрителя (lots/app.js) помнит сбор в casualhub.lots.follow.v1; header-menu.js подгружает этот файл на остальных страницах.
-   Мини-плеер раз в пару секунд спрашивает сбор и играет то, что выбрал ведущий: фон по кругу, на победе трек победы, потом снова фон.
+   Мини-плеер узнаёт о переменах по WebSocket от комнаты лотов (если сервер ответил rt: true), иначе спрашивает сбор
+   раз в пару секунд, и играет то, что выбрал ведущий: фон по кругу, на победе трек победы, потом снова фон.
    Браузер может не пустить звук без нажатия на новой странице (айфоны строже всего): тогда в плашке появится «Включить музыку». */
 (() => {
   const FOLLOW_KEY = 'casualhub.lots.follow.v1', SOUND_KEY = 'casualhub.lots.sound.v1';
@@ -167,12 +168,42 @@
   function end(drop) {
     stopped = true;
     clearTimeout(timer);
+    if (rt) { rt.close(); rt = null; }
     try { if (yt && yt.destroy) yt.destroy(); } catch (e) {}
     if (box) box.remove();
     css.remove();
     if (drop) { const r = rd(FOLLOW_KEY); if (r && r.code === code) { try { localStorage.removeItem(FOLLOW_KEY); } catch (e) {} } }
   }
 
+  // комната лотов: снимок по WebSocket сразу, как что-то поменялось. Сбор (название, время) — обычным запросом,
+  // когда поменялся его номер версии
+  let rt = null, room = null, live = null, wsVer = null;
+  const rtLive = () => !!(rt && rt.live());
+  function startRT() {
+    const go = () => {
+      if (stopped || rt || !window.CasualRT) return;
+      rt = window.CasualRT.lots(code, {
+        onState(m) { offset = m.now ? m.now - Date.now() : offset; live = m.live; wsVer = m.ver; tick(); },
+        onGone() { end(true); },
+      });
+    };
+    // ws-client.js нужен и online.js: кто попросит вторым, дождётся того же тега, а не останется без сокета
+    window.CasualUtil.script('/ws-client.js', () => !!window.CasualRT).then(go, () => {});
+  }
+  async function refresh() {
+    const res = await fetch('/api/lots/' + code + (ver ? '?v=' + ver : ''), { cache: 'no-store' });
+    if (res.status === 404) { end(true); return false; }
+    const d = await res.json();
+    if (stopped) return false;
+    ver = d.room ? d.room.ver : ver;
+    offset = d.now ? d.now - Date.now() : offset;
+    room = d.room || room;
+    live = d.live;
+    title = (d.room && d.room.title) || title;
+    if (d.rt && !rt) startRT();
+    else if (!d.rt && rt) { rt.close(); rt = null; }
+    return true;
+  }
   async function tick() {
     clearTimeout(timer);
     if (stopped) return;
@@ -184,22 +215,17 @@
     const viewerOpen = r.on && Date.now() - (+r.at || 0) < 20000;
     if (viewerOpen || !s.on || !r.heard) { if (cur) play(null); timer = setTimeout(tick, 4000); return; }
     try {
-      const res = await fetch('/api/lots/' + code + (ver ? '?v=' + ver : ''), { cache: 'no-store' });
-      if (res.status === 404) { end(true); return; }
-      const d = await res.json();
-      if (stopped) return;
-      ver = d.room ? d.room.ver : ver;
-      offset = d.now ? d.now - Date.now() : offset;
-      title = (d.room && d.room.title) || title;
+      // с живым сокетом снимок уже свежий; спрашиваем сервер, только если поменялся сам сбор
+      if (!(rtLive() && room && wsVer === ver) && !(await refresh())) return;
       // сбор закончился и победа давно позади: следить больше не за чем
-      const over = d.room && (d.room.closed || (d.room.endsAt && d.room.endsAt <= Date.now() + offset));
-      const winAge = d.live && d.live.winner ? Date.now() + offset - (+d.live.winner.at || 0) : -1;
+      const over = room && (room.closed || (room.endsAt && room.endsAt <= Date.now() + offset));
+      const winAge = live && live.winner ? Date.now() + offset - (+live.winner.at || 0) : -1;
       if (over && winAge > 600000) { end(true); return; }
-      decide(d.live);
+      decide(live);
       if (cur) { try { yt && yt.setVolume && yt.setVolume(vol(cur.ch)); } catch (e) {} }
       paint();
     } catch (e) {}
-    timer = setTimeout(tick, document.hidden ? 10000 : 3000);
+    timer = setTimeout(tick, rtLive() ? 4000 : document.hidden ? 10000 : 3000);
   }
 
   // уходим со страницы: место в треке запоминается, на следующей музыка продолжится отсюда

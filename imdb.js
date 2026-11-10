@@ -12,7 +12,7 @@
     store = Object.fromEntries(e);
     try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (er) {}
   }, 300); };
-  const esc = (s) => String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+  const esc = window.CasualUtil.esc; // общий, /util.js
   const fmt = (n) => Number(n).toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const yearOf = (meta) => { const m = /\b(19|20)\d{2}\b/.exec(String(meta || '')); return m ? +m[0] : 0; };
   // ключ фильма: код IMDb, если он известен, иначе название и год

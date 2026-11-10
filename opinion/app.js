@@ -362,6 +362,7 @@ function loadUsers() {
       if (!state.user.email) state.user.email = '';
     }
   } catch (_) { state.users = []; state.user = null; }
+  hidePlainPasswords();
 }
 
 function saveUsers() {
@@ -370,6 +371,36 @@ function saveUsers() {
     if (state.user) localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(state.user));
     else localStorage.removeItem(STORAGE_KEYS.USER);
   } catch (_) {}
+}
+
+// Пароль профиля, заведённого на этом устройстве до онлайн-входа: в браузере лежит только хеш (PBKDF2), сам пароль — нигде.
+// Им старый профиль входит и при первом входе подключается к онлайн-аккаунту; дальше пароль проверяет сервер.
+// Новые профили без сервера больше не заводятся (friends.js).
+const LOCAL_PASS_ITER = 100000;
+const hexOf = (buf) => Array.from(new Uint8Array(buf)).map(b => b.toString(16).padStart(2, '0')).join('');
+async function localPassHash(pass, saltHex, iter) {
+  const salt = saltHex ? Uint8Array.from(saltHex.match(/../g).map(h => parseInt(h, 16))) : crypto.getRandomValues(new Uint8Array(16));
+  const it = iter || LOCAL_PASS_ITER;
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveBits']);
+  const bits = await crypto.subtle.deriveBits({ name: 'PBKDF2', salt, iterations: it, hash: 'SHA-256' }, key, 256);
+  return { s: hexOf(salt), h: hexOf(bits), i: it };
+}
+async function localPassOk(pass, ph) {
+  try { return (await localPassHash(pass, ph.s, ph.i)).h === ph.h; } catch (_) { return false; }
+}
+// старые версии сайта хранили пароль профиля открытым текстом: заменяем его хешем (у подключённых к серверу — просто стираем)
+async function hidePlainPasswords() {
+  const list = state.users.concat(state.user && !state.users.includes(state.user) ? [state.user] : []);
+  let ch = false;
+  for (const u of list) {
+    if (typeof u.pass !== 'string') continue;
+    // хеш не получился (нет crypto.subtle: страница по http, старый WebView) — пароль оставляем как был:
+    // стереть его без хеша значило бы оставить профиль совсем без пароля
+    if (u.pass && !u.serverId) { try { u.passHash = await localPassHash(u.pass); } catch (_) { continue; } }
+    delete u.pass;
+    ch = true;
+  }
+  if (ch) saveUsers();
 }
 
 function registerUser(username, email, password, avatar, color, handle) {
@@ -398,7 +429,7 @@ function registerUser(username, email, password, avatar, color, handle) {
     name: username,
     email,
     handle: handle || '',
-    pass: password,
+    // пароль проверяет сервер: профиль заводится только после онлайн-регистрации (friends.js), сам пароль здесь не хранится
     avatar: avatar || username.charAt(0).toUpperCase(),
     color: color || '#3550E8',
     createdAt: new Date().toISOString()
@@ -414,7 +445,7 @@ function registerUser(username, email, password, avatar, color, handle) {
   return true;
 }
 
-function loginUser(identifier, password) {
+async function loginUser(identifier, password) {
   identifier = (identifier || '').trim().toLowerCase();
   password = (password || '').trim();
   if (!identifier) { toast('Впиши почту или @юзернейм'); return false; }
@@ -426,7 +457,14 @@ function loginUser(identifier, password) {
   );
 
   if (!u) { toast('Такого аккаунта нет. Зарегистрируйся'); return false; }
-  if (u.pass && u.pass !== password) {
+  // профиль без пароля и без хеша здесь не входит, иначе в него пускало бы с любым паролем. У старых профилей пароль был
+  // всегда (регистрация требовала от 8 символов); у подключённых к серверу его нет — их пароль проверяет сервер (friends.js)
+  if (!u.passHash && !(typeof u.pass === 'string' && u.pass)) {
+    toast(u.serverId ? 'Этот профиль входит через онлайн-аккаунт: попробуй ещё раз, когда сервер ответит' : 'У этого профиля не сохранился пароль. Войди в онлайн-аккаунт или заведи новый');
+    return false;
+  }
+  // старый профиль этого устройства: пароль сверяется с хешем (открытый пароль — только пока его не успели заменить)
+  if ((u.passHash && !(await localPassOk(password, u.passHash))) || (typeof u.pass === 'string' && u.pass && u.pass !== password)) {
     toast('Неверный пароль, попробуй ещё раз'); return false;
   }
 
@@ -458,7 +496,11 @@ function updateUserProfile(username, email, password, avatar, color, handle) {
   state.user.name = username;
   if (email) state.user.email = email;
   if (handle != null && HANDLE_RE.test(cleanHandle(handle))) state.user.handle = cleanHandle(handle);
-  if (password) state.user.pass = password;
+  // новый пароль профиля, ещё не подключённого к серверу: только хешем
+  if (password && !state.user.serverId) {
+    const who = state.user;
+    localPassHash(password).then(ph => { who.passHash = ph; delete who.pass; saveUsers(); }, () => {});
+  }
   if (avatar !== undefined) state.user.avatar = avatar;
   if (color) state.user.color = color;
 
@@ -1146,17 +1188,12 @@ function handleBackupImport(e) {
 
 /* ---------- Helpers ---------- */
 const clone = o => JSON.parse(JSON.stringify(o));
-const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const esc = window.CasualUtil.esc; // общий, /util.js
 const str = v => (typeof v === 'string' ? v : '');
 const round1 = x => Math.round(x * 10) / 10;
 const fmt = n => Number(n).toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-function plural(n, one, few, many) {
-  const a = Math.abs(n) % 100, b = a % 10;
-  if (a > 10 && a < 20) return many;
-  if (b === 1) return one;
-  if (b >= 2 && b <= 4) return few;
-  return many;
-}
+// общий, /util.js; объявлено функцией, чтобы оставаться доступным выше по файлу
+function plural(n, one, few, many) { return window.CasualUtil.plural(n, one, few, many); }
 function clampInt(v, lo, hi) { v = Math.round(Number(v) || 0); return Math.max(lo, Math.min(hi, v)); }
 function tierV(v) { return v >= 8 ? 'good' : v >= 5 ? 'mid' : v >= 1 ? 'bad' : 'none'; }
 function tierT(t) { return t == null ? 'none' : t >= 7.5 ? 'good' : t >= 5 ? 'mid' : 'bad'; }
@@ -1626,7 +1663,7 @@ function artistList() {
   return [...m.values()].sort((a, b) => b.n - a.n || a.name.localeCompare(b.name, 'ru'));
 }
 function artistMiniHTML(a) {
-  return `<span class="artist-mini">${a.ava ? `<img src="${esc(a.ava)}" alt="">` : esc((a.name.trim().charAt(0) || '?').toUpperCase())}</span>`;
+  return `<span class="artist-mini">${a.ava ? `<img src="${esc(a.ava)}" alt="" loading="lazy" decoding="async">` : esc((a.name.trim().charAt(0) || '?').toUpperCase())}</span>`;
 }
 // меняет все оценки исполнителя (имя, отпечаток аватарки); оценка получает свежую дату, чтобы правка дошла до других устройств
 async function patchArtistRatings(key, patchOf) {
@@ -1722,8 +1759,8 @@ function renderArtist() {
   el.artistAva.classList.toggle('has', multi || !!ava);
   el.artistAva.classList.toggle('multi', multi);
   // несколько исполнителей: их аватарки кружками внахлёст
-  el.artistAva.innerHTML = multi ? parts.slice(0, 3).map(x => { const g = artistGet(x); return `<i>${g && g.ava ? `<img src="${esc(g.ava)}" alt="">` : esc(x.charAt(0).toUpperCase())}</i>`; }).join('')
-    : ava ? `<img src="${esc(ava)}" alt="">` : (letter ? esc(letter) : '♪');
+  el.artistAva.innerHTML = multi ? parts.slice(0, 3).map(x => { const g = artistGet(x); return `<i>${g && g.ava ? `<img src="${esc(g.ava)}" alt="" loading="lazy" decoding="async">` : esc(x.charAt(0).toUpperCase())}</i>`; }).join('')
+    : ava ? `<img src="${esc(ava)}" alt="" loading="lazy" decoding="async">` : (letter ? esc(letter) : '♪');
   const known = !multi && !!keyOf(form.artist) && artistList().some(x => x.key === keyOf(form.artist));
   el.artistEdit.hidden = !known || !!artistEditing;
   // у каждого из нескольких — своя кнопка: аватарка и имя
@@ -2329,7 +2366,7 @@ function renderTierBoard(list) {
       ? items.map(r => {
           const pUrl = resolvePhotoUrl(r.photo) || artistAvaUrl(r);
           return `<button type="button" class="tier-item" data-tier-goto="${esc(r.id)}" title="${esc(r.name)} (${r.total != null ? fmt(r.total) : '—'})">
-            ${pUrl ? `<img src="${esc(pUrl)}" alt="">` : ''}
+            ${pUrl ? `<img src="${esc(pUrl)}" alt="" loading="lazy" decoding="async">` : ''}
             <span>${r.fav ? '★ ' : ''}${esc(r.name)}</span>
             <b>${r.total != null ? fmt(r.total) : '—'}</b>
           </button>`;

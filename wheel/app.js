@@ -8,18 +8,7 @@
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   let drawRot = null; // пока колесо крутит видеокарта, рисуем его в стартовом положении
   const FONT = 'Onest, ui-sans-serif, system-ui, sans-serif';
-  const SAMPLE = [['Hollow Knight', 1500], ['Hades', 1200], ['Disco Elysium', 800], ['Outer Wilds', 500], ['Celeste', 300], ['Inscryption', 250]];
-
-  const CUR = {
-    UAH: { sym: '₴', in: 'гривнах' },
-    USD: { sym: '$', in: 'долларах' },
-    EUR: { sym: '€', in: 'евро' },
-    ILS: { sym: '₪', in: 'шекелях' },
-    RUB: { sym: '₽', in: 'рублях' },
-  };
-  const CODES = Object.keys(CUR);
-  // сколько единиц валюты дают за 1 доллар (примерно, правится на странице)
-  const DEF_RATES = { UAH: 41.5, USD: 1, EUR: 0.86, ILS: 3.3, RUB: 80 };
+  const SAMPLE = ['Hollow Knight', 'Hades', 'Disco Elysium', 'Outer Wilds', 'Celeste', 'Inscryption'];
   const DUR_MIN = 1, DUR_MAX = 30; // секунды прокрута
   const HUBS = [[24, 'Малый'], [34, 'Средний'], [44, 'Большой']];
   // те же темы, что на главной Казуал Хаба
@@ -43,8 +32,6 @@
   });
   const colorOf = (i) => SEG_COLORS[(Math.max(1, i.id) - 1) % SEG_COLORS.length];
 
-  const HINT_SIMPLE = 'Все сектора равны. Выпавший сектор выбывает, последний оставшийся побеждает.';
-  const HINT_DON = 'Шанс победить равен доле доната в банке: чем больше донат, тем реже он вылетает. Донаты в других валютах пересчитываются в валюту банка, повтор имени добавляет сумму к уже вписанной.<details class="calc"><summary>Как считается</summary>Сектор вылета у каждого равен сумме донатов остальных, поэтому пропорция держится на каждом шаге.<br><code>вылет = (банк − донат) ÷ ((N − 1) × банк)</code></details>';
 
   const svg = (inner, size, sw) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${inner}</svg>`;
   const ICON = {
@@ -84,8 +71,8 @@
 
   // два независимых колеса: основное и «по ссылке» (лоты зрителей). Настройки у них общие (музыка, картинка в центре, время),
   // а список, шансы, вылетевшие и режим у каждого свои. В S лежит открытое сейчас колесо, второе ждёт в stash
-  const WHEEL_FIELDS = ['items', 'seq', 'outSeq', 'rot', 'sample', 'pick', 'mode', 'auto'];
-  const linkFresh = () => ({ items: [], seq: 0, outSeq: 0, rot: 0, sample: false, pick: 'out', mode: 'simple', auto: false });
+  const WHEEL_FIELDS = ['items', 'seq', 'outSeq', 'rot', 'sample', 'pick', 'auto'];
+  const linkFresh = () => ({ items: [], seq: 0, outSeq: 0, rot: 0, sample: false, pick: 'out', auto: false });
   const wheelPart = (o) => { const r = {}; WHEEL_FIELDS.forEach((k) => { r[k] = o[k]; }); return r; };
   let scope = 'main', savedScope = 'main', stash = linkFresh(), linkStatus = '';
   function swapWheel() {
@@ -93,22 +80,14 @@
     WHEEL_FIELDS.forEach((k) => { S[k] = stash[k]; });
     stash = cur;
   }
-  // что-то сделать с колесом по ссылке, не открывая его
-  function onLink(fn) {
-    if (scope === 'link') return fn();
-    swapWheel();
-    try { return fn(); } finally { swapWheel(); }
-  }
 
   // ---------- helpers ----------
-  const fmt = (n) => (Math.round((+n || 0) * 100) / 100).toLocaleString('ru-RU');
   const pct = (x) => {
     const v = x * 100;
     return (v > 0 && v < 10 ? v.toFixed(1).replace('.', ',') : String(Math.round(v))) + '%';
   };
-  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const esc = window.CasualUtil.esc; // общий, /util.js
   const mod = (a, m) => ((a % m) + m) % m;
-  const num = (s) => parseFloat(String(s).replace(/[\s ]/g, '').replace(',', '.'));
   const nearest = (v, list) => list.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a));
   const rnd = () => {
     try { const u = new Uint32Array(1); crypto.getRandomValues(u); return u[0] / 4294967296; }
@@ -118,48 +97,21 @@
   // ---------- state ----------
   function fresh() {
     return {
-      v: 2, mode: 'donate', cur: 'UAH', rates: { ...DEF_RATES }, items: [], seq: 0, outSeq: 0, rot: 0,
+      v: 3, items: [], seq: 0, outSeq: 0, rot: 0,
       duration: 8, pick: 'out', auto: false, sound: true, sample: false, hub: 24, gif: '', section: 'wheel',
       music: { bg: '', win: 'preset:vika' }, bgOn: true, vol: 80,
     };
   }
-  function makeItem(name, amount, cur) {
+  function makeItem(name) {
     const id = ++S.seq;
-    return { id, name, amount: +amount || 0, cur: CUR[cur] ? cur : S.cur, out: false, outOrder: 0, startWin: null };
+    return { id, name, out: false, outOrder: 0 };
   }
   const alive = () => S.items.filter((i) => !i.out);
-  const rate = (c) => (S.rates && S.rates[c] > 0 ? S.rates[c] : DEF_RATES[c]);
-  const conv = (amount, from, to) => ((+amount || 0) / rate(from)) * rate(to);
-  const sym = (c) => (CUR[c] || CUR[S.cur]).sym;
-  const convText = (i) => (i.cur !== S.cur ? `≈ ${fmt(conv(i.amount, i.cur, S.cur))} ${sym(S.cur)}` : '');
-  // вес в донатном режиме = сумма, пересчитанная в валюту банка
-  const weight = (i) => (S.mode === 'donate' ? Math.max(0, conv(i.amount, i.cur, S.cur)) : 1);
-  const bankSum = () => alive().reduce((s, i) => s + weight(i), 0);
 
-  function curFrom(tok) {
-    if (!tok) return null;
-    const t = tok.toLowerCase();
-    if (t === '₴' || t === 'uah' || t.startsWith('гр')) return 'UAH';
-    if (t === '$' || t === 'usd' || t.startsWith('дол')) return 'USD';
-    if (t === '€' || t === 'eur' || t === 'евро') return 'EUR';
-    if (t === '₪' || t === 'ils' || t.startsWith('шек')) return 'ILS';
-    if (t === '₽' || t === 'rub' || t.startsWith('р')) return 'RUB';
-    return null;
-  }
-
-  // Шанс победы i = w_i / W. Чтобы это держалось после каждого вылета,
-  // вероятность вылета на этом спине q_i = (W − w_i) / ((N − 1) · W).
+  // шансы у всех на колесе равные: победить 1 из N, вылететь на этом спине тоже 1 из N
   function chances() {
     const a = alive(), n = a.length, res = new Map();
-    if (!n) return res;
-    if (n === 1) { res.set(a[0].id, { win: 1, drop: 0 }); return res; }
-    const W = a.reduce((s, i) => s + weight(i), 0);
-    const eq = W <= 0;
-    const Wt = eq ? n : W;
-    a.forEach((i) => {
-      const w = eq ? 1 : weight(i);
-      res.set(i.id, { win: w / Wt, drop: (Wt - w) / ((n - 1) * Wt) });
-    });
+    a.forEach((i) => res.set(i.id, n === 1 ? { win: 1, drop: 0 } : { win: 1 / n, drop: 1 / n }));
     return res;
   }
 
@@ -182,20 +134,12 @@
 
   let shownLastOut; // последний вылетевший, который уже показан в списке
   const freshRows = new Set(); // id строк, которые только что появились: въезжают один раз
-  function addItem(name, amount, cur) {
+  function addItem(name) {
     name = String(name).trim().slice(0, 60);
     if (!name) return 'empty';
     if (S.sample) { S.items = []; S.outSeq = 0; S.sample = false; }
-    const ex = alive().find((i) => i.name.toLowerCase() === name.toLowerCase());
-    if (ex) {
-      if (S.mode === 'donate') {
-        // докидка в другой валюте пересчитывается в валюту участника
-        ex.amount = Math.round(((+ex.amount || 0) + conv(amount, cur || ex.cur, ex.cur)) * 100) / 100;
-        return 'merged';
-      }
-      return 'dup';
-    }
-    const it = makeItem(name, amount, cur);
+    if (alive().some((i) => i.name.toLowerCase() === name.toLowerCase())) return 'dup';
+    const it = makeItem(name);
     S.items.push(it);
     freshRows.add(it.id); // строка въедет в список при следующей отрисовке
     return 'added';
@@ -289,11 +233,11 @@
     const byName = (x, y) => x.name.localeCompare(y.name, 'ru', { sensitivity: 'base', numeric: true });
     return rows.slice().sort(plansSort === 'name' ? byName : plansSort === 'old' ? (x, y) => planAdded(x) - planAdded(y) || byName(x, y) : (x, y) => planAdded(y) - planAdded(x) || byName(x, y));
   }
-  // вкладки: «Имена» и «Донаты» — режим колеса, «В планах» — список из Мнения на месте участников
+  // вкладки: «Имена» — участники колеса, «В планах» — список из Мнения на их месте
   function paintPane() {
     $('#boardPane').hidden = plansPane;
     $('#plans').hidden = !plansPane;
-    document.querySelectorAll('.view-tab').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.pane === 'plans' ? plansPane : !plansPane && b.dataset.mode === S.mode)));
+    document.querySelectorAll('.view-tab').forEach((b) => b.setAttribute('aria-selected', String((b.dataset.pane === 'plans') === plansPane)));
   }
 
   // ---------- обложки в «В планах» ----------
@@ -450,16 +394,14 @@
     if (S.spinning) return;
     let added = 0;
     list.forEach((r) => {
-      if (addItem(r.name, 0, S.cur) !== 'added') return;
+      if (addItem(r.name) !== 'added') return;
       added++;
       const it = S.items[S.items.length - 1], src = planPicDone.get(String(r.id));
       it.plan = String(r.id);
       if (src && /^https:\/\//.test(src)) it.pic = src.slice(0, 500);
     });
     if (!added) return;
-    msg(list.length === 1
-      ? `«${list[0].name}» на колесе.` + (S.mode === 'donate' ? ' Впиши сумму в списке.' : '')
-      : `Из планов добавлено: ${added}.` + (S.mode === 'donate' ? ' Впиши суммы в списке.' : ''), 'ok');
+    msg(list.length === 1 ? `«${list[0].name}» на колесе.` : `Из планов добавлено: ${added}.`, 'ok');
     save();
     render();
   }
@@ -813,10 +755,6 @@
     if (S.pick === 'one' || a.length === 2) cueWin(); // этот спин может дать победителя
     // новый спин: песня прошлой победы замолкает
     if (CH.win.active) { stopChannel('win'); resumeBg(); }
-    if (a.length === S.items.length || S.pick === 'one') {
-      const ch = chances();
-      a.forEach((i) => { i.startWin = ch.get(i.id).win; });
-    }
     if (S.sound) ensureAudio();
 
     const segs = segments();
@@ -890,7 +828,7 @@
       render(true);
       const left = alive();
       if (left.length === 1) {
-        setStatus(`Победитель: <b>${esc(left[0].name)}</b>`, winSub(left[0]), 'good');
+        setStatus(`Победитель: <b>${esc(left[0].name)}</b>`, winSub(), 'good');
         showWinner(left[0]);
       } else {
         setStatus(`<b>${esc(pick.item.name)}</b> выбывает`, baseSub(), 'bad');
@@ -919,7 +857,7 @@
       save();
       lastWinner = pick.item; // до отрисовки: «Экспорт» в шапке колеса появляется сразу
       render(true);
-      setStatus(`Победитель: <b>${esc(pick.item.name)}</b>`, winSub(pick.item), 'good');
+      setStatus(`Победитель: <b>${esc(pick.item.name)}</b>`, winSub(), 'good');
       showWinner(pick.item);
     };
     bgFrame(pulse);
@@ -935,17 +873,13 @@
   }
   function baseSub() {
     const n = alive().length, total = S.items.length;
-    const bank = S.mode === 'donate' && n ? ` · банк ${fmt(bankSum())} ${sym(S.cur)}` : '';
-    return (n < total ? `осталось из ${total}` : 'участников на колесе') + bank;
+    return n < total ? `осталось из ${total}` : 'участников на колесе';
   }
-  function winSub(w) {
-    if (S.pick === 'one') return S.mode === 'donate' && w.startWin != null ? `шанс был ${pct(w.startWin)}` : `выпал из ${S.items.length}`;
-    return S.mode === 'donate' && w.startWin != null ? `шанс на старте был ${pct(w.startWin)}` : `последний из ${S.items.length}`;
-  }
+  const winSub = () => (S.pick === 'one' ? `выпал из ${S.items.length}` : `последний из ${S.items.length}`);
   function idleStatus() {
     const a = alive(), n = a.length;
     if (n >= 2) setStatus('Жми «Крутить»', baseSub());
-    else if (n === 1 && S.items.some((i) => i.out) && S.pick !== 'one') setStatus(`Победитель: <b>${esc(a[0].name)}</b>`, winSub(a[0]), 'good');
+    else if (n === 1 && S.items.some((i) => i.out) && S.pick !== 'one') setStatus(`Победитель: <b>${esc(a[0].name)}</b>`, winSub(), 'good');
     else if (n === 1) setStatus('Нужен ещё хотя бы один', 'добавь участника в список');
     else setStatus('Колесо пустое', 'добавь участников в список');
   }
@@ -960,37 +894,9 @@
   }
   function updateMeta() {
     const n = alive().length;
-    $('#boardStat').innerHTML = `<b>${n}</b> на колесе` + (S.mode === 'donate' ? ` · банк <b>${fmt(bankSum())} ${sym(S.cur)}</b>` : '');
+    $('#boardStat').innerHTML = `<b>${n}</b> на колесе`;
     $('#mnavCount').textContent = n;
     $('#aliveBadge').textContent = n;
-  }
-  function refreshNumbers() {
-    const ch = chances();
-    document.querySelectorAll('#list .prow').forEach((row) => {
-      const c = ch.get(+row.dataset.id);
-      if (!c) return;
-      const pc = row.querySelector('.pc');
-      pc.querySelector('b').textContent = pct(c.win);
-      pc.querySelector('i').textContent = pct(c.drop);
-      pc.title = `Шанс победы ${pct(c.win)} · шанс вылететь на этом спине ${pct(c.drop)}`;
-      const it = S.items.find((x) => x.id === +row.dataset.id);
-      const cv = row.querySelector('.e-sub');
-      if (cv && it) cv.textContent = convText(it);
-    });
-    updateMeta();
-    draw();
-    updateTicker();
-    if (!S.spinning) idleStatus();
-  }
-
-  function renderCur() {
-    $('#curTabs').innerHTML = CODES.map((c) =>
-      `<button type="button" data-cur="${c}" aria-pressed="${c === S.cur}" title="Банк в ${CUR[c].in}">${CUR[c].sym}</button>`
-    ).join('');
-    $('#rateGrid').innerHTML = CODES.filter((c) => c !== S.cur).map((c) => {
-      const v = rate(S.cur) / rate(c);
-      return `<label class="rate" for="rate-${c}">1 ${CUR[c].sym} =<input class="inp" id="rate-${c}" data-cur="${c}" inputmode="decimal" value="${+v.toPrecision(4)}">${sym(S.cur)}</label>`;
-    }).join('');
   }
   function renderSegs() {
     $('#durRange').value = S.duration;
@@ -1006,33 +912,17 @@
   }
 
   function render(keep) {
-    const don = S.mode === 'donate';
     paintPane();
-    $('#amountWrap').hidden = !don;
-    $('#curTabs').hidden = !don;
-    $('#ratesBox').hidden = !don;
-    renderCur();
-    $('#modeHint').innerHTML = don ? HINT_DON : HINT_SIMPLE;
-    $('#bulk').placeholder = don ? 'Hollow Knight 1500\nHades — 20 $\nCeleste, 300 грн' : 'Hollow Knight\nHades\nCeleste';
-    $('#bulkHint').textContent = don
-      ? 'Строка: имя, сумма и валюта, например «Hades $20» или «Celeste 1 500 грн». Без валюты берётся выбранная в форме.'
-      : 'Одно имя на строку.';
     $('#sampleNote').hidden = !S.sample;
     // «Экспорт» в шапке колеса: пока есть победитель — и после закрытия его карточки, и после перезагрузки страницы
     $('#exportRes').hidden = !winnerNow();
 
     const a = alive(), ch = chances();
-    // в донатном режиме топ по сумме (в валюте банка), сверху самый крупный
-    const rows = don ? a.slice().sort((x, y) => weight(y) - weight(x) || x.id - y.id) : a;
-    const list = $('#list');
-    list.classList.toggle('simple', !don);
-    list.innerHTML = rows.length
-      ? rows.map((i, idx) => {
+    $('#list').innerHTML = a.length
+      ? a.map((i) => {
           const c = ch.get(i.id), col = colorOf(i);
           return `<li class="prow${freshRows.has(i.id) ? ' row-in' : ''}" data-id="${i.id}">
-            ${don ? `<span class="rank">${idx + 1}</span>` : ''}
-            <div class="pnm"><i class="sw" style="--c:${col.c}"></i><div class="e-text"><span class="e-name">${esc(i.name)}</span>${don ? `<span class="e-sub">${convText(i)}</span>` : ''}</div></div>
-            ${don ? `<label class="amt" for="amt-${i.id}"><input class="inp" id="amt-${i.id}" data-act="amt" inputmode="decimal" value="${i.amount}" aria-label="Донат: ${esc(i.name)}, ${i.cur}"><span>${sym(i.cur)}</span></label>` : ''}
+            <div class="pnm"><i class="sw" style="--c:${col.c}"></i><div class="e-text"><span class="e-name">${esc(i.name)}</span></div></div>
             <span class="pc" title="Шанс победы ${pct(c.win)} · шанс вылететь на этом спине ${pct(c.drop)}"><b>${pct(c.win)}</b><i>${pct(c.drop)}</i></span>
             <button type="button" class="mini-btn del" data-act="del" aria-label="Убрать ${esc(i.name)}">${ICON.x}</button>
           </li>`;
@@ -1047,7 +937,6 @@
     $('#outList').innerHTML = outs.map((i, k) => `<li class="orow${freshRows.has('o' + i.id) ? ' row-in' : ''}">
         <span class="onum">${k + 1}</span>
         <span class="oname">${esc(i.name)}</span>
-        ${don ? `<span class="oamt">${fmt(i.amount)} ${sym(i.cur)}</span>` : '<span></span>'}
         <button type="button" class="link-btn" data-act="back" data-id="${i.id}">вернуть</button>
       </li>`).join('');
     freshRows.clear();
@@ -1082,7 +971,6 @@
       const stick = fx.querySelector('.fx-sticker');
       const brow = fx.querySelector('.fx-eyebrow');
       const name = fx.querySelector('.fx-name');
-      const sum = fx.querySelector('.fx-sum');
       stage.querySelectorAll('.in').forEach((n) => n.classList.remove('in'));
       // случайный стикер из базовых картинок сайта
       const pool = BASE_HUBS.length ? BASE_HUBS : [];
@@ -1099,9 +987,6 @@
         const a = Math.random() * TAU, dist = 160 + Math.random() * 220;
         return `<span class="fx-ch" style="--dx:${Math.round(Math.cos(a) * dist)}px;--dy:${Math.round(Math.sin(a) * dist)}px;--r:${Math.round((Math.random() - .5) * 400)}deg;--d:${(k++ * Math.min(70, 900 / chars.length)).toFixed(0)}ms">${esc(c)}</span>`;
       }).join('')}</span>`).join('');
-      const money = S.mode === 'donate' && +it.amount > 0;
-      sum.hidden = !money;
-      sum.textContent = money ? `${fmt(0)} ${sym(it.cur)}` : '';
       // заставка раскрывается кругом из центра колеса
       const wr = $('.wheel-wrap').getBoundingClientRect();
       fx.style.setProperty('--fx-x', `${Math.round(wr.left + wr.width / 2)}px`);
@@ -1119,18 +1004,6 @@
       at(nameAt, () => name.querySelectorAll('.fx-ch').forEach((c) => c.classList.add('in')));
       at(lettersEnd - 250, () => confetti());
       at(lettersEnd + 600, () => fx.querySelector('.fx-hint').classList.add('in'));
-      if (money) {
-        at(lettersEnd, () => {
-          sum.classList.add('in');
-          const t0 = performance.now(), D = 1400, to = +it.amount;
-          const count = (now) => {
-            const t = Math.min(1, (now - t0) / D), e = 1 - Math.pow(1 - t, 3);
-            sum.textContent = `${fmt(t < 1 ? Math.round(to * e) : to)} ${sym(it.cur)}`;
-            if (t < 1) requestAnimationFrame(count);
-          };
-          requestAnimationFrame(count);
-        });
-      }
       const end = () => {
         if (!fxDone) return;
         fxDone = null;
@@ -1160,7 +1033,7 @@
       document.addEventListener('keydown', onKey, true);
       // сама заставка уходит, когда кончилась песня победы; без песни (звук выключен, трек не включился) — через несколько секунд
       const t0 = Date.now();
-      const minEnd = lettersEnd + (money ? 4500 : 4000);
+      const minEnd = lettersEnd + 4000;
       const prog = fx.querySelector('.fx-prog');
       let lastBurst = 0, lastSwap = 0;
       const watch = setInterval(() => {
@@ -1217,26 +1090,21 @@
   // текущий победитель: на выбывание — последний оставшийся, в «Одном победителе» — тот, кто выпал последним
   const winnerNow = () => (S.pick === 'one' ? (lastWinner && S.items.includes(lastWinner) ? lastWinner : null) : (S.items.length > 1 && alive().length === 1 ? alive()[0] : null));
   function resultData(it) {
-    const don = S.mode === 'donate';
-    const money = (i) => (don ? `${fmt(i.amount)} ${sym(i.cur)}` : '');
     const outs = S.pick === 'one' ? [] : S.items.filter((i) => i.out).sort((x, y) => x.outOrder - y.outOrder);
     return {
-      name: it.name, money: money(it), don,
-      chance: don && it.startWin != null ? pct(it.startWin) : '',
+      name: it.name,
       total: S.items.length,
-      bank: don ? `${fmt(S.items.reduce((t, i) => t + weight(i), 0))} ${sym(S.cur)}` : '', // весь банк, а не только оставшиеся
-      outs: outs.map((i) => ({ name: i.name, money: money(i) })),
+      outs: outs.map((i) => ({ name: i.name })),
       date: new Date().toLocaleString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
     };
   }
   function resultText(it) {
     const d = resultData(it);
-    const lines = [`🏆 Победитель: ${d.name}${d.money ? ' — ' + d.money : ''}${d.chance ? ` (шанс ${d.chance})` : ''}`];
+    const lines = [`🏆 Победитель: ${d.name}`];
     lines.push(S.pick === 'one' ? `Выпал с одной прокрутки из ${d.total}` : `Остался последним из ${d.total}`);
-    if (d.bank) lines.push(`Банк: ${d.bank}`);
     if (d.outs.length) {
       lines.push('', 'Порядок вылета:');
-      d.outs.forEach((o, k) => lines.push(`${k + 1}. ${o.name}${o.money ? ' — ' + o.money : ''}`));
+      d.outs.forEach((o, k) => lines.push(`${k + 1}. ${o.name}`));
     }
     lines.push('', `Колесо Казуала · ${d.date}`, location.origin + '/wheel/');
     return lines.join('\n');
@@ -1245,7 +1113,7 @@
     const d = resultData(it);
     const cs = getComputedStyle(document.documentElement);
     const v = (n, fb) => cs.getPropertyValue(n).trim() || fb;
-    const C = { bg: v('--bg', '#101114'), panel: v('--panel', '#17181c'), ink: v('--ink', '#f2f2f2'), ink2: v('--ink-2', '#b5b5b5'), ink3: v('--ink-3', '#7a7a7a'), line: v('--line', '#2a2b30'), good: v('--good', '#2EAD60'), accent: v('--accent', '#3550E8'), onTier: v('--on-tier', '#fff') };
+    const C = { bg: v('--bg', '#101114'), panel: v('--panel', '#17181c'), ink: v('--ink', '#f2f2f2'), ink2: v('--ink-2', '#b5b5b5'), ink3: v('--ink-3', '#7a7a7a'), line: v('--line', '#2a2b30'), accent: v('--accent', '#3550E8') };
     const disp = (v('--font-display', 'Handjet') || 'Handjet').split(',')[0].replace(/["']/g, '').trim();
     try { await document.fonts.load(`800 80px "${disp}"`); await document.fonts.load('600 30px Onest'); } catch (e) {}
     const W = 1080, rows = Math.min(d.outs.length, 14);
@@ -1270,17 +1138,9 @@
     g.fillText('П О Б Е Д И Т Е Л Ь', W / 2, 230);
     g.fillStyle = C.ink; fit(d.name, `800 $px "${disp}", ${FONT}`, 190, W - 120);
     g.fillText(d.name, W / 2, 400);
-    let y = 470;
-    if (d.money) {
-      g.font = `800 64px "${disp}", ${FONT}`;
-      const tw = g.measureText(d.money).width + 60;
-      g.fillStyle = C.good; rrect((W - tw) / 2, y, tw, 92, 20); g.fill();
-      g.fillStyle = C.onTier; g.fillText(d.money, W / 2, y + 70);
-      y += 130;
-    } else y += 30;
+    let y = 500;
     g.fillStyle = C.ink2; g.font = `600 32px ${FONT}`;
-    const sub = [S.pick === 'one' ? `выпал из ${d.total}` : `последний из ${d.total}`, d.chance && `шанс ${d.chance}`, d.bank && `банк ${d.bank}`].filter(Boolean).join('  ·  ');
-    g.fillText(sub, W / 2, y + 20);
+    g.fillText(S.pick === 'one' ? `выпал из ${d.total}` : `последний из ${d.total}`, W / 2, y + 20);
     y += 100;
     if (rows) {
       g.textAlign = 'left'; g.fillStyle = C.ink3; g.font = `700 30px "${disp}", ${FONT}`;
@@ -1292,9 +1152,8 @@
       d.outs.slice(0, rows).forEach((o, k) => {
         g.font = `500 30px ${FONT}`;
         g.textAlign = 'left'; g.fillStyle = C.ink3; g.fillText(String(k + 1), 130, y);
-        g.fillStyle = C.ink2; fit(o.name, `500 $px ${FONT}`, 30, o.money ? 560 : 760); g.fillText(o.name, 190, y);
+        g.fillStyle = C.ink2; fit(o.name, `500 $px ${FONT}`, 30, 760); g.fillText(o.name, 190, y);
         g.font = `500 30px ${FONT}`;
-        if (o.money) { g.textAlign = 'right'; g.fillStyle = C.ink3; g.fillText(o.money, W - 130, y); }
         y += 52;
       });
       if (d.outs.length > rows) { g.textAlign = 'left'; g.fillStyle = C.ink3; g.fillText(`…и ещё ${d.outs.length - rows}`, 190, y); }
@@ -1355,7 +1214,7 @@
 
   function showWinner(it) {
     lastWinner = it;
-    if (scope === 'link') lotsWinner = { n: it.name, at: Date.now() + lotsOffset, sum: S.mode === 'donate' && +it.amount > 0 ? `${fmt(it.amount)} ${sym(it.cur)}` : '' };
+    if (scope === 'link') lotsWinner = { n: it.name, at: Date.now() + lotsOffset, sum: '' };
     lotsLiveNow();
     wMsg('');
     playWinMusic();
@@ -1364,11 +1223,8 @@
   function openWinnerCard(it) {
     $('#wName').textContent = it.name;
     const total = S.items.length;
-    $('#wStats').innerHTML = S.mode === 'donate' && it.startWin != null
-      ? `<span class="badge" data-tier="good">${pct(it.startWin)}</span>
-         <div class="total-meta"><strong>${S.pick === 'one' ? 'шанс был' : 'шанс на старте'}</strong><span>донат ${fmt(it.amount)} ${sym(it.cur)}${it.cur !== S.cur ? ' ' + convText(it) : ''}</span></div>`
-      : `<span class="badge" data-tier="good">${total}</span>
-         <div class="total-meta"><strong>${S.mode === 'donate' ? `донат ${fmt(it.amount)} ${sym(it.cur)}` : 'участников было на колесе'}</strong><span>${S.pick === 'one' ? 'выпал с одной прокрутки' : 'остался последним'}</span></div>`;
+    $('#wStats').innerHTML = `<span class="badge" data-tier="good">${total}</span>
+         <div class="total-meta"><strong>участников было на колесе</strong><span>${S.pick === 'one' ? 'выпал с одной прокрутки' : 'остался последним'}</span></div>`;
     $('#wAgain').textContent = S.pick === 'one' ? 'Крутить ещё раз' : 'Новый раунд с теми же';
     $('#winner').hidden = false;
     $('#wAgain').focus();
@@ -1505,7 +1361,7 @@
       `<button type="button" class="th add" id="gifPick" aria-label="Загрузить гифку">${ICON.plus}<span>Гифка</span></button>` +
       `<button type="button" class="th" data-gif="" aria-pressed="${!src}">Без гифки</button>` +
       G.map((g) => `<span class="thw">
-        <button type="button" class="th" data-gif="${g.id}" aria-pressed="${g.id === S.gif}" title="${esc(g.name)}"><img src="${g.url}" alt="${esc(g.name)}"></button>
+        <button type="button" class="th" data-gif="${g.id}" aria-pressed="${g.id === S.gif}" title="${esc(g.name)}"><img src="${g.url}" alt="${esc(g.name)}" loading="lazy" decoding="async"></button>
         <button type="button" class="th-x" data-del="${g.id}" aria-label="Удалить ${esc(g.name)}">${ICON.xs}</button>
       </span>`).join('');
   }
@@ -2048,13 +1904,9 @@
         renderPlans();
         return;
       }
-      const wasPlans = plansPane;
+      if (!plansPane) return;
       plansPane = false;
-      if (S.spinning || S.mode === b.dataset.mode) { if (wasPlans) paintPane(); return; }
-      S.mode = b.dataset.mode;
-      msg('');
-      save();
-      render();
+      paintPane();
     }));
 
     $('#durRange').addEventListener('input', (e) => {
@@ -2087,45 +1939,6 @@
       save();
     });
 
-    $('#curTabs').addEventListener('click', (e) => {
-      const b = e.target.closest('[data-cur]');
-      if (!b || S.spinning) return;
-      S.cur = b.dataset.cur;
-      $('#cur').value = S.cur;
-      save();
-      render();
-      const nb = $(`#curTabs [data-cur="${S.cur}"]`);
-      if (nb) nb.focus();
-    });
-
-    // в суммах и курсах — только число: цифры, пробелы между тысячами и одна запятая или точка.
-    // Ловим раньше остальных обработчиков, поэтому буквы не успевают попасть ни в поле, ни в сохранённые данные
-    document.addEventListener('input', (e) => {
-      const t = e.target;
-      if (!(t instanceof HTMLInputElement) || t.inputMode !== 'decimal') return;
-      const dec = t.closest('#rateGrid') ? 6 : 2; // у курса бывает много знаков после запятой
-      let v = t.value.replace(/[^\d.,\s ]/g, '').replace(/^[\s ]+/, '');
-      const sep = v.search(/[.,]/);
-      let int = sep < 0 ? v : v.slice(0, sep), frac = sep < 0 ? null : v.slice(sep + 1).replace(/[^\d]/g, '').slice(0, dec);
-      if (int.replace(/\D/g, '').length > 10) int = int.replace(/\D/g, '').slice(0, 10); // больше миллиарда донатов не бывает
-      v = frac == null ? int : int + v[sep] + frac;
-      if (v === t.value) return;
-      const pos = Math.max(0, (t.selectionStart || 0) - (t.value.length - v.length));
-      t.value = v;
-      try { t.setSelectionRange(pos, pos); } catch (_) {}
-    }, true);
-
-    $('#rateGrid').addEventListener('input', (e) => {
-      const c = e.target.dataset.cur;
-      if (!c) return;
-      const v = num(e.target.value);
-      if (!(v > 0)) return;
-      S.rates[c] = rate(S.cur) / v;
-      save();
-      refreshNumbers();
-    });
-    $('#ratesReset').addEventListener('click', () => { S.rates = { ...DEF_RATES }; save(); render(); });
-
     $('#sampleClear').addEventListener('click', () => {
       S.items = [];
       S.outSeq = 0;
@@ -2138,15 +1951,11 @@
     $('#addForm').addEventListener('submit', (e) => {
       e.preventDefault();
       const name = $('#name').value.trim();
-      const amount = num($('#amount').value);
       if (!name) return msg('Впиши имя или название.', 'err');
-      if (S.mode === 'donate' && !(amount > 0)) { $('#amount').focus(); return msg('Впиши сумму доната больше нуля.', 'err'); }
-      const cur = $('#cur').value;
-      const r = addItem(name, S.mode === 'donate' ? amount : 0, cur);
+      const r = addItem(name);
       if (r === 'dup') return msg(`«${name}» уже на колесе.`, 'err');
-      msg(r === 'merged' ? `К «${name}» добавлено ${fmt(amount)} ${sym(cur)}` : `«${name}» на колесе.`, 'ok');
+      msg(`«${name}» на колесе.`, 'ok');
       $('#name').value = '';
-      $('#amount').value = '';
       $('#name').focus();
       save();
       render();
@@ -2155,31 +1964,16 @@
     $('#bulkAdd').addEventListener('click', () => {
       const lines = $('#bulk').value.split(/\r?\n/).map((s) => s.trim()).filter(Boolean);
       if (!lines.length) return msg('Вставь хотя бы одну строку.', 'err');
-      let added = 0, merged = 0, dup = 0, noSum = 0;
-      // имя, разделитель, [символ валюты] сумма [валюта]: «Hades $20», «Hades 1 500 грн», «Hades — 300 ₪»
-      const re = /^(.*?)[\s,;:=\-–—]+(₴|\$|€|₪|₽)?\s*(\d{1,3}(?:[  .']\d{3})+|\d+)(?:[.,](\d{1,2}))?\s*(₴|грн\.?|грив[а-яё]*|uah|\$|usd|дол[а-яё.]*|€|eur|евро|₪|ils|шек[а-яё.]*|₽|руб[а-яё.]*|rub|р\.?)?$/i;
-      const fallback = $('#cur').value;
+      let added = 0, dup = 0;
       lines.forEach((line) => {
-        let name = line, amount = 0, cur = fallback;
-        if (S.mode === 'donate') {
-          const m = line.match(re);
-          if (m && m[1].trim()) {
-            name = m[1].trim();
-            amount = parseFloat(m[3].replace(/[  .']/g, '') + (m[4] ? '.' + m[4] : '')); // «1 500», «1.500» и «1'500» — тысячи
-            cur = curFrom(m[2]) || curFrom(m[5]) || fallback;
-          } else noSum++;
-        }
-        const r = addItem(name, amount, cur);
+        const r = addItem(line);
         if (r === 'added') added++;
-        else if (r === 'merged') merged++;
         else if (r === 'dup') dup++;
       });
       $('#bulk').value = '';
       let text = `Добавлено: ${added}`;
-      if (merged) text += `, суммировано: ${merged}`;
       if (dup) text += `, повторов пропущено: ${dup}`;
-      if (noSum) text += `. Без суммы: ${noSum}, впиши её в списке.`;
-      msg(text, noSum ? 'err' : 'ok');
+      msg(text, 'ok');
       save();
       render();
     });
@@ -2193,31 +1987,6 @@
       save();
       render();
       lotsDrop([id]);
-    });
-
-    $('#list').addEventListener('input', (e) => {
-      const inp = e.target.closest('[data-act="amt"]');
-      if (!inp) return;
-      const it = S.items.find((i) => i.id === +inp.closest('.prow').dataset.id);
-      if (!it) return;
-      const v = num(inp.value);
-      it.amount = v > 0 ? v : 0;
-      S.sample = false;
-      $('#sampleNote').hidden = true;
-      save();
-      refreshNumbers();
-    });
-
-    // пересортировать топ, когда закончили править сумму (не во время ввода)
-    $('#list').addEventListener('focusout', (e) => {
-      if (!e.target.closest('[data-act="amt"]')) return;
-      setTimeout(() => {
-        if (S.spinning || $('#list').contains(document.activeElement)) return;
-        render(true);
-      }, 0);
-    });
-    $('#list').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && e.target.closest('[data-act="amt"]')) e.target.blur();
     });
 
     $('#outList').addEventListener('click', (e) => {
@@ -2333,19 +2102,14 @@
       if (l && Array.isArray(l.items)) { stash = wheelPart(Object.assign(linkFresh(), l)); savedScope = l.scope === 'link' ? 'link' : 'main'; }
     } catch (e) {}
     if (S.pick !== 'one') S.pick = 'out';
-    if (d && !d.v) {
-      // старые сохранения открывались в рублях; по умолчанию банк в гривнах
-      const wasRub = !d.cur || d.cur === 'RUB';
-      if (wasRub) S.cur = 'UAH';
-      S.items.forEach((i) => { if (!i.cur || (wasRub && i.cur === 'RUB')) i.cur = 'UAH'; });
-      save();
-    }
-    if (!CUR[S.cur]) S.cur = 'UAH';
-    S.rates = Object.assign({ ...DEF_RATES }, S.rates || {});
-    S.items.forEach((i) => { if (!CUR[i.cur]) i.cur = S.cur; });
-    stash.items.forEach((i) => { if (!CUR[i.cur]) i.cur = S.cur; });
     if (stash.pick !== 'one') stash.pick = 'out';
-    if (stash.mode !== 'donate') stash.mode = 'simple';
+    // донатов в Колесе больше нет: старые сохранения молча становятся обычным колесом с теми же участниками,
+    // суммы, валюты и курсы выбрасываются
+    const oldDonate = d && (d.v !== 3 || 'mode' in d || 'cur' in d || 'rates' in d);
+    delete S.mode; delete S.cur; delete S.rates;
+    S.v = 3;
+    [S.items, stash.items].forEach((list) => list.forEach((i) => { delete i.amount; delete i.cur; delete i.startWin; }));
+    if (oldDonate) save();
     S.duration = Math.min(DUR_MAX, Math.max(DUR_MIN, Math.round(+S.duration) || 8));
     S.hub = nearest(+S.hub || HUBS[0][0], HUBS.map((h) => h[0]));
     if (!['wheel', 'list'].includes(S.section)) S.section = 'wheel';
@@ -2361,10 +2125,8 @@
     // на победе из списка остался только VI KA: другие треки из списка заменяем на него
     if (presetOf(S.music.win) && presetOf(S.music.win).id !== DEFAULT_WIN) S.music.win = 'preset:' + DEFAULT_WIN;
     // пример участников — только при первом заходе и если примеры не выключены в «Настройках»; выключены — пример убирается
-    if (!d && examplesOn()) { S.sample = true; SAMPLE.forEach(([n, a]) => S.items.push(makeItem(n, a, S.cur))); }
+    if (!d && examplesOn()) { S.sample = true; SAMPLE.forEach((n) => S.items.push(makeItem(n))); }
     if (S.sample && !examplesOn()) dropSample();
-    $('#cur').innerHTML = CODES.map((c) => `<option value="${c}">${CUR[c].sym} ${c}</option>`).join('');
-    $('#cur').value = S.cur;
     if (!/\/wheel(\/|\/index\.html)?$/.test(location.pathname)) { $('#backLink').hidden = true; $('#opinionLink').hidden = true; } // вне сайта ссылкам некуда вести
 
     applyTheme(readThemePref(), false);
