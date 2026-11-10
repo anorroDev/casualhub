@@ -1617,7 +1617,7 @@ const routes = {
       ...old.results.flatMap((x) => [env.DB.prepare('DELETE FROM lots WHERE room_id = ?').bind(x.id), env.DB.prepare('DELETE FROM lot_rooms WHERE id = ?').bind(x.id)]),
       env.DB.prepare('INSERT INTO lot_rooms (id, owner_id, title, kind, per_user, ends_at, created_at, edit_own, uniq, fuzzy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(id, me.id, lotTitle(b.title), LOT_KINDS.includes(b.kind) ? b.kind : 'game', lotLimit(b.perUser), lotEnds(b.minutes, now), now, b.editOwn === true ? 1 : 0, b.uniq === false ? 0 : 1, b.fuzzy === false ? 0 : 1),
     ]);
-    return lotAnswer(env, id, me);
+    return lotAnswer(env, id, me, null, request);
   },
   async 'GET /lots-mine'({ env, me }) {
     const { results } = await env.DB.prepare('SELECT r.id, r.title, r.kind, r.per_user, r.ends_at, r.closed, r.live, r.created_at, (SELECT COUNT(*) FROM lots l WHERE l.room_id = r.id) AS n FROM lot_rooms r WHERE r.owner_id = ? ORDER BY r.created_at DESC LIMIT ?').bind(me.id, MAX_LOT_ROOMS).all();
@@ -1667,7 +1667,7 @@ const routes = {
       return fail(403, c.n >= MAX_LOTS ? 'В этом сборе уже слишком много лотов.' : `Больше добавить нельзя: лимит ${room.per_user} на человека.`);
     }
     await env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(arg).run();
-    return lotAnswer(env, arg, me);
+    return lotAnswer(env, arg, me, null, request);
   },
   // ведущий: лимит, время, закрыть или открыть снова
   async 'PATCH /lots/:code'({ env, request, me, arg }) {
@@ -1689,15 +1689,15 @@ const routes = {
     const flag = (v, cur) => (typeof v === 'boolean' ? (v ? 1 : 0) : cur);
     await env.DB.prepare('UPDATE lot_rooms SET per_user = ?, title = ?, ends_at = ?, closed = ?, edit_own = ?, uniq = ?, fuzzy = ?, ver = ver + 1 WHERE id = ?')
       .bind(b.perUser !== undefined ? lotLimit(b.perUser) : room.per_user, b.title !== undefined ? lotTitle(b.title) : room.title, ends, closed, flag(b.editOwn, room.edit_own), flag(b.uniq, room.uniq), flag(b.fuzzy, room.fuzzy), arg).run();
-    return lotAnswer(env, arg, me);
+    return lotAnswer(env, arg, me, null, request);
   },
   // зритель убирает свой лот или меняет его на другой — только если ведущий разрешил, пока сбор открыт и лот ещё не вылетел
-  async 'DELETE /lots/:code/:lot'({ env, me, arg }) {
+  async 'DELETE /lots/:code/:lot'({ env, request, me, arg }) {
     if (burst('lotedit:' + me.id, 40, 60e3)) return tooMany(1);
     const g = await lotEditable(env, arg[0], arg[1], me);
     if (g.res) return g.res;
     await env.DB.batch([env.DB.prepare('DELETE FROM lots WHERE room_id = ? AND id = ?').bind(arg[0], arg[1]), env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(arg[0])]);
-    return lotAnswer(env, arg[0], me);
+    return lotAnswer(env, arg[0], me, null, request);
   },
   // ведущий убрал лоты со своего колеса: из сбора они удаляются совсем — у зрителей пропадают без следа,
   // а место в лимите зрителя освобождается. Ведущему можно и после конца сбора
@@ -1744,7 +1744,7 @@ const routes = {
       await env.DB.batch([...q, env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(arg)]);
       if (admin) await adminLog(env, request, me, `lots ${arg}: removed ${ids.length} lots${names.size ? ', ' + names.size + ' host names' : ''}`, true);
     }
-    return lotAnswer(env, arg, me);
+    return lotAnswer(env, arg, me, null, request);
   },
   async 'PUT /lots/:code/:lot'({ env, request, me, arg }) {
     if (burst('lotedit:' + me.id, 40, 60e3)) return tooMany(1);
@@ -1769,7 +1769,7 @@ const routes = {
     try { await env.DB.prepare('UPDATE lots SET ref = ?, name = ?, img = ?, link = ? WHERE room_id = ? AND id = ?').bind(ref, lot.name, lot.img, lot.link, arg[0], arg[1]).run(); }
     catch (e) { return fail(409, 'Это уже добавили.'); }
     await env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(arg[0]).run();
-    return lotAnswer(env, arg[0], me);
+    return lotAnswer(env, arg[0], me, null, request);
   },
   async 'DELETE /lots/:code'({ env, me, arg }) {
     const room = await env.DB.prepare('SELECT 1 FROM lot_rooms WHERE id = ? AND owner_id = ?').bind(arg, me.id).first();
@@ -1791,32 +1791,78 @@ const routes = {
     const bin = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0));
     return new Response(bin, { headers: { 'content-type': m[1], 'cache-control': 'public, max-age=600', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'" } });
   },
+  // снимок колеса от ведущего: только то, что видно на его пульте (лоты на колесе, картинка в центре, музыка, обложки).
+  // Прокрутку, вылеты и победителя пишет сервер (POST /lots/:code/spin), их отсюда не поменять.
+  // keep/kick («Настройка лотов») принимаются только от админа с открытым входом в админку; от админа, который
+  // не хозяин сбора, — только они, остальное остаётся как было
   async 'PUT /lots/:code/live'({ env, request, me, arg }) {
     if (burst('lotlive:' + me.id, 240, 60e3)) return tooMany(1);
-    const room = await env.DB.prepare('SELECT owner_id, live FROM lot_rooms WHERE id = ?').bind(arg).first();
-    if (!room) return fail(404, 'Такого сбора нет.');
-    const isOwner = room.owner_id === me.id;
-    const isAdmin = await adminActive(env, request, me);
-    if (!isOwner && !isAdmin) return fail(403, 'Недостаточно прав.');
-    const live = cleanLive(await readBody(request));
-    if (!isOwner) {
-      let oldLive = null;
-      try { oldLive = JSON.parse(room.live || 'null'); } catch (e) {}
-      if (oldLive) {
-        live.spin = oldLive.spin;
-        live.rot = oldLive.rot;
-        live.status = oldLive.status;
-        live.winner = oldLive.winner;
-        live.out = oldLive.out;
-        live.hist = oldLive.hist;
-        live.segs = oldLive.segs;
-        live.pick = oldLive.pick;
+    const b = await readBody(request);
+    let isOwner = false, isAdmin = null;
+    const r = await liveTx(env, arg, async (live, room) => {
+      isOwner = room.owner_id === me.id;
+      if (isAdmin === null) isAdmin = !!(adminCandidate(me, env) && (await adminActive(env, request, me)));
+      if (!isOwner && !isAdmin) return { res: fail(403, 'Недостаточно прав.') };
+      const clean = cleanLive(b), busy = liveBusy(live, Date.now());
+      if (isOwner) {
+        if (b.reset === true) {
+          if (busy) return { res: fail(409, 'Колесо крутится, подожди конца прокрутки.') };
+          Object.assign(live, { spin: null, pick: '', status: '', out: [], winner: null, hist: [] });
+          delete live.res;
+        }
+        for (const k of LIVE_OWNER) if (b[k] !== undefined && clean[k] !== undefined) live[k] = clean[k];
+        // пока колесо крутится, сектора те же, что в начале прокрутки: иначе стрелка остановится не там
+        if (Array.isArray(b.segs) && !busy) live.segs = clean.segs.map((x) => ({ ...x, p: 1 / clean.segs.length }));
       }
-    }
-    const data = JSON.stringify(live);
-    if (data.length > 90000) return fail(413, 'Слишком много лотов на колесе.');
-    await env.DB.prepare('UPDATE lot_rooms SET live = ? WHERE id = ?').bind(data, arg).run();
+      if (isAdmin) {
+        if (Array.isArray(b.keep)) live.keep = clean.keep;
+        if (Array.isArray(b.kick)) live.kick = clean.kick;
+      }
+      return { live };
+    });
+    if (r.res) return r.res;
+    if (r.big) return fail(413, 'Слишком много лотов на колесе.');
+    if (isAdmin && !isOwner && (Array.isArray(b.keep) || Array.isArray(b.kick))) await adminLog(env, request, me, `lots ${arg}: keep ${(r.live.keep || []).length}, kick ${(r.live.kick || []).length}`, true);
     return json({ ok: true });
+  },
+  // прокрутка: цель выбирает сервер (равные шансы, но с правилами админа keep/kick), всем уходит одна и та же прокрутка.
+  // Вылет и победу после остановки тоже досчитывает сервер — при первом же запросе к сбору, от ведущего или зрителя
+  async 'POST /lots/:code/spin'({ env, request, me, arg }) {
+    if (burst('lotspin:' + me.id, 30, 60e3)) return tooMany(1);
+    const b = await readBody(request);
+    const mode = b.mode === 'one' ? 'one' : 'out';
+    const dur = Math.max(1, Math.min(30, Math.round(+b.dur) || 8));
+    let allowed = null;
+    const r = await liveTx(env, arg, async (live, room) => {
+      if (allowed === null) allowed = room.owner_id === me.id || !!(adminCandidate(me, env) && (await adminActive(env, request, me)));
+      if (!allowed) return { res: fail(403, 'Недостаточно прав.') };
+      const now = Date.now();
+      if (liveBusy(live, now)) return { res: fail(409, 'Колесо уже крутится.') };
+      if (mode === 'out' && live.winner) return { res: fail(409, 'Победитель уже есть. Жми «Вернуть всех», чтобы крутить заново.') };
+      const lots = await liveLots(env, arg);
+      const alive = lotsAlive(lots, live.out);
+      if (alive.length < 2) return { res: fail(409, 'Чтобы крутить, на колесе нужно хотя бы два лота.') };
+      const segs = lotSegs(lots, alive);
+      const pool = spinPool(alive, mode, live.keep, live.kick);
+      const k = pool[uniform(pool.length)];
+      // стрелка вверху: под ней окажется случайная точка выпавшего сектора, не у самого края.
+      // Сектора равные, их границы — как у place() на странице сбора
+      const start = k / alive.length * TAU, end = (k + 1) / alive.length * TAU;
+      const a = start + (0.12 + 0.76 * rand01()) * (end - start);
+      const from = mod(live.spin ? +live.spin.to || 0 : +live.rot || 0, TAU);
+      const to = from + (3 + Math.round(dur * 0.6)) * TAU + mod(-Math.PI / 2 - a - from, TAU);
+      // старт через LIVE_LEAD: зрители спрашивают сервер раз в 2 секунды и успевают получить прокрутку до её начала
+      const at = now + LIVE_LEAD, ms = dur * 1000;
+      Object.assign(live, {
+        segs, rot: +from.toFixed(4), spin: { from: +from.toFixed(4), to: +to.toFixed(4), ms, at }, pick: '',
+        winner: mode === 'one' ? null : live.winner || null, status: 'Колесо крутится',
+        seen: lots.length, ids: lots.map((l) => l.id), res: { n: alive[k].name, mode, end: at + ms },
+      });
+      return { live };
+    });
+    if (r.res) return r.res;
+    if (r.big) return fail(413, 'Слишком много лотов на колесе.');
+    return lotAnswer(env, arg, me, null, request);
   },
   // поиск треков и альбомов по названию: только лицензионные каталоги, где исполнители настоящие
   async 'GET /music/search'({ env, request, me }) {
@@ -2351,6 +2397,105 @@ function cleanLive(b) {
     kick: (Array.isArray(b && b.kick) ? b.kick : []).slice(0, MAX_LOTS).map((x) => clip(x, LOT_NAME)),
   };
 }
+// ---------- колесо лотов: прокрутка и её итог считает сервер ----------
+// что ведущий меняет своим снимком (PUT /lots/:code/live); остальное в снимке — работа сервера
+const LIVE_OWNER = ['hub', 'hubImg', 'hubOwn', 'seen', 'ids', 'music', 'pics'];
+const LIVE_LEAD = 2600, LIVE_OUT_MS = 1100; // отсчёт перед стартом; сколько мигает выпавший сектор, прежде чем вылететь
+const TAU = Math.PI * 2;
+const mod = (a, b) => ((a % b) + b) % b;
+// честное число от 0 до n − 1: без перекоса к младшим числам, который даёт простое «случайное % n»
+function uniform(n) {
+  const lim = Math.floor(2 ** 32 / n) * n, u = new Uint32Array(1);
+  do crypto.getRandomValues(u); while (u[0] >= lim);
+  return u[0] % n;
+}
+const rand01 = () => crypto.getRandomValues(new Uint32Array(1))[0] / 2 ** 32;
+// те же цвета секторов, что рисует страница сбора: цвет закреплён за местом лота в сборе
+const LOT_PALETTE = ['#3550E8', '#EAA92C', '#2EAD60', '#EC4899', '#9333EA', '#F97316', '#06B6D4', '#E4553F', '#84CC16', '#64748B'];
+const lum = (hex) => {
+  const n = parseInt(hex.slice(1), 16);
+  const [r, g, b] = [(n >> 16) & 255, (n >> 8) & 255, n & 255].map((v) => { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+};
+const inkOn = (c) => { const L = lum(c); return (L + 0.05) / (lum('#14161C') + 0.05) >= 1.05 / (L + 0.05) ? '#14161C' : '#FFFFFF'; };
+const lowName = (s) => String(s || '').toLowerCase();
+const inNames = (arr, name) => Array.isArray(arr) && arr.some((x) => lowName(x) === lowName(name));
+// лоты сбора в том порядке, в каком их видит страница (по времени добавления, без лотов удалённых аккаунтов)
+async function liveLots(env, code) {
+  const { results } = await env.DB.prepare('SELECT l.id, l.name FROM lots l JOIN users u ON u.id = l.user_id WHERE l.room_id = ? ORDER BY l.created_at LIMIT ?').bind(code, MAX_LOTS).all();
+  return results;
+}
+const lotsAlive = (lots, out) => { const gone = new Set((Array.isArray(out) ? out : []).map(lowName)); return lots.filter((l) => !gone.has(lowName(l.name))); };
+const lotSegs = (lots, alive) => alive.map((l) => { const c = LOT_PALETTE[Math.max(0, lots.indexOf(l)) % LOT_PALETTE.length]; return { n: l.name, p: 1 / alive.length, c, t: inkOn(c), l: l.id }; });
+// из кого выбирает прокрутка (номера в alive). «На выбывание»: сначала те, кого админ отметил на вылет, иначе все,
+// кроме оставленных. «Один победитель»: сначала оставленные, иначе все, кроме отмеченных на вылет. Иначе все
+function spinPool(alive, mode, keep, kick) {
+  const all = alive.map((_, i) => i);
+  const marked = all.filter((i) => inNames(mode === 'one' ? keep : kick, alive[i].name));
+  const free = all.filter((i) => !inNames(mode === 'one' ? kick : keep, alive[i].name));
+  return marked.length ? marked : free.length ? free : all;
+}
+// идёт прокрутка или её итог ещё не записан
+const liveBusy = (live, now) => !!(live && (live.res || (live.spin && now < +live.spin.at + +live.spin.ms)));
+// итог прокрутки по часам сервера: «Один победитель» — сразу после остановки; «На выбывание» — сектор мигает
+// LIVE_OUT_MS, потом лот вылетает. Возвращает true, если снимок поменялся. lots — лоты сбора (нужны для вылета)
+function settleLive(live, now, lots) {
+  const r = live && live.res;
+  if (!r || !r.n || now < +r.end) return false;
+  const hist = Array.isArray(live.hist) ? live.hist : [];
+  if (live.spin) live.rot = +live.spin.to || 0;
+  if (r.mode === 'one') {
+    Object.assign(live, { pick: r.n, winner: { n: r.n, sum: '', at: +r.end }, status: `Победитель: ${r.n}`, hist: [...hist, r.n].slice(-MAX_LOTS) });
+    delete live.res;
+    return true;
+  }
+  if (now < +r.end + LIVE_OUT_MS) {
+    if (live.pick === r.n) return false;
+    Object.assign(live, { pick: r.n, status: `Вылетает: ${r.n}` });
+    return true;
+  }
+  const out = [...(Array.isArray(live.out) ? live.out : []), r.n];
+  const left = lotsAlive(lots, out);
+  const winner = left.length === 1 ? { n: left[0].name, sum: '', at: +r.end + LIVE_OUT_MS } : null;
+  Object.assign(live, {
+    segs: lotSegs(lots, left), spin: null, pick: '', out, winner, hist: [...hist, r.n].slice(-MAX_LOTS),
+    status: winner ? `Победитель: ${winner.n}` : `Вылетел: ${r.n}. Осталось ${left.length}`,
+    seen: lots.length, ids: lots.map((l) => l.id),
+  });
+  delete live.res;
+  return true;
+}
+// снимок колеса с досчитанным итогом прокрутки. Запись — только если с момента чтения снимок никто не поменял:
+// тогда два запроса разом не затрут друг друга. text — снимок, как он лежит в базе
+async function settledLive(env, code, text) {
+  let live = null;
+  try { live = text ? JSON.parse(text) : null; } catch (e) {}
+  if (!live || !live.res) return live;
+  const now = Date.now();
+  if (now < +live.res.end) return live;
+  const lots = live.res.mode === 'one' ? [] : await liveLots(env, code);
+  if (settleLive(live, now, lots)) await env.DB.prepare('UPDATE lot_rooms SET live = ? WHERE id = ? AND live IS ?').bind(JSON.stringify(live), code, text).run();
+  return live;
+}
+// изменить снимок: прочитать, досчитать прокрутку, fn(live, room) меняет live, записать, если никто не успел раньше.
+// fn возвращает { live } или { res: ответ-отказ }
+async function liveTx(env, code, fn) {
+  for (let i = 0; i < 4; i++) {
+    const room = await env.DB.prepare('SELECT owner_id, live FROM lot_rooms WHERE id = ?').bind(code).first();
+    if (!room) return { res: fail(404, 'Такого сбора нет.') };
+    let live = null;
+    try { live = room.live ? JSON.parse(room.live) : null; } catch (e) {}
+    if (!live) live = cleanLive({});
+    if (live.res && Date.now() >= +live.res.end) settleLive(live, Date.now(), live.res.mode === 'one' ? [] : await liveLots(env, code));
+    const r = await fn(live, room);
+    if (r.res) return r;
+    const data = JSON.stringify(r.live);
+    if (data.length > 90000) return { big: true };
+    const w = await env.DB.prepare('UPDATE lot_rooms SET live = ? WHERE id = ? AND live IS ?').bind(data, code, room.live).run();
+    if (w.meta.changes) return { live: r.live };
+  }
+  return { res: fail(409, 'Колесо сейчас меняют, попробуй ещё раз.') };
+}
 async function lotEditable(env, code, lotId, me) {
   const room = await env.DB.prepare('SELECT * FROM lot_rooms WHERE id = ?').bind(code).first();
   if (!room) return { res: fail(404, 'Такого сбора нет.') };
@@ -2370,10 +2515,16 @@ async function lotAnswer(env, id, me, knownVer, request) {
   if (!row || row.owner_banned) return fail(404, 'Такого сбора нет.');
   const own = !!me && row.owner_id === me.id;
   const out = { room: { id: row.id, title: row.title, kind: row.kind, perUser: row.per_user, endsAt: row.ends_at, closed: !!row.closed, ver: row.ver, own, owner: row.owner_name || '', editOwn: !!row.edit_own, uniq: !!row.uniq, fuzzy: !!row.fuzzy }, now: Date.now(), live: null };
-  try { out.live = row.live ? JSON.parse(row.live) : null; } catch (e) {}
-  if (out.live && !own && !(me && request && await adminActive(env, request, me))) {
-    delete out.live.keep;
-    delete out.live.kick;
+  // прокрутка кончилась, а итог ещё не записан: записывает тот запрос, который первым это заметил, — от ведущего или зрителя
+  out.live = await settledLive(env, id, row.live);
+  if (out.live) {
+    // выпавший лот виден из угла прокрутки, но готовым именем не отдаём
+    delete out.live.res;
+    // «Настройка лотов» — только для админа: ни ведущий, ни зрители этих списков не получают
+    if (!(me && request && adminCandidate(me, env) && (await adminActive(env, request, me)))) {
+      delete out.live.keep;
+      delete out.live.kick;
+    }
   }
   // список лотов отдаём, только если он поменялся: страница спрашивает часто
   if (String(knownVer) !== String(row.ver)) {
@@ -2850,6 +3001,7 @@ export async function onRequest({ request, env, params }) {
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && /^[0-9a-f]{16}$/.test(segs[2])) { key = `${request.method} /lots/:code/:lot`; arg = [segs[1], segs[2]]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'live') { key = `${request.method} /lots/:code/live`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'drop') { key = `${request.method} /lots/:code/drop`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'spin') { key = `${request.method} /lots/:code/spin`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'hub') { key = `${request.method} /lots/:code/hub`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'sessions' && /^[0-9a-f]{16}$/.test(segs[1])) { key = `${request.method} /sessions/:id`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'share' && SHARE_RE.test(segs[1])) { key = `${request.method} /share/:id`; arg = segs[1]; }

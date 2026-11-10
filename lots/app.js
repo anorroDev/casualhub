@@ -787,7 +787,7 @@
   function openWinner(name) {
     const lot = S.lots.find((l) => l.name.toLowerCase() === name.toLowerCase());
     $('#wName').textContent = name;
-    $('#wStats').innerHTML = lot ? `${lot.img ? `<img class="lots-win-img" src="${esc(lot.img)}" alt="" referrerpolicy="no-referrer">` : ''}<div class="total-meta"><strong>Лот от: ${esc(lot.by)}</strong><span>Участников было на колесе: ${S.lots.length}${S.live && S.live.winner && S.live.winner.sum ? ' · донат ' + esc(S.live.winner.sum) : ''}</span></div>` : '';
+    $('#wStats').innerHTML = lot ? `${lot.img ? `<img class="lots-win-img" src="${esc(lot.img)}" alt="" referrerpolicy="no-referrer">` : ''}<div class="total-meta"><strong>Лот от: ${esc(lot.by)}</strong><span>Участников было на колесе: ${S.lots.length}</span></div>` : '';
     $('#wStats').hidden = !lot;
     const link = $('#wLink');
     link.hidden = !(lot && lot.link);
@@ -1033,24 +1033,22 @@
   }
 
   // ---------- пульт ведущего: хозяин сбора крутит колесо прямо здесь ----------
-  // Зрители видят то же, что и раньше: снимок колеса (live) на сервере. Теперь его пишет эта страница у хозяина сбора.
+  // Зрители видят снимок колеса (live) на сервере. Лоты на колесе, картинку в центре и музыку пишет эта страница
+  // у хозяина сбора, а прокрутку, вылеты и победителя считает сервер: страница только просит «крути» и показывает ответ.
   // На колесе все лоты сбора, кроме вылетевших; шансы у всех равные. Режим и длительность хранятся в этом браузере
   const HOST_KEY = 'casualhub.lots.host.v1';
-  const H = Object.assign({ pick: 'out', dur: 8, keep: [], kick: [] }, read(HOST_KEY) || {});
-  H.dur = Math.max(1, Math.min(30, Math.round(+H.dur) || 8));
-  if (!Array.isArray(H.keep)) H.keep = [];
-  if (!Array.isArray(H.kick)) H.kick = [];
-  const keepHost = () => { try { localStorage.setItem(HOST_KEY, JSON.stringify({ pick: H.pick, dur: H.dur, keep: H.keep, kick: H.kick })); } catch (e) {} };
+  const hostSaved = read(HOST_KEY) || {};
+  const H = { pick: hostSaved.pick === 'one' ? 'one' : 'out', dur: Math.max(1, Math.min(30, Math.round(+hostSaved.dur) || 8)) };
+  const keepHost = () => { try { localStorage.setItem(HOST_KEY, JSON.stringify({ pick: H.pick, dur: H.dur })); } catch (e) {} };
+  // раньше здесь лежали и списки «Настройки лотов»: теперь они только на сервере
+  if ('keep' in hostSaved || 'kick' in hostSaved) keepHost();
+  // «Настройка лотов» админа: списки приходят с сервера только админу
+  let F = { keep: [], kick: [] };
   const inList = (arr, name) => Array.isArray(arr) && arr.some((x) => low(x) === low(name));
-  const isKept = (name) => inList(H.keep, name) || (S.live && inList(S.live.keep, name));
-  const isKicked = (name) => inList(H.kick, name) || (S.live && inList(S.live.kick, name));
-  const LEAD = 2600;
   let hostRes = null, hostT = 0, hostArmT = 0, hostPushing = false, hostAuto = false, hostAutoT = 0;
   const isHost = () => !!(token && S.room && S.room.own);
-  const canControl = () => !!(token && S.room && (S.room.own || S.admin));
   const stopAutoSpin = () => { hostAuto = false; clearTimeout(hostAutoT); paintHost(); };
   const low = (s) => String(s || '').toLowerCase();
-  const rnd = () => { try { const u = new Uint32Array(1); crypto.getRandomValues(u); return u[0] / 4294967296; } catch (e) { return Math.random(); } };
   const liveOut = () => (S.live && Array.isArray(S.live.out) ? S.live.out : []);
   const hostSpinning = () => !!hostRes || !!(S.live && S.live.spin && serverNow() < S.live.spin.at + S.live.spin.ms);
   function hostAlive(out) {
@@ -1062,27 +1060,27 @@
     const i = Math.max(0, S.lots.indexOf(l)), c = PALETTE[i % PALETTE.length];
     return { n: l.name, p, c, t: inkOn(c), l: l.id };
   }
+  // что ведущий пишет в снимок сам: лоты на колесе, картинка в центре, музыка, обложки.
+  // Прокрутку, вылеты, победителя и историю сервер берёт из своего снимка, а не отсюда
   function hostBody(over) {
     const live = S.live || {};
-    const out = over && over.out ? over.out : liveOut();
-    const alive = hostAlive(out);
+    const alive = hostAlive(over && over.out ? over.out : liveOut());
     return Object.assign({
       segs: alive.map((l) => hostSeg(l, 1 / alive.length)),
-      rot: live.spin ? +live.spin.to || 0 : +live.rot || 0,
-      spin: null, pick: '', hub: +live.hub || 24, hubImg: live.hubImg || '', hubOwn: live.hubOwn || '',
+      hub: +live.hub || 24, hubImg: live.hubImg || '', hubOwn: live.hubOwn || '',
       seen: S.lots.length, ids: S.lots.map((l) => l.id),
       music: hostMusic(live.music),
-      status: live.status || '', out, winner: live.winner || null,
-      hist: Array.isArray(live.hist) ? live.hist : [],
-      keep: Array.isArray(H.keep) ? H.keep : [],
-      kick: Array.isArray(H.kick) ? H.kick : [],
       pics: live.pics !== false,
     }, over);
   }
   const hostMsg = (t) => { const m = $('#hostMsg'); if (m) { m.textContent = t || ''; m.hidden = !t; } };
-  // снимок уходит на сервер; ответы опроса, которые уже были в пути, его не перетрут
+  // снимок уходит на сервер; ответы опроса, которые уже были в пути, его не перетрут.
+  // Пока ответа нет, страница показывает то, что ушло, поверх последнего снимка
   async function hostPush(body) {
-    S.live = body;
+    const { reset, ...shown } = body;
+    // пока колесо крутится, сектора на сервере не меняются: и здесь остаются те, с которыми оно крутится
+    if (hostSpinning()) delete shown.segs;
+    S.live = Object.assign({}, S.live, shown);
     pollSeq++;
     paintAll();
     hostPushing = true;
@@ -1098,78 +1096,86 @@
     const want = hostBody();
     const live = S.live;
     const same = live && JSON.stringify([live.segs, live.ids, live.seen]) === JSON.stringify([want.segs, want.ids, want.seen]);
-    if (!same) hostPush(hostBody({ status: live && live.status ? live.status : '' }));
+    if (!same) hostPush(want);
   }
-  function hostSpin() {
+  // ответ сервера с прокруткой или её итогом: то же, что получает опрос
+  function hostTake(d) {
+    if (!d) return;
+    S.room = d.room;
+    S.live = d.live;
+    if (d.lots) S.lots = d.lots;
+    takeForce(d.live);
+    paintAll();
+  }
+  // «Крутить»: кого выбьет или кто победит, выбирает сервер; страница крутит колесо к выпавшему сектору
+  async function hostSpin() {
     if (!isHost() || hostSpinning()) return;
     const live = S.live || {};
     if (H.pick === 'out' && live.winner) { stopAutoSpin(); hostMsg('Победитель уже есть. Жми «Вернуть всех», чтобы крутить заново.'); return; }
-    const alive = hostAlive();
-    if (alive.length < 2) { stopAutoSpin(); hostMsg('Чтобы крутить, на колесе нужно хотя бы два лота.'); return; }
-    const segs = place(alive.map((l) => hostSeg(l, 1 / alive.length)));
-    let pool = alive.map((_, i) => i);
-
-    const activeKeep = (S.live && Array.isArray(S.live.keep) && S.live.keep.length) ? S.live.keep : H.keep;
-    const activeKick = (S.live && Array.isArray(S.live.kick) && S.live.kick.length) ? S.live.kick : H.kick;
-
-    if (H.pick === 'out') {
-      const kickIdx = pool.filter((i) => inList(activeKick, alive[i].name));
-      const freeIdx = pool.filter((i) => !inList(activeKeep, alive[i].name));
-      if (kickIdx.length) pool = kickIdx;
-      else if (freeIdx.length) pool = freeIdx;
-    }
-    let k = pool[Math.min(pool.length - 1, Math.floor(rnd() * pool.length))];
-    const s = segs[k];
-    // стрелка вверху: под ней окажется случайная точка выпавшего сектора, не у самого края
-    const a = s.start + (0.12 + 0.76 * rnd()) * (s.end - s.start);
-    const from = mod(live.spin ? +live.spin.to || 0 : +live.rot || 0, TAU);
-    const ms = H.dur * 1000;
-    const to = from + (3 + Math.round(H.dur * 0.6)) * TAU + mod(-Math.PI / 2 - a - from, TAU);
-    // старт через LEAD: зрители спрашивают сервер раз в 2 секунды и успевают получить прокрутку до её начала
-    const at = Math.round(serverNow() + LEAD);
-    hostRes = { name: alive[k].name, to, at, ms };
+    if (hostAlive().length < 2) { stopAutoSpin(); hostMsg('Чтобы крутить, на колесе нужно хотя бы два лота.'); return; }
+    const mode = H.pick;
+    hostRes = { mode };
     if (CH.win.active) { stopChannel('win'); syncBg(); }
-    hostPush(hostBody({ rot: from, spin: { from: +from.toFixed(4), to: +to.toFixed(4), ms, at }, pick: '', winner: H.pick === 'one' ? null : live.winner || null, status: 'Колесо крутится' }));
-    clearTimeout(hostT);
-    hostT = setTimeout(hostFinish, LEAD + ms + 150);
-  }
-  // прокрутка кончилась: выпавший сектор мигает, потом вылетает (или сразу побеждает в режиме «Один победитель»)
-  function hostFinish() {
-    const r = hostRes;
-    if (!r) return;
-    if (H.pick === 'one') {
+    paintHost();
+    pollSeq++;
+    const t0 = Date.now();
+    let d = null;
+    try { d = await api(`/lots/${encodeURIComponent(code)}/spin`, 'POST', { mode, dur: H.dur }); }
+    catch (e) {
       hostRes = null;
       stopAutoSpin();
-      hostPush(hostBody({ rot: r.to, spin: S.live && S.live.spin, pick: r.name, winner: { n: r.name, sum: '', at: serverNow() }, status: `Победитель: ${r.name}`, hist: [...hostHist(), r.name] }));
+      hostMsg(e.message);
+      poll();
       return;
     }
-    hostPush(hostBody({ rot: r.to, spin: S.live && S.live.spin, pick: r.name, status: `Вылетает: ${r.name}` }));
-    hostT = setTimeout(() => {
-      hostRes = null;
-      const out = [...liveOut(), r.name];
-      const left = hostAlive(out);
-      const winner = left.length === 1 ? { n: left[0].name, sum: '', at: serverNow() } : null;
-      hostPush(hostBody({ rot: r.to, spin: null, pick: '', out, winner, status: winner ? `Победитель: ${winner.n}` : `Вылетел: ${r.name}. Осталось ${left.length}`, hist: [...hostHist(), r.name] }));
-      if (winner || left.length < 2) {
-        stopAutoSpin();
-      } else if (hostAuto) {
-        paintHost();
-        clearTimeout(hostAutoT);
-        hostAutoT = setTimeout(() => {
-          if (hostAuto && isHost() && !hostSpinning()) {
-            hostSpin();
-          }
-        }, 900);
-      }
-    }, 1100);
+    clockSample(d.now, t0, Date.now());
+    hostMsg('');
+    hostTake(d);
+    const spin = S.live && S.live.spin;
+    if (!spin) { hostRes = null; paintHost(); return; }
+    clearTimeout(hostT);
+    hostT = setTimeout(hostFinish, Math.max(0, spin.at + spin.ms - serverNow()) + 150);
   }
-  const hostHist = () => (S.live && Array.isArray(S.live.hist) ? S.live.hist : []);
+  // прокрутка кончилась: итог записывает сервер. «На выбывание»: сектор мигает, через LIVE_OUT лот вылетает;
+  // «Один победитель» — сразу. Страница забирает итог и в режиме «до победителя» крутит дальше
+  const LIVE_OUT = 1100;
+  async function hostFinish() {
+    const r = hostRes;
+    if (!r) return;
+    await poll();
+    if (r.mode === 'one') { hostRes = null; stopAutoSpin(); return; }
+    hostT = setTimeout(async () => {
+      await poll();
+      hostRes = null;
+      const live = S.live || {};
+      if (live.winner || hostAlive().length < 2) { stopAutoSpin(); return; }
+      paintHost();
+      if (!hostAuto) return;
+      clearTimeout(hostAutoT);
+      hostAutoT = setTimeout(() => { if (hostAuto && isHost() && !hostSpinning()) hostSpin(); }, 900);
+    }, LIVE_OUT + 100);
+  }
+  // списки «Настройки лотов» из ответа сервера: они там есть, только если спрашивает админ
+  function takeForce(live) {
+    if (live && Array.isArray(live.keep)) F.keep = live.keep;
+    if (live && Array.isArray(live.kick)) F.kick = live.kick;
+  }
+  // админ поменял списки: уходят только они, остальное в снимке сервер не трогает
+  async function forcePush(next) {
+    F = next;
+    pollSeq++;
+    paintHost();
+    try { await api(`/lots/${encodeURIComponent(code)}/live`, 'PUT', { keep: next.keep, kick: next.kick }); }
+    catch (e) { lotMsg('Настройка лотов не сохранилась: ' + e.message); }
+    clearTimeout(pollT);
+    pollT = setTimeout(poll, 1500);
+  }
+  // «Вернуть всех»: вылетевшие снова на колесе, победителя и истории нет. Настройку лотов админа это не трогает
   function hostReset() {
     if (!isHost() || hostSpinning()) return;
     stopAutoSpin();
     if (CH.win.active) { stopChannel('win'); syncBg(); }
-    H.keep = []; H.kick = []; keepHost();
-    hostPush(hostBody({ out: [], winner: null, pick: '', spin: null, status: '', hist: [], keep: [], kick: [] }));
+    hostPush(hostBody({ out: [], winner: null, pick: '', spin: null, status: '', hist: [], reset: true }));
   }
   async function hostRoom(body) {
     try {
@@ -1218,7 +1224,7 @@
   const hubIo = 'IntersectionObserver' in window ? new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { const v = e.target; hubIo.unobserve(v); v.preload = 'metadata'; try { v.load(); } catch (er) {} } }), { rootMargin: '80px' }) : null;
   function hostHub(over) {
     if (!isHost()) return;
-    hostPush(hostBody(Object.assign({ spin: S.live && hostSpinning() ? S.live.spin : null }, over)));
+    hostPush(hostBody(over));
   }
   // своя картинка: квадрат до 480 px; небольшая гифка уходит как есть, чтобы двигалась
   function hubData(file) {
@@ -1251,14 +1257,13 @@
   const PLAY_IC = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>', PAUSE_IC = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden="true"><rect x="6.5" y="5" width="4" height="14" rx="1"/><rect x="13.5" y="5" width="4" height="14" rx="1"/></svg>';
   // музыка меняется сразу, даже во время прокрутки: снимок колеса уходит тот же, меняется только музыка
   function hostMusicPush(patch) {
-    if (!canControl()) return;
+    if (!isHost()) return;
     const live = S.live || {};
     const cur = normMusic(live.music);
     const m = Object.assign({}, cur, { pos: musicAt(cur), at: Math.round(serverNow()) }, patch);
     if (patch.cur && patch.pos == null) m.pos = (presetOf(patch.cur) || {}).start || 0;
     if (patch.bg != null && !patch.cur) { m.cur = patch.bg; m.pos = (presetOf(patch.bg) || {}).start || 0; m.pause = false; }
-    const keep = hostSpinning() ? { spin: live.spin, rot: +live.rot || 0 } : {};
-    hostPush(hostBody(Object.assign({ music: m, pick: live.pick || '', status: live.status || '' }, keep)));
+    hostPush(hostBody({ music: m }));
   }
   function paintHost() {
     const panel = $('#hostPanel'), room = $('#hostRoom');
@@ -1274,17 +1279,8 @@
       forceWrap.hidden = !admin;
       if (admin) {
         const aliveList = hostAlive();
-        if (aliveList.length) {
-          const names = new Set(aliveList.map((l) => l.name));
-          const before = H.keep.length + H.kick.length;
-          H.keep = aliveList.filter((l) => inList(H.keep, l.name)).map((l) => l.name);
-          H.kick = aliveList.filter((l) => inList(H.kick, l.name)).map((l) => l.name);
-          if (H.keep.length + H.kick.length !== before) keepHost();
-        }
-        const activeKeep = (S.live && Array.isArray(S.live.keep)) ? S.live.keep : H.keep;
-        const activeKick = (S.live && Array.isArray(S.live.kick)) ? S.live.kick : H.kick;
         const row = (l, kind) => {
-          const name = l.name, on = kind === 'keep' ? inList(activeKeep, name) : inList(activeKick, name);
+          const name = l.name, on = inList(F[kind], name);
           const pic = /^https:\/\//.test(l.img || '') ? `<img class="hf-pic" src="${esc(l.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<em class="hf-pic" aria-hidden="true">${esc([...name][0] || '?')}</em>`;
           return `<label class="lots-chk hf-row"><input type="checkbox" data-force-lot="${esc(name)}" data-force-kind="${kind}"${on ? ' checked' : ''}>${pic}<span>${esc(name)}</span></label>`;
         };
@@ -1424,28 +1420,20 @@
     sk.addEventListener('input', () => { seeking = true; $('#hostPos').textContent = tsec(+sk.value); sk.style.setProperty('--fill', (+sk.value / (+sk.max || 1) * 100).toFixed(2) + '%'); });
     sk.addEventListener('change', () => { seeking = false; const v = +sk.value; try { if (CH.bg.active && EMB.yt.bg) EMB.yt.bg.seekTo(v, true); } catch (e) {} hostMusicPush({ pos: v }); });
     $('#hostPics').addEventListener('change', (e) => {
-      if (!canControl()) return;
-      const live = S.live || {};
-      const keep = hostSpinning() ? { spin: live.spin, rot: +live.rot || 0 } : {};
-      hostPush(hostBody(Object.assign({ pics: e.target.checked, pick: live.pick || '', status: live.status || '' }, keep)));
+      if (!isHost()) return;
+      hostPush(hostBody({ pics: e.target.checked }));
     });
-    $('#hostForceWrap')?.addEventListener('change', async (e) => {
+    // «Настройка лотов»: сервер принимает списки только от админа и учитывает их на следующей прокрутке
+    $('#hostForceWrap')?.addEventListener('change', (e) => {
       const inp = e.target.closest('input[data-force-lot]');
       if (!inp || !S.admin) return;
-      const name = inp.dataset.forceLot;
-      const kind = inp.dataset.forceKind;
-      if (kind === 'keep') {
-        H.keep = inp.checked ? [...H.keep.filter((n) => low(n) !== low(name)), name] : H.keep.filter((n) => low(n) !== low(name));
-        if (inp.checked) H.kick = H.kick.filter((n) => low(n) !== low(name));
-      } else {
-        H.kick = inp.checked ? [...H.kick.filter((n) => low(n) !== low(name)), name] : H.kick.filter((n) => low(n) !== low(name));
-        if (inp.checked) H.keep = H.keep.filter((n) => low(n) !== low(name));
-      }
-      keepHost();
-      paintHost();
-      if (canControl() && !hostSpinning()) {
-        await hostPush(hostBody({ keep: H.keep, kick: H.kick }));
-      }
+      const name = inp.dataset.forceLot, kind = inp.dataset.forceKind, other = kind === 'keep' ? 'kick' : 'keep';
+      // названия лотов, которых в сборе уже нет, из списков уходят; вылетевшие остаются до «Вернуть всех»
+      const has = new Set(S.lots.map((l) => low(l.name)));
+      const next = { keep: F.keep.filter((n) => has.has(low(n))), kick: F.kick.filter((n) => has.has(low(n))) };
+      next[kind] = next[kind].filter((n) => low(n) !== low(name));
+      if (inp.checked) { next[kind].push(name); next[other] = next[other].filter((n) => low(n) !== low(name)); }
+      forcePush(next);
     });
     const room = $('#hostRoom');
     room.addEventListener('click', async (e) => {
@@ -1496,10 +1484,7 @@
       clockSample(d.now, t0, Date.now());
       S.room = d.room;
       S.live = d.live;
-      if (d.live) {
-        if (Array.isArray(d.live.keep)) H.keep = d.live.keep;
-        if (Array.isArray(d.live.kick)) H.kick = d.live.kick;
-      }
+      takeForce(d.live);
       if (d.lots) S.lots = d.lots;
       keepFollow();
       paintAll();

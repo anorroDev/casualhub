@@ -7,6 +7,8 @@
 /tier/*      /tierlist/:splat 301
 # служебные файлы репозитория сайту не нужны
 /README.md    /  302
+/CLAUDE.md    /  302
+/.claude/*    /  302
 /wrangler.toml /  302
 /.github/*    /  302
 /.gitignore   /  302
