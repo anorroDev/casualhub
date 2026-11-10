@@ -1045,9 +1045,11 @@
   // «Настройка лотов» админа: списки приходят с сервера только админу
   let F = { keep: [], kick: [] };
   const inList = (arr, name) => Array.isArray(arr) && arr.some((x) => low(x) === low(name));
-  let hostRes = null, hostT = 0, hostArmT = 0, hostPushing = false, hostAuto = false, hostAutoT = 0;
+  let hostRes = null, hostT = 0, hostArmT = 0, hostPushing = false;
   const isHost = () => !!(token && S.room && S.room.own);
-  const stopAutoSpin = () => { hostAuto = false; clearTimeout(hostAutoT); paintHost(); };
+  // «до победителя» идёт на сервере: пока в снимке есть auto, следующие прокрутки начинаются сами
+  const autoOn = () => !!(S.live && S.live.auto);
+  const stopAutoSpin = () => { if (autoOn()) hostPush({ auto: false }); };
   const low = (s) => String(s || '').toLowerCase();
   const liveOut = () => (S.live && Array.isArray(S.live.out) ? S.live.out : []);
   const hostSpinning = () => !!hostRes || !!(S.live && S.live.spin && serverNow() < S.live.spin.at + S.live.spin.ms);
@@ -1107,12 +1109,13 @@
     takeForce(d.live);
     paintAll();
   }
-  // «Крутить»: кого выбьет или кто победит, выбирает сервер; страница крутит колесо к выпавшему сектору
-  async function hostSpin() {
+  // «Крутить»: кого выбьет или кто победит, выбирает сервер; страница крутит колесо к выпавшему сектору.
+  // auto — «до победителя»: следующие прокрутки сервер начинает сам, вкладку можно и закрыть
+  async function hostSpin(auto) {
     if (!isHost() || hostSpinning()) return;
     const live = S.live || {};
-    if (H.pick === 'out' && live.winner) { stopAutoSpin(); hostMsg('Победитель уже есть. Жми «Вернуть всех», чтобы крутить заново.'); return; }
-    if (hostAlive().length < 2) { stopAutoSpin(); hostMsg('Чтобы крутить, на колесе нужно хотя бы два лота.'); return; }
+    if (H.pick === 'out' && live.winner) { hostMsg('Победитель уже есть. Жми «Вернуть всех», чтобы крутить заново.'); return; }
+    if (hostAlive().length < 2) { hostMsg('Чтобы крутить, на колесе нужно хотя бы два лота.'); return; }
     const mode = H.pick;
     hostRes = { mode };
     if (CH.win.active) { stopChannel('win'); syncBg(); }
@@ -1120,10 +1123,9 @@
     pollSeq++;
     const t0 = Date.now();
     let d = null;
-    try { d = await api(`/lots/${encodeURIComponent(code)}/spin`, 'POST', { mode, dur: H.dur }); }
+    try { d = await api(`/lots/${encodeURIComponent(code)}/spin`, 'POST', { mode, dur: H.dur, auto: !!auto && mode === 'out' }); }
     catch (e) {
       hostRes = null;
-      stopAutoSpin();
       hostMsg(e.message);
       poll();
       return;
@@ -1137,22 +1139,19 @@
     hostT = setTimeout(hostFinish, Math.max(0, spin.at + spin.ms - serverNow()) + 150);
   }
   // прокрутка кончилась: итог записывает сервер. «На выбывание»: сектор мигает, через LIVE_OUT лот вылетает;
-  // «Один победитель» — сразу. Страница забирает итог и в режиме «до победителя» крутит дальше
-  const LIVE_OUT = 1100;
+  // «Один победитель» — сразу. Страница только забирает итог пораньше, не дожидаясь очередного опроса.
+  // «До победителя» следующую прокрутку начинает сервер через LIVE_NEXT после вылета: спрашиваем и её
+  const LIVE_OUT = 1100, LIVE_NEXT = 900;
   async function hostFinish() {
     const r = hostRes;
     if (!r) return;
     await poll();
-    if (r.mode === 'one') { hostRes = null; stopAutoSpin(); return; }
+    if (r.mode === 'one') { hostRes = null; paintHost(); return; }
     hostT = setTimeout(async () => {
       await poll();
       hostRes = null;
-      const live = S.live || {};
-      if (live.winner || hostAlive().length < 2) { stopAutoSpin(); return; }
       paintHost();
-      if (!hostAuto) return;
-      clearTimeout(hostAutoT);
-      hostAutoT = setTimeout(() => { if (hostAuto && isHost() && !hostSpinning()) hostSpin(); }, 900);
+      if (autoOn()) hostT = setTimeout(poll, LIVE_NEXT + 200);
     }, LIVE_OUT + 100);
   }
   // списки «Настройки лотов» из ответа сервера: они там есть, только если спрашивает админ
@@ -1173,9 +1172,8 @@
   // «Вернуть всех»: вылетевшие снова на колесе, победителя и истории нет. Настройку лотов админа это не трогает
   function hostReset() {
     if (!isHost() || hostSpinning()) return;
-    stopAutoSpin();
     if (CH.win.active) { stopChannel('win'); syncBg(); }
-    hostPush(hostBody({ out: [], winner: null, pick: '', spin: null, status: '', hist: [], reset: true }));
+    hostPush(hostBody({ out: [], winner: null, pick: '', spin: null, status: '', hist: [], auto: null, reset: true }));
   }
   async function hostRoom(body) {
     try {
@@ -1300,7 +1298,7 @@
     const autoBtn = $('#hostAutoSpin');
     const resetBtn = $('#hostReset');
     if (b) {
-      b.disabled = spinning || alive < 2 || (H.pick === 'out' && !!live.winner) || hostAuto;
+      b.disabled = spinning || alive < 2 || (H.pick === 'out' && !!live.winner) || autoOn();
       if (!b.dataset.armed) b.textContent = spinning ? 'Крутится…' : 'Крутить';
       // центр колеса крутит так же, как кнопка в пульте
       const hub = $('#lotHub');
@@ -1310,8 +1308,8 @@
     }
     if (autoBtn) {
       autoBtn.style.display = H.pick === 'out' ? '' : 'none';
-      autoBtn.disabled = !hostAuto && (spinning || alive < 2 || !!live.winner);
-      if (hostAuto) {
+      autoBtn.disabled = !autoOn() && (spinning || alive < 2 || !!live.winner);
+      if (autoOn()) {
         autoBtn.textContent = 'Остановить';
         autoBtn.classList.add('danger');
         autoBtn.classList.remove('ghost');
@@ -1321,12 +1319,12 @@
         autoBtn.classList.add('ghost');
       }
     }
-    if (resetBtn) resetBtn.disabled = spinning || !(liveOut().length || live.winner) || hostAuto;
+    if (resetBtn) resetBtn.disabled = spinning || !(liveOut().length || live.winner) || autoOn();
     $('#hostPick').querySelectorAll('[data-pick]').forEach((x) => x.setAttribute('aria-pressed', String(x.dataset.pick === H.pick)));
     const durSlider = $('#hostDurSlider'), durVal = $('#hostDurVal');
     if (durSlider) {
       durSlider.value = H.dur;
-      durSlider.disabled = spinning || hostAuto;
+      durSlider.disabled = spinning || autoOn();
     }
     if (durVal) durVal.textContent = `${H.dur} с`;
     const m = hostMusic(live.music);
@@ -1361,7 +1359,6 @@
     const panel = $('#hostPanel');
     if (!panel) return;
     $('#hostSpin').addEventListener('click', () => {
-      stopAutoSpin();
       const b = $('#hostSpin');
       // сбор ещё идёт: зрители могут добавлять лоты, поэтому сначала спрашиваем
       if (isOpen() && S.room.endsAt && !b.dataset.armed) {
@@ -1383,7 +1380,7 @@
     });
     $('#hostAutoSpin')?.addEventListener('click', () => {
       if (!isHost()) return;
-      if (hostAuto) {
+      if (autoOn()) {
         stopAutoSpin();
         return;
       }
@@ -1391,9 +1388,7 @@
       if (H.pick === 'out' && live.winner) { hostMsg('Победитель уже есть. Жми «Вернуть всех», чтобы крутить заново.'); return; }
       const alive = hostAlive();
       if (alive.length < 2) { hostMsg('Чтобы крутить, на колесе нужно хотя бы два лота.'); return; }
-      hostAuto = true;
-      paintHost();
-      hostSpin();
+      hostSpin(true);
     });
     $('#hostReset').addEventListener('click', hostReset);
     $('#hostHubTabs').addEventListener('click', (e) => { const t = e.target.closest('[data-hub-tab]'); if (!t) return; hubTab = t.dataset.hubTab; paintHubPick(true); });
