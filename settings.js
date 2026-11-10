@@ -116,6 +116,15 @@ label.st-row { cursor: pointer; }
 .st-empty p { margin: 0; font-size: 14px; line-height: 1.45; color: var(--ink-2, #b9bdc8); }
 .st-toast { position: absolute; left: 50%; bottom: 16px; z-index: 2; width: max-content; max-width: calc(100% - 32px); padding: 10px 16px; border-radius: 12px; background: var(--ink, #f3f4f6); color: var(--panel, #1b1d24); font-size: 14px; font-weight: 600; text-align: center; transform: translate(-50%, 12px); opacity: 0; pointer-events: none; transition: opacity .2s, transform .25s; }
 .st-toast.on { opacity: 1; transform: translate(-50%, 0); }
+/* тонкая полоска прокрутки без стрелок и фона: еле видна, ярче при наведении (Chrome, Edge, Safari) */
+.st-body::-webkit-scrollbar, .st-nav::-webkit-scrollbar { width: 10px; }
+.st-body::-webkit-scrollbar-track, .st-nav::-webkit-scrollbar-track { background: transparent; }
+.st-body::-webkit-scrollbar-button, .st-nav::-webkit-scrollbar-button { display: none; height: 0; }
+.st-body::-webkit-scrollbar-thumb, .st-nav::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 99px; background: color-mix(in srgb, var(--ink, #f3f4f6) 18%, transparent) padding-box; }
+.st-body:hover::-webkit-scrollbar-thumb, .st-nav:hover::-webkit-scrollbar-thumb { background-color: color-mix(in srgb, var(--ink, #f3f4f6) 32%, transparent); }
+.st-body::-webkit-scrollbar-thumb:hover, .st-nav::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--ink, #f3f4f6) 48%, transparent); }
+/* Firefox не знает ::-webkit-scrollbar: там тонкая полоска своими средствами */
+@supports not selector(::-webkit-scrollbar) { .st-body, .st-nav { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--ink, #f3f4f6) 25%, transparent) transparent; } }
 @media (max-width: 719px) {
   .st-sheet { padding: 0; place-items: stretch; }
   .st-card { width: 100%; height: 100dvh; grid-template-columns: minmax(0, 1fr); border: 0; border-radius: 0; }
