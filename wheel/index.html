@@ -264,6 +264,11 @@ svg { flex: none; }
 .field { margin-top: 20px; }
 .field > .label { margin-bottom: 8px; }
 .crit-tip { margin-top: 10px; font-size: 13px; color: var(--ink-2); text-wrap: pretty; }
+.crit-tip .calc { margin-top: 6px; }
+.crit-tip .calc > summary { display: inline-flex; align-items: center; min-height: 32px; color: var(--accent); font-weight: 600; cursor: pointer; list-style: none; }
+.crit-tip .calc > summary::-webkit-details-marker { display: none; }
+.crit-tip .calc > summary::after { content: ''; width: 6px; height: 6px; margin-left: 8px; border: solid currentColor; border-width: 0 1.6px 1.6px 0; rotate: 45deg; translate: 0 -2px; transition: rotate .2s; }
+.crit-tip .calc[open] > summary::after { rotate: 225deg; translate: 0 2px; }
 .crit-tip code {
   display: inline-block; margin-top: 8px; padding: 2px 8px; border: 1px solid var(--line); border-radius: 6px;
   background: var(--panel-2); color: var(--ink); font-family: var(--font-display); font-size: 18px; font-weight: 600; letter-spacing: .01em;
@@ -1094,7 +1099,7 @@ html.unslop::before { display: none; }
           <button type="button" class="view-tab" role="tab" data-pane="plans" id="tab-plans">В планах<sup class="plans-n" id="plansN"></sup></button>
         </div>
         <div id="boardPane">
-        <p class="crit-tip" id="modeHint"></p>
+        <div class="crit-tip" id="modeHint"></div>
 
         <div class="board-head">
           <p class="board-stat" id="boardStat"></p>

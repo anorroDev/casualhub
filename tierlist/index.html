@@ -442,7 +442,7 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
 
 .toast {
   position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 14px); z-index: 70;
-  max-width: min(92vw, 460px); padding: 10px 16px; border-radius: 12px;
+  width: max-content; max-width: min(92vw, 460px); padding: 10px 16px; border-radius: 12px;
   background: var(--ink); color: var(--panel); font-size: 14px; font-weight: 600; text-align: center;
   box-shadow: 0 12px 30px -12px color-mix(in srgb, var(--ink) 60%, transparent);
   opacity: 0; transform: translate(-50%, -10px); pointer-events: none; transition: opacity .2s, transform .2s;

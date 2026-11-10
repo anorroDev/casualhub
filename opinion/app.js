@@ -1279,6 +1279,9 @@ state.tierOpts = state.tierOpts || { mode: 'scores', cats: null };
 let form = blankForm();
 let drag = null;
 let pendingFocus = null;
+// рейтинг рисуется порциями: сотни оценок разом подвешивают телефон при каждой сортировке и поиске
+const BOARD_PAGE = 60;
+let boardLimit = BOARD_PAGE, boardSel = '';
 let ready = Promise.resolve();
 
 function currentCat() { return state.cats.find(c => c.id === form.cat) || null; }
@@ -1466,7 +1469,7 @@ function updateTotal() {
   el.totalNum.textContent = t == null ? '—' : fmt(t);
   const plan = t == null && noScoreOk(form.status);
   el.verdict.textContent = t == null ? (plan ? form.status.trim() : 'Пока без оценки') : verdict(t);
-  el.totalSub.textContent = t == null ? (plan ? 'Можно сохранить и без балла' : 'Подвинь хотя бы один ползунок или отметь «В планах»') : coverage(ratedRows.length, rows.length);
+  el.totalSub.textContent = t == null ? (plan ? 'Можно сохранить и без балла' : 'Нажми на клетку или отметь «В планах»') : coverage(ratedRows.length, rows.length);
   el.total.classList.remove('nudge');
 }
 function updateHead() {
@@ -2471,7 +2474,19 @@ function renderBoard() {
     renderTierBoard(list);
   } else {
     if (el.tierBoard) el.tierBoard.hidden = true;
-    el.board.innerHTML = list.map(r => entryHTML(r, ranks.get(r.id), showCat)).join('');
+    // другой отбор или порядок — снова первая порция
+    const sel = [state.filter, state.sfilter, state.sort, q, state.genres.join('\n'), state.bmode].join('|');
+    if (sel !== boardSel) { boardSel = sel; boardLimit = BOARD_PAGE; }
+    let lim = boardLimit;
+    // оценка, к которой ведём (ссылка, подсветка, удаление), всегда в показанной части
+    for (const id of [state.pinId, state.flashId, state.confirmDel]) {
+      const i = id ? list.findIndex(r => r.id === id) : -1;
+      if (i >= lim) lim = i + 1;
+    }
+    if (list.length <= lim + 15) lim = list.length; // короткий хвост не прячем за кнопку
+    const rest = list.length - lim;
+    el.board.innerHTML = list.slice(0, lim).map(r => entryHTML(r, ranks.get(r.id), showCat)).join('')
+      + (rest > 0 ? `<li class="board-more-li"><button type="button" class="btn ghost small more-btn" data-board-more="${lim}">Показать ещё (${rest})</button></li>` : '');
     el.board.hidden = !list.length;
   }
   el.noMatch.hidden = !((catPool.length > 0) && !list.length);
@@ -2863,6 +2878,7 @@ async function save() {
     if (oldId && (!photo || photo.id !== oldId)) dropAsset(oldId);
     resetForm(form.cat);
     toast(`${target ? 'Оценка обновлена' : 'Сохранено'}: ${name}${t != null ? ', ' + fmt(t) : ''}`);
+    if (isNarrow()) showSaved(id);
     setTimeout(() => { if (state.flashId === id) state.flashId = null; }, 2000);
   } catch (e) {
     state.flashId = null;
@@ -2873,6 +2889,12 @@ async function save() {
     state.saving = false;
     updateHead();
   }
+}
+
+// оценка из базы приходит подпиской чуть позже записи: ждём её до двух секунд
+function showSaved(id, tries = 0) {
+  if (state.ratings.some(x => x.id === id)) { goToRating(id, false, true); return; }
+  if (tries < 20) setTimeout(() => showSaved(id, tries + 1), 100);
 }
 
 /* ---------- Чужая оценка себе: «В планы» и «Оценить» из профиля друга, с главной и из ленты друзей ---------- */
@@ -4001,6 +4023,16 @@ el.board.addEventListener('toggle', e => {
   if (e.target.open) state.open.add(li.dataset.id); else state.open.delete(li.dataset.id);
 }, true);
 el.board.addEventListener('click', e => {
+  const more = e.target.closest('button[data-board-more]');
+  if (more) {
+    // следующая порция; фокус — на первую из новых оценок, чтобы с клавиатуры не терять место
+    const from = +more.dataset.boardMore;
+    boardLimit = from + BOARD_PAGE;
+    renderBoard();
+    const li = el.board.querySelectorAll(':scope > .entry')[from];
+    if (li) li.querySelector('summary').focus({ preventScroll: true });
+    return;
+  }
   const b = e.target.closest('button[data-act]');
   if (!b) return;
   const li = b.closest('.entry');
@@ -4955,7 +4987,7 @@ function setLogTab() {
   renderLogStat();
 }
 const smoothScroll = () => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
-function goToRating(id, quiet) {
+function goToRating(id, quiet, noPin) {
   const r = state.ratings.find(x => x.id === id);
   if (!r) { toast('Этой оценки уже нет в рейтинге'); return; }
   if (isNarrow()) setSection('board'); else setView('board');
@@ -4966,7 +4998,7 @@ function goToRating(id, quiet) {
   if (!hasGenres(r)) state.genres = [];
   state.open.add(id);
   state.flashId = id;
-  state.pinId = id; // открытая по ссылке оценка стоит первой в списке, пока не сменят сортировку
+  if (!noPin) state.pinId = id; // открытая по ссылке оценка стоит первой в списке, пока не сменят сортировку
   renderBoard();
   const li = el.board.querySelector(`.entry[data-id="${CSS.escape(id)}"]`);
   // quiet: сразу откроется форма оценки — к списку не прокручиваем

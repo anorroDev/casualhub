@@ -215,7 +215,8 @@ body.howto-lock { overflow: hidden; }
       if (want) {
         for (const el of document.querySelectorAll('.scorebar, [data-fab-avoid]')) {
           const r = el.getBoundingClientRect();
-          if (r.height && r.bottom >= vh - 2 && r.top < vh && r.right > innerWidth - 80) lift = Math.max(lift, vh - r.top);
+          // кнопка занимает полосу 16–64px от низа экрана справа: всё, что туда попадает, она обходит сверху
+          if (r.height && r.top < vh - 16 && r.bottom > vh - 64 && r.right > innerWidth - 80) lift = Math.max(lift, vh - r.top);
         }
       }
       fab.style.setProperty('--fab-lift', lift + 'px');

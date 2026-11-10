@@ -44,16 +44,18 @@
   // ---------- превью Мнения: свой топ-3 или примеры ----------
   function renderMnPreview(list) {
   const top = list.filter((r) => typeof r.total === 'number' && r.name).sort((a, b) => b.total - a.total).slice(0, 3);
+  const demo = !top.length && (() => { try { return localStorage.getItem('casualhub.examples.v1') !== '0'; } catch (e) { return true; } })();
   const rows = top.length ? top.map((r) => ({ name: r.name, t: r.total, id: r.id }))
-    : [{ name: 'Интерстеллар', t: 9.8 }, { name: 'The Witcher 3', t: 9.3 }, { name: 'Hades', t: 8.4 }];
+    : demo ? [{ name: 'Интерстеллар', t: 9.8 }, { name: 'The Witcher 3', t: 9.3 }, { name: 'Hades', t: 8.4 }] : [];
   const barsOf = (on) => Array.from({ length: 10 }, (_, j) => `<b style="--j:${j};height:${30 + j * 7}%"${j < on ? ' class="on"' : ''}></b>`).join('');
   // своих оценок меньше трёх: пустые места ждут следующих
-  const ghosts = Array.from({ length: 3 - rows.length }, (_, g) => `<span class="pv-row ghost" style="--k:${rows.length + g}"><span class="pv-rank">${rows.length + g + 1}</span><span class="pv-name">${g ? '…' : 'Следующая оценка'}</span><span class="pv-bar">${barsOf(0)}</span><span class="pv-badge">—</span></span>`).join('');
-  $('#mnPreview').innerHTML = (top.length ? '<span class="pv-tag">твой топ</span>' : '<span class="pv-tag">пример</span>')
+  const ghosts = Array.from({ length: 3 - rows.length }, (_, g) => `<span class="pv-row ghost" style="--k:${rows.length + g}"><span class="pv-rank">${rows.length + g + 1}</span><span class="pv-name">${g ? '…' : rows.length ? 'Следующая оценка' : 'Первая оценка'}</span><span class="pv-bar">${barsOf(0)}</span><span class="pv-badge">—</span></span>`).join('');
+  $('#mnPreview').innerHTML = (top.length ? '<span class="pv-tag">твой топ</span>' : demo ? '<span class="pv-tag">пример</span>' : '')
     + rows.map((r, k) => `<span class="pv-row" data-tier="${tierT(r.t)}" style="--k:${k}"${r.id ? ` data-go="/opinion/#r=${encodeURIComponent(r.id)}" title="Открыть оценку «${esc(r.name)}»"` : ''}><span class="pv-rank">${k + 1}</span><span class="pv-name">${esc(r.name)}</span><span class="pv-bar">${barsOf(Math.round(r.t))}</span><span class="pv-badge">${fmt(r.t)}</span></span>`).join('')
     + ghosts;
   }
   renderMnPreview(mine);
+  window.addEventListener('casualhub:examples', () => renderMnPreview(mine));
 
   // ---------- превью Колеса: настоящее мини-колесо ----------
   // Крутятся только обычные блоки с готовой картинкой внутри: видеокарта двигает их сама, без перерисовки

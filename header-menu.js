@@ -117,7 +117,7 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
         <div class="hs-body">${SETTINGS.map((sec) => `<section class="hs-sec"><span class="hs-lab">${escH(sec.title)}</span>
           ${sec.items.map((it) => `<a class="hs-it" href="${escH(it.href)}" ${it.attr}><span class="hs-ic" aria-hidden="true">${it.icon}</span><span class="hs-t"><b>${escH(it.name)}</b><small>${escH(it.desc)}</small></span><span class="hs-go" aria-hidden="true">›</span></a>`).join('')}</section>`).join('')}
           <section class="hs-sec"><span class="hs-lab">Примеры</span>
-          <label class="hs-it hs-tg"><span class="hs-t"><b>Показывать примеры</b><small>Пример участников в пустом Колесе при первом заходе. Выключишь — он уберётся и больше не появится</small></span><input type="checkbox" data-examples${examplesOn() ? ' checked' : ''}></label></section>
+          <label class="hs-it hs-tg"><span class="hs-t"><b>Показывать примеры</b><small>Пример топа на главной и участники в пустом Колесе. Выключишь — они уберутся и больше не появятся</small></span><input type="checkbox" data-examples${examplesOn() ? ' checked' : ''}></label></section>
           <p class="hs-note">Скоро здесь появятся и другие настройки.</p></div></div>`;
       document.body.appendChild(setBox);
       // настройка общая для всего сайта: хранится в браузере, страница (Колесо) узнаёт о ней сразу

@@ -12,6 +12,9 @@
 /api/*
   Cache-Control: no-store
 
+/wheel/hub/*
+  Cache-Control: public, max-age=604800, stale-while-revalidate=2592000
+
 /og/*
   ! Cross-Origin-Resource-Policy
 

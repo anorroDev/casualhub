@@ -391,7 +391,7 @@
     const pool = S.tab === 'fav' ? lists.filter((l) => l.fav) : lists;
     const found = pool.filter((l) => inQuery(l.title, ...l.rows.map((r) => r.label), ...Object.values(l.items).map((it) => it.name)));
     const n = found.length;
-    const none = pool.length ? 'Ничего не нашлось.' : S.tab === 'fav' ? 'Нажми ★ у тир-листа, и он появится здесь.' : 'Пока пусто. Начни с любого варианта рядом: тир-лист сохранится сам.';
+    const none = pool.length ? 'Ничего не нашлось.' : S.tab === 'fav' ? 'Нажми ★ у тир-листа, и он появится здесь.' : 'Пока пусто. Выбери, с чего начать, в «Новом тир-листе»: тир-лист сохранится сам.';
     box.innerHTML = n ? `<p class="tl-stat"><b>${n}</b> ${plural(n, 'тир-лист', 'тир-листа', 'тир-листов')}</p><div class="tl-grid">${bySort(found, (l) => l.title || 'Без названия', (l) => l.at).map((l, k) => {
       const c = Object.keys(l.items).length;
       return `<div class="tl-cell"><button type="button" class="tl-star" data-fav="${esc(l.id)}" aria-pressed="${l.fav}" aria-label="${l.fav ? 'Убрать из избранного' : 'В избранное'}" title="${l.fav ? 'Убрать из избранного' : 'В избранное'}">★</button><a class="tl-tile" href="#${esc(ownHash(l.id))}" style="--k:${Math.min(k, 8)}"><span class="tl-mini" aria-hidden="true">${l.rows.slice(0, 5).map((r) => `<span class="tl-mini-r"><i style="background:${esc(r.color)}"></i><span>${r.items.slice(0, 7).map((id) => miniThumb(l.items[id])).join('')}</span></span>`).join('')}</span><b>${esc(l.title || 'Без названия')}</b><small>${cards(c)} · ${esc(fmtDate(l.at))}${l.private ? ' · скрыт от друзей' : ''}</small></a></div>`;

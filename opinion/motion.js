@@ -64,8 +64,12 @@
       const r = base.apply(this, arguments);
       if (!before.size || el.board.hidden) return r;
       let k = 0;
+      // анимируем только то, что видно на экране (до или после): при сотнях оценок
+      // анимации строк за краем экрана никто не видит, а телефон на них подвисает
+      const vh = innerHeight, near = (top) => top > -160 && top < vh + 160;
       rows().forEach(li => {
         const b = li.getBoundingClientRect(), was = before.get(li.dataset.id);
+        if (!near(b.top) && !(was && near(was[1]))) return;
         if (was) {
           const dx = was[0] - b.left, dy = was[1] - b.top;
           if (Math.abs(dx) > 1 || Math.abs(dy) > 1) li.animate([{ transform: `translate(${dx}px, ${dy}px)` }, { transform: 'none' }], { duration: 460, easing: OUT });
