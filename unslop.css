@@ -1,5 +1,5 @@
-/* Казуал Хаб: экспериментальный вид (unslop). Включается в меню тем, класс unslop на <html> ставят head-скрипты страниц.
-   Здесь общее для всех страниц: иконки в двух вариантах и правки окон из общих скриптов (подсказка, меню ☰, друзья, темы).
+/* Казуал Хаб: казуальный вид (unslop). Включается в Настройках (раздел «Внешний вид»), класс unslop на <html> ставят head-скрипты страниц.
+   Здесь общее для всех страниц: иконки в двух вариантах и правки окон из общих скриптов (подсказка, меню ☰, друзья).
    Свои правила у каждой страницы лежат в ней самой, в <style id="unslop-page">.
    Основано на unslop by Damir Sokolovsky (@heydamir), CC BY 4.0 */
 /* эмодзи в обычном виде, линейная иконка в экспериментальном */
@@ -26,11 +26,6 @@ html.unslop .hm-panel > .hm-all:hover, html.unslop .hm-panel > .hm-all:focus-vis
 html.unslop .fp-card { animation: fp-pop .3s cubic-bezier(.22, 1, .36, 1); }
 html.unslop .fp-card .label { letter-spacing: normal; text-transform: none; }
 html.unslop .fp-btn { transition: transform .2s cubic-bezier(.22, 1, .36, 1), border-color .15s; }
-/* themes.js */
-html.unslop .theme-menu.tm-grid .tm-group { letter-spacing: normal; text-transform: none; }
-html.unslop .theme-pick[open] .theme-menu.tm-grid .theme-opt.tm { animation: tm-in .45s cubic-bezier(.22, 1, .36, 1) backwards; animation-delay: calc(var(--ti, 0) * 22ms); }
-html.unslop .theme-menu.tm-grid .theme-opt.tm:hover .tm-prev { transform: translateY(-1px); }
-html.unslop .theme-menu.tm-grid .tm-prev { transition: transform .25s cubic-bezier(.22, 1, .36, 1); }
 /* online.js */
 html.unslop .site-ann { animation: ann-in .5s cubic-bezier(.22, 1, .36, 1); }
 html.unslop .site-note { animation: note-in-u .3s cubic-bezier(.22, 1, .36, 1); box-shadow: 0 6px 18px rgb(0 0 0 / .18); }

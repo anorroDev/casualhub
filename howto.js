@@ -13,7 +13,7 @@
         '<b>Мнение</b> — оценивай игры, фильмы, еду, что угодно по шкале от 1 до 10, рейтинг соберётся сам',
         '<b>Колесо</b> — впиши варианты или участников и крути: кто вылетит, кто победит',
         '<b>Тир-листы</b> — собери свой тир-лист из картинок, текста, оценок или стикеров и скачай картинкой',
-        'Вверху кнопка аккаунта: <b>войди</b>, чтобы оценки были на всех твоих устройствах и их видели друзья. Рядом — «Друзья», а в меню <b>☰</b> — тема и эта подсказка',
+        'Вверху кнопка аккаунта: <b>войди</b>, чтобы оценки были на всех твоих устройствах и их видели друзья. Рядом — «Друзья», а в меню <b>☰</b> — настройки и эта подсказка',
       ],
     },
     opinion: {
@@ -112,17 +112,16 @@ body.howto-lock { overflow: hidden; }
   const mark = (v) => { try { const m = read(); m[PAGE] = v; if (PAGE === 'wheel') m.wheelLots = v; localStorage.setItem(KEY, JSON.stringify(m)); } catch (e) {} };
 
   function makeHeaderBtn() {
-    const pick = document.getElementById('themePick');
-    if (!pick) return null;
+    // встаёт перед «Что нового» в шапке и в том же стиле; меню ☰ (header-menu.js) забирает её к себе
+    const twin = document.querySelector('header [data-whatsnew]');
+    if (!twin) return null;
     const b = document.createElement('button');
     b.type = 'button';
     b.id = 'howtoBtn';
-    // кнопка в том же стиле, что и соседние в шапке; меню ☰ (header-menu.js) забирает её к себе
-    const twin = pick.querySelector('summary');
-    b.className = (twin && /\bpill\b/.test(twin.className) ? 'pill' : 'theme-btn') + ' howto-btn';
+    b.className = (/\bpill\b/.test(twin.className) ? 'pill' : 'theme-btn') + ' howto-btn';
     b.title = 'Как пользоваться';
     b.innerHTML = '<span aria-hidden="true"><span class="u-old">❓</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M9.5 9.5a2.5 2.5 0 1 1 3.4 2.3c-.6.3-.9.8-.9 1.4v.3M12 16.8h.01"/></svg></span><span class="hb-t">Помощь</span>';
-    pick.parentNode.insertBefore(b, pick);
+    twin.parentNode.insertBefore(b, twin);
     return b;
   }
 

@@ -1,11 +1,12 @@
 /* Казуал Хаб: шапка без россыпи кнопок.
    На виду остаются главная, «Мнение», «Колесо», «Тир-листы», «Друзья», профиль и кнопка ☰. В меню ☰ уезжают «Помощь»,
-   «Тема», «⚙️ Настройки» (окно с импортом из Letterboxd и обновлением обложек) и GitHub. «Что нового» на широком экране стоит в самом углу страницы, на узком — тоже в меню.
+   «⚙️ Настройки» (окно /settings.js: аккаунт, безопасность, тема, язык, данные) и GitHub. «Что нового» на широком экране стоит в самом углу страницы, на узком — тоже в меню.
+   Тема и язык меняются только в Настройках (раздел «Внешний вид»), тему ставит CasualThemes.apply из /themes.js.
    Кнопки переносятся целиком, поэтому их обработчики и счётчики (online.js, whatsnew.js) продолжают работать. */
 (() => {
   // музыка чужого аука не обрывается при уходе со страницы зрителя: мини-плеер сам решает, нужно ли ему что-то делать
   try { if (localStorage.getItem('casualhub.lots.follow.v1')) { const f = document.createElement('script'); f.src = '/lots-follow.js'; f.defer = true; document.head.appendChild(f); } } catch (e) {}
-  const MOVE = '#howtoBtn, .howto-btn, .theme-pick, a[href*="github.com"]';
+  const MOVE = '#howtoBtn, .howto-btn, a[href*="github.com"]';
   const css = document.createElement('style');
   css.textContent = `
 .hm-wrap { position: relative; display: inline-flex; flex: none; }
@@ -22,12 +23,9 @@
 @media (prefers-reduced-motion: reduce) { .hm-panel > * { animation: none; } }
 .hm-panel > * { display: flex !important; width: 100%; margin: 0 !important; justify-content: flex-start !important; text-align: left; }
 .hm-panel > [hidden] { display: none !important; }
-.hm-panel .theme-pick { display: block !important; }
-.hm-panel .theme-pick > summary { width: 100%; justify-content: flex-start; }
-.hm-panel .theme-menu { position: static !important; translate: none !important; transform: none !important; inset: auto !important; width: 100% !important; max-width: none !important; margin-top: 8px; box-shadow: none !important; }
-.hm-panel .oc-t, .hm-panel .fb-t, .hm-panel .hb-t, .hm-panel .t, .hm-panel .wn-text, .hm-panel summary > span, .hm-panel .hm-t, .hm-panel > a > span, .hm-panel > button > span { display: inline !important; }
+.hm-panel .oc-t, .hm-panel .fb-t, .hm-panel .hb-t, .hm-panel .t, .hm-panel .wn-text, .hm-panel .hm-t, .hm-panel > a > span, .hm-panel > button > span { display: inline !important; }
 /* в меню все пункты — строки одной ширины с подписью, даже если на телефоне в шапке они были круглыми значками */
-.hm-panel > a, .hm-panel > button, .hm-panel > span, .hm-panel .theme-pick > summary { width: 100% !important; min-width: 0 !important; height: auto !important; min-height: 40px; padding: 8px 12px !important; gap: 8px !important; border-radius: 11px !important; font-size: 13.5px !important; line-height: 1.2 !important; align-items: center; }
+.hm-panel > a, .hm-panel > button, .hm-panel > span { width: 100% !important; min-width: 0 !important; height: auto !important; min-height: 40px; padding: 8px 12px !important; gap: 8px !important; border-radius: 11px !important; font-size: 13.5px !important; line-height: 1.2 !important; align-items: center; }
 .hm-t { margin-left: 2px; }
 .hm-panel > .hm-all { border: 1.5px solid transparent !important; background: linear-gradient(var(--panel, #1b1d24), var(--panel, #1b1d24)) padding-box, linear-gradient(120deg, var(--accent, #3550E8), #E85FA5 55%, #F5B942) border-box !important; color: var(--ink, #f3f4f6) !important; font-weight: 700 !important; min-height: 46px; margin-bottom: 4px !important; text-decoration: none; transition: box-shadow .2s, transform .2s; }
 .hm-panel > .hm-all:hover, .hm-panel > .hm-all:focus-visible { transform: translateY(-1px); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #3550E8) 20%, transparent), 0 10px 24px -14px #E85FA5; }
@@ -155,9 +153,9 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     const btn = wrap.firstElementChild, panel = wrap.lastElementChild, dot = btn.querySelector('.hm-dot');
     // меню живёт в конце страницы: так оно поверх всего (и нижней панели Мнения), а стили шапки не прячут подписи
     document.body.appendChild(panel);
-    [...bar.querySelectorAll(MOVE)].filter((el) => !el.closest('.hm-panel') && el.parentElement && !el.closest('.theme-menu')).forEach((el) => {
+    [...bar.querySelectorAll(MOVE)].filter((el) => !el.closest('.hm-panel') && el.parentElement).forEach((el) => {
       // у кнопок-иконок в меню видна подпись
-      if (!el.matches('.theme-pick') && !el.textContent.trim() && el.title) el.insertAdjacentHTML('beforeend', `<span class="hm-t">${el.title.replace(/\s*:.*$/, '')}</span>`);
+      if (!el.textContent.trim() && el.title) el.insertAdjacentHTML('beforeend', `<span class="hm-t">${el.title.replace(/\s*:.*$/, '')}</span>`);
       panel.appendChild(el);
     });
     // GitHub есть в меню на всех страницах, даже если в шапке страницы его нет
@@ -171,27 +169,16 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
       gh.innerHTML = GH_ICON + '<span class="hm-t">GitHub</span>';
       panel.appendChild(gh);
     }
-    // «Настройки»: аккаунт, безопасность, приватность, вид, данные (окно — /settings.js)
+    // «Настройки»: аккаунт, безопасность, приватность, тема и язык, данные (окно — /settings.js)
     const set = document.createElement('button');
     set.type = 'button';
     set.className = cls + ' hm-set';
-    set.title = 'Аккаунт, безопасность, тема и данные';
+    set.title = 'Аккаунт, безопасность, тема, язык и данные';
     set.innerHTML = '<span aria-hidden="true"><span class="u-old">⚙️</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/></svg></span><span class="hm-t">Настройки</span>';
     set.addEventListener('click', openSettings);
     panel.appendChild(set);
-    // язык сайта (i18n.js): кнопка называет тот язык, на который переключит
-    if (window.CasualLang) {
-      const en = window.CasualLang.lang === 'en';
-      const lang = document.createElement('button');
-      lang.type = 'button';
-      lang.className = cls + ' hm-lang';
-      lang.title = en ? 'Switch to Russian' : 'Switch to English';
-      lang.innerHTML = `<span aria-hidden="true"><span class="u-old">🌐</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg></span><span class="hm-t">${en ? 'Русский' : 'English'}</span>`;
-      lang.addEventListener('click', () => window.CasualLang.set(en ? 'ru' : 'en'));
-      panel.appendChild(lang);
-    }
     // одинаковый порядок пунктов на всех страницах
-    ['#howtoBtn, .howto-btn', '.theme-pick', '.hm-lang', '.hm-set', 'a[href*="github.com"]'].forEach((sel) => { const el = panel.querySelector(`:scope > :is(${sel})`); if (el) panel.appendChild(el); });
+    ['#howtoBtn, .howto-btn', '.hm-set', 'a[href*="github.com"]'].forEach((sel) => { const el = panel.querySelector(`:scope > :is(${sel})`); if (el) panel.appendChild(el); });
     // «Все оценки» — самый первый пункт, в цветной рамке
     const all = document.createElement('a');
     all.className = cls + ' hm-all';
@@ -242,12 +229,8 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
       open(false);
     });
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.hidden) { open(false); btn.focus(); } });
-    // нажали пункт меню (кроме выбора темы) — меню закрывается
-    panel.addEventListener('click', (e) => {
-      if (e.target.closest('.theme-pick > summary')) return;
-      if (e.target.closest('.theme-menu') && !e.target.closest('[data-theme-id]')) return;
-      if (e.target.closest('a, button')) setTimeout(() => open(false), 0);
-    });
+    // нажали пункт меню — меню закрывается
+    panel.addEventListener('click', (e) => { if (e.target.closest('a, button')) setTimeout(() => open(false), 0); });
 
     // точка на ☰: непрочитанное «Что нового» внутри меню (заявки в друзья видны на самой кнопке «Друзья»)
     const sync = () => { dot.hidden = !panel.querySelector('.wn-dot'); };

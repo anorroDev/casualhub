@@ -358,8 +358,7 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }`
         + row({ name: 'Кто видит тир-листы', desc: 'Выбирается в редакторе тир-листа под кнопками', href: '/tierlist/' }));
   };
   R.look = () => {
-    const pressed = document.querySelector('.theme-menu [data-theme-id][aria-pressed="true"]');
-    const curTheme = pressed ? pressed.dataset.themeId : 'auto';
+    const curTheme = window.CasualThemes ? window.CasualThemes.current() : 'auto';
     const list = (window.CasualThemes && window.CasualThemes.list) || [];
     const en = window.CasualLang && window.CasualLang.lang === 'en';
     return grp('Тема', `<div class="st-themes">${list.map((t) => {
@@ -432,9 +431,8 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }`
       // свой атрибут: data-theme стоит и на <html>, closest нашёл бы его при любом нажатии в окне
       const th = e.target.closest('[data-st-theme]');
       if (th) {
-        // тему ставит сама страница (её меню тем): так же, как при выборе в меню ☰
-        const pick = document.querySelector(`.theme-menu [data-theme-id="${CSS.escape(th.dataset.stTheme)}"]`);
-        if (pick) pick.click();
+        // тема ставится и запоминается для всех страниц (/themes.js), новая расходится кругом от нажатой карточки
+        if (window.CasualThemes) window.CasualThemes.apply(th.dataset.stTheme, true, th);
         box.querySelectorAll('[data-st-theme]').forEach((b) => b.setAttribute('aria-pressed', String(b === th)));
         return;
       }

@@ -1266,7 +1266,7 @@ const el = {
   offlineBar: $('offlineBar'),
   userBar: $('userBar'), authModal: $('authModal'), authClose: $('authClose'), authBody: $('authBody'),
   authTitle: $('authTitle'),
-  themeBtn: $('themeBtn'), cmpTrayBtn: $('cmpTrayBtn'), cmpCount: $('cmpCount'),
+  cmpTrayBtn: $('cmpTrayBtn'), cmpCount: $('cmpCount'),
   favBtn: $('favBtn'), statusChips: $('statusChips'), meta: $('itemMeta'),
   pros: $('itemPros'), cons: $('itemCons'),
   tabStats: $('tabStats'), panelStats: $('panelStats'), statsContent: $('statsContent'),
@@ -1287,7 +1287,7 @@ const state = {
   cats: clone(STARTERS),
   editCat: false, catDelConfirm: false, catAsk: null,
   sort: 'score', filter: 'all', sfilter: 'all', bmode: 'list', query: '',
-  theme: 'auto', cmpIds: [],
+  cmpIds: [],
   open: new Set(), confirmDel: null, flashId: null, saving: false,
   exportOpts: { desc: true, pc: true, notes: true, photo: true },
   view: 'board', logTab: 'mine', section: 'rate'
@@ -3339,7 +3339,6 @@ function loadPrefs() {
       if (['icons', 'scores', 'names'].includes(p.tierOpts.mode)) state.tierOpts.mode = p.tierOpts.mode;
       if (Array.isArray(p.tierOpts.cats)) state.tierOpts.cats = p.tierOpts.cats.filter(x => typeof x === 'string').slice(0, 40);
     }
-    if (p && THEMES.some(t => t.id === p.theme)) state.theme = p.theme;
     if (p && typeof p.filter === 'string') state.filter = p.filter;
     if (p && p.exportOpts && typeof p.exportOpts === 'object') {
       for (const k of ['desc', 'pc', 'notes', 'photo']) if (typeof p.exportOpts[k] === 'boolean') state.exportOpts[k] = p.exportOpts[k];
@@ -3351,8 +3350,9 @@ function loadPrefs() {
 }
 function savePrefs() {
   try {
+    // настройки пишутся целиком, поэтому и тема: та, что сейчас на странице (ставит её /themes.js)
     localStorage.setItem(PREFS_KEY, JSON.stringify({
-      sort: state.sort, bmode: state.bmode, theme: state.theme, filter: state.filter, exportOpts: state.exportOpts,
+      sort: state.sort, bmode: state.bmode, theme: window.CasualThemes.current(), filter: state.filter, exportOpts: state.exportOpts,
       statsView: state.statsView, tierOpts: state.tierOpts,
       view: state.view, logTab: state.logTab, section: state.section
     }));
@@ -5146,63 +5146,7 @@ el.logList.addEventListener('keydown', e => {
 });
 
 
-/* ---------- Statistics, Compare & Theme ---------- */
-// темы общие с колесом: список и id должны совпадать с wheel/index.html
-const THEMES = window.CasualThemes.list; // общий список тем: /themes.js
-function applyTheme(t) {
-  const th = THEMES.find(x => x.id === t) || THEMES[0];
-  state.theme = th.id;
-  if (state.theme === 'auto') document.documentElement.removeAttribute('data-theme');
-  else document.documentElement.setAttribute('data-theme', state.theme);
-  if (el.themeBtn) {
-    el.themeBtn.innerHTML = `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="6.4"/><path d="M8 1.6a6.4 6.4 0 0 0 0 12.8z" fill="currentColor"/></svg><span>Тема: ${th.name}</span>`;
-    el.themeBtn.setAttribute('aria-label', `Тема: ${th.name}`);
-  }
-  const menu = document.getElementById('themeMenu');
-  if (menu) {
-    menu.classList.add('tm-grid');
-    menu.innerHTML = window.CasualThemes.menuHTML(state.theme);
-  }
-  savePrefs();
-}
-{
-  const pick = document.getElementById('themePick');
-  const menu = document.getElementById('themeMenu');
-  if (pick && menu) {
-    // меню не уходит за край экрана, где бы ни оказалась кнопка (на телефоне её сдвигает кнопка профиля)
-    pick.addEventListener('toggle', () => {
-      if (!pick.open) return;
-      menu.style.translate = '';
-      const box = menu.offsetParent ? menu.offsetParent.getBoundingClientRect() : { left: 0 };
-      const left = box.left + menu.offsetLeft, right = left + menu.offsetWidth;
-      const shift = left < 8 ? 8 - left : right > innerWidth - 8 ? innerWidth - 8 - right : 0;
-      if (shift) menu.style.translate = `${Math.round(shift)}px 0`;
-    });
-    menu.addEventListener('click', e => {
-      const b = e.target.closest('[data-theme-id]');
-      if (!b) return;
-      // новая тема расходится кругом от выбранного пункта, где это умеет браузер
-      if (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches) {
-        const r = b.getBoundingClientRect();
-        document.documentElement.style.setProperty('--tx', `${r.left + r.width / 2}px`);
-        document.documentElement.style.setProperty('--ty', `${r.top + r.height / 2}px`);
-        document.documentElement.classList.add('theme-swap');
-        let done = false;
-        const go = () => { if (!done) { done = true; applyTheme(b.dataset.themeId); } };
-        const vt = document.startViewTransition(go);
-        vt.ready.catch(() => {});
-        if (vt.updateCallbackDone) vt.updateCallbackDone.catch(() => {});
-        vt.finished.catch(() => {}).finally(() => document.documentElement.classList.remove('theme-swap'));
-        setTimeout(go, 400); // если переход не начался (вкладка в фоне), тема всё равно сменится
-      } else applyTheme(b.dataset.themeId);
-      pick.open = false;
-      el.themeBtn.focus();
-    });
-    document.addEventListener('click', e => { if (pick.open && !pick.contains(e.target)) pick.open = false; });
-    document.addEventListener('keydown', e => { if (e.key === 'Escape' && pick.open) { pick.open = false; el.themeBtn.focus(); } });
-  }
-}
-
+/* ---------- Statistics & Compare ---------- */
 // ---------- Тир-лист в статистике: свои категории, вид элементов и картинка для экспорта ----------
 const TL_TIERS = [
   { id: 'S', min: 9.2, range: '9,2–10', col: '#43C97A' },
@@ -5884,7 +5828,6 @@ window.addEventListener('storage', async e => {
 /* ---------- Boot ---------- */
 loadDraft();
 loadPrefs();
-applyTheme(state.theme);
 syncSort();
 setView(state.view);
 setLogTab(state.logTab);

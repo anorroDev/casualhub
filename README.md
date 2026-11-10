@@ -4,7 +4,7 @@
 
 Сайт: **https://casualhub.pages.dev**
 
-Язык интерфейса: русский или английский, переключается в меню ☰.
+Язык интерфейса: русский или английский, переключается в «Настройках» (меню ☰ → «Настройки» → «Внешний вид»).
 
 *Casual Hub is a small site for rating anything from 1 to 10 (Opinion) and letting a wheel decide (Wheel). The interface is available in Russian and English.*
 
