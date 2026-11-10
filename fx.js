@@ -94,7 +94,7 @@
   // обложки, фото и аватарки, которые догрузились, когда страница уже стоит, слегка «выпрыгивают» (только масштаб)
   addEventListener('load', (e) => {
     const im = e.target;
-    if (!im || im.tagName !== 'IMG' || !im.isConnected || im.closest('.theme-menu, .hist-menu, #baseThumbs')) return;
+    if (!im || im.tagName !== 'IMG' || !im.isConnected || im.closest('.hist-menu, #baseThumbs')) return;
     const r = im.getBoundingClientRect();
     if (r.width < 24 || r.bottom < 0 || r.top > innerHeight) return;
     im.animate([{ scale: '.9' }, { scale: '1' }], { duration: 420, easing: SPRING });

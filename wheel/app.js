@@ -1,7 +1,6 @@
 (() => {
   const TAU = Math.PI * 2;
   const KEY = 'koleso-vybyvanie-v1';
-  const PREFS_KEY = 'ocenshik.prefs.v1'; // общий с «Оценщиком всего»: тема одна на весь сайт
   const $ = (s) => document.querySelector(s);
   const canvas = $('#wheel');
   const ctx = canvas.getContext('2d');
@@ -11,9 +10,6 @@
   const SAMPLE = ['Hollow Knight', 'Hades', 'Disco Elysium', 'Outer Wilds', 'Celeste', 'Inscryption'];
   const DUR_MIN = 1, DUR_MAX = 30; // секунды прокрута
   const HUBS = [[24, 'Малый'], [34, 'Средний'], [44, 'Большой']];
-  // те же темы, что на главной Казуал Хаба
-  const THEMES = window.CasualThemes.list; // общий список тем: /themes.js
-  const THEME_IDS = THEMES.map((x) => x.id);
 
   // сектора: цвета аватаров «Оценщика» плюс лайм и графит; подпись тёмная или белая, смотря что контрастнее
   const PALETTE = ['#3550E8', '#EAA92C', '#2EAD60', '#EC4899', '#9333EA', '#F97316', '#06B6D4', '#E4553F', '#84CC16', '#64748B'];
@@ -467,36 +463,6 @@
       localStorage.setItem(LINK_KEY, JSON.stringify({ scope, ...(scope === 'main' ? stash : own) }));
     } catch (e) {}
     lotsLiveSoon();
-  }
-
-  // ---------- theme, shared with the rater ----------
-  function readThemePref() {
-    try {
-      const p = JSON.parse(localStorage.getItem(PREFS_KEY) || 'null');
-      if (p && THEME_IDS.includes(p.theme)) return p.theme;
-    } catch (e) {}
-    return 'auto';
-  }
-  function writeThemePref(t) {
-    try {
-      let p = JSON.parse(localStorage.getItem(PREFS_KEY) || 'null');
-      if (!p || typeof p !== 'object' || Array.isArray(p)) p = {};
-      p.theme = t;
-      localStorage.setItem(PREFS_KEY, JSON.stringify(p));
-    } catch (e) {}
-  }
-  let theme = 'auto';
-  function applyTheme(t, fromUser) {
-    theme = THEME_IDS.includes(t) ? t : 'auto';
-    // «Авто» при загрузке не трогает атрибут, чтобы не перебить тему, выбранную снаружи
-    if (theme === 'auto') { if (fromUser) document.documentElement.removeAttribute('data-theme'); }
-    else document.documentElement.setAttribute('data-theme', theme);
-    const th = THEMES.find((x) => x.id === theme);
-    $('#themeBtn').innerHTML = `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="6.4"/><path d="M8 1.6a6.4 6.4 0 0 0 0 12.8z" fill="currentColor"/></svg><span>Тема: ${th.name}</span>`;
-    $('#themeBtn').setAttribute('aria-label', `Тема: ${th.name}`);
-    $('#themeMenu').classList.add('tm-grid');
-    $('#themeMenu').innerHTML = window.CasualThemes.menuHTML(theme);
-    if (fromUser) writeThemePref(theme);
   }
 
   // ---------- drawing ----------
@@ -1852,39 +1818,6 @@
     });
     $('#restart').addEventListener('click', restoreAll);
 
-    $('#themeMenu').addEventListener('click', (e) => {
-      const b = e.target.closest('[data-theme-id]');
-      if (!b) return;
-      const swap = () => { applyTheme(b.dataset.themeId, true); readTheme(); draw(); };
-      // новая тема расходится кругом от выбранного пункта, где это умеет браузер
-      if (document.startViewTransition && !reduced) {
-        const r = b.getBoundingClientRect();
-        document.documentElement.style.setProperty('--tx', `${r.left + r.width / 2}px`);
-        document.documentElement.style.setProperty('--ty', `${r.top + r.height / 2}px`);
-        document.documentElement.classList.add('theme-swap');
-        let done = false;
-        const go = () => { if (!done) { done = true; swap(); } };
-        const vt = document.startViewTransition(go);
-        vt.ready.catch(() => {});
-        if (vt.updateCallbackDone) vt.updateCallbackDone.catch(() => {});
-        vt.finished.catch(() => {}).finally(() => document.documentElement.classList.remove('theme-swap'));
-        setTimeout(go, 400); // если переход не начался (вкладка в фоне), тема всё равно сменится
-      } else swap();
-      $('#themePick').open = false;
-      $('#themeBtn').focus();
-    });
-    document.addEventListener('click', (e) => { const p = $('#themePick'); if (p.open && !p.contains(e.target)) p.open = false; });
-    // меню тем не уходит за край экрана, где бы ни оказалась кнопка
-    $('#themePick').addEventListener('toggle', () => {
-      const pick = $('#themePick'), menu = $('#themeMenu');
-      if (!pick.open || !menu) return;
-      menu.style.translate = '';
-      const box = menu.offsetParent ? menu.offsetParent.getBoundingClientRect() : { left: 0 };
-      const left = box.left + menu.offsetLeft, right = left + menu.offsetWidth;
-      const shift = left < 8 ? 8 - left : right > innerWidth - 8 ? innerWidth - 8 - right : 0;
-      if (shift) menu.style.translate = `${Math.round(shift)}px 0`;
-    });
-
     $('#mnav').addEventListener('click', (e) => {
       const b = e.target.closest('[data-section]');
       if (!b || S.section === b.dataset.section) return;
@@ -2129,7 +2062,6 @@
     if (S.sample && !examplesOn()) dropSample();
     if (!/\/wheel(\/|\/index\.html)?$/.test(location.pathname)) { $('#backLink').hidden = true; $('#opinionLink').hidden = true; } // вне сайта ссылкам некуда вести
 
-    applyTheme(readThemePref(), false);
     readTheme();
     bind();
     renderSegs();

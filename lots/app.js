@@ -6,7 +6,6 @@
   const esc = window.CasualUtil.esc; // общий, /util.js
   const plural = window.CasualUtil.plural; // общий, /util.js
   const read = window.CasualUtil.read; // общий, /util.js
-  const PREFS_KEY = 'ocenshik.prefs.v1';
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const TAU = Math.PI * 2;
   const mod = (a, b) => ((a % b) + b) % b;
@@ -1700,54 +1699,6 @@
   setInterval(() => { $('#fxMute').hidden = $('#wMute').hidden = !CH.win.active; }, 300);
   $('#winner').addEventListener('click', (e) => { if (e.target === $('#winner')) closeWinner(); });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeWinner(); });
-
-  // ---------- тема: одна на весь сайт ----------
-  const THEMES = window.CasualThemes.list, THEME_IDS = THEMES.map((t) => t.id);
-  function readThemePref() {
-    const p = read(PREFS_KEY);
-    return p && THEME_IDS.includes(p.theme) ? p.theme : 'auto';
-  }
-  function writeThemePref(t) {
-    try {
-      let p = read(PREFS_KEY);
-      if (!p || typeof p !== 'object' || Array.isArray(p)) p = {};
-      p.theme = t;
-      localStorage.setItem(PREFS_KEY, JSON.stringify(p));
-    } catch (e) {}
-  }
-  function applyTheme(t, fromUser) {
-    const theme = THEME_IDS.includes(t) ? t : 'auto';
-    if (theme === 'auto') { if (fromUser) document.documentElement.removeAttribute('data-theme'); }
-    else document.documentElement.setAttribute('data-theme', theme);
-    const th = THEMES.find((x) => x.id === theme);
-    $('#themeBtn').innerHTML = `<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="6.4"/><path d="M8 1.6a6.4 6.4 0 0 0 0 12.8z" fill="currentColor"/></svg><span>Тема: ${th.name}</span>`;
-    $('#themeBtn').setAttribute('aria-label', `Тема: ${th.name}`);
-    $('#themeMenu').classList.add('tm-grid');
-    $('#themeMenu').innerHTML = window.CasualThemes.menuHTML(theme);
-    if (fromUser) writeThemePref(theme);
-  }
-  $('#themeMenu').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-theme-id]');
-    if (!b) return;
-    const swap = () => applyTheme(b.dataset.themeId, true);
-    if (document.startViewTransition && !reduced) {
-      const r = b.getBoundingClientRect();
-      document.documentElement.style.setProperty('--tx', `${r.left + r.width / 2}px`);
-      document.documentElement.style.setProperty('--ty', `${r.top + r.height / 2}px`);
-      document.documentElement.classList.add('theme-swap');
-      let done = false;
-      const go = () => { if (!done) { done = true; swap(); } };
-      const vt = document.startViewTransition(go);
-      vt.ready.catch(() => {});
-      if (vt.updateCallbackDone) vt.updateCallbackDone.catch(() => {});
-      vt.finished.catch(() => {}).finally(() => document.documentElement.classList.remove('theme-swap'));
-      setTimeout(go, 400); // если переход не начался (вкладка в фоне), тема всё равно сменится
-    } else swap();
-    $('#themePick').open = false;
-    $('#themeBtn').focus();
-  });
-  document.addEventListener('click', (e) => { const p = $('#themePick'); if (p.open && !p.contains(e.target)) p.open = false; });
-  applyTheme(readThemePref(), false);
 
   canvas = $('#wheel');
   ctx = canvas.getContext('2d');

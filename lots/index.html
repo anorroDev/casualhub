@@ -179,32 +179,14 @@ html:active-view-transition-type(back)::view-transition-new(root) { animation: v
 @keyframes vt-out-r { to { transform: translateX(100%); } }
 @keyframes vt-in-l { from { transform: translateX(-100%); } }
 /* Buttons press in; menus and sections that appear slide up a little (.enter is set by script) */
-.btn, .theme-btn, .theme-opt, .th, .opt {
+.btn, .theme-btn, .th, .opt {
   transition-property: transform, background-color, border-color, color, box-shadow, opacity; transition-duration: .12s;
 }
-.btn:active:not(:disabled), .theme-btn:active, .theme-opt:active, .th:active, .opt:active { transform: scale(.96); }
-.theme-pick[open] .theme-menu { animation: enter-up .2s cubic-bezier(.2, .8, .2, 1) both; }
+.btn:active:not(:disabled), .theme-btn:active, .th:active, .opt:active { transform: scale(.96); }
 @keyframes enter-up { from { transform: translateY(8px); } }
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }
-.theme-pick { position: relative; }
-.theme-pick > summary { list-style: none; }
-.theme-pick > summary::-webkit-details-marker { display: none; }
-.theme-menu {
-  position: absolute; right: 0; top: calc(100% + 6px); z-index: 30; width: 200px;
-  display: grid; gap: 2px; padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 14px;
-  box-shadow: 0 18px 40px -18px color-mix(in srgb, var(--ink) 55%, transparent);
-}
-.theme-opt {
-  display: flex; align-items: center; gap: 10px; height: 36px; padding: 0 10px; border: 0; border-radius: 9px;
-  background: transparent; color: var(--ink); font-size: 14px; font-weight: 600; text-align: left; cursor: pointer;
-}
-.theme-opt i { flex: none; width: 18px; height: 18px; border-radius: 50%; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 20%, transparent); }
-.theme-opt[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
-.theme-opt:hover { background: var(--panel-2); }
-.theme-opt:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-@media (max-width: 560px) { .theme-menu { right: auto; left: 0; } }
 @media (max-width: 560px) { :root { --pad: 16px; } }
 
 *, *::before, *::after { box-sizing: border-box; }
@@ -530,21 +512,15 @@ html::after {
 #opinionLink:hover svg rect:nth-child(2) { transform: scaleY(1.2); }
 #opinionLink:hover svg rect:nth-child(3) { transform: scaleY(.8); }
 .scale span { background: color-mix(in srgb, var(--panel) 92%, transparent); }
-.theme-menu { border-radius: 16px; transform-origin: 90% 0; box-shadow: 0 24px 50px -20px color-mix(in srgb, var(--ink) 55%, transparent); }
-.theme-pick[open] .theme-menu { animation: menu-in .26s var(--spring) both; }
-@keyframes menu-in { from { transform: translateY(-6px) scale(.94); } }
-.theme-opt i { transition: transform .3s var(--spring); }
-.theme-opt:hover i { transform: rotate(180deg) scale(1.1); }
 html.theme-swap::view-transition-old(root) { animation: none; }
 html.theme-swap::view-transition-new(root) { animation: theme-circle .6s cubic-bezier(.4, 0, .2, 1) both; }
 @keyframes theme-circle { from { clip-path: circle(0 at var(--tx, 50%) var(--ty, 0)); } to { clip-path: circle(150vmax at var(--tx, 50%) var(--ty, 0)); } }
 @media (max-width: 560px) {
-  #themeBtn span, .ml-text, .hl-full, .wn-text { display: none; }
-  #themeBtn, #opinionLink, #whatsNewBtn { width: 36px; padding: 0; }
+  .ml-text, .hl-full, .wn-text { display: none; }
+  #opinionLink, #whatsNewBtn { width: 36px; padding: 0; }
   #githubLink { display: none; }
   .masthead { gap: 18px; }
   .masthead-right > .user-bar { flex-wrap: nowrap; gap: 6px; }
-  .theme-menu { right: 0; left: auto; }
 }
 
 /* Title letters rise one by one and breathe (transforms only) */
@@ -833,18 +809,15 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
 <link rel="stylesheet" href="/base.css">
 <link rel="stylesheet" href="/unslop.css">
 <style id="unslop-page">
-/* Казуальный вид (unslop): действует, только когда в меню тем включён переключатель. Собрано из правок, которые убирают
+/* Казуальный вид (unslop): действует, только когда в Настройках включён «Казуальный вид». Собрано из правок, которые убирают
    цветные пятна, свечения, пружинные и вечные анимации, заглавные подписи. Обычный вид выше не меняется */
 @keyframes ch-in-u { from { opacity: 0; transform: translateY(.12em); } }
-html.unslop .theme-menu { box-shadow: 0 20px 44px -22px rgb(0 0 0 / .45); }
 html.unslop .label { text-transform: none; letter-spacing: normal; }
 html.unslop .label::first-letter { text-transform: uppercase; }
 html.unslop .eyebrow { text-transform: none; letter-spacing: normal; }
 html.unslop .sheet:not([hidden]) .sheet-card { animation: pop .35s cubic-bezier(.22, 1, .36, 1); }
 :root.unslop { --spring: cubic-bezier(.22, 1, .36, 1); }
 html.unslop .theme-btn:hover { box-shadow: 0 6px 18px -10px rgb(0 0 0 / .28); }
-html.unslop .theme-menu { box-shadow: 0 20px 44px -22px rgb(0 0 0 / .45); }
-html.unslop .theme-opt:hover i { transform: none; }
 html.unslop .title .ch { animation: ch-in-u .7s cubic-bezier(.22, 1, .36, 1) backwards calc(var(--i) * 40ms); transition: color .15s; }
 html.unslop .title .ch:hover { scale: none; }
 html.unslop .card { background: var(--panel); }
@@ -871,10 +844,6 @@ html.unslop::before { display: none; }
         <a class="theme-btn" id="githubLink" href="https://github.com/anorroDev/casualhub" target="_blank" rel="noopener" title="Код сайта на GitHub"><svg viewBox="0 0 16 16" width="15" height="15" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>GitHub</a>
         <span class="theme-btn online-chip" data-online-count title="Сколько людей сейчас на сайте: с аккаунтом и гости"><em aria-hidden="true"></em><b>—</b><span class="oc-t">&nbsp;на сайте</span></span>
         <a class="theme-btn fr-btn" href="/opinion/#friends" data-friends-btn title="Друзья"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="5.5" r="2.5"/><path d="M1.5 14c.6-2.6 2.3-4 4.5-4s3.9 1.4 4.5 4"/><path d="M10.5 3.2a2.5 2.5 0 0 1 0 4.6M12.5 10.3c1 .6 1.7 1.9 2 3.7"/></svg><span class="fb-t">Друзья</span><i class="fb-n fb-on" hidden></i><i class="fb-n fb-req" hidden></i></a>
-        <details class="theme-pick" id="themePick">
-          <summary class="theme-btn" id="themeBtn" title="Тема оформления">🌓 Тема: Авто</summary>
-          <div class="theme-menu" id="themeMenu" role="group" aria-label="Тема оформления"></div>
-        </details>
         <button type="button" class="theme-btn" id="whatsNewBtn" data-whatsnew title="Что нового на сайте"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.5l1.6 3.6 3.9.4-2.9 2.6.8 3.9L8 10l-3.4 2 .8-3.9-2.9-2.6 3.9-.4z"/></svg><span class="wn-text">Что нового</span></button>
         <span data-account data-cls="theme-btn"></span><script src="/account-btn.js"></script>
       </div>

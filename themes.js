@@ -1,6 +1,7 @@
-/* Казуал Хаб: темы оформления — один список на все страницы и меню выбора с живыми превью.
-   Цвета каждой темы задаются в CSS страниц (:root[data-theme=…]); здесь только то, что нужно для меню:
-   название, значок и три цвета для картинки-превью (фон, панель, акцент). */
+/* Казуал Хаб: темы оформления — один список на все страницы и CasualThemes.apply, которым тема ставится везде.
+   Цвета каждой темы задаются в CSS страниц (:root[data-theme=…]); здесь название, значок и три цвета
+   для картинки-превью (фон, панель, акцент). Выбирают тему в Настройках (settings.js, раздел «Внешний вид»),
+   до первой отрисовки её ставят head-скрипты страниц из ocenshik.prefs.v1. */
 (() => {
   const T = (id, name, icon, group, bg, panel, accent) => ({ id, name, icon, group, sw: [bg, accent], prev: { bg, panel, accent } });
   const LIST = [
@@ -22,25 +23,9 @@
     T('vampire', 'Вампир', '🦇', 'dark', '#140A0C', '#1D0F12', '#FF4D5E'),
     T('graphite', 'Графит', '🖤', 'dark', '#000000', '#0E0E0F', '#FFB020'),
   ];
-  const GROUPS = [['auto', ''], ['light', 'Светлые'], ['dark', 'Тёмные']];
-  const esc = window.CasualUtil.esc; // общий, /util.js
-
-  // карточка темы: маленькая «страница» в её цветах — фон, панель и акцентная кнопка
-  const card = (t, current, i) => {
-    const p = t.prev;
-    const bg = t.id === 'auto' ? `linear-gradient(135deg, ${p.bg} 50%, ${p.panel} 50%)` : p.bg;
-    return `<button type="button" class="theme-opt tm${t.id === 'auto' ? ' tm-wide' : ''}" data-theme-id="${t.id}" aria-pressed="${t.id === current}" style="--ti:${i}">`
-      + `<span class="tm-prev" style="--pb:${bg};--pp:${t.id === 'auto' ? '#FFFFFF' : p.panel};--pa:${p.accent}" aria-hidden="true"><span class="tm-panel"></span><span class="tm-btn"></span><span class="tm-dot"></span></span>`
-      + `<span class="tm-name"><span class="u-old">${t.icon} </span>${esc(t.name)}${t.id === 'auto' ? '<small>светлая днём, тёмная ночью — как в телефоне или компьютере</small>' : ''}</span></button>`;
-  };
-  // экспериментальный вид (unslop): тише, без свечений, пятен фона и прыгающих анимаций; работает с любой темой
+  // «Казуальный вид» (unslop): тише, без свечений, пятен фона и прыгающих анимаций; работает с любой темой.
+  // Переключатель — в Настройках, раздел «Внешний вид» (settings.js), а включает и запоминает его обработчик ниже
   const UNSLOP_KEY = 'casualhub.unslop.v1';
-  const unslopOn = () => document.documentElement.classList.contains('unslop');
-  const expHTML = () => `<label class="tm-exp"><input type="checkbox" data-unslop${unslopOn() ? ' checked' : ''}><span class="tm-exp-t"><b>Казуальный вид</b><small>unslop: спокойнее, без свечений и прыгающих анимаций. Работает с любой темой</small></span></label>`;
-  function menuHTML(current) {
-    let i = 0;
-    return expHTML() + GROUPS.map(([g, title]) => (title ? `<span class="tm-group">${title}</span>` : '') + LIST.filter((t) => t.group === g).map((t) => card(t, current, i++)).join('')).join('');
-  }
   document.addEventListener('change', (e) => {
     const c = e.target.closest && e.target.closest('[data-unslop]');
     if (!c) return;
@@ -51,31 +36,45 @@
   // включили в другой вкладке — эта тоже переключается
   addEventListener('storage', (e) => { if (e.key === UNSLOP_KEY) { const on = e.newValue === '1'; document.documentElement.classList.toggle('unslop', on); document.querySelectorAll('[data-unslop]').forEach((x) => { x.checked = on; }); } });
 
-  const css = document.createElement('style');
-  css.textContent = `
-.theme-menu.tm-grid { width: min(300px, calc(100vw - 16px)); grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; padding: 8px; max-height: min(72vh, 560px); overflow-y: auto; overscroll-behavior: contain; }
-.theme-menu.tm-grid .tm-group { grid-column: 1 / -1; padding: 6px 4px 0; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
-.theme-menu.tm-grid .theme-opt.tm { display: grid; gap: 6px; height: auto; padding: 6px; border: 2px solid transparent; border-radius: 12px; text-align: left; align-content: start; }
-.theme-menu.tm-grid .theme-opt.tm-wide { grid-column: 1 / -1; grid-template-columns: 76px minmax(0, 1fr); align-items: center; }
-.theme-menu.tm-grid .tm-prev { position: relative; display: block; height: 44px; border-radius: 8px; background: var(--pb); box-shadow: inset 0 0 0 1px rgb(127 127 127 / .25); overflow: hidden; }
-.theme-menu.tm-grid .tm-panel { position: absolute; left: 7px; right: 7px; top: 7px; height: 14px; border-radius: 4px; background: var(--pp); box-shadow: 0 1px 2px rgb(0 0 0 / .12); }
-.theme-menu.tm-grid .tm-btn { position: absolute; left: 7px; bottom: 7px; width: 46%; height: 9px; border-radius: 99px; background: var(--pa); }
-.theme-menu.tm-grid .tm-dot { position: absolute; right: 7px; bottom: 6px; width: 11px; height: 11px; border-radius: 50%; background: var(--pa); opacity: .55; }
-.theme-menu.tm-grid .tm-name { display: grid; font-size: 13px; font-weight: 700; line-height: 1.2; color: var(--ink); }
-.theme-menu.tm-grid .tm-name small { font-size: 11.5px; font-weight: 500; color: var(--ink-3); }
-.theme-menu.tm-grid .theme-opt.tm:hover { background: var(--panel-2); }
-.theme-menu.tm-grid .theme-opt.tm[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
-.theme-pick[open] .theme-menu.tm-grid .theme-opt.tm { animation: tm-in .45s cubic-bezier(.34, 1.56, .64, 1) backwards; animation-delay: calc(var(--ti, 0) * 22ms); }
-.theme-menu.tm-grid .theme-opt.tm:hover .tm-prev { transform: translateY(-2px) rotate(-1.5deg); }
-.theme-menu.tm-grid .tm-prev { transition: transform .25s cubic-bezier(.34, 1.56, .64, 1); }
-@keyframes tm-in { from { transform: translateY(10px) scale(.92); } }
-@media (prefers-reduced-motion: reduce) { .theme-pick[open] .theme-menu.tm-grid .theme-opt.tm { animation: none; } }
-.theme-menu.tm-grid .theme-opt.tm:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-.theme-menu.tm-grid .tm-exp { grid-column: 1 / -1; display: flex; align-items: flex-start; gap: 10px; margin-bottom: 2px; padding: 8px 8px 12px; border-bottom: 1px solid var(--line); cursor: pointer; }
-.theme-menu.tm-grid .tm-exp input { flex: none; width: 16px; height: 16px; margin: 2px 0 0; accent-color: var(--accent); }
-.theme-menu.tm-grid .tm-exp-t { display: grid; gap: 2px; font-size: 13px; line-height: 1.25; color: var(--ink); }
-.theme-menu.tm-grid .tm-exp-t small { font-size: 11.5px; color: var(--ink-3); }`;
-  document.head.appendChild(css);
+  const PREFS_KEY = 'ocenshik.prefs.v1'; // общий для сайта: тема и то, что запоминает Мнение
+  const root = document.documentElement;
+  const find = (id) => LIST.find((t) => t.id === id) || LIST[0];
+  // head-скрипт уже поставил тему; неизвестную (например, убранную из списка) снимаем, чтобы работало «Авто»
+  const was = root.getAttribute('data-theme');
+  if (was !== null && (was === 'auto' || find(was).id !== was)) root.removeAttribute('data-theme');
+  let current = root.getAttribute('data-theme') || 'auto';
 
-  window.CasualThemes = { list: LIST, ids: LIST.map((t) => t.id), find: (id) => LIST.find((t) => t.id === id) || LIST[0], menuHTML };
+  // Ставит тему на страницу: data-theme на <html>. «Авто» — без атрибута: светлую или тёмную выбирает система
+  // (@media (prefers-color-scheme: dark) в CSS страниц). save — запомнить в этом браузере для всех страниц.
+  // from — кнопка, от которой новая тема расходится кругом (html.theme-swap в CSS страниц), если браузер это умеет.
+  // Холсты Колеса и лотов перерисовываются сами: следят за data-theme и за темой системы
+  function apply(id, save, from) {
+    const th = find(id);
+    current = th.id;
+    if (save) {
+      try {
+        let p = JSON.parse(localStorage.getItem(PREFS_KEY) || 'null');
+        if (!p || typeof p !== 'object' || Array.isArray(p)) p = {};
+        p.theme = th.id;
+        localStorage.setItem(PREFS_KEY, JSON.stringify(p));
+      } catch (e) {}
+    }
+    const set = () => { if (th.id === 'auto') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', th.id); };
+    if (!from || !document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) { set(); return th.id; }
+    const r = from.getBoundingClientRect();
+    root.style.setProperty('--tx', `${r.left + r.width / 2}px`);
+    root.style.setProperty('--ty', `${r.top + r.height / 2}px`);
+    root.classList.add('theme-swap');
+    let done = false;
+    const go = () => { if (!done) { done = true; set(); } };
+    const vt = document.startViewTransition(go);
+    vt.ready.catch(() => {});
+    if (vt.updateCallbackDone) vt.updateCallbackDone.catch(() => {});
+    vt.finished.catch(() => {}).finally(() => root.classList.remove('theme-swap'));
+    setTimeout(go, 400); // если переход не начался (вкладка в фоне), тема всё равно сменится
+    return th.id;
+  }
+
+  // current — тема, которая сейчас на этой странице (id из list)
+  window.CasualThemes = { list: LIST, ids: LIST.map((t) => t.id), find, apply, current: () => current };
 })();

@@ -510,37 +510,6 @@
     } catch (x) { if (!stale(my)) fail(x); }
   }
 
-  (() => {
-    const pick = $('#themePick'), btn = $('#themeBtn'), menu = $('#themeMenu');
-    if (!pick || !btn || !menu || !window.CasualThemes) return;
-    const THEMES = window.CasualThemes.list;
-    const PALETTE = '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="8" cy="8" r="6.4"/><path d="M8 1.6a6.4 6.4 0 0 0 0 12.8z" fill="currentColor"/></svg>';
-    const PREFS_KEY = 'ocenshik.prefs.v1';
-    const apply = (id, save) => {
-      const th = THEMES.find((t) => t.id === id) || THEMES[0];
-      if (th.id === 'auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', th.id);
-      btn.innerHTML = `${PALETTE}<span class="t">Тема: ${esc(th.name)}</span>`;
-      btn.setAttribute('aria-label', `Тема: ${th.name}`);
-      menu.classList.add('tm-grid');
-      menu.innerHTML = window.CasualThemes.menuHTML(th.id);
-      if (save) { try { let p = read(PREFS_KEY); if (!p || typeof p !== 'object' || Array.isArray(p)) p = {}; p.theme = th.id; localStorage.setItem(PREFS_KEY, JSON.stringify(p)); } catch (e) {} }
-    };
-    apply((read(PREFS_KEY) || {}).theme || 'auto', false);
-    menu.addEventListener('click', (e) => {
-      const b = e.target.closest('[data-theme-id]');
-      if (!b) return;
-      apply(b.dataset.themeId, true);
-      pick.open = false;
-    });
-    pick.addEventListener('toggle', () => {
-      if (!pick.open) return;
-      menu.style.translate = '';
-      const r = menu.getBoundingClientRect();
-      const shift = r.left < 8 ? 8 - r.left : r.right > innerWidth - 8 ? innerWidth - 8 - r.right : 0;
-      if (shift) menu.style.translate = `${Math.round(shift)}px 0`;
-    });
-  })();
-
   async function start() {
     if (!token) {
       message('Админ-панель', 'Сначала войди в онлайн-аккаунт в Мнении.', '<a class="btn primary" href="/opinion/#login">Войти</a>');

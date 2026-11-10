@@ -253,34 +253,12 @@ h1, h2, p { margin: 0; }
 .pill:active { transform: scale(.95); }
 .pill.primary { background: var(--ink); border-color: var(--ink); color: var(--panel); }
 .pill.primary:hover { background: color-mix(in srgb, var(--ink) 84%, var(--accent)); color: var(--panel); }
-.pill:focus-visible, .app:focus-visible, .theme-opt:focus-visible, .mark:focus-visible, .meter:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.pill:focus-visible, .app:focus-visible, .mark:focus-visible, .meter:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 .avatar {
   width: 24px; height: 24px; margin-left: -6px; border-radius: 50%; display: grid; place-items: center; flex: none;
   color: #fff; font-size: 11.5px; font-weight: 700; text-transform: uppercase; background-size: cover; background-position: center;
 }
 .pill .badge-dot { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px; background: var(--bad); color: var(--on-tier); font-size: 11px; font-weight: 800; display: grid; place-items: center; }
-
-/* Theme picker (same ids as on the other pages) */
-.theme-pick { position: relative; }
-.theme-pick > summary { list-style: none; }
-.theme-pick > summary::-webkit-details-marker { display: none; }
-.theme-menu {
-  position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; width: 210px;
-  display: grid; gap: 2px; padding: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: 16px;
-  box-shadow: 0 24px 50px -20px color-mix(in srgb, var(--ink) 55%, transparent);
-  transform-origin: 90% 0; animation: menu-in .26s var(--spring) both;
-}
-@keyframes menu-in { from { transform: translateY(-6px) scale(.94); } }
-.theme-opt {
-  display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 10px; border: 0; border-radius: 10px;
-  background: transparent; color: var(--ink); font: inherit; font-size: 14px; font-weight: 600; text-align: left; cursor: pointer;
-  transition: background-color .15s, transform .15s;
-}
-.theme-opt i { flex: none; width: 20px; height: 20px; border-radius: 50%; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 20%, transparent); transition: transform .3s var(--spring); }
-.theme-opt:hover i { transform: rotate(180deg) scale(1.1); }
-.theme-opt[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
-.theme-opt:hover { background: var(--panel-2); }
-.theme-opt[aria-pressed="true"]:hover { background: var(--accent-soft); }
 
 /* Hero: wordmark, a playable meter and the lede */
 .hero { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 24px; padding-block: clamp(30px, 8vh, 88px) clamp(26px, 6vh, 60px); }
@@ -544,15 +522,14 @@ h1, h2, p { margin: 0; }
   .page { padding-block: 14px 26px; }
   .pill { height: 36px; padding: 0 12px; }
   .pill.gh { display: none; } /* GitHub на телефоне не нужен, шапка помещается в строку */
-  .pill.gh span, #themeBtn span, .pill.wn span { display: none; }
+  .pill.gh span, .pill.wn span { display: none; }
   .user-bar { flex-wrap: wrap; row-gap: 6px; min-width: 0; }
   .oc-t, .fb-t { display: none; }
   .pill.fr-btn { padding: 0 10px; gap: 5px; }
   #account .pill { min-width: 0; }
   .acc-name { min-width: 0; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .pill.gh, #themeBtn, .pill.wn { width: 36px; padding: 0; }
+  .pill.gh, .pill.wn { width: 36px; padding: 0; }
   .top { gap: 10px; }
-  .theme-menu { right: -44px; }
   .hero { gap: 18px; }
   .meter { height: 40px; gap: 4px; }
   .meter i.knob { height: 32px; }
@@ -583,14 +560,12 @@ h1, h2, p { margin: 0; }
 <link rel="stylesheet" href="/base.css">
 <link rel="stylesheet" href="/unslop.css">
 <style id="unslop-page">
-/* Казуальный вид (unslop): действует, только когда в меню тем включён переключатель. Собрано из правок, которые убирают
+/* Казуальный вид (unslop): действует, только когда в Настройках включён «Казуальный вид». Собрано из правок, которые убирают
    цветные пятна, свечения, пружинные и вечные анимации, заглавные подписи. Обычный вид выше не меняется */
 @keyframes ch-in-u { from { opacity: 0; transform: translateY(.12em); } }
 :root.unslop { --spring: cubic-bezier(.22, 1, .36, 1); }
 html.unslop .mark:hover svg { transform: none; }
 html.unslop .pill:hover { box-shadow: 0 6px 18px -10px rgb(0 0 0 / .28); }
-html.unslop .theme-menu { box-shadow: 0 20px 44px -22px rgb(0 0 0 / .45); }
-html.unslop .theme-opt:hover i { transform: none; }
 html.unslop .ch { animation: ch-in-u .75s cubic-bezier(.22, 1, .36, 1) backwards calc(var(--i) * 55ms); transition: color .15s; }
 html.unslop .ch:hover { scale: none; }
 html.unslop .meter i.on { box-shadow: none; }
@@ -620,10 +595,6 @@ html.unslop body::before { display: none; }
     <div class="user-bar">
       <span class="pill online-chip" data-online-count title="Сколько людей сейчас на сайте: с аккаунтом и гости"><em aria-hidden="true"></em><b>—</b><span class="oc-t">&nbsp;на сайте</span></span>
       <a class="pill fr-btn" href="/opinion/#friends" data-friends-btn title="Друзья"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="5.5" r="2.5"/><path d="M1.5 14c.6-2.6 2.3-4 4.5-4s3.9 1.4 4.5 4"/><path d="M10.5 3.2a2.5 2.5 0 0 1 0 4.6M12.5 10.3c1 .6 1.7 1.9 2 3.7"/></svg><span class="fb-t">Друзья</span><i class="fb-n fb-on" hidden></i><i class="fb-n fb-req" hidden></i></a>
-      <details class="theme-pick" id="themePick">
-        <summary class="pill" id="themeBtn" title="Тема оформления">Тема</summary>
-        <div class="theme-menu" id="themeMenu" role="group" aria-label="Тема оформления"></div>
-      </details>
       <a class="pill gh" href="https://github.com/anorroDev/casualhub" target="_blank" rel="noopener" title="Код сайта на GitHub" aria-label="Код сайта на GitHub"><svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg><span>GitHub</span></a>
         <button type="button" class="pill wn" data-whatsnew title="Что нового на сайте"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.5l1.6 3.6 3.9.4-2.9 2.6.8 3.9L8 10l-3.4 2 .8-3.9-2.9-2.6 3.9-.4z"/></svg><span>Что нового</span></button>
       <span id="account"></span>

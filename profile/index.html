@@ -235,21 +235,8 @@ button, input { font: inherit; color: inherit; }
 .pill:hover { border-color: color-mix(in srgb, var(--accent) 70%, var(--line)); color: var(--ink); box-shadow: 0 6px 18px -10px color-mix(in srgb, var(--accent) 60%, transparent); }
 .pill:active { transform: scale(.95); }
 .pill svg { flex: none; }
-.pill:focus-visible, .btn:focus-visible, .chip:focus-visible, .seg button:focus-visible, .fr:focus-visible, .theme-opt:focus-visible, .search:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.theme-pick { position: relative; }
-.theme-pick > summary { list-style: none; }
-.theme-pick > summary::-webkit-details-marker { display: none; }
-.theme-menu {
-  position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; width: 210px; display: grid; gap: 2px; padding: 6px;
-  background: var(--panel); border: 1px solid var(--line); border-radius: 16px; box-shadow: 0 24px 50px -20px color-mix(in srgb, var(--ink) 55%, transparent);
-  transform-origin: 90% 0; animation: menu-in .26s var(--spring) both;
-}
+.pill:focus-visible, .btn:focus-visible, .chip:focus-visible, .seg button:focus-visible, .fr:focus-visible, .search:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 @keyframes menu-in { from { transform: translateY(-6px) scale(.94); } }
-.theme-opt { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 10px; border: 0; border-radius: 10px; background: transparent; color: var(--ink); font-size: 14px; font-weight: 600; text-align: left; cursor: pointer; }
-.theme-opt i { flex: none; width: 20px; height: 20px; border-radius: 50%; box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink) 20%, transparent); transition: transform .3s var(--spring); }
-.theme-opt:hover { background: var(--panel-2); }
-.theme-opt:hover i { transform: rotate(180deg) scale(1.1); }
-.theme-opt[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
 
 /* Cards */
 .card {
@@ -962,7 +949,6 @@ body.prof-edit #app [data-photo] { cursor: inherit; }
   .pod .row small { max-width: 100%; font-size: 11px; }
   .pod .badge { min-width: 40px; height: 28px; font-size: 20px; }
   .hist { height: 110px; gap: 4px; }
-  .theme-menu { right: 0; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
@@ -978,13 +964,11 @@ body.prof-edit #app [data-photo] { cursor: inherit; }
 <link rel="stylesheet" href="/base.css">
 <link rel="stylesheet" href="/unslop.css">
 <style id="unslop-page">
-/* Казуальный вид (unslop): действует, только когда в меню тем включён переключатель. Собрано из правок, которые убирают
+/* Казуальный вид (unslop): действует, только когда в Настройках включён «Казуальный вид». Собрано из правок, которые убирают
    цветные пятна, свечения, пружинные и вечные анимации, заглавные подписи. Обычный вид выше не меняется */
 @keyframes ch-in-u { from { opacity: 0; transform: translateY(.12em); } }
 :root.unslop { --spring: cubic-bezier(.22, 1, .36, 1); }
 html.unslop .pill:hover { box-shadow: 0 6px 18px -10px rgb(0 0 0 / .28); }
-html.unslop .theme-menu { box-shadow: 0 20px 44px -22px rgb(0 0 0 / .45); }
-html.unslop .theme-opt:hover i { transform: none; }
 html.unslop .card { background: var(--panel); }
 html.unslop .label { text-transform: none; letter-spacing: normal; }
 html.unslop .label::first-letter { text-transform: uppercase; }
@@ -1024,10 +1008,6 @@ html.unslop::before { display: none; }
     <a class="pill fr-btn" href="/opinion/#friends" data-friends-btn title="Друзья"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="5.5" r="2.5"/><path d="M1.5 14c.6-2.6 2.3-4 4.5-4s3.9 1.4 4.5 4"/><path d="M10.5 3.2a2.5 2.5 0 0 1 0 4.6M12.5 10.3c1 .6 1.7 1.9 2 3.7"/></svg><span class="fb-t">Друзья</span><i class="fb-n fb-on" hidden></i><i class="fb-n fb-req" hidden></i></a>
     <a class="pill ic" href="/opinion/" title="Мнение Казуала"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1.5" y="9" width="3.4" height="5.5" rx="1" fill="#E4553F"/><rect x="6.3" y="6" width="3.4" height="8.5" rx="1" fill="#EAA92C"/><rect x="11.1" y="2.5" width="3.4" height="12" rx="1" fill="#2EAD60"/></svg><span class="t">Мнение</span></a>
     <a class="pill ic" href="/wheel/" title="Колесо Казуала"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><g transform="translate(8 8)"><path d="M0 0V-6.5A6.5 6.5 0 0 1 5.63-3.25Z" fill="#3550E8"/><path d="M0 0L5.63-3.25A6.5 6.5 0 0 1 5.63 3.25Z" fill="#EAA92C"/><path d="M0 0L5.63 3.25A6.5 6.5 0 0 1 0 6.5Z" fill="#2EAD60"/><path d="M0 0V6.5A6.5 6.5 0 0 1-5.63 3.25Z" fill="#EC4899"/><path d="M0 0L-5.63 3.25A6.5 6.5 0 0 1-5.63-3.25Z" fill="#9333EA"/><path d="M0 0L-5.63-3.25A6.5 6.5 0 0 1 0-6.5Z" fill="#06B6D4"/><circle r="2" fill="currentColor"/></g></svg><span class="t">Колесо</span></a>
-    <details class="theme-pick" id="themePick">
-      <summary class="pill ic" id="themeBtn" title="Тема оформления">Тема</summary>
-      <div class="theme-menu" id="themeMenu" role="group" aria-label="Тема оформления"></div>
-    </details>
     <button type="button" class="pill wn" data-whatsnew title="Что нового на сайте"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.5l1.6 3.6 3.9.4-2.9 2.6.8 3.9L8 10l-3.4 2 .8-3.9-2.9-2.6 3.9-.4z"/></svg><span>Что нового</span></button>
     <span data-account data-cls="pill"></span><script src="/account-btn.js"></script>
   </header>
