@@ -360,7 +360,7 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }`
     const en = window.CasualLang && window.CasualLang.lang === 'en';
     return grp('Тема', `<div class="st-themes">${list.map((t) => {
         const p = t.prev, bg = t.id === 'auto' ? `linear-gradient(135deg, ${p.bg} 50%, ${p.panel} 50%)` : p.bg;
-        return `<button type="button" class="st-th" data-theme="${esc(t.id)}" aria-pressed="${t.id === curTheme}"><i style="--pb:${bg};--pp:${t.id === 'auto' ? '#FFFFFF' : p.panel};--pa:${p.accent}"></i>${esc(t.name)}</button>`;
+        return `<button type="button" class="st-th" data-st-theme="${esc(t.id)}" aria-pressed="${t.id === curTheme}"><i style="--pb:${bg};--pp:${t.id === 'auto' ? '#FFFFFF' : p.panel};--pa:${p.accent}"></i>${esc(t.name)}</button>`;
       }).join('')}</div>`)
       + grp('Вид', toggle({ name: 'Казуальный вид', desc: 'Спокойнее: без свечений, цветных пятен и прыгающих анимаций. Работает с любой темой', attr: 'data-unslop', on: document.documentElement.classList.contains('unslop') }))
       + grp('Язык', `<div class="st-row"><span class="st-t"><b>Язык сайта</b><small>Страница перезагрузится</small></span><span class="st-seg" role="group" aria-label="Язык сайта"><button type="button" data-lang="ru" aria-pressed="${!en}">Русский</button><button type="button" data-lang="en" aria-pressed="${en}">English</button></span></div>`);
@@ -425,12 +425,13 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }`
       const nb = e.target.closest('.st-nb');
       if (nb) { show(nb.dataset.sec, true); return; }
       if (e.target.closest('[data-back]')) { card.dataset.view = 'list'; const b = box.querySelector(`.st-nb[data-sec="${cur}"]`); if (b) b.focus({ preventScroll: true }); return; }
-      const th = e.target.closest('[data-theme]');
+      // свой атрибут: data-theme стоит и на <html>, closest нашёл бы его при любом нажатии в окне
+      const th = e.target.closest('[data-st-theme]');
       if (th) {
         // тему ставит сама страница (её меню тем): так же, как при выборе в меню ☰
-        const pick = document.querySelector(`.theme-menu [data-theme-id="${CSS.escape(th.dataset.theme)}"]`);
+        const pick = document.querySelector(`.theme-menu [data-theme-id="${CSS.escape(th.dataset.stTheme)}"]`);
         if (pick) pick.click();
-        box.querySelectorAll('[data-theme]').forEach((b) => b.setAttribute('aria-pressed', String(b === th)));
+        box.querySelectorAll('[data-st-theme]').forEach((b) => b.setAttribute('aria-pressed', String(b === th)));
         return;
       }
       const lang = e.target.closest('[data-lang]');
