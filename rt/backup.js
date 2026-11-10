@@ -6,11 +6,12 @@
 // старой или новой.
 //
 // Формат — JSON Lines, запись на строку. Куски backups/<id>/part-00000.ndjson, part-00001… склеиваются по порядку:
-//   {"casualhub":"backup","v":1,"id","at","schema":[{type,name,tbl_name,sql}]} — схема всех таблиц и индексов, и тех, что без строк
+//   {"casualhub":"backup","v":1,"id","at","schema":[{type,name,tbl_name,sql}],"secrets":{mode,key,tables}} — схема всех таблиц
+//     и индексов (и тех, что без строк) и как в копии лежат секреты (см. SECRETS)
 //   {"table":"users","columns":["rowid","id",…]} — за ней строки этой таблицы массивами [rowid, значение, …]
 //   {"end":true,"rows":{"users":12,…}} — последняя строка; если её нет, файл оборван
-// BLOB (сейчас в базе их нет) пишется как {"b64":"…"}. У таблиц из SKIP в копии только схема, без строк.
-// Восстановление: node rt/restore.mjs копия.ndjson > restore.sql, дальше README, раздел «Резервные копии».
+// BLOB (сейчас в базе их нет) пишется как {"b64":"…"}, зашифрованный секрет — как {"enc":"…"}. У таблиц из SKIP в копии
+// только схема, без строк. Восстановление: node rt/restore.mjs копия.ndjson restore.sql, дальше README, «Резервные копии».
 //
 // Без привязки BACKUPS на всё отвечает {off: true} с заголовком x-backup-off.
 //   POST /start      — начать копию (cron или админ, кто — в x-backup-by); если копия уже идёт, ответит {running: true}
@@ -19,6 +20,15 @@
 
 // входы, лимиты, одноразовые ссылки из писем, «кто на сайте» и кэш IMDb: после восстановления всё это нарастёт заново
 export const SKIP = new Set(['sessions', 'admin_sessions', 'attempts', 'mail_tokens', 'presence', 'imdb_info', 'imdb_find']);
+// что не должно лежать в копии открытым текстом: хеш пароля и соль, секрет 2FA (в том же поле — хеши запасных кодов),
+// пин админа, ключ журнала «Изменения». С секретом BACKUP_KEY у Worker'а они шифруются (AES-GCM, ключ — SHA-256 от
+// BACKUP_KEY, в R2 его нет), без него пишутся вот такими пустыми: после восстановления из такой копии пароль сбрасывают
+// через «Забыли пароль?», 2FA и пин заводят заново. only — секрет только в строке, где эта колонка равна этому значению
+export const SECRETS = {
+  users: { cols: { pass_hash: '', salt: '', totp: null, totp_pending: null } },
+  admins: { cols: { pin_hash: null, pin_salt: null } },
+  meta: { cols: { v: null }, only: ['k', 'admin_notes_key'] },
+};
 const MAX_Q = 40; // запросов к D1 за будильник: на бесплатном плане за вызов можно 50
 const PART = 8e6; // символов в куске (base64 и латиница — по байту на символ)
 const PAGE = 3e6; // символов на одну выборку: сколько строк брать, считается по самой длинной строке таблицы
@@ -38,6 +48,17 @@ const cell = (v) => (v instanceof ArrayBuffer ? { b64: b64(new Uint8Array(v)) }
   : Array.isArray(v) ? { b64: b64(Uint8Array.from(v)) } : v);
 const sum = (o) => Object.values(o || {}).reduce((a, b) => a + b, 0);
 const json = (data, status = 200) => new Response(JSON.stringify(data), { status, headers: { 'content-type': 'application/json; charset=utf-8' } });
+const enc = new TextEncoder();
+const hex = (buf) => [...new Uint8Array(buf)].map((b) => b.toString(16).padStart(2, '0')).join('');
+// метка ключа: по ней restore.mjs скажет «ключ не тот» до расшифровки. Сам ключ из неё не получить
+export const keyIdOf = async (key) => hex(await crypto.subtle.digest('SHA-256', enc.encode('casualhub-backup-key-id:' + key))).slice(0, 16);
+// где в строке таблицы секреты: [[номер в строке, колонка]], only — [номер колонки-условия, значение]
+function secretPlan(t, cols) {
+  const s = SECRETS[t];
+  if (!s) return null;
+  const idx = Object.keys(s.cols).map((c) => [cols.indexOf(c) + 1, c]).filter(([i]) => i > 0);
+  return idx.length ? { idx, only: s.only ? [cols.indexOf(s.only[0]) + 1, s.only[1]] : null } : null;
+}
 
 export class BackupDO {
   constructor(ctx, env) {
@@ -45,6 +66,28 @@ export class BackupDO {
     this.env = env;
   }
   keep() { const n = parseInt(this.env.BACKUP_KEEP, 10); return n >= 1 && n <= 90 ? n : 14; }
+  // ключ шифрования секретов из BACKUP_KEY (секрет Worker'а) или null
+  async key() {
+    if (!this.env.BACKUP_KEY) return null;
+    if (!this.aes) this.aes = await crypto.subtle.importKey('raw', await crypto.subtle.digest('SHA-256', enc.encode(String(this.env.BACKUP_KEY))), 'AES-GCM', false, ['encrypt']);
+    return this.aes;
+  }
+  // секреты строки: зашифровать ({enc: base64(iv + шифр)}, к шифру привязано «таблица.колонка») или заменить пустыми
+  async hide(t, r, sec, mode) {
+    if (sec.only && r[sec.only[0]] !== sec.only[1]) return;
+    const key = mode === 'enc' ? await this.key() : null;
+    if (mode === 'enc' && !key) throw new Error('BACKUP_KEY пропал посреди копии');
+    for (const [i, c] of sec.idx) {
+      if (r[i] == null) continue;
+      if (!key) { r[i] = SECRETS[t].cols[c]; continue; }
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const ct = new Uint8Array(await crypto.subtle.encrypt({ name: 'AES-GCM', iv, additionalData: enc.encode(t + '.' + c) }, key, enc.encode(String(r[i]))));
+      const box = new Uint8Array(12 + ct.length);
+      box.set(iv);
+      box.set(ct, 12);
+      r[i] = { enc: b64(box) };
+    }
+  }
   async fetch(request) {
     // R2 не подключено — копий нет. Не 503: такой ответ привязка (по крайней мере локальная) принимает за обрыв связи
     if (!this.env.BACKUPS) return new Response('{"off":true}', { headers: { 'content-type': 'application/json; charset=utf-8', 'x-backup-off': '1' } });
@@ -98,7 +141,10 @@ export class BackupDO {
       q++;
       run.tables = results.filter((r) => r.type === 'table' && !SKIP.has(r.name)).map((r) => r.name);
       run.started = true;
-      put({ casualhub: 'backup', v: 1, id: run.id, at: run.at, schema: results });
+      // как лежат секреты, решается один раз на всю копию
+      run.mode = this.env.BACKUP_KEY ? 'enc' : 'blank';
+      const secrets = { mode: run.mode, key: run.mode === 'enc' ? await keyIdOf(String(this.env.BACKUP_KEY)) : null, tables: SECRETS };
+      put({ casualhub: 'backup', v: 1, id: run.id, at: run.at, schema: results, secrets });
     }
     // начало таблицы стоит три запроса, поэтому новый круг — только пока до MAX_Q остаётся хотя бы три
     while (run.ti < run.tables.length && q <= MAX_Q - 3 && size < PART && Date.now() - t0 < SLICE_MS) {
@@ -114,11 +160,15 @@ export class BackupDO {
         run.limit = Math.max(1, Math.min(MAX_ROWS, Math.floor(PAGE / Math.max(200, st.mx) / (run.div || 1))));
         run.after = FIRST;
         run.rows[t] = 0;
+        run.sec = secretPlan(t, run.cols);
         put({ table: t, columns: ['rowid', ...run.cols] });
       }
       const rows = await db.prepare(`SELECT rowid, ${run.cols.map(quote).join(', ')} FROM ${name} WHERE rowid > ?1 ORDER BY rowid LIMIT ${run.limit}`).bind(run.after).raw();
       q++;
-      for (const r of rows) put(r.map(cell));
+      for (const r of rows) {
+        if (run.sec) await this.hide(t, r, run.sec, run.mode);
+        put(r.map(cell));
+      }
       run.rows[t] += rows.length;
       if (rows.length < run.limit) { run.ti++; run.cols = null; } else run.after = rows[rows.length - 1][0];
     }
@@ -139,7 +189,7 @@ export class BackupDO {
   }
   async finish(run) {
     const runs = (await this.ctx.storage.get('runs')) || [];
-    runs.unshift({ id: run.id, at: run.at, done: Date.now(), by: run.by, bytes: run.bytes, parts: run.sizes, rows: run.rows });
+    runs.unshift({ id: run.id, at: run.at, done: Date.now(), by: run.by, bytes: run.bytes, parts: run.sizes, rows: run.rows, secrets: run.mode });
     const old = runs.splice(this.keep());
     await this.ctx.storage.put('runs', runs);
     await this.ctx.storage.delete(['run', 'error']);
@@ -159,7 +209,9 @@ export class BackupDO {
     const runs = got.get('runs') || [], run = got.get('run');
     return {
       keep: this.keep(),
-      runs: runs.map((r) => ({ id: r.id, at: r.at, done: r.done, by: r.by, bytes: r.bytes, rows: sum(r.rows), tables: Object.keys(r.rows).length })),
+      // secrets: как будут лежать пароли и 2FA в следующей копии — 'enc' (есть BACKUP_KEY) или 'blank'
+      secrets: this.env.BACKUP_KEY ? 'enc' : 'blank',
+      runs: runs.map((r) => ({ id: r.id, at: r.at, done: r.done, by: r.by, bytes: r.bytes, rows: sum(r.rows), tables: Object.keys(r.rows).length, secrets: r.secrets || 'plain' })),
       run: run ? { id: run.id, at: run.at, by: run.by, table: run.tables[run.ti] || null, step: run.ti, of: run.tables.length, rows: sum(run.rows), bytes: run.bytes, fails: run.fails } : null,
       error: got.get('error') || null,
     };

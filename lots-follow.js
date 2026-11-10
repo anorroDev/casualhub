@@ -187,12 +187,8 @@
         onGone() { end(true); },
       });
     };
-    if (window.CasualRT) { go(); return; }
-    if (document.querySelector('script[src="/ws-client.js"]')) return;
-    const sc = document.createElement('script');
-    sc.src = '/ws-client.js';
-    sc.onload = go;
-    document.head.appendChild(sc);
+    // ws-client.js нужен и online.js: кто попросит вторым, дождётся того же тега, а не останется без сокета
+    window.CasualUtil.script('/ws-client.js', () => !!window.CasualRT).then(go, () => {});
   }
   async function refresh() {
     const res = await fetch('/api/lots/' + code + (ver ? '?v=' + ver : ''), { cache: 'no-store' });

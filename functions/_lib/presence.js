@@ -36,20 +36,23 @@ export async function readAnnounce(env, now) {
   try { const r = await env.DB.prepare("SELECT v FROM meta WHERE k = 'announce'").first(); a = r ? JSON.parse(r.v) : null; } catch (e) {}
   return a && a.text && (!a.until || a.until > now) ? { id: a.id, text: a.text, kind: a.kind } : null;
 }
-// отметить «заходил сейчас»; пишем не чаще раза в 45 секунд на человека, база не тратится на каждую вкладку
-export async function touchUsers(env, ids, now) {
+// отметить «заходил сейчас»; пишем не чаще раза в gap (по умолчанию 45 секунд) на человека, база не тратится на каждую вкладку.
+// Комната присутствия отмечает всех раз в такт и передаёт gap меньше такта: при равных значениях каждая вторая отметка
+// пропускалась бы, и «в сети» обновлялось бы раз в два такта
+export const TOUCH_GAP = 45e3;
+export async function touchUsers(env, ids, now, gap = TOUCH_GAP) {
   const q = [];
   for (let i = 0; i < ids.length; i += CHUNK) {
     const part = ids.slice(i, i + CHUNK);
-    q.push(env.DB.prepare(`UPDATE users SET last_seen = ?1 WHERE id IN (${part.map((_, k) => '?' + (k + 3)).join(', ')}) AND (last_seen IS NULL OR last_seen < ?2)`).bind(now, now - 45e3, ...part));
+    q.push(env.DB.prepare(`UPDATE users SET last_seen = ?1 WHERE id IN (${part.map((_, k) => '?' + (k + 3)).join(', ')}) AND (last_seen IS NULL OR last_seen < ?2)`).bind(now, now - gap, ...part));
   }
   if (q.length) await env.DB.batch(q);
 }
-export async function touchGuests(env, ids, now) {
+export async function touchGuests(env, ids, now, gap = TOUCH_GAP) {
   const q = [];
   for (let i = 0; i < ids.length; i += CHUNK) {
     const part = ids.slice(i, i + CHUNK);
-    q.push(env.DB.prepare(`INSERT INTO presence (id, at) VALUES ${part.map((_, k) => `(?${k + 3}, ?1)`).join(', ')} ON CONFLICT(id) DO UPDATE SET at = ?1 WHERE presence.at < ?2`).bind(now, now - 45e3, ...part.map((g) => 'g:' + g)));
+    q.push(env.DB.prepare(`INSERT INTO presence (id, at) VALUES ${part.map((_, k) => `(?${k + 3}, ?1)`).join(', ')} ON CONFLICT(id) DO UPDATE SET at = ?1 WHERE presence.at < ?2`).bind(now, now - gap, ...part.map((g) => 'g:' + g)));
   }
   if (q.length) await env.DB.batch(q);
 }

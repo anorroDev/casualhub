@@ -31,13 +31,15 @@ class_name = "BackupDO"
 binding = "BACKUPS"
 bucket_name = "casualhub-backups"
 
-# копия каждую ночь в 01:00 UTC (04:00 по Москве)
+# копия каждую ночь в 01:00 UTC
 [triggers]
 crons = ["0 1 * * *"]
 
 [vars]
 # сколько последних копий хранить: при базе до 500 МБ (предел бесплатного D1) 14 копий влезают в бесплатные 10 ГБ R2
 BACKUP_KEEP = "14"
+# ключ, которым в копиях шифруются пароли, 2FA и пин-коды, — секрет, здесь его нет:
+# npx wrangler secret put BACKUP_KEY -c rt/wrangler.toml (README, «Резервные копии»). Без него эти поля в копии пустые
 
 # хранилище комнат — SQLite: такие Durable Objects есть и на бесплатном плане Workers
 [[migrations]]

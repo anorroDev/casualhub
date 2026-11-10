@@ -61,7 +61,18 @@ export async function liveLots(env, code) {
   const { results } = await env.DB.prepare('SELECT l.id, l.name FROM lots l JOIN users u ON u.id = l.user_id WHERE l.room_id = ? ORDER BY l.created_at LIMIT ?').bind(code, MAX_LOTS).all();
   return results;
 }
-const lotsAlive = (lots, out) => { const gone = new Set((Array.isArray(out) ? out : []).map(lowName)); return lots.filter((l) => !gone.has(lowName(l.name))); };
+// кто вылетел — id лотов (outIds): когда повторы разрешены, два «Hades» — разные лоты, и вылетает только один из них.
+// out с именами остаётся для показа. В снимках, где outIds ещё нет, каждое имя из out выбивает один лот, а не все с ним
+export function goneIds(lots, live) {
+  if (Array.isArray(live && live.outIds)) return new Set(live.outIds);
+  const gone = new Set();
+  for (const x of Array.isArray(live && live.out) ? live.out : []) {
+    const l = lots.find((y) => !gone.has(y.id) && lowName(y.name) === lowName(x));
+    if (l) gone.add(l.id);
+  }
+  return gone;
+}
+const lotsAlive = (lots, live) => { const gone = goneIds(lots, live); return lots.filter((l) => !gone.has(l.id)); };
 const lotSegs = (lots, alive) => alive.map((l) => { const c = LOT_PALETTE[Math.max(0, lots.indexOf(l)) % LOT_PALETTE.length]; return { n: l.name, p: 1 / alive.length, c, t: inkOn(c), l: l.id }; });
 // из кого выбирает прокрутка (номера в alive). «На выбывание»: сначала те, кого админ отметил на вылет, иначе все,
 // кроме оставленных. «Один победитель»: сначала оставленные, иначе все, кроме отмеченных на вылет. Иначе все
@@ -81,7 +92,7 @@ export function spinLive(live, lots, mode, dur, now, auto) {
   dur = Math.max(1, Math.min(30, Math.round(+dur) || 8));
   if (liveBusy(live, now)) return { err: [409, 'Колесо уже крутится.'] };
   if (mode === 'out' && live.winner) return { err: [409, 'Победитель уже есть. Жми «Вернуть всех», чтобы крутить заново.'] };
-  const alive = lotsAlive(lots, live.out);
+  const alive = lotsAlive(lots, live);
   if (alive.length < 2) return { err: [409, 'Чтобы крутить, на колесе нужно хотя бы два лота.'] };
   const pool = spinPool(alive, mode, live.keep, live.kick);
   const k = pool[uniform(pool.length)];
@@ -94,9 +105,9 @@ export function spinLive(live, lots, mode, dur, now, auto) {
   // старт через LIVE_LEAD: кто спрашивает сервер раз в 2 секунды, успевает получить прокрутку до её начала
   const at = now + LIVE_LEAD, ms = dur * 1000;
   Object.assign(live, {
-    segs: lotSegs(lots, alive), rot: +from.toFixed(4), spin: { from: +from.toFixed(4), to: +to.toFixed(4), ms, at }, pick: '',
+    segs: lotSegs(lots, alive), rot: +from.toFixed(4), spin: { from: +from.toFixed(4), to: +to.toFixed(4), ms, at }, pick: '', pickL: '',
     winner: mode === 'one' ? null : live.winner || null, status: 'Колесо крутится',
-    seen: lots.length, ids: lots.map((l) => l.id), res: { n: alive[k].name, mode, end: at + ms },
+    seen: lots.length, ids: lots.map((l) => l.id), res: { n: alive[k].name, id: alive[k].id, mode, end: at + ms },
   });
   delete live.next;
   if (auto && mode === 'out') live.auto = { dur }; else delete live.auto;
@@ -105,7 +116,7 @@ export function spinLive(live, lots, mode, dur, now, auto) {
 // «Вернуть всех»: вылетевшие снова на колесе, победителя и истории нет. Настройку лотов админа (keep/kick) не трогает
 export function resetLive(live, now) {
   if (liveBusy(live, now)) return { err: [409, 'Колесо крутится, подожди конца прокрутки.'] };
-  Object.assign(live, { spin: null, pick: '', status: '', out: [], winner: null, hist: [] });
+  Object.assign(live, { spin: null, pick: '', pickL: '', status: '', out: [], outIds: [], winner: null, hist: [] });
   delete live.res; delete live.auto; delete live.next;
   return { live };
 }
@@ -131,21 +142,26 @@ export function advanceLive(live, now, lots) {
     if (r && r.n && now >= +r.end) {
       const hist = Array.isArray(live.hist) ? live.hist : [];
       if (live.spin) live.rot = +live.spin.to || 0;
+      // pickL — id выпавшего лота: страница подсвечивает именно его сектор, а не все с таким названием
       if (r.mode === 'one') {
-        Object.assign(live, { pick: r.n, winner: { n: r.n, sum: '', at: +r.end }, status: `Победитель: ${r.n}`, hist: [...hist, r.n].slice(-MAX_LOTS) });
+        Object.assign(live, { pick: r.n, pickL: r.id || '', winner: { n: r.n, sum: '', at: +r.end }, status: `Победитель: ${r.n}`, hist: [...hist, r.n].slice(-MAX_LOTS) });
         delete live.res; delete live.auto; delete live.next;
         return true;
       }
       if (now < +r.end + LIVE_OUT_MS) {
         if (live.pick === r.n) return changed;
-        Object.assign(live, { pick: r.n, status: `Вылетает: ${r.n}` });
+        Object.assign(live, { pick: r.n, pickL: r.id || '', status: `Вылетает: ${r.n}` });
         return true;
       }
+      // вылетает ровно выпавший лот: по id, а у прокрутки, начатой до этой версии, — первый живой с таким именем
+      const gone = goneIds(lots, live);
+      const hit = r.id && lots.some((l) => l.id === r.id) ? r.id : (lots.find((l) => !gone.has(l.id) && lowName(l.name) === lowName(r.n)) || {}).id;
+      if (hit) gone.add(hit);
       const out = [...(Array.isArray(live.out) ? live.out : []), r.n];
-      const left = lotsAlive(lots, out);
+      const left = lots.filter((l) => !gone.has(l.id));
       const winner = left.length === 1 ? { n: left[0].name, sum: '', at: +r.end + LIVE_OUT_MS } : null;
       Object.assign(live, {
-        segs: lotSegs(lots, left), spin: null, pick: '', out, winner, hist: [...hist, r.n].slice(-MAX_LOTS),
+        segs: lotSegs(lots, left), spin: null, pick: '', pickL: '', out, outIds: [...gone], winner, hist: [...hist, r.n].slice(-MAX_LOTS),
         status: winner ? `Победитель: ${winner.n}` : `Вылетел: ${r.n}. Осталось ${left.length}`,
         seen: lots.length, ids: lots.map((l) => l.id),
       });

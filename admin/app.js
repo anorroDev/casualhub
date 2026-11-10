@@ -473,13 +473,14 @@
       }
       const run = d.run, facts = (list) => list.map((x) => `<span>${esc(x)}</span>`).join('');
       sec().innerHTML = `<div class="head"><h2 class="h2">Копии</h2><span class="label">каждую ночь, хранятся последние ${d.keep}</span></div>
-        <p class="muted">В копии все оценки, фото, тир-листы, лоты и аккаунты. Входы на устройствах в неё не попадают: после восстановления все войдут заново. Файл — JSON Lines, восстановление описано в README.</p>
+        <p class="muted">В копии все оценки, фото, тир-листы, лоты и аккаунты. Пароли, 2FA и пин-коды в ней зашифрованы ключом BACKUP_KEY, которого в хранилище нет. Входы на устройствах в копию не попадают: после восстановления все войдут заново. Файл — JSON Lines, восстановление описано в README.</p>
+        ${d.secrets === 'blank' ? '<p class="adm-err">Ключ BACKUP_KEY не задан: пароли, 2FA и пин-коды в копию не попадают, после восстановления их придётся сбрасывать. Как задать ключ — в README, раздел «Резервные копии».</p>' : ''}
         ${run ? `<p class="adm-bk-run" role="status"><b>Делаю копию</b>${facts((run.of ? [run.table ? 'таблица ' + run.table : 'дописываю', `${Math.min(run.step + 1, run.of)} из ${run.of}`, rowsText(run.rows)].concat(run.bytes ? [size(run.bytes)] : []) : ['начинаю']).concat(run.fails ? ['повторяю после ошибки'] : []))}</p>` : ''}
         ${d.error ? `<p class="adm-err">Копия ${esc(when(d.error.at))} не получилась: ${esc(d.error.msg)}</p>` : ''}
         <div class="adm-ann-row"><button type="button" class="btn primary" id="admBkNow"${run ? ' disabled' : ''}>Сделать копию сейчас</button></div>
         <p class="adm-err" id="admBkMsg" role="status"></p>
         ${d.runs.length ? `<ul class="adm-list adm-bk">${d.runs.map((r, i) => `<li class="adm-row" style="--k:${Math.min(i, 12)}">
-            <div class="adm-who"><b>${esc(when(r.done))}</b><small>${facts([size(r.bytes), rowsText(r.rows), r.by === 'cron' ? 'ночная' : 'вручную ' + r.by])}</small></div>
+            <div class="adm-who"><b>${esc(when(r.done))}</b><small>${facts([size(r.bytes), rowsText(r.rows), r.by === 'cron' ? 'ночная' : 'вручную ' + r.by].concat(r.secrets === 'blank' ? ['без паролей'] : []))}</small></div>
             <div class="adm-acts"><button type="button" class="btn ghost small" data-bk="${esc(r.id)}">Скачать</button></div>
           </li>`).join('')}</ul>` : '<p class="muted">Копий пока нет: первая появится ночью или по кнопке выше.</p>'}`;
       const msg = $('#admBkMsg');

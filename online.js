@@ -183,12 +183,8 @@
         onStatus: (open) => { clearInterval(timer); clearInterval(annTimer); if (!open && !document.hidden) { timer = setInterval(ping, 60e3); annTimer = setInterval(pollAnnounce, 15e3); } },
       });
     };
-    if (window.CasualRT) { go(); return; }
-    if (document.querySelector('script[src="/ws-client.js"]')) return;
-    const sc = document.createElement('script');
-    sc.src = '/ws-client.js';
-    sc.onload = go;
-    document.head.appendChild(sc);
+    // ws-client.js нужен и мини-плееру лотов (lots-follow.js): кто попросит вторым, дождётся того же тега
+    window.CasualUtil.script('/ws-client.js', () => !!window.CasualRT).then(go, () => {});
   }
   function stopRT() { if (rt) { rt.close(); rt = null; } }
   function onRT(m) {

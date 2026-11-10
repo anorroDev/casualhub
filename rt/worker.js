@@ -42,7 +42,7 @@ export class LotRoomDO {
     if (url.pathname === '/ws') return this.connect(request);
     if (url.pathname === '/poke' && request.method === 'POST') {
       const b = await request.json().catch(() => ({}));
-      if (b.what === 'gone') { this.gone(); return new Response('ok'); }
+      if (b.what === 'gone') { await this.gone(); return new Response('ok'); }
       await this.sync(b.what !== 'live');
       return new Response('ok');
     }
@@ -96,12 +96,12 @@ export class LotRoomDO {
     if (!(await this.room())) return;
     await this.sync(false);
   }
-  gone() {
+  async gone() {
     for (const ws of this.ctx.getWebSockets()) {
       this.send(ws, JSON.stringify({ t: 'gone' }));
       this.drop(ws, 4404, 'gone');
     }
-    this.ctx.storage.deleteAlarm();
+    await this.ctx.storage.deleteAlarm();
   }
   // сокет могли закрыть, пока его сообщения ещё стояли в очереди: в закрытый не пишем
   send(ws, text) {
@@ -180,6 +180,8 @@ export class LotRoomDO {
 //   reconnect — переподключись (сеанс закрыли): страница подключается заново с тем токеном, что есть, или гостем.
 // Клиент → комната: только строка "ping" (ответ "pong" без пробуждения комнаты), остальное не нужно.
 const BEAT_MS = 45000, SOON_MS = 3000, CACHE_MS = 5000;
+// на такте отметка «заходил» пишется, если прошлой больше BEAT_GAP: меньше такта, иначе каждая вторая пропускалась бы
+const BEAT_GAP = BEAT_MS - 10e3;
 const UID_RE = /^[0-9a-f]{24}$/;
 const short = (v, n) => String(v == null ? '' : v).slice(0, n);
 export class PresenceDO {
@@ -285,8 +287,8 @@ export class PresenceDO {
     const now = Date.now(), uids = new Set(), guests = new Set();
     for (const w of socks) { const a = w.deserializeAttachment() || {}; if (a.uid) uids.add(a.uid); else if (a.guest) guests.add(a.guest); }
     try {
-      await touchUsers(this.env, [...uids], now);
-      await touchGuests(this.env, [...guests], now);
+      await touchUsers(this.env, [...uids], now, BEAT_GAP);
+      await touchGuests(this.env, [...guests], now, BEAT_GAP);
       this.cnt.at = 0; this.ann.at = 0;
       const n = await this.online(now), a = await this.announce(now);
       const sent = (await this.ctx.storage.get('sent')) || {};

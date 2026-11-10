@@ -8,14 +8,18 @@
 // Копия должна быть целой: в конце строка {"end":true}, и строк каждой таблицы столько, сколько в ней записано.
 // Оборванную копию скрипт переводит только с --partial. SQL пишется в файл, а не в консоль (в PowerShell «>» дал бы
 // UTF-16), сначала как restore.sql.part: настоящее имя он получает, только когда всё проверено.
+// Пароли, 2FA, пин-коды и ключ журнала в копии зашифрованы ключом BACKUP_KEY (тем же, что у casualhub-rt): его передают
+// переменной окружения — BACKUP_KEY=… node rt/restore.mjs … (PowerShell: $env:BACKUP_KEY='…'; node rt/restore.mjs …).
+// Ключа нет — --no-secrets: секреты будут пустыми, пароли сбрасывают через «Забыли пароль?», 2FA и пин заводят заново.
 import fs from 'node:fs';
 import { once } from 'node:events';
+import { webcrypto } from 'node:crypto';
 
 const MAX_STMT = 90000; // байт в команде: предел D1 — 100 000
 const LONG = 8000; // строка длиннее (в кавычках, в байтах) пишется отдельными командами
-const args = process.argv.slice(2), partial = args.includes('--partial');
+const args = process.argv.slice(2), partial = args.includes('--partial'), noSecrets = args.includes('--no-secrets');
 const [src, dst] = args.filter((a) => !a.startsWith('--'));
-if (!src || !dst) { console.error('Как запустить: node rt/restore.mjs копия.ndjson|папка-с-кусками restore.sql [--partial]'); process.exit(2); }
+if (!src || !dst) { console.error('Как запустить: [BACKUP_KEY=…] node rt/restore.mjs копия.ndjson|папка-с-кусками restore.sql [--partial] [--no-secrets]'); process.exit(2); }
 class Stop extends Error {}
 const stop = (msg) => { throw new Stop(msg); };
 
@@ -28,6 +32,30 @@ const val = (v) => (v === null || v === undefined ? 'NULL'
   : typeof v === 'object' && typeof v.b64 === 'string' ? "X'" + Buffer.from(v.b64, 'base64').toString('hex') + "'"
   : lit(String(v)));
 const ifNot = (sql) => sql.replace(/^\s*CREATE\s+(UNIQUE\s+)?(TABLE|INDEX|VIEW|TRIGGER)\s+(?!IF\s+NOT\s+EXISTS\b)/i, (m, u, k) => `CREATE ${u ? 'UNIQUE ' : ''}${k.toUpperCase()} IF NOT EXISTS `);
+// секреты копии (см. SECRETS в rt/backup.js): расшифровать ключом BACKUP_KEY или, с --no-secrets, заменить пустыми
+const subtle = webcrypto.subtle, te = new TextEncoder(), td = new TextDecoder();
+const keyIdOf = async (key) => Buffer.from(await subtle.digest('SHA-256', te.encode('casualhub-backup-key-id:' + key))).toString('hex').slice(0, 16);
+async function secretOpener(head) {
+  const s = head.secrets;
+  if (!s) return { note: 'копия сделана до защиты секретов: пароли и 2FA в ней открытым текстом — храни её как пароль', open: null };
+  if (s.mode === 'blank') return { note: 'в копии нет паролей, 2FA и пин-кодов (у casualhub-rt не было BACKUP_KEY): пароли сбрасывают через «Забыли пароль?»', open: null };
+  if (s.mode !== 'enc') stop('непонятно, как в копии лежат секреты: ' + s.mode);
+  const blank = (t, c) => { const v = s.tables && s.tables[t] && s.tables[t].cols ? s.tables[t].cols[c] : null; return v === undefined ? null : v; };
+  if (!process.env.BACKUP_KEY) {
+    if (!noSecrets) stop('в копии зашифрованы пароли, 2FA и пин-коды: задай BACKUP_KEY (тот же, что у casualhub-rt) или запусти с --no-secrets — тогда их не будет');
+    return { note: 'секреты не восстановлены (--no-secrets): пароли сбрасывают через «Забыли пароль?», 2FA и пин заводят заново', open: async (t, c) => blank(t, c) };
+  }
+  if ((await keyIdOf(process.env.BACKUP_KEY)) !== s.key) stop('BACKUP_KEY не тот, которым шифровали эту копию');
+  const key = await subtle.importKey('raw', await subtle.digest('SHA-256', te.encode(process.env.BACKUP_KEY)), 'AES-GCM', false, ['decrypt']);
+  return {
+    note: '',
+    open: async (t, c, box) => {
+      const raw = Buffer.from(box, 'base64');
+      try { return td.decode(await subtle.decrypt({ name: 'AES-GCM', iv: raw.subarray(0, 12), additionalData: te.encode(t + '.' + c) }, key, raw.subarray(12))); }
+      catch (e) { stop(`не расшифровать ${t}.${c}: копия повреждена или ключ не тот`); }
+    },
+  };
+}
 // куски строки, каждый в кавычках не длиннее MAX_STMT - 1000 байт; суррогатную пару (эмодзи) не разрывает
 function pieces(s) {
   const out = [], room = MAX_STMT - 1000;
@@ -81,7 +109,7 @@ let out = null;
 async function main() {
   const files = inputs();
   out = fs.createWriteStream(part, { encoding: 'utf8' });
-  let stmts = 0, longest = 0, head = null, table = null, cols = null, end = null, ln = 0;
+  let stmts = 0, longest = 0, head = null, table = null, cols = null, end = null, ln = 0, secrets = null, opened = 0;
   const write = async (s) => { stmts++; longest = Math.max(longest, bytes(s)); if (!out.write(s + '\n')) await once(out, 'drain'); };
   const seen = {}, indexes = [];
   for await (const line of fileLines(files)) {
@@ -96,6 +124,7 @@ async function main() {
     if (!head) {
       if (!rec || rec.casualhub !== 'backup' || rec.v !== 1 || !Array.isArray(rec.schema)) stop('это не копия Казуал Хаба: первая строка должна быть {"casualhub":"backup","v":1,…}');
       head = rec;
+      secrets = await secretOpener(rec);
       out.write(`-- Казуал Хаб: восстановление из копии ${rec.id} (${new Date(rec.at).toISOString()})\n`);
       await write('PRAGMA defer_foreign_keys = true;');
       for (const s of rec.schema) { if (s.type === 'table') await write(ifNot(s.sql) + ';'); else indexes.push(s); }
@@ -104,6 +133,13 @@ async function main() {
     if (Array.isArray(rec)) {
       if (!table) stop(`строка ${ln}: значения до названия таблицы`);
       if (rec.length !== cols.length) stop(`строка ${ln}: в ${table} ${cols.length} полей, а пришло ${rec.length}`);
+      for (let i = 1; i < rec.length; i++) {
+        const v = rec[i];
+        if (!v || typeof v !== 'object' || typeof v.enc !== 'string') continue;
+        if (!secrets.open) stop(`строка ${ln}: зашифрованное значение в копии без ключа`);
+        rec[i] = await secrets.open(table, cols[i], v.enc);
+        opened++;
+      }
       for (const st of rowSql(table, cols, rec)) await write(st);
       seen[table]++;
     } else if (rec.table) {
@@ -121,8 +157,9 @@ async function main() {
   if (bad.length && !partial) stop(bad.join('; ') + '. Если всё равно нужно то, что есть, — запусти с --partial');
   fs.renameSync(part, dst);
   for (const m of bad) console.error('restore: внимание — ' + m);
+  if (secrets.note) console.error('restore: внимание — ' + secrets.note);
   const total = Object.values(seen).reduce((a, b) => a + b, 0);
-  console.error(`restore: копия ${head.id}: ${Object.keys(seen).length} таблиц, ${total} строк → ${dst}: ${stmts} команд, самая длинная ${longest} байт`);
+  console.error(`restore: копия ${head.id}: ${Object.keys(seen).length} таблиц, ${total} строк${opened ? `, расшифровано секретов: ${opened}` : ''} → ${dst}: ${stmts} команд, самая длинная ${longest} байт`);
 }
 try {
   await main();

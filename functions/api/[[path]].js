@@ -287,10 +287,12 @@ function burst(key, max, winMs) {
   return b.n > max ? Math.ceil((b.reset - now) / 1000) : 0;
 }
 
-async function currentUser(env, request) {
-  const m = (request.headers.get('authorization') || '').match(/^Bearer ([0-9a-f]{64})$/);
-  if (!m) return null;
-  const th = await sha256(m[1]);
+const bearerOf = (request) => { const m = (request.headers.get('authorization') || '').match(/^Bearer ([0-9a-f]{64})$/); return m ? m[1] : null; };
+// token — когда он пришёл не заголовком (у WebSocket — в подпротоколе). request — всегда настоящий запрос:
+// из него берутся браузер и страна для списка устройств
+async function currentUser(env, request, token = bearerOf(request)) {
+  if (!token) return null;
+  const th = await sha256(token);
   const now = Date.now();
   const u = await env.DB.prepare(
     'SELECT u.id, u.username, u.uname AS handle, u.email, u.created_at, u.hide_online, u.banned, u.ban_reason, u.totp, u.totp_pending, u.email_ok, s.expires_at, s.seen_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?'
@@ -352,14 +354,30 @@ const PIN_SET_MS = 15 * 60e3;
 const adminRow = (env, me) => (me ? env.DB.prepare('SELECT user_id, pin_hash, pin_salt, pin_until FROM admins WHERE user_id = ?').bind(me.id).first() : null);
 const isAdmin = async (env, me) => !!(await adminRow(env, me));
 const ADMIN_TTL = 12 * 3600e3;
-const tokenHashOf = async (request) => { const m = (request.headers.get('authorization') || '').match(/^Bearer ([0-9a-f]{64})$/); return m ? sha256(m[1]) : null; };
-async function adminActive(env, request, me) {
+const tokenHashOf = async (request, token = bearerOf(request)) => (token ? sha256(token) : null);
+// открыт ли вход в админку — для частых запросов (опрос сбора раз в 2 секунды): ответ помнится 30 секунд на токен,
+// чтобы не ходить за ним в базу каждый раз. «Выйти из админки» забывает его сразу (в этом экземпляре функции; в других —
+// через те же 30 секунд). Для действий админа — только adminActive
+const adminSeen = new Map();
+async function adminActiveCached(env, request, me) {
+  if (!me || !adminCandidate(me, env)) return false;
+  const th = await tokenHashOf(request), now = Date.now();
+  if (!th) return false;
+  const hit = adminSeen.get(th);
+  if (hit && hit[1] > now) return hit[0];
+  const ok = await adminActive(env, request, me);
+  if (adminSeen.size > 200) adminSeen.clear();
+  adminSeen.set(th, [ok, now + 30e3]);
+  return ok;
+}
+async function adminActive(env, request, me, token) {
   if (!(await isAdmin(env, me)) || !adminCandidate(me, env)) return false;
-  const th = await tokenHashOf(request);
+  const th = await tokenHashOf(request, token || undefined);
   return !!(th && (await env.DB.prepare('SELECT 1 FROM admin_sessions WHERE token_hash = ? AND user_id = ? AND until > ?').bind(th, me.id, Date.now()).first()));
 }
 async function openAdmin(env, request, me) {
   const th = await tokenHashOf(request), now = Date.now();
+  adminSeen.delete(th);
   await env.DB.batch([
     env.DB.prepare('INSERT OR REPLACE INTO admin_sessions (token_hash, user_id, until) VALUES (?, ?, ?)').bind(th, me.id, now + ADMIN_TTL),
     env.DB.prepare('DELETE FROM admin_sessions WHERE until < ?').bind(now),
@@ -561,7 +579,7 @@ const routes = {
   async 'POST /admin/lock'({ env, request, me }) {
     if (!adminCandidate(me, env)) return fail(404, 'Нет такого адреса.');
     const th = await tokenHashOf(request);
-    if (th) await env.DB.prepare('DELETE FROM admin_sessions WHERE token_hash = ?').bind(th).run();
+    if (th) { await env.DB.prepare('DELETE FROM admin_sessions WHERE token_hash = ?').bind(th).run(); adminSeen.delete(th); }
     await adminLog(env, request, me, 'lock', true);
     return json({ ok: true });
   },
@@ -1066,7 +1084,7 @@ const routes = {
     const guest = (protos.find((x) => /^guest\.[a-z0-9]{12,40}$/.test(x)) || '').slice(6);
     let me = null;
     if (bearer) {
-      try { me = await currentUser(env, new Request(request.url, { headers: { authorization: 'Bearer ' + bearer.slice(7) } })); } catch (e) {}
+      try { me = await currentUser(env, request, bearer.slice(7)); } catch (e) {}
       if (me && me.banned) me = null;
     }
     const headers = new Headers({ upgrade: 'websocket', 'x-rt-uid': me ? me.id : '', 'x-rt-hide': me && me.hide_online ? '1' : '', 'x-rt-guest': me ? '' : guest, 'x-rt-bearer': bearer ? '1' : '', 'x-rt-proto': protos.includes('casualhub') ? 'casualhub' : '' });
@@ -1852,13 +1870,18 @@ const routes = {
   async 'PUT /lots/:code/live'({ env, request, me, arg }) {
     if (burst('lotlive:' + me.id, 240, 60e3)) return tooMany(1);
     const b = await readBody(request);
-    let isOwner = false, isAdmin = null;
+    // вкладка ведущего со старой страницей (до прокрутки на сервере) шлёт свою прокрутку и вылеты: сервер их не берёт, и колесо
+    // крутилось бы только у неё. Нынешняя страница шлёт v: 2, старой отвечаем «обнови страницу» — она покажет это ведущему
+    if (b.v !== LIVE_CLIENT) return fail(409, 'Сайт обновился — обнови страницу, тогда колесо увидят все.');
+    let isOwner = false, isAdmin = null, refused = '';
     const r = await liveTx(env, arg, async (live, room) => {
+      refused = '';
       isOwner = room.owner_id === me.id;
       if (isAdmin === null) isAdmin = !!(adminCandidate(me, env) && (await adminActive(env, request, me)));
       if (!isOwner && !isAdmin) return { err: [403, 'Недостаточно прав.'] };
       const clean = cleanLive(b), now = Date.now();
-      if (b.reset === true) { const x = resetLive(live, now); if (x.err) return x; }
+      // «Вернуть всех» посреди прокрутки не выйдет, но остальное из того же запроса (картинка, музыка, обложки) применяется
+      if (b.reset === true) { const x = resetLive(live, now); if (x.err) refused = x.err[1]; }
       if (b.auto === false) stopAuto(live);
       if (isOwner) {
         for (const k of LIVE_OWNER) if (b[k] !== undefined && clean[k] !== undefined) live[k] = clean[k];
@@ -1875,7 +1898,7 @@ const routes = {
     if (r.big) return fail(413, 'Слишком много лотов на колесе.');
     if (isAdmin && !isOwner && (Array.isArray(b.keep) || Array.isArray(b.kick))) await adminLog(env, request, me, `lots ${arg}: keep ${(r.live.keep || []).length}, kick ${(r.live.kick || []).length}`, true);
     await pokeRoom(env, arg, 'live');
-    return json({ ok: true });
+    return json(refused ? { ok: true, refused } : { ok: true });
   },
   // прокрутка: цель выбирает сервер (равные шансы, но с правилами админа keep/kick), всем уходит одна и та же прокрутка.
   // Вылет и победу после остановки тоже записывает сервер: комната лотов (Durable Object) — по будильнику,
@@ -1908,10 +1931,10 @@ const routes = {
     const bearer = protos.find((x) => /^bearer\.[0-9a-f]{64}$/.test(x));
     let me = null;
     if (bearer) {
-      const authed = new Request(request.url, { headers: { authorization: 'Bearer ' + bearer.slice(7) } });
-      try { me = await currentUser(env, authed); } catch (e) {}
+      const token = bearer.slice(7);
+      try { me = await currentUser(env, request, token); } catch (e) {}
       if (me && me.banned) me = null;
-      if (me && adminCandidate(me, env) && (await adminActive(env, authed, me))) me.rtRole = 'admin';
+      if (me && adminCandidate(me, env) && (await adminActive(env, request, me, token))) me.rtRole = 'admin';
     }
     const role = me ? me.rtRole || (room.owner_id === me.id ? 'host' : 'viewer') : 'viewer';
     const headers = new Headers({ upgrade: 'websocket', 'x-rt-code': arg, 'x-rt-role': role, 'x-rt-uid': me ? me.id : '', 'x-rt-ip': clientIp(request), 'x-rt-proto': protos.includes('casualhub') ? 'casualhub' : '' });
@@ -2448,6 +2471,8 @@ async function lotEditable(env, code, lotId, me) {
 // страницы подключают WebSocket, а прокрутки, вылеты и «до победителя» доводит комната по будильникам.
 // Откат: LOTS_RT = "0" — всё снова идёт через опрос, снимок в D1 тот же
 const rtOn = (env) => !!env.LOT_RT && env.LOTS_RT !== '0';
+// версия страницы сбора, которую понимает PUT /lots/:code/live: прокрутку и вылеты ведёт сервер (lots/app.js шлёт v: 2)
+const LIVE_CLIENT = 2;
 const rtRoom = (env, code) => env.LOT_RT.get(env.LOT_RT.idFromName(code));
 // ---------- присутствие вживую (Durable Object PresenceDO в том же Worker'е, одна комната на весь сайт) ----------
 // «В сети» по подключению и отключению, счётчик «N на сайте», объявление, заявки в друзья и уведомления о реакциях
@@ -2494,7 +2519,7 @@ async function lotAnswer(env, id, me, knownVer, request, conditional) {
   const settled = await settledLive(env, id, row.live);
   if (settled.wrote) await pokeRoom(env, id, 'live');
   // выпавший лот не отдаём; «Настройка лотов» — только для админа: ни ведущий, ни зрители этих списков не получают
-  out.live = liveView(settled.live, !!(me && request && adminCandidate(me, env) && (await adminActive(env, request, me))));
+  out.live = liveView(settled.live, !!(request && (await adminActiveCached(env, request, me))));
   // список лотов отдаём, только если он поменялся: страница спрашивает часто
   if (String(knownVer) !== String(row.ver)) {
     let { results } = await env.DB.prepare('SELECT l.id, l.ref, l.name, l.img, l.link, l.user_id, u.id AS uid, u.username FROM lots l LEFT JOIN users u ON u.id = l.user_id WHERE l.room_id = ? ORDER BY l.created_at LIMIT ?').bind(id, MAX_LOTS).all();

@@ -394,7 +394,9 @@ async function hidePlainPasswords() {
   let ch = false;
   for (const u of list) {
     if (typeof u.pass !== 'string') continue;
-    if (u.pass && !u.serverId) { try { u.passHash = await localPassHash(u.pass); } catch (_) {} }
+    // хеш не получился (нет crypto.subtle: страница по http, старый WebView) — пароль оставляем как был:
+    // стереть его без хеша значило бы оставить профиль совсем без пароля
+    if (u.pass && !u.serverId) { try { u.passHash = await localPassHash(u.pass); } catch (_) { continue; } }
     delete u.pass;
     ch = true;
   }
@@ -455,6 +457,12 @@ async function loginUser(identifier, password) {
   );
 
   if (!u) { toast('Такого аккаунта нет. Зарегистрируйся'); return false; }
+  // профиль без пароля и без хеша здесь не входит, иначе в него пускало бы с любым паролем. У старых профилей пароль был
+  // всегда (регистрация требовала от 8 символов); у подключённых к серверу его нет — их пароль проверяет сервер (friends.js)
+  if (!u.passHash && !(typeof u.pass === 'string' && u.pass)) {
+    toast(u.serverId ? 'Этот профиль входит через онлайн-аккаунт: попробуй ещё раз, когда сервер ответит' : 'У этого профиля не сохранился пароль. Войди в онлайн-аккаунт или заведи новый');
+    return false;
+  }
   // старый профиль этого устройства: пароль сверяется с хешем (открытый пароль — только пока его не успели заменить)
   if ((u.passHash && !(await localPassOk(password, u.passHash))) || (typeof u.pass === 'string' && u.pass && u.pass !== password)) {
     toast('Неверный пароль, попробуй ещё раз'); return false;
