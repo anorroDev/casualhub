@@ -30,7 +30,7 @@
   const STYLE = `
 .st-sheet { position: fixed; inset: 0; z-index: 110; display: grid; place-items: center; padding: 16px; background: rgba(8, 10, 14, .6); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 .st-sheet[hidden] { display: none; }
-.st-card { position: relative; width: min(880px, 100%); height: min(640px, calc(100dvh - 32px)); display: grid; grid-template-columns: 230px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); border: 1px solid var(--line, #2b2e38); border-radius: 20px; background: var(--panel, #1b1d24); color: var(--ink, #f3f4f6); box-shadow: 0 30px 70px -28px rgba(0, 0, 0, .7); overflow: hidden; animation: st-in .24s cubic-bezier(.22, 1, .36, 1); }
+.st-card { position: relative; width: min(880px, 100%); height: min(640px, calc(100vh - 32px)); height: min(640px, calc(100dvh - 32px)); display: grid; grid-template-columns: 230px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); border: 1px solid var(--line, #2b2e38); border-radius: 20px; background: var(--panel, #1b1d24); color: var(--ink, #f3f4f6); box-shadow: 0 30px 70px -28px rgba(0, 0, 0, .7); overflow: hidden; animation: st-in .24s cubic-bezier(.22, 1, .36, 1); }
 @keyframes st-in { from { transform: translateY(12px) scale(.98); opacity: 0; } }
 .st-nav { min-height: 0; display: grid; align-content: start; gap: 2px; padding: 18px 10px; border-right: 1px solid var(--line, #2b2e38); background: var(--panel-2, #23262f); overflow: auto; }
 .st-nav h2 { margin: 0 0 10px; padding: 0 10px; font-size: 19px; }
@@ -125,7 +125,8 @@ label.st-row { cursor: pointer; }
 /* полосы прокрутки — общие для сайта, в /base.css */
 @media (max-width: 719px) {
   .st-sheet { padding: 0; place-items: stretch; }
-  .st-card { width: 100%; height: 100dvh; grid-template-columns: minmax(0, 1fr); border: 0; border-radius: 0; }
+  /* весь экран: окно растянуто по слою настроек (100dvh старые iPhone не знают) */
+  .st-card { width: 100%; height: 100%; grid-template-columns: minmax(0, 1fr); border: 0; border-radius: 0; }
   .st-nav { padding: max(14px, env(safe-area-inset-top)) 12px 24px; border-right: 0; background: var(--panel, #1b1d24); gap: 4px; }
   .st-nav h2 { display: flex; align-items: center; justify-content: space-between; padding: 0 4px 6px; font-size: 24px; }
   .st-nb { min-height: 60px; padding: 10px 12px; border: 1px solid var(--line, #2b2e38); background: var(--panel-2, #23262f); color: var(--ink, #f3f4f6); }

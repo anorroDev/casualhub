@@ -296,7 +296,12 @@ async function currentUser(env, request) {
   // кто заходит, тот не вылетает: меньше 20 дней до конца сессии — продлеваем на 30 (запись раз в ~10 дней)
   if (u && u.expires_at - now < 20 * 864e5) await env.DB.prepare('UPDATE sessions SET expires_at = ?, seen_at = ? WHERE token_hash = ?').bind(now + SESSION_DAYS * 864e5, now, th).run();
   // «заходил» для списка устройств: запись не чаще раза в час на сеанс
-  else if (u && (!u.seen_at || now - u.seen_at > 3600e3)) await env.DB.prepare('UPDATE sessions SET seen_at = ? WHERE token_hash = ?').bind(now, th).run();
+  else if (u && (!u.seen_at || now - u.seen_at > 3600e3)) {
+    // заодно дописываем браузер и страну входам, созданным до того, как сайт начал их запоминать
+    const ua = deviceLabel(request.headers.get('user-agent'));
+    const cc = request.cf && /^[A-Z]{2}$/.test(request.cf.country || '') ? request.cf.country : '';
+    await env.DB.prepare("UPDATE sessions SET seen_at = ?, ua = COALESCE(NULLIF(ua, ''), ?), country = COALESCE(NULLIF(country, ''), ?) WHERE token_hash = ?").bind(now, ua, cc, th).run();
+  }
   if (Math.random() < 0.002) await env.DB.prepare('DELETE FROM sessions WHERE expires_at < ?').bind(now).run(); // старые сессии не копятся
   return u;
 }
