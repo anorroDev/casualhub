@@ -1,5 +1,6 @@
 /* Казуал Хаб: лоты по ссылке. Зрители вписывают лоты в категории, которую выбрал ведущий, и смотрят его колесо: та же отрисовка и та же заставка победы.
-   Постоянного соединения нет: страница спрашивает сервер раз в несколько секунд, а прокрутку считает сама по общему времени. */
+   Снимок колеса приходит по WebSocket от комнаты лотов (ответ сбора rt: true), без неё — опросом раз в пару секунд с ETag.
+   Прокрутку страница рисует сама по общему времени сервера. */
 (() => {
   const $ = (s) => document.querySelector(s);
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -627,9 +628,8 @@
         setSpinning(false);
         restSig = JSON.stringify([segs.map((x) => [x.n, x.p]), mod(spin.to, TAU).toFixed(3)]);
         if (live.pick) pulse(segs, spin.to, live.pick);
-        // итог прокрутки спрашиваем сразу, не дожидаясь очередного раза
-        clearTimeout(pollT);
-        pollT = setTimeout(poll, 700);
+        // итог прокрутки спрашиваем сразу, не дожидаясь очередного раза; по сокету он придёт сам
+        if (!rtLive()) { clearTimeout(pollT); pollT = setTimeout(poll, 700); }
       };
       spinRaf = requestAnimationFrame(frame);
       return;
@@ -1087,7 +1087,7 @@
     paintAll();
     hostPushing = true;
     try { await api(`/lots/${encodeURIComponent(code)}/live`, 'PUT', body); hostMsg(''); }
-    catch (e) { hostMsg('Зрители не увидят это: ' + e.message); }
+    catch (e) { hostMsg('Зрители не увидят это: ' + e.message); etag = ''; }
     hostPushing = false;
     clearTimeout(pollT);
     pollT = setTimeout(poll, 1500);
@@ -1145,13 +1145,13 @@
   async function hostFinish() {
     const r = hostRes;
     if (!r) return;
-    await poll();
+    if (!rtLive()) await poll();
     if (r.mode === 'one') { hostRes = null; paintHost(); return; }
     hostT = setTimeout(async () => {
-      await poll();
+      if (!rtLive()) await poll();
       hostRes = null;
       paintHost();
-      if (autoOn()) hostT = setTimeout(poll, LIVE_NEXT + 200);
+      if (autoOn() && !rtLive()) hostT = setTimeout(poll, LIVE_NEXT + 200);
     }, LIVE_OUT + 100);
   }
   // списки «Настройки лотов» из ответа сервера: они там есть, только если спрашивает админ
@@ -1452,7 +1452,11 @@
   })();
 
   // ---------- связь с сервером ----------
-  let pollT = 0, pollSeq = 0;
+  // С комнатой лотов (в ответе сбора rt: true) снимок приходит по WebSocket, как только что-то поменялось, а опрос
+  // остаётся страховкой раз в минуту. Без комнаты или пока сокет не поднялся — опрос раз в пару секунд с ETag:
+  // если ничего не поменялось, сервер отвечает 304 без тела
+  let pollT = 0, pollSeq = 0, etag = '', rt = null;
+  const rtLive = () => !!(rt && rt.live());
   // часы сервера: ответ шёл туда и обратно, поэтому время сервера — на середине пути. Из последних ответов берём
   // самый быстрый (у него меньше всего погрешность), а во время прокрутки поправку не трогаем, чтобы колесо не дёргалось
   const clock = [];
@@ -1463,19 +1467,21 @@
     if (spinRaf && clock.length > 1) return;
     S.offset = clock.reduce((a, b) => (b.rtt < a.rtt ? b : a)).off;
   }
+  const goneText = 'Такого сбора нет: ведущий удалил его или ссылка с ошибкой.';
   async function poll() {
     clearTimeout(pollT);
     // опрос один: устаревший ответ не затирает свежий и не запускает второй круг
     const seq = ++pollSeq;
-    let d = null;
+    let d = null, tag = '';
     const t0 = Date.now();
-    try { d = await api(`/lots/${encodeURIComponent(code)}${S.room ? '?v=' + S.room.ver : ''}`); }
-    catch (e) {
-      if (seq !== pollSeq) return;
-      if (e.status === 404) { dropFollow(); paintGone('Такого сбора нет: ведущий удалил его или ссылка с ошибкой.'); return; }
-    }
+    try {
+      const r = await fetch(`/api/lots/${encodeURIComponent(code)}${S.room ? '?v=' + S.room.ver : ''}`, { cache: 'no-store', headers: { ...(token ? { authorization: 'Bearer ' + token } : {}), ...(etag && S.room ? { 'if-none-match': etag } : {}) } });
+      if (r.status === 404) { if (seq === pollSeq) { stopRT(); dropFollow(); paintGone(goneText); } return; }
+      if (r.ok) { d = await r.json(); tag = r.headers.get('etag') || ''; }
+    } catch (e) {}
     if (seq !== pollSeq) return;
     if (d) {
+      etag = tag;
       clockSample(d.now, t0, Date.now());
       S.room = d.room;
       S.live = d.live;
@@ -1485,13 +1491,41 @@
       paintAll();
       S.firstPoll = false;
       hostSync();
+      if (d.rt && !rt) startRT();
+      else if (!d.rt && rt) stopRT();
     }
-    // всё, что делает ведущий, видно через пару секунд; в фоновой вкладке и давно после победы спрашиваем реже
+    // всё, что делает ведущий, видно через пару секунд; с сокетом — сразу, а опрос раз в минуту на всякий случай;
+    // в фоновой вкладке и давно после победы спрашиваем реже
     const done = S.live && S.live.winner && serverNow() - (+S.live.winner.at || 0) > 600000;
-    const wait = document.hidden ? 8000 : done ? 15000 : 2000;
+    const wait = rtLive() ? 60000 : document.hidden ? 8000 : done ? 15000 : 2000;
     pollT = setTimeout(poll, wait);
   }
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && code && S.room) poll(); });
+  // комната лотов: снимок по WebSocket. Пока сокет поднимается или переподключается, страница опрашивает сервер
+  function startRT() {
+    if (rt || !window.CasualRT) return;
+    rt = window.CasualRT.lots(code, {
+      token,
+      onState(m, clk) {
+        if (clk) clockSample(m.now, clk.t0, clk.t1);
+        // своя запись ещё в пути: после неё придёт свежий снимок, этот старше
+        if (hostPushing) return;
+        pollSeq++; // ответы опроса, которые уже в пути, старше этого снимка
+        etag = '';
+        S.live = m.live;
+        takeForce(m.live);
+        // поменялись лоты или сам сбор: подробности — обычным запросом
+        if (S.room && m.ver !== S.room.ver) { poll(); return; }
+        paintAll();
+        hostSync();
+      },
+      onGone() { stopRT(); dropFollow(); paintGone(goneText); },
+      // сокет поднялся — опрос раз в минуту; оборвался — снова раз в пару секунд, пока он переподключается
+      onStatus(open) { clearTimeout(pollT); pollT = setTimeout(poll, open ? 60000 : 1500); },
+    });
+  }
+  function stopRT() { if (rt) { rt.close(); rt = null; } }
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && code && S.room && !rtLive()) poll(); });
+  let followAt = 0;
   setInterval(() => {
     if (!S.room) return;
     const was = $('#lotAdd').dataset.state;
@@ -1500,6 +1534,8 @@
     watchOpen();
     paintHost(); // время сбора на пульте идёт каждую секунду
     syncBg();
+    // мини-плеер в других вкладках молчит, пока эта страница открыта: она отмечается раз в 5 секунд
+    if (Date.now() - followAt > 5000) { followAt = Date.now(); keepFollow(); }
   }, 1000);
 
   // лот уходит на сервер только после подтверждения; replace — id своего лота, который заменяем

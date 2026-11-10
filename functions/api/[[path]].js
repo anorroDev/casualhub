@@ -1634,7 +1634,7 @@ const routes = {
     let me = null;
     try { me = await currentUser(env, request); } catch (e) {}
     const v = new URL(request.url).searchParams.get('v');
-    return lotAnswer(env, arg, me && !me.banned ? me : null, v, request);
+    return lotAnswer(env, arg, me && !me.banned ? me : null, v, request, true);
   },
   async 'POST /lots/:code'({ env, request, me, arg }) {
     if (burst('lotadd:' + me.id, 30, 60e3)) return tooMany(1);
@@ -2407,7 +2407,8 @@ async function pokeRoom(env, code, what) {
   try { await rtRoom(env, code).fetch('https://rt/poke', { method: 'POST', headers: { 'x-rt-code': code }, body: JSON.stringify({ what }) }); }
   catch (e) { console.error('lots rt poke', code, what, e && e.message); }
 }
-async function lotAnswer(env, id, me, knownVer, request) {
+// conditional — ответ с ETag: опрос без перемен получает 304 без тела, а не снимок до 90 КБ
+async function lotAnswer(env, id, me, knownVer, request, conditional) {
   const row = await env.DB.prepare('SELECT r.*, u.username AS owner_name, u.banned AS owner_banned FROM lot_rooms r LEFT JOIN users u ON u.id = r.owner_id WHERE r.id = ?').bind(id).first();
   if (!row || row.owner_banned) return fail(404, 'Такого сбора нет.');
   const own = !!me && row.owner_id === me.id;
@@ -2431,7 +2432,14 @@ async function lotAnswer(env, id, me, knownVer, request) {
     }
     out.lots = results.map((x) => ({ id: x.id, ref: x.ref, name: x.name, img: x.img, link: x.link, by: x.username || '', mine: !!me && x.user_id === me.id }));
   }
-  return json(out);
+  if (!conditional) return json(out);
+  // метка — от всего ответа, кроме часов сервера: в нём и то, что видит именно этот человек (свой сбор, свои лоты)
+  const tag = '"' + (await sha256(JSON.stringify({ ...out, now: 0 }))).slice(0, 32) + '"';
+  const seen = (request.headers.get('if-none-match') || '').split(',').map((x) => x.trim().replace(/^W\//, ''));
+  if (seen.includes(tag)) return new Response(null, { status: 304, headers: { etag: tag, 'cache-control': 'no-store' } });
+  const res = json(out);
+  res.headers.set('etag', tag);
+  return res;
 }
 
 // ---------- поиск музыки ----------

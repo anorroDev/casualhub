@@ -5,9 +5,10 @@
 // Снимок в lot_rooms.live — главная копия, комната держит только сокеты и будильник: она доводит прокрутку до вылета
 // или победы и запускает следующую в режиме «до победителя», даже если вкладка ведущего закрыта.
 //
-// Протокол (JSON). Клиент → комната: hello, spin {mode, dur, auto}, stop (выключить «до победителя»), reset,
+// Протокол (JSON). Клиент → комната: hello {id}, spin {mode, dur, auto}, stop (выключить «до победителя»), reset,
 // force {keep, kick} (только админ). Строка "ping" → "pong" без пробуждения комнаты.
-// Комната → клиент: state {live, ver, now} (при подключении и после каждой перемены; keep/kick — только админу),
+// Комната → клиент: state {live, ver, now, re?} (при подключении, после каждой перемены и в ответ на hello с re = id;
+// keep/kick — только админу),
 // gone (сбор удалён), error {code, msg}
 import { cleanLive, liveTx, settledLive, liveWake, liveLots, liveView, spinLive, resetLive, stopAuto } from '../functions/_lib/lots-live.js';
 
@@ -61,8 +62,8 @@ export class LotRoomDO {
     const { live } = await settledLive(this.env, this.code, row.live);
     return { live, ver: row.ver };
   }
-  stateText(live, ver, admin) {
-    return JSON.stringify({ t: 'state', live: liveView(live, admin), ver, now: Date.now() });
+  stateText(live, ver, admin, re) {
+    return JSON.stringify({ t: 'state', live: liveView(live, admin), ver, now: Date.now(), ...(re !== undefined ? { re } : {}) });
   }
   // разослать снимок: зрителям и ведущему без keep/kick, админам — с ними
   broadcast(live, ver, force) {
@@ -126,7 +127,8 @@ export class LotRoomDO {
     if (m.t === 'hello') {
       const st = await this.load();
       if (!st) return this.gone();
-      this.send(ws, this.stateText(st.live, st.ver, role === 'admin'));
+      // re — номер hello: по времени ответа страница сверяет свои часы с часами сервера
+      this.send(ws, this.stateText(st.live, st.ver, role === 'admin', Number.isInteger(m.id) ? m.id : undefined));
       return;
     }
     const control = role === 'host' || role === 'admin';
