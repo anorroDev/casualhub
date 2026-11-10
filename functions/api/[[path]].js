@@ -49,7 +49,9 @@ function recsView(d, hidden, ratings) {
   const keep = (x) => x && !hide.has(x.key) && !mine.has(titleKey(x.title)) && !(x.orig && mine.has(titleKey(x.orig)));
   return { at: d.at, movie: (d.movie || []).filter(keep), game: (d.game || []).filter(keep), anime: (d.anime || []).filter(keep), friends: (d.friends || []).filter(keep) };
 }
-const ownUser = (u) => ({ ...pubUser(u), email: u.email || '', createdAt: u.created_at || u.createdAt || null, hideOnline: !!u.hide_online });
+// двухфакторная защита: { s: секрет base32, last: последний принятый 30-секундный шаг, codes: [sha256 запасных кодов], at }
+const totpOf = (u) => { try { const t = u && u.totp ? JSON.parse(u.totp) : null; return t && t.s ? t : null; } catch (e) { return null; } };
+const ownUser = (u) => { const t = totpOf(u); return { ...pubUser(u), email: u.email || '', createdAt: u.created_at || u.createdAt || null, hideOnline: !!u.hide_online, emailOk: !!u.email_ok, twoFactor: !!t, backupLeft: t ? (t.codes || []).length : 0 }; };
 
 // Таблицы создаются и обновляются сами при первом запросе,
 // чтобы новые поля вроде email не требовали ручной миграции.
@@ -112,6 +114,15 @@ async function ensureScheme(env) {
   if (!results.some((c) => c.name === 'hide_online')) await env.DB.prepare('ALTER TABLE users ADD COLUMN hide_online INTEGER').run();
   if (!results.some((c) => c.name === 'banned')) await env.DB.prepare('ALTER TABLE users ADD COLUMN banned INTEGER').run();
   if (!results.some((c) => c.name === 'ban_reason')) await env.DB.prepare('ALTER TABLE users ADD COLUMN ban_reason TEXT').run();
+  // безопасность: двухфакторная защита (и её подключение, пока не подтверждено кодом) и подтверждённая почта
+  for (const [c, t] of [['totp', 'TEXT'], ['totp_pending', 'TEXT'], ['email_ok', 'INTEGER']]) {
+    if (!results.some((x) => x.name === c)) await env.DB.prepare(`ALTER TABLE users ADD COLUMN ${c} ${t}`).run();
+  }
+  // одноразовые ссылки из писем: сброс пароля и подтверждение почты (хранится только хеш)
+  await env.DB.batch([
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS mail_tokens (hash TEXT PRIMARY KEY, user_id TEXT NOT NULL, kind TEXT NOT NULL, email TEXT, expires_at INTEGER NOT NULL, used INTEGER NOT NULL DEFAULT 0)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS mail_tokens_user ON mail_tokens(user_id)'),
+  ]);
   await env.DB.batch([
     env.DB.prepare('CREATE INDEX IF NOT EXISTS users_seen ON users(last_seen)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS users_nkey ON users(nkey)'),
@@ -159,6 +170,80 @@ function sameHex(a, b) {
   for (let i = 0; i < a.length; i++) r |= a.charCodeAt(i) ^ b.charCodeAt(i);
   return r === 0;
 }
+// ---------- двухфакторная защита: коды из приложения (TOTP, RFC 6238) ----------
+const B32 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
+function b32enc(bytes) {
+  let bits = 0, val = 0, out = '';
+  for (const b of bytes) { val = ((val << 8) | b) & 0xffff; bits += 8; while (bits >= 5) { out += B32[(val >>> (bits - 5)) & 31]; bits -= 5; } }
+  if (bits > 0) out += B32[(val << (5 - bits)) & 31];
+  return out;
+}
+function b32dec(str) {
+  let bits = 0, val = 0;
+  const out = [];
+  for (const c of String(str).toUpperCase()) { const i = B32.indexOf(c); if (i < 0) continue; val = ((val << 5) | i) & 0xffff; bits += 5; if (bits >= 8) { out.push((val >>> (bits - 8)) & 255); bits -= 8; } }
+  return new Uint8Array(out);
+}
+async function hotp(secret, counter) {
+  const key = await crypto.subtle.importKey('raw', b32dec(secret), { name: 'HMAC', hash: 'SHA-1' }, false, ['sign']);
+  const msg = new DataView(new ArrayBuffer(8));
+  msg.setUint32(0, Math.floor(counter / 4294967296)); msg.setUint32(4, counter >>> 0);
+  const h = new Uint8Array(await crypto.subtle.sign('HMAC', key, msg.buffer));
+  const o = h[19] & 15;
+  return String((((h[o] & 127) << 24) | (h[o + 1] << 16) | (h[o + 2] << 8) | h[o + 3]) % 1e6).padStart(6, '0');
+}
+// код подходит: текущий 30-секундный шаг или соседний (часы телефона могут спешить); уже принятый шаг второй раз не проходит
+async function totpStep(secret, code, last) {
+  const c = String(code || '').replace(/\D/g, '');
+  if (c.length !== 6) return 0;
+  const now = Math.floor(Date.now() / 30e3);
+  for (const st of [now, now - 1, now + 1]) if (st > (last || 0) && sameHex(await hotp(secret, st), c)) return st;
+  return 0;
+}
+// запасные коды: 10 штук вида 1a2b-3c4d, каждый работает один раз; в базе только хеши
+const newCodes = () => Array.from({ length: 10 }, () => { const h = randHex(4); return h.slice(0, 4) + '-' + h.slice(4); });
+const codeKey = (c) => String(c || '').toLowerCase().replace(/[^0-9a-f]/g, '');
+// второй шаг входа: код из приложения или запасной код. Включённой защиты нет — второй шаг не нужен
+async function secondFactor(env, u, code) {
+  const t = totpOf(u);
+  if (!t) return true;
+  const st = await totpStep(t.s, code, t.last);
+  if (st) { t.last = st; await env.DB.prepare('UPDATE users SET totp = ? WHERE id = ?').bind(JSON.stringify(t), u.id).run(); return true; }
+  const k = codeKey(code);
+  if (k.length === 8) {
+    const i = (t.codes || []).indexOf(await sha256(k));
+    if (i >= 0) { t.codes.splice(i, 1); await env.DB.prepare('UPDATE users SET totp = ? WHERE id = ?').bind(JSON.stringify(t), u.id).run(); return true; }
+  }
+  return false;
+}
+const BAD_CODE = 'Код не подходит. Возьми свежий из приложения или введи запасной.';
+
+// ---------- письма (Resend): сброс пароля и подтверждение почты. Ключи — в настройках Cloudflare ----------
+// MAIL_KEY — ключ Resend, MAIL_FROM — отправитель с подтверждённого в Resend домена, например «Казуал Хаб <no-reply@домен>»
+const mailOn = (env) => !!(env.MAIL_KEY && env.MAIL_FROM);
+const langOf = (request) => (/(?:^|;\s*)casualhub_lang=en(?:;|$)/.test(request.headers.get('cookie') || '') ? 'en' : 'ru');
+const escMail = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+async function sendMail(env, to, subject, lines, btn, url) {
+  const text = [...lines, '', btn + ': ' + url].join('\n');
+  const html = `<div style="font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#14161c">`
+    + `<p style="font-size:20px;font-weight:700;margin:0 0 16px">Casual Hub</p>`
+    + lines.map((l) => `<p style="font-size:15px;line-height:1.5;margin:0 0 12px">${escMail(l)}</p>`).join('')
+    + `<p style="margin:20px 0"><a href="${escMail(url)}" style="display:inline-block;padding:12px 20px;border-radius:12px;background:#3550E8;color:#fff;text-decoration:none;font-weight:600">${escMail(btn)}</a></p>`
+    + `<p style="font-size:12px;color:#6b7080;word-break:break-all;margin:0">${escMail(url)}</p></div>`;
+  const r = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { authorization: 'Bearer ' + env.MAIL_KEY, 'content-type': 'application/json' },
+    body: JSON.stringify({ from: env.MAIL_FROM, to: [to], subject, text, html }),
+  });
+  if (!r.ok) throw new Error('mail ' + r.status);
+}
+async function mailToken(env, userId, kind, email, minutes) {
+  const t = randHex(32), now = Date.now();
+  await env.DB.prepare('INSERT INTO mail_tokens (hash, user_id, kind, email, expires_at) VALUES (?, ?, ?, ?, ?)').bind(await sha256(t), userId, kind, email, now + minutes * 60e3).run();
+  if (Math.random() < 0.05) await env.DB.prepare('DELETE FROM mail_tokens WHERE expires_at < ?').bind(now - 864e5).run();
+  return t;
+}
+
 const MAX_BODY = 2200000; // фото до ~1,9 МБ плюс запас
 class TooBig extends Error {}
 async function readBody(request) {
@@ -185,7 +270,7 @@ async function currentUser(env, request) {
   const th = await sha256(m[1]);
   const now = Date.now();
   const u = await env.DB.prepare(
-    'SELECT u.id, u.username, u.uname AS handle, u.email, u.created_at, u.hide_online, u.banned, u.ban_reason, s.expires_at, s.seen_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?'
+    'SELECT u.id, u.username, u.uname AS handle, u.email, u.created_at, u.hide_online, u.banned, u.ban_reason, u.totp, u.totp_pending, u.email_ok, s.expires_at, s.seen_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ? AND s.expires_at > ?'
   ).bind(th, now).first();
   // кто заходит, тот не вылетает: меньше 20 дней до конца сессии — продлеваем на 30 (запись раз в ~10 дней)
   if (u && u.expires_at - now < 20 * 864e5) await env.DB.prepare('UPDATE sessions SET expires_at = ?, seen_at = ? WHERE token_hash = ?').bind(now + SESSION_DAYS * 864e5, now, th).run();
@@ -215,6 +300,9 @@ async function tokenHash(request) {
   return m ? sha256(m[1]) : '';
 }
 const LIMITS = {
+  forgot: { max: 5, win: 30 * 60e3 },
+  forgotAcc: { max: 3, win: 60 * 60e3 },
+  verifyMail: { max: 3, win: 60 * 60e3 },
   loginIp: { max: 30, win: 15 * 60e3 },
   loginAcc: { max: 10, win: 15 * 60e3 },
   register: { max: 10, win: 60 * 60e3 },
@@ -350,13 +438,13 @@ const routes = {
   },
   // вход по почте или по нику
   async 'POST /login'({ env, request }) {
-    const { login, username, password } = await readBody(request);
+    const { login, username, password, code } = await readBody(request);
     const ident = String(login || username || '').trim();
     const ipKey = 'login-ip:' + clientIp(request);
     if (burst('login:all', 300, 60e3)) return tooMany(1);
     const waitIp = await bump(env, ipKey, 'loginIp');
     if (waitIp) return tooMany(waitIp);
-    const COLS = 'id, username, uname, email, created_at, pass_hash, salt, banned, ban_reason';
+    const COLS = 'id, username, uname, email, created_at, pass_hash, salt, banned, ban_reason, totp, email_ok';
     let u = await env.DB.prepare(`SELECT ${COLS} FROM users WHERE uname = ? OR email = ?`).bind(cleanHandle(ident), cleanEmail(ident)).first();
     if (!u) {
       const { results: same } = await env.DB.prepare(`SELECT ${COLS} FROM users WHERE nkey = ? LIMIT 2`).bind(cleanName(ident).toLowerCase()).all();
@@ -368,6 +456,11 @@ const routes = {
     const hash = await hashPass(String(password || '').slice(0, 200), u ? u.salt : 'no-such-user-salt'); // паролей длиннее 200 не бывает
     if (!u || !sameHex(hash, u.pass_hash)) return fail(401, 'Неверная почта, юзернейм или пароль.');
     if (u.banned) return fail(403, 'Аккаунт заблокирован администрацией' + (u.ban_reason ? ': ' + u.ban_reason : '.'));
+    // двухфакторная защита: пароль верный, но без кода из приложения (или запасного) сессии не будет
+    if (totpOf(u)) {
+      if (!code) return json({ error: 'Нужен код из приложения-аутентификатора.', need2fa: true }, 401);
+      if (!(await secondFactor(env, u, code))) return json({ error: BAD_CODE, need2fa: true }, 401);
+    }
     // пароль верный: попытка не считается
     await env.DB.batch([
       env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind(accKey),
@@ -670,8 +763,9 @@ const routes = {
       out.hide_online = hideOnline ? 1 : 0;
     }
     if (mailChange) {
-      await env.DB.prepare('UPDATE users SET email = ? WHERE id = ?').bind(mail, me.id).run();
+      await env.DB.prepare('UPDATE users SET email = ?, email_ok = 0 WHERE id = ?').bind(mail, me.id).run();
       out.email = mail;
+      out.email_ok = 0;
     }
     if (handleChange) {
       await env.DB.prepare('UPDATE users SET uname = ? WHERE id = ?').bind(h, me.id).run();
@@ -710,6 +804,134 @@ const routes = {
     const r = await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?').bind(me.id, cur).run();
     return json({ ok: true, n: r.meta.changes || 0 });
   },
+  // ---------- двухфакторная защита ----------
+  // начало подключения: новый секрет ждёт подтверждения кодом из приложения
+  async 'POST /2fa/start'({ env, me }) {
+    if (totpOf(me)) return fail(400, 'Двухфакторная защита уже включена.');
+    const secret = b32enc(crypto.getRandomValues(new Uint8Array(20)));
+    await env.DB.prepare('UPDATE users SET totp_pending = ? WHERE id = ?').bind(JSON.stringify({ s: secret, at: Date.now() }), me.id).run();
+    return json({ secret, uri: `otpauth://totp/CasualHub:${encodeURIComponent('@' + me.handle)}?secret=${secret}&issuer=CasualHub&digits=6&period=30` });
+  },
+  async 'POST /2fa/enable'({ env, request, me }) {
+    const { code } = await readBody(request);
+    const wait = await bump(env, 'acc:' + me.id, 'loginAcc');
+    if (wait) return tooMany(wait);
+    let p = null;
+    try { p = JSON.parse(me.totp_pending || 'null'); } catch (e) {}
+    if (!p || !p.s || Date.now() - p.at > 30 * 60e3) return fail(400, 'Подключение устарело: начни заново.');
+    const st = await totpStep(p.s, code, 0);
+    if (!st) return fail(400, 'Код не подходит. Проверь, что время на телефоне точное, и введи свежий код.');
+    const codes = newCodes();
+    const t = { s: p.s, last: st, codes: await Promise.all(codes.map((c) => sha256(codeKey(c)))), at: Date.now() };
+    await env.DB.batch([
+      env.DB.prepare('UPDATE users SET totp = ?, totp_pending = NULL WHERE id = ?').bind(JSON.stringify(t), me.id),
+      env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind('acc:' + me.id),
+    ]);
+    return json({ codes, user: ownUser({ ...me, totp: JSON.stringify(t) }) });
+  },
+  async 'POST /2fa/disable'({ env, request, me }) {
+    const { password, code } = await readBody(request);
+    if (!totpOf(me)) return json({ user: ownUser(me) });
+    const wait = await bump(env, 'acc:' + me.id, 'loginAcc');
+    if (wait) return tooMany(wait);
+    const row = await env.DB.prepare('SELECT pass_hash, salt FROM users WHERE id = ?').bind(me.id).first();
+    const pass = String(password || '');
+    if (!row || pass.length > 200 || !sameHex(await hashPass(pass, row.salt), row.pass_hash)) return fail(403, 'Текущий пароль не подходит.');
+    if (!(await secondFactor(env, me, code))) return fail(403, BAD_CODE);
+    await env.DB.prepare('UPDATE users SET totp = NULL, totp_pending = NULL WHERE id = ?').bind(me.id).run();
+    return json({ user: ownUser({ ...me, totp: null }) });
+  },
+  // новые запасные коды взамен старых (старые перестают работать)
+  async 'POST /2fa/codes'({ env, request, me }) {
+    const { code } = await readBody(request);
+    if (!totpOf(me)) return fail(400, 'Сначала включи двухфакторную защиту.');
+    const wait = await bump(env, 'acc:' + me.id, 'loginAcc');
+    if (wait) return tooMany(wait);
+    if (!(await secondFactor(env, me, code))) return fail(403, BAD_CODE);
+    const t = totpOf(await env.DB.prepare('SELECT totp FROM users WHERE id = ?').bind(me.id).first());
+    const codes = newCodes();
+    t.codes = await Promise.all(codes.map((c) => sha256(codeKey(c))));
+    await env.DB.prepare('UPDATE users SET totp = ? WHERE id = ?').bind(JSON.stringify(t), me.id).run();
+    return json({ codes, user: ownUser({ ...me, totp: JSON.stringify(t) }) });
+  },
+
+  // ---------- письма: сброс пароля и подтверждение почты ----------
+  async 'GET /auth/options'({ env }) {
+    return json({ mail: mailOn(env) });
+  },
+  async 'POST /password/forgot'({ env, request }) {
+    if (!mailOn(env)) return fail(503, 'Восстановление по почте пока не подключено.');
+    if (burst('forgot:all', 60, 60e3)) return tooMany(1);
+    const wait = await bump(env, 'forgot:' + clientIp(request), 'forgot');
+    if (wait) return tooMany(wait);
+    const mail = cleanEmail((await readBody(request)).email);
+    if (!NEW_MAIL_RE.test(mail) || mail.length > 120) return fail(400, 'Нужна почта, например name@mail.com.');
+    const u = await env.DB.prepare('SELECT id, uname, banned FROM users WHERE email = ?').bind(mail).first();
+    // ответ одинаковый, есть такая почта или нет: по форме не узнать, кто зарегистрирован
+    if (u && !u.banned && !(await bump(env, 'forgot-acc:' + u.id, 'forgotAcc'))) {
+      const url = `${new URL(request.url).origin}/opinion/#reset=${await mailToken(env, u.id, 'reset', mail, 60)}`;
+      const en = langOf(request) === 'en';
+      try {
+        await sendMail(env, mail, en ? 'Reset your Casual Hub password' : 'Сброс пароля в Казуал Хабе',
+          en ? [`Someone asked to reset the password for @${u.uname}.`, 'The link works for one hour and only once. If it wasn’t you, just ignore this email: your password stays the same.']
+             : [`Кто-то попросил сбросить пароль аккаунта @${u.uname}.`, 'Ссылка работает час и один раз. Если это был не ты, просто не обращай внимания: пароль останется прежним.'],
+          en ? 'Set a new password' : 'Задать новый пароль', url);
+      } catch (e) {}
+    }
+    return json({ ok: true });
+  },
+  async 'POST /password/reset'({ env, request }) {
+    const { token, password } = await readBody(request);
+    if (!/^[0-9a-f]{64}$/.test(String(token || ''))) return fail(400, 'Ссылка неполная: открой её из письма целиком.');
+    const wait = await bump(env, 'reset:' + clientIp(request), 'loginIp');
+    if (wait) return tooMany(wait);
+    const row = await env.DB.prepare("SELECT user_id, expires_at, used FROM mail_tokens WHERE hash = ? AND kind = 'reset'").bind(await sha256(token)).first();
+    if (!row || row.used || row.expires_at < Date.now()) return fail(400, 'Ссылка устарела или уже использована. Запроси новое письмо.');
+    const pass = String(password || '');
+    if (weakPass(pass)) return fail(400, WEAK_PASS);
+    const salt = randHex(16);
+    // письмо пришло на эту почту — значит, она твоя; все входы на других устройствах закрываются
+    await env.DB.batch([
+      env.DB.prepare('UPDATE users SET pass_hash = ?, salt = ?, email_ok = 1 WHERE id = ?').bind(await hashPass(pass, salt), salt, row.user_id),
+      env.DB.prepare("UPDATE mail_tokens SET used = 1 WHERE user_id = ? AND kind = 'reset'").bind(row.user_id),
+      env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(row.user_id),
+      env.DB.prepare('DELETE FROM admin_sessions WHERE user_id = ?').bind(row.user_id),
+      env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind('login-acc:' + row.user_id),
+    ]);
+    return json({ ok: true });
+  },
+  async 'POST /email/verify-send'({ env, request, me }) {
+    if (!mailOn(env)) return fail(503, 'Письма пока не подключены.');
+    if (!me.email) return fail(400, 'Сначала укажи почту.');
+    if (me.email_ok) return json({ ok: true, already: true });
+    const wait = await bump(env, 'verify-acc:' + me.id, 'verifyMail');
+    if (wait) return tooMany(wait);
+    const url = `${new URL(request.url).origin}/opinion/#verify=${await mailToken(env, me.id, 'verify', me.email, 24 * 60)}`;
+    const en = langOf(request) === 'en';
+    try {
+      await sendMail(env, me.email, en ? 'Confirm your email for Casual Hub' : 'Подтверди почту в Казуал Хабе',
+        en ? [`This email was added to @${me.handle}.`, 'Confirm it so you can reset your password by email if you ever forget it. The link works for 24 hours.']
+           : [`Эту почту указали в аккаунте @${me.handle}.`, 'Подтверди её, чтобы при случае можно было сбросить пароль по почте. Ссылка работает сутки.'],
+        en ? 'Confirm email' : 'Подтвердить почту', url);
+    } catch (e) { return fail(502, 'Письмо не ушло, попробуй через пару минут.'); }
+    return json({ ok: true });
+  },
+  async 'POST /email/verify'({ env, request }) {
+    const { token } = await readBody(request);
+    if (!/^[0-9a-f]{64}$/.test(String(token || ''))) return fail(400, 'Ссылка неполная: открой её из письма целиком.');
+    const wait = await bump(env, 'reset:' + clientIp(request), 'loginIp');
+    if (wait) return tooMany(wait);
+    const row = await env.DB.prepare("SELECT user_id, email, expires_at, used FROM mail_tokens WHERE hash = ? AND kind = 'verify'").bind(await sha256(token)).first();
+    if (!row || row.used || row.expires_at < Date.now()) return fail(400, 'Ссылка устарела или уже использована. Отправь письмо заново из настроек.');
+    const u = await env.DB.prepare('SELECT email FROM users WHERE id = ?').bind(row.user_id).first();
+    if (!u || u.email !== row.email) return fail(400, 'Почта в аккаунте уже другая: отправь письмо заново из настроек.');
+    await env.DB.batch([
+      env.DB.prepare('UPDATE users SET email_ok = 1 WHERE id = ?').bind(row.user_id),
+      env.DB.prepare("UPDATE mail_tokens SET used = 1 WHERE user_id = ? AND kind = 'verify'").bind(row.user_id),
+    ]);
+    return json({ ok: true, email: row.email });
+  },
+
   // удалить свой аккаунт: текущий пароль и юзернейм, всё на сервере стирается сразу и навсегда
   async 'POST /account/delete'({ env, request, me }) {
     const { password, confirm } = await readBody(request);
@@ -734,6 +956,7 @@ const routes = {
       'DELETE FROM comments WHERE owner_id = ?1 OR from_id = ?1',
       'DELETE FROM shares WHERE owner_id = ?1',
       'DELETE FROM attempts WHERE key = \'acc:\' || ?1',
+      'DELETE FROM mail_tokens WHERE user_id = ?1',
       'DELETE FROM users WHERE id = ?1',
     ].map((q) => env.DB.prepare(q).bind(u.id)));
     return json({ ok: true });
@@ -2531,7 +2754,7 @@ async function canSee(env, me, uid) {
   return !!row && row.status === 'accepted';
 }
 
-const PUBLIC = new Set(['POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid']);
+const PUBLIC = new Set(['GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid']);
 // код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности
 const SHARE_RE = /^[A-Za-z0-9]{12}$/;
 function shareId() {

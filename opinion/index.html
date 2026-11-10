@@ -44,7 +44,7 @@
 .auth-tab { flex: 1; padding: 8px 12px; border: 0; background: transparent; font-size: 13.5px; font-weight: 600; border-radius: 7px; color: var(--ink-2); cursor: pointer; transition: all .15s; }
 .auth-tab.active { background: var(--panel); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
 .auth-form { display: grid; gap: 12px; margin-top: 10px; }
-.auth-field { display: grid; gap: 5px; }
+.auth-field { display: grid; gap: 5px; } .auth-field .auth-forgot { justify-self: start; height: 30px; margin: -2px 0 0 -10px; font-size: 13px; }
 .auth-field label { font-size: 12.5px; font-weight: 600; color: var(--ink-2); }
 .auth-field input { width: 100%; padding: 10px 12px; border-radius: 8px; border: 1px solid var(--line); background: var(--panel-2); font-size: 14px; color: var(--ink); box-sizing: border-box; }
 .auth-field input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
@@ -554,6 +554,7 @@ html.booting .layout, html.booting .mnav, html.booting .offline-bar { visibility
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Handjet:wght@400..800&family=Onest:wght@400..700&display=block">
+<link rel="stylesheet" href="/base.css">
 <link rel="stylesheet" href="/unslop.css">
 <style id="unslop-page">
 /* Казуальный вид (unslop): действует, только когда в меню тем включён переключатель. Собрано из правок, которые убирают
@@ -1897,6 +1898,7 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
 <script src="/imdb.js"></script>
 <script src="/rating-card.js"></script>
 <script src="/friends.js"></script>
+<script src="/opinion/recover.js"></script>
 <script src="/opinion/reveal.js"></script><script src="/tier-maker.js"></script>
 <script src="/opinion/motion.js"></script>
 

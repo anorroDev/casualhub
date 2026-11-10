@@ -99,6 +99,12 @@ label.st-row { cursor: pointer; }
 .st-fold > summary:hover { background: color-mix(in srgb, var(--ink, #fff) 4%, transparent); }
 .st-fold[open] > summary .st-btn { opacity: .55; }
 .st-fold > .st-form { padding-top: 2px; }
+.st-qr { display: flex; flex-wrap: wrap; align-items: center; gap: 16px; }
+.st-qr svg { flex: none; width: 176px; height: 176px; border-radius: 12px; }
+.st-qr > .st-t { flex: 1 1 180px; }
+.st-key { font: 600 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; letter-spacing: .06em; word-break: normal; user-select: all; color: var(--ink, #f3f4f6); }
+.st-codes { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.st-codes code { padding: 8px 10px; border: 1px solid var(--line, #2b2e38); border-radius: 10px; background: var(--panel, #1b1d24); font: 600 15px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-align: center; letter-spacing: .06em; user-select: all; }
 .st-check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2, #b9bdc8); cursor: pointer; }
 .st-check input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent, #3550E8); }
 .st-danger { border-color: color-mix(in srgb, #e5484d 40%, var(--line, #2b2e38)); }
@@ -116,15 +122,7 @@ label.st-row { cursor: pointer; }
 .st-empty p { margin: 0; font-size: 14px; line-height: 1.45; color: var(--ink-2, #b9bdc8); }
 .st-toast { position: absolute; left: 50%; bottom: 16px; z-index: 2; width: max-content; max-width: calc(100% - 32px); padding: 10px 16px; border-radius: 12px; background: var(--ink, #f3f4f6); color: var(--panel, #1b1d24); font-size: 14px; font-weight: 600; text-align: center; transform: translate(-50%, 12px); opacity: 0; pointer-events: none; transition: opacity .2s, transform .25s; }
 .st-toast.on { opacity: 1; transform: translate(-50%, 0); }
-/* тонкая полоска прокрутки без стрелок и фона: еле видна, ярче при наведении (Chrome, Edge, Safari) */
-.st-body::-webkit-scrollbar, .st-nav::-webkit-scrollbar { width: 10px; }
-.st-body::-webkit-scrollbar-track, .st-nav::-webkit-scrollbar-track { background: transparent; }
-.st-body::-webkit-scrollbar-button, .st-nav::-webkit-scrollbar-button { display: none; height: 0; }
-.st-body::-webkit-scrollbar-thumb, .st-nav::-webkit-scrollbar-thumb { border: 3px solid transparent; border-radius: 99px; background: color-mix(in srgb, var(--ink, #f3f4f6) 18%, transparent) padding-box; }
-.st-body:hover::-webkit-scrollbar-thumb, .st-nav:hover::-webkit-scrollbar-thumb { background-color: color-mix(in srgb, var(--ink, #f3f4f6) 32%, transparent); }
-.st-body::-webkit-scrollbar-thumb:hover, .st-nav::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--ink, #f3f4f6) 48%, transparent); }
-/* Firefox не знает ::-webkit-scrollbar: там тонкая полоска своими средствами */
-@supports not selector(::-webkit-scrollbar) { .st-body, .st-nav { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--ink, #f3f4f6) 25%, transparent) transparent; } }
+/* полосы прокрутки — общие для сайта, в /base.css */
 @media (max-width: 719px) {
   .st-sheet { padding: 0; place-items: stretch; }
   .st-card { width: 100%; height: 100dvh; grid-template-columns: minmax(0, 1fr); border: 0; border-radius: 0; }
@@ -146,7 +144,8 @@ label.st-row { cursor: pointer; }
 html.unslop .st-card { box-shadow: 0 24px 60px -30px rgb(0 0 0 / .45); }
 html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }`;
 
-  let box = null, card = null, cur = 'account', me = null, toastT = 0;
+  let box = null, card = null, cur = 'account', me = null, toastT = 0, mailOn = false;
+  fetch(API + '/auth/options', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : {})).then((o) => { mailOn = !!(o && o.mail); }).catch(() => {});
   const $ = (s) => box.querySelector(s);
   const narrow = () => matchMedia('(max-width: 719px)').matches;
   function toast(t) {
@@ -204,6 +203,80 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }`
     try { localStorage.removeItem('ocenshik.user.v1'); } catch (e) {}
   }
 
+  // ---------- копия оценок: тот же файл, что «Резервная копия» в Мнении ----------
+  // фото оценок лежат в IndexedDB (photo-store.js): на страницах без него скрипт подгружается
+  const photoStore = () => (window.CasualPhotos ? Promise.resolve(window.CasualPhotos) : new Promise((res) => {
+    const sc = document.createElement('script'); sc.src = '/photo-store.js';
+    sc.onload = () => res(window.CasualPhotos || null); sc.onerror = () => res(null); document.head.appendChild(sc);
+  }));
+  const stampOf = (x) => +new Date(x.updatedAt || x.createdAt || 0) || 0;
+  async function makeBackup() {
+    const ratings = (read('ocenshik.ratings.v2') || []).filter((r) => r && typeof r.id === 'string' && !r.example);
+    const ps = await photoStore();
+    if (ps) {
+      const keys = ratings.filter((r) => r.photo && ps.isKey(r.photo.ref) && !r.photo.data).map((r) => r.photo.ref);
+      const got = keys.length ? await ps.getMany(keys) : {};
+      ratings.forEach((r, i) => { const k = r.photo && r.photo.ref; if (k && got[k]) ratings[i] = { ...r, photo: { id: got[k], data: got[k], w: r.photo.w || 0, h: r.photo.h || 0 } }; });
+    }
+    // пароли в файл не попадают: копию могут и переслать
+    return { version: 2, appName: 'Мнение Казуала', exportedAt: new Date().toISOString(), ratings, categories: read('ocenshik.cats.v2') || [], users: (read('ocenshik.users.v1') || []).map(({ pass, ...x }) => x), log: read('ocenshik.log.v2') || [] };
+  }
+  // бережное восстановление: недостающие добавляются, более свежие из файла заменяют старые, остальное не трогается
+  async function restoreFrom(file) {
+    if (file.size > 60e6) throw new Error('Файл слишком большой для копии оценок.');
+    let data;
+    try { data = JSON.parse(await file.text()); } catch (e) { throw new Error('Не получилось прочитать файл: это не копия оценок.'); }
+    const list = Array.isArray(data) ? data : data && Array.isArray(data.ratings) ? data.ratings : null;
+    const inFile = (list || []).filter((r) => r && typeof r === 'object' && typeof r.id === 'string' && r.id && r.id.length <= 120 && typeof r.name === 'string' && r.name.trim() && !r.example).slice(0, 5000);
+    if (!inFile.length) throw new Error('В этом файле нет оценок.');
+    const u = user();
+    const local = (read('ocenshik.ratings.v2') || []).filter((r) => r && typeof r.id === 'string');
+    const at = new Map(local.map((r, i) => [r.id, i]));
+    const people = new Set((read('ocenshik.users.v1') || []).map((x) => x && x.id));
+    // удалённые раньше (здесь и, если вошёл, в аккаунте): восстановленная оценка свежее отметки, и синхронизация её не уберёт
+    const tomb = new Map((read('casualhub.deleted.v1') || []).filter((d) => d && d.id).map((d) => [d.id, +d.at || 0]));
+    let acc = null;
+    if (token()) {
+      try {
+        acc = me || (await api('/me')).user;
+        const sh = await api('/shelf/' + encodeURIComponent(acc.id));
+        (sh.deleted || []).forEach((d) => { if (d && d.id) tomb.set(d.id, Math.max(tomb.get(d.id) || 0, +d.at || 0)); });
+      } catch (e) {}
+    }
+    const ps = await photoStore();
+    let added = 0, updated = 0;
+    for (const r0 of inFile) {
+      const r = { ...r0 };
+      // копия с другого устройства: оценки становятся твоими, а не чужого профиля, которого здесь нет
+      if (u && (!r.author || !people.has(r.author.id))) r.author = { id: u.id, name: u.name, avatar: u.avatar, color: u.color };
+      const t = tomb.get(r.id);
+      if (t && stampOf(r) <= t) r.updatedAt = new Date(t + 1000).toISOString();
+      const i = at.get(r.id);
+      if (i != null && stampOf(r) <= stampOf(local[i])) continue;
+      // фото из файла — в IndexedDB, в оценке остаётся ссылка (иначе тяжёлые фото не влезут в браузер)
+      const d = r.photo && [r.photo.data, r.photo.id].find((x) => typeof x === 'string' && x.startsWith('data:image/'));
+      if (d && ps) { const key = ps.keyOf(d); if (await ps.put(key, d)) r.photo = { ref: key, w: r.photo.w || 0, h: r.photo.h || 0 }; }
+      if (i == null) { at.set(r.id, local.length); local.push(r); added++; } else { local[i] = r; updated++; }
+    }
+    const ids = new Set(inFile.map((r) => r.id));
+    write('casualhub.deleted.v1', (read('casualhub.deleted.v1') || []).filter((d) => !(d && ids.has(d.id))));
+    // категории: добавляются только те, которых нет (по id или названию)
+    const fileCats = Array.isArray(data.categories) ? data.categories.filter((c) => c && typeof c.id === 'string' && typeof c.name === 'string' && Array.isArray(c.criteria)) : [];
+    const cats = read('ocenshik.cats.v2');
+    const have = Array.isArray(cats) ? cats : [];
+    const newCats = fileCats.filter((c) => !have.some((x) => x && (x.id === c.id || String(x.name || '').trim().toLowerCase() === c.name.trim().toLowerCase())));
+    if (newCats.length) {
+      write('ocenshik.cats.v2', [...have, ...newCats].slice(0, 40));
+      write('ocenshik.catsDeleted.v1', (read('ocenshik.catsDeleted.v1') || []).filter((d) => !(d && newCats.some((c) => c.id === d.id))));
+      if (acc) { const m = read('ocenshik.catsAt.v1') || {}; m[acc.id] = Date.now(); write('ocenshik.catsAt.v1', m); }
+    }
+    if (added || updated) {
+      try { localStorage.setItem('ocenshik.ratings.v2', JSON.stringify(local)); }
+      catch (e) { throw new Error('В браузере не хватает места для всех оценок из файла.'); }
+    }
+    return { added, updated, same: inFile.length - added - updated, cats: newCats.length };
+  }
+
   // ---------- разделы ----------
   const R = {};
   R.account = () => {
@@ -233,10 +306,12 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }`
           <label class="st-check"><input type="checkbox" data-show> Показать пароли</label>
           <span class="st-hint">От 8 символов и не из самых простых вроде «12345678».</span>
           <div class="st-acts"><button type="submit" class="st-btn pri">Сменить пароль</button><span class="st-msg" role="status"></span></div></form>` })
-        + fold({ name: 'Почта', desc: mail ? esc(mail) + ' · по почте тоже можно войти' : 'Не указана', btn: 'Сменить', form: `<form class="st-form" data-f="mail">
+        + fold({ name: 'Почта', desc: mail ? esc(mail) + (me && me.emailOk ? ' · <span>подтверждена</span>' : mailOn && me ? ' · <span>не подтверждена</span>' : ' · <span>по почте тоже можно войти</span>') : 'Не указана', btn: 'Сменить', form: `<form class="st-form" data-f="mail">
           <label class="st-f"><span>Новая почта</span><input class="st-in" type="email" name="email" autocomplete="email" required placeholder="name@mail.com"></label>
           <label class="st-f"><span>Текущий пароль</span><input class="st-in" type="password" name="current" autocomplete="current-password" required></label>
-          <div class="st-acts"><button type="submit" class="st-btn pri">Сменить почту</button><span class="st-msg" role="status"></span></div></form>` }))
+          <div class="st-acts"><button type="submit" class="st-btn pri">Сменить почту</button><span class="st-msg" role="status"></span></div></form>` })
+      + (mail && mailOn && me && !me.emailOk ? `<div class="st-row"><span class="st-t"><b>Подтвердить почту</b><small>Пришлём письмо со ссылкой. С подтверждённой почтой забытый пароль можно сбросить</small></span><button type="button" class="st-btn" data-do="verify-mail">Отправить письмо</button></div>` : ''))
+      + grp('Двухфакторная защита', tfaBlock())
       + `<section class="st-grp"><span class="st-lab">Где выполнен вход</span><div class="st-box" id="stDevs"><div class="st-row"><span class="st-t"><small>Загружаю устройства…</small></span></div></div>
           <div class="st-acts"><button type="button" class="st-btn" data-do="others" hidden>Выйти на всех остальных устройствах</button></div></section>`
       + grp('Удаление', fold({ name: 'Удалить аккаунт', desc: 'Навсегда, вместе со всем на сервере', btn: 'Удалить…', bad: true, form: `<form class="st-form" data-f="delete">
@@ -245,6 +320,33 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }`
           <label class="st-f"><span>Впиши свой юзернейм для подтверждения</span><span class="st-at"><span>@</span><input class="st-in" name="confirm" autocapitalize="none" autocorrect="off" spellcheck="false" required></span></label>
           <div class="st-acts"><button type="submit" class="st-btn bad pri">Удалить аккаунт навсегда</button><span class="st-msg" role="status"></span></div></form>` }), 'st-danger');
   };
+  // двухфакторная защита: выключена — подключение по QR-коду, включена — запасные коды и выключение
+  function tfaBlock() {
+    if (me && me.twoFactor) {
+      return fold({ name: 'Включена', desc: `При входе нужен код из приложения · запасных кодов: ${me.backupLeft}`, btn: 'Настроить', form: `<div class="st-form" data-tfa>
+          <form class="st-form" data-f="tfa-codes" style="padding:0">
+            <span class="st-hint"><b>Новые запасные коды.</b> Старые перестанут работать. Нужен код из приложения.</span>
+            <label class="st-f"><span>Код из приложения</span><input class="st-in" name="code" autocomplete="one-time-code" inputmode="numeric" maxlength="6" required></label>
+            <div class="st-acts"><button type="submit" class="st-btn">Получить новые коды</button><span class="st-msg" role="status"></span></div></form>
+          <form class="st-form" data-f="tfa-off" style="padding:12px 0 0;border-top:1px solid var(--line, #2b2e38)">
+            <span class="st-hint"><b>Выключить защиту.</b> Входить можно будет снова только по паролю.</span>
+            <label class="st-f"><span>Текущий пароль</span><input class="st-in" type="password" name="current" autocomplete="current-password" required></label>
+            <label class="st-f"><span>Код из приложения или запасной</span><input class="st-in" name="code" autocomplete="one-time-code" maxlength="12" required></label>
+            <div class="st-acts"><button type="submit" class="st-btn bad">Выключить</button><span class="st-msg" role="status"></span></div></form></div>` });
+    }
+    return fold({ name: 'Выключена', desc: 'Включи: при входе, кроме пароля, понадобится код из приложения на телефоне. Даже узнав пароль, чужой не войдёт', btn: 'Включить', form: `<div class="st-form" data-tfa>
+        <span class="st-hint">Нужно приложение-аутентификатор: Google Authenticator, Microsoft Authenticator, 1Password, Bitwarden или любое похожее.</span>
+        <div class="st-acts"><button type="button" class="st-btn pri" data-do="tfa-start">Показать QR-код</button><span class="st-msg" role="status"></span></div></div>` });
+  }
+  const loadQR = () => (window.CasualQR ? Promise.resolve() : new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = '/qr.js'; sc.onload = res; sc.onerror = rej; document.head.appendChild(sc); }));
+  // запасные коды показываются один раз: скопировать, скачать файлом
+  function showCodes(box, codes) {
+    box.innerHTML = `<span class="st-hint"><b>Запасные коды.</b> Сохрани их: каждый работает один раз и выручит, если телефона нет под рукой. Больше их не покажем.</span>
+      <div class="st-codes">${codes.map((c) => `<code>${esc(c)}</code>`).join('')}</div>
+      <div class="st-acts"><button type="button" class="st-btn" data-do="codes-copy">Скопировать</button><button type="button" class="st-btn" data-do="codes-save">Скачать файлом</button><button type="button" class="st-btn pri" data-do="codes-done">Готово, сохранил</button></div>`;
+    box.dataset.codes = codes.join('\n');
+  }
+
   R.privacy = () => {
     const acc = user() && token();
     return (acc ? grp('Друзья', toggle({ name: 'Показывать друзьям, что я в сети', desc: 'Зелёная точка у тебя в списке друзей. Выключишь — друзья не увидят, когда ты на сайте', attr: 'data-online', on: !(me && me.hideOnline) })) : needAccount('Друзья и «в сети» есть у аккаунта.'))
@@ -265,7 +367,8 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }`
   };
   R.data = () => grp('Импорт', row({ name: 'Импорт из Letterboxd', desc: 'Перенести оценки фильмов из архива Letterboxd', href: '/opinion/#letterboxd', attr: 'data-lb-open data-close' }))
     + grp('Обложки и названия', row({ name: 'Обновить обложки и названия', desc: 'Подтянуть к сохранённым оценкам обложки, русские названия, год и жанры', href: '/opinion/#refresh', attr: 'data-refresh-open data-close' }))
-    + grp('Копия', `<div class="st-row"><span class="st-t"><b>Скачать мои оценки</b><small>Файл с оценками и категориями из этого браузера: на всякий случай или чтобы посмотреть в другой программе</small></span><button type="button" class="st-btn" data-do="backup">Скачать</button></div>`);
+    + grp('Копия', `<div class="st-row"><span class="st-t"><b>Скачать копию</b><small>Оценки, категории, фото и журнал из этого браузера в одном файле</small></span><button type="button" class="st-btn" data-do="backup">Скачать</button></div>
+        <div class="st-row"><span class="st-t"><b>Восстановить из копии</b><small>Каких оценок нет — добавит, более старые обновит, остальные не тронет. Подходит и копия из профиля в Мнении</small></span><label class="st-btn">Выбрать файл<input type="file" accept=".json,application/json" data-restore hidden></label></div>`);
   R.general = () => {
     const ex = (() => { try { return localStorage.getItem('casualhub.examples.v1') !== '0'; } catch (e) { return true; } })();
     return grp('Примеры', toggle({ name: 'Показывать примеры', desc: 'Пример топа на главной и участники в пустом Колесе. Выключишь — они уберутся и больше не появятся', attr: 'data-examples', on: ex }))
@@ -356,16 +459,46 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }`
         forgetAccount();
         location.reload();
       } else if (what === 'backup') {
-        const u = user();
-        const all = read('ocenshik.ratings.v2') || [];
-        const mine = all.filter((r) => r && !r.example && (!u || !r.author || !r.author.id || r.author.id === u.id));
-        const data = { site: 'casualhub.pages.dev', at: new Date().toISOString(), ratings: mine, categories: read('ocenshik.cats.v2') || [] };
+        act.disabled = true;
+        try {
+          const data = await makeBackup();
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(new Blob([JSON.stringify(data)], { type: 'application/json' }));
+          a.download = `casualhub-backup-${new Date().toISOString().slice(0, 10)}.json`;
+          document.body.appendChild(a); a.click(); a.remove();
+          setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+          toast(`В копии оценок: ${data.ratings.length}`);
+        } catch (er) { toast('Не получилось собрать копию'); }
+        act.disabled = false;
+      } else if (what === 'tfa-start') {
+        const boxT = act.closest('[data-tfa]');
+        act.disabled = true;
+        try {
+          const [r] = await Promise.all([api('/2fa/start', 'POST'), loadQR()]);
+          const key = r.secret.replace(/(.{4})/g, '$1 ').trim();
+          boxT.innerHTML = `<span class="st-hint"><b>1.</b> Отсканируй QR-код приложением-аутентификатором${narrow() ? ' или нажми «Открыть в приложении»' : ''}.</span>
+            <div class="st-qr">${window.CasualQR.svg(r.uri, 176)}<span class="st-t"><small>Не получается отсканировать? Добавь вручную по ключу:</small><span class="st-key">${esc(key)}</span>${narrow() ? `<a class="st-btn" href="${esc(r.uri)}" style="justify-self:start;margin-top:6px">Открыть в приложении</a>` : ''}</span></div>
+            <form class="st-form" data-f="tfa-on" style="padding:0"><span class="st-hint"><b>2.</b> Введи 6 цифр, которые показывает приложение для «CasualHub».</span>
+              <label class="st-f"><span>Код из приложения</span><input class="st-in" name="code" autocomplete="one-time-code" inputmode="numeric" maxlength="6" required></label>
+              <div class="st-acts"><button type="submit" class="st-btn pri">Включить защиту</button><span class="st-msg" role="status"></span></div></form>`;
+          const i = boxT.querySelector('input[name="code"]'); if (i && !narrow()) i.focus();
+        } catch (er) { act.disabled = false; msg(boxT, er.message, 'bad'); }
+      } else if (what === 'codes-copy') {
+        const codes = act.closest('[data-codes]').dataset.codes;
+        try { await navigator.clipboard.writeText(codes); toast('Коды скопированы'); } catch (er) { toast('Не получилось скопировать: выдели коды вручную'); }
+      } else if (what === 'codes-save') {
+        const codes = act.closest('[data-codes]').dataset.codes;
         const a = document.createElement('a');
-        a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 1)], { type: 'application/json' }));
-        a.download = `casualhub-ratings-${new Date().toISOString().slice(0, 10)}.json`;
+        a.href = URL.createObjectURL(new Blob([`Казуал Хаб — запасные коды для входа (@${(me && me.handle) || ''})\nКаждый код работает один раз.\n\n${codes}\n`], { type: 'text/plain' }));
+        a.download = 'casualhub-backup-codes.txt';
         document.body.appendChild(a); a.click(); a.remove();
         setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-        toast(`Скачано оценок: ${mine.length}`);
+      } else if (what === 'codes-done') {
+        show('security');
+      } else if (what === 'verify-mail') {
+        act.disabled = true;
+        try { await api('/email/verify-send', 'POST'); act.textContent = 'Письмо отправлено'; toast('Письмо отправлено: открой ссылку из него'); }
+        catch (er) { act.disabled = false; toast(er.message); }
       } else if (what === 'howto') {
         try { localStorage.removeItem('casualhub.howto.v1'); } catch (er) {}
         toast('Подсказки покажутся при следующем заходе на страницы');
@@ -382,6 +515,19 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }`
     box.addEventListener('change', async (e) => {
       const t = e.target;
       if (t.matches('[data-show]')) { t.closest('form').querySelectorAll('input[type="password"], input[data-pw]').forEach((i) => { i.type = t.checked ? 'text' : 'password'; i.dataset.pw = '1'; }); return; }
+      if (t.matches('[data-restore]')) {
+        const f = t.files && t.files[0];
+        t.value = '';
+        if (!f) return;
+        try {
+          const r = await restoreFrom(f);
+          if (!r.added && !r.updated && !r.cats) { toast(`Всё из файла уже есть: ${r.same}`); return; }
+          toast(`Добавлено: ${r.added}, обновлено: ${r.updated}`);
+          // Мнение перечитает оценки и отправит их в аккаунт
+          setTimeout(() => { if (/^\/opinion\/?$/.test(location.pathname)) { location.hash = 'rating'; location.reload(); } else location.href = '/opinion/#rating'; }, 1200);
+        } catch (er) { toast(er.message); }
+        return;
+      }
       if (t.matches('[data-examples]')) {
         try { localStorage.setItem('casualhub.examples.v1', t.checked ? '1' : '0'); } catch (er) {}
         window.dispatchEvent(new CustomEvent('casualhub:examples', { detail: t.checked }));
@@ -428,6 +574,25 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }`
           patchLocal({ email: me.email });
           show('security');
           toast('Почта сменена');
+          return;
+        } else if (f.dataset.f === 'tfa-on') {
+          btn.disabled = true;
+          const r = await api('/2fa/enable', 'POST', { code: v.code });
+          me = r.user;
+          showCodes(f.closest('[data-tfa]'), r.codes);
+          toast('Двухфакторная защита включена');
+          return;
+        } else if (f.dataset.f === 'tfa-codes') {
+          btn.disabled = true;
+          const r = await api('/2fa/codes', 'POST', { code: v.code });
+          me = r.user;
+          showCodes(f.closest('[data-tfa]'), r.codes);
+          return;
+        } else if (f.dataset.f === 'tfa-off') {
+          btn.disabled = true;
+          me = (await api('/2fa/disable', 'POST', { password: v.current, code: v.code })).user;
+          show('security');
+          toast('Двухфакторная защита выключена');
           return;
         } else if (f.dataset.f === 'delete') {
           btn.disabled = true;

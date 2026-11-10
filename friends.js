@@ -212,6 +212,7 @@
       const err = new Error(out.error || 'Сервер не отвечает.');
       err.status = res.status;
       err.retryAfter = +res.headers.get('retry-after') || 0;
+      err.need2fa = !!out.need2fa; // пароль верный, нужен код из приложения-аутентификатора
       throw err;
     }
     return out;
@@ -358,6 +359,7 @@
     try {
       r = await api('/login', 'POST', { login: /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail) ? mail : nick, password: pass }, null);
     } catch (e) {
+      if (e.need2fa) { F.linkError = 'У аккаунта включена двухфакторная защита: выйди и войди заново кнопкой «Войти», с кодом из приложения.'; return false; }
       if (e.status !== 401) { F.linkError = e.message; return false; }
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(mail)) {
         F.linkError = 'У аккаунта нет почты. Добавь её в профиле («Войти / Профиль» → изменить) и подключи снова.';
@@ -1244,6 +1246,14 @@ ${ICON.chev}
       // сервер ищет и по почте, и по нику
       try { r = await api('/login', 'POST', { login: ident, password: pass }, null); }
       catch (e) { err = e; }
+      // двухфакторная защита: спрашиваем код, пока он не подойдёт или человек не передумает
+      while (!r && err && err.need2fa && window.CasualAskCode) {
+        const code = await window.CasualAskCode(/Код не подходит/.test(err.message) ? err.message : '');
+        if (!code) return false;
+        err = null;
+        try { r = await api('/login', 'POST', { login: ident, password: pass, code }, null); }
+        catch (e) { err = e; if (!e.need2fa) break; }
+      }
       if (r) {
         let u = state.users.find((x) => x.serverId === r.user.id) || (local && (!local.serverId || local.serverId === r.user.id) ? local : null);
         if (!u) {

@@ -844,6 +844,7 @@ function renderAuthModal() {
             <input type="password" id="inputLoginPass" autocomplete="current-password" placeholder="Пароль">
             <button type="button" class="pwd-toggle" id="btnToggleLoginPass" aria-label="Показать/скрыть пароль">${EYE_OPEN_SVG}</button>
           </div>
+          <button type="button" class="btn text small auth-forgot" data-forgot>Забыли пароль?</button>
         </div>
         <button type="submit" class="btn primary" style="margin-top:4px;">Войти</button>
         <div class="auth-guest-row">
