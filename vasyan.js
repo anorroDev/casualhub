@@ -109,10 +109,14 @@
     if (!css.isConnected) document.head.appendChild(css);
     bowl = document.createElement('button');
     bowl.type = 'button'; bowl.className = 'vy-bowl';
+    bowl.dataset.noPress = ''; // без «проседания» из fx.js: его scale сжимает и наш transform-сдвиг
     bowl.setAttribute('aria-label', 'Миска Васяна: насыпать корм');
     bowl.addEventListener('click', feed);
     cat = document.createElement('button');
     cat.type = 'button'; cat.className = 'vy-cat';
+    // fx.js при нажатии уменьшает кнопку (scale: .94), а scale применяется поверх transform: translate —
+    // весь сдвиг сжимался к левому верхнему углу, и схваченный Васян висел далеко от курсора
+    cat.dataset.noPress = '';
     cat.setAttribute('aria-label', 'Котик Васян: нажми, чтобы погладить, или перетащи');
     cat.innerHTML = '<span class="vy-body"></span>';
     body = cat.firstChild;
