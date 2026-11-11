@@ -174,6 +174,50 @@ html.unslop .lv-hbtn.lv-pulse { animation-duration: 2.6s; }
 .lv-recap .wide { grid-column: 1 / -1; }
 .lv-recap .wide b { font-size: 18px; }
 .lv-err { color: #E4553F; font-size: 13px; margin: 0; }
+/* знакомство: всё размыто, кроме кнопки уровня (её копия лежит поверх размытия ровно на месте настоящей) */
+.lv-spot { position: fixed; inset: 0; z-index: 130; background: rgb(8 10 16 / .55); -webkit-backdrop-filter: blur(9px) saturate(.8); backdrop-filter: blur(9px) saturate(.8); animation: lv-fade .35s ease both; }
+@keyframes lv-fade { from { opacity: 0; } }
+.lv-ov.lv-blur { -webkit-backdrop-filter: blur(9px) saturate(.8); backdrop-filter: blur(9px) saturate(.8); background: rgb(8 10 16 / .55); }
+.lv-spot-btn { position: fixed; z-index: 131; margin: 0 !important; box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent, #3550E8) 45%, transparent), 0 0 34px 6px color-mix(in srgb, var(--accent, #3550E8) 55%, transparent) !important; animation: lv-pulse 1.6s ease-in-out infinite; }
+.lv-spot-tip { position: fixed; z-index: 131; width: min(300px, calc(100vw - 32px)); padding: 14px 16px; border-radius: 16px; background: var(--panel, #17181c); color: var(--ink, #f2f2f2); border: 1px solid color-mix(in srgb, var(--accent, #3550E8) 50%, var(--line, #2b2e38)); box-shadow: 0 18px 40px -12px rgb(0 0 0 / .6); display: grid; gap: 4px; animation: lv-tip-in .45s .15s cubic-bezier(.22, 1, .36, 1) both; }
+.lv-spot-tip b { font-size: 16px; }
+.lv-spot-tip span { font-size: 13.5px; color: var(--ink-2, #b5b5b5); line-height: 1.4; }
+.lv-spot-tip::before { content: ""; position: absolute; top: -7px; left: var(--ax, 28px); width: 12px; height: 12px; background: inherit; border-left: 1px solid color-mix(in srgb, var(--accent, #3550E8) 50%, var(--line, #2b2e38)); border-top: 1px solid color-mix(in srgb, var(--accent, #3550E8) 50%, var(--line, #2b2e38)); transform: rotate(45deg); }
+@keyframes lv-tip-in { from { opacity: 0; transform: translateY(8px); } }
+@media (prefers-reduced-motion: reduce) { .lv-spot, .lv-spot-tip, .lv-spot-btn { animation: none; } }
+/* тур: одна карточка — картинка, заголовок, две строки */
+.lv-tour { width: min(440px, 100%); display: grid; gap: 18px; padding: 26px 24px 20px; border-radius: 24px; border: 1px solid var(--line, #2b2e38); background: var(--panel, #17181c); color: var(--ink, #f2f2f2); box-shadow: 0 30px 70px -20px rgb(0 0 0 / .65); text-align: center; }
+.lv-tour .pic { height: 132px; display: grid; place-items: center; }
+.lv-tour h3 { margin: 0; font: 800 24px/1.15 var(--font-display, system-ui); text-wrap: balance; }
+.lv-tour p { margin: 0; font-size: 14.5px; line-height: 1.5; color: var(--ink-2, #b5b5b5); text-wrap: balance; }
+.lv-tour .dots { display: flex; justify-content: center; gap: 6px; }
+.lv-tour .dots i { width: 7px; height: 7px; border-radius: 4px; background: color-mix(in srgb, var(--ink, #fff) 18%, transparent); transition: width .25s, background .25s; }
+.lv-tour .dots i.on { width: 22px; background: var(--accent, #3550E8); }
+.lv-tour .nav { display: flex; gap: 10px; }
+.lv-tour .nav button { flex: 1; padding: 12px; border-radius: 14px; font: 700 14.5px/1.2 inherit; font-family: inherit; cursor: pointer; border: 1px solid var(--line, #2b2e38); background: transparent; color: var(--ink, #fff); }
+.lv-tour .nav .go { background: var(--accent, #3550E8); border-color: transparent; color: #fff; }
+.lv-tour .slide { display: grid; gap: 10px; animation: lv-slide .35s cubic-bezier(.22, 1, .36, 1); }
+@keyframes lv-slide { from { opacity: 0; transform: translateX(14px); } }
+@media (prefers-reduced-motion: reduce) { .lv-tour .slide { animation: none; } }
+.lv-bigring { position: relative; width: 112px; height: 112px; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--accent, #3550E8) var(--p, 60%), color-mix(in srgb, var(--ink, #fff) 12%, transparent) 0); }
+.lv-bigring::before { content: ""; position: absolute; inset: 10px; border-radius: 50%; background: var(--panel, #17181c); }
+.lv-bigring b { position: relative; font: 800 44px/1 var(--font-display, system-ui); }
+.lv-bigring small { position: absolute; bottom: -10px; left: 50%; transform: translateX(-50%); padding: 3px 10px; border-radius: 999px; background: var(--accent, #3550E8); color: #fff; font: 700 11.5px/1.2 system-ui, sans-serif; white-space: nowrap; }
+.lv-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 7px; max-width: 360px; }
+.lv-chips span { display: inline-flex; align-items: center; gap: 6px; padding: 7px 11px; border-radius: 999px; border: 1px solid var(--line, #2b2e38); font-size: 13px; font-weight: 600; }
+.lv-chips span b { color: var(--accent, #3550E8); font-variant-numeric: tabular-nums; }
+.lv-tq { display: grid; gap: 8px; width: min(300px, 100%); text-align: left; }
+.lv-tq div { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 12px; border: 1px solid var(--line, #2b2e38); font-size: 13.5px; }
+.lv-tq div i { width: 18px; height: 18px; border-radius: 6px; border: 2px solid var(--line, #2b2e38); flex: none; }
+.lv-tq div.ok i { background: #2EAD60; border-color: #2EAD60; }
+.lv-tq div em { margin-left: auto; font-style: normal; font-weight: 800; color: #D99A1E; }
+.lv-tmedals { display: flex; gap: 12px; align-items: flex-end; }
+.lv-tmedals .lv-medal { width: 54px; height: 54px; border-radius: 16px; font-size: 22px; }
+.lv-tmedals .lv-medal:nth-child(2) { width: 68px; height: 68px; font-size: 28px; }
+.lv-tmail { position: relative; width: 120px; height: 86px; border-radius: 16px; border: 2px solid var(--line, #2b2e38); display: grid; place-items: center; }
+.lv-tmail svg { width: 64px; height: 64px; color: var(--accent, #3550E8); }
+.lv-tmail span { position: absolute; top: -10px; right: -10px; padding: 4px 9px; border-radius: 999px; background: #D99A1E; color: #fff; font: 800 13px/1 system-ui, sans-serif; }
+html.unslop .lv-tour .nav .go, html.unslop .lv-tour .dots i.on { background: var(--accent, #3550E8); }
 @media (max-width: 600px) { .lv-ov { padding: 0; } .lv-card { width: 100%; height: 100%; border-radius: 0; border: 0; } .lv-body { padding: 14px 16px 24px; } }
 html.unslop .lv-row .lv-bar i, html.unslop .lv-bar i { background: var(--accent, #3550E8); }
 html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3550E8); }
@@ -654,7 +698,126 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     }, 'image/png');
   }
 
-  window.CasualLevels = { open: openProgress, refresh: refreshMe, news: pullNews };
+  // ---------- знакомство с уровнями (один раз на аккаунт) ----------
+  const INTRO_KEY = 'casualhub.levels.intro.v1';
+  const introDone = () => { try { if (localStorage.getItem(INTRO_KEY) === '1') return true; } catch (e) {} return !!(ME && ME.prefs && ME.prefs.intro); };
+  let spot = null;
+  // всё размыто, видна только кнопка уровня: нажать её — единственный путь дальше
+  function spotlight() {
+    const real = document.querySelector('.lv-hbtn');
+    if (!real || spot) return;
+    spot = { ov: document.createElement('div'), tip: document.createElement('div'), btn: real.cloneNode(true) };
+    spot.ov.className = 'lv-spot';
+    spot.btn.classList.add('lv-spot-btn');
+    spot.btn.classList.remove('lv-pulse');
+    spot.tip.className = 'lv-spot-tip';
+    spot.tip.setAttribute('role', 'dialog');
+    spot.tip.setAttribute('aria-label', 'Новое на сайте: уровни');
+    spot.tip.innerHTML = '<b>Новое: уровни</b><span>Получай опыт за оценки и общение с друзьями. Нажми, чтобы узнать, как это работает.</span>';
+    const place = () => {
+      const r = real.getBoundingClientRect();
+      Object.assign(spot.btn.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
+      const tw = Math.min(300, innerWidth - 32);
+      const left = Math.max(16, Math.min(r.left, innerWidth - tw - 16));
+      spot.tip.style.left = left + 'px';
+      spot.tip.style.top = r.bottom + 14 + 'px';
+      spot.tip.style.setProperty('--ax', Math.max(14, Math.min(tw - 26, r.left + r.width / 2 - left - 6)) + 'px');
+    };
+    // сначала убираем прокрутку страницы: без полосы прокрутки шапка сдвигается, и копия встала бы мимо кнопки
+    document.documentElement.style.overflow = 'hidden';
+    place();
+    requestAnimationFrame(place);
+    spot.place = place;
+    addEventListener('resize', place);
+    addEventListener('scroll', place, { passive: true });
+    spot.btn.addEventListener('click', () => { endSpot(); openIntro(); });
+    spot.tip.addEventListener('click', () => { endSpot(); openIntro(); });
+    // только кнопка: клавиатура тоже не уходит под размытие
+    spot.ov.addEventListener('keydown', (e) => e.preventDefault());
+    document.body.append(spot.ov, spot.btn, spot.tip);
+    setTimeout(() => spot && spot.btn.focus(), 50);
+  }
+  function endSpot() {
+    if (!spot) return;
+    removeEventListener('resize', spot.place);
+    removeEventListener('scroll', spot.place);
+    spot.ov.remove(); spot.btn.remove(); spot.tip.remove();
+    spot = null;
+    document.documentElement.style.overflow = '';
+  }
+  document.addEventListener('focusin', (e) => { if (spot && !spot.btn.contains(e.target) && !spot.tip.contains(e.target)) spot.btn.focus(); });
+
+  // тур: пять карточек, на каждой картинка, заголовок и пара строк
+  function slides() {
+    const m = ME, lv = m.level, p = Math.max(8, Math.round((m.into / Math.max(1, m.need)) * 100));
+    const past = m.xp > 0;
+    return [
+      {
+        pic: `<div class="lv-bigring" style="--p:${p}%"><b>${lv}</b><small>${esc(m.rank)}</small></div>`,
+        h: past ? `У тебя уже ${lv}-й уровень` : 'Теперь у всех есть уровень',
+        t: past ? `Это за всё, что ты успел сделать на сайте раньше: ${nf(m.xp)} опыта. Дальше — больше.` : 'Делай то, что и так делаешь на сайте, — и уровень будет расти.',
+      },
+      {
+        pic: '<div class="lv-chips"><span>Оценка <b>+10</b></span><span>Отзыв <b>+5</b></span><span>Тир-лист <b>+25</b></span><span>Реакция другу <b>+3</b></span><span>Комментарий <b>+6</b></span><span>Новый друг <b>+15</b></span><span>Сбор лотов <b>+30</b></span></div>',
+        h: 'Опыт за то, что ты любишь',
+        t: 'Больше всего — за общение с друзьями. У каждого действия есть дневной лимит, а удалённое списывается.',
+      },
+      {
+        pic: '<div class="lv-tq"><div class="ok"><i></i>Оцени 2 произведения<em>+15</em></div><div class="ok"><i></i>Отреагируй на 3 оценки<em>+15</em></div><div><i></i>Напиши отзыв<em>+15</em></div></div>',
+        h: 'Задания и серия',
+        t: 'Каждый день три задания. Заходи подряд — растёт серия 🔥, а «заморозка» спасёт, если пропустишь день.',
+      },
+      {
+        pic: '<div class="lv-tmedals"><i class="lv-medal lv-t1">К</i><i class="lv-medal lv-t3">★</i><i class="lv-medal lv-t2">Д</i></div>',
+        h: 'Достижения и награды',
+        t: 'Собирай достижения и открывай рамки для аватара, цвет ника и фон профиля.',
+      },
+      {
+        pic: `<div class="lv-tmail">${MAIL_ICON.replace('width="17" height="17"', '')}<span>+50</span></div>`,
+        h: 'Подарки в почте',
+        t: 'В меню ☰ → «Почта» приходят подарки от нас. А в «Рейтинге» видно, кто из друзей сильнее на этой неделе.',
+      },
+    ];
+  }
+  let tour = null;
+  function openIntro() {
+    if (!ME) return;
+    const list = slides();
+    let i = 0;
+    tour = document.createElement('div');
+    tour.className = 'lv-ov lv-blur';
+    tour.style.zIndex = '132';
+    tour.innerHTML = '<div class="lv-tour" role="dialog" aria-modal="true" aria-labelledby="lvTourH"></div>';
+    const box = tour.firstElementChild;
+    const draw = () => {
+      const s = list[i], last = i === list.length - 1;
+      box.innerHTML = `<div class="slide"><div class="pic">${s.pic}</div><h3 id="lvTourH">${s.h}</h3><p>${s.t}</p></div>
+        <div class="dots" aria-hidden="true">${list.map((_, k) => `<i class="${k === i ? 'on' : ''}"></i>`).join('')}</div>
+        <div class="nav">${i ? '<button type="button" class="back">Назад</button>' : ''}<button type="button" class="go">${last ? 'Поехали' : 'Дальше'}</button></div>`;
+      box.querySelector('.go').addEventListener('click', () => { if (last) finish(); else { i++; draw(); } });
+      const back = box.querySelector('.back');
+      if (back) back.addEventListener('click', () => { i--; draw(); });
+      box.querySelector('.go').focus();
+    };
+    tour.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowRight' && i < list.length - 1) { i++; draw(); }
+      if (e.key === 'ArrowLeft' && i > 0) { i--; draw(); }
+    });
+    document.body.appendChild(tour);
+    document.documentElement.style.overflow = 'hidden';
+    draw();
+  }
+  async function finish() {
+    try { localStorage.setItem(INTRO_KEY, '1'); } catch (e) {}
+    markSeen();
+    if (tour) { tour.remove(); tour = null; }
+    document.documentElement.style.overflow = '';
+    try { const r = await api('/levels/prefs', 'PUT', { intro: true }); ME.prefs = r.prefs; } catch (e) {}
+    openProgress('home');
+    pullNews();
+  }
+
+  window.CasualLevels = { open: openProgress, refresh: refreshMe, news: pullNews, intro: openIntro };
   if (!token()) return;
-  refreshMe().then(() => { if (ME) { pullNews(); if (/^#progress$/.test(location.hash)) { history.replaceState(null, '', location.pathname + location.search); openProgress('home'); } } });
+  refreshMe().then(() => { if (ME && !introDone()) { setTimeout(spotlight, 400); return; } if (ME) { pullNews(); if (/^#progress$/.test(location.hash)) { history.replaceState(null, '', location.pathname + location.search); openProgress('home'); } } });
 })();

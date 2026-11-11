@@ -607,7 +607,7 @@ export async function readLevel(env, uid) {
 }
 export const prefsOf = (row) => {
   const p = parse(row && row.prefs, {});
-  return { hideLevel: !!p.hideLevel, hideBoard: !!p.hideBoard, notify: p.notify !== false, anim: p.anim !== false, showcase: Array.isArray(p.showcase) ? p.showcase.slice(0, 3) : [], frame: p.frame || '', color: p.color || '', bg: p.bg || '' };
+  return { intro: !!p.intro, hideLevel: !!p.hideLevel, hideBoard: !!p.hideBoard, notify: p.notify !== false, anim: p.anim !== false, showcase: Array.isArray(p.showcase) ? p.showcase.slice(0, 3) : [], frame: p.frame || '', color: p.color || '', bg: p.bg || '' };
 };
 // оформление, которое видят другие: только то, что открыто уровнем
 export function lookOf(row) {

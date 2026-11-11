@@ -141,7 +141,7 @@ export function makeLevelsRoutes(h) {
       const cur = prefsOf(row);
       const lv = levelView(+row.xp || 0, +row.level || 1).level, u = unlockedAt(lv);
       const next = { ...cur };
-      for (const k of ['hideLevel', 'hideBoard', 'notify', 'anim']) if (typeof b[k] === 'boolean') next[k] = b[k];
+      for (const k of ['intro', 'hideLevel', 'hideBoard', 'notify', 'anim']) if (typeof b[k] === 'boolean') next[k] = b[k];
       if (Array.isArray(b.showcase)) {
         const own = new Set(((await env.DB.prepare('SELECT code FROM achievements WHERE user_id = ?').bind(me.id).all()).results || []).map((x) => x.code));
         next.showcase = [...new Set(b.showcase.map(String))].filter((c) => own.has(c)).slice(0, 3);
