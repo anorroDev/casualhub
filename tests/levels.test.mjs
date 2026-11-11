@@ -294,3 +294,17 @@ test('почта: письмо о новом уровне с тем, что от
   await award(env, 'u2', 'past', 'x', { xp: 500, now: NOON, past: true });
   assert.equal(q(env, "SELECT COUNT(*) AS n FROM gifts WHERE to_id = 'u2'")[0].n, 0);
 });
+
+test('опыт за прошлое сам при первом заходе (ensurePast), один раз', async () => {
+  const { ensurePast } = await import('../functions/_lib/levels-api.js');
+  const env = envOf();
+  env.DB.raw.exec("INSERT INTO users (id, username, uname, created_at, email_ok) VALUES ('u1', 'Аня', 'anya', 1000, 0)");
+  env.DB.raw.prepare('INSERT INTO shelves (user_id, data, updated_at) VALUES (?, ?, ?)').run('u1', JSON.stringify({ ratings: [{ id: 'a', status: 'Просмотрено', scores: [{ v: 8 }], total: 8, createdAt: new Date(NOON - DAY).toISOString() }] }), NOON);
+  await ensurePast(env, 'u1');
+  const lv = await readLevel(env, 'u1');
+  assert.equal(lv.xp, 10 + 20); // оценка и первый шаг «Первая оценка»
+  await award(env, 'u1', 'visit', 'd1', { now: NOON, ...bare });
+  await ensurePast(env, 'u1');
+  assert.equal((await readLevel(env, 'u1')).xp, 35);
+  assert.ok((await achievementsOf(env, 'u1')).find((a) => a.code === 'founder').got);
+});

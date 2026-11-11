@@ -8,7 +8,7 @@ import { NOTES } from '../_lib/admin-changes.js';
 import { LOT_NAME, MAX_LOTS, STICKER_RE, cleanLive, LIVE_OWNER, liveBusy, liveLots, spinLive, resetLive, stopAuto, settledLive, liveTx, liveView } from '../_lib/lots-live.js';
 import { ONLINE_MS, GUEST_RE, onlineCount, friendsAndIncoming, touchUsers, touchGuests } from '../_lib/presence.js';
 import { awardMany as lvAwardMany, revokeMany as lvRevokeMany, visit as lvVisit, shelfDiff, nightNow, levelsOn } from '../_lib/levels.js';
-import { makeLevelsRoutes, acceptInvite, tzOf } from '../_lib/levels-api.js';
+import { makeLevelsRoutes, acceptInvite, tzOf, ensurePast } from '../_lib/levels-api.js';
 
 const enc = new TextEncoder();
 const ITER = 10000;
@@ -1104,7 +1104,8 @@ const routes = {
     const me = await currentUser(env, request);
     if (me) {
       await touchUsers(env, [me.id], now);
-      // уровни: «зашёл сегодня» (раз в день по часовому поясу человека)
+      // уровни: опыт за прошлое при первом заходе после запуска, потом «зашёл сегодня» (раз в день по его часовому поясу)
+      await ensurePast(env, me.id);
       const v = await lvVisit(env, me.id, tzOf(request), now);
       if (v && v.news && v.news.length) lvNews.set(request, true);
     }

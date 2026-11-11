@@ -22,6 +22,16 @@ const FOUNDERS_BEFORE = Date.UTC(2026, 10, 12); // кто зарегистрир
 const parse = (s, d) => { try { const v = s ? JSON.parse(s) : null; return v == null ? d : v; } catch (e) { return d; } };
 const randCode = () => [...crypto.getRandomValues(new Uint8Array(8))].map((b) => 'abcdefghijkmnopqrstuvwxyz23456789'[b % 33]).join('');
 
+// опыт за прошлое — сам, при первом заходе после запуска (нет строки в user_level): уровень и «Основатель хаба»
+// появляются сразу, без кнопки в админке. Повторный вызов ничего не удваивает
+export async function ensurePast(env, uid) {
+  if (!levelsOn(env) || !uid) return;
+  try {
+    await ensureLevels(env);
+    if (await env.DB.prepare('SELECT 1 FROM user_level WHERE user_id = ?').bind(uid).first()) return;
+    await backfillUser(env, uid, { founderBefore: FOUNDERS_BEFORE });
+  } catch (e) { console.error('levels past', e && e.message); }
+}
 // видит ли человек уровни: при LEVELS = "admins" — только админы
 export async function levelsVisible(env, me, h) {
   const m = levelsMode(env);
@@ -50,7 +60,7 @@ export function makeLevelsRoutes(h) {
     // всё про мой прогресс одним запросом: уровень, серия, задания, первые шаги, оформление
     async 'GET /levels/me'({ env, request, me }) {
       if (!(await gate(env, me))) return off();
-      await ensureLevels(env);
+      await ensurePast(env, me.id);
       const now = Date.now();
       const row = (await userRow(env, me.id)) || {};
       const tz = tzOf(request) || row.tz || 'UTC';
