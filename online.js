@@ -208,6 +208,8 @@
   const ratingName = (rid) => { const rs = read('ocenshik.ratings.v2'); const r = Array.isArray(rs) && rs.find((x) => x && x.id === rid); return r && r.name ? String(r.name).slice(0, 80) : ''; };
   let noteT = 0;
   function notify(n) {
+    // уровни: «у тебя награда» — плашку покажет levels-ui.js, забрав её с сервера
+    if (n.kind === 'award') { document.dispatchEvent(new CustomEvent('casual-levels-news')); return; }
     const who = (n.from && (n.from.username || (n.from.handle ? '@' + n.from.handle : ''))) || 'Друг';
     let what = '', href = '/', ico = '', sub = n.text || '';
     if (n.kind === 'react') {

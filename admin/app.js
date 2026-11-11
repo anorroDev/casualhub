@@ -256,7 +256,7 @@
   }
   const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-  const TABS = [['stats', '📊', 'Статистика'], ['users', '👥', 'Пользователи'], ['comments', '💬', 'Комментарии'], ['announce', '📢', 'Объявление'], ['mail', '✉️', 'Почта'], ['backup', '💾', 'Копии'], ['changes', '🛠', 'Изменения'], ['log', '📜', 'Журнал']];
+  const TABS = [['stats', '📊', 'Статистика'], ['users', '👥', 'Пользователи'], ['comments', '💬', 'Комментарии'], ['announce', '📢', 'Объявление'], ['mail', '✉️', 'Почта'], ['backup', '💾', 'Копии'], ['levels', '⭐', 'Уровни'], ['changes', '🛠', 'Изменения'], ['log', '📜', 'Журнал']];
   let tab = 'stats';
   const sec = () => $('#admSec');
   const when = (t) => (t ? new Date(t).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—');
@@ -276,7 +276,7 @@
     const s = sec();
     if (!s) return;
     s.innerHTML = '<p class="muted">Загружаю…</p>';
-    ({ stats, users, comments, announce, mail, backup, changes, log })[tab]();
+    ({ stats, users, comments, announce, mail, backup, levels, changes, log })[tab]();
   }
   let emos = null;
   const emoOf = (x) => { if (!emos || !emos.length) return ''; let h = 0; for (const c of x.title) h = (h * 31 + c.charCodeAt(0)) >>> 0; return emos[h % emos.length]; };
@@ -430,6 +430,72 @@
     } catch (x) { if (!stale(my)) fail(x); }
   }
   // почта сайта (Resend): подключена ли, последняя отправка и её ответ, тестовое письмо себе
+  // уровни: опыт и уровень каждого, журнал начислений, поправки, опыт за прошлое, тематическая неделя
+  async function levels() {
+    const my = fresh();
+    try {
+      const d = await call('GET', '/admin/levels');
+      if (stale(my)) return;
+      const MODE = { off: 'выключены (LEVELS = "0")', admins: 'видят только админы', all: 'включены для всех' };
+      const ev = d.event;
+      sec().innerHTML = `<div class="head"><h2 class="h2">Уровни</h2><span class="label">${esc(MODE[d.mode] || d.mode)}</span></div>
+        <p class="muted">Опыт за оценки, общение, тир-листы и лоты. Правила — в functions/_lib/levels.js, включение — LEVELS в wrangler.toml.</p>
+        ${d.mode === 'off' ? '' : `<div class="adm-ann-row"><button type="button" class="btn ghost" id="lvBack">Начислить опыт за прошлое всем</button></div>
+        <p class="adm-err" id="lvMsg" role="status"></p>
+        <div class="adm-lv-ev"><h3 class="h3">Тематическая неделя</h3>
+          ${ev ? `<p>Идёт: <b>${esc(ev.title)}</b> · ×${ev.mult} до ${esc(when(ev.until))} · ${ev.kinds.map(esc).join(', ')}</p><button type="button" class="btn ghost" id="lvEvOff">Закончить</button>`
+            : `<div class="adm-ann-row"><input id="lvEvTitle" maxlength="80" placeholder="Например: Неделя тир-листов"><select id="lvEvMult"><option value="2">×2</option><option value="1.5">×1,5</option><option value="3">×3</option></select><select id="lvEvDays"><option value="7">7 дней</option><option value="3">3 дня</option><option value="14">14 дней</option></select></div>
+              <div class="adm-lv-kinds">${d.kinds.map((k) => `<label><input type="checkbox" value="${esc(k.k)}"> ${esc(k.label)}</label>`).join('')}</div>
+              <button type="button" class="btn primary" id="lvEvOn">Начать неделю</button>`}
+        </div>
+        <ul class="adm-list">${d.users.map((u, i) => `<li class="adm-row" style="--k:${Math.min(i, 12)}">
+          <div class="adm-who"><b>${esc(u.username)} <span class="muted">@${esc(u.handle)}</span>${u.fast ? ' <em class="adm-badge bad" title="Больше 60 начислений за последний час">быстро</em>' : ''}${u.hidden ? ' <em class="adm-badge mute">уровень скрыт</em>' : ''}</b>
+            <small>ур. ${u.level} · ${esc(u.rank)} · ${u.xp} опыта · за неделю ${u.week} · серия ${u.streak} (лучшая ${u.best}) · ачивок ${u.ach}</small></div>
+          <div class="adm-acts"><button type="button" class="btn ghost small" data-lvlog="${esc(u.id)}">Журнал</button><button type="button" class="btn ghost small" data-lvadj="${esc(u.id)}" data-name="${esc(u.username)}">Опыт ±</button></div>
+          <div class="adm-lv-log" id="lvLog-${esc(u.id)}" hidden></div>
+        </li>`).join('')}</ul>`}`;
+      const msg = $('#lvMsg');
+      const back = $('#lvBack');
+      if (back) back.addEventListener('click', async () => {
+        back.disabled = true; msg.textContent = 'Считаю…';
+        try { const r = await call('POST', '/admin/levels/backfill'); msg.textContent = `Готово: ${r.users.length} человек.`; setTimeout(levels, 1200); }
+        catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else { msg.textContent = x.message; back.disabled = false; } }
+      });
+      const on = $('#lvEvOn');
+      if (on) on.addEventListener('click', async () => {
+        const kinds = [...document.querySelectorAll('.adm-lv-kinds input:checked')].map((x) => x.value);
+        try { await call('PUT', '/admin/levels/event', { title: $('#lvEvTitle').value, mult: +$('#lvEvMult').value, days: +$('#lvEvDays').value, kinds }); levels(); }
+        catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else msg.textContent = x.message; }
+      });
+      const offB = $('#lvEvOff');
+      if (offB) offB.addEventListener('click', async () => { try { await call('DELETE', '/admin/levels/event'); levels(); } catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else msg.textContent = x.message; } });
+      document.querySelectorAll('[data-lvlog]').forEach((b) => b.addEventListener('click', async () => {
+        const box = $('#lvLog-' + b.dataset.lvlog);
+        if (!box.hidden) { box.hidden = true; return; }
+        try {
+          const r = await call('GET', '/admin/levels/log?id=' + encodeURIComponent(b.dataset.lvlog));
+          box.innerHTML = r.items.length ? r.items.slice(0, 60).map((x) => `<div class="${x.gone ? 'gone' : ''}"><span>${esc(when(x.at))}</span><span>${esc(x.what)}${x.peer && x.kind === 'admin' ? ' · ' + esc(x.peer) : ''}</span><b>${x.xp > 0 ? '+' : ''}${x.xp}</b></div>`).join('') : '<p class="muted">Пусто.</p>';
+          box.hidden = false;
+        } catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else msg.textContent = x.message; }
+      }));
+      document.querySelectorAll('[data-lvadj]').forEach((b) => b.addEventListener('click', () => {
+        const row = b.closest('.adm-row');
+        if (row.querySelector('.adm-lv-adj')) return;
+        const f = document.createElement('form');
+        f.className = 'adm-lv-adj adm-ann-row';
+        f.innerHTML = `<input type="number" step="1" required placeholder="+50 или -50" aria-label="Сколько опыта"><input maxlength="120" placeholder="За что (видно в журнале)" aria-label="За что"><button class="btn primary">Сохранить</button>`;
+        f.addEventListener('submit', async (e) => {
+          e.preventDefault();
+          const [n, note] = f.querySelectorAll('input');
+          try { await call('POST', '/admin/levels/adjust', { id: b.dataset.lvadj, xp: +n.value, note: note.value }); levels(); }
+          catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else msg.textContent = x.message; }
+        });
+        row.appendChild(f);
+        f.querySelector('input').focus();
+      }));
+    } catch (x) { if (!stale(my)) fail(x); }
+  }
+
   async function mail() {
     const my = fresh();
     try {

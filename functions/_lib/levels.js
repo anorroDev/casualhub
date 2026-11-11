@@ -137,7 +137,7 @@ export const FIRST_STEPS = [
 export const REWARDS = [
   { level: 2, kind: 'badge', id: 'badge', title: 'Кружок уровня у аватара' },
   { level: 3, kind: 'frame', id: 'frame1', title: 'Рамка «Казуал»' },
-  { level: 7, kind: 'fx', id: 'confetti', title: 'Конфетти на победу в Колесе и Лотах' },
+  { level: 7, kind: 'chip', id: 'rankchip', title: 'Звание рядом с ником в профиле' },
   { level: 10, kind: 'color', id: 'colors', title: 'Цвет ника на выбор' },
   { level: 12, kind: 'frame', id: 'frame2', title: 'Рамка «Неон»' },
   { level: 15, kind: 'bg', id: 'bgs', title: 'Фон профиля на выбор' },
@@ -155,7 +155,7 @@ export function unlockedAt(level) {
     frames: ['frame1', 'frame2', 'frame3', 'frame4'].filter((f) => got.has(f)),
     colors: got.has('colors') ? Object.keys(NAME_COLORS).filter((c) => c !== 'gold' || got.has('gold')) : [],
     bgs: got.has('bgs') ? Object.keys(PROFILE_BGS).filter((b) => b !== 'legend' || got.has('legend')) : [],
-    confetti: got.has('confetti'),
+    rankChip: got.has('rankchip'),
     badge: got.has('badge'),
   };
 }
@@ -603,6 +603,7 @@ export function lookOf(row) {
     frame: u.frames.includes(p.frame) ? p.frame : '',
     color: u.colors.includes(p.color) ? p.color : '',
     bg: u.bgs.includes(p.bg) ? p.bg : '',
+    rank: u.rankChip ? rankOf(lv).fun : '',
   };
 }
 // уровни для списка людей (кружки у аватаров): скрывшие уровень не попадают
@@ -760,4 +761,4 @@ export function shelfDiff(oldList, newList) {
   return { give, take, metrics };
 }
 // оценка поставлена ночью (2–5 часов по времени человека) — для скрытой ачивки
-export const nightNow = (now, tz) => { const h = hourIn(now, tz); return h >= 2 && h < 5; };
+export const nightNow = (now, tz) => { if (!tz) return false; const h = hourIn(now, tz); return h >= 2 && h < 5; }; // без часового пояса не гадаем

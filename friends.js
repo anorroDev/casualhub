@@ -360,7 +360,7 @@
         return false;
       }
       try {
-        r = await api('/register', 'POST', { username: nick, handle: state.user.handle || undefined, password: pass, email: mail }, null);
+        r = await api('/register', 'POST', { username: nick, handle: state.user.handle || undefined, password: pass, email: mail, invite: localStorage.getItem('casualhub.invite.v1') || undefined }, null);
       } catch (e2) {
         F.linkError = e2.status === 409
           ? `${e2.message} Если аккаунт твой, проверь пароль, иначе поменяй ник или почту в профиле.`
@@ -1214,7 +1214,7 @@ ${ICON.chev}
       const h = String(handle || '').trim().replace(/^@+/, '').toLowerCase();
       if (!HANDLE_RE.test(h)) { toast(h ? 'Юзернейм: от 3 до 20 символов, латинские буквы, цифры, «_» и «.»' : 'Придумай юзернейм: по нему тебя найдут друзья'); return false; }
       let r;
-      try { r = await api('/register', 'POST', { username: nick, handle: h, password: pass, email: em }, null); }
+      try { r = await api('/register', 'POST', { username: nick, handle: h, password: pass, email: em, invite: localStorage.getItem('casualhub.invite.v1') || undefined }, null); }
       catch (e) {
         if (e.status === 0 || e.status === 503) { toast(OFFLINE_REG); return false; }
         toast(e.status === 409 && /почт/.test(e.message) ? `${e.message} Если это твой аккаунт, войди на вкладке «Вход».` : e.message);

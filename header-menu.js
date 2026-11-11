@@ -61,6 +61,16 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     e.preventDefault();
     window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   });
+  // ссылка-приглашение (?invite=код): запоминаем до регистрации (friends.js отправит её с регистрацией) и убираем из адреса
+  try {
+    const inv = new URLSearchParams(location.search).get('invite');
+    if (inv && /^[a-z0-9]{8}$/.test(inv)) {
+      localStorage.setItem('casualhub.invite.v1', inv);
+      const url = new URL(location.href);
+      url.searchParams.delete('invite');
+      history.replaceState(null, '', url.pathname + url.search + url.hash);
+    }
+  } catch (e) {}
   const MENU_ICON ='<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h11"/></svg>';
   const GH_ICON = '<svg viewBox="0 0 16 16" width="16" height="16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>';
   const ICON = {
@@ -231,6 +241,14 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !panel.hidden) { open(false); btn.focus(); } });
     // нажали пункт меню — меню закрывается
     panel.addEventListener('click', (e) => { if (e.target.closest('a, button')) setTimeout(() => open(false), 0); });
+
+    // уровни: строка в меню, кружок у аватара, плашки наград и окно «Прогресс» — /levels-ui.js, только у вошедших
+    // (сам решает, показывать ли: сервер отвечает on: false, пока уровни выключены)
+    try {
+      const lu = JSON.parse(localStorage.getItem('ocenshik.user.v1') || 'null');
+      const lt = lu && (JSON.parse(localStorage.getItem('casualhub.tokens.v1') || 'null') || {})[lu.id];
+      if (lt && !window.CasualLevels && !document.querySelector('script[src="/levels-ui.js"]')) { const sc = document.createElement('script'); sc.src = '/levels-ui.js'; document.head.appendChild(sc); }
+    } catch (e) {}
 
     // точка на ☰: непрочитанное «Что нового» внутри меню (заявки в друзья видны на самой кнопке «Друзья»)
     const sync = () => { dot.hidden = !panel.querySelector('.wn-dot'); };
