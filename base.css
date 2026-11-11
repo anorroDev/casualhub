@@ -12,12 +12,11 @@
 @supports not selector(::-webkit-scrollbar) {
   * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--ink, #888) 28%, transparent) transparent; }
 }
-/* Баллы в маленьких плашках. У пиксельного Handjet ноль с точкой внутри — «8,0» читается как «8,8», «10» как «18».
-   В плашках до ~30px — ровные цифры Onest одной ширины; крупные числа (итог оценки, счётчики) остаются пиксельными. */
-.badge:not(.big), .pv-badge, .bd-v { font-family: "Onest", system-ui, -apple-system, "Segoe UI", sans-serif !important; font-weight: 800 !important; font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
-.badge:not(.big):not(.sm) { font-size: 20px !important; }
-.badge.sm { font-size: 14.5px !important; }
-.pv-badge { font-size: 15.5px !important; }
-.bd-v { font-size: 16px !important; }
+/* Цифры. У пиксельного Handjet ноль с точкой внутри — «8,0» читалось как «8,8», «10» как «18». Поэтому цифры в пиксельном
+   шрифте сайта берутся из Jersey 10 (тоже пиксельный, но 0 и 8 в нём не путаются), а буквы остаются в Handjet:
+   шрифт «Casual Digits» содержит только цифры (unicode-range), остальное браузер берёт у следующего в списке.
+   html:root — чтобы перебить --font-display, который каждая страница задаёт у себя в :root. */
+@font-face { font-family: "Casual Digits"; src: url(https://fonts.gstatic.com/s/jersey10/v4/GftH7vZKsggXMf9n_J5n_5jh.woff2) format("woff2"); font-weight: 100 900; font-display: swap; unicode-range: U+0030-0039; size-adjust: 112%; }
+html:root { --font-display: "Casual Digits", "Handjet", "Onest", ui-sans-serif, system-ui, sans-serif; }
 /* подсказка в полях ввода: заметнее (была 4,1:1 к фону, нужно не меньше 4,5:1) */
 ::placeholder { color: color-mix(in srgb, var(--ink, #888) 62%, transparent); opacity: 1; }

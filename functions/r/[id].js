@@ -61,15 +61,16 @@ body { min-height: 100vh; background: var(--bg); color: var(--ink); font: 400 16
   padding: max(16px, env(safe-area-inset-top)) 16px 40px; display: grid; justify-items: center; }
 .wrap { width: min(620px, 100%); display: grid; gap: 14px; }
 .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.brand { font-family: Handjet, Onest, sans-serif; font-weight: 800; font-size: 26px; color: var(--ink); text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
+@font-face { font-family: "Casual Digits"; src: url(https://fonts.gstatic.com/s/jersey10/v4/GftH7vZKsggXMf9n_J5n_5jh.woff2) format("woff2"); font-weight: 100 900; font-display: swap; unicode-range: U+0030-0039; size-adjust: 112%; }
+.brand { font-family: "Casual Digits", Handjet, Onest, sans-serif; font-weight: 800; font-size: 26px; color: var(--ink); text-decoration: none; display: inline-flex; align-items: center; gap: 8px; }
 .pill { display: inline-flex; align-items: center; height: 36px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel); color: var(--ink); text-decoration: none; font-weight: 600; font-size: 14px; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 22px; padding: 20px; display: grid; gap: 16px; animation: rise .6s cubic-bezier(.34, 1.56, .64, 1) both; }
 @keyframes rise { from { transform: translateY(18px) scale(.985); } }
 .photo { width: 100%; max-height: 420px; object-fit: cover; border-radius: 16px; background: var(--panel-2); }
 .head { display: flex; gap: 14px; align-items: flex-start; justify-content: space-between; }
-h1 { font-family: Handjet, Onest, sans-serif; font-weight: 800; font-size: clamp(34px, 8vw, 54px); line-height: .95; overflow-wrap: anywhere; }
+h1 { font-family: "Casual Digits", Handjet, Onest, sans-serif; font-weight: 800; font-size: clamp(34px, 8vw, 54px); line-height: .95; overflow-wrap: anywhere; }
 .score { flex: none; display: grid; justify-items: center; gap: 4px; }
-.badge { min-width: 76px; padding: 8px 12px; border-radius: 16px; text-align: center; font-family: Handjet, Onest, sans-serif; font-weight: 800; font-size: 40px; line-height: 1; background: var(--cell); color: var(--ink); }
+.badge { min-width: 76px; padding: 8px 12px; border-radius: 16px; text-align: center; font-family: "Casual Digits", Handjet, Onest, sans-serif; font-weight: 800; font-size: 40px; line-height: 1; background: var(--cell); color: var(--ink); }
 .badge[data-tier="good"] { background: var(--good); color: var(--on-tier); } .badge[data-tier="mid"] { background: var(--mid); color: var(--on-tier); } .badge[data-tier="bad"] { background: var(--bad); color: var(--on-tier); }
 .verdict { font-size: 13px; font-weight: 700; color: var(--ink-2); }
 .chips { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -80,7 +81,7 @@ h1 { font-family: Handjet, Onest, sans-serif; font-weight: 800; font-size: clamp
 .crit { list-style: none; padding: 0; display: grid; gap: 10px; }
 .crit li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; }
 .crit .n { font-weight: 600; overflow-wrap: anywhere; }
-.crit .v { font-family: Handjet, Onest, sans-serif; font-weight: 800; font-size: 22px; line-height: 1; }
+.crit .v { font-family: "Casual Digits", Handjet, Onest, sans-serif; font-weight: 800; font-size: 22px; line-height: 1; }
 .cells { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(10, 1fr); gap: 3px; }
 .cells i { height: 8px; border-radius: 3px; background: var(--cell); }
 .cells i.on { background: var(--t, var(--accent)); }
