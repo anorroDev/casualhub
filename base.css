@@ -30,3 +30,37 @@ input, textarea, [contenteditable="true"] { caret-color: var(--accent, #3550E8);
 .no-match:has(> .empty-art), .feed-empty:has(> .empty-art) { text-align: center; }
 /* значок раздела над заголовком страницы (пиксельный логотип из /art/logo) */
 .title-logo { display: block; width: clamp(44px, 6vw, 56px); height: auto; margin-bottom: 14px; }
+/* Фон сайта — пиксельные звёзды (html[data-bg="stars"], ставит util.js всем по умолчанию). Картинки в /art/site — маски:
+   форма из картинки, цвет из темы, поэтому подходит к любой теме. Слои: body::after (дальний) и html::after (ближний) —
+   на главной вместо сетки точек body::after, на разделах вместо html::after; пятна света (::before) остаются.
+   В запасе пейзаж (html[data-bg="horizon"], ?bg=horizon в адресе): пока не включён, пригодится для события или темы */
+html[data-bg] body::after, html[data-bg]::after {
+  content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background: none; -webkit-mask: none; mask: none;
+}
+/* пейзаж (в запасе): звёзды и дальний город с холмами, спереди холмы ближе */
+html[data-bg="horizon"] body::after {
+  background: color-mix(in srgb, var(--accent, #8C9BFF) 26%, transparent);
+  -webkit-mask: url(/art/site/stars.webp) 0 0 / 420px 420px repeat, url(/art/site/horizon-far.webp) left bottom / auto 300px repeat-x;
+  mask: url(/art/site/stars.webp) 0 0 / 420px 420px repeat, url(/art/site/horizon-far.webp) left bottom / auto 300px repeat-x;
+}
+html[data-bg="horizon"]::after {
+  background: color-mix(in srgb, var(--ink, #888) 10%, var(--bg, #0D0F14));
+  -webkit-mask: url(/art/site/horizon-near.webp) 37% bottom / auto 300px repeat-x; mask: url(/art/site/horizon-near.webp) 37% bottom / auto 300px repeat-x;
+}
+@media (max-width: 640px) {
+  html[data-bg="horizon"] body::after { -webkit-mask-size: 420px 420px, auto 190px; mask-size: 420px 420px, auto 190px; }
+  html[data-bg="horizon"]::after { -webkit-mask-size: auto 190px; mask-size: auto 190px; }
+}
+/* звёзды: неподвижные и мерцающие (ступеньками, как в старых играх) */
+html[data-bg="stars"] body::after {
+  background: color-mix(in srgb, var(--ink, #888) 26%, transparent);
+  -webkit-mask: url(/art/site/stars.webp) 0 0 / 420px 420px repeat; mask: url(/art/site/stars.webp) 0 0 / 420px 420px repeat;
+}
+html[data-bg="stars"]::after {
+  background: color-mix(in srgb, var(--accent, #8C9BFF) 70%, transparent);
+  -webkit-mask: url(/art/site/stars-twinkle.webp) 0 0 / 420px 420px repeat; mask: url(/art/site/stars-twinkle.webp) 0 0 / 420px 420px repeat;
+  animation: bg-twinkle 3.2s steps(4, jump-none) infinite alternate;
+}
+@keyframes bg-twinkle { from { opacity: .15; } to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { html[data-bg="stars"]::after { animation: none; opacity: .6; } }

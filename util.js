@@ -7,6 +7,14 @@
                                Второй, кто попросит тот же скрипт, дождётся того же тега, а не останется ни с чем
    emptyArt(name, w)         — пиксельная картинка пустого состояния (/art/empty-*.webp: rate, friends, tier, lots) шириной w */
 (() => {
+  // фон сайта (base.css, html[data-bg]): у всех пиксельные звёзды. Пейзаж в запасе — ?bg=horizon запоминается в этом браузере, ?bg= — вернуть звёзды
+  try {
+    const q = new URLSearchParams(location.search).get('bg');
+    if (q !== null) { if (q === 'horizon') localStorage.setItem('casualhub.bg.v1', q); else localStorage.removeItem('casualhub.bg.v1'); }
+  } catch (e) {}
+  let bg = 'stars';
+  try { if (localStorage.getItem('casualhub.bg.v1') === 'horizon') bg = 'horizon'; } catch (e) {}
+  document.documentElement.dataset.bg = bg;
   if (window.CasualUtil) return;
   const MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
   const esc = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => MAP[c]);
