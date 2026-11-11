@@ -28,14 +28,14 @@ export function levelOf(xp) {
 
 // ---------- звания ----------
 export const RANKS = [
-  { from: 1, fun: 'Залётный', plain: 'Новичок' },
+  { from: 1, fun: 'Людишка', plain: 'Новичок' },
   { from: 5, fun: 'Казуал', plain: 'Зритель' },
   { from: 10, fun: 'Диванный критик', plain: 'Казуал' },
-  { from: 15, fun: 'Знаток с дивана', plain: 'Ценитель' },
-  { from: 20, fun: 'Профессиональный нытик', plain: 'Критик' },
+  { from: 15, fun: 'Профессиональный нытик', plain: 'Ценитель' },
+  { from: 20, fun: 'Чемпион', plain: 'Критик' },
   { from: 30, fun: 'Рецензент от бога', plain: 'Эксперт' },
   { from: 40, fun: 'Хранитель вкуса', plain: 'Мастер вкуса' },
-  { from: 50, fun: 'Легенда хаба', plain: 'Легенда хаба' },
+  { from: 50, fun: 'Легенда', plain: 'Легенда' },
 ];
 export const rankOf = (level) => RANKS.reduce((r, x) => (level >= x.from ? x : r), RANKS[0]);
 
@@ -345,7 +345,7 @@ async function doAward(env, uid, items, opts) {
 export async function levelLetter(env, uid, up, now = Date.now()) {
   try {
     const opened = REWARDS.filter((r) => r.level > up.from && r.level <= up.to).map((r) => r.title);
-    const body = `Звание: ${rankOf(up.to).fun}.` + (opened.length ? ` Открыто: ${opened.join(', ')}. Выбрать можно в «Прогресс» → «Оформление».` : ` Следующая награда — на ${(REWARDS.find((r) => r.level > up.to) || {}).level || '…'}-м уровне.`);
+    const body = `Звание: ${rankOf(up.to).fun}.` + (opened.length ? ` Открыто: ${opened.join(', ')}. Выбрать их можно будет в «Прогресс» → «Оформление» — оно скоро появится.` : ` Следующая награда — на ${(REWARDS.find((r) => r.level > up.to) || {}).level || '…'}-м уровне.`);
     await env.DB.prepare("INSERT OR IGNORE INTO gifts (id, to_id, kind, title, body, xp, at) VALUES (?, ?, 'level', ?, ?, 0, ?)").bind(`lv:${uid}:${up.to}`, uid, `Новый уровень: ${up.to}`, body, now).run();
   } catch (e) { console.error('levels letter', e && e.message); }
 }

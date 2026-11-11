@@ -60,7 +60,9 @@ test('формула уровня', () => {
 });
 
 test('звания, флаг, награды по уровням', () => {
-  assert.equal(rankOf(1).fun, 'Залётный');
+  assert.equal(rankOf(1).fun, 'Людишка');
+  assert.equal(rankOf(20).fun, 'Чемпион');
+  assert.equal(rankOf(50).fun, 'Легенда');
   assert.equal(rankOf(10).fun, 'Диванный критик');
   assert.equal(levelsMode({}), 'off');
   assert.equal(levelsMode({ LEVELS: 'admins' }), 'admins');

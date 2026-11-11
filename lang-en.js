@@ -2389,6 +2389,8 @@
 "на твой тир-лист":"on your tier list",
 "· убран с колеса":"· removed from the wheel",
 // уровни (levels-ui.js, админка → «Уровни»)
+"В разработке":"In development",
+"Скоро":"Soon",
 "Прогресс":"Progress",
 "Достижения":"Achievements",
 "Оформление":"Look",
@@ -2444,13 +2446,13 @@
 "Начать неделю":"Start the week",
 "Закончить":"End",
 "Опыт ±":"XP ±",
-"Залётный":"Drop-in",
+"Людишка":"Little human",
 "Диванный критик":"Couch critic",
-"Знаток с дивана":"Couch connoisseur",
+"Чемпион":"Champion",
 "Профессиональный нытик":"Professional complainer",
 "Рецензент от бога":"Godlike reviewer",
 "Хранитель вкуса":"Keeper of taste",
-"Легенда хаба":"Hub legend"};
+"Легенда":"Legend"};
   // слово после числа: 1 оценка, 5 оценок. [все русские формы, одна штука, несколько]
   const NOUNS = [
     [['оценка', 'оценки', 'оценок', 'оценкой', 'оценками'], 'rating', 'ratings'],

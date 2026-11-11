@@ -89,6 +89,12 @@ html.unslop .lv-hbtn.lv-pulse { animation-duration: 2.6s; }
 .lv-bg-ember { background-image: linear-gradient(135deg, color-mix(in srgb, #F08A24 20%, transparent), color-mix(in srgb, #E4553F 14%, transparent)) !important; }
 .lv-bg-legend { background-image: linear-gradient(135deg, color-mix(in srgb, #E2A925 26%, transparent), color-mix(in srgb, #9B6BFF 22%, transparent), color-mix(in srgb, #E85FA5 18%, transparent)) !important; }
 .lv-prof { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; font-size: 13px; color: var(--ink-2, #b5b5b5); }
+/* кольцо с номером уровня — как у кнопки в шапке, только крупнее */
+.lv-pring { position: relative; flex: none; width: 34px; height: 34px; border-radius: 50%; display: inline-grid; place-items: center; background: conic-gradient(var(--accent, #3550E8) var(--p, 0%), color-mix(in srgb, var(--ink, #fff) 16%, transparent) 0); }
+.lv-pring::before { content: ""; position: absolute; inset: 4px; border-radius: 50%; background: var(--panel, #1b1d24); }
+.lv-pring b { position: relative; font: 800 13px/1 system-ui, sans-serif; color: var(--ink, #f3f4f6); font-variant-numeric: tabular-nums; }
+/* у профиля при уровнях — только рамка уровня, без прежнего радужного кольца */
+html.lv-on .ava-wrap > .ava-ring { display: none !important; }
 .lv-prof .lv-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--accent, #3550E8) 14%, transparent); color: var(--ink, #f3f4f6); font-weight: 600; }
 .lv-prof .lv-show { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line, #2b2e38); font-size: 12px; }
 .lv-medal { display: inline-grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 7px; color: #fff; font: 800 11px/1 system-ui, sans-serif; }
@@ -103,17 +109,22 @@ html.unslop .lv-hbtn.lv-pulse { animation-duration: 2.6s; }
 @keyframes lv-in { from { transform: translate(-50%, -14px); opacity: 0; } }
 @media (prefers-reduced-motion: reduce) { .lv-toast { animation: none; } }
 
-.lv-ov { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; padding: max(16px, env(safe-area-inset-top, 0px)) 16px max(16px, env(safe-area-inset-bottom, 0px)); background: rgb(0 0 0 / .55); }
-.lv-card { width: min(760px, 100%); height: min(720px, 100%); display: grid; grid-template-rows: auto auto minmax(0, 1fr); border-radius: 20px; border: 1px solid var(--line, #2b2e38); background: var(--panel, #17181c); color: var(--ink, #f2f2f2); overflow: hidden; box-shadow: 0 30px 70px -20px rgb(0 0 0 / .6); }
-.lv-head { display: flex; align-items: center; gap: 12px; padding: 16px 16px 10px 20px; }
-.lv-head h2 { margin: 0; font-size: 20px; font-family: var(--font-display, inherit); }
+.lv-ov { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; padding: max(20px, env(safe-area-inset-top, 0px)) 20px max(20px, env(safe-area-inset-bottom, 0px)); background: rgb(6 8 12 / .5); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+.lv-card { width: min(980px, 100%); height: min(820px, 100%); display: grid; grid-template-rows: auto auto minmax(0, 1fr); border-radius: 24px; border: 1px solid var(--line, #2b2e38); background: var(--panel, #17181c); color: var(--ink, #f2f2f2); overflow: hidden; box-shadow: 0 40px 90px -30px rgb(0 0 0 / .7); }
+.lv-head { display: flex; align-items: center; gap: 12px; padding: 22px 22px 14px 28px; }
+.lv-head h2 { margin: 0; font-size: 24px; font-family: var(--font-display, inherit); }
 .lv-head .x { margin-left: auto; width: 36px; height: 36px; border: 0; border-radius: 50%; background: color-mix(in srgb, var(--ink, #fff) 8%, transparent); color: var(--ink, #fff); font-size: 16px; cursor: pointer; }
-.lv-tabs { display: flex; gap: 6px; padding: 0 16px 12px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--line, #2b2e38); }
+.lv-tabs { display: flex; gap: 8px; padding: 0 28px 16px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--line, #2b2e38); }
 .lv-tabs::-webkit-scrollbar { display: none; }
-.lv-tabs button { flex: none; padding: 7px 12px; border-radius: 999px; border: 1px solid var(--line, #2b2e38); background: transparent; color: var(--ink-2, #b5b5b5); font: 600 13px/1.2 inherit; font-family: inherit; cursor: pointer; }
+.lv-tabs button { position: relative; flex: none; padding: 8px 15px; border-radius: 999px; border: 1px solid var(--line, #2b2e38); background: transparent; color: var(--ink-2, #b5b5b5); font: 600 13px/1.2 inherit; font-family: inherit; cursor: pointer; }
 .lv-tabs button[aria-selected="true"] { background: var(--accent, #3550E8); border-color: transparent; color: #fff; }
-.lv-body { overflow-y: auto; padding: 16px 20px 24px; display: grid; gap: 16px; align-content: start; scrollbar-width: thin; }
-.lv-box { border: 1px solid var(--line, #2b2e38); border-radius: 16px; padding: 14px 16px; display: grid; gap: 10px; background: var(--panel-2, color-mix(in srgb, var(--ink, #fff) 3%, transparent)); }
+/* вкладки «в разработке»: серые, по наведению или нажатию — подсказка */
+.lv-tabs button.soon { color: var(--ink-3, #8a8f9e); opacity: .55; cursor: default; border-style: dashed; }
+.lv-tabs button.soon:hover, .lv-tabs button.soon.lv-tip { opacity: .8; }
+.lv-tabs { position: relative; }
+.lv-soon-tip { position: fixed; z-index: 140; padding: 4px 9px; border-radius: 8px; background: var(--ink, #f3f4f6); color: var(--panel, #1b1d24); font: 700 12px/1.2 system-ui, sans-serif; pointer-events: none; white-space: nowrap; }
+.lv-body { overflow-y: auto; padding: 22px 28px 32px; display: grid; gap: 18px; align-content: start; }
+.lv-box { border: 1px solid var(--line, #2b2e38); border-radius: 18px; padding: 18px 20px; display: grid; gap: 10px; background: var(--panel-2, color-mix(in srgb, var(--ink, #fff) 3%, transparent)); }
 .lv-box h3 { margin: 0; font-size: 15px; }
 .lv-hero { display: flex; align-items: center; gap: 16px; }
 .lv-hero .n { font: 800 54px/0.9 var(--font-display, system-ui); color: var(--accent, #3550E8); font-variant-numeric: tabular-nums; }
@@ -128,13 +139,13 @@ html.unslop .lv-hbtn.lv-pulse { animation-duration: 2.6s; }
 .lv-q.done .lv-bar i { background: #2EAD60; }
 .lv-streak { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .lv-streak .big { font: 800 30px/1 var(--font-display, system-ui); }
-.lv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(220px, 100%), 1fr)); gap: 10px; }
-.lv-ach { display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 10px; align-items: center; padding: 10px; border-radius: 14px; border: 1px solid var(--line, #2b2e38); }
-.lv-ach .lv-medal { width: 40px; height: 40px; border-radius: 12px; font-size: 17px; }
+.lv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); gap: 12px; }
+.lv-ach { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; align-items: start; padding: 14px; border-radius: 16px; border: 1px solid var(--line, #2b2e38); }
+.lv-ach .lv-medal { width: 44px; height: 44px; border-radius: 13px; font-size: 18px; }
 .lv-ach b { display: block; font-size: 14px; }
 .lv-ach span, .lv-ach small { display: block; font-size: 12px; color: var(--ink-3, #8a8f9e); }
 .lv-ach.off { opacity: .55; }
-.lv-ach .pin { margin-top: 4px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line, #2b2e38); background: transparent; color: var(--ink-2, #b5b5b5); font: 600 11.5px/1.2 inherit; font-family: inherit; cursor: pointer; justify-self: start; }
+.lv-ach .pin { margin-top: 8px; padding: 4px 10px; white-space: nowrap; border-radius: 999px; border: 1px solid var(--line, #2b2e38); background: transparent; color: var(--ink-2, #b5b5b5); font: 600 11.5px/1.2 inherit; font-family: inherit; cursor: pointer; justify-self: start; }
 .lv-ach .pin[aria-pressed="true"] { background: var(--accent, #3550E8); color: #fff; border-color: transparent; }
 .lv-board { display: grid; gap: 6px; }
 .lv-board > div { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 8px 12px; border-radius: 12px; background: color-mix(in srgb, var(--ink, #fff) 4%, transparent); font-size: 14px; }
@@ -319,12 +330,9 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     // кружок — на самом аватаре (у #account на главной нет своего размера: display: contents)
     const acc = box && (box.querySelector('.avatar, .ava, img') || box);
     if (!acc || !ME) return;
-    acc.classList.add('lv-acc');
-    let n = acc.querySelector(':scope > .lv-num');
-    if (ME.prefs.hideLevel || !ME.unlocked.badge) { if (n) n.remove(); return; }
-    if (!n) { n = document.createElement('i'); n.className = 'lv-num'; acc.appendChild(n); }
-    // без лишних записей в DOM: наблюдатель за страницей иначе крутился бы по кругу
-    if (n.textContent !== String(ME.level)) { n.textContent = ME.level; n.title = `Уровень ${ME.level}`; }
+    // своя цифра на аватаре только путала: уровень и так виден на кнопке «Уровень» рядом
+    const n = acc.querySelector(':scope > .lv-num');
+    if (n) n.remove();
   }
   // ---------- кнопки в шапке: уровень (мигает до первого нажатия) и магазин «Soon» ----------
   const SEEN_KEY = 'casualhub.levels.seen.v1';
@@ -374,6 +382,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       const d = await api('/levels/me');
       if (!d.on) { ME = null; return; }
       ME = d;
+      document.documentElement.classList.add('lv-on');
       paintMenu();
       paintHeader();
       paintAccount();
@@ -443,7 +452,8 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     const box = document.createElement('div');
     box.className = 'lv-prof';
     box.dataset.for = id;
-    box.innerHTML = `<span class="lv-chip">Уровень ${d.level}${d.look.rank ? ' · ' + esc(d.look.rank) : ''}</span>${(d.showcase || []).map((a) => `<span class="lv-show"><i class="lv-medal lv-t${a.tiers > 1 ? a.tier : 0}">${esc(a.title.charAt(0))}</i>${esc(a.title)}</span>`).join('')}`;
+    const pr = Math.min(100, Math.round(((+d.into || 0) / Math.max(1, +d.need || 1)) * 100));
+    box.innerHTML = `<span class="lv-pring" style="--p:${pr}%" title="Уровень ${d.level} · ${esc(d.rank)}" aria-label="Уровень ${d.level}"><b>${d.level}</b></span>${d.look.rank ? `<span class="lv-chip">${esc(d.look.rank)}</span>` : ''}${(d.showcase || []).map((a) => `<span class="lv-show"><i class="lv-medal lv-t${a.tiers > 1 ? a.tier : 0}">${esc(a.title.charAt(0))}</i>${esc(a.title)}</span>`).join('')}`;
     const sub = who.querySelector('.sub');
     if (sub) sub.after(box); else who.appendChild(box);
     const name = hero.querySelector('#profileName');
@@ -457,7 +467,8 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   }
 
   // ---------- окно «Прогресс» ----------
-  const TABS = [['home', 'Обзор'], ['mail', 'Почта'], ['ach', 'Достижения'], ['board', 'Рейтинг'], ['look', 'Оформление'], ['hist', 'История'], ['invite', 'Пригласить'], ['recap', 'Итоги 2026']];
+  const TABS = [['home', 'Обзор'], ['mail', 'Почта'], ['ach', 'Достижения'], ['board', 'Рейтинг'], ['hist', 'История'], ['recap', 'Итоги 2026'], ['look', 'Оформление'], ['invite', 'Пригласить']];
+  const SOON_TABS = new Set(['look', 'invite']); // пока в разработке: серые, с подсказкой
   let ov = null, tab = 'home', lastFocus = null;
   function openProgress(which) {
     if (!ME) return;
@@ -479,14 +490,33 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   }
   function closeProgress() {
     if (!ov) return;
+    soonTip(null);
     ov.remove();
     document.documentElement.style.overflow = '';
     if (lastFocus && lastFocus.focus) lastFocus.focus();
   }
   function renderTabs() {
     const t = ov.querySelector('.lv-tabs');
-    t.innerHTML = TABS.filter(([k]) => k !== 'recap' || ME.recap).map(([k, n]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${k === tab}">${n}${k === 'mail' && +ME.mail ? ` (${ME.mail})` : ''}</button>`).join('');
-    t.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { tab = b.dataset.tab; renderTabs(); render(); }));
+    if (SOON_TABS.has(tab)) tab = 'home';
+    t.innerHTML = TABS.filter(([k]) => k !== 'recap' || ME.recap).map(([k, n]) => SOON_TABS.has(k)
+      ? `<button type="button" class="soon" data-soon-tab="${k}" aria-disabled="true" aria-label="${n} — в разработке">${n}</button>`
+      : `<button type="button" role="tab" data-tab="${k}" aria-selected="${k === tab}">${n}${k === 'mail' && +ME.mail ? ` (${ME.mail})` : ''}</button>`).join('');
+    t.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { tab = b.dataset.tab; renderTabs(); render(); }));
+    t.querySelectorAll('[data-soon-tab]').forEach((b) => {
+      const show = () => soonTip(b), hide = () => soonTip(null);
+      b.addEventListener('mouseenter', show); b.addEventListener('mouseleave', hide); b.addEventListener('focus', show); b.addEventListener('blur', hide);
+      b.addEventListener('click', () => { show(); clearTimeout(tipT); tipT = setTimeout(hide, 1500); });
+    });
+  }
+  // подсказка «В разработке» над серой вкладкой (вкладки прокручиваются вбок, поэтому подсказка — поверх окна)
+  function soonTip(b) {
+    let tip = document.querySelector('.lv-soon-tip');
+    if (!b) { if (tip) tip.remove(); return; }
+    if (!tip) { tip = document.createElement('div'); tip.className = 'lv-soon-tip'; tip.setAttribute('role', 'status'); document.body.appendChild(tip); }
+    tip.textContent = 'В разработке';
+    const r = b.getBoundingClientRect();
+    tip.style.left = Math.max(8, Math.min(innerWidth - 120, r.left + r.width / 2 - 50)) + 'px';
+    tip.style.top = r.bottom + 8 + 'px';
   }
   const body = () => ov.querySelector('#lvBody');
   let seq = 0;
@@ -534,7 +564,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       const got = d.items.filter((a) => a.got).length;
       const show = new Set(ME.prefs.showcase || []);
       return `<p class="lv-muted">Получено ${got} из ${d.items.length}. Отметь до трёх — они будут видны в профиле.</p>
-        <div class="lv-grid">${d.items.map((a) => `<div class="lv-ach${a.got ? '' : ' off'}">${medal(a)}<div><b>${esc(a.title)}${a.got && a.tiers > 1 ? ' · ' + ['', 'бронза', 'серебро', 'золото'][a.tier] : ''}</b><span>${esc(a.desc)}${a.next ? ` · дальше: ${a.next}` : ''}</span><small>есть у ${a.rarity}%</small>${a.got ? `<button type="button" class="pin" data-pin="${esc(a.code)}" aria-pressed="${show.has(a.code)}">${show.has(a.code) ? 'В профиле' : 'Показать в профиле'}</button>` : ''}</div></div>`).join('')}</div>`;
+        <div class="lv-grid">${d.items.map((a) => `<div class="lv-ach${a.got ? '' : ' off'}">${medal(a)}<div><b>${esc(a.title)}${a.got && a.tiers > 1 ? ' · ' + ['', 'бронза', 'серебро', 'золото'][a.tier] : ''}</b><span>${esc(a.desc)}${a.next ? ` · дальше: ${a.next}` : ''}</span><small>есть у ${a.rarity}%</small>${a.got ? `<button type="button" class="pin" data-pin="${esc(a.code)}" aria-pressed="${show.has(a.code)}">${show.has(a.code) ? 'В профиле ✓' : 'В профиль'}</button>` : ''}</div></div>`).join('')}</div>`;
     },
     async board() {
       const scope = VIEWS.scope || 'friends';
@@ -543,7 +573,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       return `<div class="lv-seg" role="group" aria-label="Чей рейтинг"><button type="button" data-scope="friends" aria-pressed="${scope === 'friends'}">Друзья</button><button type="button" data-scope="all" aria-pressed="${scope === 'all'}">Весь сайт</button></div>
         <div class="lv-box"><h3>Опыт за неделю</h3><div class="lv-board">${rows || '<p class="lv-muted">На этой неделе пока никто не набрал опыта.</p>'}</div>
         ${d.best ? `<p class="lv-muted">Лучший прогресс: ${esc(d.best.username)}${d.best.growth != null ? ` — +${d.best.growth}% к прошлой неделе` : ' — новичок недели'}.</p>` : ''}
-        <p class="lv-muted">Рейтинг обнуляется в понедельник. Скрыть себя можно во вкладке «Оформление».</p></div>`;
+        <p class="lv-muted">Рейтинг обнуляется в понедельник.</p></div>`;
     },
     async look() {
       await refreshMe();
