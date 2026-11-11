@@ -108,12 +108,12 @@ html.unslop .lv-hbtn.lv-pulse { animation-duration: 2.6s; }
 .lv-pick .sw.lv-bg-legend { background-image: url(/art/bg/legend-s.webp) !important; }
 .banner[class*="lv-bg-"] { background-size: cover !important; background-position: center 70% !important; }
 /* эмблемы достижений: пиксельные картинки из листа /art/ach.webp (6×4, порядок как в ACH_ART).
-   В казуальном виде (html.unslop) остаются прежние линейные значки */
+   Одни и те же в обычном и казуальном виде (html.unslop); линейный SVG остаётся только у скрытых «?» */
 .lv-px { display: none; }
-html:not(.unslop) .px > svg { display: none; }
-html:not(.unslop) .px > .lv-px { display: block; width: 100%; height: 100%; background: url(/art/ach.webp) calc(var(--ax) * 20%) calc(var(--ay) * 100% / 3) / 600% 400% no-repeat; }
-html:not(.unslop) .lv-bi .ic.px { padding: 3px; background: color-mix(in srgb, var(--c1) 14%, var(--panel, #1b1d24)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c2) 45%, transparent); }
-html:not(.unslop) .lv-sic.px { width: 22px; height: 22px; background: none; }
+html .px > svg { display: none; }
+html .px > .lv-px { display: block; width: 100%; height: 100%; background: url(/art/ach.webp) calc(var(--ax) * 20%) calc(var(--ay) * 100% / 3) / 600% 400% no-repeat; }
+html .lv-bi .ic.px { padding: 3px; background: color-mix(in srgb, var(--c1) 14%, var(--panel, #1b1d24)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c2) 45%, transparent); }
+html .lv-sic.px { width: 22px; height: 22px; background: none; }
 .lv-prof { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; font-size: 13px; color: var(--ink-2, #b5b5b5); }
 /* кольцо с номером уровня — как у кнопки в шапке, только крупнее */
 .lv-pring { position: relative; flex: none; width: 34px; height: 34px; border-radius: 50%; display: inline-grid; place-items: center; background: conic-gradient(var(--accent, #3550E8) var(--p, 0%), color-mix(in srgb, var(--ink, #fff) 16%, transparent) 0); }
