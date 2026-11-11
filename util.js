@@ -4,7 +4,8 @@
    read(key)                 — JSON из localStorage или null, если ключа нет или он испорчен
    plural(n, one, few, many) — нужная форма слова: 1 оценка, 2 оценки, 5 оценок
    script(src, ready)        — подгрузить скрипт один раз: Promise, который выполнится, когда ready() вернёт правду.
-                               Второй, кто попросит тот же скрипт, дождётся того же тега, а не останется ни с чем */
+                               Второй, кто попросит тот же скрипт, дождётся того же тега, а не останется ни с чем
+   emptyArt(name, w)         — пиксельная картинка пустого состояния (/art/empty-*.webp: rate, friends, tier, lots) шириной w */
 (() => {
   if (window.CasualUtil) return;
   const MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -26,5 +27,7 @@
     }
     return loading.get(src);
   };
-  window.CasualUtil = Object.freeze({ esc, read, plural, script });
+  const EMPTY_H = { rate: 230, friends: 201, tier: 185, lots: 173 }; // высота при ширине 240
+  const emptyArt = (name, w = 112) => (EMPTY_H[name] ? `<img class="empty-art" src="/art/empty-${name}.webp" width="${w}" height="${Math.round((w * EMPTY_H[name]) / 240)}" alt="" loading="lazy" decoding="async">` : '');
+  window.CasualUtil = Object.freeze({ esc, read, plural, script, emptyArt });
 })();

@@ -395,7 +395,7 @@
     box.innerHTML = n ? `<p class="tl-stat"><b>${n}</b> ${plural(n, 'тир-лист', 'тир-листа', 'тир-листов')}</p><div class="tl-grid">${bySort(found, (l) => l.title || 'Без названия', (l) => l.at).map((l, k) => {
       const c = Object.keys(l.items).length;
       return `<div class="tl-cell"><button type="button" class="tl-star" data-fav="${esc(l.id)}" aria-pressed="${l.fav}" aria-label="${l.fav ? 'Убрать из избранного' : 'В избранное'}" title="${l.fav ? 'Убрать из избранного' : 'В избранное'}">★</button><a class="tl-tile" href="#${esc(ownHash(l.id))}" style="--k:${Math.min(k, 8)}"><span class="tl-mini" aria-hidden="true">${l.rows.slice(0, 5).map((r) => `<span class="tl-mini-r"><i style="background:${esc(r.color)}"></i><span>${r.items.slice(0, 7).map((id) => miniThumb(l.items[id])).join('')}</span></span>`).join('')}</span><b>${esc(l.title || 'Без названия')}</b><small>${cards(c)} · ${esc(fmtDate(l.at))}${l.private ? ' · скрыт от друзей' : ''}</small></a></div>`;
-    }).join('')}</div>` : `<p class="tl-empty">${none}</p>`;
+    }).join('')}</div>` : `<p class="tl-empty">${pool.length ? '' : window.CasualUtil.emptyArt('tier')}${none}</p>`;
   }
   async function renderFriendsTab() {
     const box = $('#tlPanel');
@@ -411,7 +411,7 @@
   }
   function paintFriends() {
     const box = $('#tlPanel'), feed = S.feed;
-    if (!feed.friends) { box.innerHTML = '<div class="tl-empty"><p>Пока нет друзей. Добавь их, и здесь появятся их тир-листы.</p><p class="tl-mt"><a class="btn small primary" href="/opinion/#friends">Добавить друзей</a></p></div>'; return; }
+    if (!feed.friends) { box.innerHTML = '<div class="tl-empty">' + window.CasualUtil.emptyArt('friends') + '<p>Пока нет друзей. Добавь их, и здесь появятся их тир-листы.</p><p class="tl-mt"><a class="btn small primary" href="/opinion/#friends">Добавить друзей</a></p></div>'; return; }
     if (!feed.items.length) { box.innerHTML = '<p class="tl-empty">Друзья пока не собрали ни одного тир-листа.</p>'; return; }
     const people = [...new Map(feed.items.map((x) => [x.user.id, x.user])).values()];
     if (S.who && !people.some((p) => p.id === S.who)) S.who = '';

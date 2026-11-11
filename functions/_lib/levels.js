@@ -148,7 +148,7 @@ export const REWARDS = [
   { level: 50, kind: 'bg', id: 'legend', title: 'Фон «Легенда»' },
 ];
 export const NAME_COLORS = { blue: '#5B74FF', pink: '#E85FA5', green: '#2EAD60', orange: '#F08A24', violet: '#9B6BFF', teal: '#14A3A8', gold: '#E2A925' };
-export const PROFILE_BGS = { dawn: 1, night: 1, forest: 1, ember: 1, legend: 1 };
+export const PROFILE_BGS = { dawn: 1, night: 1, city: 1, forest: 1, ember: 1, legend: 1 };
 // что из оформления доступно на уровне
 export function unlockedAt(level) {
   const got = new Set(REWARDS.filter((r) => level >= r.level).map((r) => r.id));

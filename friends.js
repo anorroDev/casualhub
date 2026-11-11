@@ -852,7 +852,7 @@ ${ICON.chev}
   function showAllFriends() {
     if (!F.friends.length) {
       fboard.hidden = true; fnote.hidden = false;
-      fnote.textContent = 'Пока нет друзей. Добавь друга кнопкой «Друзья» вверху страницы.';
+      fnote.innerHTML = window.CasualUtil.emptyArt('friends') + 'Пока нет друзей. Добавь друга кнопкой «Друзья» вверху страницы.';
       el.boardStat.textContent = 'Друзья';
       return;
     }

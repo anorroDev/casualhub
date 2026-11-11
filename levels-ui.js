@@ -86,11 +86,34 @@ html.unslop .lv-hbtn.lv-pulse { animation-duration: 2.6s; }
 .lv-frame-frame4 { box-shadow: 0 0 0 2px var(--panel, #1b1d24), 0 0 0 5px #E2A925, 0 0 0 7px #8C5A12 !important; border-radius: 50%; }
 @keyframes lv-spin { 0%, 100% { box-shadow: 0 0 0 2px var(--panel, #1b1d24), 0 0 0 4px #E85FA5; } 50% { box-shadow: 0 0 0 2px var(--panel, #1b1d24), 0 0 0 4px #5B74FF; } }
 @media (prefers-reduced-motion: reduce) { .lv-frame-frame3 { animation: none; } }
+/* фон профиля: у карточки профиля — лёгкий оттенок, у баннера по умолчанию и у образца в «Оформлении» — пиксельная картинка из /art/bg */
 .lv-bg-dawn { background-image: linear-gradient(135deg, color-mix(in srgb, #F5B942 16%, transparent), color-mix(in srgb, #E85FA5 14%, transparent)) !important; }
 .lv-bg-night { background-image: linear-gradient(135deg, color-mix(in srgb, #3550E8 22%, transparent), color-mix(in srgb, #0D0F14 30%, transparent)) !important; }
+.lv-bg-city { background-image: linear-gradient(135deg, color-mix(in srgb, #3550E8 16%, transparent), color-mix(in srgb, #F2BA44 10%, transparent)) !important; }
 .lv-bg-forest { background-image: linear-gradient(135deg, color-mix(in srgb, #2EAD60 18%, transparent), color-mix(in srgb, #14A3A8 14%, transparent)) !important; }
 .lv-bg-ember { background-image: linear-gradient(135deg, color-mix(in srgb, #F08A24 20%, transparent), color-mix(in srgb, #E4553F 14%, transparent)) !important; }
 .lv-bg-legend { background-image: linear-gradient(135deg, color-mix(in srgb, #E2A925 26%, transparent), color-mix(in srgb, #9B6BFF 22%, transparent), color-mix(in srgb, #E85FA5 18%, transparent)) !important; }
+.banner.lv-bg-dawn, .lv-pick .sw.lv-bg-dawn { background-image: url(/art/bg/dawn.webp) !important; }
+.banner.lv-bg-night, .lv-pick .sw.lv-bg-night { background-image: url(/art/bg/night.webp) !important; }
+.banner.lv-bg-city, .lv-pick .sw.lv-bg-city { background-image: url(/art/bg/city.webp) !important; }
+.banner.lv-bg-forest, .lv-pick .sw.lv-bg-forest { background-image: url(/art/bg/forest.webp) !important; }
+.banner.lv-bg-ember, .lv-pick .sw.lv-bg-ember { background-image: url(/art/bg/ember.webp) !important; }
+.banner.lv-bg-legend, .lv-pick .sw.lv-bg-legend { background-image: url(/art/bg/legend.webp) !important; }
+.lv-pick .sw[class*="lv-bg-"] { background-image: none; background-size: cover !important; background-position: center !important; }
+.lv-pick .sw.lv-bg-dawn { background-image: url(/art/bg/dawn-s.webp) !important; }
+.lv-pick .sw.lv-bg-night { background-image: url(/art/bg/night-s.webp) !important; }
+.lv-pick .sw.lv-bg-city { background-image: url(/art/bg/city-s.webp) !important; }
+.lv-pick .sw.lv-bg-forest { background-image: url(/art/bg/forest-s.webp) !important; }
+.lv-pick .sw.lv-bg-ember { background-image: url(/art/bg/ember-s.webp) !important; }
+.lv-pick .sw.lv-bg-legend { background-image: url(/art/bg/legend-s.webp) !important; }
+.banner[class*="lv-bg-"] { background-size: cover !important; background-position: center 70% !important; }
+/* эмблемы достижений: пиксельные картинки из листа /art/ach.webp (6×4, порядок как в ACH_ART).
+   В казуальном виде (html.unslop) остаются прежние линейные значки */
+.lv-px { display: none; }
+html:not(.unslop) .px > svg { display: none; }
+html:not(.unslop) .px > .lv-px { display: block; width: 100%; height: 100%; background: url(/art/ach.webp) calc(var(--ax) * 20%) calc(var(--ay) * 100% / 3) / 600% 400% no-repeat; }
+html:not(.unslop) .lv-bi .ic.px { padding: 3px; background: color-mix(in srgb, var(--c1) 14%, var(--panel, #1b1d24)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c2) 45%, transparent); }
+html:not(.unslop) .lv-sic.px { width: 22px; height: 22px; background: none; }
 .lv-prof { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; font-size: 13px; color: var(--ink-2, #b5b5b5); }
 /* кольцо с номером уровня — как у кнопки в шапке, только крупнее */
 .lv-pring { position: relative; flex: none; width: 34px; height: 34px; border-radius: 50%; display: inline-grid; place-items: center; background: conic-gradient(var(--accent, #3550E8) var(--p, 0%), color-mix(in srgb, var(--ink, #fff) 16%, transparent) 0); }
@@ -479,7 +502,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     box.className = 'lv-prof';
     box.dataset.for = id;
     const pr = Math.min(100, Math.round(((+d.into || 0) / Math.max(1, +d.need || 1)) * 100));
-    box.innerHTML = `<span class="lv-pring" style="--p:${pr}%" title="Уровень ${d.level} · ${esc(d.rank)}" aria-label="Уровень ${d.level}"><b>${d.level}</b></span>${d.look.rank ? `<span class="lv-chip">${esc(d.look.rank)}</span>` : ''}${(d.showcase || []).map((a) => { const art = ACH_ART[a.code] || ACH_ART.critic; return `<span class="lv-show"><i class="lv-sic" style="--c1:${art[0]};--c2:${art[1]}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${art[2]}</svg></i>${esc(a.title)}</span>`; }).join('')}`;
+    box.innerHTML = `<span class="lv-pring" style="--p:${pr}%" title="Уровень ${d.level} · ${esc(d.rank)}" aria-label="Уровень ${d.level}"><b>${d.level}</b></span>${d.look.rank ? `<span class="lv-chip">${esc(d.look.rank)}</span>` : ''}${(d.showcase || []).map((a) => { const art = ACH_ART[a.code] || ACH_ART.critic; return `<span class="lv-show"><i class="lv-sic px" style="--c1:${art[0]};--c2:${art[1]}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${art[2]}</svg>${achPx(a.code)}</i>${esc(a.title)}</span>`; }).join('')}`;
     const sub = who.querySelector('.sub');
     if (sub) sub.after(box); else who.appendChild(box);
     const name = hero.querySelector('#profileName');
@@ -615,13 +638,19 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     event: ['#F0ABFC', '#A21CAF', '<rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 9.5h16M8.5 3.5v3M15.5 3.5v3"/><path d="M12 12l1 2 2.2.3-1.6 1.5.4 2.2-2-1-2 1 .4-2.2-1.6-1.5 2.2-.3z"/>'],
     recap2026: ['#FDE68A', '#CA8A04', '<rect x="4" y="9" width="16" height="11" rx="2"/><path d="M3 9h18v-3H3zM12 6v14M12 6c-1-2.5-4.5-2.5-4.5-.5S10 6 12 6zm0 0c1-2.5 4.5-2.5 4.5-.5S14 6 12 6z"/>'],
   };
+  // пиксельная эмблема: клетка листа /art/ach.webp по порядку ключей ACH_ART (незнакомый код — как у «Критика»)
+  const ACH_KEYS = Object.keys(ACH_ART);
+  function achPx(code) {
+    const i = ACH_KEYS.indexOf(code), k = i < 0 ? ACH_KEYS.indexOf('critic') : i;
+    return `<i class="lv-px" style="--ax:${k % 6};--ay:${Math.floor(k / 6)}"></i>`;
+  }
   const TIER = ['', 'бронза', 'серебро', 'золото'];
   function achCard(a, pin, show) {
     const art = ACH_ART[a.code] || ACH_ART.critic;
     const sub = a.got ? (a.next ? `${a.desc} · дальше ${a.have || 0} из ${a.next}` : a.desc) : a.next ? `${a.desc} · ${a.have || 0} из ${a.next}` : a.desc;
     const p = a.next && a.have != null ? pct(a.have, a.next) : null;
     return `<div class="lv-bi ${a.got ? 'got' : 'off'}" style="--c1:${art[0]};--c2:${art[1]}" title="${esc(a.title)}: ${esc(a.desc)}">`
-      + `<span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${a.got || !a.hidden ? art[2] : '<path d="M9.2 9a2.9 2.9 0 1 1 4.1 2.6c-.8.4-1.3 1.1-1.3 2v.6M12 17.5h.01"/>'}</svg></span>`
+      + `<span class="ic${a.got || !a.hidden ? ' px' : ''}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${a.got || !a.hidden ? art[2] : '<path d="M9.2 9a2.9 2.9 0 1 1 4.1 2.6c-.8.4-1.3 1.1-1.3 2v.6M12 17.5h.01"/>'}</svg>${a.got || !a.hidden ? achPx(a.code) : ''}</span>`
       + `<span><b>${esc(a.title)}${a.got && a.tiers > 1 ? ' · ' + TIER[a.tier] : ''}</b><small>${esc(sub)} · есть у ${a.rarity}%</small>${p != null && (!a.got || a.next) ? bar(p) : ''}`
       + `${pin && a.got ? `<button type="button" class="pin" data-pin="${esc(a.code)}" aria-pressed="${show.has(a.code)}">${show.has(a.code) ? 'В профиле ✓' : 'В профиль'}</button>` : ''}</span>`
       + `${a.got ? '<span class="ok" aria-label="Получено">✓</span>' : ''}</div>`;
@@ -683,7 +712,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       await refreshMe();
       const m = ME, u = m.unlocked, p = m.prefs;
       const FR = { '': 'Без рамки', frame1: 'Казуал', frame2: 'Неон', frame3: 'Переливы', frame4: 'Мастер' };
-      const BG = { '': 'Без фона', dawn: 'Рассвет', night: 'Ночь', forest: 'Лес', ember: 'Угли', legend: 'Легенда' };
+      const BG = { '': 'Без фона', dawn: 'Закат', night: 'Ночь', city: 'Город', forest: 'Лес', ember: 'Уют', legend: 'Легенда' };
       const frames = ['', 'frame1', 'frame2', 'frame3', 'frame4'].map((f) => `<button type="button" data-frame="${f}" aria-pressed="${p.frame === f}"${f && !u.frames.includes(f) ? ' disabled' : ''}>${f ? `<span class="dot lv-frame-${f}" style="background:var(--panel-2,#222)"></span>` : ''}${FR[f]}</button>`).join('');
       const colors = ['', ...Object.keys(m.colors)].map((c) => `<button type="button" data-color="${c}" aria-pressed="${p.color === c}"${c && !u.colors.includes(c) ? ' disabled' : ''}>${c ? `<span class="dot" style="background:${m.colors[c]}"></span>` : ''}${c ? '' : 'Обычный'}</button>`).join('');
       const bgs = ['', ...m.bgs].map((b) => `<button type="button" data-bg="${b}" aria-pressed="${p.bg === b}"${b && !u.bgs.includes(b) ? ' disabled' : ''}>${b ? `<span class="sw lv-bg-${b}"></span>` : ''}${BG[b]}</button>`).join('');
@@ -902,7 +931,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
         t: 'Каждый день три задания. Заходи подряд — растёт серия, а «заморозка» спасёт, если пропустишь день.',
       },
       {
-        pic: `<div class="lv-tmedals">${['critic', 'masterpiece', 'soul'].map((c) => `<span class="lv-bi got" style="--c1:${ACH_ART[c][0]};--c2:${ACH_ART[c][1]};padding:0;border:0;background:none"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ACH_ART[c][2]}</svg></span></span>`).join('')}</div>`,
+        pic: `<div class="lv-tmedals">${['critic', 'masterpiece', 'soul'].map((c) => `<span class="lv-bi got" style="--c1:${ACH_ART[c][0]};--c2:${ACH_ART[c][1]};padding:0;border:0;background:none"><span class="ic px"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ACH_ART[c][2]}</svg>${achPx(c)}</span></span>`).join('')}</div>`,
         h: 'Достижения',
         t: 'Бронза, серебро и золото за оценки, тир-листы и общение. Три любимых видны у тебя в профиле.',
       },
