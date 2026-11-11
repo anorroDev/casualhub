@@ -14,9 +14,9 @@
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <title>Казуал Хаб</title>
-<link rel="icon" href="/favicon.ico?v=2" sizes="48x48">
-<link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
-<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=2">
+<link rel="icon" href="/favicon.ico?v=3" sizes="48x48">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg?v=3">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png?v=3">
 <link rel="manifest" href="/site.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -230,14 +230,11 @@ h1, h2, p { margin: 0; }
 .top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; animation: drop-in .6s var(--out) backwards; }
 @keyframes drop-in { from { transform: translateY(-16px); } }
 .mark { display: inline-flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 700; font-size: 22px; text-decoration: none; letter-spacing: .02em; border-radius: 10px; }
-.mark svg { width: 32px; height: 32px; transition: transform .5s var(--spring); }
-.mark:hover svg { transform: rotate(-8deg) scale(1.08); }
-/* The logo assembles itself: the scale draws from red to green, then the needle swings over to green */
-.mark .lg-arc { stroke-dasharray: 1; animation: lg-draw .3s ease-out backwards; }
-.mark .lg-arc:nth-child(1) { animation-delay: .1s; } .mark .lg-arc:nth-child(2) { animation-delay: .25s; } .mark .lg-arc:nth-child(3) { animation-delay: .4s; }
-@keyframes lg-draw { from { stroke-dashoffset: 1; } }
-.mark .lg-needle { transform-box: view-box; transform-origin: 16px 17.4px; animation: lg-swing .8s var(--spring) .35s backwards; }
-@keyframes lg-swing { from { transform: rotate(-190deg); } }
+.mark img { width: 32px; height: 32px; transition: transform .5s var(--spring); }
+.mark:hover img { transform: rotate(-8deg) scale(1.08); }
+/* пиксельный логотип (/art/logo/hub.svg) появляется ступенькой, как спрайт */
+.mark img { animation: lg-pop .5s steps(3, jump-end) .1s backwards; }
+@keyframes lg-pop { from { transform: scale(.4); opacity: 0; } }
 .online-chip { cursor: default; }
 .user-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; flex: 1 1 auto; } /* прижата вправо и под логотипом: кнопку «Что нового» не двигает то, что дорисовывается левее */
 #account { display: contents; }
@@ -344,7 +341,7 @@ h1, h2, p { margin: 0; }
   .hero-art i:nth-child(4) { --mx: 140px; --my: 6px; --ms: 38px; }
   .hero-art i:nth-child(n+5) { display: none; }
 }
-@media (prefers-reduced-motion: reduce) { .hero-art i { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .hero-art i, .mark img { animation: none; } }
 html.unslop .hero-art i { animation: none; filter: none; }
 
 /* App cards: a live preview on top, the name under it, the footer with counters */
@@ -517,7 +514,7 @@ html.unslop .hero-art i { animation: none; filter: none; }
 .feed-empty a { color: var(--accent); font-weight: 600; }
 
 .app-icon { width: 52px; height: 52px; border-radius: 14px; display: grid; place-items: center; transition: transform .5s var(--spring); }
-.app-icon svg { width: 100%; height: 100%; }
+.app-icon img { width: 100%; height: 100%; }
 .app:hover .app-icon { transform: rotate(-6deg) scale(1.06); }
 .app-text { display: grid; gap: 4px; min-width: 0; align-content: start; }
 .app-name { font-family: var(--font-display); font-weight: 800; font-size: clamp(32px, 4.2vw, 42px); line-height: .9; }
@@ -614,7 +611,7 @@ html.unslop body::before { display: none; }
 <div class="page">
   <header class="top">
     <a class="mark" href="/" aria-label="Казуал Хаб, главная">
-      <svg viewBox="0 0 32 32" aria-hidden="true"><rect width="32" height="32" rx="8" fill="#14161C"/><g fill="none" stroke-width="5"><path class="lg-arc" pathLength="1" d="M9.21 24.19A9.6 9.6 0 0 1 8.75 11.1" stroke="#F26A55"/><path class="lg-arc" pathLength="1" d="M9.45 10.38A9.6 9.6 0 0 1 22.55 10.38" stroke="#F2BA44"/><path class="lg-arc" pathLength="1" d="M23.25 11.1A9.6 9.6 0 0 1 22.79 24.19" stroke="#43C97A"/></g><g class="lg-needle"><path d="M16 17.4L22.28 13.48" fill="none" stroke="#E8EAF0" stroke-width="2.4" stroke-linecap="round"/><circle cx="16" cy="17.4" r="3" fill="#E8EAF0"/></g></svg>
+      <img src="/art/logo/hub.svg" width="32" height="32" alt="">
       casualhub
     </a>
     <div class="user-bar">
@@ -655,7 +652,7 @@ html.unslop body::before { display: none; }
     <a class="app" href="/opinion/">
       <span class="glow" aria-hidden="true"><i></i></span>
       <span class="pv pv-board" id="mnPreview" aria-hidden="true"></span>
-      <span class="app-icon" aria-hidden="true"><svg viewBox="0 0 256 256"><rect width="256" height="256" rx="58" fill="#14161C"/><rect x="34" y="104" width="38" height="48" rx="11" fill="#F26A55"/><rect x="80" y="104" width="38" height="48" rx="11" fill="#F2BA44"/><rect x="126" y="104" width="38" height="48" rx="11" fill="#43C97A"/><rect x="172" y="46" width="50" height="164" rx="16" fill="#43C97A"/><rect x="186" y="102" width="7" height="52" rx="3.5" fill="#14161C" fill-opacity=".5"/><rect x="201" y="102" width="7" height="52" rx="3.5" fill="#14161C" fill-opacity=".5"/></svg></span>
+      <span class="app-icon" aria-hidden="true"><img src="/art/logo/opinion.svg" width="52" height="52" alt=""></span>
       <span class="app-text">
         <span class="app-name">Мнение Казуала</span>
         <span class="app-desc">Игры, фильмы, еда, места или что угодно своё. Критерии, рейтинг, тиры, статистика и оценки друзей.</span>
@@ -667,7 +664,7 @@ html.unslop body::before { display: none; }
       <span class="pv pv-wheel" aria-hidden="true">
         <span class="wheel" id="wheel"></span>
       </span>
-      <span class="app-icon" aria-hidden="true"><svg viewBox="0 0 256 256"><rect width="256" height="256" rx="58" fill="#14161C"/><path d="M137.00 114.02L137.00 32.02A82 82 0 0 1 208.01 73.02Z" fill="#43C97A" stroke="#14161C" stroke-width="9" stroke-linejoin="round"/><path d="M122.00 140.00L193.01 99.00A82 82 0 0 1 193.01 181.00Z" fill="#F2BA44" stroke="#14161C" stroke-width="9" stroke-linejoin="round"/><path d="M122.00 140.00L193.01 181.00A82 82 0 0 1 122.00 222.00Z" fill="#F26A55" stroke="#14161C" stroke-width="9" stroke-linejoin="round"/><path d="M122.00 140.00L122.00 222.00A82 82 0 0 1 50.99 181.00Z" fill="#43C97A" stroke="#14161C" stroke-width="9" stroke-linejoin="round"/><path d="M122.00 140.00L50.99 181.00A82 82 0 0 1 50.99 99.00Z" fill="#F2BA44" stroke="#14161C" stroke-width="9" stroke-linejoin="round"/><path d="M122.00 140.00L50.99 99.00A82 82 0 0 1 122.00 58.00Z" fill="#F26A55" stroke="#14161C" stroke-width="9" stroke-linejoin="round"/><circle cx="122" cy="140" r="22" fill="#8C9BFF" stroke="#14161C" stroke-width="9"/></svg></span>
+      <span class="app-icon" aria-hidden="true"><img src="/art/logo/wheel.svg" width="52" height="52" alt=""></span>
       <span class="app-text">
         <span class="app-name">Колесо Казуала</span>
         <span class="app-desc">На выбывание или один победитель с одной прокрутки, шансы у всех равные. Своя музыка, стикеры в центре и лоты по ссылке: друзья предлагают, колесо выбирает.</span>
@@ -677,7 +674,7 @@ html.unslop body::before { display: none; }
     <a class="app" href="/tierlist/">
       <span class="glow" aria-hidden="true"><i></i></span>
       <span class="pv pv-tiers" aria-hidden="true"><span class="pv-tier"><i style="background:#43C97A"></i><span><b style="--j:0"></b><b style="--j:1"></b><b style="--j:2"></b></span></span><span class="pv-tier"><i style="background:#F2BA44"></i><span><b style="--j:0"></b><b style="--j:1"></b><b style="--j:2"></b><b style="--j:3"></b><b style="--j:4"></b></span></span><span class="pv-tier"><i style="background:#F28E4C"></i><span><b style="--j:0"></b><b style="--j:1"></b></span></span><span class="pv-tier"><i style="background:#F26A55"></i><span><b style="--j:0"></b><b style="--j:1"></b><b style="--j:2"></b><b style="--j:3"></b></span></span></span>
-      <span class="app-icon" aria-hidden="true"><svg viewBox="0 0 256 256"><rect width="256" height="256" rx="58" fill="#14161C"/><rect x="36" y="44" width="52" height="48" rx="11" fill="#43C97A"/><rect x="100" y="44" width="120" height="48" rx="11" fill="#3A3F4B"/><rect x="36" y="104" width="52" height="48" rx="11" fill="#F2BA44"/><rect x="100" y="104" width="84" height="48" rx="11" fill="#3A3F4B"/><rect x="36" y="164" width="52" height="48" rx="11" fill="#F26A55"/><rect x="100" y="164" width="48" height="48" rx="11" fill="#3A3F4B"/></svg></span>
+      <span class="app-icon" aria-hidden="true"><img src="/art/logo/tierlist.svg" width="52" height="52" alt=""></span>
       <span class="app-text">
         <span class="app-name">Тир-листы Казуала</span>
         <span class="app-desc">Свои картинки, текст, оценки или стикеры. Разложи по рядам, покажи друзьям и скачай картинкой.</span>

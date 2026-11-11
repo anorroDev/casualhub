@@ -28,3 +28,5 @@ input, textarea, [contenteditable="true"] { caret-color: var(--accent, #3550E8);
 /* Пустые состояния: пиксельный зверёк из /art/empty-*.webp (CasualUtil.emptyArt) над подписью */
 .empty-art { display: block; max-width: 100%; height: auto; margin: 0 auto 10px; }
 .no-match:has(> .empty-art), .feed-empty:has(> .empty-art) { text-align: center; }
+/* значок раздела над заголовком страницы (пиксельный логотип из /art/logo) */
+.title-logo { display: block; width: clamp(44px, 6vw, 56px); height: auto; margin-bottom: 14px; }

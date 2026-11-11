@@ -122,8 +122,8 @@ function page(T, title, body, meta, tier) {
 <meta name="robots" content="noindex, nofollow">
 <title>${esc(title)}</title>
 ${meta || ''}
-<link rel="icon" href="/favicon.ico?v=2" sizes="48x48">
-<link rel="icon" type="image/svg+xml" href="/favicon.svg?v=2">
+<link rel="icon" href="/favicon.ico?v=3" sizes="48x48">
+<link rel="icon" type="image/svg+xml" href="/favicon.svg?v=3">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Handjet:wght@600..800&family=Onest:wght@400..700&display=swap">
