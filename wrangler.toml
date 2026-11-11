@@ -30,3 +30,6 @@ script_name = "casualhub-rt"
 [vars]
 LOTS_RT = "1"
 PRESENCE_RT = "1"
+# Уровни и опыт (functions/_lib/levels.js, docs/levels): "0" — выключено, база не меняется; "admins" — опыт копится
+# у всех, видят только админы; "1" — для всех.
+LEVELS = "0"
