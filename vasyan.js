@@ -69,6 +69,7 @@
 .vy-cat { left: 0; top: 0; touch-action: none; cursor: grab; }
 .vy-cat.drag { cursor: grabbing; z-index: 60; }
 .vy-cat svg, .vy-bowl svg { display: block; }
+.vy-body { display: block; } /* строчный span не принимает transform — без этого Васян не разворачивался и ходил задом */
 .vy-cat.flip .vy-body { transform: scaleX(-1); }
 .vy-cat.hop .vy-body { animation: vy-hop .35s steps(3, jump-none); }
 @keyframes vy-hop { 50% { translate: 0 -8px; } }
@@ -100,7 +101,7 @@
   let x = 120, y = 0, vy = 0, dir = 1, mode = 'sit', until = 0, target = 0, frame = 0, lastFrame = 0, saveT = 0, floor = 0, lastT = 0;
   let surf = null, jump = null, after = null, size = { w: 57, h: 39 };
   let mouse = { x: -1, y: -1, t: 0 }, chaseT = 0, measureT = 0;
-  let press = null, dragged = false, shown = null;
+  let press = null, dragged = false, shown = null, turnUntil = 0, faced = 1;
 
   function mount() {
     if (alive) return;
@@ -308,9 +309,11 @@
       y = surfTop(surf);
       if (mode === 'walk' || mode === 'run' || mode === 'goEat') {
         const dx = target - x; dir = dx >= 0 ? 1 : -1;
+        // сменил направление — сначала разворачивается на месте, потом идёт мордой вперёд
+        if (dir !== faced && Math.abs(dx) > 1) { faced = dir; turnUntil = t + 220; }
         const speed = mode === 'walk' ? 42 : 110;
-        x += dir * Math.min(Math.abs(dx), speed * dt);
-        rows = frame % 2 ? WALK_B : WALK_A;
+        if (t >= turnUntil) x += dir * Math.min(Math.abs(dx), speed * dt);
+        rows = t < turnUntil ? SIT : frame % 2 ? WALK_B : WALK_A;
         if (Math.abs(target - x) < 1) {
           if (mode === 'goEat') { mode = 'eat'; until = t + 3200; dir = -1; }
           else if (mode === 'run') { mode = 'sit'; until = t + 4000; say('love'); }
@@ -337,6 +340,7 @@
     if (shown !== rows) { body.innerHTML = s.svg; shown = rows; }
     if (rows === WALK_A || rows === WALK_B) size = { w: s.w, h: s.h };
     // спрайты нарисованы мордой вправо, спящий — влево
+    if (!['walk', 'run', 'goEat'].includes(mode)) faced = dir;
     cat.classList.toggle('flip', mode === 'sleep' ? dir > 0 : dir < 0);
     if (mode !== 'drag' && mode !== 'fall' && mode !== 'jump') {
       const [a, b] = surf ? bounds(surf) : [mode === 'eat' || mode === 'goEat' ? bowlRight() - 8 : bowlRight(), innerWidth - s.w - 6];
