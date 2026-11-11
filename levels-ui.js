@@ -11,6 +11,8 @@
   const token = () => { const u = read('ocenshik.user.v1'); const t = u && (read('casualhub.tokens.v1') || {})[u.id]; return t || ''; };
   const reduced = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
   const nf = (n) => String(Math.round(+n || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+  // полоса из 10 делений, как шкала оценок сайта: заполнено до ближайшего деления вверх, точное число — в тексте рядом
+  function bar(p) { const v = Math.max(0, Math.min(100, +p || 0)); const c = v > 0 ? Math.min(100, Math.ceil(v / 10) * 10) : 0; return `<span class="lv-bar" style="--p:${c}" role="img" aria-label="${Math.round(v)}%"></span>`; }
 
   // fetch сайта без обёртки: обёртка ниже ловит заголовок x-levels у всех запросов страницы
   const rawFetch = window.fetch.bind(window);
@@ -35,8 +37,9 @@
 .lv-row .lv-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; width: 100%; font-size: 13.5px; }
 .lv-row .lv-top b { font-weight: 700; }
 .lv-row .lv-top span { color: var(--ink-3, #8a8f9e); font-variant-numeric: tabular-nums; font-size: 12.5px; }
-.lv-bar { height: 7px; width: 100%; border-radius: 4px; background: color-mix(in srgb, var(--ink, #fff) 10%, transparent); overflow: hidden; }
-.lv-bar i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--accent, #3550E8), #E85FA5); transition: width .5s; }
+.lv-bar { position: relative; display: block; height: 8px; width: 100%; background: linear-gradient(90deg, var(--bad, #E4553F) 0 40%, var(--mid, #EAA92C) 40% 70%, var(--good, #2EAD60) 70%);
+  -webkit-mask: repeating-linear-gradient(90deg, #000 0 calc(10% - 3px), transparent calc(10% - 3px) 10%); mask: repeating-linear-gradient(90deg, #000 0 calc(10% - 3px), transparent calc(10% - 3px) 10%); }
+.lv-bar::after { content: ""; position: absolute; top: 0; bottom: 0; right: 0; width: calc((100 - var(--p, 0)) * 1%); background: var(--cell, color-mix(in srgb, var(--ink, #fff) 14%, transparent)); transition: width .5s; }
 .lv-row .lv-sub { display: flex; gap: 12px; font-size: 12.5px; color: var(--ink-3, #8a8f9e); width: 100%; }
 .lv-acc { position: relative; overflow: visible !important; }
 /* кнопка уровня в шапке: кольцо прогресса с номером уровня и подпись */
@@ -95,6 +98,8 @@ html.unslop .lv-hbtn.lv-pulse { animation-duration: 2.6s; }
 .lv-pring b { position: relative; font: 800 13px/1 system-ui, sans-serif; color: var(--ink, #f3f4f6); font-variant-numeric: tabular-nums; }
 /* у профиля при уровнях — только рамка уровня, без прежнего радужного кольца */
 html.lv-on .ava-wrap > .ava-ring { display: none !important; }
+.lv-sic { display: inline-grid; place-items: center; width: 20px; height: 20px; border-radius: 6px; color: #fff; background: linear-gradient(140deg, var(--c1), var(--c2)); }
+.lv-sic svg { width: 13px; height: 13px; }
 .lv-prof .lv-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--accent, #3550E8) 14%, transparent); color: var(--ink, #f3f4f6); font-weight: 600; }
 .lv-prof .lv-show { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line, #2b2e38); font-size: 12px; }
 .lv-medal { display: inline-grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 7px; color: #fff; font: 800 11px/1 system-ui, sans-serif; }
@@ -116,6 +121,8 @@ html.lv-on .ava-wrap > .ava-ring { display: none !important; }
 .lv-head .x { margin-left: auto; width: 36px; height: 36px; border: 0; border-radius: 50%; background: color-mix(in srgb, var(--ink, #fff) 8%, transparent); color: var(--ink, #fff); font-size: 16px; cursor: pointer; }
 .lv-tabs { display: flex; gap: 8px; padding: 0 28px 16px; overflow-x: auto; scrollbar-width: none; border-bottom: 1px solid var(--line, #2b2e38); }
 .lv-tabs::-webkit-scrollbar { display: none; }
+/* на узком экране вкладки листаются вбок: правый край тает — видно, что дальше есть ещё */
+@media (max-width: 700px) { .lv-tabs { -webkit-mask: linear-gradient(90deg, #000 82%, transparent); mask: linear-gradient(90deg, #000 82%, transparent); } }
 .lv-tabs button { position: relative; flex: none; padding: 8px 15px; border-radius: 999px; border: 1px solid var(--line, #2b2e38); background: transparent; color: var(--ink-2, #b5b5b5); font: 600 13px/1.2 inherit; font-family: inherit; cursor: pointer; }
 .lv-tabs button[aria-selected="true"] { background: var(--accent, #3550E8); border-color: transparent; color: #fff; }
 /* вкладки «в разработке»: серые, по наведению или нажатию — подсказка */
@@ -134,11 +141,29 @@ html.lv-on .ava-wrap > .ava-ring { display: none !important; }
 .lv-muted { color: var(--ink-3, #8a8f9e); font-size: 13px; margin: 0; }
 .lv-q { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 12px; align-items: center; font-size: 14px; }
 .lv-q .xp { font-weight: 700; color: #D99A1E; font-variant-numeric: tabular-nums; }
-.lv-q .lv-bar { grid-column: 1 / -1; height: 5px; }
+.lv-q .lv-bar { grid-column: 1 / -1; height: 6px; }
 .lv-q.done > span:first-child { color: var(--ink-3, #8a8f9e); text-decoration: line-through; }
-.lv-q.done .lv-bar i { background: #2EAD60; }
+.lv-q.done .lv-bar { background: var(--good, #2EAD60); }
 .lv-streak { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .lv-streak .big { font: 800 30px/1 var(--font-display, system-ui); }
+/* достижения: эмблема на цветной плашке, как ачивки в профиле */
+.lv-bdg { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(250px, 100%), 1fr)); gap: 10px; }
+.lv-bi { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 12px; padding: 12px; border-radius: 14px; border: 1px solid var(--line, #2b2e38); background: var(--panel-2, var(--panel, #1b1d24)); min-width: 0; }
+.lv-bi.got { padding-right: 30px; border-color: color-mix(in srgb, var(--c2) 35%, var(--line, #2b2e38)); background: linear-gradient(135deg, color-mix(in srgb, var(--c1) 12%, var(--panel-2, var(--panel, #1b1d24))), var(--panel-2, var(--panel, #1b1d24)) 65%); }
+.lv-bi .ic { width: 44px; height: 44px; border-radius: 13px; display: grid; place-items: center; color: #fff; background: linear-gradient(140deg, var(--c1), var(--c2)); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .35), inset 0 -2px 0 rgba(0, 0, 0, .14), 0 8px 16px -10px var(--c2); }
+.lv-bi .ic svg { width: 24px; height: 24px; filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .22)); }
+.lv-bi.off .ic { filter: grayscale(1); opacity: .45; box-shadow: none; }
+.lv-bi b { display: block; font-size: 14px; line-height: 1.25; overflow-wrap: anywhere; }
+.lv-bi.off b { color: var(--ink-2, #b5b5b5); }
+.lv-bi small { display: block; margin-top: 2px; font-size: 12px; color: var(--ink-3, #8a8f9e); }
+.lv-bi .lv-bar { margin-top: 7px; height: 6px; }
+.lv-bi .ok { position: absolute; top: 9px; right: 10px; font-weight: 800; color: var(--c2); }
+.lv-bi .pin { margin-top: 8px; padding: 4px 10px; white-space: nowrap; border-radius: 999px; border: 1px solid var(--line, #2b2e38); background: transparent; color: var(--ink-2, #b5b5b5); font: 600 11.5px/1.2 inherit; font-family: inherit; cursor: pointer; }
+.lv-bi .pin[aria-pressed="true"] { background: var(--accent, #3550E8); color: #fff; border-color: transparent; }
+.lv-more { margin-top: 4px; }
+.lv-more summary { cursor: pointer; padding: 8px 2px; font-size: 13.5px; font-weight: 700; color: var(--accent, #3550E8); list-style: none; }
+.lv-more summary::-webkit-details-marker { display: none; }
+.lv-more[open] summary { margin-bottom: 8px; }
 .lv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(260px, 100%), 1fr)); gap: 12px; }
 .lv-ach { display: grid; grid-template-columns: 44px minmax(0, 1fr); gap: 12px; align-items: start; padding: 14px; border-radius: 16px; border: 1px solid var(--line, #2b2e38); }
 .lv-ach .lv-medal { width: 44px; height: 44px; border-radius: 13px; font-size: 18px; }
@@ -230,7 +255,7 @@ html.lv-on .ava-wrap > .ava-ring { display: none !important; }
 .lv-tmail span { position: absolute; top: -10px; right: -10px; padding: 4px 9px; border-radius: 999px; background: #D99A1E; color: #fff; font: 800 13px/1 system-ui, sans-serif; }
 html.unslop .lv-tour .nav .go, html.unslop .lv-tour .dots i.on { background: var(--accent, #3550E8); }
 @media (max-width: 600px) { .lv-ov { padding: 0; } .lv-card { width: 100%; height: 100%; border-radius: 0; border: 0; } .lv-body { padding: 14px 16px 24px; } }
-html.unslop .lv-row .lv-bar i, html.unslop .lv-bar i { background: var(--accent, #3550E8); }
+html.unslop .lv-bar { height: 7px; }
 html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3550E8); }
 `;
   const style = document.createElement('style');
@@ -242,15 +267,15 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   function newsLine(n) {
     if (n.t === 'level') return `Новый уровень: ${n.to} · ${n.rank}`;
     if (n.t === 'ach') return `Достижение «${n.title}»${n.tier ? ' · ' + ['', 'бронза', 'серебро', 'золото'][n.tier] : ''}`;
-    if (n.t === 'quest') return `Задание выполнено: ${n.title} · +${n.xp}`;
-    if (n.t === 'quest_all') return `Все задания дня · +${n.xp}`;
-    if (n.t === 'quest_week') return `Задание недели: ${n.title} · +${n.xp}`;
-    if (n.t === 'streak') return `Серия ${n.streak} ${plural(n.streak, 'день', 'дня', 'дней')} подряд · +${n.xp}`;
+    if (n.t === 'quest') return `Задание выполнено: ${n.title}\u00a0·\u00a0+${n.xp}`;
+    if (n.t === 'quest_all') return `Все задания дня\u00a0·\u00a0+${n.xp}`;
+    if (n.t === 'quest_week') return `Задание недели: ${n.title}\u00a0·\u00a0+${n.xp}`;
+    if (n.t === 'streak') return `Серия ${n.streak} ${plural(n.streak, 'день', 'дня', 'дней')} подряд\u00a0·\u00a0+${n.xp}`;
     if (n.t === 'freeze') return `«Заморозка» спасла серию: ${n.streak} ${plural(n.streak, 'день', 'дня', 'дней')}`;
-    if (n.t === 'first') return `Первые шаги: ${n.title} · +${n.xp}`;
-    if (n.t === 'invite') return `Друг по твоей ссылке дошёл до 3-го уровня · +${n.xp}`;
-    if (n.t === 'invite_me') return `Ты пришёл по ссылке друга · +${n.xp}`;
-    if (n.t === 'gift') return `Подарок из почты · +${n.xp} опыта`;
+    if (n.t === 'first') return `Первые шаги: ${n.title}\u00a0·\u00a0+${n.xp}`;
+    if (n.t === 'invite') return `Друг по твоей ссылке дошёл до 3-го уровня\u00a0·\u00a0+${n.xp}`;
+    if (n.t === 'invite_me') return `Приглашение друга засчитано\u00a0·\u00a0+${n.xp}`;
+    if (n.t === 'gift') return `Подарок из почты ·\u00a0+${n.xp}\u00a0опыта`;
     return '';
   }
 
@@ -321,7 +346,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     const mh = `${MAIL_ICON}<span class="hm-t">Почта</span>${m ? `<span class="lv-cnt">${m}</span><i class="wn-dot"></i>` : ''}`;
     if (mail.innerHTML !== mh) mail.innerHTML = mh;
     row.innerHTML = `<span class="lv-top"><b>Уровень ${ME.level} · ${esc(ME.rank)}</b><span>${nf(ME.into)} / ${nf(ME.need)}</span></span>
-      <span class="lv-bar"><i style="width:${Math.min(100, Math.round((ME.into / ME.need) * 100))}%"></i></span>
+      ${bar(Math.min(100, Math.round((ME.into / ME.need) * 100)))}
       <span class="lv-sub"><span>Задания ${qd}/${q.length}</span>${ME.streak.days ? `<span>🔥 ${ME.streak.days} ${plural(ME.streak.days, 'день', 'дня', 'дней')}</span>` : ''}${ME.event ? `<span>${esc(ME.event.title)}</span>` : ''}</span>`;
   }
   function paintAccount() {
@@ -435,6 +460,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
 
   // ---------- профиль: уровень, звание, витрина, рамка, цвет ника и фон ----------
   let profFor = '', profData = null;
+  const ACH_TOTAL = 24;
   async function paintProfile() {
     if (!ME || !location.pathname.startsWith('/profile')) return;
     const hero = document.querySelector('.card.hero');
@@ -453,7 +479,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     box.className = 'lv-prof';
     box.dataset.for = id;
     const pr = Math.min(100, Math.round(((+d.into || 0) / Math.max(1, +d.need || 1)) * 100));
-    box.innerHTML = `<span class="lv-pring" style="--p:${pr}%" title="Уровень ${d.level} · ${esc(d.rank)}" aria-label="Уровень ${d.level}"><b>${d.level}</b></span>${d.look.rank ? `<span class="lv-chip">${esc(d.look.rank)}</span>` : ''}${(d.showcase || []).map((a) => `<span class="lv-show"><i class="lv-medal lv-t${a.tiers > 1 ? a.tier : 0}">${esc(a.title.charAt(0))}</i>${esc(a.title)}</span>`).join('')}`;
+    box.innerHTML = `<span class="lv-pring" style="--p:${pr}%" title="Уровень ${d.level} · ${esc(d.rank)}" aria-label="Уровень ${d.level}"><b>${d.level}</b></span>${d.look.rank ? `<span class="lv-chip">${esc(d.look.rank)}</span>` : ''}${(d.showcase || []).map((a) => { const art = ACH_ART[a.code] || ACH_ART.critic; return `<span class="lv-show"><i class="lv-sic" style="--c1:${art[0]};--c2:${art[1]}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${art[2]}</svg></i>${esc(a.title)}</span>`; }).join('')}`;
     const sub = who.querySelector('.sub');
     if (sub) sub.after(box); else who.appendChild(box);
     const name = hero.querySelector('#profileName');
@@ -464,6 +490,33 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     [...hero.classList].filter((c) => c.startsWith('lv-bg-')).forEach((c) => hero.classList.remove(c));
     if (d.look.bg) hero.classList.add('lv-bg-' + d.look.bg);
     if (banner && d.look.bg) banner.classList.add('lv-bg-' + d.look.bg);
+    paintProfileAch(id);
+  }
+  // карточка «Ачивки» в профиле: одна система с «Прогрессом» (свой профиль — всё, чужой — только полученное)
+  let achFor = '', achData = null;
+  async function paintProfileAch(id) {
+    const card = [...document.querySelectorAll('#app .card')].find((c) => { const h = c.querySelector('.head h2'); return h && h.textContent.trim() === 'Ачивки'; });
+    if (!card || card.dataset.lv === id) return;
+    if (achFor !== id) { achFor = id; achData = null; try { achData = (await api('/levels/achievements?id=' + id)).items; } catch (e) { achData = null; } }
+    if (!achData || card.dataset.lv === id) return;
+    card.dataset.lv = id;
+    const got = achData.filter((a) => a.got).length;
+    const label = card.querySelector('.head .label');
+    if (label) label.textContent = `${got} из ${ACH_TOTAL}`;
+    // общая полоска «открыто N%» над списком — по тем же достижениям
+    const sum = card.querySelector(':scope > .ach-sum');
+    if (sum) {
+      const p = Math.round((got / ACH_TOTAL) * 100);
+      sum.setAttribute('aria-label', `Открыто ${p}% достижений`);
+      const i = sum.querySelector('.tr i'), bb = sum.querySelector('b');
+      if (i) i.style.width = p + '%';
+      if (bb) bb.textContent = p + '%';
+    }
+    card.querySelectorAll(':scope > .bdg, :scope > .bdg-more, :scope > details').forEach((x) => x.remove());
+    const box = document.createElement('div');
+    box.className = 'lv-prof-ach';
+    box.innerHTML = achData.length ? achList(achData, false) : '<p class="lv-muted">Пока нет полученных достижений.</p>';
+    card.appendChild(box);
   }
 
   // ---------- окно «Прогресс» ----------
@@ -486,7 +539,8 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     document.documentElement.style.overflow = 'hidden';
     renderTabs();
     render();
-    setTimeout(() => { const b = ov.querySelector('.lv-tabs [aria-selected="true"]'); if (b) b.focus(); }, 0);
+    // фокус — внутрь окна: на выбранную вкладку, а если её не видно — на само окно
+    requestAnimationFrame(() => { const b = ov.querySelector('.lv-tabs [aria-selected="true"]'); const card = ov.querySelector('.lv-card'); if (b) b.focus(); else if (card) { card.tabIndex = -1; card.focus(); } });
   }
   function closeProgress() {
     if (!ov) return;
@@ -534,19 +588,66 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     }
   }
   const pct = (a, b) => Math.min(100, Math.round((a / Math.max(1, b)) * 100));
+  // эмблемы достижений: [цвет 1, цвет 2, рисунок 24×24] — тот же вид, что у ачивок в профиле
+  const ACH_ART = {
+    founder: ['#67E8F9', '#0284C7', '<path d="M12 3c3 2 4.5 5.5 4.5 9.5L14.6 16H9.4l-1.9-3.5C7.5 8.5 9 5 12 3z"/><circle cx="12" cy="9.6" r="1.6"/><path d="M7.6 12.4L5 15v3.2l4.2-2.2M16.4 12.4L19 15v3.2l-4.2-2.2M10.6 18.5L12 21l1.4-2.5"/>'],
+    first_steps: ['#86EFAC', '#16A34A', '<path d="M8 3.5c1.6 0 2.6 1.6 2.6 3.6S9.6 11 8 11 5.4 9.1 5.4 7.1 6.4 3.5 8 3.5zM7.4 13.5h1.8l.4 2.5c.2 1.4-.6 2.5-1.6 2.5s-1.8-1.1-1.6-2.5zM16 7.5c1.6 0 2.6 1.6 2.6 3.6S17.6 15 16 15s-2.6-1.9-2.6-3.9 1-3.6 2.6-3.6zM15.4 17.5h1.8l.4 1.5c.2 1.4-.6 1.5-1.6 1.5s-1.8-.1-1.6-1.5z"/>'],
+    critic: ['#60A5FA', '#4F46E5', '<path d="M3.5 9L12 4.5 20.5 9z"/><path d="M6.5 11v6M10.2 11v6M13.8 11v6M17.5 11v6M4 20h16"/>'],
+    reviewer: ['#5EEAD4', '#0D9488', '<path d="M4.5 19.5l2.6-7.6L15 4l5 5-7.9 7.9z"/><path d="M4.5 19.5l5.2-5.2"/><circle cx="11.2" cy="12.8" r="1.5"/>'],
+    omnivore: ['#C084FC', '#7C3AED', '<circle cx="12" cy="12" r="8.2"/><path d="M15.6 8.4l-2.1 5.1-5.1 2.1 2.1-5.1z" fill="currentColor"/>'],
+    finisher: ['#FCA5A5', '#DC2626', '<rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 9.5h16M8.5 3.5v3M15.5 3.5v3M8.8 14.5l2.2 2.2 4.4-4.4"/>'],
+    moved: ['#FDBA74', '#EA580C', '<path d="M4 12h12M12 6.5l5.5 5.5-5.5 5.5"/><path d="M20 5v14"/>'],
+    tiermaker: ['#6EE7B7', '#059669', '<rect x="4" y="4.5" width="4" height="3.4" rx="1"/><rect x="4" y="10.3" width="4" height="3.4" rx="1"/><rect x="4" y="16.1" width="4" height="3.4" rx="1"/><path d="M11 6.2h9M11 12h6M11 17.8h3"/>'],
+    masterpiece: ['#FDE68A', '#D97706', '<path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8L12 16.8l-5.2 2.8 1-5.8-4.3-4.1 5.9-.9z"/>'],
+    soul: ['#A78BFA', '#6D28D9', '<circle cx="9" cy="8.2" r="3.2"/><path d="M3.5 19.5a5.5 5.5 0 0 1 11 0"/><path d="M15.6 5.2a3.2 3.2 0 0 1 0 6M17 13.6a5.5 5.5 0 0 1 3.5 5.9"/>'],
+    chatter: ['#93C5FD', '#2563EB', '<path d="M20 12a8 8 0 0 1-11.6 7.1L4 20l1-4.2A8 8 0 1 1 20 12z"/><path d="M8.5 11h.01M12 11h.01M15.5 11h.01"/>'],
+    fan: ['#F9A8D4', '#DB2777', '<path d="M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.2a4.2 4.2 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/>'],
+    popular: ['#FDBA74', '#EA580C', '<path d="M12 21c-3.9 0-6.5-2.6-6.5-6 0-3.6 3-5.6 3.6-9.2 2.6 1.5 4.4 4 4.4 6.6 1-.8 1.5-2 1.6-3.1 1.8 1.6 3.4 3.7 3.4 5.7 0 3.4-2.6 6-6.5 6z"/>'],
+    recruiter: ['#A5B4FC', '#4338CA', '<circle cx="10" cy="8" r="3.4"/><path d="M3.5 20a6.5 6.5 0 0 1 13 0"/><path d="M18.5 7.5v6M15.5 10.5h6"/>'],
+    auctioneer: ['#FCD34D', '#B45309', '<circle cx="12" cy="12" r="8.2"/><path d="M12 12V3.8M12 12l7.2 4M12 12l-7.2 4"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/>'],
+    lucky: ['#86EFAC', '#15803D', '<circle cx="9" cy="9" r="3.2"/><circle cx="15" cy="9" r="3.2"/><circle cx="9" cy="15" r="3.2"/><circle cx="15" cy="15" r="3.2"/><path d="M12 12l5 8"/>'],
+    rhythm: ['#FDBA74', '#C2410C', '<path d="M12 21c-3.9 0-6.5-2.6-6.5-6 0-3.6 3-5.6 3.6-9.2 2.6 1.5 4.4 4 4.4 6.6 1-.8 1.5-2 1.6-3.1 1.8 1.6 3.4 3.7 3.4 5.7 0 3.4-2.6 6-6.5 6z"/><path d="M12 18a2.4 2.4 0 0 1-2.4-2.4c0-1.4 1.2-2.2 1.5-3.6 1.4.9 3.3 2 3.3 3.6A2.4 2.4 0 0 1 12 18z"/>'],
+    questor: ['#5EEAD4', '#0F766E', '<rect x="4.5" y="4" width="15" height="16.5" rx="2.5"/><path d="M8 9l1.5 1.5L12 8M8 14.5l1.5 1.5L12 13.5M14 9.3h2.5M14 14.8h2.5"/>'],
+    night: ['#818CF8', '#3730A3', '<path d="M5.5 4.5L8 7.2A6 6 0 0 1 16 7.2l2.5-2.7V14a6.5 6.5 0 0 1-13 0z"/><circle cx="9.4" cy="11.3" r="2"/><circle cx="14.6" cy="11.3" r="2"/><path d="M11.2 14.6l.8 1.4.8-1.4z"/>'],
+    strict: ['#F87171', '#C81E1E', '<path d="M7 13.5V4.5H4.5v9z"/><path d="M7 13.5l3.6 6.5c1.4 0 2.3-1.1 2-2.4l-.7-3.6h5.3a2 2 0 0 0 2-2.4l-1.3-6A2 2 0 0 0 15.9 4.5H7"/>'],
+    nope: ['#FCA5A5', '#B91C1C', '<circle cx="12" cy="12" r="8.2"/><path d="M6.2 6.2l11.6 11.6"/>'],
+    comeback: ['#67E8F9', '#0E7490', '<path d="M9 7L4.5 11.5 9 16"/><path d="M4.5 11.5H14a5.5 5.5 0 0 1 0 11h-2"/>'],
+    event: ['#F0ABFC', '#A21CAF', '<rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 9.5h16M8.5 3.5v3M15.5 3.5v3"/><path d="M12 12l1 2 2.2.3-1.6 1.5.4 2.2-2-1-2 1 .4-2.2-1.6-1.5 2.2-.3z"/>'],
+    recap2026: ['#FDE68A', '#CA8A04', '<rect x="4" y="9" width="16" height="11" rx="2"/><path d="M3 9h18v-3H3zM12 6v14M12 6c-1-2.5-4.5-2.5-4.5-.5S10 6 12 6zm0 0c1-2.5 4.5-2.5 4.5-.5S14 6 12 6z"/>'],
+  };
+  const TIER = ['', 'бронза', 'серебро', 'золото'];
+  function achCard(a, pin, show) {
+    const art = ACH_ART[a.code] || ACH_ART.critic;
+    const sub = a.got ? (a.next ? `${a.desc} · дальше ${a.have || 0} из ${a.next}` : a.desc) : a.next ? `${a.desc} · ${a.have || 0} из ${a.next}` : a.desc;
+    const p = a.next && a.have != null ? pct(a.have, a.next) : null;
+    return `<div class="lv-bi ${a.got ? 'got' : 'off'}" style="--c1:${art[0]};--c2:${art[1]}" title="${esc(a.title)}: ${esc(a.desc)}">`
+      + `<span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${a.got || !a.hidden ? art[2] : '<path d="M9.2 9a2.9 2.9 0 1 1 4.1 2.6c-.8.4-1.3 1.1-1.3 2v.6M12 17.5h.01"/>'}</svg></span>`
+      + `<span><b>${esc(a.title)}${a.got && a.tiers > 1 ? ' · ' + TIER[a.tier] : ''}</b><small>${esc(sub)} · есть у ${a.rarity}%</small>${p != null && (!a.got || a.next) ? bar(p) : ''}`
+      + `${pin && a.got ? `<button type="button" class="pin" data-pin="${esc(a.code)}" aria-pressed="${show.has(a.code)}">${show.has(a.code) ? 'В профиле ✓' : 'В профиль'}</button>` : ''}</span>`
+      + `${a.got ? '<span class="ok" aria-label="Получено">✓</span>' : ''}</div>`;
+  }
+  // полученные сверху, из остальных выше те, до которых ближе; дальние — под «Ещё N»
+  function achList(items, pin) {
+    const show = new Set((ME && ME.prefs && ME.prefs.showcase) || []);
+    const near = (a) => (a.next && a.have != null ? a.have / a.next : 0);
+    const got = items.filter((a) => a.got), rest = items.filter((a) => !a.got).sort((x, y) => near(y) - near(x));
+    const first = rest.slice(0, 6), more = rest.slice(6);
+    return `<div class="lv-bdg">${got.concat(first).map((a) => achCard(a, pin, show)).join('')}</div>`
+      + (more.length ? `<details class="lv-more"><summary>Ещё ${more.length}</summary><div class="lv-bdg">${more.map((a) => achCard(a, pin, show)).join('')}</div></details>` : '');
+  }
   const medal = (a) => `<i class="lv-medal ${a.got ? 'lv-t' + (a.tiers > 1 ? a.tier : 0) : 'lv-tx'}">${a.got || !a.hidden ? esc(a.title.charAt(0)) : '?'}</i>`;
   const VIEWS = {
     async home() {
       await refreshMe();
       const m = ME, q = m.quests;
-      const daily = q.daily.map((x) => `<div class="lv-q${x.done ? ' done' : ''}"><span>${esc(x.title)}</span><span class="xp">+${x.xp}</span><span class="lv-bar"><i style="width:${pct(x.progress, x.goal)}%"></i></span></div>`).join('');
+      const daily = q.daily.map((x) => `<div class="lv-q${x.done ? ' done' : ''}"><span>${esc(x.title)}</span><span class="xp">+${x.xp}</span>${bar(pct(x.progress, x.goal))}</div>`).join('');
       const w = q.weekly;
       const steps = m.steps ? `<div class="lv-box"><h3>Первые шаги</h3>${m.steps.map((s) => `<div class="lv-q${s.done ? ' done' : ''}"><span>${esc(s.title)}</span><span class="xp">+${s.xp}</span></div>`).join('')}</div>` : '';
-      return `<div class="lv-hero"><span class="n">${m.level}</span><div class="r"><b>${esc(m.rank)}</b><span>${nf(m.xp)} опыта всего · до ${m.level + 1}-го уровня ещё ${nf(m.need - m.into)}</span><span class="lv-bar"><i style="width:${pct(m.into, m.need)}%"></i></span></div></div>
+      return `<div class="lv-hero"><span class="n">${m.level}</span><div class="r"><b>${esc(m.rank)}</b><span>${nf(m.xp)} опыта всего · до ${m.level + 1}-го уровня ещё ${nf(m.need - m.into)}</span>${bar(pct(m.into, m.need))}</div></div>
         ${m.event ? `<div class="lv-box"><h3>${esc(m.event.title)}</h3><p class="lv-muted">×${m.event.mult} опыта до ${new Date(m.event.until).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}.</p></div>` : ''}
         <div class="lv-box"><div class="lv-streak"><span class="big">🔥 ${m.streak.days}</span><div><b>${m.streak.days ? `${plural(m.streak.days, 'день', 'дня', 'дней')} подряд` : 'Серии пока нет'}</b><p class="lv-muted">${m.streak.today ? 'Сегодня уже засчитан.' : 'Оцени что-нибудь или отреагируй другу, чтобы засчитать сегодня.'} Лучшая серия: ${m.streak.best}. «Заморозок»: ${m.streak.freezes} — спасают серию, если пропустишь день.</p></div></div></div>
         <div class="lv-box"><h3>Задания дня</h3>${daily || '<p class="lv-muted">Заданий пока нет.</p>'}<p class="lv-muted">За все три — ещё +${q.allXp}${q.allPaid ? ' (получено)' : ''}. Новые задания — завтра.</p></div>
-        ${w ? `<div class="lv-box"><h3>Задание недели</h3><div class="lv-q${w.done ? ' done' : ''}"><span>${esc(w.title)} · ${w.progress} из ${w.goal}</span><span class="xp">+${w.xp}</span><span class="lv-bar"><i style="width:${pct(w.progress, w.goal)}%"></i></span></div></div>` : ''}
+        ${w ? `<div class="lv-box"><h3>Задание недели</h3><div class="lv-q${w.done ? ' done' : ''}"><span>${esc(w.title)} · ${w.progress} из ${w.goal}</span><span class="xp">+${w.xp}</span>${bar(pct(w.progress, w.goal))}</div></div>` : ''}
         ${steps}
         <p class="lv-muted">Опыт дают оценки, отзывы, тир-листы, реакции и комментарии друзьям, лоты. У каждого действия дневной лимит; удалишь — опыт уйдёт.</p>`;
     },
@@ -563,12 +664,15 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       const d = await api('/levels/achievements');
       const got = d.items.filter((a) => a.got).length;
       const show = new Set(ME.prefs.showcase || []);
-      return `<p class="lv-muted">Получено ${got} из ${d.items.length}. Отметь до трёх — они будут видны в профиле.</p>
-        <div class="lv-grid">${d.items.map((a) => `<div class="lv-ach${a.got ? '' : ' off'}">${medal(a)}<div><b>${esc(a.title)}${a.got && a.tiers > 1 ? ' · ' + ['', 'бронза', 'серебро', 'золото'][a.tier] : ''}</b><span>${esc(a.desc)}${a.next ? ` · дальше: ${a.next}` : ''}</span><small>есть у ${a.rarity}%</small>${a.got ? `<button type="button" class="pin" data-pin="${esc(a.code)}" aria-pressed="${show.has(a.code)}">${show.has(a.code) ? 'В профиле ✓' : 'В профиль'}</button>` : ''}</div></div>`).join('')}</div>`;
+      return `<p class="lv-muted">${got ? `Получено ${got} из ${d.items.length}. Три любимых можно показать в профиле.` : `Пока ни одного из ${d.items.length} — первое уже близко: ниже видно, сколько осталось.`}</p>${achList(d.items, true)}`;
     },
     async board() {
       const scope = VIEWS.scope || 'friends';
       const d = await api('/levels/board?scope=' + scope);
+      if (scope === 'friends' && d.top.filter((x) => !x.me).length === 0) {
+        return `<div class="lv-seg" role="group" aria-label="Чей рейтинг"><button type="button" data-scope="friends" aria-pressed="true">Друзья</button><button type="button" data-scope="all" aria-pressed="false">Весь сайт</button></div>
+          <div class="lv-box"><h3>Пока соревноваться не с кем</h3><p class="lv-muted">Добавь друзей через кнопку «Друзья» в шапке — тут появится, кто из вас набрал больше опыта за неделю. А пока загляни во «Весь сайт».</p></div>`;
+      }
       const rows = d.top.map((x) => `<div class="${x.me ? 'me' : ''}"><em>${x.place}</em><span>${esc(x.username)}${x.level ? ` · ур. ${x.level}` : ''}</span><b>${nf(x.week)}</b></div>`).join('');
       return `<div class="lv-seg" role="group" aria-label="Чей рейтинг"><button type="button" data-scope="friends" aria-pressed="${scope === 'friends'}">Друзья</button><button type="button" data-scope="all" aria-pressed="${scope === 'all'}">Весь сайт</button></div>
         <div class="lv-box"><h3>Опыт за неделю</h3><div class="lv-board">${rows || '<p class="lv-muted">На этой неделе пока никто не набрал опыта.</p>'}</div>
@@ -793,14 +897,14 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
         t: 'Больше всего — за общение с друзьями. У каждого действия есть дневной лимит, а удалённое списывается.',
       },
       {
-        pic: '<div class="lv-tq"><div class="ok"><i></i>Оцени 2 произведения<em>+15</em></div><div class="ok"><i></i>Отреагируй на 3 оценки<em>+15</em></div><div><i></i>Напиши отзыв<em>+15</em></div></div>',
+        pic: '<div class="lv-tq"><div class="ok"><i></i>Поставь 2 оценки<em>+15</em></div><div class="ok"><i></i>Отреагируй на 3 оценки<em>+15</em></div><div><i></i>Напиши отзыв<em>+15</em></div></div>',
         h: 'Задания и серия',
-        t: 'Каждый день три задания. Заходи подряд — растёт серия 🔥, а «заморозка» спасёт, если пропустишь день.',
+        t: 'Каждый день три задания. Заходи подряд — растёт серия, а «заморозка» спасёт, если пропустишь день.',
       },
       {
-        pic: '<div class="lv-tmedals"><i class="lv-medal lv-t1">К</i><i class="lv-medal lv-t3">★</i><i class="lv-medal lv-t2">Д</i></div>',
-        h: 'Достижения и награды',
-        t: 'Собирай достижения и открывай рамки для аватара, цвет ника и фон профиля.',
+        pic: `<div class="lv-tmedals">${['critic', 'masterpiece', 'soul'].map((c) => `<span class="lv-bi got" style="--c1:${ACH_ART[c][0]};--c2:${ACH_ART[c][1]};padding:0;border:0;background:none"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ACH_ART[c][2]}</svg></span></span>`).join('')}</div>`,
+        h: 'Достижения',
+        t: 'Бронза, серебро и золото за оценки, тир-листы и общение. Три любимых видны у тебя в профиле.',
       },
       {
         pic: `<div class="lv-tmail">${MAIL_ICON.replace('width="17" height="17"', '')}<span>+50</span></div>`,

@@ -174,9 +174,9 @@ test('задания дня: выбираются по возможностям,
   // выполнить «оцени 2»: опыт за задание приходит с последним действием
   await award(env, 'u1', 'rate', 'a', { now: NOON });
   const r = await award(env, 'u1', 'rate', 'b', { now: NOON });
-  assert.ok(r.news.some((n) => n.t === 'quest' && n.title === 'Оцени 2 произведения'));
+  assert.ok(r.news.some((n) => n.t === 'quest' && n.title === 'Поставь 2 оценки'));
   const again = await award(env, 'u1', 'rate', 'c', { now: NOON });
-  assert.ok(!again.news.some((n) => n.t === 'quest' && n.title === 'Оцени 2 произведения'));
+  assert.ok(!again.news.some((n) => n.t === 'quest' && n.title === 'Поставь 2 оценки'));
   assert.equal(q(env, "SELECT COUNT(*) AS n FROM xp_log WHERE kind = 'quest'")[0].n >= 1, true);
 });
 
@@ -203,6 +203,7 @@ test('достижения: ступени и скрытые', async () => {
   const critic = a.find((x) => x.code === 'critic');
   assert.equal(critic.tier, 1);
   assert.equal(critic.next, 100);
+  assert.equal(critic.have, 10);
   const night = a.find((x) => x.code === 'night');
   assert.equal(night.title, '???');
   await award(env, 'u1', 'rate', 'late', { now: NOON + DAY, metrics: { night: 1 } });
@@ -291,7 +292,7 @@ test('почта: письмо о новом уровне с тем, что от
   const g = q(env, "SELECT id, to_id, kind, title, body FROM gifts WHERE to_id = 'u1'");
   assert.equal(g.length, 1);
   assert.equal(g[0].title, 'Новый уровень: 2');
-  assert.match(g[0].body, /Кружок уровня у аватара/);
+  assert.match(g[0].body, /Звание: Людишка\. Следующее — «Казуал» на 5-м уровне\./);
   // опыт за прошлое писем не шлёт
   await award(env, 'u2', 'past', 'x', { xp: 500, now: NOON, past: true });
   assert.equal(q(env, "SELECT COUNT(*) AS n FROM gifts WHERE to_id = 'u2'")[0].n, 0);

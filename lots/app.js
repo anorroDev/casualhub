@@ -1039,6 +1039,27 @@
     if (section === 'wheel') { resize(); restSig = ''; wheel(); }
   });
   paintSection();
+  // зашли без кода сбора: зрителю — поле для ссылки, ведущему — путь к созданию сбора в Колесе
+  function paintStart() {
+    $('#mnav').hidden = true;
+    setTitle(baseTitle(), true);
+    $('#lotLede').textContent = '';
+    view.innerHTML = `<section class="card lots-gone lots-start">
+      <h2 class="h2">Лоты по ссылке</h2>
+      <p class="lots-empty">Друзья предлагают игры или фильмы, а колесо выбирает одно. Открой сбор по ссылке ведущего или собери свой.</p>
+      <form class="lots-join" id="lotsJoin"><input id="lotsCode" aria-label="Ссылка или код сбора" placeholder="Ссылка или код сбора" autocomplete="off" spellcheck="false"><button class="btn primary" type="submit">Открыть</button></form>
+      <p class="lots-empty" id="lotsJoinMsg" role="status"></p>
+      <a class="btn ghost" href="/wheel/#lots">Я ведущий — создать сбор</a>
+    </section>`;
+    $('#lotsJoin').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const m = /([A-Za-z0-9]{12})\/?\s*$/.exec($('#lotsCode').value.trim().replace('#', '/'));
+      if (m) location.href = '/lots/' + m[1];
+      else $('#lotsJoinMsg').textContent = 'Не похоже на ссылку сбора: в ней после /lots/ идут 12 букв и цифр.';
+    });
+    canvas = null;
+    S.room = null;
+  }
   function paintGone(text) {
     $('#mnav').hidden = true;
     setTitle(baseTitle(), true);
@@ -1765,5 +1786,5 @@
   // админ с открытым входом в админку видит кнопку «Удалить» у каждого лота
   if (token && user) api('/admin/me').then((d) => { if (d && d.active) { S.admin = true; if (S.room) { paintList(); paintHost(); paintPlaying(); } } }, () => {});
   if (/^[A-Za-z0-9]{12}$/.test(code)) poll();
-  else paintGone('В ссылке нет кода сбора. Попроси ведущего прислать её ещё раз.');
+  else paintStart();
 })();

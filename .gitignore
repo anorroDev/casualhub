@@ -20,3 +20,6 @@ Thumbs.db
 
 # Local notes
 *.local.*
+
+# Impeccable: снимки разборов и локальный сервер подсветки
+.impeccable/

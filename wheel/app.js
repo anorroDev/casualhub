@@ -2237,6 +2237,11 @@
     if (lotsAccount) lotsRefreshRooms();
   }
 
+  // /wheel/#lots (из меню ☰ и со страницы лотов): сразу открыть «Лоты по ссылке» — там ведущий создаёт сбор
+  if (location.hash === '#lots') {
+    const box = $('#lotsBox');
+    if (box) { box.open = true; setTimeout(() => box.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' }), 400); }
+  }
   window.claude?.hot?.snapshot?.(() => { const { spinning, ...rest } = S || {}; return rest; });
   window.claude?.hot?.ready ? window.claude.hot.ready(start) : start(window.claude?.hot?.data ?? {});
 })();

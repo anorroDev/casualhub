@@ -86,7 +86,7 @@ export const ACHIEVEMENTS = [
   { code: 'finisher', title: 'Довёл до конца', desc: 'Оценил то, что было «В планах»', metric: 'plan_done', tiers: [5, 25, 100] },
   { code: 'moved', title: 'Переезд', desc: 'Перенёс оценки из Letterboxd', metric: 'import', tiers: [1] },
   { code: 'tiermaker', title: 'Тир-лист-мейкер', desc: 'Тир-листы', metric: 'tier', tiers: [1, 10, 30] },
-  { code: 'masterpiece', title: 'Шедевр', desc: 'Тир-лист собрал 10 реакций', metric: '@tierReacts', tiers: [10] },
+  { code: 'masterpiece', title: 'Хит тир-листов', desc: 'Тир-лист собрал 10 реакций', metric: '@tierReacts', tiers: [10] },
   { code: 'soul', title: 'Душа компании', desc: 'Друзья', metric: 'friend', tiers: [3, 10, 25] },
   { code: 'chatter', title: 'Болтун', desc: 'Комментарии', metric: 'comment', tiers: [10, 100, 500] },
   { code: 'fan', title: 'Ценитель чужого', desc: 'Реакции друзьям', metric: 'react', tiers: [25, 250, 1000] },
@@ -111,7 +111,7 @@ export const tierFor = (a, v) => (a.tiers || []).reduce((t, need, i) => (v >= ne
 // ---------- задания ----------
 // kinds — какие строки журнала засчитываются; goal — сколько; need — когда задание можно выдать
 export const DAILY = [
-  { code: 'rate2', title: 'Оцени 2 произведения', kinds: ['rate', 'import'], goal: 2 },
+  { code: 'rate2', title: 'Поставь 2 оценки', kinds: ['rate', 'import'], goal: 2 },
   { code: 'review1', title: 'Напиши отзыв от 100 символов', kinds: ['review'], goal: 1 },
   { code: 'full1', title: 'Заполни оценку целиком: все критерии и обложка', kinds: ['rate_full'], goal: 1 },
   { code: 'react3', title: 'Отреагируй на 3 оценки друзей', kinds: ['react'], goal: 3, need: 'friends' },
@@ -344,8 +344,8 @@ async function doAward(env, uid, items, opts) {
 // письмо в почту о новом уровне: звание и что открылось
 export async function levelLetter(env, uid, up, now = Date.now()) {
   try {
-    const opened = REWARDS.filter((r) => r.level > up.from && r.level <= up.to).map((r) => r.title);
-    const body = `Звание: ${rankOf(up.to).fun}.` + (opened.length ? ` Открыто: ${opened.join(', ')}. Выбрать их можно будет в «Прогресс» → «Оформление» — оно скоро появится.` : ` Следующая награда — на ${(REWARDS.find((r) => r.level > up.to) || {}).level || '…'}-м уровне.`);
+    const nextRank = RANKS.find((r) => r.from > up.to);
+    const body = `Звание: ${rankOf(up.to).fun}.` + (nextRank ? ` Следующее — «${nextRank.fun}» на ${nextRank.from}-м уровне.` : ' Это самое высокое звание.');
     await env.DB.prepare("INSERT OR IGNORE INTO gifts (id, to_id, kind, title, body, xp, at) VALUES (?, ?, 'level', ?, ?, 0, ?)").bind(`lv:${uid}:${up.to}`, uid, `Новый уровень: ${up.to}`, body, now).run();
   } catch (e) { console.error('levels letter', e && e.message); }
 }
@@ -634,21 +634,33 @@ export async function levelsOf(env, ids) {
   return out;
 }
 export async function achievementsOf(env, uid) {
-  const [mine, all, users] = await env.DB.batch([
+  const [mine, all, users, kinds, lv] = await env.DB.batch([
     env.DB.prepare('SELECT code, tier, at FROM achievements WHERE user_id = ?').bind(uid),
     env.DB.prepare('SELECT code, COUNT(*) AS n FROM achievements GROUP BY code'),
     env.DB.prepare('SELECT COUNT(*) AS n FROM users'),
+    env.DB.prepare('SELECT kind, COUNT(*) AS n FROM xp_log WHERE user_id = ? AND gone = 0 GROUP BY kind').bind(uid),
+    env.DB.prepare('SELECT best_streak, metrics FROM user_level WHERE user_id = ?').bind(uid),
   ]);
   const own = Object.fromEntries((mine.results || []).map((x) => [x.code, x]));
   const cnt = Object.fromEntries((all.results || []).map((x) => [x.code, +x.n || 0]));
   const people = Math.max(1, n0(users));
+  // прогресс: те же мерки, что у checkAchievements
+  const c = Object.fromEntries((kinds.results || []).map((x) => [x.kind, +x.n || 0]));
+  const l = (lv.results || [])[0] || {};
+  const m = { ...parse(l.metrics, {}) };
+  m.streak = Math.max(+m.streak || 0, +l.best_streak || 0);
+  m.event = c.event || 0;
+  const value = (a) => (!a.metric ? 0 : typeof a.metric === 'string' && a.metric[0] === '@' ? +m[a.metric.slice(1)] || 0
+    : (Array.isArray(a.metric) ? a.metric : [a.metric]).reduce((s, k) => s + (c[k] || 0), 0));
   return ACHIEVEMENTS.map((a) => {
     const o = own[a.code];
     const show = o || !a.hidden;
+    const next = show && a.tiers ? a.tiers[o ? +o.tier : 0] || null : null;
     return {
       code: a.code, got: !!o, tier: o ? +o.tier : 0, tiers: (a.tiers || []).length, at: o ? o.at : null,
-      title: show ? a.title : '???', desc: show ? a.desc : 'Скрытое достижение', next: show && a.tiers ? a.tiers[o ? +o.tier : 0] || null : null,
-      hidden: !!a.hidden, rarity: Math.round(((cnt[a.code] || 0) / people) * 100),
+      title: show ? a.title : '???', desc: show ? a.desc : 'Скрытое достижение', next,
+      have: show && next ? Math.min(value(a), next) : null,
+      hidden: !!a.hidden, special: !!a.special, rarity: Math.round(((cnt[a.code] || 0) / people) * 100),
     };
   });
 }

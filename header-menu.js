@@ -43,6 +43,16 @@
 header a[href="/"]:has(+ .hm-left) { margin-right: 0 !important; }
 header.top > .hm-left { margin-left: 4px; }
 @media (max-width: 480px) { .top .hm-left { margin-right: auto; } .hm-left { gap: 6px; } }
+/* телефон: шапка в одну строку — логотип, уровень, друзья, профиль, ☰; разделы переезжают в меню строкой с подписями */
+.hm-panel > .hm-secs { display: none !important; }
+@media (max-width: 480px) {
+  header .hm-nav { display: none !important; }
+  /* у профиля на телефоне — только аватар (ник есть на странице профиля и в подсказке): так всё влезает в одну строку */
+  header .acc-name { display: none !important; }
+  .hm-panel > .hm-secs { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .hm-secs a { display: grid; justify-items: center; gap: 5px; padding: 10px 4px; border-radius: 12px; border: 1px solid var(--line, #2b2e38); color: var(--ink, #f3f4f6); text-decoration: none; font-size: 12.5px; font-weight: 600; min-height: 56px; }
+  .hm-secs a[aria-current="page"] { border-color: var(--accent, #3550E8); background: color-mix(in srgb, var(--accent, #3550E8) 12%, transparent); }
+}
 /* счётчик «на сайте»: в правом углу страницы, а если места нет — строкой в меню */
 .wn-corner .oc-mini { box-shadow: 0 10px 24px -14px rgba(0, 0, 0, .6); }
 @media (max-width: 480px) { #homeLink, #backLink, header .pill[href="/"] { width: 36px; min-width: 36px; padding: 0 !important; font-size: 0 !important; justify-content: center; } }
@@ -207,6 +217,18 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     all.title = 'Все твои оценки: список, плитки и тир-лист';
     all.innerHTML = '<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1.3"/><rect x="9" y="2" width="5" height="5" rx="1.3"/><rect x="2" y="9" width="5" height="5" rx="1.3"/><rect x="9" y="9" width="5" height="5" rx="1.3"/></svg><span class="hm-t">Все оценки</span><span class="hm-go" aria-hidden="true">›</span>';
     panel.prepend(all);
+    // разделы строкой с подписями (видно только на телефоне, где их нет в шапке) и «Лоты по ссылке» — на всех экранах
+    const secs = document.createElement('nav');
+    secs.className = 'hm-secs';
+    secs.setAttribute('aria-label', 'Разделы');
+    secs.innerHTML = ['/opinion/', '/wheel/', '/tierlist/'].map((h) => `<a href="${h}"${here.startsWith(h) ? ' aria-current="page"' : ''}>${ICON[h]}<span>${NAMES[h]}</span></a>`).join('');
+    all.after(secs);
+    const lots = document.createElement('a');
+    lots.className = cls + ' hm-lots';
+    lots.href = here.startsWith('/lots/') ? '/wheel/#lots' : '/lots/';
+    lots.title = 'Друзья предлагают, колесо выбирает';
+    lots.innerHTML = '<svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="8" cy="8" r="6.2"/><path d="M8 8V1.8M8 8l5.4 3.1M8 8l-5.4 3.1"/></svg><span class="hm-t">Лоты по ссылке</span>';
+    secs.after(lots);
 
     const adm = adminBtn(cls);
     // «Что нового»: в самом углу страницы, на узком экране — в меню
