@@ -125,7 +125,7 @@
     document.body.append(bowl, cat);
     measure();
     x = Math.min(innerWidth - 80, 90 + Math.random() * Math.max(40, innerWidth / 3));
-    y = floorY(); surf = null;
+    y = floorAt(x + 28); surf = null;
     drawBowl(); decide();
     lastT = performance.now();
     raf = requestAnimationFrame(loop);
@@ -137,23 +137,34 @@
   }
 
   // ---------- пол и блоки ----------
-  // пол — над закреплёнными внизу панелями (полоса «Сохранить» в Мнении, нижние меню)
+  // пол — над закреплёнными внизу панелями (полоса «Сохранить» в Мнении, кнопка «?», нижние меню).
+  // Свой для каждой полосы шириной 30 px: панель может занимать только часть ширины (полоса «Сохранить» —
+  // средняя колонка), и рядом с ней пол остаётся у самого низа экрана — там стоит и миска
+  const COL = 30;
+  let cols = [];
   function measure() {
     let top = innerHeight;
-    for (let px = 12; px < innerWidth; px += 60) {
+    cols = [];
+    for (let px = COL / 2; px < innerWidth; px += COL) {
+      let t = innerHeight;
       for (const el of document.elementsFromPoint(px, innerHeight - 12)) {
         if (mine(el) || el === document.body || el === document.documentElement) continue;
-        let n = el;
+        let n = el, found = false;
         while (n && n !== document.body) {
           const p = getComputedStyle(n).position;
-          if (p === 'fixed' || p === 'sticky') { const r = n.getBoundingClientRect(); if (r.height < innerHeight * 0.5) top = Math.min(top, r.top); break; }
+          if (p === 'fixed' || p === 'sticky') { const r = n.getBoundingClientRect(); if (r.height < innerHeight * 0.5) t = Math.min(t, r.top); found = true; break; }
           n = n.parentElement;
         }
+        if (found) break;
       }
+      cols.push(t);
+      top = Math.min(top, t);
     }
     floor = Math.max(0, innerHeight - top);
-    if (bowl) bowl.style.bottom = floor + 6 + 'px';
+    if (bowl) bowl.style.bottom = innerHeight - floorAt(10 + 9 * K) + 6 + 'px';
   }
+  // линия пола под точкой x (в координатах окна)
+  const floorAt = (px) => (cols.length ? cols[Math.max(0, Math.min(cols.length - 1, Math.floor(px / COL)))] : innerHeight) - 2;
   const mine = (el) => !!el && (el === cat || el === bowl || (cat && cat.contains(el)) || (bowl && bowl.contains(el)));
   const floorY = () => innerHeight - floor - 2;
   const bowlRight = () => 10 + 18 * K + 4;
@@ -173,7 +184,7 @@
     }
     return out;
   }
-  const surfTop = (s) => (s ? s.getBoundingClientRect().top : floorY());
+  const surfTop = (s, px = x) => (s ? s.getBoundingClientRect().top : floorAt(px + size.w / 2));
   function bounds(s) {
     if (!s) return [bowlRight(), innerWidth - size.w - 6];
     const r = s.getBoundingClientRect();
@@ -229,7 +240,7 @@
   function jumpTo(s, tx) {
     const [a, b] = bounds(s);
     tx = Math.max(a, Math.min(b, tx));
-    const dist = Math.hypot(tx - x, surfTop(s) - y);
+    const dist = Math.hypot(tx - x, surfTop(s, tx) - y);
     jump = { s, x0: x, y0: y, x1: tx, t0: performance.now(), dur: Math.min(900, 380 + dist * 0.9) };
     dir = tx >= x ? 1 : -1;
     mode = 'jump'; clearBubble('zz');
@@ -301,9 +312,9 @@
       // приземлиться на блок, через верх которого пролетели, или на пол
       const cx = x + size.w / 2;
       const hit = platforms().find((p) => cx >= p.r.left && cx <= p.r.right && p.r.top >= prev - 2 && p.r.top <= y);
-      if (hit) land(hit.el); else if (y >= floorY()) { x = Math.max(bowlRight(), x); land(null); }
+      if (hit) land(hit.el); else if (y >= floorAt(cx)) { x = Math.max(bowlRight(), x); land(null); }
     } else if (mode === 'jump' && jump) {
-      const k = Math.min(1, (t - jump.t0) / jump.dur), y1 = surfTop(jump.s);
+      const k = Math.min(1, (t - jump.t0) / jump.dur), y1 = surfTop(jump.s, jump.x1);
       const h = 50 + Math.max(0, jump.y0 - y1) * 0.6;
       x = jump.x0 + (jump.x1 - jump.x0) * k;
       y = jump.y0 + (y1 - jump.y0) * k - h * 4 * k * (1 - k);
