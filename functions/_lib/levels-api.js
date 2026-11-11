@@ -4,7 +4,7 @@
 // Папка _lib не становится адресом сайта.
 import {
   levelsMode, levelsOn, ensureLevels, readLevel, levelView, prefsOf, lookOf, unlockedAt, levelsOf, achievementsOf, questState,
-  firstSteps, takeNews, dayKey, weekStart, shiftDay, cleanTz, backfillUser, grantSpecial, currentEvent, forgetEvent, RULES,
+  firstSteps, takeNews, dayKey, weekStart, shiftDay, cleanTz, backfillUser, grantSpecial, currentEvent, forgetEvent, RULES, awardMany,
   ACHIEVEMENTS, REWARDS, NAME_COLORS, PROFILE_BGS, FIRST_STEPS, isScored, textLen, rankOf, award,
 } from './levels.js';
 
@@ -15,7 +15,7 @@ export const KIND_LABEL = {
   got_react: 'реакция на твою оценку', got_comment: 'комментарий тебе', friend: 'новый друг', lots_host: 'провёл сбор лотов',
   lot_add: 'лот в чужой сбор', lot_win: 'твой лот победил', visit: 'зашёл на сайт', invite: 'приглашение', quest: 'задание дня',
   quest_all: 'все задания дня', quest_week: 'задание недели', streak: 'серия дней', first: 'первые шаги', past: 'опыт за прошлое',
-  admin: 'от администрации', event: 'тематическая неделя',
+  admin: 'от администрации', event: 'тематическая неделя', gift: 'подарок из почты',
 };
 const INVITE_RE = /^[a-z0-9]{8}$/;
 const FOUNDERS_BEFORE = Date.UTC(2026, 10, 12); // кто зарегистрировался до запуска уровней — «Основатель хаба»
@@ -30,6 +30,15 @@ export async function levelsVisible(env, me, h) {
   return !!(h.adminCandidate(me, env) || (await h.isAdmin(env, me)));
 }
 export const tzOf = (request) => cleanTz(request && request.cf && request.cf.timezone);
+
+// письма человеку: всем (to_id пустой) и лично ему, кроме просроченных; новые сверху
+const MAIL_SQL = `SELECT g.id, g.kind, g.title, g.body, g.xp, g.at, g.until, COALESCE(b.read, 0) AS read, COALESCE(b.claimed, 0) AS claimed
+  FROM gifts g LEFT JOIN gift_box b ON b.gift_id = g.id AND b.user_id = ?1
+  WHERE (g.to_id IS NULL OR g.to_id = ?1) AND (g.until IS NULL OR g.until > ?2) ORDER BY g.at DESC LIMIT 60`;
+export async function mailUnread(env, uid) {
+  const r = await env.DB.prepare(`SELECT COUNT(*) AS n FROM (${MAIL_SQL}) WHERE read = 0 OR (xp > 0 AND claimed = 0)`).bind(uid, Date.now()).first();
+  return +(r && r.n) || 0;
+}
 
 export function makeLevelsRoutes(h) {
   const { json, fail } = h;
@@ -57,7 +66,40 @@ export function makeLevelsRoutes(h) {
         event: ev ? { title: ev.title, kinds: ev.kinds, mult: ev.mult, until: ev.until } : null,
         rewards: REWARDS, colors: NAME_COLORS, bgs: Object.keys(PROFILE_BGS),
         recap: recapOpen(now) ? 2026 : null,
+        mail: await mailUnread(env, me.id),
       });
+    },
+    // почта: подарки от администрации и письма о новых уровнях
+    async 'GET /levels/mail'({ env, me }) {
+      if (!(await gate(env, me))) return off();
+      await ensureLevels(env);
+      const { results } = await env.DB.prepare(MAIL_SQL).bind(me.id, Date.now()).all();
+      return json({ items: (results || []).map((g) => ({ id: g.id, kind: g.kind, title: g.title, body: g.body || '', xp: +g.xp || 0, at: +g.at, until: g.until ? +g.until : null, read: !!g.read, claimed: !!g.claimed })) });
+    },
+    // открыл почту — всё прочитано (забрать подарки всё равно нужно кнопкой)
+    async 'POST /levels/mail/read'({ env, me }) {
+      if (!(await gate(env, me))) return off();
+      await ensureLevels(env);
+      const now = Date.now();
+      const { results } = await env.DB.prepare(MAIL_SQL).bind(me.id, now).all();
+      const unread = (results || []).filter((g) => !g.read);
+      if (unread.length) await env.DB.batch(unread.map((g) => env.DB.prepare('INSERT INTO gift_box (gift_id, user_id, read, at) VALUES (?, ?, 1, ?) ON CONFLICT(gift_id, user_id) DO UPDATE SET read = 1').bind(g.id, me.id, now)));
+      return json({ ok: true, unread: await mailUnread(env, me.id) });
+    },
+    // забрать подарок: опыт начисляется один раз
+    async 'POST /levels/mail/claim'({ env, request, me }) {
+      if (!(await gate(env, me))) return off();
+      await ensureLevels(env);
+      const { id } = await h.readBody(request);
+      const now = Date.now();
+      const g = await env.DB.prepare('SELECT id, xp, to_id, until FROM gifts WHERE id = ?').bind(String(id || '')).first();
+      if (!g || (g.to_id && g.to_id !== me.id) || (g.until && g.until <= now)) return fail(404, 'Такого подарка нет или он уже истёк.');
+      if (!(+g.xp > 0)) return fail(400, 'В этом письме нечего забирать.');
+      const w = await env.DB.prepare('INSERT INTO gift_box (gift_id, user_id, read, claimed, at) VALUES (?1, ?2, 1, 1, ?3) ON CONFLICT(gift_id, user_id) DO UPDATE SET claimed = 1, read = 1 WHERE claimed = 0').bind(g.id, me.id, now).run();
+      if (!(w.meta && w.meta.changes)) return fail(409, 'Этот подарок уже забран.');
+      const r = await awardMany(env, me.id, [{ kind: 'gift', ref: g.id, xp: +g.xp }], { now, tz: tzOf(request) });
+      h.markNews(request, r);
+      return json({ ok: true, gained: r ? r.gained : 0, level: r ? r.level : null, unread: await mailUnread(env, me.id) });
     },
     // новые награды (плашки): отдаются один раз
     async 'GET /levels/news'({ env, me }) {
@@ -256,6 +298,46 @@ export function makeLevelsRoutes(h) {
       if (b.give) await env.DB.prepare('INSERT INTO achievements (user_id, code, tier, at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, code) DO UPDATE SET tier = excluded.tier').bind(id, code, Math.max(1, Math.min(3, +b.tier || 1)), Date.now()).run();
       else await env.DB.prepare('DELETE FROM achievements WHERE user_id = ? AND code = ?').bind(id, code).run();
       await h.adminLog(env, request, me, `levels: ach ${b.give ? '+' : '-'}${code} ${id}`, true);
+      return json({ ok: true });
+    },
+    // подарок в почту: всем или одному человеку (по юзернейму), с опытом или просто письмо
+    async 'POST /admin/levels/gift'({ env, request, me }) {
+      if (!(await h.adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+      if (!levelsOn(env)) return fail(400, 'Уровни выключены (LEVELS = "0").');
+      await ensureLevels(env);
+      const b = await h.readBody(request);
+      const title = String(b.title || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+      const body = String(b.body || '').replace(/\r\n?/g, '\n').trim().slice(0, 600);
+      const xp = Math.max(0, Math.min(1000, Math.round(+b.xp || 0)));
+      const days = Math.max(1, Math.min(90, Math.round(+b.days || 30)));
+      if (!title) return fail(400, 'Нужен заголовок письма.');
+      let to = null;
+      const who = String(b.to || '').trim().replace(/^@+/, '').toLowerCase();
+      if (who && who !== 'all') {
+        const u = await env.DB.prepare('SELECT id FROM users WHERE uname = ?').bind(who).first();
+        if (!u) return fail(404, `Нет пользователя @${who}.`);
+        to = u.id;
+      }
+      const id = 'g' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      await env.DB.prepare("INSERT INTO gifts (id, to_id, kind, title, body, xp, at, until, by_id) VALUES (?, ?, 'gift', ?, ?, ?, ?, ?, ?)").bind(id, to, title, body, xp, Date.now(), Date.now() + days * 864e5, me.id).run();
+      await h.adminLog(env, request, me, `levels: gift ${to ? '@' + who : 'всем'} «${title}» +${xp}`, true);
+      if (to) await h.poke(env, to); else await h.pokeAll(env);
+      return json({ ok: true, id });
+    },
+    async 'GET /admin/levels/gifts'({ env, request, me }) {
+      if (!(await h.adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+      await ensureLevels(env);
+      const { results } = await env.DB.prepare(`SELECT g.id, g.to_id, g.title, g.xp, g.at, g.until, u.uname,
+          (SELECT COUNT(*) FROM gift_box b WHERE b.gift_id = g.id AND b.claimed = 1) AS claimed
+        FROM gifts g LEFT JOIN users u ON u.id = g.to_id WHERE g.kind = 'gift' ORDER BY g.at DESC LIMIT 30`).all();
+      return json({ items: (results || []).map((g) => ({ id: g.id, to: g.to_id ? '@' + (g.uname || '?') : 'всем', title: g.title, xp: +g.xp || 0, at: +g.at, until: g.until ? +g.until : null, claimed: +g.claimed || 0 })) });
+    },
+    async 'DELETE /admin/levels/gift'({ env, request, me }) {
+      if (!(await h.adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+      await ensureLevels(env);
+      const id = new URL(request.url).searchParams.get('id') || '';
+      await env.DB.prepare("UPDATE gifts SET until = ? WHERE id = ? AND kind = 'gift'").bind(Date.now(), id).run();
+      await h.adminLog(env, request, me, `levels: gift off ${id}`, true);
       return json({ ok: true });
     },
     // тематическая неделя: ×2 к выбранным действиям на N дней

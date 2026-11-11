@@ -39,6 +39,41 @@
 .lv-bar i { display: block; height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--accent, #3550E8), #E85FA5); transition: width .5s; }
 .lv-row .lv-sub { display: flex; gap: 12px; font-size: 12.5px; color: var(--ink-3, #8a8f9e); width: 100%; }
 .lv-acc { position: relative; overflow: visible !important; }
+/* кнопка уровня в шапке: кольцо прогресса с номером уровня и подпись */
+.lv-hbtn { position: relative; display: inline-flex !important; align-items: center; gap: 7px; cursor: pointer; }
+.lv-ring { position: relative; flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--accent, #3550E8) var(--p, 0%), color-mix(in srgb, var(--ink, #fff) 16%, transparent) 0); }
+.lv-ring::before { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: var(--panel, #1b1d24); }
+.lv-ring b { position: relative; font: 800 11px/1 system-ui, sans-serif; color: var(--ink, #f3f4f6); font-variant-numeric: tabular-nums; }
+.lv-hbtn .lv-hl { font-weight: 700; }
+/* мигает, пока на кнопку ни разу не нажали */
+.lv-hbtn.lv-pulse { animation: lv-pulse 1.8s ease-in-out infinite; border-color: color-mix(in srgb, var(--accent, #3550E8) 70%, transparent) !important; }
+.lv-hbtn.lv-pulse::after { content: ""; position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; border-radius: 50%; background: #E85FA5; box-shadow: 0 0 0 2px var(--panel, #1b1d24); }
+@keyframes lv-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent, #3550E8) 60%, transparent); } 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent, #3550E8) 0%, transparent), 0 0 18px 2px color-mix(in srgb, var(--accent, #3550E8) 45%, transparent); } }
+@media (prefers-reduced-motion: reduce) { .lv-hbtn.lv-pulse { animation: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, #3550E8) 60%, transparent); } }
+/* магазин: пока серый, при наведении — «Soon» */
+.lv-shop { position: relative; display: inline-flex !important; align-items: center; justify-content: center; cursor: default; color: var(--ink-3, #8a8f9e) !important; filter: grayscale(1); opacity: .6; }
+.lv-shop:hover, .lv-shop:focus-visible, .lv-shop.lv-tip { opacity: .85; }
+.lv-shop::after { content: attr(data-soon); position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%) translateY(-4px); padding: 4px 9px; border-radius: 8px; background: var(--ink, #f3f4f6); color: var(--panel, #1b1d24); font: 700 12px/1.2 system-ui, sans-serif; letter-spacing: .02em; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .15s, transform .15s; z-index: 100; filter: none; }
+.lv-shop:hover::after, .lv-shop:focus-visible::after, .lv-shop.lv-tip::after { opacity: 1; transform: translateX(-50%) translateY(0); }
+@media (max-width: 480px) { .lv-hbtn .lv-hl { display: none; } .lv-hbtn { padding: 0 9px !important; } header .lv-shop { display: none !important; } }
+/* строки меню: почта и (на телефоне) магазин */
+.hm-panel > .lv-mailrow, .hm-panel > .lv-shoprow { display: flex !important; align-items: center; gap: 8px !important; }
+.hm-panel > .lv-shoprow { display: none !important; color: var(--ink-3, #8a8f9e) !important; cursor: default; }
+@media (max-width: 480px) { .hm-panel > .lv-shoprow { display: flex !important; } }
+.lv-mailrow .lv-cnt, .lv-shoprow .lv-soon { margin-left: auto; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 700; }
+.lv-mailrow .lv-cnt { background: #E4553F; color: #fff; }
+.lv-shoprow .lv-soon { border: 1px solid var(--line, #2b2e38); }
+.lv-mailrow .wn-dot { display: none !important; }
+.lv-mail { display: grid; gap: 10px; }
+.lv-letter { display: grid; gap: 6px; padding: 14px 16px; border-radius: 16px; border: 1px solid var(--line, #2b2e38); }
+.lv-letter.new { border-color: color-mix(in srgb, var(--accent, #3550E8) 60%, var(--line, #2b2e38)); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #3550E8) 14%, transparent); }
+.lv-letter .top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.lv-letter b { font-size: 15px; }
+.lv-letter small { color: var(--ink-3, #8a8f9e); font-size: 12px; white-space: nowrap; }
+.lv-letter p { margin: 0; font-size: 13.5px; color: var(--ink-2, #b5b5b5); white-space: pre-line; overflow-wrap: anywhere; }
+.lv-letter .act { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.lv-letter .gift { font-weight: 800; color: #D99A1E; }
+html.unslop .lv-hbtn.lv-pulse { animation-duration: 2.6s; }
 .lv-num { position: absolute; right: -5px; bottom: -4px; min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 9px; background: var(--accent, #3550E8); color: #fff; font: 700 10.5px/18px system-ui, sans-serif; text-align: center; box-shadow: 0 0 0 2px var(--panel, #1b1d24); pointer-events: none; z-index: 2; }
 [data-ava].lv-has { position: relative; overflow: visible !important; }
 [data-ava] > .lv-num { right: -4px; bottom: -3px; min-width: 16px; height: 16px; font-size: 9.5px; line-height: 16px; }
@@ -160,6 +195,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     if (n.t === 'first') return `Первые шаги: ${n.title} · +${n.xp}`;
     if (n.t === 'invite') return `Друг по твоей ссылке дошёл до 3-го уровня · +${n.xp}`;
     if (n.t === 'invite_me') return `Ты пришёл по ссылке друга · +${n.xp}`;
+    if (n.t === 'gift') return `Подарок из почты · +${n.xp} опыта`;
     return '';
   }
 
@@ -211,6 +247,24 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     const q = ME.quests ? ME.quests.daily : [];
     const qd = q.filter((x) => x.done).length;
     row.title = 'Уровень, задания и достижения';
+    // «Почта»: подарки и письма; непрочитанное — красная цифра, и точка на ☰ (header-menu.js ищет .wn-dot)
+    let mail = panel.querySelector('.lv-mailrow');
+    if (!mail) {
+      mail = document.createElement('button');
+      mail.type = 'button';
+      mail.className = row.className.replace(/\blv-row\b/, '') + ' lv-mailrow';
+      mail.title = 'Подарки и письма';
+      mail.addEventListener('click', () => openProgress('mail'));
+      row.after(mail);
+      const shop = document.createElement('span');
+      shop.className = row.className.replace(/\blv-row\b/, '') + ' lv-shoprow';
+      shop.setAttribute('aria-disabled', 'true');
+      shop.innerHTML = `${SHOP_ICON}<span class="hm-t">Магазин</span><span class="lv-soon">Soon</span>`;
+      mail.after(shop);
+    }
+    const m = +ME.mail || 0;
+    const mh = `${MAIL_ICON}<span class="hm-t">Почта</span>${m ? `<span class="lv-cnt">${m}</span><i class="wn-dot"></i>` : ''}`;
+    if (mail.innerHTML !== mh) mail.innerHTML = mh;
     row.innerHTML = `<span class="lv-top"><b>Уровень ${ME.level} · ${esc(ME.rank)}</b><span>${nf(ME.into)} / ${nf(ME.need)}</span></span>
       <span class="lv-bar"><i style="width:${Math.min(100, Math.round((ME.into / ME.need) * 100))}%"></i></span>
       <span class="lv-sub"><span>Задания ${qd}/${q.length}</span>${ME.streak.days ? `<span>🔥 ${ME.streak.days} ${plural(ME.streak.days, 'день', 'дня', 'дней')}</span>` : ''}${ME.event ? `<span>${esc(ME.event.title)}</span>` : ''}</span>`;
@@ -228,12 +282,56 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     // без лишних записей в DOM: наблюдатель за страницей иначе крутился бы по кругу
     if (n.textContent !== String(ME.level)) { n.textContent = ME.level; n.title = `Уровень ${ME.level}`; }
   }
+  // ---------- кнопки в шапке: уровень (мигает до первого нажатия) и магазин «Soon» ----------
+  const SEEN_KEY = 'casualhub.levels.seen.v1';
+  const seen = () => { try { return localStorage.getItem(SEEN_KEY) === '1'; } catch (e) { return true; } };
+  const markSeen = () => { try { localStorage.setItem(SEEN_KEY, '1'); } catch (e) {} document.querySelectorAll('.lv-hbtn.lv-pulse').forEach((b) => b.classList.remove('lv-pulse')); };
+  const MAIL_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg>';
+  const SHOP_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1.2 11.1a2 2 0 0 1-2 1.9H8.2a2 2 0 0 1-2-1.9L5 8z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></svg>';
+  let tipT = 0;
+  function paintHeader() {
+    const header = document.querySelector('header');
+    if (!header || !ME) return;
+    const bar = header.querySelector('.masthead-right > .user-bar') || header.querySelector('.user-bar') || header;
+    const twin = bar.querySelector('.pill, .theme-btn');
+    const cls = twin && /\bpill\b/.test(twin.className) ? 'pill' : 'theme-btn';
+    // перед «Друзьями», а если их нет — перед профилем
+    const before = bar.querySelector(':scope > [data-friends-btn]') || bar.querySelector(':scope > #account, :scope > [data-account], :scope > #userBar') || bar.querySelector(':scope > .hm-wrap');
+    let btn = bar.querySelector(':scope > .lv-hbtn');
+    btn = btn || (header.querySelector('.hm-left > .lv-hbtn'));
+    if (!btn) {
+      btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = cls + ' lv-hbtn';
+      btn.addEventListener('click', () => { markSeen(); openProgress('home'); });
+      const shop = document.createElement('button');
+      shop.type = 'button';
+      shop.className = cls + ' lv-shop';
+      shop.dataset.soon = 'Soon';
+      shop.setAttribute('aria-disabled', 'true');
+      shop.setAttribute('aria-label', 'Магазин — скоро');
+      shop.innerHTML = SHOP_ICON;
+      // на телефоне наведения нет: подсказка «Soon» показывается по нажатию
+      shop.addEventListener('click', () => { shop.classList.add('lv-tip'); clearTimeout(tipT); tipT = setTimeout(() => shop.classList.remove('lv-tip'), 1600); });
+      // место слева у логотипа (header-menu.js), иначе — перед «Друзьями»
+      const slot = header.querySelector('.hm-left');
+      if (slot) { slot.appendChild(btn); slot.appendChild(shop); }
+      else if (before) { bar.insertBefore(btn, before); bar.insertBefore(shop, before); } else { bar.appendChild(btn); bar.appendChild(shop); }
+    }
+    const p = Math.min(100, Math.round((ME.into / Math.max(1, ME.need)) * 100));
+    const html = `<span class="lv-ring" style="--p:${p}%"><b>${ME.level}</b></span><span class="lv-hl">Уровень</span>`;
+    if (btn.innerHTML !== html) btn.innerHTML = html;
+    const t = `Уровень ${ME.level} · ${ME.rank} · ${ME.into} / ${ME.need} опыта`;
+    if (btn.title !== t) { btn.title = t; btn.setAttribute('aria-label', t); }
+    btn.classList.toggle('lv-pulse', !seen());
+  }
   async function refreshMe() {
     try {
       const d = await api('/levels/me');
       if (!d.on) { ME = null; return; }
       ME = d;
       paintMenu();
+      paintHeader();
       paintAccount();
       paintAvatars();
     } catch (e) {}
@@ -279,7 +377,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     el.appendChild(n);
   }
   let moT = 0;
-  new MutationObserver(() => { if (!ME) return; clearTimeout(moT); moT = setTimeout(() => { paintAvatars(); paintProfile(); paintAccount(); }, 150); })
+  new MutationObserver(() => { if (!ME) return; clearTimeout(moT); moT = setTimeout(() => { paintAvatars(); paintProfile(); paintAccount(); paintHeader(); }, 150); })
     .observe(document.documentElement, { subtree: true, childList: true });
 
   // ---------- профиль: уровень, звание, витрина, рамка, цвет ника и фон ----------
@@ -315,10 +413,11 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   }
 
   // ---------- окно «Прогресс» ----------
-  const TABS = [['home', 'Обзор'], ['ach', 'Достижения'], ['board', 'Рейтинг'], ['look', 'Оформление'], ['hist', 'История'], ['invite', 'Пригласить'], ['recap', 'Итоги 2026']];
+  const TABS = [['home', 'Обзор'], ['mail', 'Почта'], ['ach', 'Достижения'], ['board', 'Рейтинг'], ['look', 'Оформление'], ['hist', 'История'], ['invite', 'Пригласить'], ['recap', 'Итоги 2026']];
   let ov = null, tab = 'home', lastFocus = null;
   function openProgress(which) {
     if (!ME) return;
+    markSeen();
     tab = which || tab;
     lastFocus = document.activeElement;
     if (!ov) {
@@ -342,7 +441,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   }
   function renderTabs() {
     const t = ov.querySelector('.lv-tabs');
-    t.innerHTML = TABS.filter(([k]) => k !== 'recap' || ME.recap).map(([k, n]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${k === tab}">${n}</button>`).join('');
+    t.innerHTML = TABS.filter(([k]) => k !== 'recap' || ME.recap).map(([k, n]) => `<button type="button" role="tab" data-tab="${k}" aria-selected="${k === tab}">${n}${k === 'mail' && +ME.mail ? ` (${ME.mail})` : ''}</button>`).join('');
     t.querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { tab = b.dataset.tab; renderTabs(); render(); }));
   }
   const body = () => ov.querySelector('#lvBody');
@@ -376,6 +475,15 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
         ${w ? `<div class="lv-box"><h3>Задание недели</h3><div class="lv-q${w.done ? ' done' : ''}"><span>${esc(w.title)} · ${w.progress} из ${w.goal}</span><span class="xp">+${w.xp}</span><span class="lv-bar"><i style="width:${pct(w.progress, w.goal)}%"></i></span></div></div>` : ''}
         ${steps}
         <p class="lv-muted">Опыт дают оценки, отзывы, тир-листы, реакции и комментарии друзьям, лоты. У каждого действия дневной лимит; удалишь — опыт уйдёт.</p>`;
+    },
+    async mail() {
+      const d = await api('/levels/mail');
+      VIEWS.mailIds = d.items.filter((g) => !g.read).map((g) => g.id);
+      const when = (t) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+      const rows = d.items.map((g) => `<div class="lv-letter${!g.read || (g.xp && !g.claimed) ? ' new' : ''}"><div class="top"><b>${esc(g.title)}</b><small>${when(g.at)}</small></div>
+        ${g.body ? `<p>${esc(g.body)}</p>` : ''}
+        ${g.xp ? `<div class="act"><span class="gift">+${g.xp} опыта</span>${g.claimed ? '<span class="lv-muted">Забрано</span>' : `<button type="button" class="lv-btn" data-claim="${esc(g.id)}">Забрать</button>`}${g.until && !g.claimed ? `<span class="lv-muted">до ${when(g.until)}</span>` : ''}</div>` : ''}</div>`).join('');
+      return `<p class="lv-muted">Сюда приходят подарки от администрации и письма о новых уровнях.</p><div class="lv-mail">${rows || '<p class="lv-muted">Писем пока нет.</p>'}</div><p class="lv-err" id="lvMailMsg" role="status"></p>`;
     },
     async ach() {
       const d = await api('/levels/achievements');
@@ -443,6 +551,22 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     },
   };
   const BIND = {
+    mail(b) {
+      // открыл почту — всё прочитано
+      if ((VIEWS.mailIds || []).length) api('/levels/mail/read', 'POST', {}).then((r) => { ME.mail = r.unread; paintMenu(); renderTabs(); }).catch(() => {});
+      const msg = b.querySelector('#lvMailMsg');
+      b.querySelectorAll('[data-claim]').forEach((btn) => btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try {
+          const r = await api('/levels/mail/claim', 'POST', { id: btn.dataset.claim });
+          ME.mail = r.unread;
+          if (r.gained) showNews([{ t: 'gift', xp: r.gained }]);
+          await refreshMe();
+          renderTabs();
+          render();
+        } catch (e) { btn.disabled = false; if (msg) msg.textContent = e.message; }
+      }));
+    },
     ach(b) {
       b.querySelectorAll('[data-pin]').forEach((btn) => btn.addEventListener('click', async () => {
         const cur = new Set(ME.prefs.showcase || []);

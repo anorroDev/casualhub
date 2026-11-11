@@ -68,6 +68,7 @@ export const RULES = {
   streak: { given: true }, // серия 7 / 30 / 100 дней
   first: { given: true }, // первые шаги
   past: { given: true }, // опыт за прошлое одной строкой (если понадобится)
+  gift: { given: true }, // подарок из почты (опыт, который прислала администрация)
 };
 // что считается «сделал что-то за день» для серии: всё, кроме простого захода и наград
 const ACTIVE = new Set(['rate', 'review', 'rate_full', 'plan_done', 'import', 'tier', 'tier_share', 'react', 'comment', 'friend', 'lots_host', 'lot_add']);
@@ -208,6 +209,10 @@ export async function ensureLevels(env) {
     env.DB.prepare('CREATE INDEX IF NOT EXISTS achievements_code ON achievements(code, tier)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS invites (code TEXT PRIMARY KEY, user_id TEXT NOT NULL UNIQUE, at INTEGER NOT NULL)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS invited (user_id TEXT PRIMARY KEY, by_id TEXT NOT NULL, at INTEGER NOT NULL, rewarded INTEGER NOT NULL DEFAULT 0)'),
+    // почта: письма всем (to_id пустой) или одному человеку; в gift_box — прочитано ли и забран ли подарок
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS gifts (id TEXT PRIMARY KEY, to_id TEXT, kind TEXT NOT NULL DEFAULT \'gift\', title TEXT NOT NULL, body TEXT, xp INTEGER NOT NULL DEFAULT 0, at INTEGER NOT NULL, until INTEGER, by_id TEXT)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS gifts_to ON gifts(to_id, at)'),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS gift_box (gift_id TEXT NOT NULL, user_id TEXT NOT NULL, read INTEGER NOT NULL DEFAULT 0, claimed INTEGER NOT NULL DEFAULT 0, at INTEGER NOT NULL, PRIMARY KEY (gift_id, user_id))'),
   ]);
   ready.add(env.DB);
 }
@@ -325,6 +330,7 @@ async function doAward(env, uid, items, opts) {
   const gained = rows.reduce((a, r) => a + r.xp, 0);
   const news = [];
   if (s.levelUp) news.push({ t: 'level', from: s.levelUp.from, to: s.levelUp.to, rank: rankOf(s.levelUp.to).fun });
+  if (s.levelUp && !opts.past) await levelLetter(env, uid, s.levelUp, now);
   // серия, задания, достижения, приглашения — только за живые действия, не за пересчёт прошлого
   let extra = { gained: 0 };
   if (!opts.past && !opts.noExtras) extra = await extras(env, uid, { now, today, tz, rows, row: known, level: s.level, metrics: opts.metrics, news });
@@ -333,6 +339,15 @@ async function doAward(env, uid, items, opts) {
   const level = Math.max(s.level, extra.level || 0);
   if (news.length && !opts.silent) await pushNews(env, uid, news, now);
   return { gained: gained + extra.gained, xp: total, level, levelUp: s.levelUp || extra.levelUp || null, news };
+}
+
+// письмо в почту о новом уровне: звание и что открылось
+export async function levelLetter(env, uid, up, now = Date.now()) {
+  try {
+    const opened = REWARDS.filter((r) => r.level > up.from && r.level <= up.to).map((r) => r.title);
+    const body = `Звание: ${rankOf(up.to).fun}.` + (opened.length ? ` Открыто: ${opened.join(', ')}. Выбрать можно в «Прогресс» → «Оформление».` : ` Следующая награда — на ${(REWARDS.find((r) => r.level > up.to) || {}).level || '…'}-м уровне.`);
+    await env.DB.prepare("INSERT OR IGNORE INTO gifts (id, to_id, kind, title, body, xp, at) VALUES (?, ?, 'level', ?, ?, 0, ?)").bind(`lv:${uid}:${up.to}`, uid, `Новый уровень: ${up.to}`, body, now).run();
+  } catch (e) { console.error('levels letter', e && e.message); }
 }
 
 // пересчитать итог по журналу; уровень поднимается, если опыта хватает, и никогда не опускается

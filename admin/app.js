@@ -435,6 +435,7 @@
     const my = fresh();
     try {
       const d = await call('GET', '/admin/levels');
+      const gifts = d.mode === 'off' ? { items: [] } : await call('GET', '/admin/levels/gifts');
       if (stale(my)) return;
       const MODE = { off: 'выключены (LEVELS = "0")', admins: 'видят только админы', all: 'включены для всех' };
       const ev = d.event;
@@ -442,6 +443,13 @@
         <p class="muted">Опыт за оценки, общение, тир-листы и лоты. Правила — в functions/_lib/levels.js, включение — LEVELS в wrangler.toml.</p>
         ${d.mode === 'off' ? '' : `<div class="adm-ann-row"><button type="button" class="btn ghost" id="lvBack">Начислить опыт за прошлое всем</button></div>
         <p class="adm-err" id="lvMsg" role="status"></p>
+        <div class="adm-lv-ev"><h3 class="h3">Почта: подарок</h3>
+          <p class="muted">Письмо придёт в «Почту» в меню ☰. Если указать опыт, у письма будет кнопка «Забрать»; каждый заберёт один раз.</p>
+          <div class="adm-ann-row"><input id="lvGiftTo" maxlength="40" placeholder="Кому: всем или @юзернейм" value="всем"><input id="lvGiftTitle" maxlength="80" placeholder="Заголовок, например: Спасибо, что вы с нами"></div>
+          <textarea id="lvGiftBody" maxlength="600" rows="3" placeholder="Текст письма (можно пусто)"></textarea>
+          <div class="adm-ann-row"><input id="lvGiftXp" type="number" min="0" max="1000" step="10" value="50" aria-label="Опыт в подарок"><select id="lvGiftDays"><option value="30">забрать за 30 дней</option><option value="7">за 7 дней</option><option value="90">за 90 дней</option></select><button type="button" class="btn primary" id="lvGiftSend">Отправить</button></div>
+          ${gifts.items.length ? `<div class="adm-lv-log" style="display:grid">${gifts.items.map((g) => `<div><span>${esc(when(g.at))}</span><span>${esc(g.to)} · ${esc(g.title)} · +${g.xp} · забрали ${g.claimed}${g.until && g.until < Date.now() ? ' · закрыто' : ''}</span>${g.until && g.until > Date.now() ? `<button type="button" class="btn ghost small" data-giftoff="${esc(g.id)}">Отозвать</button>` : '<b></b>'}</div>`).join('')}</div>` : ''}
+        </div>
         <div class="adm-lv-ev"><h3 class="h3">Тематическая неделя</h3>
           ${ev ? `<p>Идёт: <b>${esc(ev.title)}</b> · ×${ev.mult} до ${esc(when(ev.until))} · ${ev.kinds.map(esc).join(', ')}</p><button type="button" class="btn ghost" id="lvEvOff">Закончить</button>`
             : `<div class="adm-ann-row"><input id="lvEvTitle" maxlength="80" placeholder="Например: Неделя тир-листов"><select id="lvEvMult"><option value="2">×2</option><option value="1.5">×1,5</option><option value="3">×3</option></select><select id="lvEvDays"><option value="7">7 дней</option><option value="3">3 дня</option><option value="14">14 дней</option></select></div>
@@ -461,6 +469,18 @@
         try { const r = await call('POST', '/admin/levels/backfill'); msg.textContent = `Готово: ${r.users.length} человек.`; setTimeout(levels, 1200); }
         catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else { msg.textContent = x.message; back.disabled = false; } }
       });
+      const send = $('#lvGiftSend');
+      if (send) send.addEventListener('click', async () => {
+        const to = $('#lvGiftTo').value.trim();
+        send.disabled = true;
+        try {
+          await call('POST', '/admin/levels/gift', { to: !to || /^все[мх]?$/i.test(to) ? 'all' : to, title: $('#lvGiftTitle').value, body: $('#lvGiftBody').value, xp: +$('#lvGiftXp').value || 0, days: +$('#lvGiftDays').value });
+          levels();
+        } catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else { msg.textContent = x.message; send.disabled = false; } }
+      });
+      document.querySelectorAll('[data-giftoff]').forEach((b) => b.addEventListener('click', async () => {
+        try { await call('DELETE', '/admin/levels/gift?id=' + encodeURIComponent(b.dataset.giftoff)); levels(); } catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else msg.textContent = x.message; }
+      }));
       const on = $('#lvEvOn');
       if (on) on.addEventListener('click', async () => {
         const kinds = [...document.querySelectorAll('.adm-lv-kinds input:checked')].map((x) => x.value);

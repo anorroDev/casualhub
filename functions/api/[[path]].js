@@ -3019,7 +3019,13 @@ async function canSee(env, me, uid) {
 }
 
 // адреса уровней (/api/levels/…, /api/admin/levels…) — в functions/_lib/levels-api.js
-Object.assign(routes, makeLevelsRoutes({ json, fail, readBody, adminActive, isAdmin, adminCandidate, adminLog }));
+Object.assign(routes, makeLevelsRoutes({
+  json, fail, readBody, adminActive, isAdmin, adminCandidate, adminLog,
+  // новое в почте: человеку — сигнал по сокету, всем — по всем открытым сокетам
+  poke: (env, uid) => pokePresence(env, { what: 'notify', to: uid, n: { kind: 'award' } }),
+  pokeAll: (env) => pokePresence(env, { what: 'mail' }),
+  markNews: (request, r) => { if (r && r.news && r.news.length) lvNews.set(request, true); },
+}));
 
 const PUBLIC = new Set(['GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid']);
 // код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности

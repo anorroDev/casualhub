@@ -309,6 +309,8 @@ export class PresenceDO {
       this.broadcast(JSON.stringify({ t: 'announce', announce: a }));
       return;
     }
+    // уровни: в почте новое письмо для всех — каждой открытой вкладке сигнал «загляни за наградами»
+    if (what === 'mail') { this.broadcast(JSON.stringify({ t: 'notify', kind: 'award' })); return; }
     if (what === 'notify') {
       const to = String(b.to || ''), n = b.n || {};
       if (!UID_RE.test(to) || !['react', 'comment', 'award'].includes(n.kind)) return;

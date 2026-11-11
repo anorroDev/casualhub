@@ -34,7 +34,14 @@
 /* на узком экране «Мнение» и «Колесо» — только значки, чтобы шапка помещалась в одну строку */
 @media (max-width: 480px) { .hm-nav .hm-t, .hm-nav .t, .hm-fr .fb-t { display: none !important; } .hm-nav, .hm-fr { padding: 0 11px !important; } }
 /* телефон: «← Хаб» только стрелкой, а на самых узких ещё и без счётчика, чтобы разделы, «Друзья», профиль и ☰ поместились в одну строку */
-@media (max-width: 400px) { .oc-mini { display: none !important; } #homeLink, #backLink, header .pill[href="/"] { margin-right: auto !important; } }
+@media (max-width: 400px) { #homeLink, #backLink, header .pill[href="/"] { margin-right: 0 !important; } .hm-left { margin-right: auto !important; } }
+/* место слева, сразу после логотипа: туда levels-ui.js ставит кнопку уровня (и магазин); пустое — ничего не занимает */
+.hm-left { display: inline-flex; align-items: center; gap: 8px; flex: none; }
+.hm-left:empty { display: none; }
+header.top > .hm-left { margin-right: auto; margin-left: 4px; }
+@media (max-width: 480px) { .top .hm-left { margin-right: auto; } .hm-left { gap: 6px; } }
+/* счётчик «на сайте»: в правом углу страницы, а если места нет — строкой в меню */
+.wn-corner .oc-mini { box-shadow: 0 10px 24px -14px rgba(0, 0, 0, .6); }
 @media (max-width: 480px) { #homeLink, #backLink, header .pill[href="/"] { width: 36px; min-width: 36px; padding: 0 !important; font-size: 0 !important; justify-content: center; } }
 /* у гостя на главной «Регистрация» на телефоне не помещается — она есть в окне «Войти» */
 @media (max-width: 480px) { #account a[href="/opinion/#reg"] { display: none !important; } }
@@ -141,19 +148,20 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
       if (account) bar.insertBefore(fr, account); else bar.appendChild(fr);
     }
 
-    // счётчик «на сайте» — слева: сразу после логотипа или кнопки главной
+    // слева, сразу после логотипа или кнопки главной — место для кнопки уровня (levels-ui.js)
     const oc = header.querySelector('[data-online-count]');
     const home = header.querySelector('a[href="/"]');
-    if (oc) {
-      oc.classList.add('oc-mini');
-      if (home && home.parentElement) home.after(oc); else bar.prepend(oc);
-      // в Мнении и Колесе кнопку главной прижимает влево отступ справа от неё: переносим его на счётчик
-      if (home && home.parentElement === oc.parentElement && parseFloat(getComputedStyle(home).marginRight) > 24) {
-        home.style.marginRight = '0';
-        oc.style.marginRight = 'auto';
-        oc.style.marginLeft = '8px';
-      }
+    const left = document.createElement('span');
+    left.className = 'hm-left';
+    if (home && home.parentElement) home.after(left); else bar.prepend(left);
+    // в Мнении и Колесе кнопку главной прижимает влево отступ справа от неё: переносим его на это место
+    if (home && home.parentElement === left.parentElement && parseFloat(getComputedStyle(home).marginRight) > 24) {
+      home.style.marginRight = '0';
+      left.style.marginRight = 'auto';
+      left.style.marginLeft = '8px';
     }
+    // счётчик «на сайте» — в правом углу страницы (см. placeWn ниже)
+    if (oc) oc.classList.add('oc-mini');
 
     // меню ☰
     const wrap = document.createElement('div');
@@ -205,12 +213,17 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     document.body.appendChild(corner);
     // в угол — только если справа от шапки хватает места, чтобы кнопка ничего не закрывала
     const placeWn = () => {
-      if (!wn) { if (adm) panel.appendChild(adm); return; }
-      if (!wn.textContent.trim()) wn.insertAdjacentHTML('beforeend', '<span class="hm-t">Что нового</span>');
+      if (wn && !wn.textContent.trim()) wn.insertAdjacentHTML('beforeend', '<span class="hm-t">Что нового</span>');
       const room = document.documentElement.clientWidth - header.getBoundingClientRect().right;
-      const wnW = (wn.parentElement === corner && wn.offsetWidth) || 140;
-      if (room >= wnW + 40) { if (wn.parentElement !== corner) corner.appendChild(wn); }
-      else if (wn.parentElement !== panel) panel.appendChild(wn);
+      const ocW = oc ? (oc.parentElement === corner && oc.offsetWidth) || 70 : 0;
+      const wnW = wn ? (wn.parentElement === corner && wn.offsetWidth) || 140 : 0;
+      // онлайн важнее: он в углу, если влезает хотя бы он; «Что нового» — если влезают оба
+      const ocFits = !!oc && room >= ocW + 40, wnFits = !!wn && room >= ocW + wnW + 48;
+      if (oc) {
+        if (ocFits) { oc.classList.add('oc-mini'); if (oc.parentElement !== corner) corner.prepend(oc); }
+        else { oc.classList.remove('oc-mini'); if (oc.parentElement !== panel) panel.appendChild(oc); }
+      }
+      if (wn) { if (wnFits) { if (wn.parentElement !== corner) corner.appendChild(wn); } else if (wn.parentElement !== panel) panel.appendChild(wn); }
       if (adm) panel.appendChild(adm);
     };
     placeWn();

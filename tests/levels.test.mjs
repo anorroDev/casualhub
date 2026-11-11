@@ -282,3 +282,15 @@ test('неизвестное действие — ошибка в коде', asy
   await assert.rejects(() => award(envOf(), 'u1', 'nope', 'x'));
   for (const [k, r] of Object.entries(RULES)) assert.ok(r.given || Number.isFinite(r.xp), k);
 });
+
+test('почта: письмо о новом уровне с тем, что открылось', async () => {
+  const env = envOf();
+  await awardMany(env, 'u1', Array.from({ length: 30 }, (_, i) => ({ kind: 'rate', ref: 'r' + i })), { now: NOON, ...bare });
+  const g = q(env, "SELECT id, to_id, kind, title, body FROM gifts WHERE to_id = 'u1'");
+  assert.equal(g.length, 1);
+  assert.equal(g[0].title, 'Новый уровень: 2');
+  assert.match(g[0].body, /Кружок уровня у аватара/);
+  // опыт за прошлое писем не шлёт
+  await award(env, 'u2', 'past', 'x', { xp: 500, now: NOON, past: true });
+  assert.equal(q(env, "SELECT COUNT(*) AS n FROM gifts WHERE to_id = 'u2'")[0].n, 0);
+});
