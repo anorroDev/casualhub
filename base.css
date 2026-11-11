@@ -32,7 +32,7 @@ input, textarea, [contenteditable="true"] { caret-color: var(--accent, #3550E8);
 .title-logo { display: block; width: clamp(44px, 6vw, 56px); height: auto; margin-bottom: 14px; }
 /* Фон сайта — пиксельные звёзды (html[data-bg="stars"], ставит util.js всем по умолчанию). Картинки в /art/site — маски:
    форма из картинки, цвет из темы, поэтому подходит к любой теме. Слои: body::after (дальний) и html::after (ближний) —
-   на главной вместо сетки точек body::after, на разделах вместо html::after; пятна света (::before) остаются.
+   на главной вместо сетки точек body::after, на разделах вместо html::after. Цветных пятен света больше нет.
    В запасе пейзаж (html[data-bg="horizon"], ?bg=horizon в адресе): пока не включён, пригодится для события или темы */
 html[data-bg] body::after, html[data-bg]::after {
   content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;

@@ -189,21 +189,12 @@ html.theme-swap::view-transition-new(root) { animation: theme-circle .6s cubic-b
 *, *::before, *::after { box-sizing: border-box; }
 html, body { min-height: 100%; }
 body { margin: 0; background-color: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
-html::before {
-  content: ""; position: fixed; inset: -12vmax; z-index: -1; pointer-events: none; will-change: transform;
-  background:
-    radial-gradient(36vmax 28vmax at 18% 12%, color-mix(in srgb, var(--accent) calc(var(--glow) * 100%), transparent), transparent 70%),
-    radial-gradient(30vmax 26vmax at 86% 30%, color-mix(in srgb, var(--good) calc(var(--glow) * 50%), transparent), transparent 70%),
-    radial-gradient(32vmax 26vmax at 50% 96%, color-mix(in srgb, var(--mid) calc(var(--glow) * 40%), transparent), transparent 70%);
-  animation: drift 28s ease-in-out infinite alternate;
-}
 html::after {
   content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background-image: radial-gradient(circle at 1px 1px, var(--dot) 1px, transparent 1.5px); background-size: 18px 18px;
   -webkit-mask-image: radial-gradient(120% 90% at 50% 20%, #000 40%, transparent 100%);
   mask-image: radial-gradient(120% 90% at 50% 20%, #000 40%, transparent 100%);
 }
-@keyframes drift { 0% { transform: translate3d(0, 0, 0) rotate(0deg); } 50% { transform: translate3d(3vmax, -2vmax, 0) rotate(5deg); } 100% { transform: translate3d(-2vmax, 2vmax, 0) rotate(-4deg); } }
 a { color: inherit; }
 h1, h2, h3, p { margin: 0; }
 button, input { font: inherit; color: inherit; }
@@ -996,7 +987,6 @@ html.unslop .tile:hover { transform: translateY(-1px); }
 html.unslop .tl-it:hover { transform: translateY(-1px); }
 html.unslop .item:hover { transform: translateY(-1px); }
 html.unslop .cmp-head { text-transform: none; letter-spacing: normal; }
-html.unslop::before { display: none; }
 </style>
 </head>
 <body>

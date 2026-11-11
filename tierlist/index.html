@@ -323,25 +323,12 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
   --lift: 0 1px 0 color-mix(in srgb, #fff 5%, transparent) inset, 0 26px 52px -32px rgba(0, 0, 0, .55);
 }
 body { background-image: none; overflow-x: hidden; }
-/* Ambient light pools and a dot grid fading to the edges (on html: body::before is the iPhone notch strip) */
-html::before {
-  content: ""; position: fixed; inset: -12vmax; z-index: -1; pointer-events: none; will-change: transform;
-  background:
-    radial-gradient(36vmax 28vmax at 18% 12%, color-mix(in srgb, var(--accent) calc(var(--glow) * 100%), transparent), transparent 70%),
-    radial-gradient(30vmax 26vmax at 86% 30%, color-mix(in srgb, #EC4899 calc(var(--glow) * 45%), transparent), transparent 70%),
-    radial-gradient(32vmax 26vmax at 50% 96%, color-mix(in srgb, var(--mid) calc(var(--glow) * 40%), transparent), transparent 70%);
-  animation: drift 28s ease-in-out infinite alternate;
-}
+/* Dot grid fading to the edges (on html: body::before is the iPhone notch strip) */
 html::after {
   content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
   background-image: radial-gradient(circle at 1px 1px, var(--dot) 1px, transparent 1.5px); background-size: 18px 18px;
   -webkit-mask-image: radial-gradient(120% 90% at 50% 20%, #000 40%, transparent 100%);
   mask-image: radial-gradient(120% 90% at 50% 20%, #000 40%, transparent 100%);
-}
-@keyframes drift {
-  0% { transform: translate3d(0, 0, 0) rotate(0deg); }
-  50% { transform: translate3d(3vmax, -2vmax, 0) rotate(5deg); }
-  100% { transform: translate3d(-2vmax, 2vmax, 0) rotate(-4deg); }
 }
 
 /* Header: navigation is a top bar (home on the left, the rest on the right), the title sits under it */
@@ -618,7 +605,6 @@ html.unslop .tl-x:hover { transform: none; }
 html.unslop .rx-title { text-transform: none; letter-spacing: normal; }
 html.unslop .rx-btns button:hover .rx-e { transform: none; }
 html.unslop .tl-sw:hover { transform: none; }
-html.unslop::before { display: none; }
 </style>
 </head>
 <body>

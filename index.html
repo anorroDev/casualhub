@@ -191,15 +191,6 @@ body {
   color: var(--ink); font-family: var(--font-body); font-size: 15px; line-height: 1.5;
   -webkit-font-smoothing: antialiased; overflow-x: hidden;
 }
-/* Ambient light: three soft pools in the tier and accent colours drift behind everything */
-body::before {
-  content: ""; position: fixed; inset: -12vmax; z-index: -1; pointer-events: none; will-change: transform;
-  background:
-    radial-gradient(38vmax 30vmax at 22% 18%, color-mix(in srgb, var(--accent) calc(var(--glow) * 100%), transparent), transparent 70%),
-    radial-gradient(30vmax 26vmax at 82% 26%, color-mix(in srgb, var(--good) calc(var(--glow) * 55%), transparent), transparent 70%),
-    radial-gradient(34vmax 28vmax at 58% 88%, color-mix(in srgb, var(--mid) calc(var(--glow) * 45%), transparent), transparent 70%);
-  animation: drift 26s ease-in-out infinite alternate;
-}
 /* Dot grid that fades out towards the edges */
 body::after {
   content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none;
@@ -207,11 +198,6 @@ body::after {
   background-size: 18px 18px;
   -webkit-mask-image: radial-gradient(120% 90% at 50% 30%, #000 40%, transparent 100%);
   mask-image: radial-gradient(120% 90% at 50% 30%, #000 40%, transparent 100%);
-}
-@keyframes drift {
-  0% { transform: translate3d(0, 0, 0) rotate(0deg); }
-  50% { transform: translate3d(3vmax, -2vmax, 0) rotate(6deg); }
-  100% { transform: translate3d(-2vmax, 2vmax, 0) rotate(-4deg); }
 }
 a { color: inherit; }
 h1, h2, p { margin: 0; }
@@ -604,7 +590,6 @@ html.unslop .wheel::before { box-shadow: 0 20px 44px -22px rgb(0 0 0 / .45); }
 html.unslop .fd:hover { transform: translateY(-1px); }
 html.unslop .app:hover .app-icon { transform: none; }
 html.unslop .chip.alert { animation: nudge 2.4s ease-in-out 1.6s 2; }
-html.unslop body::before { display: none; }
 </style>
 </head>
 <body>
