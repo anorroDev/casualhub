@@ -68,7 +68,12 @@ test('звания, флаг, награды по уровням', () => {
   assert.equal(levelsMode({ LEVELS: 'admins' }), 'admins');
   assert.equal(levelsMode({ LEVELS: '1' }), 'all');
   assert.deepEqual(unlockedAt(1).frames, []);
-  assert.deepEqual(unlockedAt(12).frames, ['frame1', 'frame2']);
+  assert.deepEqual(unlockedAt(12).frames, ['frame1', 'frame5', 'frame2']);
+  assert.deepEqual(unlockedAt(17).nicks, []);
+  assert.deepEqual(unlockedAt(35).nicks, ['shadow', 'rainbow']);
+  assert.ok(!unlockedAt(24).pet && unlockedAt(25).pet);
+  assert.ok(!unlockedAt(49).bgs.includes('legend') && unlockedAt(50).bgs.includes('legend'));
+  assert.equal(unlockedAt(1, true).frames.length, 6); // админу открыто всё
   assert.ok(!unlockedAt(29).colors.includes('gold'));
   assert.ok(unlockedAt(30).colors.includes('gold'));
 });

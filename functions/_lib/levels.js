@@ -135,27 +135,40 @@ export const FIRST_STEPS = [
 ];
 
 // ---------- награды за уровни (только внешний вид) ----------
+// id рамок frame1–frame4 и фонов — прежние: их уже выбирали; новые добавлены рядом
 export const REWARDS = [
   { level: 2, kind: 'badge', id: 'badge', title: 'Кружок уровня у аватара' },
   { level: 3, kind: 'frame', id: 'frame1', title: 'Рамка «Казуал»' },
+  { level: 5, kind: 'frame', id: 'frame5', title: 'Рамка «Пиксель»' },
   { level: 7, kind: 'chip', id: 'rankchip', title: 'Звание рядом с ником в профиле' },
   { level: 10, kind: 'color', id: 'colors', title: 'Цвет ника на выбор' },
   { level: 12, kind: 'frame', id: 'frame2', title: 'Рамка «Неон»' },
-  { level: 15, kind: 'bg', id: 'bgs', title: 'Фон профиля на выбор' },
-  { level: 20, kind: 'frame', id: 'frame3', title: 'Анимированная рамка' },
+  { level: 15, kind: 'bg', id: 'bgs', title: 'Пиксельный фон профиля на выбор' },
+  { level: 18, kind: 'nick', id: 'shadow', title: 'Ник с пиксельной тенью' },
+  { level: 20, kind: 'frame', id: 'frame3', title: 'Рамка «Переливы»' },
+  { level: 22, kind: 'fx', id: 'stars', title: 'Звездопад в шапке профиля' },
+  { level: 25, kind: 'pet', id: 'pet', title: 'Казик живёт у тебя в профиле' },
   { level: 30, kind: 'color', id: 'gold', title: '«Золотой» ник' },
-  { level: 40, kind: 'frame', id: 'frame4', title: 'Рамка «Мастер»' },
-  { level: 50, kind: 'bg', id: 'legend', title: 'Фон «Легенда»' },
+  { level: 35, kind: 'nick', id: 'rainbow', title: 'Радужный ник' },
+  { level: 40, kind: 'frame', id: 'frame4', title: 'Рамка «Мастер» с короной' },
+  { level: 45, kind: 'fx', id: 'confetti', title: 'Конфетти, когда открывают твой профиль' },
+  { level: 50, kind: 'frame', id: 'frame6', title: 'Рамка и фон «Легенда»' },
 ];
 export const NAME_COLORS = { blue: '#5B74FF', pink: '#E85FA5', green: '#2EAD60', orange: '#F08A24', violet: '#9B6BFF', teal: '#14A3A8', gold: '#E2A925' };
 export const PROFILE_BGS = { dawn: 1, night: 1, city: 1, forest: 1, ember: 1, legend: 1 };
-// что из оформления доступно на уровне
-export function unlockedAt(level) {
-  const got = new Set(REWARDS.filter((r) => level >= r.level).map((r) => r.id));
+const FRAMES = ['frame1', 'frame5', 'frame2', 'frame3', 'frame4', 'frame6']; // по уровню
+const NICKS = ['shadow', 'rainbow'];
+const FXS = ['stars', 'confetti'];
+// что из оформления доступно на уровне; all — админу открыто всё (проверять награды до выхода)
+export function unlockedAt(level, all = false) {
+  const got = new Set(REWARDS.filter((r) => all || level >= r.level).map((r) => r.id));
   return {
-    frames: ['frame1', 'frame2', 'frame3', 'frame4'].filter((f) => got.has(f)),
+    frames: FRAMES.filter((f) => got.has(f)),
     colors: got.has('colors') ? Object.keys(NAME_COLORS).filter((c) => c !== 'gold' || got.has('gold')) : [],
-    bgs: got.has('bgs') ? Object.keys(PROFILE_BGS).filter((b) => b !== 'legend' || got.has('legend')) : [],
+    bgs: got.has('bgs') ? Object.keys(PROFILE_BGS).filter((b) => b !== 'legend' || got.has('frame6')) : [],
+    nicks: NICKS.filter((n) => got.has(n)),
+    fx: FXS.filter((f) => got.has(f)),
+    pet: got.has('pet'),
     rankChip: got.has('rankchip'),
     badge: got.has('badge'),
   };
@@ -607,17 +620,21 @@ export async function readLevel(env, uid) {
 }
 export const prefsOf = (row) => {
   const p = parse(row && row.prefs, {});
-  return { intro: !!p.intro, hideLevel: !!p.hideLevel, hideBoard: !!p.hideBoard, notify: p.notify !== false, anim: p.anim !== false, showcase: Array.isArray(p.showcase) ? p.showcase.slice(0, 3) : [], frame: p.frame || '', color: p.color || '', bg: p.bg || '' };
+  return { intro: !!p.intro, hideLevel: !!p.hideLevel, hideBoard: !!p.hideBoard, notify: p.notify !== false, anim: p.anim !== false, showcase: Array.isArray(p.showcase) ? p.showcase.slice(0, 3) : [], frame: p.frame || '', color: p.color || '', bg: p.bg || '', nick: p.nick || '', fx: p.fx || '', pet: !!p.pet, adm: !!p.adm };
 };
-// оформление, которое видят другие: только то, что открыто уровнем
+// оформление, которое видят другие: только то, что открыто уровнем.
+// adm — выбор сохранил админ (PUT /levels/prefs ставит его сам): ему для проверки открыто всё
 export function lookOf(row) {
   const lv = levelView(+row.xp || 0, +row.level || 1).level;
-  const p = prefsOf(row), u = unlockedAt(lv);
+  const p = prefsOf(row), u = unlockedAt(lv, p.adm);
   return {
     level: lv,
     frame: u.frames.includes(p.frame) ? p.frame : '',
     color: u.colors.includes(p.color) ? p.color : '',
     bg: u.bgs.includes(p.bg) ? p.bg : '',
+    nick: u.nicks.includes(p.nick) ? p.nick : '',
+    fx: u.fx.includes(p.fx) ? p.fx : '',
+    pet: u.pet && p.pet,
     rank: u.rankChip ? rankOf(lv).fun : '',
   };
 }
