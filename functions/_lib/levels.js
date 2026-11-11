@@ -147,7 +147,7 @@ export const REWARDS = [
   { level: 18, kind: 'nick', id: 'shadow', title: 'Ник с пиксельной тенью' },
   { level: 20, kind: 'frame', id: 'frame3', title: 'Рамка «Переливы»' },
   { level: 22, kind: 'fx', id: 'stars', title: 'Звездопад в шапке профиля' },
-  { level: 25, kind: 'pet', id: 'pet', title: 'Казик живёт у тебя в профиле' },
+  { level: 25, kind: 'pet', id: 'pet', title: 'Котик Васян живёт у тебя в профиле' },
   { level: 30, kind: 'color', id: 'gold', title: '«Золотой» ник' },
   { level: 35, kind: 'nick', id: 'rainbow', title: 'Радужный ник' },
   { level: 40, kind: 'frame', id: 'frame4', title: 'Рамка «Мастер» с короной' },

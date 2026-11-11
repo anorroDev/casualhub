@@ -165,7 +165,7 @@ export function makeLevelsRoutes(h) {
       if (typeof b.bg === 'string') { if (b.bg && !u.bgs.includes(b.bg)) return fail(403, 'Этот фон ещё не открыт.'); next.bg = b.bg; }
       if (typeof b.nick === 'string') { if (b.nick && !u.nicks.includes(b.nick)) return fail(403, 'Этот ник ещё не открыт.'); next.nick = b.nick; }
       if (typeof b.fx === 'string') { if (b.fx && !u.fx.includes(b.fx)) return fail(403, 'Этот эффект ещё не открыт.'); next.fx = b.fx; }
-      if (typeof b.pet === 'boolean') { if (b.pet && !u.pet) return fail(403, 'Казик откроется на 25-м уровне.'); next.pet = b.pet; }
+      if (typeof b.pet === 'boolean') { if (b.pet && !u.pet) return fail(403, 'Васян откроется на 25-м уровне.'); next.pet = b.pet; }
       await env.DB.prepare('INSERT INTO user_level (user_id, updated_at, prefs) VALUES (?1, ?2, ?3) ON CONFLICT(user_id) DO UPDATE SET prefs = ?3').bind(me.id, Date.now(), JSON.stringify(next)).run();
       return json({ ok: true, prefs: next, look: lookOf({ ...row, prefs: JSON.stringify(next) }) });
     },

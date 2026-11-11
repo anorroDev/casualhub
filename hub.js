@@ -348,7 +348,7 @@
         const feed = $('#feed');
         feed.hidden = false;
         if (!d.friends) {
-          $('#feedList').innerHTML = '<li class="feed-empty">' + window.CasualUtil.emptyArt('friends', 96) + 'Тут появятся оценки друзей. <a href="/opinion/">Добавь друзей в Мнении Казуала</a> через кнопку «👥 Друзья».</li>';
+          $('#feedList').innerHTML = '<li class="feed-empty">' + window.CasualUtil.emptyArt('friends') + 'Тут появятся оценки друзей. <a href="/opinion/">Добавь друзей в Мнении Казуала</a> через кнопку «👥 Друзья».</li>';
           return;
         }
         if (!d.items.length) { $('#feedList').innerHTML = '<li class="feed-empty">Друзья пока ничего не оценили.</li>'; return; }

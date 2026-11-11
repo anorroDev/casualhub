@@ -5,7 +5,7 @@
    plural(n, one, few, many) — нужная форма слова: 1 оценка, 2 оценки, 5 оценок
    script(src, ready)        — подгрузить скрипт один раз: Promise, который выполнится, когда ready() вернёт правду.
                                Второй, кто попросит тот же скрипт, дождётся того же тега, а не останется ни с чем
-   emptyArt(name, w)         — пиксельная картинка пустого состояния (/art/empty-*.webp: rate, friends, tier, lots) шириной w */
+   emptyArt(name)            — котик Васян в пустом состоянии (/art/empty-*.webp: rate, friends, tier, lots), в половину исходника — пиксели ровные */
 (() => {
   // фон сайта (base.css, html[data-bg]): у всех пиксельные звёзды. Пейзаж в запасе — ?bg=horizon запоминается в этом браузере, ?bg= — вернуть звёзды
   try {
@@ -35,7 +35,7 @@
     }
     return loading.get(src);
   };
-  const EMPTY_H = { rate: 230, friends: 201, tier: 185, lots: 173 }; // высота при ширине 240
-  const emptyArt = (name, w = 112) => (EMPTY_H[name] ? `<img class="empty-art" src="/art/empty-${name}.webp" width="${w}" height="${Math.round((w * EMPTY_H[name]) / 240)}" alt="" loading="lazy" decoding="async">` : '');
+  const EMPTY_SIZE = { rate: [140, 70], friends: [110, 70], tier: [100, 55], lots: [80, 60] }; // половина исходника 10 px на пиксель
+  const emptyArt = (name) => { const s = EMPTY_SIZE[name]; return s ? `<img class="empty-art" src="/art/empty-${name}.webp" width="${s[0]}" height="${s[1]}" alt="" loading="lazy" decoding="async">` : ''; };
   window.CasualUtil = Object.freeze({ esc, read, plural, script, emptyArt });
 })();

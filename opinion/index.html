@@ -1160,10 +1160,10 @@ button.lg-ref:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .ghost-rows i { height: 28px; border-radius: 8px; background: var(--cell); }
 .empty p { color: var(--ink-2); font-size: 14px; text-wrap: pretty; }
 .empty strong { color: var(--ink); }
-/* зверёк слева от пустого рейтинга; на узком экране — над ним */
+/* котик Васян слева от пустого рейтинга; на узком экране — над ним */
 .empty:has(> .empty-art) { grid-template-columns: auto minmax(0, 1fr); align-items: center; column-gap: 20px; }
 .empty > .empty-art { grid-row: span 2; margin: 0; }
-@media (max-width: 480px) { .empty:has(> .empty-art) { grid-template-columns: minmax(0, 1fr); } .empty > .empty-art { grid-row: auto; margin: 0 auto; width: 96px; } }
+@media (max-width: 480px) { .empty:has(> .empty-art) { grid-template-columns: minmax(0, 1fr); } .empty > .empty-art { grid-row: auto; margin: 0 auto; } }
 
 /* Toast and export sheet */
 .toast {
@@ -1725,7 +1725,7 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
         <div class="tier-board" id="tierBoard" hidden></div>
         <p class="no-match" id="noMatch" hidden>Ничего не нашлось.</p>
         <div class="empty" id="empty">
-          <img class="empty-art" src="/art/empty-rate.webp" width="112" height="107" alt="" loading="lazy" decoding="async">
+          <img class="empty-art" src="/art/empty-rate.webp" width="140" height="70" alt="" loading="lazy" decoding="async">
           <div class="ghost-rows" aria-hidden="true">
             <span>1</span><b class="w1"></b><i></i>
             <span>2</span><b class="w2"></b><i></i>

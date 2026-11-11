@@ -94,12 +94,13 @@ html.unslop .lv-hbtn.lv-pulse { animation-duration: 2.6s; }
 .lv-frame-frame4 { box-shadow: 0 0 0 calc(var(--u, 1px) * 2) var(--panel, #1b1d24), 0 0 0 calc(var(--u, 1px) * 4) #E2A925, 0 0 0 calc(var(--u, 1px) * 6) var(--panel, #1b1d24), 0 0 0 calc(var(--u, 1px) * 7.5) #8C5A12, 0 0 0 calc(var(--u, 1px) * 9) #E2A925 !important; border-radius: 50%; }
 .lv-frame-frame6 { border-radius: 50%; outline: calc(var(--u, 1px) * 2.5) dashed #F2BA44; outline-offset: calc(var(--u, 1px) * 7); animation: lv-flow 1.5s steps(1, end) infinite; }
 @media (prefers-reduced-motion: reduce) { .lv-frame-frame2, .lv-frame-frame3, .lv-frame-frame6 { animation: none; box-shadow: 0 0 0 calc(var(--u, 1px) * 2) var(--panel, #1b1d24), 0 0 0 calc(var(--u, 1px) * 4) #5B74FF, 0 0 0 calc(var(--u, 1px) * 6) var(--panel, #1b1d24), 0 0 0 calc(var(--u, 1px) * 7.5) #E85FA5 !important; } }
-/* корона («Мастер», «Легенда») и Казик (25-й уровень): в профиле у аватара и в предпросмотре */
+/* корона («Мастер», «Легенда») и котик Васян (25-й уровень): в профиле у аватара и в предпросмотре */
 #avaWrap > .lv-crown, .lv-lk-ava > .lv-crown { position: absolute; left: 50%; top: -28px; width: 46px; height: auto; transform: translateX(-50%) rotate(-8deg); image-rendering: pixelated; z-index: 3; pointer-events: none; }
-#avaWrap > .lv-pet, .lv-lk-ava > .lv-pet { position: absolute; right: -70px; top: -6px; width: 66px; height: auto; z-index: 3; pointer-events: none; animation: lv-bob 1.4s steps(2, jump-none) infinite; }
+/* Васян — лист /art/pet-vasyan.webp из 6 кадров (последний — моргнул) */
+#avaWrap > .lv-pet, .lv-lk-ava > .lv-pet { position: absolute; right: -86px; top: -4px; width: 80px; height: 56px; z-index: 3; pointer-events: none; background: url(/art/pet-vasyan.webp) 0 0 / 600% 100% no-repeat; image-rendering: pixelated; animation: lv-blink 3s steps(6, jump-none) infinite; }
+@keyframes lv-blink { to { background-position: 100% 0; } }
 .lv-lk-ava > .lv-crown { width: 34px; top: -22px; }
-.lv-lk-ava > .lv-pet { width: 50px; right: -54px; top: -10px; }
-@keyframes lv-bob { 50% { translate: 0 -4px; } }
+.lv-lk-ava > .lv-pet { width: 46px; height: 32px; right: -52px; top: 0; }
 /* ник: пиксельная тень (18-й) и радужный ступеньками (35-й) */
 .lv-nick-shadow { text-shadow: .06em .06em 0 color-mix(in srgb, var(--accent, #5B74FF) 80%, #000), .12em .12em 0 color-mix(in srgb, var(--ink, #fff) 16%, transparent); }
 .lv-nick-rainbow { background: linear-gradient(90deg, #F26A55 0 16.6%, #F2BA44 0 33.3%, #43C97A 0 50%, #14A3A8 0 66.6%, #5B74FF 0 83.3%, #E85FA5 0) 0 0 / 200% 100% repeat-x; -webkit-background-clip: text; background-clip: text; color: transparent !important; -webkit-text-fill-color: transparent; animation: lv-rb 3s steps(12) infinite; }
@@ -562,12 +563,12 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     if (name && d.look.color && ME.colors) name.style.color = ME.colors[d.look.color] || '';
     const ava = hero.querySelector('#avaWrap');
     if (ava) { [...ava.classList].filter((c) => c.startsWith('lv-frame-')).forEach((c) => ava.classList.remove(c)); if (d.look.frame) ava.classList.add('lv-frame-' + d.look.frame); }
-    // ник с тенью или радужный, корона у «Мастера» и «Легенды», Казик, звездопад в шапке, конфетти один раз за просмотр
+    // ник с тенью или радужный, корона у «Мастера» и «Легенды», котик Васян, звездопад в шапке, конфетти один раз за просмотр
     if (name) { [...name.classList].filter((c) => c.startsWith('lv-nick-')).forEach((c) => name.classList.remove(c)); if (d.look.nick) name.classList.add('lv-nick-' + d.look.nick); }
     if (ava) {
       ava.querySelectorAll(':scope > .lv-crown, :scope > .lv-pet').forEach((x) => x.remove());
       if (d.look.frame === 'frame4' || d.look.frame === 'frame6') ava.insertAdjacentHTML('beforeend', '<img class="lv-crown" src="/art/crown.svg" width="44" height="30" alt="" aria-hidden="true">');
-      if (d.look.pet) ava.insertAdjacentHTML('beforeend', '<img class="lv-pet" src="/art/pet-kazik.webp" width="64" height="52" alt="" aria-hidden="true">');
+      if (d.look.pet) ava.insertAdjacentHTML('beforeend', '<i class="lv-pet" aria-hidden="true"></i>');
     }
     const anyBan = hero.querySelector('.banner');
     if (anyBan) { anyBan.querySelectorAll(':scope > .lv-fx-stars').forEach((x) => x.remove()); if (d.look.fx === 'stars') anyBan.insertAdjacentHTML('beforeend', '<i class="lv-fx-stars" aria-hidden="true"></i>'); }
@@ -799,7 +800,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       const prev = `<div class="lv-lk" aria-label="Так твой профиль увидят другие">
           <div class="lv-lk-ban${p.bg ? ' lv-bg-' + p.bg : ''}">${p.fx === 'stars' ? '<i class="lv-fx-stars" aria-hidden="true"></i>' : ''}</div>
           <div class="lv-lk-row">
-            <span class="lv-lk-ava${p.frame ? ' lv-frame-' + p.frame : ''}">${esc(nm.charAt(0).toUpperCase())}${crown}${p.pet ? '<img class="lv-pet" src="/art/pet-kazik.webp" width="64" height="52" alt="">' : ''}</span>
+            <span class="lv-lk-ava${p.frame ? ' lv-frame-' + p.frame : ''}">${esc(nm.charAt(0).toUpperCase())}${crown}${p.pet ? '<i class="lv-pet" aria-hidden="true"></i>' : ''}</span>
             <div class="lv-lk-who"><b class="lv-lk-name${p.nick ? ' lv-nick-' + p.nick : ''}"${p.color && m.colors[p.color] ? ` style="color:${m.colors[p.color]}"` : ''}>${esc(nm)}</b>${u.rankChip ? `<span class="lv-chip">${esc(m.rank)}</span>` : ''}${p.fx === 'confetti' ? '<span class="lv-muted">+ конфетти при открытии профиля</span>' : ''}</div>
           </div>
         </div>`;
@@ -808,7 +809,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
         <div class="lv-box"><h3>Рамка аватара</h3><div class="lv-pick">${frames}</div></div>
         <div class="lv-box"><h3>Ник в профиле</h3><div class="lv-pick">${colors}</div><div class="lv-pick" style="margin-top:8px">${nicks}</div></div>
         <div class="lv-box"><h3>Фон профиля</h3><div class="lv-pick">${bgs}</div></div>
-        <div class="lv-box"><h3>Эффект и Казик</h3><div class="lv-pick">${fxs}</div><p class="lv-muted" style="margin:10px 0 6px">Казик рядом с аватаром</p><div class="lv-pick">${pet}</div></div>
+        <div class="lv-box"><h3>Эффект и котик</h3><div class="lv-pick">${fxs}</div><p class="lv-muted" style="margin:10px 0 6px">Котик Васян рядом с аватаром</p><div class="lv-pick">${pet}</div></div>
         <div class="lv-box"><h3>Награды за уровни</h3><div class="lv-rw">${rw}</div></div>
         <div class="lv-box"><h3>Видимость и уведомления</h3>${tg('hideLevel', 'Скрыть мой уровень от других', p.hideLevel)}${tg('hideBoard', 'Не показывать меня в рейтинге недели', p.hideBoard)}${tg('notify', 'Плашки о наградах', p.notify)}</div>
         <p class="lv-err" id="lvLookMsg" role="status"></p>`;
