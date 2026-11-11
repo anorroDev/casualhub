@@ -4,6 +4,7 @@
 // Главная копия снимка — lot_rooms.live в D1. И API, и комната меняют её только через liveTx и settledLive:
 // запись проходит, лишь если снимок с момента чтения никто не поменял, поэтому они не затирают друг друга.
 // Папка _lib не становится адресом сайта.
+import { lotsWon } from './levels.js';
 import { clip } from './shelf.js';
 
 export const LOT_NAME = 60, MAX_LOTS = 300;
@@ -190,9 +191,14 @@ export async function settledLive(env, code, text) {
   for (let i = 0; i < 4; i++) {
     const live = parseLive(text), now = Date.now(), wake = liveWake(live);
     if (!live || !wake || now < wake) return { live, wrote: false };
+    const prevWin = live.winner ? live.winner.at : null;
     if (!advanceLive(live, now, await liveLots(env, code))) return { live, wrote: false };
     const w = await env.DB.prepare('UPDATE lot_rooms SET live = ? WHERE id = ? AND live IS ?').bind(JSON.stringify(live), code, text).run();
-    if (w.meta.changes) return { live, wrote: true };
+    if (w.meta.changes) {
+      // уровни: победитель только что определился — опыт ведущему и автору лота (повтор ничего не удвоит)
+      if (live.winner && live.winner.at !== prevWin) await lotsWon(env, code, live);
+      return { live, wrote: true };
+    }
     const row = await env.DB.prepare('SELECT live FROM lot_rooms WHERE id = ?').bind(code).first();
     if (!row) return { live: null, wrote: false };
     text = row.live;
@@ -206,13 +212,17 @@ export async function liveTx(env, code, fn) {
     const room = await env.DB.prepare('SELECT owner_id, live, ver FROM lot_rooms WHERE id = ?').bind(code).first();
     if (!room) return { err: [404, 'Такого сбора нет.'] };
     const live = parseLive(room.live) || cleanLive({}), now = Date.now(), wake = liveWake(live);
+    const prevWin = live.winner ? live.winner.at : null;
     if (wake && now >= wake) advanceLive(live, now, await liveLots(env, code));
     const r = await fn(live, room);
     if (r.err) return r;
     const data = JSON.stringify(r.live);
     if (data.length > 90000) return { big: true };
     const w = await env.DB.prepare('UPDATE lot_rooms SET live = ? WHERE id = ? AND live IS ?').bind(data, code, room.live).run();
-    if (w.meta.changes) return { live: r.live, room };
+    if (w.meta.changes) {
+      if (r.live && r.live.winner && r.live.winner.at !== prevWin) await lotsWon(env, code, r.live);
+      return { live: r.live, room };
+    }
   }
   return { err: [409, 'Колесо сейчас меняют, попробуй ещё раз.'] };
 }

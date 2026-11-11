@@ -311,7 +311,9 @@ export class PresenceDO {
     }
     if (what === 'notify') {
       const to = String(b.to || ''), n = b.n || {};
-      if (!UID_RE.test(to) || !['react', 'comment'].includes(n.kind)) return;
+      if (!UID_RE.test(to) || !['react', 'comment', 'award'].includes(n.kind)) return;
+      // уровни: только сигнал «загляни за наградами», сами награды страница возьмёт из /api/levels/news
+      if (n.kind === 'award') { const t = JSON.stringify({ t: 'notify', kind: 'award' }); for (const w of this.live('u:' + to)) this.send(w, t); return; }
       const from = n.from || {};
       const msg = { t: 'notify', kind: n.kind, from: { id: short(from.id, 24), username: short(from.username, 40), handle: short(from.handle, 32) }, text: short(n.text, 200) };
       if (n.kind === 'react') { msg.rid = short(n.rid, 90); msg.emoji = n.emoji ? short(n.emoji, 16) : null; } else msg.target = short(n.target, 90);

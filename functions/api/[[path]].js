@@ -7,6 +7,8 @@ import { imdbLookup } from '../_lib/imdb.js';
 import { NOTES } from '../_lib/admin-changes.js';
 import { LOT_NAME, MAX_LOTS, STICKER_RE, cleanLive, LIVE_OWNER, liveBusy, liveLots, spinLive, resetLive, stopAuto, settledLive, liveTx, liveView } from '../_lib/lots-live.js';
 import { ONLINE_MS, GUEST_RE, onlineCount, friendsAndIncoming, touchUsers, touchGuests } from '../_lib/presence.js';
+import { awardMany as lvAwardMany, revokeMany as lvRevokeMany, visit as lvVisit, shelfDiff, nightNow, levelsOn } from '../_lib/levels.js';
+import { makeLevelsRoutes, acceptInvite, tzOf } from '../_lib/levels-api.js';
 
 const enc = new TextEncoder();
 const ITER = 10000;
@@ -463,7 +465,7 @@ const routes = {
     if (burst('reg:all', 30, 60e3)) return tooMany(1);
     const wait = await overLimit(env, ipKey, 'register');
     if (wait) return tooMany(wait);
-    const { username, handle, password, email } = await readBody(request);
+    const { username, handle, password, email, invite } = await readBody(request);
     const name = cleanName(username);
     const mail = cleanEmail(email);
     const pass = String(password || '');
@@ -480,7 +482,10 @@ const routes = {
     const uname = wanted || await freeHandle(env, toHandle(name)); // старые версии сайта юзернейм не присылают
     const salt = randHex(16);
     const passHash = await hashPass(pass, salt);
-    return json(await createUser(env, { name, uname, mail, passHash, salt, request }));
+    const made = await createUser(env, { name, uname, mail, passHash, salt, request });
+    // пришёл по ссылке друга: сразу друзья, а когда дойдёт до 3-го уровня — опыт обоим
+    if (invite && made && made.user) await acceptInvite(env, made.user.id, String(invite));
+    return json(made);
   },
   // вход по почте или по нику
   async 'POST /login'({ env, request }) {
@@ -1097,7 +1102,12 @@ const routes = {
     if (burst('ping:' + ip, 150, 60e3)) return json({ online: onlineCache.n, friends: [] });
     const now = Date.now();
     const me = await currentUser(env, request);
-    if (me) await touchUsers(env, [me.id], now);
+    if (me) {
+      await touchUsers(env, [me.id], now);
+      // уровни: «зашёл сегодня» (раз в день по часовому поясу человека)
+      const v = await lvVisit(env, me.id, tzOf(request), now);
+      if (v && v.news && v.news.length) lvNews.set(request, true);
+    }
     else {
       const { guest } = await readBody(request);
       if (typeof guest === 'string' && GUEST_RE.test(guest) && !burst('pingw:' + ip, 60, 60e3) && !burst('pingw:all', 400, 60e3)) await touchGuests(env, [guest], now);
@@ -1206,6 +1216,8 @@ const routes = {
     const [a, b] = pair(me.id, String(userId));
     await env.DB.prepare("UPDATE friendships SET status = 'accepted' WHERE a = ? AND b = ?").bind(a, b).run();
     await pokePresence(env, { what: 'users', ids: [me.id, String(userId)] });
+    await lvGive(env, request, me, me.id, [{ kind: 'friend', ref: String(userId) }]);
+    await lvGive(env, request, me, String(userId), [{ kind: 'friend', ref: me.id }]);
     return json({ ok: true });
   },
 
@@ -1213,7 +1225,13 @@ const routes = {
   async 'POST /friends/remove'({ env, request, me }) {
     const { userId } = await readBody(request);
     const [a, b] = pair(me.id, String(userId || ''));
+    const was = levelsOn(env) ? await env.DB.prepare('SELECT status, created_at FROM friendships WHERE a = ? AND b = ?').bind(a, b).first() : null;
     await env.DB.prepare('DELETE FROM friendships WHERE a = ? AND b = ?').bind(a, b).run();
+    // дружбу убрали в первую неделю — опыт за неё уходит у обоих (чтобы не «дружить» ради опыта)
+    if (was && was.status === 'accepted' && Date.now() - (+was.created_at || 0) < 7 * 864e5) {
+      await lvRevokeMany(env, me.id, [{ kind: 'friend', ref: String(userId) }]);
+      await lvRevokeMany(env, String(userId), [{ kind: 'friend', ref: me.id }]);
+    }
     await pokePresence(env, { what: 'users', ids: [me.id, String(userId || '')] });
     return json({ ok: true });
   },
@@ -1307,6 +1325,12 @@ const routes = {
         .concat(env.DB.prepare('DELETE FROM shares WHERE owner_id = ? AND rid = ?').bind(me.id, id)) // и ссылка на отзыв закрывается
         .concat(env.DB.prepare('DELETE FROM reactions WHERE owner_id = ? AND rid = ?').bind(me.id, id)) // и реакции
         .concat(env.DB.prepare('DELETE FROM comments WHERE owner_id = ? AND target = ?').bind(me.id, 'r.' + id)))); // и ветка комментариев под ней
+    }
+    if (levelsOn(env)) {
+      const diff = shelfDiff(old.ratings, merged);
+      if (diff.take.length) await lvRevokeMany(env, me.id, diff.take.slice(0, 500));
+      const night = diff.give.some((x) => x.kind === 'rate') && nightNow(now, tzOf(request)) ? 1 : 0;
+      if (diff.give.length) await lvGive(env, request, me, me.id, diff.give, { metrics: { ...diff.metrics, night } });
     }
     return json({ ok: true, updatedAt: updated, count: merged.length, catsAt: catsOut ? catsOut.at : null });
   },
@@ -1568,6 +1592,8 @@ const routes = {
         .bind(me.id, arg, data, JSON.stringify(tierMeta(list)), list.private ? 1 : 0, at, list.vis === 'public' ? 1 : 0),
       ...dropped.map((k) => env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(`${me.id}:${k}`)),
     ]);
+    // новый тир-лист от 8 элементов — опыт (правки уже готового — нет)
+    if ((!old || old.data == null) && Object.keys(list.items || {}).length >= 8) await lvGive(env, request, me, me.id, [{ kind: 'tier', ref: arg }]);
     return json({ ok: true, at });
   },
   async 'DELETE /tierlist/:id'({ env, request, me, arg }) {
@@ -1587,6 +1613,7 @@ const routes = {
       env.DB.prepare('DELETE FROM shares WHERE owner_id = ? AND rid = ?').bind(me.id, 't.' + arg),
       ...imgs.map((k) => env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(`${me.id}:${k}`)),
     ]);
+    await lvRevokeMany(env, me.id, [{ kind: 'tier', ref: arg }]);
     return json({ ok: true, at });
   },
   // ссылка на тир-лист: открывается у всех, у кого она есть, даже если тир-лист скрыт от друзей. Закрывается через DELETE /share/:id
@@ -1604,6 +1631,7 @@ const routes = {
     if (c && c.n >= 500) return fail(413, 'Слишком много открытых ссылок. Закрой старые.');
     const sid = shareId();
     await env.DB.prepare('INSERT INTO shares (id, owner_id, rid, created_at) VALUES (?, ?, ?, ?)').bind(sid, me.id, rid, Date.now()).run();
+    await lvGive(env, request, me, me.id, [{ kind: 'tier_share', ref: id }]);
     return json({ id: sid });
   },
   // картинка карточки: квадрат 240×240, ключ придумывает браузер
@@ -1723,9 +1751,10 @@ const routes = {
       const twin = lotTwin(room, [...have.map((x) => x.name), ...liveNames(room)], lot.name);
       if (twin) return fail(409, lotKey(twin) === lotKey(lot.name) ? 'Это уже добавили.' : `Похоже на «${twin}», которое уже есть. Одна игра — один лот.`);
     } else if (have.some((x) => x.ref === ref)) ref = ref + '~' + randHex(3); // ведущий разрешил повторы: у лота своя строка
+    const lotId = randHex(8);
     const r = await env.DB.prepare(`INSERT INTO lots (room_id, id, user_id, ref, name, img, link, created_at)
       SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8 WHERE (SELECT COUNT(*) FROM lots WHERE room_id = ?1 AND user_id = ?3) < ?9 AND (SELECT COUNT(*) FROM lots WHERE room_id = ?1) < ?10
-      ON CONFLICT(room_id, ref) DO NOTHING`).bind(arg, randHex(8), me.id, ref, lot.name, lot.img, lot.link, now, own ? MAX_LOTS : room.per_user, MAX_LOTS).run();
+      ON CONFLICT(room_id, ref) DO NOTHING`).bind(arg, lotId, me.id, ref, lot.name, lot.img, lot.link, now, own ? MAX_LOTS : room.per_user, MAX_LOTS).run();
     if (!r.meta.changes) {
       const has = await env.DB.prepare('SELECT 1 FROM lots WHERE room_id = ? AND ref = ?').bind(arg, ref).first();
       if (has) return fail(409, 'Это уже добавили.');
@@ -1764,7 +1793,9 @@ const routes = {
     if (burst('lotedit:' + me.id, 40, 60e3)) return tooMany(1);
     const g = await lotEditable(env, arg[0], arg[1], me);
     if (g.res) return g.res;
+    const gl = levelsOn(env) ? await env.DB.prepare('SELECT user_id FROM lots WHERE room_id = ? AND id = ?').bind(arg[0], arg[1]).first() : null;
     await env.DB.batch([env.DB.prepare('DELETE FROM lots WHERE room_id = ? AND id = ?').bind(arg[0], arg[1]), env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(arg[0])]);
+    if (gl) await lvRevokeMany(env, gl.user_id, [{ kind: 'lot_add', ref: arg[1] }]);
     await pokeRoom(env, arg[0], 'lots');
     return lotAnswer(env, arg[0], me, null, request);
   },
@@ -1963,6 +1994,8 @@ const routes = {
     const text = String(body.text || '').replace(SPOOF_RE, '').replace(/\s+/g, ' ').trim().slice(0, 140);
     if (!emoji && !text) {
       await env.DB.prepare('DELETE FROM reactions WHERE owner_id = ? AND rid = ? AND from_id = ?').bind(uid, rid, me.id).run();
+      await lvRevokeMany(env, me.id, [{ kind: 'react', ref: `${uid}:${rid}` }]);
+      await lvRevokeMany(env, uid, [{ kind: 'got_react', ref: `${me.id}:${rid}` }]);
       return json({ ok: true, removed: true });
     }
     const now = Date.now();
@@ -1970,6 +2003,15 @@ const routes = {
       'INSERT INTO reactions (owner_id, rid, from_id, emoji, text, at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(owner_id, rid, from_id) DO UPDATE SET emoji = excluded.emoji, text = excluded.text, at = excluded.at'
     ).bind(uid, rid, me.id, emoji, text || null, now).run();
     await pokePresence(env, { what: 'notify', to: uid, n: { kind: 'react', from: pubUser(me), rid, emoji, text } });
+    if (levelsOn(env)) {
+      const [nope, tr] = await env.DB.batch([
+        env.DB.prepare("SELECT COUNT(*) AS n FROM reactions WHERE from_id = ? AND emoji = 'nope'").bind(me.id),
+        env.DB.prepare('SELECT COUNT(*) AS n FROM reactions WHERE owner_id = ? AND rid = ?').bind(uid, rid),
+      ]);
+      const cnt = (r) => +((r.results || [])[0] || {}).n || 0;
+      await lvGive(env, request, me, me.id, [{ kind: 'react', ref: `${uid}:${rid}`, peer: uid }], { metrics: { nope: cnt(nope) } });
+      await lvGive(env, request, me, uid, [{ kind: 'got_react', ref: `${me.id}:${rid}`, peer: me.id }], { metrics: /^t\./.test(rid) ? { tierReacts: cnt(tr) } : {} });
+    }
     return json({ ok: true, at: now });
   },
   // все реакции на оценки человека: видят он сам и его друзья
@@ -2192,11 +2234,18 @@ const routes = {
     const id = randHex(10), now = Date.now();
     await env.DB.prepare('INSERT INTO comments (id, owner_id, target, from_id, text, at) VALUES (?, ?, ?, ?, ?, ?)').bind(id, uid, target, me.id, text, now).run();
     if (uid !== me.id) await pokePresence(env, { what: 'notify', to: uid, n: { kind: 'comment', from: pubUser(me), target, text: text.slice(0, 140) } });
+    if (text.length >= 10) await lvGive(env, request, me, me.id, [{ kind: 'comment', ref: id, peer: uid === me.id ? 'self' : uid }]);
+    if (uid !== me.id) await lvGive(env, request, me, uid, [{ kind: 'got_comment', ref: id, peer: me.id }]);
     return json({ item: { id, text, at: now, from: pubUser(me), canDelete: true } });
   },
   // удалить может автор комментария и хозяин профиля, на чьей стене или оценке он написан
   async 'DELETE /comment/:id'({ env, me, arg }) {
+    const c = levelsOn(env) ? await env.DB.prepare('SELECT from_id, owner_id FROM comments WHERE id = ? AND (from_id = ? OR owner_id = ?)').bind(arg, me.id, me.id).first() : null;
     await env.DB.prepare('DELETE FROM comments WHERE id = ? AND (from_id = ? OR owner_id = ?)').bind(arg, me.id, me.id).run();
+    if (c) {
+      await lvRevokeMany(env, c.from_id, [{ kind: 'comment', ref: arg }]);
+      await lvRevokeMany(env, c.owner_id, [{ kind: 'got_comment', ref: arg }]);
+    }
     return json({ ok: true });
   },
   // сколько комментариев под оценками человека: число 💬 у строк рейтинга
@@ -2503,6 +2552,20 @@ async function pokePresence(env, body) {
   if (!presenceOn(env)) return;
   try { await presenceRoom(env).fetch('https://rt/poke', { method: 'POST', body: JSON.stringify(body) }); }
   catch (e) { console.error('presence poke', body && body.what, e && e.message); }
+}
+// ---------- уровни: начисление из запросов (правила — functions/_lib/levels.js) ----------
+// Новые награды того, кто сделал запрос, — заголовок x-levels в ответе: страница заберёт плашки (/api/levels/news).
+// Награды другому человеку (реакция на его оценку, комментарий ему) — ему по сокету, а без сокета — при следующем заходе.
+const lvNews = new WeakMap();
+async function lvGive(env, request, me, uid, items, opts = {}) {
+  if (!levelsOn(env) || !uid || !items.length) return null;
+  const mine = !!me && uid === me.id;
+  const res = await lvAwardMany(env, uid, items, { ...opts, tz: mine ? tzOf(request) : undefined });
+  if (res && res.news && res.news.length) {
+    if (mine) lvNews.set(request, true);
+    else await pokePresence(env, { what: 'notify', to: uid, n: { kind: 'award' } });
+  }
+  return res;
 }
 // после записи в D1 комната перечитывает снимок, рассылает его и заводит будильник. what: live | lots | room | gone
 async function pokeRoom(env, code, what) {
@@ -2955,6 +3018,9 @@ async function canSee(env, me, uid) {
   return !!row && row.status === 'accepted';
 }
 
+// адреса уровней (/api/levels/…, /api/admin/levels…) — в functions/_lib/levels-api.js
+Object.assign(routes, makeLevelsRoutes({ json, fail, readBody, adminActive, isAdmin, adminCandidate, adminLog }));
+
 const PUBLIC = new Set(['GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid']);
 // код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности
 const SHARE_RE = /^[A-Za-z0-9]{12}$/;
@@ -3022,7 +3088,9 @@ export async function onRequest({ request, env, params }) {
       if (!me) return fail(401, 'Нужно войти в онлайн-аккаунт.');
       if (me.banned) return fail(403, 'Аккаунт заблокирован администрацией' + (me.ban_reason ? ': ' + me.ban_reason : '.'));
     }
-    return await handler({ env, request, me, arg });
+    const res = await handler({ env, request, me, arg });
+    if (lvNews.has(request) && res && res.headers) { try { res.headers.set('x-levels', '1'); } catch (e) {} }
+    return res;
   } catch (e) {
     if (e instanceof TooBig) return fail(413, 'Слишком большой запрос.');
     console.error(e);
