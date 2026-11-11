@@ -1,9 +1,12 @@
-/* Казуал Хаб: котик Васян живёт внизу экрана на всех страницах — только у своих 10 хозяев.
+/* Казуал Хаб: котик Васян живёт на страницах сайта — только у своих 10 хозяев.
    Это подарок «Первой десятке» (первые 10 аккаунтов): письмо в почте уровней, «Забрать котика».
    Хозяин ли этот браузер, помнит levels-ui.js (casualhub.vasyan.own) и шлёт событие casualhub:vasyan.
-   Гуляет, сидит, спит (Zzz), гладится кликом (сердечко), ест из миски в левом нижнем углу; миску пополняют кликом.
-   Проголодался, а корма нет — думает о рыбке. Голод копится и между заходами (localStorage, только в этом браузере).
-   Выключается в Настройках → Внешний вид («Котик Васян на сайте», data-vasyan). При «меньше движения» не ходит.
+   Как Shimeji: ходит не только по низу экрана, но и по верхним краям карточек и блоков, прыгает между ними,
+   падает, если блок уехал при прокрутке; его можно схватить мышкой (висит за шкирку) и бросить — упадёт на то, что ниже.
+   Как oneko: остановил курсор — может прибежать к нему. Клик — погладить (сердечко), спит — Zzz,
+   ест из серой миски в левом нижнем углу (корм — кликом по миске), голоден при пустой миске — думает о рыбке.
+   Голод копится и между заходами (localStorage, только в этом браузере). Выключается в Настройках → Внешний вид
+   («Котик Васян на сайте», data-vasyan). При «меньше движения» не ходит и не прыгает.
    Спрайты — пиксельные сетки ниже, контур дорисовывается сам; картинок не грузит. Подключает util.js. */
 (() => {
   if (window.CasualVasyan || /^\/(admin|r)\//.test(location.pathname)) return;
@@ -14,17 +17,32 @@
 
   // ---------- спрайты ----------
   const INK = '#1B1B1F';
-  const PAL = { M: '#F4F4F0', O: '#F28E4C', K: '#353A47', E: INK, N: '#F59AC4', B: '#5B74FF', D: '#3B4FC4', F: '#A8693A', G: '#C98B5A', R: '#E8483B', Y: '#F2BA44', W: '#FFFFFF', S: '#8CC8F0' };
+  const PAL = { M: '#F4F4F0', O: '#F28E4C', K: '#353A47', E: INK, N: '#F59AC4', R: '#E8483B', W: '#FFFFFF', S: '#8CC8F0',
+    L: '#D3D8E0', G: '#9AA1AE', H: '#5E6573', I: '#F7F9FC', F: '#A8693A', J: '#D39A5E' };
   const WALK_A = ['...................', '..K..........O...K.', '..K.........OOO.KKK', '..K.........OOMMKKK', '..K.........OEMMMEK', '..KK........MEMNMEM', '...K........MMMMMMM', '...KKKMMMMMOOMMMMM.', '....MMMMMOOOMMMMM..', '....MMKKMMMMMMMMM..', '....MM.MM...MM.MM..', '....MM.MM...MM.MM..', '...................'];
   const WALK_B = WALK_A.slice();
   WALK_B[1] = '.K...........O...K.'; WALK_B[2] = '.K..........OOO.KKK'; WALK_B[10] = '.....MM.MM.MM.MM...'; WALK_B[11] = '.....MM.MM.MM.MM...';
+  const JUMP = WALK_A.slice(); JUMP[10] = '...MM........MM....'; JUMP[11] = '..MM..........MM...';
   const SIT = ['....................', '............O...K...', '...........OOO.KKK..', '...........OOOOKKKK.', '...........OMEMMEMK.', '...........MMEMMEMM.', '...........MMMNNMMM.', '..........MMMMMMMM..', '.........OOMMMMMMM..', '........OOOMMMMMMM..', '........OOMMMMMMMK..', '..KKK...OMMMMMMMKK..', '..KKKKKKKKKMMMMMMM..', '....................'];
   const BLINK = SIT.slice(); BLINK[4] = '...........OMMMMMMK.'; BLINK[5] = '...........MEEMMEEM.';
   const SLEEP = ['..................', '...O...K..........', '..OOO.KKK.........', '..OOOMMKKMMMMMMM..', '..MEEMEEMMMOOOMMM.', '..MMMNNMMMMOOOMMMM', '..MMMMMMMMMMMMMMMM', '...KKKKKKKKKKKKKKM', '..................'];
   const SLEEP_B = SLEEP.slice(); SLEEP_B[3] = '..OOOMMKKMMMMMMMM.'; SLEEP_B[6] = '..MMMMMMMMMMMMMMMMM';
+  // за шкирку: висит, лапки болтаются
+  const HANG = ['....O...K....', '...OOO.KKK...', '...OOOOKKKK..', '...OMEMMEMK..', '...MMEMMEMM..', '...MMMNNMMM..', '....MMMMMM...', '...MMMMMMMM..', '...OMMMMMMK..', '...OOMMMMKK..', '...MM.MM.MM..', '...MM....MM..', '.........KK..', '..........K..'];
+  const HANG_B = HANG.slice(); HANG_B[10] = '...MM.MMMM...'; HANG_B[11] = '....MM..MM...'; HANG_B[12] = '........KK...'; HANG_B[13] = '........K....';
   const HEART = ['.RR.RR.', 'RRRRRRR', 'RRRRRRR', '.RRRRR.', '..RRR..', '...R...'];
   const FISH = ['..S.....', '.SSSS.S.', 'SSWSSSS.', 'SSSSSSSS', '.SSSS.S.', '..S.....'];
-  const BOWL = (n) => ['................', n >= 3 ? '...F.G.F.G.F....' : '................', n >= 2 ? '..GFGFGFGFGFGF..' : '................', n >= 1 ? 'DGFGFGFGFGFGFGFD' : 'DDDDDDDDDDDDDDDD', 'DBBBBBBBBBBBBBBD', '.BBBWBBBBBBBBBB.', '.BBBBBBBBBBBBBB.', '..BBBBBBBBBBBB..', '...DDDDDDDDDD...'];
+  // серая металлическая миска с бликом; корм — горкой
+  const BOWL = (n) => [
+    n >= 3 ? '.......JF.J.......' : '..................',
+    n >= 2 ? '....FJFJFJFJFJ....' : '..................',
+    n >= 1 ? '..JFJFJFJFJFJFJF..' : '..................',
+    n >= 1 ? 'GLLLLLLLLLLLLLLLLG' : 'GLLHHHHHHHHHHHHLLG',
+    'GIIILLLLLLLLLLLLLG',
+    '.GLILLLLLLLLLLLLG.',
+    '..GGLLLLLLLLLLGG..',
+    '...HGGGGGGGGGGH...',
+    '....HHHHHHHHHH....'];
   const cache = new Map();
   function sprite(rows, k, outline = true) {
     const key = rows.join('|') + k + outline;
@@ -39,21 +57,22 @@
     }
     let r = '';
     for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (g[y][x]) r += `<rect x="${x}" y="${y}" width="1" height="1" fill="${g[y][x]}"/>`;
-    const svg = `<svg viewBox="0 0 ${W} ${H}" width="${W * k}" height="${H * k}" shape-rendering="crispEdges" aria-hidden="true" focusable="false">${r}</svg>`;
-    cache.set(key, svg);
-    return svg;
+    const out = { svg: `<svg viewBox="0 0 ${W} ${H}" width="${W * k}" height="${H * k}" shape-rendering="crispEdges" aria-hidden="true" focusable="false">${r}</svg>`, w: W * k, h: H * k };
+    cache.set(key, out);
+    return out;
   }
 
   // ---------- разметка ----------
   const css = document.createElement('style');
   css.textContent = `
 .vy-cat, .vy-bowl { position: fixed; z-index: 40; padding: 0; margin: 0; border: 0; background: none; cursor: pointer; line-height: 0; -webkit-tap-highlight-color: transparent; }
-.vy-cat { left: 0; bottom: 0; transform-origin: 50% 100%; }
+.vy-cat { left: 0; top: 0; touch-action: none; cursor: grab; }
+.vy-cat.drag { cursor: grabbing; z-index: 60; }
 .vy-cat svg, .vy-bowl svg { display: block; }
 .vy-cat.flip .vy-body { transform: scaleX(-1); }
 .vy-cat.hop .vy-body { animation: vy-hop .35s steps(3, jump-none); }
 @keyframes vy-hop { 50% { translate: 0 -8px; } }
-.vy-bowl { left: 10px; bottom: 6px; }
+.vy-bowl { left: 10px; bottom: 6px; filter: drop-shadow(0 3px 0 rgb(0 0 0 / .18)); }
 .vy-bowl.add svg { animation: vy-hop .3s steps(2, jump-none); }
 .vy-cat:focus-visible, .vy-bowl:focus-visible { outline: 2px solid var(--accent, #5B74FF); outline-offset: 3px; }
 .vy-bub { position: absolute; left: 50%; bottom: calc(100% + 4px); transform: translateX(-50%); pointer-events: none; line-height: 0; }
@@ -69,15 +88,19 @@
 
   const K = innerWidth < 480 ? 2.5 : 3; // размер «пикселя» котика
   let st = read();
-  const now = Date.now();
+  const now0 = Date.now();
   // голод копится и пока сайт закрыт: 1 пункт за 12 секунд, но не больше чем до «очень голоден»
-  st.hunger = Math.min(100, (+st.hunger || 0) + (st.at ? Math.max(0, now - st.at) / 12000 : 0));
+  st.hunger = Math.min(100, (+st.hunger || 0) + (st.at ? Math.max(0, now0 - st.at) / 12000 : 0));
   st.food = st.food == null ? 2 : Math.max(0, Math.min(3, +st.food));
-  st.at = now;
+  st.at = now0;
   const save = () => { st.at = Date.now(); write(st); };
 
   let cat, body, bubble, bowl, alive = false, raf = 0;
-  let x = 120, dir = 1, mode = 'sit', until = 0, target = 0, frame = 0, lastFrame = 0, bubT = 0, floor = 0, lastT = 0;
+  // положение: x — левый край, y — линия лап (в координатах окна). surf — блок, на котором стоит (null — пол)
+  let x = 120, y = 0, vy = 0, dir = 1, mode = 'sit', until = 0, target = 0, frame = 0, lastFrame = 0, saveT = 0, floor = 0, lastT = 0;
+  let surf = null, jump = null, after = null, size = { w: 57, h: 39 };
+  let mouse = { x: -1, y: -1, t: 0 }, chaseT = 0, measureT = 0;
+  let press = null, dragged = false, shown = null;
 
   function mount() {
     if (alive) return;
@@ -89,13 +112,16 @@
     bowl.addEventListener('click', feed);
     cat = document.createElement('button');
     cat.type = 'button'; cat.className = 'vy-cat';
-    cat.setAttribute('aria-label', 'Погладить котика Васяна');
+    cat.setAttribute('aria-label', 'Котик Васян: нажми, чтобы погладить, или перетащи');
     cat.innerHTML = '<span class="vy-body"></span>';
     body = cat.firstChild;
-    cat.addEventListener('click', pet);
+    cat.addEventListener('pointerdown', down);
+    cat.addEventListener('click', (e) => { e.preventDefault(); if (dragged) { dragged = false; return; } pet(); });
     document.body.append(bowl, cat);
+    measure();
     x = Math.min(innerWidth - 80, 90 + Math.random() * Math.max(40, innerWidth / 3));
-    drawBowl(); decide(); measure();
+    y = floorY(); surf = null;
+    drawBowl(); decide();
     lastT = performance.now();
     raf = requestAnimationFrame(loop);
   }
@@ -105,12 +131,13 @@
     cat = bowl = bubble = null;
   }
 
-  // над закреплёнными внизу панелями (полоса «Сохранить» в Мнении, нижние меню): ищем их у нижнего края
+  // ---------- пол и блоки ----------
+  // пол — над закреплёнными внизу панелями (полоса «Сохранить» в Мнении, нижние меню)
   function measure() {
     let top = innerHeight;
-    for (let px = 12; px < innerWidth; px += 60) { // панель может занимать не всю ширину (полоса «Сохранить» в Мнении — только левая колонка)
+    for (let px = 12; px < innerWidth; px += 60) {
       for (const el of document.elementsFromPoint(px, innerHeight - 12)) {
-        if (el === cat || el === bowl || (cat && cat.contains(el)) || (bowl && bowl.contains(el)) || el === document.body || el === document.documentElement) continue;
+        if (mine(el) || el === document.body || el === document.documentElement) continue;
         let n = el;
         while (n && n !== document.body) {
           const p = getComputedStyle(n).position;
@@ -122,8 +149,40 @@
     floor = Math.max(0, innerHeight - top);
     if (bowl) bowl.style.bottom = floor + 6 + 'px';
   }
+  const mine = (el) => !!el && (el === cat || el === bowl || (cat && cat.contains(el)) || (bowl && bowl.contains(el)));
+  const floorY = () => innerHeight - floor - 2;
+  const bowlRight = () => 10 + 18 * K + 4;
+  // блоки, по верху которых можно ходить: крупные карточки, верхний край виден и ничем не закрыт
+  const PLAT = '.card, .app, .lv-box, .panel, .feed-list > li, .tl-tile, .recs, .feed, section';
+  function platforms() {
+    const fy = floorY(), out = [];
+    for (const el of document.querySelectorAll(PLAT)) {
+      if (mine(el)) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 150 || r.height < 50 || r.top < 80 || r.top > fy - 60 || r.left < 0 || r.right > innerWidth) continue;
+      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + 3);
+      if (!hit || !(el === hit || el.contains(hit))) continue;
+      if (out.some((p) => Math.abs(p.r.top - r.top) < 6 && Math.abs(p.r.left - r.left) < 6)) continue;
+      out.push({ el, r });
+      if (out.length > 40) break;
+    }
+    return out;
+  }
+  const surfTop = (s) => (s ? s.getBoundingClientRect().top : floorY());
+  function bounds(s) {
+    if (!s) return [bowlRight(), innerWidth - size.w - 6];
+    const r = s.getBoundingClientRect();
+    return [r.left + 2, Math.max(r.left + 2, r.right - size.w - 2)];
+  }
+  const surfaceOk = (s) => {
+    if (!s) return true;
+    if (!s.isConnected) return false;
+    const r = s.getBoundingClientRect();
+    return r.width >= 100 && r.top > 60 && r.top < floorY() - 30;
+  };
 
-  function drawBowl() { if (bowl) bowl.innerHTML = sprite(BOWL(st.food), K); }
+  // ---------- миска и ласка ----------
+  function drawBowl() { if (bowl) bowl.innerHTML = sprite(BOWL(st.food), K).svg; }
   function feed() {
     if (st.food >= 3) { say('love'); return; }
     st.food += 1; save(); drawBowl();
@@ -132,26 +191,75 @@
     const p = document.createElement('span'); p.className = 'vy-plus'; p.textContent = '+1';
     p.style.left = r.left + r.width / 2 - 8 + 'px'; p.style.top = r.top - 18 + 'px';
     document.body.appendChild(p); setTimeout(() => p.remove(), 1000);
-    if (st.hunger > 60 && mode !== 'eat') goEat();
+    if (st.hunger > 60 && !['eat', 'goEat', 'drag', 'fall', 'jump'].includes(mode)) goEat();
   }
   function pet() {
     st.pets = (+st.pets || 0) + 1; save();
-    if (mode === 'sleep' || mode === 'walk' || mode === 'goEat') { mode = 'sit'; until = performance.now() + 3500; }
+    if (!['drag', 'fall', 'jump'].includes(mode)) { mode = 'sit'; until = performance.now() + 3500; }
     cat.classList.remove('hop'); void cat.offsetWidth; cat.classList.add('hop');
     say('love');
   }
-  const bowlX = () => 10 + 16 * K + 4;
-  function goEat() { mode = 'goEat'; target = bowlX(); }
+
+  // ---------- перетаскивание (как Shimeji) ----------
+  function down(e) {
+    if (e.button > 0) return;
+    press = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    dragged = false;
+    addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+  }
+  function move(e) {
+    if (!press) return;
+    if (!dragged && Math.hypot(e.clientX - press.x, e.clientY - press.y) < 6) return;
+    if (!dragged) { dragged = true; mode = 'drag'; jump = null; after = null; clearBubble(); cat.classList.add('drag'); }
+    const s = sprite(HANG, K);
+    x = e.clientX - s.w / 2; y = e.clientY + s.h - 6;
+  }
+  function up() {
+    removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up);
+    press = null;
+    if (dragged) { cat.classList.remove('drag'); mode = 'fall'; vy = 0; surf = null; }
+  }
 
   // ---------- что делать дальше ----------
+  function jumpTo(s, tx) {
+    const [a, b] = bounds(s);
+    tx = Math.max(a, Math.min(b, tx));
+    const dist = Math.hypot(tx - x, surfTop(s) - y);
+    jump = { s, x0: x, y0: y, x1: tx, t0: performance.now(), dur: Math.min(900, 380 + dist * 0.9) };
+    dir = tx >= x ? 1 : -1;
+    mode = 'jump'; clearBubble('zz');
+  }
+  function goEat() {
+    if (surf) { jumpTo(null, x); after = 'goEat'; return; }
+    mode = 'goEat'; target = bowlRight() - 6;
+  }
   function decide() {
     const t = performance.now();
     if (st.hunger > 60 && st.food > 0) { goEat(); return; }
     const r = Math.random();
     if (calm) { mode = r < 0.3 ? 'sleep' : 'sit'; until = t + 8000 + Math.random() * 8000; return; }
-    if (r < 0.45) { mode = 'walk'; target = 16 * K + 30 + Math.random() * Math.max(60, innerWidth - 120 - 32 * K); }
-    else if (r < 0.8) { mode = 'sit'; until = t + 3000 + Math.random() * 6000; }
-    else { mode = 'sleep'; until = t + 10000 + Math.random() * 15000; }
+    if (r < 0.34) { const [a, b] = bounds(surf); mode = 'walk'; target = a + Math.random() * Math.max(10, b - a); return; }
+    if (r < 0.58) {
+      // прыжок на другой блок недалеко (или вниз, на пол)
+      const ps = platforms().filter((p) => p.el !== surf && Math.abs((p.r.left + p.r.right) / 2 - x) < 520 && Math.abs(p.r.top - y) < 420);
+      if (ps.length && Math.random() < 0.8) { const p = ps[Math.floor(Math.random() * ps.length)]; jumpTo(p.el, p.r.left + Math.random() * Math.max(10, p.r.width - size.w)); return; }
+      if (surf) { jumpTo(null, x + (Math.random() - 0.5) * 200); return; }
+    }
+    if (r < 0.82) { mode = 'sit'; until = t + 3000 + Math.random() * 6000; return; }
+    mode = 'sleep'; until = t + 10000 + Math.random() * 15000;
+  }
+  // как oneko: курсор остановился неподалёку — прибежать к нему (по блоку под курсором или по полу)
+  function chase(t) {
+    if (calm || !['sit', 'walk'].includes(mode) || t - chaseT < 7000) return;
+    if (mouse.t === 0 || t - mouse.t < 1100 || t - mouse.t > 1400 || Math.random() < 0.4) return;
+    chaseT = t;
+    const ps = platforms();
+    let best = null;
+    for (const p of ps) if (mouse.x >= p.r.left && mouse.x <= p.r.right && p.r.top >= mouse.y - 12 && (!best || p.r.top < best.r.top)) best = p;
+    const s = best ? best.el : null;
+    const tx = mouse.x - size.w / 2;
+    if (s === surf) { mode = 'run'; target = Math.max(bounds(s)[0], Math.min(bounds(s)[1], tx)); }
+    else jumpTo(s, tx);
   }
 
   function say(kind) {
@@ -159,54 +267,83 @@
     if (bubble) bubble.remove();
     bubble = document.createElement('span');
     bubble.className = 'vy-bub ' + kind;
-    bubble.innerHTML = kind === 'love' ? sprite(HEART, K * 0.9) : kind === 'think' ? sprite(FISH, K * 0.9, false) : 'Zzz…';
+    bubble.innerHTML = kind === 'love' ? sprite(HEART, K * 0.9).svg : kind === 'think' ? sprite(FISH, K * 0.9, false).svg : 'Zzz…';
     cat.appendChild(bubble);
     if (kind === 'love') { const b = bubble; setTimeout(() => { if (b === bubble) { b.remove(); bubble = null; } }, 1400); }
   }
   function clearBubble(kind) { if (bubble && (!kind || bubble.classList.contains(kind))) { bubble.remove(); bubble = null; } }
 
+  // ---------- кадр ----------
+  function land(s) { surf = s; y = surfTop(s); jump = null; if (after === 'goEat') { after = null; mode = 'goEat'; target = bowlRight() - 6; } else decide(); }
   function loop(t) {
     raf = requestAnimationFrame(loop);
     if (document.hidden || !cat) { lastT = t; return; }
     const dt = Math.min(100, t - lastT) / 1000; lastT = t;
     st.hunger = Math.min(100, st.hunger + dt / 12);
-    if (t - lastFrame > 170) { frame++; lastFrame = t; }
-    if (frame % 12 === 0 && t - lastFrame < 20) measure();
+    if (t - lastFrame > 160) { frame++; lastFrame = t; }
+    if (t - measureT > 2000) { measureT = t; measure(); }
+    chase(t);
     const hungry = st.hunger > 60;
 
+    // блок уехал при прокрутке или исчез — падаем
+    if (['sit', 'walk', 'run', 'sleep'].includes(mode) && !surfaceOk(surf)) { mode = 'fall'; vy = 0; surf = null; clearBubble('zz'); }
+
     let rows;
-    if (mode === 'walk' || mode === 'goEat') {
-      const dx = target - x; dir = dx >= 0 ? 1 : -1;
-      x += dir * Math.min(Math.abs(dx), (mode === 'goEat' ? 70 : 42) * dt);
-      rows = frame % 2 ? WALK_B : WALK_A;
-      if (Math.abs(target - x) < 1) {
-        if (mode === 'goEat') { mode = 'eat'; until = t + 3200; dir = -1; }
-        else decide();
-      }
-    } else if (mode === 'eat') {
-      rows = frame % 2 ? BLINK : SIT; dir = -1;
-      if (t > until) { st.food = Math.max(0, st.food - 1); st.hunger = Math.max(0, st.hunger - 70); save(); drawBowl(); clearBubble('think'); say('love'); decide(); }
-    } else if (mode === 'sleep') {
-      rows = Math.floor(frame / 6) % 2 ? SLEEP_B : SLEEP;
-      if (!bubble || !bubble.classList.contains('zz')) say('zz');
-      if (t > until || (hungry && st.food > 0)) { clearBubble('zz'); decide(); }
+    if (mode === 'drag') rows = frame % 4 < 2 ? HANG : HANG_B;
+    else if (mode === 'fall') {
+      const prev = y; vy = Math.min(1600, vy + 2200 * dt); y += vy * dt;
+      rows = HANG_B;
+      // приземлиться на блок, через верх которого пролетели, или на пол
+      const cx = x + size.w / 2;
+      const hit = platforms().find((p) => cx >= p.r.left && cx <= p.r.right && p.r.top >= prev - 2 && p.r.top <= y);
+      if (hit) land(hit.el); else if (y >= floorY()) { x = Math.max(bowlRight(), x); land(null); }
+    } else if (mode === 'jump' && jump) {
+      const k = Math.min(1, (t - jump.t0) / jump.dur), y1 = surfTop(jump.s);
+      const h = 50 + Math.max(0, jump.y0 - y1) * 0.6;
+      x = jump.x0 + (jump.x1 - jump.x0) * k;
+      y = jump.y0 + (y1 - jump.y0) * k - h * 4 * k * (1 - k);
+      rows = k < 0.5 ? JUMP : WALK_A;
+      if (k >= 1) { if (surfaceOk(jump.s)) land(jump.s); else { mode = 'fall'; vy = 0; surf = null; jump = null; } }
     } else {
-      rows = frame % 18 === 17 ? BLINK : SIT;
-      if (t > until) decide();
+      y = surfTop(surf);
+      if (mode === 'walk' || mode === 'run' || mode === 'goEat') {
+        const dx = target - x; dir = dx >= 0 ? 1 : -1;
+        const speed = mode === 'walk' ? 42 : 110;
+        x += dir * Math.min(Math.abs(dx), speed * dt);
+        rows = frame % 2 ? WALK_B : WALK_A;
+        if (Math.abs(target - x) < 1) {
+          if (mode === 'goEat') { mode = 'eat'; until = t + 3200; dir = -1; }
+          else if (mode === 'run') { mode = 'sit'; until = t + 4000; say('love'); }
+          else decide();
+        }
+      } else if (mode === 'eat') {
+        rows = frame % 2 ? BLINK : SIT; dir = -1;
+        if (t > until) { st.food = Math.max(0, st.food - 1); st.hunger = Math.max(0, st.hunger - 70); save(); drawBowl(); clearBubble('think'); say('love'); decide(); }
+      } else if (mode === 'sleep') {
+        rows = Math.floor(frame / 6) % 2 ? SLEEP_B : SLEEP;
+        if (!bubble || !bubble.classList.contains('zz')) say('zz');
+        if (t > until || (hungry && st.food > 0)) { clearBubble('zz'); decide(); }
+      } else {
+        rows = frame % 18 === 17 ? BLINK : SIT;
+        if (t > until) decide();
+      }
     }
     if (mode !== 'sleep') clearBubble('zz');
     // голоден, а корма нет: думает о рыбке (по несколько секунд, с перерывами)
-    if (hungry && st.food === 0 && mode !== 'sleep') { if (frame % 40 < 18) { if (!bubble) say('think'); } else clearBubble('think'); }
+    if (hungry && st.food === 0 && ['sit', 'walk'].includes(mode)) { if (frame % 40 < 18) { if (!bubble) say('think'); } else clearBubble('think'); }
     else clearBubble('think');
 
-    body.innerHTML = sprite(rows, K);
+    const s = sprite(rows, K);
+    if (shown !== rows) { body.innerHTML = s.svg; shown = rows; }
+    if (rows === WALK_A || rows === WALK_B) size = { w: s.w, h: s.h };
     // спрайты нарисованы мордой вправо, спящий — влево
     cat.classList.toggle('flip', mode === 'sleep' ? dir > 0 : dir < 0);
-    const w = body.firstChild ? body.firstChild.getAttribute('width') : 57;
-    x = Math.max(bowlX() - 6, Math.min(innerWidth - w - 6, x));
-    cat.style.transform = `translateX(${Math.round(x)}px)`;
-    cat.style.bottom = floor + 2 + 'px';
-    if (t - bubT > 15000) { bubT = t; save(); }
+    if (mode !== 'drag' && mode !== 'fall' && mode !== 'jump') {
+      const [a, b] = surf ? bounds(surf) : [mode === 'eat' || mode === 'goEat' ? bowlRight() - 8 : bowlRight(), innerWidth - s.w - 6];
+      x = Math.max(a, Math.min(b, x));
+    }
+    cat.style.transform = `translate(${Math.round(x)}px, ${Math.round(y - s.h)}px)`;
+    if (t - saveT > 15000) { saveT = t; save(); }
   }
 
   // ---------- включение и выключение ----------
@@ -222,6 +359,7 @@
   document.addEventListener('casualhub:vasyan', () => { if (own() && !st.off) mount(); else unmount(); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
   addEventListener('resize', () => { if (alive) measure(); });
+  addEventListener('mousemove', (e) => { mouse = { x: e.clientX, y: e.clientY, t: performance.now() }; }, { passive: true });
   addEventListener('pagehide', () => { if (alive) save(); });
   // переключатель в Настройках → Внешний вид
   document.addEventListener('change', (e) => {
