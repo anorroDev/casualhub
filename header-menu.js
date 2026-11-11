@@ -38,7 +38,10 @@
 /* место слева, сразу после логотипа: туда levels-ui.js ставит кнопку уровня (и магазин); пустое — ничего не занимает */
 .hm-left { display: inline-flex; align-items: center; gap: 8px; flex: none; }
 .hm-left:empty { display: none; }
-header.top > .hm-left { margin-right: auto; margin-left: 4px; }
+/* всегда сразу за кнопкой главной, остальное — вправо: без замеров при загрузке (они иногда не успевали) */
+.hm-left { margin-right: auto !important; margin-left: 8px; }
+header a[href="/"]:has(+ .hm-left) { margin-right: 0 !important; }
+header.top > .hm-left { margin-left: 4px; }
 @media (max-width: 480px) { .top .hm-left { margin-right: auto; } .hm-left { gap: 6px; } }
 /* счётчик «на сайте»: в правом углу страницы, а если места нет — строкой в меню */
 .wn-corner .oc-mini { box-shadow: 0 10px 24px -14px rgba(0, 0, 0, .6); }
