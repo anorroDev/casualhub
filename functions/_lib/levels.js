@@ -79,6 +79,7 @@ export const STREAK_BONUS = { 7: 30, 30: 150, 100: 500 };
 // (одна цифра — одна ступень). hidden — до получения видно «???». special — выдаётся отдельно.
 export const ACHIEVEMENTS = [
   { code: 'founder', title: 'Основатель хаба', desc: 'Был на сайте до запуска уровней', special: true },
+  { code: 'first10', title: 'Первая десятка', desc: 'Один из первых 10 аккаунтов на сайте. Награда — котик Васян', special: true },
   { code: 'first_steps', title: 'Первые шаги', desc: 'Прошёл все первые шаги', special: true },
   { code: 'critic', title: 'Критик', desc: 'Оценки', metric: ['rate', 'import'], tiers: [10, 100, 500] },
   { code: 'reviewer', title: 'Рецензент', desc: 'Отзывы от 100 символов', metric: 'review', tiers: [5, 25, 100] },

@@ -156,6 +156,7 @@ html .px > svg { display: none; }
 html .px > .lv-px { display: block; width: 100%; height: 100%; background: url(/art/ach.webp) calc(var(--ax) * 20%) calc(var(--ay) * 100% / 3) / 600% 400% no-repeat; }
 html .lv-bi .ic.px { padding: 3px; background: color-mix(in srgb, var(--c1) 14%, var(--panel, #1b1d24)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c2) 45%, transparent); }
 html .lv-sic.px { width: 22px; height: 22px; background: none; }
+html .px > .lv-px.vasyan { background: url(/art/pet-vasyan.webp) 0 50% / 600% auto no-repeat; image-rendering: pixelated; }
 .lv-prof { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-top: 6px; font-size: 13px; color: var(--ink-2, #b5b5b5); }
 /* кольцо с номером уровня — как у кнопки в шапке, только крупнее */
 .lv-pring { position: relative; flex: none; width: 34px; height: 34px; border-radius: 50%; display: inline-grid; place-items: center; background: conic-gradient(var(--accent, #3550E8) var(--p, 0%), color-mix(in srgb, var(--ink, #fff) 16%, transparent) 0); }
@@ -265,6 +266,7 @@ html.lv-on .ava-wrap > .ava-ring { display: none !important; }
 .lv-rw .got .l { border-color: var(--accent, #3550E8); color: var(--accent, #3550E8); }
 .lv-rw .no { color: var(--ink-3, #8a8f9e); }
 .lv-rw .ok { color: var(--good, #43C97A); font-weight: 800; }
+.lv-letter .lv-vy { width: 60px; height: 42px; flex: none; background: url(/art/pet-vasyan.webp) 0 0 / 600% 100% no-repeat; image-rendering: pixelated; animation: lv-blink 3s steps(6, jump-none) infinite; }
 .lv-link { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .lv-link input { flex: 1; min-width: 0; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line, #2b2e38); background: transparent; color: var(--ink, #fff); font: inherit; font-size: 13px; }
 .lv-btn { padding: 9px 14px; border-radius: 10px; border: 0; background: var(--accent, #3550E8); color: #fff; font: 700 13.5px/1.2 inherit; font-family: inherit; cursor: pointer; }
@@ -468,11 +470,18 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     if (btn.title !== t) { btn.title = t; btn.setAttribute('aria-label', t); }
     btn.classList.toggle('lv-pulse', !seen());
   }
+  // котик Васян (подарок «Первой десятке»): vasyan.js показывает его только хозяину — флаг в этом браузере
+  function vasyanOwn(on) {
+    let was = null;
+    try { was = localStorage.getItem('casualhub.vasyan.own'); if (on) localStorage.setItem('casualhub.vasyan.own', '1'); else localStorage.removeItem('casualhub.vasyan.own'); } catch (e) {}
+    if (!!was !== on) document.dispatchEvent(new CustomEvent('casualhub:vasyan', { detail: { own: on } }));
+  }
   async function refreshMe() {
     try {
       const d = await api('/levels/me');
       if (!d.on) { ME = null; return; }
       ME = d;
+      vasyanOwn(!!d.vasyan);
       document.documentElement.classList.add('lv-on');
       paintMenu();
       paintHeader();
@@ -537,7 +546,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     host.appendChild(box);
     setTimeout(() => box.remove(), 2600);
   }
-  const ACH_TOTAL = 24;
+  const ACH_TOTAL = 25;
   async function paintProfile() {
     if (!ME || !location.pathname.startsWith('/profile')) return;
     const hero = document.querySelector('.card.hero');
@@ -679,6 +688,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   const pct = (a, b) => Math.min(100, Math.round((a / Math.max(1, b)) * 100));
   // эмблемы достижений: [цвет 1, цвет 2, рисунок 24×24] — тот же вид, что у ачивок в профиле
   const ACH_ART = {
+    first10: ['#F9A8D4', '#F28E4C', '<path d="M5 20v-9L4 4l4.5 3h7L20 4l-1 7v9z"/><path d="M9.5 12.5h.01M14.5 12.5h.01M11 15.5h2"/>'],
     founder: ['#67E8F9', '#0284C7', '<path d="M12 3c3 2 4.5 5.5 4.5 9.5L14.6 16H9.4l-1.9-3.5C7.5 8.5 9 5 12 3z"/><circle cx="12" cy="9.6" r="1.6"/><path d="M7.6 12.4L5 15v3.2l4.2-2.2M16.4 12.4L19 15v3.2l-4.2-2.2M10.6 18.5L12 21l1.4-2.5"/>'],
     first_steps: ['#86EFAC', '#16A34A', '<path d="M8 3.5c1.6 0 2.6 1.6 2.6 3.6S9.6 11 8 11 5.4 9.1 5.4 7.1 6.4 3.5 8 3.5zM7.4 13.5h1.8l.4 2.5c.2 1.4-.6 2.5-1.6 2.5s-1.8-1.1-1.6-2.5zM16 7.5c1.6 0 2.6 1.6 2.6 3.6S17.6 15 16 15s-2.6-1.9-2.6-3.9 1-3.6 2.6-3.6zM15.4 17.5h1.8l.4 1.5c.2 1.4-.6 1.5-1.6 1.5s-1.8-.1-1.6-1.5z"/>'],
     critic: ['#60A5FA', '#4F46E5', '<path d="M3.5 9L12 4.5 20.5 9z"/><path d="M6.5 11v6M10.2 11v6M13.8 11v6M17.5 11v6M4 20h16"/>'],
@@ -707,6 +717,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   // пиксельная эмблема: клетка листа /art/ach.webp по порядку ключей ACH_ART (незнакомый код — как у «Критика»)
   const ACH_KEYS = Object.keys(ACH_ART);
   function achPx(code) {
+    if (code === 'first10') return '<i class="lv-px vasyan"></i>'; // эмблема — сам Васян
     const i = ACH_KEYS.indexOf(code), k = i < 0 ? ACH_KEYS.indexOf('critic') : i;
     return `<i class="lv-px" style="--ax:${k % 6};--ay:${Math.floor(k / 6)}"></i>`;
   }
@@ -750,8 +761,9 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       const d = await api('/levels/mail');
       VIEWS.mailIds = d.items.filter((g) => !g.read).map((g) => g.id);
       const when = (t) => new Date(t).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
-      const rows = d.items.map((g) => `<div class="lv-letter${!g.read || (g.xp && !g.claimed) ? ' new' : ''}"><div class="top"><b>${esc(g.title)}</b><small>${when(g.at)}</small></div>
+      const rows = d.items.map((g) => `<div class="lv-letter${!g.read || ((g.xp || g.kind === 'vasyan') && !g.claimed) ? ' new' : ''}"><div class="top"><b>${esc(g.title)}</b><small>${when(g.at)}</small></div>
         ${g.body ? `<p>${esc(g.body)}</p>` : ''}
+        ${g.kind === 'vasyan' ? `<div class="act"><span class="lv-vy" aria-hidden="true"></span>${g.claimed ? '<span class="lv-muted">Васян уже у тебя — гуляет внизу экрана</span>' : `<button type="button" class="lv-btn" data-claim="${esc(g.id)}">Забрать котика</button>`}</div>` : ''}
         ${g.xp ? `<div class="act"><span class="gift">+${g.xp} опыта</span>${g.claimed ? '<span class="lv-muted">Забрано</span>' : `<button type="button" class="lv-btn" data-claim="${esc(g.id)}">Забрать</button>`}${g.until && !g.claimed ? `<span class="lv-muted">до ${when(g.until)}</span>` : ''}</div>` : ''}</div>`).join('');
       return `<p class="lv-muted">Сюда приходят подарки от администрации и письма о новых уровнях.</p><div class="lv-mail">${rows || '<p class="lv-muted">Писем пока нет.</p>'}</div><p class="lv-err" id="lvMailMsg" role="status"></p>`;
     },
@@ -857,6 +869,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
           const r = await api('/levels/mail/claim', 'POST', { id: btn.dataset.claim });
           ME.mail = r.unread;
           if (r.gained) showNews([{ t: 'gift', xp: r.gained }]);
+          if (r.vasyan) vasyanOwn(true);
           await refreshMe();
           renderTabs();
           render();

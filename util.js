@@ -38,4 +38,6 @@
   const EMPTY_SIZE = { rate: [140, 70], friends: [110, 70], tier: [100, 55], lots: [80, 60] }; // половина исходника 10 px на пиксель
   const emptyArt = (name) => { const s = EMPTY_SIZE[name]; return s ? `<img class="empty-art" src="/art/empty-${name}.webp" width="${s[0]}" height="${s[1]}" alt="" loading="lazy" decoding="async">` : ''; };
   window.CasualUtil = Object.freeze({ esc, read, plural, script, emptyArt });
+  // котик Васян внизу экрана (vasyan.js сам проверяет, не выключен ли он в Настройках; в админке и на /r/ его нет)
+  if (!/^\/(admin|r)\//.test(location.pathname)) script('/vasyan.js', () => !!window.CasualVasyan).catch(() => {});
 })();

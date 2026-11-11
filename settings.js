@@ -365,7 +365,8 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }`
         const p = t.prev, bg = t.id === 'auto' ? `linear-gradient(135deg, ${p.bg} 50%, ${p.panel} 50%)` : p.bg;
         return `<button type="button" class="st-th" data-st-theme="${esc(t.id)}" aria-pressed="${t.id === curTheme}"><i style="--pb:${bg};--pp:${t.id === 'auto' ? '#FFFFFF' : p.panel};--pa:${p.accent}"></i>${esc(t.name)}</button>`;
       }).join('')}</div>`)
-      + grp('Вид', toggle({ name: 'Казуальный вид', desc: 'Спокойнее: без свечений, цветных пятен и прыгающих анимаций. Работает с любой темой', attr: 'data-unslop', on: document.documentElement.classList.contains('unslop') }))
+      + grp('Вид', toggle({ name: 'Казуальный вид', desc: 'Спокойнее: без свечений, цветных пятен и прыгающих анимаций. Работает с любой темой', attr: 'data-unslop', on: document.documentElement.classList.contains('unslop') })
+        + (window.CasualVasyan && window.CasualVasyan.own() ? toggle({ name: 'Котик Васян на сайте', desc: 'Гуляет внизу экрана: его можно погладить и покормить из миски в левом углу', attr: 'data-vasyan', on: window.CasualVasyan.on() }) : ''))
       + grp('Язык', `<div class="st-row"><span class="st-t"><b>Язык сайта</b><small>Страница перезагрузится</small></span><span class="st-seg" role="group" aria-label="Язык сайта"><button type="button" data-lang="ru" aria-pressed="${!en}">Русский</button><button type="button" data-lang="en" aria-pressed="${en}">English</button></span></div>`);
   };
   R.data = () => grp('Импорт', row({ name: 'Импорт из Letterboxd', desc: 'Перенести оценки фильмов из архива Letterboxd', href: '/opinion/#letterboxd', attr: 'data-lb-open data-close' }))
@@ -542,7 +543,7 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }`
         catch (er) { t.checked = !t.checked; toast(er.message); }
         t.disabled = false;
       }
-      // «Казуальный вид» (data-unslop) переключает themes.js сам
+      // «Казуальный вид» (data-unslop) переключает themes.js сам, «Котика Васяна» (data-vasyan) — vasyan.js
     });
 
     box.addEventListener('submit', async (e) => {

@@ -45,8 +45,31 @@ export const tzOf = (request) => cleanTz(request && request.cf && request.cf.tim
 const MAIL_SQL = `SELECT g.id, g.kind, g.title, g.body, g.xp, g.at, g.until, COALESCE(b.read, 0) AS read, COALESCE(b.claimed, 0) AS claimed
   FROM gifts g LEFT JOIN gift_box b ON b.gift_id = g.id AND b.user_id = ?1
   WHERE (g.to_id IS NULL OR g.to_id = ?1) AND (g.until IS NULL OR g.until > ?2) ORDER BY g.at DESC LIMIT 60`;
+// «Первая десятка»: первые 10 аккаунтов сайта (по дате регистрации) получают достижение и личное письмо
+// с котиком Васяном (kind 'vasyan', id 'vasyan:<uid>'). Забрал письмо — Васян гуляет у него внизу экрана (vasyan.js)
+const FIRST_N = 10;
+let firstIds = null, firstAt = 0;
+async function firstTen(env) {
+  if (firstIds && Date.now() - firstAt < 600e3) return firstIds;
+  const { results } = await env.DB.prepare('SELECT id FROM users ORDER BY created_at ASC, id ASC LIMIT ?').bind(FIRST_N).all();
+  firstIds = new Set((results || []).map((r) => r.id)); firstAt = Date.now();
+  return firstIds;
+}
+async function ensureFirst(env, uid) {
+  try {
+    if (!(await firstTen(env)).has(uid)) return;
+    const gid = 'vasyan:' + uid;
+    if (await env.DB.prepare('SELECT 1 FROM gifts WHERE id = ?').bind(gid).first()) return;
+    await grantSpecial(env, uid, 'first10');
+    await env.DB.prepare("INSERT OR IGNORE INTO gifts (id, to_id, kind, title, body, xp, at) VALUES (?, ?, 'vasyan', ?, ?, 0, ?)").bind(gid, uid,
+      'Котик Васян — тебе',
+      'Ты в первой десятке людей на Казуал Хабе. В подарок — котик Васян: он будет гулять у тебя внизу экрана, его можно гладить и кормить из миски в левом углу. Таких котиков всего 10.',
+      Date.now()).run();
+  } catch (e) { console.error('first10', e && e.message); }
+}
+const vasyanOwned = async (env, uid) => !!(await env.DB.prepare('SELECT 1 FROM gift_box WHERE gift_id = ? AND user_id = ? AND claimed = 1').bind('vasyan:' + uid, uid).first());
 export async function mailUnread(env, uid) {
-  const r = await env.DB.prepare(`SELECT COUNT(*) AS n FROM (${MAIL_SQL}) WHERE read = 0 OR (xp > 0 AND claimed = 0)`).bind(uid, Date.now()).first();
+  const r = await env.DB.prepare(`SELECT COUNT(*) AS n FROM (${MAIL_SQL}) WHERE read = 0 OR ((xp > 0 OR kind = 'vasyan') AND claimed = 0)`).bind(uid, Date.now()).first();
   return +(r && r.n) || 0;
 }
 
@@ -68,6 +91,7 @@ export function makeLevelsRoutes(h) {
       const lv = levelView(+row.xp || 0, +row.level || 1);
       const prefs = prefsOf(row);
       const admin = !!(h.adminCandidate(me, env) || (await h.isAdmin(env, me)));
+      await ensureFirst(env, me.id);
       const [quests, steps, ev] = await Promise.all([questState(env, me.id, { now, today, row }), firstSteps(env, me.id), currentEvent(env, now)]);
       const alive = row.streak_day === today || row.streak_day === shiftDay(today, -1) || (row.streak_day === shiftDay(today, -2) && +row.freezes > 0);
       return json({
@@ -78,6 +102,7 @@ export function makeLevelsRoutes(h) {
         rewards: REWARDS, colors: NAME_COLORS, bgs: Object.keys(PROFILE_BGS),
         recap: recapOpen(now) ? 2026 : null,
         mail: await mailUnread(env, me.id),
+        vasyan: await vasyanOwned(env, me.id),
       });
     },
     // почта: подарки от администрации и письма о новых уровнях
@@ -103,8 +128,12 @@ export function makeLevelsRoutes(h) {
       await ensureLevels(env);
       const { id } = await h.readBody(request);
       const now = Date.now();
-      const g = await env.DB.prepare('SELECT id, xp, to_id, until FROM gifts WHERE id = ?').bind(String(id || '')).first();
+      const g = await env.DB.prepare('SELECT id, kind, xp, to_id, until FROM gifts WHERE id = ?').bind(String(id || '')).first();
       if (!g || (g.to_id && g.to_id !== me.id) || (g.until && g.until <= now)) return fail(404, 'Такого подарка нет или он уже истёк.');
+      if (g.kind === 'vasyan') { // котик, не опыт
+        await env.DB.prepare('INSERT INTO gift_box (gift_id, user_id, read, claimed, at) VALUES (?1, ?2, 1, 1, ?3) ON CONFLICT(gift_id, user_id) DO UPDATE SET claimed = 1, read = 1').bind(g.id, me.id, now).run();
+        return json({ ok: true, gained: 0, vasyan: true, unread: await mailUnread(env, me.id) });
+      }
       if (!(+g.xp > 0)) return fail(400, 'В этом письме нечего забирать.');
       const w = await env.DB.prepare('INSERT INTO gift_box (gift_id, user_id, read, claimed, at) VALUES (?1, ?2, 1, 1, ?3) ON CONFLICT(gift_id, user_id) DO UPDATE SET claimed = 1, read = 1 WHERE claimed = 0').bind(g.id, me.id, now).run();
       if (!(w.meta && w.meta.changes)) return fail(409, 'Этот подарок уже забран.');

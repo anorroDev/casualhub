@@ -2455,7 +2455,9 @@
 "Легенда":"Legend",
 "Ночь":"Night",
 "Город":"City",
-"Уют":"Cozy"};
+"Уют":"Cozy",
+"Котик Васян на сайте":"Vasyan the cat on the site",
+"Гуляет внизу экрана: его можно погладить и покормить из миски в левом углу":"Walks along the bottom of the screen: pet him and fill his bowl in the left corner"};
   // слово после числа: 1 оценка, 5 оценок. [все русские формы, одна штука, несколько]
   const NOUNS = [
     [['оценка', 'оценки', 'оценок', 'оценкой', 'оценками'], 'rating', 'ratings'],
