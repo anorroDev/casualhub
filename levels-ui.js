@@ -312,6 +312,7 @@ html.lv-on .ava-wrap > .ava-ring { display: none !important; }
 .lv-seg button { padding: 5px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--ink-2, #b5b5b5); font: 600 13px/1.2 inherit; font-family: inherit; cursor: pointer; }
 .lv-seg button[aria-pressed="true"] { background: var(--accent, #3550E8); color: #fff; }
 .lv-pick { display: flex; flex-wrap: wrap; gap: 8px; }
+.lv-reset { font-variant-numeric: tabular-nums; color: var(--ink, #fff); } /* таймер до новых заданий */
 .lv-pick button { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 12px; border: 1px solid var(--line, #2b2e38); background: transparent; color: var(--ink, #fff); font: 600 13px/1.2 inherit; font-family: inherit; cursor: pointer; }
 .lv-pick button[aria-pressed="true"] { border-color: var(--accent, #3550E8); background: color-mix(in srgb, var(--accent, #3550E8) 12%, transparent); box-shadow: inset 0 0 0 1px var(--accent, #3550E8), 0 0 0 3px color-mix(in srgb, var(--accent, #3550E8) 22%, transparent); } /* выбранное — рамка цвета темы */
 .lv-pick button:disabled { opacity: .45; cursor: not-allowed; }
@@ -407,6 +408,23 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   document.head.appendChild(style);
 
   let ME = null;
+  // до новых заданий дня — полночь по местному времени (сервер меняет задания по часовому поясу человека). Таймер в «Обзоре»
+  const untilMidnight = () => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1) - n; };
+  const hms = (ms) => { const t = Math.max(0, Math.floor(ms / 1000)); return Math.floor(t / 3600) + ':' + String(Math.floor(t / 60) % 60).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); };
+  let resetT = 0;
+  function tickReset() {
+    clearInterval(resetT);
+    const tick = () => {
+      const els = document.querySelectorAll('[data-lv-reset]');
+      if (!els.length) { clearInterval(resetT); return; }
+      const ms = untilMidnight();
+      els.forEach((e) => { e.textContent = hms(ms); });
+      // полночь: задания уже новые — обновить «Обзор»
+      if (ms < 1000) { clearInterval(resetT); setTimeout(() => refreshMe().then(() => { if (tab === 'home' && document.querySelector('[data-lv-reset]')) render(); }).catch(() => {}), 2500); }
+    };
+    tick();
+    resetT = setInterval(tick, 1000);
+  }
   const FX_LAYER = ['stars', 'snow', 'embers']; // эффекты слоем в шапке профиля (конфетти — отдельно, при открытии)
   // шрифты ника (награды за уровни; id — как NICK_FONTS в levels.js): Google Fonts, грузятся только буквы ника (&text=)
   const FONTS = { comfortaa: ['Comfortaa', 700], caveat: ['Caveat', 700], lobster: ['Lobster', 400], press: ['Press Start 2P', 400], pacifico: ['Pacifico', 400], russo: ['Russo One', 400], amatic: ['Amatic SC', 700], kelly: ['Kelly Slab', 400], aladin: ['Aladin', 400], yeseva: ['Yeseva One', 400], unbounded: ['Unbounded', 700], underdog: ['Underdog', 400], marck: ['Marck Script', 400], glitch: ['Rubik Glitch', 400], ruslan: ['Ruslan Display', 400], paint: ['Rubik Wet Paint', 400], beastly: ['Rubik Beastly', 400] };
@@ -938,7 +956,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       return `${m.season ? `<button type="button" class="lv-hero lv-hero-go" data-ranks aria-label="Звания сезона: ${esc(m.rank)}">${emblem(m.season.rank, 56)}${hero}<span class="lv-go"><span>Звания</span><i aria-hidden="true">›</i></span></button>` : `<div class="lv-hero">${hero}</div>`}
         ${m.event ? `<div class="lv-box"><h3>${esc(m.event.title)}</h3><p class="lv-muted">×${m.event.mult} опыта до ${new Date(m.event.until).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}.</p></div>` : ''}
         <div class="lv-box"><div class="lv-streak"><span class="big">🔥 ${m.streak.days}</span><div><b>${m.streak.days ? `${plural(m.streak.days, 'день', 'дня', 'дней')} подряд` : 'Серии пока нет'}</b><p class="lv-muted">${m.streak.today ? 'Сегодня уже засчитан.' : 'Оцени что-нибудь или отреагируй другу, чтобы засчитать сегодня.'} Лучшая серия: ${m.streak.best}. «Заморозок»: ${m.streak.freezes} — спасают серию, если пропустишь день.</p></div></div></div>
-        <div class="lv-box"><h3>Задания дня</h3>${daily || '<p class="lv-muted">Заданий пока нет.</p>'}<p class="lv-muted">За все три — ещё +${q.allXp}${q.allPaid ? ' (получено)' : ''}. Новые задания — завтра.</p></div>
+        <div class="lv-box"><h3>Задания дня</h3>${daily || '<p class="lv-muted">Заданий пока нет.</p>'}<p class="lv-muted">За все три — ещё +${q.allXp}${q.allPaid ? ' (получено)' : ''}. Новые задания через <b class="lv-reset" data-lv-reset>${hms(untilMidnight())}</b>.</p></div>
         ${w ? `<div class="lv-box"><h3>Задание недели</h3><div class="lv-q${w.done ? ' done' : ''}"><span>${esc(w.title)} · ${w.progress} из ${w.goal}</span><span class="xp">+${w.xp}</span>${bar(pct(w.progress, w.goal))}</div></div>` : ''}
         ${steps}
         <p class="lv-muted">Опыт дают оценки, отзывы, тир-листы, реакции и комментарии друзьям, лоты. У каждого действия дневной лимит; удалишь — опыт уйдёт.</p>`;
@@ -1083,7 +1101,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   };
   const BIND = {
     // шапка «Обзора» → звания сезона и обратно (вкладка «Обзор» остаётся выбранной)
-    home(b) { const go = b.querySelector('[data-ranks]'); if (go) go.addEventListener('click', () => { tab = 'ranks'; renderTabs(); render(); }); },
+    home(b) { tickReset(); const go = b.querySelector('[data-ranks]'); if (go) go.addEventListener('click', () => { tab = 'ranks'; renderTabs(); render(); }); },
     ranks(b) { const back = b.querySelector('[data-home]'); if (back) { back.addEventListener('click', () => { tab = 'home'; renderTabs(); render(); }); back.focus({ preventScroll: true }); } },
     mail(b) {
       // открыл почту — всё прочитано

@@ -394,13 +394,14 @@
   const floorY = () => innerHeight - floor - 2;
   const bowlRight = () => 10 + 18 * K + 4;
   // блоки, по верху которых можно ходить: крупные карточки, верхний край виден и ничем не закрыт
-  const PLAT = '.card, .app, .lv-box, .panel, .feed-list > li, .tl-tile, .recs, .feed, section';
+  // баннер профиля — тоже: на него котик запрыгивает, когда страницу листают вверх
+  const PLAT = '.card, .app, .lv-box, .panel, .feed-list > li, .tl-tile, .recs, .feed, section, .banner';
   function platforms() {
     const fy = floorY(), out = [];
     for (const el of document.querySelectorAll(PLAT)) {
       if (mine(el)) continue;
       const r = el.getBoundingClientRect();
-      if (r.width < 150 || r.height < 50 || r.top < 80 || r.top > fy - 60 || r.left < 0 || r.right > innerWidth) continue;
+      if (r.width < 150 || r.height < 50 || r.top < (el.classList.contains('banner') ? 40 : 80) || r.top > fy - 60 || r.left < 0 || r.right > innerWidth) continue;
       const hit = document.elementFromPoint(r.left + r.width / 2, r.top + 3);
       if (!hit || !(el === hit || el.contains(hit))) continue;
       if (out.some((p) => Math.abs(p.r.top - r.top) < 6 && Math.abs(p.r.left - r.left) < 6)) continue;
@@ -960,6 +961,25 @@
   addEventListener('resize', () => { if (alive) measure(); });
   addEventListener('mousemove', (e) => { mouse = { x: e.clientX, y: e.clientY, t: performance.now() }; }, { passive: true });
   addEventListener('pagehide', () => { if (alive) save(); });
+  // прокрутка страницы: вниз — котик спрыгивает на плитку ниже (а с нижней — на пол), вверх — запрыгивает на плитку выше,
+  // до самого баннера. Не чаще раза в ~0,6 с, не посреди прыжка и не когда его держат; при «меньше движения» — как раньше
+  let scrollY0 = scrollY, scrollHop = 0;
+  addEventListener('scroll', () => {
+    const dy = scrollY - scrollY0;
+    scrollY0 = scrollY;
+    if (!alive || !cat || calm || Math.abs(dy) < 2) return;
+    const t = performance.now();
+    if (t - scrollHop < 600 || ['drag', 'jump', 'climb', 'fall', 'prep', 'eat', 'goEat', 'scared'].includes(mode)) return;
+    const cx = x + size.w / 2, near = (p) => Math.abs((p.r.left + p.r.right) / 2 - cx);
+    const ps = platforms().filter((p) => p.el !== surf && near(p) < 700);
+    const next = dy > 0
+      ? ps.filter((p) => p.r.top > y + 20).sort((a, b) => a.r.top - b.r.top || near(a) - near(b))[0]
+      : ps.filter((p) => p.r.top < y - 30).sort((a, b) => b.r.top - a.r.top || near(a) - near(b))[0];
+    if (!next && (dy < 0 || !surf)) return; // выше прыгать некуда / уже на полу
+    scrollHop = t;
+    stopPlay(); clearBubble('zz');
+    jumpTo(next ? next.el : null, x); // место на плитке — ближе к тому, где стоял (bounds в jumpTo)
+  }, { passive: true });
   // переключатель в Настройках → Внешний вид
   document.addEventListener('change', (e) => {
     const c = e.target.closest && e.target.closest('[data-vasyan]');
