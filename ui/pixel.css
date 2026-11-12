@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Tiny5&family=Golos+Text:wght@400..800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Tiny5&family=Golos+Text:wght@400..800&display=fallback');
 /* Казуал Хаб: вид «Пиксель» — как меню старой игры. Включается выбором вида в Настройках: <html class="unslop" data-ui="pixel">,
    поэтому строится поверх казуального вида (/unslop.css уже убрал свечения, пятна и вечные анимации).
    Углы прямые, рамки 2px, жёсткие тени без размытия. Пиксельный шрифт Tiny5 (чистая кириллица, один вес) — только у крупных

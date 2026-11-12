@@ -7,7 +7,7 @@ try {
   if (!uv && localStorage.getItem('casualhub.unslop.v1') === '1') uv = 'casual';
   if (['casual', 'minimal', 'pixel', 'paper', 'lobby', 'arena'].indexOf(uv) >= 0) {
     document.documentElement.classList.add('unslop');
-    if (uv !== 'casual') { document.documentElement.setAttribute('data-ui', uv); document.write('<link rel="stylesheet" href="/ui/' + uv + '.css" data-ui-css="' + uv + '">'); }
+    if (uv !== 'casual') { document.documentElement.setAttribute('data-ui', uv); document.write('<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin><link rel="stylesheet" href="/ui/' + uv + '.css" data-ui-css="' + uv + '">'); }
   }
 } catch (e) {}
 /* вступительные анимации не играют при обновлении (F5) и поверх сдвига между страницами: всё сразу на месте. Бесконечные не трогаем */
