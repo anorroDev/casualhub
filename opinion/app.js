@@ -2478,7 +2478,8 @@ function renderBoard() {
     if (el.tierBoard) el.tierBoard.hidden = true;
     // другой отбор или порядок — снова первая порция
     const sel = [state.filter, state.sfilter, state.sort, q, state.genres.join('\n'), state.bmode].join('|');
-    if (sel !== boardSel) { boardSel = sel; boardLimit = BOARD_PAGE; }
+    const newSel = sel !== boardSel;
+    if (newSel) { boardSel = sel; boardLimit = BOARD_PAGE; }
     let lim = boardLimit;
     // оценка, к которой ведём (ссылка, подсветка, удаление), всегда в показанной части
     for (const id of [state.pinId, state.flashId, state.confirmDel]) {
@@ -2490,6 +2491,7 @@ function renderBoard() {
     el.board.innerHTML = list.slice(0, lim).map(r => entryHTML(r, ranks.get(r.id), showCat)).join('')
       + (rest > 0 ? `<li class="board-more-li"><button type="button" class="btn ghost small more-btn" data-board-more="${lim}">Показать ещё (${rest})</button></li>` : '');
     el.board.hidden = !list.length;
+    if (newSel) el.board.scrollTop = 0; // другой отбор — список снова с начала (он листается внутри карточки)
   }
   el.noMatch.hidden = !((catPool.length > 0) && !list.length);
   el.empty.hidden = state.ratings.length > 0;
