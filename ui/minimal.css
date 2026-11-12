@@ -92,6 +92,12 @@ html[data-ui="minimal"] :is(.lv-tabs button, .recs-tabs button)[aria-selected="t
 html[data-ui="minimal"] :is(.seg, .st-seg, .lv-seg) { border-radius: 10px; border-color: transparent; background: var(--v-fill); padding: 2px; }
 html[data-ui="minimal"] :is(.seg button, .st-seg button, .lv-seg button) { border-radius: 8px; transition: background-color .25s var(--v-ease), color .2s var(--v-ease); }
 html[data-ui="minimal"] :is(.seg button, .st-seg button, .lv-seg button)[aria-pressed="true"] { background: var(--panel); color: var(--ink); box-shadow: 0 1px 3px color-mix(in srgb, #000 14%, transparent), 0 1px 1px color-mix(in srgb, #000 6%, transparent); }
+/* выбранные чипы (темы в Мнении и в профиле, формат кадра): общее правило кнопок выше снимает их заливку, а цвет текста
+   остаётся от страницы — текст сливался с фоном. Выбранное — тёмной пилюлей, как вкладки; статус, подтема и своя
+   реакция — лёгкой заливкой акцента */
+html[data-ui="minimal"] :is(.chip, .chip-btn, .crop-ratios button)[aria-pressed="true"], html[data-ui="minimal"] :is(.chip, .chip-btn, .crop-ratios button)[aria-pressed="true"]:hover { background-color: var(--ink); color: var(--panel); }
+html[data-ui="minimal"] :is(.status-chip, .sub-chip)[aria-pressed="true"], html[data-ui="minimal"] :is(.status-chip, .sub-chip)[aria-pressed="true"]:hover { background-color: var(--accent-soft, color-mix(in srgb, var(--accent) 16%, transparent)); color: var(--accent); }
+html[data-ui="minimal"] .rx-btns button[aria-pressed="true"], html[data-ui="minimal"] .rx-btns button[aria-pressed="true"]:hover { background-color: var(--accent-soft, color-mix(in srgb, var(--accent) 16%, transparent)); color: var(--ink); }
 /* полоса разделов на телефоне — как панель вкладок iOS: матовая, с тонкой рамкой */
 html[data-ui="minimal"] .mnav { border-radius: 16px; border-color: var(--v-hair); background: color-mix(in srgb, var(--panel) 84%, transparent); -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5); }
 html[data-ui="minimal"] .mnav button { border-radius: 12px; transition: background-color .25s var(--v-ease), color .2s var(--v-ease); }

@@ -81,6 +81,12 @@ html[data-ui="lobby"] :is(.lv-tabs button, .recs-tabs button)[aria-selected="tru
 html[data-ui="lobby"] :is(.seg, .st-seg, .lv-seg) { border-radius: 10px; border-color: transparent; background: var(--v-side); }
 html[data-ui="lobby"] :is(.seg button, .st-seg button, .lv-seg button) { border-radius: 7px; transition: background-color .15s, color .15s; }
 html[data-ui="lobby"] :is(.seg button, .st-seg button, .lv-seg button)[aria-pressed="true"] { background: var(--accent); color: var(--on-accent, #fff); }
+/* выбранные чипы (темы в Мнении и в профиле, формат кадра): общее правило кнопок выше снимает их заливку, а цвет текста
+   остаётся от страницы — текст сливался с фоном. Выбранное — цветом акцента, как вкладки; статус, подтема и своя
+   реакция — лёгкой заливкой акцента */
+html[data-ui="lobby"] :is(.chip, .chip-btn, .crop-ratios button)[aria-pressed="true"], html[data-ui="lobby"] :is(.chip, .chip-btn, .crop-ratios button)[aria-pressed="true"]:hover { background-color: var(--accent); color: var(--on-accent, #fff); }
+html[data-ui="lobby"] :is(.status-chip, .sub-chip)[aria-pressed="true"], html[data-ui="lobby"] :is(.status-chip, .sub-chip)[aria-pressed="true"]:hover { background-color: var(--accent-soft, color-mix(in srgb, var(--accent) 16%, transparent)); color: var(--accent); }
+html[data-ui="lobby"] .rx-btns button[aria-pressed="true"], html[data-ui="lobby"] .rx-btns button[aria-pressed="true"]:hover { background-color: var(--accent-soft, color-mix(in srgb, var(--accent) 16%, transparent)); color: var(--ink); }
 /* полоса разделов на телефоне: панелью, активный раздел — цветом акцента */
 html[data-ui="lobby"] .mnav { border-radius: 12px; border-color: transparent; background: var(--v-side); }
 html[data-ui="lobby"] .mnav button { border-radius: 8px; transition: background-color .15s, color .15s, transform .2s var(--v-pop); }

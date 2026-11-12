@@ -79,6 +79,12 @@ html[data-ui="paper"] .lv-tabs { gap: 16px; }
 html[data-ui="paper"] :is(.seg, .st-seg, .lv-seg) { border-radius: 3px; border: 1px solid var(--v-frame); background: transparent; }
 html[data-ui="paper"] :is(.seg button, .st-seg button, .lv-seg button) { border-radius: 2px; }
 html[data-ui="paper"] :is(.seg button, .st-seg button, .lv-seg button)[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+/* выбранные чипы (темы в Мнении и в профиле, формат кадра): общее правило кнопок выше снимает их заливку и рамку, а цвет
+   текста остаётся от страницы — текст сливался с фоном. Выбранное — тёмным, как главная кнопка; статус, подтема и своя
+   реакция — рамкой акцента */
+html[data-ui="paper"] :is(.chip, .chip-btn, .crop-ratios button)[aria-pressed="true"], html[data-ui="paper"] :is(.chip, .chip-btn, .crop-ratios button)[aria-pressed="true"]:hover { background-color: var(--ink); border-color: var(--ink); color: var(--panel); }
+html[data-ui="paper"] :is(.status-chip, .sub-chip)[aria-pressed="true"], html[data-ui="paper"] :is(.status-chip, .sub-chip)[aria-pressed="true"]:hover { background-color: var(--accent-soft, color-mix(in srgb, var(--accent) 16%, transparent)); border-color: var(--accent); color: var(--accent); }
+html[data-ui="paper"] .rx-btns button[aria-pressed="true"], html[data-ui="paper"] .rx-btns button[aria-pressed="true"]:hover { background-color: var(--accent-soft, color-mix(in srgb, var(--accent) 16%, transparent)); border-color: var(--accent); color: var(--ink); }
 /* нижняя полоса разделов на телефоне (Мнение, Колесо…): прилипает к краю, поэтому непрозрачная */
 html[data-ui="paper"] .mnav { border-radius: 3px; border-color: var(--v-frame); background: var(--panel); }
 html[data-ui="paper"] .mnav button { border-radius: 2px; }
