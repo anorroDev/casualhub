@@ -19,7 +19,7 @@
 //   GET  /export?id= — копия одним файлом (без id — последняя)
 
 // входы, лимиты, одноразовые ссылки из писем, «кто на сайте» и кэш IMDb: после восстановления всё это нарастёт заново
-export const SKIP = new Set(['sessions', 'admin_sessions', 'attempts', 'mail_tokens', 'presence', 'imdb_info', 'imdb_find', 'plan_info']);
+export const SKIP = new Set(['sessions', 'admin_sessions', 'attempts', 'mail_tokens', 'presence', 'imdb_info', 'imdb_find', 'plan_info', 'king_seen']);
 // что не должно лежать в копии открытым текстом: хеш пароля и соль, секрет 2FA (в том же поле — хеши запасных кодов),
 // пин админа, ключ журнала «Изменения». С секретом BACKUP_KEY у Worker'а они шифруются (AES-GCM, ключ — SHA-256 от
 // BACKUP_KEY, в R2 его нет), без него пишутся вот такими пустыми: после восстановления из такой копии пароль сбрасывают

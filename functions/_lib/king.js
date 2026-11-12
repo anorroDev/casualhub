@@ -9,7 +9,8 @@
 //             Участников ровно столько, каков размер сетки (bracketErr). Пропуски (верхние по посеву без боя) умеет
 //             buildRounds — они остались у старых турниров, созданных до этого правила.
 // Бой решает ведущий (mode: 'host') или голосование по ссылке (mode: 'vote'): ведущий закрывает бой или его закрывает
-// таймер. При равенстве голосов царь остаётся на горе, в сетке проходит верхний в паре.
+// таймер, а если все, кто сейчас в комнате, проголосовали или сказали «пас», — сразу (king_seen, allIn). При равенстве
+// голосов царь остаётся на горе, в сетке проходит верхний в паре.
 //
 // Всё про турнир лежит одним снимком в king_rooms.state (JSON), голоса — в king_votes (строка на человека и бой).
 // Снимок меняется только через tx(): запись проходит, если снимок никто не поменял с момента чтения (ver).
@@ -207,13 +208,28 @@ export function settle(st, tally, now) {
   return closeByVotes(st, tally, 'timer', now);
 }
 export const timerDue = (st, now) => !!(st && st.status === 'live' && st.bout && st.bout.ends && now >= st.bout.ends);
+// в комнате — зрители, открывшие турнир за последние SEEN_MS (ведущий не в счёт). Все проголосовали или сказали «пас»
+// (pick 'x') — бою незачем ждать таймера
+export const allIn = (people) => Array.isArray(people) && people.length > 0 && people.every((p) => !!p && ['a', 'b', 'x'].includes(p.pick));
+// все в комнате высказались: голоса есть — бой закрывается по ним; все «пас» — как у таймера без голосов: таймер
+// останавливается, решает ведущий (pass — чтобы страница сказала, почему)
+export function closeAll(st, tally, now) {
+  const bt = st.bout;
+  if (st.status !== 'live' || st.mode !== 'vote' || !bt || now < bt.opens) return { same: true };
+  if (!((+tally.a || 0) + (+tally.b || 0))) {
+    if (bt.idle && bt.pass && !bt.ends) return { same: true };
+    bt.ends = 0; bt.idle = 1; bt.pass = 1;
+    return { ok: true, idle: true };
+  }
+  return closeByVotes(st, tally, 'all', now);
+}
 export function undoLast(st, now) {
   const u = st.undo;
   if (!u) return { err: [409, 'Отменять нечего.'] };
   for (const k of UNDO) st[k] = u[k];
   st.log = st.log.slice(0, u.logN);
   st.undo = null;
-  if (st.bout) { st.bout.opens = now; st.bout.ends = st.mode === 'vote' && st.timer ? now + st.timer * 1000 : 0; delete st.bout.idle; }
+  if (st.bout) { st.bout.opens = now; st.bout.ends = st.mode === 'vote' && st.timer ? now + st.timer * 1000 : 0; delete st.bout.idle; delete st.bout.pass; }
   return { ok: true, reopened: st.bout };
 }
 // досрочно закончить «Царя горы»: царь на горе — последний царь, претендент возвращается в начало очереди
@@ -266,7 +282,7 @@ export function setRules(st, b, now) {
   const bt = st.bout;
   if (bt && (b.mode !== undefined || b.timer !== undefined)) {
     bt.ends = st.mode === 'vote' && st.timer ? Math.max(now, bt.opens) + st.timer * 1000 : 0;
-    delete bt.idle;
+    delete bt.idle; delete bt.pass;
   }
   return { ok: true };
 }
@@ -297,11 +313,23 @@ export async function ensureKing(env) {
     env.DB.prepare('CREATE INDEX IF NOT EXISTS king_rooms_owner ON king_rooms(owner_id, created_at)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS king_imgs (room_id TEXT NOT NULL, pid TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY (room_id, pid))'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS king_votes (room_id TEXT NOT NULL, bout INTEGER NOT NULL, user_id TEXT NOT NULL, pick TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (room_id, bout, user_id))'),
+    // кто сейчас в комнате (страница спрашивает турнир раз в 2 с): строка на зрителя, at — когда спрашивал. В копию не идёт
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS king_seen (room_id TEXT NOT NULL, user_id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (room_id, user_id))'),
   ]);
   ready.add(env.DB);
 }
 const ROW = 'SELECT r.id, r.owner_id, r.title, r.fmt, r.status, r.ver, r.state, r.created_at, u.username AS owner_name, u.banned AS owner_banned FROM king_rooms r LEFT JOIN users u ON u.id = r.owner_id WHERE r.id = ?';
 const TALLY = 'SELECT pick, COUNT(*) AS n FROM king_votes WHERE room_id = ?1 AND bout = ?2 GROUP BY pick';
+// присутствие: в комнате тот, кто спрашивал турнир за последние SEEN_MS. Строка обновляется не чаще раза в SEEN_EVERY
+// (опрос раз в 2 с не пишет в базу на каждый запрос); ведущего и законченные турниры не записываем
+export const SEEN_MS = 25000, SEEN_EVERY = 10000;
+const SEEN_UP = `INSERT INTO king_seen (room_id, user_id, at) SELECT ?1, ?2, ?3 WHERE EXISTS (SELECT 1 FROM king_rooms WHERE id = ?1 AND owner_id <> ?2 AND status <> 'done')
+  ON CONFLICT(room_id, user_id) DO UPDATE SET at = excluded.at WHERE king_seen.at < excluded.at - ${SEEN_EVERY}`;
+// кто в комнате и высказался ли в текущем бою (за кого — наружу не уходит). Порядок — кто раньше пришёл
+const PEOPLE = `SELECT s.user_id AS id, u.username AS name, u.uname AS handle, v.pick AS pick FROM king_seen s JOIN users u ON u.id = s.user_id
+  LEFT JOIN king_votes v ON v.room_id = s.room_id AND v.user_id = s.user_id AND v.bout = (SELECT bout FROM king_rooms WHERE id = ?1)
+  WHERE s.room_id = ?1 AND s.at > ?2 AND (u.banned IS NULL OR u.banned = 0) AND s.user_id <> (SELECT owner_id FROM king_rooms WHERE id = ?1)
+  ORDER BY s.rowid LIMIT 60`;
 const mirror = (st) => { const s = summary(st); return [s.status, s.bout, s.people, s.king, s.streak, s.best, s.best_n, s.bouts]; };
 // изменить снимок: fn(st, row) меняет st на месте и возвращает { err } | { same } | что угодно ещё (уйдёт в ответ).
 // Запись проходит, только если ver тот же, что при чтении; иначе — ещё раз с новым снимком
@@ -352,24 +380,50 @@ export function makeKingRoutes(h) {
     }, now);
     if (r.wrote) { await after(env, code, r.row, r); if (r.done) await hostXp(env, request, me, r.row, r.st); }
   }
-  // ответ страницам: снимок, голоса текущего боя, свой голос. conditional — с ETag: без перемен 304 без тела
+  // все в комнате проголосовали или сказали «пас»: бой закрывает тот запрос, который первым это заметил
+  async function allInDue(env, request, me, code, now) {
+    const r = await tx(env, code, async (st) => {
+      if (!(st.status === 'live' && st.mode === 'vote' && st.bout && now >= st.bout.opens)) return { same: true };
+      const [p, t] = await env.DB.batch([env.DB.prepare(PEOPLE).bind(code, now - SEEN_MS), env.DB.prepare(TALLY).bind(code, st.bout.n)]);
+      if (!allIn(p.results)) return { same: true };
+      return closeAll(st, tallyOf(t.results), now);
+    }, now);
+    if (r.wrote) { await after(env, code, r.row, r); if (r.done) await hostXp(env, request, me, r.row, r.st); }
+  }
+  // ответ страницам: снимок, голоса текущего боя, свой голос, кто в комнате. conditional — с ETag: без перемен 304 без тела.
+  // Заодно отмечает, что me сейчас в комнате (SEEN_UP)
   async function answer(env, request, me, code, pv, conditional) {
     const now = Date.now();
+    let marked = false;
     const read = async () => {
-      const [a, b] = await env.DB.batch([
+      const q = [
         env.DB.prepare(ROW).bind(code),
         env.DB.prepare('SELECT pick, COUNT(*) AS n, SUM(CASE WHEN user_id = ?2 THEN 1 ELSE 0 END) AS me FROM king_votes WHERE room_id = ?1 AND bout = (SELECT bout FROM king_rooms WHERE id = ?1) GROUP BY pick').bind(code, me ? me.id : ''),
-      ]);
-      return { row: (a.results || [])[0], votes: b.results || [] };
+        env.DB.prepare(PEOPLE).bind(code, now - SEEN_MS),
+      ];
+      // сначала отметка — тогда в списке есть и сам спросивший; изредка — уборка давних отметок
+      const pre = me && !marked ? [env.DB.prepare(SEEN_UP).bind(code, me.id, now), ...(Math.random() < 0.01 ? [env.DB.prepare('DELETE FROM king_seen WHERE at < ?').bind(now - 6 * 3600e3)] : [])] : [];
+      marked = true;
+      const res = await env.DB.batch([...pre, ...q]);
+      const [a, b, c] = res.slice(pre.length);
+      return { row: (a.results || [])[0], votes: b.results || [], here: c.results || [] };
     };
-    let { row, votes } = await read();
+    let { row, votes, here } = await read();
     if (!row || row.owner_banned) return fail(404, 'Такого турнира нет.');
     let st = parse(row.state);
-    if (timerDue(st, now)) { await settleDue(env, request, me, code, now); ({ row, votes } = await read()); st = parse(row && row.state); if (!row || !st) return fail(404, 'Такого турнира нет.'); }
+    if (timerDue(st, now)) { await settleDue(env, request, me, code, now); ({ row, votes, here } = await read()); st = parse(row && row.state); if (!row || !st) return fail(404, 'Такого турнира нет.'); }
+    // все высказались — не ждём таймера (все «пас» и бой уже ждёт ведущего — повторять нечего)
+    const bt = st && st.bout, t0 = tallyOf(votes);
+    if (st.status === 'live' && st.mode === 'vote' && bt && now >= bt.opens && allIn(here) && !(bt.idle && !bt.ends && !(t0.a + t0.b))) {
+      await allInDue(env, request, me, code, now);
+      ({ row, votes, here } = await read()); st = parse(row && row.state);
+      if (!row || !st) return fail(404, 'Такого турнира нет.');
+    }
     const mine = (votes.find((v) => +v.me > 0) || {}).pick || null;
+    const people = here.map((p) => ({ id: p.id, name: p.name || '', handle: p.handle || '', ...(p.pick === 'a' || p.pick === 'b' ? { v: 1 } : p.pick === 'x' ? { x: 1 } : {}) }));
     const out = {
       room: { id: row.id, title: row.title, fmt: row.fmt, status: row.status, ver: row.ver, own: !!me && me.id === row.owner_id, owner: row.owner_name || '', created: row.created_at },
-      state: publicState(st, String(pv) !== String(st.pv)), tally: tallyOf(votes), mine, now,
+      state: publicState(st, String(pv) !== String(st.pv)), tally: tallyOf(votes), mine, people, now,
     };
     if (!conditional) return json(out);
     const tag = '"' + (await h.sha256(JSON.stringify({ ...out, now: 0 }))).slice(0, 32) + '"';
@@ -396,7 +450,7 @@ export function makeKingRoutes(h) {
       if (b.start === true) startState(st, now);
       const old = await env.DB.prepare('SELECT id FROM king_rooms WHERE owner_id = ? ORDER BY created_at DESC LIMIT -1 OFFSET ?').bind(me.id, KING.ROOMS - 1).all();
       if ((old.results || []).length) await ensureChat(env); // чаты старых турниров уходят вместе с ними
-      const drop = (old.results || []).flatMap((x) => [chatDrop(env, 'king', x.id), env.DB.prepare('DELETE FROM king_votes WHERE room_id = ?').bind(x.id), env.DB.prepare('DELETE FROM king_imgs WHERE room_id = ?').bind(x.id), env.DB.prepare('DELETE FROM king_rooms WHERE id = ?').bind(x.id)]);
+      const drop = (old.results || []).flatMap((x) => [chatDrop(env, 'king', x.id), env.DB.prepare('DELETE FROM king_votes WHERE room_id = ?').bind(x.id), env.DB.prepare('DELETE FROM king_seen WHERE room_id = ?').bind(x.id), env.DB.prepare('DELETE FROM king_imgs WHERE room_id = ?').bind(x.id), env.DB.prepare('DELETE FROM king_rooms WHERE id = ?').bind(x.id)]);
       const imgSql = (c) => imgs.map((x) => env.DB.prepare('INSERT OR REPLACE INTO king_imgs (room_id, pid, data) VALUES (?, ?, ?)').bind(c, x.id, x.data));
       const m = mirror(st);
       let code = '';
@@ -470,12 +524,13 @@ export function makeKingRoutes(h) {
       }
       return answer(env, request, me, code, null, false);
     },
-    // голос: { c, n — номер боя, pick: 'a' | 'b' }. Передумать можно, пока бой открыт
+    // голос: { c, n — номер боя, pick: 'a' | 'b' | 'x' — «пас» }. Передумать можно, пока бой открыт. «Пас» в счёт не идёт,
+    // но считается за «высказался»: когда высказались все в комнате, бой закрывается (answer → allInDue)
     async 'POST /king/vote'({ env, request, me }) {
       if (slow('kingvote:' + me.id, 90, 60e3)) return busy();
       await ensureKing(env);
       const b = await readBody(request);
-      const code = codeOf(b.c), n = Math.floor(+b.n || 0), pick = b.pick === 'b' ? 'b' : b.pick === 'a' ? 'a' : '';
+      const code = codeOf(b.c), n = Math.floor(+b.n || 0), pick = ['a', 'b', 'x'].includes(b.pick) ? b.pick : '';
       if (!code) return fail(404, 'Такого турнира нет.');
       if (!pick) return fail(400, 'За кого голос?');
       const row = await env.DB.prepare('SELECT owner_id, state FROM king_rooms WHERE id = ?').bind(code).first();
@@ -488,7 +543,7 @@ export function makeKingRoutes(h) {
       if (bt.ends && now > bt.ends + 1500) return fail(409, 'Время вышло.');
       await env.DB.prepare('INSERT INTO king_votes (room_id, bout, user_id, pick, at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(room_id, bout, user_id) DO UPDATE SET pick = excluded.pick, at = excluded.at').bind(code, n, me.id, pick, now).run();
       // голосующим — понемногу (правило king_vote: дневной лимит и не больше 5 в день у одного ведущего); себе за свой турнир — нет
-      if (h.lvGive && me.id !== row.owner_id) { try { await h.lvGive(env, request, me, me.id, [{ kind: 'king_vote', ref: `${code}:${n}`, peer: row.owner_id }]); } catch (e) {} }
+      if (h.lvGive && me.id !== row.owner_id && pick !== 'x') { try { await h.lvGive(env, request, me, me.id, [{ kind: 'king_vote', ref: `${code}:${n}`, peer: row.owner_id }]); } catch (e) {} }
       await poke(env, code);
       return answer(env, request, me, code, b.pv, false);
     },
@@ -523,7 +578,7 @@ export function makeKingRoutes(h) {
       const row = code && (await env.DB.prepare('SELECT owner_id FROM king_rooms WHERE id = ?').bind(code).first());
       if (!row || row.owner_id !== me.id) return fail(404, 'Такого турнира нет.');
       await ensureChat(env);
-      await env.DB.batch([chatDrop(env, 'king', code), env.DB.prepare('DELETE FROM king_votes WHERE room_id = ?').bind(code), env.DB.prepare('DELETE FROM king_imgs WHERE room_id = ?').bind(code), env.DB.prepare('DELETE FROM king_rooms WHERE id = ?').bind(code)]);
+      await env.DB.batch([chatDrop(env, 'king', code), env.DB.prepare('DELETE FROM king_votes WHERE room_id = ?').bind(code), env.DB.prepare('DELETE FROM king_seen WHERE room_id = ?').bind(code), env.DB.prepare('DELETE FROM king_imgs WHERE room_id = ?').bind(code), env.DB.prepare('DELETE FROM king_rooms WHERE id = ?').bind(code)]);
       await poke(env, code);
       await chatGone(env, 'king', code);
       return json({ ok: true });
