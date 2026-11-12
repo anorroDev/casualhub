@@ -26,7 +26,7 @@
 @keyframes hm-in { from { transform: translateY(-6px) scale(.97); } }
 @media (prefers-reduced-motion: reduce) { .hm-panel { animation: none; } }
 .hm-panel[hidden] { display: none; }
-.hm-panel > * { animation: hm-item .34s cubic-bezier(.34, 1.56, .64, 1) backwards; animation-delay: calc(var(--i, 0) * 22ms); }
+.hm-panel > * { animation: hm-item .24s cubic-bezier(.34, 1.56, .64, 1) backwards; animation-delay: calc(min(var(--i, 0), 8) * 15ms); }
 @keyframes hm-item { from { transform: translateX(14px); } }
 @media (prefers-reduced-motion: reduce) { .hm-panel > * { animation: none; } }
 .hm-panel > * { display: flex !important; width: 100%; margin: 0 !important; justify-content: flex-start !important; text-align: left; }

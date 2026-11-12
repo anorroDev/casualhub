@@ -1878,14 +1878,21 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     draw();
   }
 
-  // числа в плитках набегают от нуля
+  // числа в плитках набегают от нуля. До первого кадра в плитке остаётся настоящее число: если кадров нет
+  // (вкладка в фоне, страницу снимают картинкой), там не застревает «0»; время — по кадрам, а не по performance.now()
   function countUp() {
-    if (calm) return;
+    if (calm || document.hidden) return;
     document.querySelectorAll('[data-count]').forEach((n) => {
       const to = +n.dataset.count; if (!to) return;
-      const t0 = performance.now(), D = 700;
-      const step = (t) => { const k = Math.min(1, (t - t0) / D); n.textContent = Math.round(to * (1 - Math.pow(1 - k, 3))); if (k < 1) requestAnimationFrame(step); };
-      n.textContent = '0';
+      const D = 350;
+      let t0 = 0;
+      const step = (t) => {
+        if (!n.isConnected) return;
+        if (!t0) t0 = t;
+        const k = Math.min(1, (t - t0) / D);
+        n.textContent = Math.round(to * (1 - Math.pow(1 - k, 3)));
+        if (k < 1) requestAnimationFrame(step);
+      };
       requestAnimationFrame(step);
     });
   }

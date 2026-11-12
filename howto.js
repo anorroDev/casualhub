@@ -73,22 +73,22 @@
 .howto { position: relative; width: min(100%, 480px); max-height: calc(100dvh - 32px); overflow-y: auto; display: grid; gap: 14px; padding: 20px 18px 16px; border-radius: 22px;
   background: linear-gradient(160deg, var(--panel), color-mix(in srgb, var(--accent-soft) 70%, var(--panel))); border: 2px solid var(--accent);
   box-shadow: 0 30px 70px -24px rgba(0, 0, 0, .55), 0 14px 34px -18px color-mix(in srgb, var(--accent) 70%, transparent); text-align: left; }
-.howto-modal.in .howto { animation: howto-in .55s cubic-bezier(.34, 1.56, .64, 1) both; }
+.howto-modal.in .howto { animation: howto-in .3s cubic-bezier(.34, 1.56, .64, 1) both; }
 .howto-modal.out .howto { animation: howto-out .28s cubic-bezier(.5, 0, .75, 0) both; }
 @keyframes howto-in { from { transform: translateY(40px) scale(.9); } }
 @keyframes howto-out { to { transform: translateY(60px) scale(.92); } }
 .howto-head { display: flex; align-items: center; gap: 10px; padding-right: 34px; font-size: 18px; font-weight: 800; line-height: 1.2; color: var(--ink); }
 .howto-head small { display: block; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
-.howto-wave { flex: none; display: inline-block; font-size: 30px; transform-origin: 70% 80%; animation: howto-wave 1.6s ease-in-out .5s 3; }
+.howto-wave { flex: none; display: inline-block; font-size: 30px; transform-origin: 70% 80%; animation: howto-wave 1.6s ease-in-out .3s 3; }
 @keyframes howto-wave { 0%, 60%, 100% { transform: rotate(0); } 10%, 30% { transform: rotate(16deg); } 20%, 40% { transform: rotate(-10deg); } }
 .howto ol { list-style: none; margin: 0; padding: 0; display: grid; gap: 10px; }
 .howto li { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 12px; align-items: center; font-size: 15px; line-height: 1.42; color: var(--ink); }
-.howto-modal.in .howto li { animation: howto-step .5s cubic-bezier(.34, 1.56, .64, 1) backwards; }
-.howto-modal.in .howto li:nth-child(1) { animation-delay: .12s; }
-.howto-modal.in .howto li:nth-child(2) { animation-delay: .22s; }
-.howto-modal.in .howto li:nth-child(3) { animation-delay: .32s; }
-.howto-modal.in .howto li:nth-child(4) { animation-delay: .42s; }
-.howto-modal.in .howto li:nth-child(5) { animation-delay: .52s; }
+.howto-modal.in .howto li { animation: howto-step .28s cubic-bezier(.34, 1.56, .64, 1) backwards; }
+.howto-modal.in .howto li:nth-child(1) { animation-delay: .04s; }
+.howto-modal.in .howto li:nth-child(2) { animation-delay: .07s; }
+.howto-modal.in .howto li:nth-child(3) { animation-delay: .1s; }
+.howto-modal.in .howto li:nth-child(4) { animation-delay: .13s; }
+.howto-modal.in .howto li:nth-child(5) { animation-delay: .16s; }
 @keyframes howto-step { from { transform: translateX(-18px); } }
 .howto li > b { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--accent); color: var(--on-accent, #fff); font-size: 15px; font-weight: 800; box-shadow: 0 4px 10px -4px var(--accent); }
 .howto li span b { font-weight: 800; }

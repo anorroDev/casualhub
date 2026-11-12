@@ -39,7 +39,7 @@
   background: rgba(5, 6, 10, .55); }
 .wn-sheet[hidden] { display: none; }
 .wn-card { width: min(620px, 100%); max-height: 100%; min-height: 0; display: grid; grid-template-rows: auto minmax(0, 1fr); background: var(--panel); color: var(--ink);
-  border: 1px solid var(--line); border-radius: 20px; box-shadow: 0 30px 70px -30px rgba(0, 0, 0, .6); animation: wn-pop .32s cubic-bezier(.34, 1.56, .64, 1); }
+  border: 1px solid var(--line); border-radius: 20px; box-shadow: 0 30px 70px -30px rgba(0, 0, 0, .6); animation: wn-pop .28s cubic-bezier(.34, 1.56, .64, 1); }
 @keyframes wn-pop { from { transform: translateY(14px) scale(.96); } }
 .wn-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 18px 20px 12px; border-bottom: 1px solid var(--line); }
 .wn-head h2 { margin: 0; font-family: var(--font-display); font-weight: 800; font-size: 34px; line-height: .95; }

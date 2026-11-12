@@ -213,13 +213,13 @@ h1, h2, p { margin: 0; }
 }
 
 /* Top bar */
-.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; animation: drop-in .6s var(--out) backwards; }
+.top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; animation: drop-in .25s var(--out) backwards; }
 @keyframes drop-in { from { transform: translateY(-16px); } }
 .mark { display: inline-flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 700; font-size: 22px; text-decoration: none; letter-spacing: .02em; border-radius: 10px; }
 .mark img { width: 32px; height: 32px; transition: transform .5s var(--spring); }
 .mark:hover img { transform: rotate(-8deg) scale(1.08); }
 /* пиксельный логотип (/art/logo/hub.svg) появляется ступенькой, как спрайт */
-.mark img { animation: lg-pop .5s steps(3, jump-end) .1s backwards; }
+.mark img { animation: lg-pop .24s steps(3, jump-end) backwards; }
 @keyframes lg-pop { from { transform: scale(.4); opacity: 0; } }
 .online-chip { cursor: default; }
 .user-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; flex: 1 1 auto; } /* прижата вправо и под логотипом: кнопку «Что нового» не двигает то, что дорисовывается левее */
@@ -253,8 +253,8 @@ h1, h2, p { margin: 0; }
 .ch {
   display: inline-block; transform-origin: 50% 100%; cursor: default;
   animation:
-    ch-in .75s cubic-bezier(.2, .9, .25, 1.25) backwards calc(var(--i) * 55ms),
-    ch-wave 7s ease-in-out calc(1.4s + var(--i) * 70ms) infinite;
+    ch-in .3s cubic-bezier(.2, .9, .25, 1.25) backwards calc(min(var(--i), 10) * 18ms),
+    ch-wave 7s ease-in-out calc(.5s + var(--i) * 70ms) infinite;
   transition: color .25s, scale .35s var(--spring);
 }
 .ch:hover { color: var(--accent); scale: 1 1.08; }
@@ -301,8 +301,8 @@ h1, h2, p { margin: 0; }
 .online-now b { color: var(--ink); font-weight: 700; }
 .online-now a { color: var(--ink); font-weight: 600; text-decoration: none; }
 .online-now a:hover { color: var(--accent); }
-.lede { max-width: 58ch; color: var(--ink-2); font-size: clamp(15px, 1.6vw, 17.5px); text-wrap: pretty; animation: rise .7s var(--out) .45s backwards; }
-.meter-row { animation: rise .7s var(--out) .3s backwards; }
+.lede { max-width: 58ch; color: var(--ink-2); font-size: clamp(15px, 1.6vw, 17.5px); text-wrap: pretty; animation: rise .3s var(--out) .06s backwards; }
+.meter-row { animation: rise .3s var(--out) .04s backwards; }
 @keyframes rise { from { transform: translateY(14px); } }
 /* Пиксельные штуки справа от надписи: то, что люди оценивают (игры, кино, еда, музыка). Лист /art/hero.webp 4×2.
    Покачиваются ступеньками, как спрайты в старых играх; без анимации — при «меньше движения» и в казуальном виде */
@@ -313,7 +313,7 @@ h1, h2, p { margin: 0; }
   position: absolute; left: var(--x); top: var(--y); width: var(--s); aspect-ratio: 1; rotate: var(--t, 0deg);
   background: url(/art/hero.webp) calc(var(--c) * 100% / 3) calc(var(--r) * 100%) / 400% 200% no-repeat;
   filter: drop-shadow(0 10px 14px color-mix(in srgb, #000 28%, transparent));
-  animation: art-in .6s var(--out) backwards calc(.5s + var(--d, 0s)), art-bob 2.4s steps(2, jump-none) infinite var(--d, 0s);
+  animation: art-in .3s var(--out) backwards calc(var(--d, 0s) / 10), art-bob 2.4s steps(2, jump-none) infinite calc(-1 * var(--d, 0s));
 }
 @keyframes art-in { from { opacity: 0; transform: translateY(18px); } }
 @keyframes art-bob { 50% { translate: 0 -4px; } }
@@ -329,8 +329,9 @@ h1, h2, p { margin: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .hero-art i, .mark img { animation: none; } }
 html.unslop .hero-art i { animation: none; filter: none; }
-/* в видах интерфейса картинки за заголовком тоже подпрыгивают — без появления «пружиной» и без тени */
-@media (prefers-reduced-motion: no-preference) { html.unslop .hero-art i { animation: art-bob 2.4s steps(2, jump-none) infinite var(--d, 0s); } }
+/* в видах интерфейса (кроме спокойного казуального) картинки за заголовком тоже подпрыгивают — сразу, без пружины и без тени;
+   ступеньки у них остаются: это пиксельные спрайты */
+@media (prefers-reduced-motion: no-preference) { html.unslop[data-ui] .hero-art i { animation: u-fade var(--mo-in, .2s) var(--mo-ease, ease-out) backwards, art-bob 2.4s steps(2, jump-none) infinite calc(-1 * var(--d, 0s)); } }
 
 /* App cards: a live preview on top, the name under it, the footer with counters */
 .apps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; perspective: 1200px; }
@@ -343,11 +344,10 @@ html.unslop .hero-art i { animation: none; filter: none; }
   box-shadow: var(--shadow);
   transform: rotateX(var(--rx)) rotateY(var(--ry)) translateY(var(--lift));
   transition: transform .35s var(--out), border-color .25s;
-  animation: app-in .8s var(--spring) backwards;
+  animation: app-in .3s var(--spring) backwards;
 }
-.app:nth-child(1) { animation-delay: .55s; }
-.app:nth-child(2) { animation-delay: .68s; }
-.app:nth-child(3) { animation-delay: .81s; }
+.app:nth-child(2) { animation-delay: .04s; }
+.app:nth-child(3) { animation-delay: .08s; }
 @media (min-width: 760px) and (max-width: 1099px) { .app:nth-child(3) { grid-column: 1 / -1; } }
 @keyframes app-in { from { transform: translateY(40px) rotateX(10deg); } }
 @property --rx { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
@@ -382,7 +382,7 @@ html.unslop .hero-art i { animation: none; filter: none; }
   display: grid; grid-template-columns: 22px minmax(0, 1fr) auto auto; align-items: center; gap: 10px;
   height: 46px; padding: 0 8px 0 10px; border-radius: 12px; background: var(--panel); border: 1px solid var(--line);
   box-shadow: 0 8px 18px -14px color-mix(in srgb, var(--ink) 50%, transparent);
-  animation: row-in .6s var(--spring) backwards calc(.85s + var(--k) * 110ms);
+  animation: row-in .3s var(--spring) backwards calc(.08s + var(--k) * 40ms);
   transition: transform .35s var(--spring);
 }
 .pv-row[data-tier="good"] { --tier: var(--good); }
@@ -420,7 +420,7 @@ html.unslop .hero-art i { animation: none; filter: none; }
 .pv-tier b { flex: none; width: 26px; border-radius: 5px; background: var(--cell); transition: transform .35s var(--spring) calc(var(--j) * 35ms); }
 .app:hover .pv-tier b { transform: translateY(-2px) scale(1.06); }
 .pv-wheel { display: grid; place-items: center; }
-.wheel { position: relative; width: 168px; height: 168px; animation: wheel-in 1s var(--spring) .8s backwards; }
+.wheel { position: relative; width: 168px; height: 168px; animation: wheel-in .3s var(--spring) .06s backwards; }
 @keyframes wheel-in { from { transform: scale(.4) rotate(-120deg); } }
 .wheel::before { content: ""; position: absolute; inset: 4px; border-radius: 50%; box-shadow: 0 16px 30px -8px color-mix(in srgb, var(--ink) 45%, transparent); }
 .wheel-layer { position: absolute; inset: 0; display: block; }
@@ -429,7 +429,7 @@ html.unslop .hero-art i { animation: none; filter: none; }
 .wheel .wheel-ptr { position: absolute; left: 50%; top: -7px; width: 20px; height: 22px; margin-left: -10px; transform-origin: 50% 0; }
 
 /* Лента друзей */
-.feed { display: grid; gap: 12px; margin-top: 26px; animation: feed-in .6s var(--spring); }
+.feed { display: grid; gap: 12px; margin-top: 26px; animation: feed-in .25s var(--spring); }
 @keyframes feed-in { from { transform: translateY(18px); } }
 .feed-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 12px; }
 .feed h2 { font-family: var(--font-display); font-weight: 800; font-size: clamp(30px, 4.4vw, 40px); line-height: .95; }
@@ -439,9 +439,9 @@ html.unslop .hero-art i { animation: none; filter: none; }
 .feed-all:hover { color: var(--accent); }
 .feed-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 /* строки ленты въезжают по очереди */
-.feed-list > li { animation: rise .55s var(--spring) backwards; }
-.feed-list > li:nth-child(2) { animation-delay: .04s; } .feed-list > li:nth-child(3) { animation-delay: .08s; } .feed-list > li:nth-child(4) { animation-delay: .12s; }
-.feed-list > li:nth-child(5) { animation-delay: .16s; } .feed-list > li:nth-child(n+6) { animation-delay: .2s; }
+.feed-list > li { animation: rise .25s var(--spring) backwards; }
+.feed-list > li:nth-child(2) { animation-delay: .02s; } .feed-list > li:nth-child(3) { animation-delay: .04s; } .feed-list > li:nth-child(4) { animation-delay: .06s; }
+.feed-list > li:nth-child(5) { animation-delay: .08s; } .feed-list > li:nth-child(n+6) { animation-delay: .1s; }
 @media (min-width: 760px) { .feed-list { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 .fd {
   display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 10px 12px;
@@ -598,11 +598,14 @@ html.unslop .hero-art i { animation: none; filter: none; }
 <style id="unslop-page">
 /* Казуальный вид (unslop): действует, только когда в Настройках включён «Казуальный вид». Собрано из правок, которые убирают
    цветные пятна, свечения, пружинные и вечные анимации, заглавные подписи. Обычный вид выше не меняется */
-@keyframes ch-in-u { from { opacity: 0; transform: translateY(.12em); } }
 :root.unslop { --spring: cubic-bezier(.22, 1, .36, 1); }
 html.unslop .mark:hover img { transform: none; }
 html.unslop .pill:hover { box-shadow: 0 6px 18px -10px rgb(0 0 0 / .28); }
-html.unslop .ch { animation: ch-in-u .75s cubic-bezier(.22, 1, .36, 1) backwards calc(var(--i) * 55ms); transition: color .15s; }
+html.unslop .ch { animation: u-in var(--mo-in) var(--mo-ease) backwards calc(min(var(--i), 10) * 14ms); transition: color .15s; }
+/* появление шапки, шкалы, карточек, превью и ленты — мягкое (кадры u-* из /unslop.css), без больших въездов; задержки — прежние, короткие */
+html.unslop :is(.top, .lede, .meter-row, .feed, .app, .pv-row, .feed-list > li) { animation-name: u-in; animation-duration: var(--mo-in); animation-timing-function: var(--mo-ease); }
+html.unslop .mark img { animation: u-fade var(--mo-in) var(--mo-ease) backwards; }
+html.unslop .wheel { animation: u-pop var(--mo-in) var(--mo-ease) .04s backwards; }
 html.unslop .ch:hover { scale: none; }
 html.unslop .meter i.on { box-shadow: none; }
 html.unslop .meter i.knob { box-shadow: 0 0 0 3px var(--bg), 0 8px 22px -6px rgb(0 0 0 / .28); }
@@ -618,6 +621,16 @@ html.unslop .wheel::before { box-shadow: 0 20px 44px -22px rgb(0 0 0 / .45); }
 html.unslop .fd:hover { transform: translateY(-1px); }
 html.unslop .app:hover .app-icon { transform: none; }
 html.unslop .chip.alert { animation: nudge 2.4s ease-in-out 1.6s 2; }
+/* виды интерфейса (кроме спокойного казуального): буквы заголовка подпрыгивают по очереди, логотип и значки разделов
+   наклоняются при наведении — мягко, со скоростью и кривой вида (--mo-in, --mo-ease) */
+@media (prefers-reduced-motion: no-preference) {
+  html.unslop[data-ui] .ch { animation: u-in var(--mo-in) var(--mo-ease) backwards calc(min(var(--i), 10) * 14ms), u-hop 7s ease-in-out calc(.5s + var(--i) * 70ms) infinite; transition: color .15s, scale var(--mo-in) var(--mo-ease); }
+  html.unslop[data-ui] .ch:hover { scale: 1 1.06; }
+  html.unslop[data-ui] .mark img { animation: lg-pop .24s steps(3, jump-end) backwards; transition: transform var(--mo-in) var(--mo-ease); }
+  html.unslop[data-ui] .mark:hover img { transform: rotate(-6deg) scale(1.06); }
+  html.unslop[data-ui] .app-icon { transition: transform var(--mo-in) var(--mo-ease); }
+  html.unslop[data-ui] .app:hover .app-icon { transform: rotate(-5deg) scale(1.05); }
+}
 </style>
 </head>
 <body>

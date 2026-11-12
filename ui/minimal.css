@@ -9,6 +9,7 @@
 html[data-ui="minimal"]:root {
   --v-font: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
   --v-ease: cubic-bezier(.2, .8, .2, 1);
+  --mo-in: .26s; --mo-ease: var(--v-ease); --mo-hop: -2px;
   --v-hair: color-mix(in srgb, var(--ink) 9%, transparent);
   --v-fill: color-mix(in srgb, var(--ink) 6%, transparent);
   --v-fill-2: color-mix(in srgb, var(--ink) 11%, transparent);
@@ -118,21 +119,21 @@ html[data-ui="minimal"] :is(.rank, .pv-rank, .lv-hero .n) { font-family: var(--v
 html[data-ui="minimal"] :is(.lv-bar, .meter i, .bc, .pv-bar b, .spark i) { border-radius: 999px; }
 html[data-ui="minimal"] .lv-bar::after { border-radius: 0 999px 999px 0; }
 
-/* ---------- движение: плавное появление с лёгким масштабом ---------- */
-@keyframes mi-in { from { opacity: 0; transform: translateY(6px) scale(.985); } }
-@keyframes mi-pop { from { opacity: 0; transform: scale(.97); } }
+/* ---------- движение: спокойное появление — прозрачность и сдвиг на несколько пикселей или лёгкий масштаб ---------- */
+@keyframes mi-in { from { opacity: 0; transform: translateY(6px); } }
+@keyframes mi-pop { from { opacity: 0; transform: scale(.98); } }
 @keyframes mi-fade { from { opacity: 0; } }
-html[data-ui="minimal"] :is(.title, .wordmark) { animation: mi-in .4s var(--v-ease) backwards; }
-html[data-ui="minimal"] :is(.card, .app, .tile, .stat, .lv-box, .lv-bi, .lv-ach, .rt, .st-box, .lv-letter, .fd) { animation: mi-in .36s var(--v-ease) backwards; }
-html[data-ui="minimal"] .app:nth-child(2) { animation-delay: .06s; }
-html[data-ui="minimal"] .app:nth-child(3) { animation-delay: .12s; }
-html[data-ui="minimal"] :is(.st-card, .fp-card, .howto, .wn-card, .lv-card, .t-pop, .ban-menu, .hist-menu) { animation: mi-pop .32s var(--v-ease) both; }
-html[data-ui="minimal"] .hm-panel { transform-origin: top right; animation: mi-pop .26s var(--v-ease) both; }
-html[data-ui="minimal"] :is(.lv-toast, .site-ann, .site-note, .st-toast, .lv-ov, .st-sheet, .fp-sheet, .howto-modal, .wn-sheet, .sheet, .tm-sheet, .rv-sheet) { animation: mi-fade .25s var(--v-ease) both; }
-html[data-ui="minimal"] .lv-body > * { animation: mi-in .3s var(--v-ease) backwards; }
-html[data-ui="minimal"] .lv-body > :nth-child(2) { animation-delay: .04s; }
-html[data-ui="minimal"] .lv-body > :nth-child(3) { animation-delay: .08s; }
-html[data-ui="minimal"] .lv-body > :nth-child(n+4) { animation-delay: .12s; }
+html[data-ui="minimal"] :is(.title, .wordmark) { animation: mi-fade var(--mo-in) var(--v-ease) backwards; } /* буквы внутри поднимаются сами */
+html[data-ui="minimal"] :is(.card, .app, .tile, .stat, .lv-box, .lv-bi, .lv-ach, .rt, .st-box, .lv-letter, .fd) { animation: mi-in var(--mo-in) var(--v-ease) backwards; }
+html[data-ui="minimal"] .app:nth-child(2) { animation-delay: .03s; }
+html[data-ui="minimal"] .app:nth-child(3) { animation-delay: .06s; }
+html[data-ui="minimal"] :is(.st-card, .fp-card, .howto, .wn-card, .lv-card, .t-pop, .ban-menu, .hist-menu) { animation: mi-pop var(--mo-in) var(--v-ease) both; }
+html[data-ui="minimal"] .hm-panel { transform-origin: top right; animation: mi-pop .22s var(--v-ease) both; }
+html[data-ui="minimal"] :is(.lv-toast, .site-ann, .site-note, .st-toast, .lv-ov, .st-sheet, .fp-sheet, .howto-modal, .wn-sheet, .sheet, .tm-sheet, .rv-sheet) { animation: mi-fade .2s var(--v-ease) both; }
+html[data-ui="minimal"] .lv-body > * { animation: mi-in .24s var(--v-ease) backwards; }
+html[data-ui="minimal"] .lv-body > :nth-child(2) { animation-delay: .02s; }
+html[data-ui="minimal"] .lv-body > :nth-child(3) { animation-delay: .04s; }
+html[data-ui="minimal"] .lv-body > :nth-child(n+4) { animation-delay: .06s; }
 @media (prefers-reduced-motion: reduce) {
   html[data-ui="minimal"] :is(.title, .wordmark, .card, .app, .tile, .stat, .lv-box, .lv-bi, .lv-ach, .rt, .st-box, .lv-letter, .fd, .st-card, .fp-card, .howto, .wn-card, .lv-card, .t-pop, .ban-menu, .hist-menu, .hm-panel, .lv-toast, .site-ann, .site-note, .st-toast, .lv-ov, .st-sheet, .fp-sheet, .howto-modal, .wn-sheet, .sheet, .tm-sheet, .rv-sheet, .lv-body > *) { animation: none; }
   html[data-ui="minimal"] :is(.pill, .theme-btn, .btn, .chip-btn, .sub-chip, .status-chip, .mini-btn, .tpl-btn, .user-pill, .opt, .st-btn, .fp-btn, .lv-btn, .howto-ok, .cm-send, .wg-btn, .mp-btn, .rx-btns button, .fx-mute, .fx-skip, .lots-opt, .crop-ratios button, .recs-tabs button, .lv-tabs button, .lv-pick button, .chip):active { transform: none; }

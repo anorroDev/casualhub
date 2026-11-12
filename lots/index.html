@@ -388,7 +388,7 @@ fieldset:disabled { opacity: .6; }
 .sheet-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .sheet-actions .btn { flex: 1 1 auto; }
 @keyframes pop { from { transform: translateY(12px) scale(.97); opacity: 0; } to { transform: none; opacity: 1; } }
-.sheet:not([hidden]) .sheet-card { animation: pop .35s cubic-bezier(.2, 1.2, .4, 1); }
+.sheet:not([hidden]) .sheet-card { animation: pop .26s cubic-bezier(.2, 1.2, .4, 1); }
 
 button, label, summary, input, textarea, select, a { touch-action: manipulation; }
 @media (pointer: coarse) {
@@ -511,7 +511,7 @@ html.theme-swap::view-transition-new(root) { animation: theme-circle .6s cubic-b
 }
 
 /* Title letters rise one by one and breathe (transforms only) */
-.title .ch { display: inline-block; transform-origin: 50% 100%; animation: ch-in .7s cubic-bezier(.2, .9, .25, 1.25) backwards calc(var(--i) * 40ms), ch-wave 8s ease-in-out calc(1.6s + var(--i) * 60ms) infinite; transition: color .25s, scale .35s var(--spring); }
+.title .ch { display: inline-block; transform-origin: 50% 100%; animation: ch-in .3s cubic-bezier(.2, .9, .25, 1.25) backwards calc(min(var(--i), 10) * 18ms), ch-wave 8s ease-in-out calc(.5s + var(--i) * 60ms) infinite; transition: color .25s, scale .35s var(--spring); }
 .title .ch:hover { color: var(--accent); scale: 1 1.08; }
 .title .w { display: inline-block; white-space: nowrap; }
 @keyframes ch-in { from { transform: translateY(60%) scaleY(.3); } }
@@ -523,10 +523,10 @@ html.theme-swap::view-transition-new(root) { animation: theme-circle .6s cubic-b
   background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 93%, var(--accent)) 0, var(--panel) 140px);
   box-shadow: var(--lift);
 }
-html.intro .layout > .card { animation: card-rise .8s var(--spring) backwards; }
-html.intro .layout > .card + .card { animation-delay: .1s; }
-html.intro .masthead-right { animation: drop-in .6s var(--out) backwards; }
-html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards; }
+html.intro .layout > .card { animation: card-rise .3s var(--spring) backwards; }
+html.intro .layout > .card + .card { animation-delay: .04s; }
+html.intro .masthead-right { animation: drop-in .25s var(--out) backwards; }
+html.intro .masthead .scale { animation: card-rise .3s var(--out) .04s backwards; }
 @keyframes card-rise { from { transform: translateY(34px) scale(.985); } }
 @keyframes drop-in { from { transform: translateY(-14px); } }
 
@@ -834,14 +834,16 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
 <style id="unslop-page">
 /* Казуальный вид (unslop): действует, только когда в Настройках включён «Казуальный вид». Собрано из правок, которые убирают
    цветные пятна, свечения, пружинные и вечные анимации, заглавные подписи. Обычный вид выше не меняется */
-@keyframes ch-in-u { from { opacity: 0; transform: translateY(.12em); } }
 html.unslop .label { text-transform: none; letter-spacing: normal; }
 html.unslop .label::first-letter { text-transform: uppercase; }
 html.unslop .eyebrow { text-transform: none; letter-spacing: normal; }
-html.unslop .sheet:not([hidden]) .sheet-card { animation: pop .35s cubic-bezier(.22, 1, .36, 1); }
+html.unslop .sheet:not([hidden]) .sheet-card { animation: u-pop var(--mo-in) var(--mo-ease); }
 :root.unslop { --spring: cubic-bezier(.22, 1, .36, 1); }
 html.unslop .theme-btn:hover { box-shadow: 0 6px 18px -10px rgb(0 0 0 / .28); }
-html.unslop .title .ch { animation: ch-in-u .7s cubic-bezier(.22, 1, .36, 1) backwards calc(var(--i) * 40ms); transition: color .15s; }
+html.unslop .title .ch { animation: u-in var(--mo-in) var(--mo-ease) backwards calc(min(var(--i), 10) * 14ms); transition: color .15s; }
+/* появление шапки и карточек — мягкое (кадры u-* из /unslop.css), без больших въездов; задержки — прежние, короткие */
+html.unslop.intro .masthead-right { animation-name: u-down; animation-duration: var(--mo-in); animation-timing-function: var(--mo-ease); }
+html.unslop :is(.intro .layout > .card, .intro .masthead .scale) { animation-name: u-in; animation-duration: var(--mo-in); animation-timing-function: var(--mo-ease); }
 html.unslop .title .ch:hover { scale: none; }
 html.unslop .card { background: var(--panel); }
 html.unslop .eyebrow .dot::after { animation: none; }
@@ -850,6 +852,18 @@ html.unslop .wheel-wrap::before { box-shadow: 0 20px 44px -22px rgb(0 0 0 / .45)
 html.unslop .scorebar .badge[data-tier="good"], html.unslop .scorebar .badge[data-tier="bad"] { box-shadow: 0 12px 26px -12px rgb(0 0 0 / .28); }
 html.unslop .btn.primary { box-shadow: inset 0 1px 0 rgb(255 255 255 / .12); }
 @media (hover: hover) { html.unslop .th:hover { transform: translateY(-1px); } }
+/* в видах шрифт заголовков шире узкого Handjet: «Крутить» в центре колеса мельче, чтобы влезал в круг при любой ширине колеса */
+html.unslop[data-ui] .hub { font-size: clamp(9px, calc(5.4cqw - 3px), 26px); letter-spacing: 0; }
+/* виды интерфейса (кроме спокойного казуального): буквы заголовка подпрыгивают по очереди, значки и плитки откликаются на наведение —
+   мягко, со скоростью и кривой вида (--mo-in, --mo-ease) */
+@media (prefers-reduced-motion: no-preference) {
+  html.unslop[data-ui] .title .ch { animation: u-in var(--mo-in) var(--mo-ease) backwards calc(min(var(--i), 10) * 14ms), u-hop 8s ease-in-out calc(.5s + var(--i) * 60ms) infinite; transition: color .15s, scale var(--mo-in) var(--mo-ease); }
+  html.unslop[data-ui] .title .ch:hover { scale: 1 1.06; }
+}
+@media (prefers-reduced-motion: no-preference) and (hover: hover) {
+  html.unslop[data-ui] .hub:hover:not(:disabled) { transform: translate(-50%, -50%) scale(1.04); }
+  html.unslop[data-ui] .th:hover { transform: translateY(-2px) scale(1.02); }
+}
 </style>
 </head>
 <body>

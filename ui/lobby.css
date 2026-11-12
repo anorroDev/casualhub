@@ -1,20 +1,22 @@
-@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Rubik:wght@400..800&display=swap');
 /* Казуал Хаб: вид «Лобби» — как игровое лобби или чат для своих. Включён, когда у <html> класс unslop
    и data-ui="lobby" (выбирается в Настройках). Плотные скруглённые панели без рамок, фон панелей чуть темнее
    или светлее основного (смесь --panel с текстом темы), строки списков подсвечиваются при наведении, как каналы,
-   мягкий шрифт Nunito, акцент темы на активном, кнопки-пилюли. Анимации живые, но короткие: подъём на 1–2 px
-   при наведении, пружинка при нажатии, окна выпрыгивают. Цвета — только переменные темы. */
+   шрифт Rubik (чуть скруглённый, с хорошей кириллицей), акцент темы на активном, кнопки-пилюли. Анимации живые,
+   но мягкие и короткие: подъём на 1–2 px при наведении, лёгкое сжатие при нажатии, окна проявляются с лёгким масштабом.
+   Цвета — только переменные темы. */
 
 /* ---------- основа ---------- */
 html[data-ui="lobby"]:root {
-  --v-font: "Nunito", "Onest", ui-sans-serif, system-ui, sans-serif;
+  --v-font: "Rubik", "Onest", ui-sans-serif, system-ui, sans-serif;
   --v-surf: color-mix(in srgb, var(--panel) 93%, var(--ink));
   --v-side: color-mix(in srgb, var(--panel) 78%, var(--bg));
   --v-input: color-mix(in srgb, var(--bg) 72%, var(--panel));
   --v-hover: color-mix(in srgb, var(--ink) 7%, transparent);
   --v-active: color-mix(in srgb, var(--ink) 12%, transparent);
-  --v-pop: cubic-bezier(.34, 1.56, .64, 1);
+  --v-pop: cubic-bezier(.2, .8, .2, 1);
   --v-out: cubic-bezier(.2, .8, .2, 1);
+  --mo-in: .2s; --mo-ease: var(--v-out); --mo-hop: -4px;
   --font-display: var(--v-font);
   --font-body: var(--v-font);
   --shadow: none;
@@ -33,7 +35,7 @@ html[data-ui="lobby"] .mark { font-family: var(--v-font); font-weight: 900; lett
 html[data-ui="lobby"] :is(.title, .wordmark) { font-family: var(--v-font); font-weight: 900; letter-spacing: -.02em; }
 html[data-ui="lobby"] .wordmark { font-size: clamp(58px, 14vw, 172px); line-height: .9; column-gap: .22em; }
 html[data-ui="lobby"] :is(h1, h2, h3, .app-name, .view-tab, .tl-view-title, .st-nav h2, .st-head h3, .lv-head h2, .wn-head h2, .howto-head) { font-family: var(--v-font); font-weight: 800; letter-spacing: 0; }
-/* Nunito шире узкого пиксельного Handjet: подписи, рассчитанные на него, — помельче */
+/* Rubik шире узкого пиксельного Handjet: подписи, рассчитанные на него, — помельче */
 html[data-ui="lobby"] .app-name { font-size: clamp(22px, 2.1vw, 26px); line-height: 1.1; }
 html[data-ui="lobby"] .view-tab { font-size: clamp(20px, 6.8cqi, 36px); }
 
@@ -61,15 +63,15 @@ html[data-ui="lobby"] .st-nav { background: var(--v-side); border-color: transpa
 html[data-ui="lobby"] :is(.wn-head, .lv-tabs) { border-color: color-mix(in srgb, var(--ink) 8%, transparent); }
 
 /* ---------- кнопки: пилюли, подъём при наведении и пружинка при нажатии ---------- */
-html[data-ui="lobby"] :is(.pill, .theme-btn, .btn, .chip-btn, .sub-chip, .status-chip, .mini-btn, .tpl-btn, .user-pill, .opt, .st-btn, .fp-btn, .lv-btn, .howto-ok, .cm-send, .wg-btn, .mp-btn, .rx-btns button, .fx-mute, .fx-skip, .lots-opt, .crop-ratios button, .recs-tabs button, .lv-tabs button, .lv-pick button, .chip) { border-radius: 999px; border-color: transparent; background-color: var(--v-hover); font-weight: 700; transition: transform .3s var(--v-pop), background-color .15s, color .15s; }
+html[data-ui="lobby"] :is(.pill, .theme-btn, .btn, .chip-btn, .sub-chip, .status-chip, .mini-btn, .tpl-btn, .user-pill, .opt, .st-btn, .fp-btn, .lv-btn, .howto-ok, .cm-send, .wg-btn, .mp-btn, .rx-btns button, .fx-mute, .fx-skip, .lots-opt, .crop-ratios button, .recs-tabs button, .lv-tabs button, .lv-pick button, .chip) { border-radius: 999px; border-color: transparent; background-color: var(--v-hover); font-weight: 700; transition: transform .2s var(--v-pop), background-color .15s, color .15s; }
 html[data-ui="lobby"] :is(.pill, .theme-btn, .btn, .chip-btn, .sub-chip, .status-chip, .mini-btn, .tpl-btn, .user-pill, .opt, .st-btn, .fp-btn, .lv-btn, .howto-ok, .cm-send, .wg-btn, .mp-btn, .rx-btns button, .fx-mute, .fx-skip, .lots-opt, .crop-ratios button, .recs-tabs button, .lv-tabs button, .lv-pick button, .chip):hover { background-color: var(--v-active); border-color: transparent; color: var(--ink); transform: translateY(-1px); }
-html[data-ui="lobby"] :is(.pill, .theme-btn, .btn, .chip-btn, .sub-chip, .status-chip, .mini-btn, .tpl-btn, .user-pill, .opt, .st-btn, .fp-btn, .lv-btn, .howto-ok, .cm-send, .wg-btn, .mp-btn, .rx-btns button, .fx-mute, .fx-skip, .lots-opt, .crop-ratios button, .recs-tabs button, .lv-tabs button, .lv-pick button, .chip):active { transform: scale(.94); transition-duration: .08s; }
+html[data-ui="lobby"] :is(.pill, .theme-btn, .btn, .chip-btn, .sub-chip, .status-chip, .mini-btn, .tpl-btn, .user-pill, .opt, .st-btn, .fp-btn, .lv-btn, .howto-ok, .cm-send, .wg-btn, .mp-btn, .rx-btns button, .fx-mute, .fx-skip, .lots-opt, .crop-ratios button, .recs-tabs button, .lv-tabs button, .lv-pick button, .chip):active { transform: scale(.97); transition-duration: .08s; }
 html[data-ui="lobby"] :is(.pill.primary, .btn.primary, .st-btn.pri, .fp-btn.primary, .howto-ok, .cm-send, .lv-btn:not(.ghost)) { background-color: var(--accent); color: var(--on-accent, #fff); }
 html[data-ui="lobby"] :is(.pill.primary, .btn.primary, .st-btn.pri, .fp-btn.primary, .howto-ok, .cm-send, .lv-btn:not(.ghost)):hover { background-color: color-mix(in srgb, var(--accent) 86%, #fff); color: var(--on-accent, #fff); }
 html[data-ui="lobby"] :is(.btn.danger, .btn.act-del, .st-btn.bad, .fp-btn.danger) { color: var(--bad-ink, var(--bad)); background-color: color-mix(in srgb, var(--bad) 14%, transparent); }
 html[data-ui="lobby"] :is(.btn.danger-solid, .fp-btn.danger-solid) { background-color: var(--bad); color: #fff; }
-html[data-ui="lobby"] :is(.wn-x, .st-x, .fp-x, .lv-head .x, .howto-close, .lv-toast .x, .site-note button, .site-ann button) { border-radius: 50%; border-color: transparent; background: transparent; transition: transform .3s var(--v-pop), background-color .15s; }
-html[data-ui="lobby"] :is(.wn-x, .st-x, .fp-x, .lv-head .x, .howto-close, .lv-toast .x, .site-note button, .site-ann button):hover { background: var(--v-hover); transform: rotate(90deg); }
+html[data-ui="lobby"] :is(.wn-x, .st-x, .fp-x, .lv-head .x, .howto-close, .lv-toast .x, .site-note button, .site-ann button) { border-radius: 50%; border-color: transparent; background: transparent; transition: background-color .15s; }
+html[data-ui="lobby"] :is(.wn-x, .st-x, .fp-x, .lv-head .x, .howto-close, .lv-toast .x, .site-note button, .site-ann button):hover { background: var(--v-hover); }
 html[data-ui="lobby"] :is(.hm-panel > a, .hm-panel > button, .hm-panel > span) { border-radius: 8px !important; border-color: transparent !important; background: transparent !important; }
 html[data-ui="lobby"] :is(.hm-panel > a, .hm-panel > button, .hm-panel > span):hover { background: var(--v-hover) !important; color: var(--ink) !important; }
 html[data-ui="lobby"] .hm-panel > .hm-all { background: color-mix(in srgb, var(--accent) 16%, transparent) !important; border-color: transparent !important; }
@@ -81,7 +83,7 @@ html[data-ui="lobby"] :is(.seg button, .st-seg button, .lv-seg button) { border-
 html[data-ui="lobby"] :is(.seg button, .st-seg button, .lv-seg button)[aria-pressed="true"] { background: var(--accent); color: var(--on-accent, #fff); }
 /* полоса разделов на телефоне: панелью, активный раздел — цветом акцента */
 html[data-ui="lobby"] .mnav { border-radius: 12px; border-color: transparent; background: var(--v-side); }
-html[data-ui="lobby"] .mnav button { border-radius: 8px; transition: background-color .15s, color .15s, transform .3s var(--v-pop); }
+html[data-ui="lobby"] .mnav button { border-radius: 8px; transition: background-color .15s, color .15s, transform .2s var(--v-pop); }
 html[data-ui="lobby"] .mnav button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent, #fff); }
 /* разделы Настроек — как каналы: подсветка при наведении, активный ярче */
 html[data-ui="lobby"] .st-nb { border-radius: 6px; min-height: 40px; }
@@ -107,20 +109,20 @@ html[data-ui="lobby"] :is(.badge, .score, .pv-badge, .fd-score, .bd-v, .kpi-val,
 html[data-ui="lobby"] :is(.rank, .pv-rank, .lv-hero .n) { font-family: var(--v-font); font-weight: 900; font-variant-numeric: tabular-nums; }
 html[data-ui="lobby"] :is(.lv-bar, .meter i, .bc, .pv-bar b, .spark i) { border-radius: 4px; }
 
-/* ---------- движение: живо и коротко ---------- */
-@keyframes lo-pop { from { opacity: 0; transform: scale(.94); } 70% { opacity: 1; transform: scale(1.012); } to { transform: none; } }
-@keyframes lo-up { from { opacity: 0; transform: translateY(8px); } }
+/* ---------- движение: живо, но мягко и коротко ---------- */
+@keyframes lo-pop { from { opacity: 0; transform: scale(.98); } }
+@keyframes lo-up { from { opacity: 0; transform: translateY(6px); } }
 @keyframes lo-fade { from { opacity: 0; } }
-html[data-ui="lobby"] :is(.title, .wordmark) { animation: lo-up .3s var(--v-out) backwards; }
-html[data-ui="lobby"] :is(.card, .app, .tile, .stat, .lv-box, .lv-bi, .lv-ach, .rt, .st-box, .lv-letter) { animation: lo-up .26s var(--v-out) backwards; }
-html[data-ui="lobby"] .app:nth-child(2) { animation-delay: .05s; }
-html[data-ui="lobby"] .app:nth-child(3) { animation-delay: .1s; }
-html[data-ui="lobby"] :is(.st-card, .fp-card, .howto, .wn-card, .lv-card, .t-pop, .ban-menu, .hist-menu) { animation: lo-pop .28s var(--v-out) both; }
-html[data-ui="lobby"] .hm-panel { transform-origin: top right; animation: lo-pop .24s var(--v-out) both; }
+html[data-ui="lobby"] :is(.title, .wordmark) { animation: lo-fade var(--mo-in) var(--v-out) backwards; } /* буквы внутри поднимаются сами */
+html[data-ui="lobby"] :is(.card, .app, .tile, .stat, .lv-box, .lv-bi, .lv-ach, .rt, .st-box, .lv-letter) { animation: lo-up var(--mo-in) var(--v-out) backwards; }
+html[data-ui="lobby"] .app:nth-child(2) { animation-delay: .03s; }
+html[data-ui="lobby"] .app:nth-child(3) { animation-delay: .06s; }
+html[data-ui="lobby"] :is(.st-card, .fp-card, .howto, .wn-card, .lv-card, .t-pop, .ban-menu, .hist-menu) { animation: lo-pop var(--mo-in) var(--v-out) both; }
+html[data-ui="lobby"] .hm-panel { transform-origin: top right; animation: lo-pop var(--mo-in) var(--v-out) both; }
 html[data-ui="lobby"] :is(.lv-toast, .site-ann, .site-note, .st-toast, .lv-ov, .st-sheet, .fp-sheet, .howto-modal, .wn-sheet, .sheet, .tm-sheet, .rv-sheet) { animation: lo-fade .18s var(--v-out) both; }
-html[data-ui="lobby"] .lv-body > * { animation: lo-up .22s var(--v-out) backwards; }
-html[data-ui="lobby"] .lv-body > :nth-child(2) { animation-delay: .03s; }
-html[data-ui="lobby"] .lv-body > :nth-child(n+3) { animation-delay: .06s; }
+html[data-ui="lobby"] .lv-body > * { animation: lo-up var(--mo-in) var(--v-out) backwards; }
+html[data-ui="lobby"] .lv-body > :nth-child(2) { animation-delay: .02s; }
+html[data-ui="lobby"] .lv-body > :nth-child(n+3) { animation-delay: .04s; }
 @media (prefers-reduced-motion: reduce) {
   html[data-ui="lobby"] :is(.title, .wordmark, .card, .app, .tile, .stat, .lv-box, .lv-bi, .lv-ach, .rt, .st-box, .lv-letter, .st-card, .fp-card, .howto, .wn-card, .lv-card, .t-pop, .ban-menu, .hist-menu, .hm-panel, .lv-toast, .site-ann, .site-note, .st-toast, .lv-ov, .st-sheet, .fp-sheet, .howto-modal, .wn-sheet, .sheet, .tm-sheet, .rv-sheet, .lv-body > *) { animation: none; }
   html[data-ui="lobby"] :is(.pill, .theme-btn, .btn, .chip-btn, .sub-chip, .status-chip, .mini-btn, .tpl-btn, .user-pill, .opt, .st-btn, .fp-btn, .lv-btn, .howto-ok, .cm-send, .wg-btn, .mp-btn, .rx-btns button, .fx-mute, .fx-skip, .lots-opt, .crop-ratios button, .recs-tabs button, .lv-tabs button, .lv-pick button, .chip, .wn-x, .st-x, .fp-x, .lv-head .x, .howto-close, .lv-toast .x, .site-note button, .site-ann button, .app, .rt, .lv-bi, .lv-ach, .tile, .fr-card):is(:hover, :active) { transform: none; }
