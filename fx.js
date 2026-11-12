@@ -119,6 +119,9 @@
 
   let queued = false;
   const later = () => { if (queued) return; queued = true; requestAnimationFrame(() => { queued = false; scan(); popScan(); }); };
-  const start = () => { scan(); popScan(); new MutationObserver(later).observe(document.body, { childList: true, subtree: true }); addEventListener('click', () => setTimeout(later, 60)); };
+  // перепроверка — только когда на странице появились новые элементы: смена текста (бегущее имя на колесе, таймеры, счётчики)
+  // меняет лишь текстовые узлы и раньше запускала обход всей страницы на каждом кадре прокрутки
+  const grew = (recs) => recs.some((r) => { for (const n of r.addedNodes) if (n.nodeType === 1) return true; return false; });
+  const start = () => { scan(); popScan(); new MutationObserver((recs) => { if (grew(recs)) later(); }).observe(document.body, { childList: true, subtree: true }); addEventListener('click', () => setTimeout(later, 60)); };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
 })();

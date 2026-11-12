@@ -22,7 +22,7 @@ html[data-ui="pixel"]:root {
 }
 
 /* ---------- углы: всё прямоугольное. Круглыми остаются аватары, кольца уровня, точки «в сети», колесо и его центр ---------- */
-html[data-ui="pixel"]:root body :not(img, video, canvas, svg, svg *, .hub, .knob, .lv-pring, .lv-bigring, [class*="ava"], [class*="ring"], [class*="dot"], [class*="wheel"]),
+html[data-ui="pixel"]:root body :not(img, video, canvas, svg, svg *, .hub, .knob, .lv-pring, .lv-bigring, [class*="ava"], [class*="ava"] > span, [class*="ring"], [class*="dot"], [class*="wheel"]),
 html[data-ui="pixel"]:root body :not(.hub, .knob, .lv-pring, .lv-bigring, [class*="ava"], [class*="ring"], [class*="dot"], [class*="wheel"])::before,
 html[data-ui="pixel"]:root body :not(.hub, .knob, .lv-pring, .lv-bigring, [class*="ava"], [class*="ring"], [class*="dot"], [class*="wheel"])::after {
   border-radius: 0 !important;

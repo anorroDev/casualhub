@@ -2940,7 +2940,21 @@
 "Снег":"Snow",
 "Искры":"Sparks",
 "Пиксельный снег в шапке профиля":"Pixel snow in the profile header",
-"Искры костра в шапке профиля":"Campfire sparks in the profile header"};
+"Искры костра в шапке профиля":"Campfire sparks in the profile header",
+// «В планах»: карточка, порядок по IMDb; таймер заданий
+"IMDb: от лучшего":"IMDb: best first",
+"IMDb: от худшего":"IMDb: worst first",
+"Обложка крупно":"Bigger cover",
+"Ищу описание…":"Looking for a description…",
+"Описания не нашлось.":"No description found.",
+"Википедия":"Wikipedia",
+"Википедия (на английском)":"Wikipedia (in English)",
+"Трейлер":"Trailer",
+"Трейлер IMDb":"IMDb trailer",
+"Трейлер YouTube":"YouTube trailer",
+"Трейлер на YouTube":"Trailer on YouTube",
+"На колесе — убрать":"On the wheel — remove",
+"Новые задания через":"New quests in"};
   // слово после числа: 1 оценка, 5 оценок. [все русские формы, одна штука, несколько]
   const NOUNS = [
     [['рофлан', 'рофлана', 'рофланов', 'рофланы'], 'Soul', 'Souls'],
