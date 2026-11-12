@@ -54,10 +54,20 @@ html.unslop:not([data-ui]) .lp-box { animation: none; }
 `;
   document.head.appendChild(css);
 
-  let lots = [], live = null, data = null, msg = '', msgCls = '', busy = false, timer = 0, lastKey = '';
+  let lots = [], live = null, own = false, data = null, msg = '', msgCls = '', busy = false, timer = 0, lastKey = null, shown = '';
+  // seq — номер запроса: поздний ответ старого запроса не перетирает свежий; stale — сколько раз подряд сервер ответил
+  // не то, что видно по снимку (его ответ старше снимка)
+  let seq = 0, failed = 0, stale = 0, jitter = 0;
   const box = document.createElement('div');
   box.className = 'lp-box';
   box.setAttribute('aria-live', 'polite');
+
+  // закрыты ли прогнозы — по снимку колеса, тем же правилом, что на сервере (predictOpen в functions/_lib/lots-live.js):
+  // колесо крутится или уже крутилось (вылеты, история, победитель). Выпавший лот (res) страницам не отдают, но без spin его не бывает
+  const closedBy = (lv) => !!(lv && (lv.spin || lv.winner || (Array.isArray(lv.hist) && lv.hist.length) || (Array.isArray(lv.outIds) && lv.outIds.length)));
+  // крутится прямо сейчас (в «Один победитель» spin остаётся и после остановки, но тогда уже есть победитель)
+  const spinning = (lv) => !!(lv && lv.spin && !lv.winner);
+  const isOpen = () => (live ? !closedBy(live) : data ? !!data.open : true);
 
   function mount() {
     const board = document.querySelector('#view .board');
@@ -71,16 +81,16 @@ html.unslop:not([data-ui]) .lp-box { animation: none; }
     mount();
     if (!box.isConnected) return;
     const d = data || { open: true, counts: {}, total: 0, top: [] };
-    const total = d.total || 0;
+    const open = isOpen(), total = d.total || 0;
     const rows = lots.map((l) => {
       const n = (d.counts && d.counts[l.id]) || 0, p = total ? Math.round((n / total) * 100) : 0;
       const names = d.who && d.who[l.id] ? `<p class="lp-who">${d.who[l.id].slice(0, 12).map(esc).join(', ')}${d.who[l.id].length > 12 ? ' …' : ''}</p>` : '';
-      return `<li><button type="button" class="lp-opt${d.mine === l.id ? ' on' : ''}${d.win === l.id ? ' win' : ''}" data-lp="${esc(l.id)}"${d.open && d.signed ? '' : ' disabled'} aria-pressed="${d.mine === l.id}"><span class="lp-bar" style="--p:${p}%"></span><span class="lp-n">${esc(l.name)}</span><b>${p}%</b></button>${names}</li>`;
+      return `<li><button type="button" class="lp-opt${d.mine === l.id ? ' on' : ''}${d.win === l.id ? ' win' : ''}" data-lp="${esc(l.id)}"${open && d.signed ? '' : ' disabled'} aria-pressed="${d.mine === l.id}"><span class="lp-bar" style="--p:${p}%"></span><span class="lp-n">${esc(l.name)}</span><b>${p}%</b></button>${names}</li>`;
     }).join('');
     let note = msg;
     if (!note) {
       if (d.win && d.mine) note = d.got ? 'Угадал! Опыт уже начислен.' : 'Не угадал в этот раз.';
-      else if (!d.open) note = d.mine ? 'Прогнозы закрыты, ждём победителя.' : 'Прогнозы закрыты: колесо уже крутится.';
+      else if (!open) note = d.mine ? 'Прогнозы закрыты, ждём победителя.' : spinning(live) ? 'Прогнозы закрыты: колесо крутится.' : own ? 'Прогнозы закрыты: колесо уже крутили. «Вернуть всех» откроет их снова.' : 'Прогнозы закрыты: колесо уже крутили.';
       else if (!d.signed) note = 'Войди в аккаунт, чтобы сделать прогноз.';
       else if (!d.mine) note = 'Нажми на лот, который, по-твоему, победит.';
     }
@@ -91,27 +101,39 @@ html.unslop:not([data-ui]) .lp-box { animation: none; }
     const dropLot = dropId && d.who ? lots.find((l) => l.id === dropId) : null;
     const dropNames = dropLot ? d.who[dropId] || [] : [];
     const drop = dropLot ? `<p class="lp-drop"><span>Выпал</span> <b>${esc(dropLot.name)}</b>. ${dropNames.length ? `<span>Ставили:</span> ${dropNames.slice(0, 20).map(esc).join(', ')}${dropNames.length > 20 ? ' …' : ''}` : '<span>На него никто не ставил.</span>'}</p>` : '';
-    const adm = d.adm && d.open && d.who ? '<p class="lp-adm">Имена под лотами видишь только ты как админ: остальным до первой прокрутки видны лишь проценты.</p>' : '';
-    box.innerHTML = `<div class="lp-head"><h3>Прогноз</h3><span class="lp-st${d.open ? ' on' : ''}">${d.open ? 'открыт' : 'закрыт'}${total ? ` · ${total}` : ''}</span></div>
+    const adm = d.adm && open && d.who ? '<p class="lp-adm">Имена под лотами видишь только ты как админ: остальным до первой прокрутки видны лишь проценты.</p>' : '';
+    // перерисовка только при переменах: снимок колеса приходит часто, а так не пропадают нажатия
+    const html = `<div class="lp-head"><h3>Прогноз</h3><span class="lp-st${open ? ' on' : ''}">${open ? 'открыт' : 'закрыт'}${total ? ` · ${total}` : ''}</span></div>
       <p class="lp-lede">Угадай, какой лот победит: угадавшим — опыт на сайте.</p>${drop}${adm}
       <ul class="lp-list">${rows}</ul>${note ? `<p class="lp-msg ${cls}">${esc(note)}</p>` : ''}${top}`;
+    if (html !== shown) { box.innerHTML = html; shown = html; }
   }
+  // сбой сети — остаётся то, что было, и запрос повторяется (без прогнозов страница работает как раньше)
   async function load() {
-    try { data = await api('GET'); } catch (e) { /* без прогнозов страница работает как раньше */ }
+    const my = ++seq;
+    let d = null;
+    try { d = await api('GET'); failed = 0; } catch (e) { failed++; }
+    if (my !== seq) return;
+    if (d) data = d;
     paint();
   }
-  // опрос: пока прогнозы открыты или ждём победителя — раз в 15 секунд, на видимой вкладке
+  // опрос раз в 15 с на видимой вкладке: пока прогнозы открыты (проценты) или ждём победителя. После сбоя — через 5 с;
+  // сервер ответил «закрыт», а по снимку открыто (или наоборот) — его ответ старше снимка: тоже через 5 с, до трёх раз подряд
   function schedule() {
     clearTimeout(timer);
-    const waiting = !data || data.open || (!data.win && data.mine);
-    if (waiting) timer = setTimeout(() => { if (!document.hidden) load().then(schedule); else schedule(); }, 15000);
+    const off = !!(data && live && !!data.open !== isOpen());
+    stale = off ? stale + 1 : 0;
+    const waiting = !data || isOpen() || (!data.win && data.mine);
+    const ms = failed ? (failed < 4 ? 5000 : 15000) : off && stale <= 3 ? 5000 : waiting ? 15000 : 0;
+    if (ms) timer = setTimeout(() => { if (!document.hidden) load().then(schedule); else schedule(); }, ms);
   }
   box.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-lp]');
     if (!b || b.disabled || busy) return;
     busy = true; msg = '';
     const id = b.dataset.lp;
-    try { data = await api('POST', { lot: data && data.mine === id ? '' : id }); }
+    // ответ на свой прогноз — свежее всех, что уже в пути
+    try { const d = await api('POST', { lot: data && data.mine === id ? '' : id }); seq++; data = d; }
     catch (err) { msg = err.message; msgCls = 'err'; }
     busy = false;
     paint();
@@ -120,8 +142,18 @@ html.unslop:not([data-ui]) .lp-box { animation: none; }
     const d = e.detail || {};
     lots = (d.lots || []).filter((l) => l && l.id).map((l) => ({ id: l.id, name: l.name || '' }));
     live = d.live || null;
-    // крутанули колесо или выпал победитель — прогнозы обновить сразу
-    const key = live ? [!!live.res, live.winner ? live.winner.at : 0, (live.hist || []).length].join(':') : '';
-    if (key !== lastKey || !data) { lastKey = key; load().then(schedule); } else paint();
+    own = !!(d.room && d.room.own);
+    // крутанули колесо, кто-то вылетел, выпал победитель или «Вернуть всех»: «открыт/закрыт» меняется сразу (по снимку),
+    // а проценты и итог страница перечитывает (зрители — вразброс до 0,8 с, чтобы не все разом)
+    const n = (a) => (Array.isArray(a) ? a.length : 0);
+    // (снимка ещё нет — то же, что колесо не крутили: при его появлении перечитывать нечего)
+    const key = live ? [live.spin ? +live.spin.at || 1 : 0, live.winner ? +live.winner.at || 1 : 0, n(live.hist), n(live.outIds)].join(':') : '0:0:0:0';
+    if (lastKey === null) { lastKey = key; load().then(schedule); return; }
+    if (key !== lastKey) {
+      lastKey = key; msg = '';
+      clearTimeout(jitter);
+      jitter = setTimeout(() => load().then(schedule), Math.random() * 800);
+    }
+    paint();
   });
 })();

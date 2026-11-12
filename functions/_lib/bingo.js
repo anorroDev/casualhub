@@ -64,16 +64,17 @@ export function makeBingoRoutes(h) {
     await ensure(env);
     const uid = me ? me.id : '';
     const [room, game, card, players] = await env.DB.batch([
-      env.DB.prepare('SELECT owner_id FROM lot_rooms WHERE id = ?').bind(code),
+      // xb — метка бинго в снимке колеса (stamp ниже): по ней страница видит, что её ответ не старше снимка
+      env.DB.prepare("SELECT owner_id, CASE WHEN json_valid(live) THEN json_extract(live, '$.xb') END AS xb FROM lot_rooms WHERE id = ?").bind(code),
       env.DB.prepare('SELECT items, marked, winners FROM bingo_games WHERE room_id = ?').bind(code),
       env.DB.prepare('SELECT cells, won_at FROM bingo_cards WHERE room_id = ? AND user_id = ?').bind(code, uid),
       env.DB.prepare('SELECT COUNT(*) AS n FROM bingo_cards WHERE room_id = ?').bind(code),
     ]);
     const r = room.results && room.results[0];
     if (!r) return null;
-    const host = !!uid && uid === r.owner_id;
+    const host = !!uid && uid === r.owner_id, xb = +r.xb || 0;
     const g = game.results && game.results[0];
-    if (!g) return { on: false, host, defaults: host ? BINGO_DEFAULT : undefined };
+    if (!g) return { on: false, host, xb, defaults: host ? BINGO_DEFAULT : undefined };
     const items = arr(g.items);
     let c = card.results && card.results[0];
     // первая карточка зрителя — при первом заходе (у ведущего карточки нет: он отмечает)
@@ -84,10 +85,20 @@ export function makeBingoRoutes(h) {
     }
     const winners = arr(g.winners);
     return {
-      on: true, host, items, marked: arr(g.marked), card: c ? arr(c.cells) : null, won: !!(c && c.won_at),
+      on: true, host, xb, items, marked: arr(g.marked), card: c ? arr(c.cells) : null, won: !!(c && c.won_at),
       place: c && c.won_at ? winners.findIndex((w) => w.id === uid) + 1 : 0,
       winners: winners.map((w) => ({ name: w.name, at: w.at })), players: (players.results && players.results[0] && +players.results[0].n) || 0,
     };
+  }
+  // бинго поменялось — на единицу больше метка xb в снимке колеса (lot_rooms.live). Снимок и так сразу уходит всем по сокету
+  // комнаты лотов (без комнаты — опросом с ETag), а страницы по новой метке перечитывают бинго (lots/bingo.js).
+  // liveTx и settledLive пишут снимок, только если его не меняли с чтения, — после этой записи они просто перечитают его.
+  // Снимка нет (ведущий ещё не открывал колесо) — нет и метки: тогда страницы, как раньше, спрашивают идущее бинго сами раз в 6 с
+  async function stamp(env, code) {
+    try {
+      const w = await env.DB.prepare("UPDATE lot_rooms SET live = json_set(live, '$.xb', coalesce(json_extract(live, '$.xb'), 0) + 1) WHERE id = ? AND json_valid(live)").bind(code).run();
+      if (w.meta && w.meta.changes && h.pokeRoom) await h.pokeRoom(env, code, 'live');
+    } catch (e) { console.error('bingo stamp', code, e && e.message); }
   }
   return {
     // бинго сбора: клише, отмеченные, своя карточка (выдаётся при первом заходе), победители
@@ -135,6 +146,7 @@ export function makeBingoRoutes(h) {
         // опыт — первым трём победителям игры
         if (h.lvGive) for (const w of fresh) if (all.indexOf(w) < 3) { try { await h.lvGive(env, request, me, w.id, [{ kind: 'bingo_win', ref: `${arg}:${w.id}`, peer: me.id }]); } catch (e) { console.error('bingo xp', e && e.message); } }
       } else return fail(400, 'Неизвестное действие.');
+      await stamp(env, arg);
       return json(await view(env, arg, me));
     },
   };
