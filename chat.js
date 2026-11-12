@@ -5,7 +5,9 @@
    Новые сообщения приходят по WebSocket от комнаты чата в casualhub-rt (ответ сервера rt: true, /ws-client.js). Без неё —
    опрос «что нового после N» раз в 9 секунд, и только пока чат виден на экране и вкладка открыта.
    Стикеры — каталог Колеса (/wheel/hub/index.json, наборы Папич, roflan, arthas, Twitch). Текст людей вставляется только
-   через esc(), обработчики — из скрипта (CSP). */
+   через esc(), обработчики — из скрипта (CSP).
+   Новое сообщение со словом «васян» (своё или чужое, не история при загрузке) — событие casualhub:vasyan-call { el: карточка
+   чата }: котик Васян на странице (vasyan.js) отзывается и бежит к чату. */
 (() => {
   if (window.CasualChat) return;
   const U = window.CasualUtil || {};
@@ -16,6 +18,7 @@
   const WEBM_OK = (() => { try { return !!document.createElement('video').canPlayType('video/webm; codecs="vp9"'); } catch (e) { return false; } })();
   const vidSrc = (src) => '/wheel/' + (WEBM_OK ? src : src.replace(/\.webm$/i, '.mp4'));
   const POLL_MS = 9000, WS_GIVEUP_MS = 45000, MAX = 300, GROUP_MS = 5 * 60e3;
+  const CALL = /васян|vasyan/i; // зовут котика
   const COLORS = ['#3550E8', '#EAA92C', '#2EAD60', '#EC4899', '#9333EA', '#06B6D4', '#F97316', '#14B8A6'];
   const colorOf = (id) => COLORS[[...String(id)].reduce((a, c) => a + c.charCodeAt(0), 0) % COLORS.length];
   const profUrl = (u) => (/^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/.test(u.handle || '') ? '/profile/' + u.handle : '/profile/?id=' + encodeURIComponent(u.id));
@@ -163,8 +166,8 @@ html.unslop .ch-m.ch-fresh { animation: u-in var(--mo-in, .22s) var(--mo-ease, e
       watchVideos();
       if (keep < 0) toBottom(); else list.scrollTop = keep;
     }
-    // новые сообщения: дописываются в конец, без перерисовки остальных
-    function add(items, fromOthers) {
+    // новые сообщения: дописываются в конец, без перерисовки остальных. quiet — это история (перезагрузка списка), а не новое
+    function add(items, fromOthers, quiet) {
       const fresh = items.filter((m) => m && m.id && !S.ids.has(m.id) && m.u).sort((a, b) => a.id - b.id);
       if (!fresh.length) return;
       const stick = S.stick && atBottom();
@@ -185,6 +188,7 @@ html.unslop .ch-m.ch-fresh { animation: u-in var(--mo-in, .22s) var(--mo-ease, e
       // чужие, а человек их не видит (чат скрыт или он читает выше) — «новые сообщения ↓» и значок на вкладке
       if (fromOthers && others && (!shown() || !S.stick)) setUnread(S.unread + others);
       else seen();
+      if (!quiet && fresh.some((m) => CALL.test(m.text || ''))) document.dispatchEvent(new CustomEvent('casualhub:vasyan-call', { detail: { el } }));
     }
     function drop(ids) {
       const gone = (ids || []).filter((id) => S.ids.has(id));
@@ -197,7 +201,7 @@ html.unslop .ch-m.ch-fresh { animation: u-in var(--mo-in, .22s) var(--mo-ease, e
       if (!d) return;
       if (d.reset) { S.msgs = []; S.ids.clear(); S.stick = true; }
       if (d.last > S.last) S.last = d.last;
-      if (d.reset) { add(d.msgs || [], false); paintAll(); return; }
+      if (d.reset) { add(d.msgs || [], false, true); paintAll(); return; }
       drop(d.del);
       add(d.msgs || [], true);
     }
