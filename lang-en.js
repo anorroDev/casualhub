@@ -2764,7 +2764,18 @@
 "Посоветуй другу":"Recommend to your friend",
 "Всё любимое друга у тебя уже оценено.":"You have already rated everything your friend loves.",
 "Твоё любимое уже есть у друга в оценках.":"Your friend has already rated your favourites.",
-". Общих оценок мало, процент пока примерный.":". Few shared ratings, so the percentage is rough for now."};
+". Общих оценок мало, процент пока примерный.":". Few shared ratings, so the percentage is rough for now.",
+// прогнозы (lots/predict.js)
+"Прогноз":"Prediction",
+"Угадай, какой лот победит: угадавшим — опыт на сайте.":"Guess which lot wins: correct guesses earn site XP.",
+"Угадал! Опыт уже начислен.":"You got it! XP has been added.",
+"Не угадал в этот раз.":"Not this time.",
+"Прогнозы закрыты, ждём победителя.":"Predictions are closed, waiting for the winner.",
+"Прогнозы закрыты: колесо уже крутится.":"Predictions are closed: the wheel is already spinning.",
+"Войди в аккаунт, чтобы сделать прогноз.":"Sign in to make a prediction.",
+"Нажми на лот, который, по-твоему, победит.":"Tap the lot you think will win.",
+"Лучшие прогнозисты сезона":"Top predictors of the season",
+"Такого лота в сборе нет.":"There is no such lot in this collection."};
   // слово после числа: 1 оценка, 5 оценок. [все русские формы, одна штука, несколько]
   const NOUNS = [
     [['рофлан', 'рофлана', 'рофланов', 'рофланы'], 'Soul', 'Souls'],

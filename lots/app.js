@@ -1022,6 +1022,8 @@
   }
   function paintAll() {
     paintHead(); paintRule(); paintAdd(); paintConfirm(); paintResults(); paintList(); paintStatus(); wheel(); paintWinner(); syncBg(); watchOpen(); paintHost(); paintHist();
+    // снимок сбора для модулей страницы (lots/predict.js)
+    document.dispatchEvent(new CustomEvent('casualhub:lots', { detail: { code, room: S.room, lots: S.lots, live: S.live } }));
   }
   // телефон: колесо и список лотов — разные вкладки, переключатель вверху
   let section = 'wheel';
