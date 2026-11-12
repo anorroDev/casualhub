@@ -2818,7 +2818,21 @@
 "Этот вариант уже убрали.":"This option has already been vetoed.",
 "Нужно оставить хотя бы два варианта.":"At least two options must stay.",
 "Вето бывает только в «Вечере с друзьями».":"Vetoes are only for “Evening with friends”.",
-"Такого варианта в сборе нет.":"There is no such option in this collection."};
+"Такого варианта в сборе нет.":"There is no such option in this collection.",
+// бинго для стрима (lots/bingo.js)
+"Бинго для стрима":"Stream bingo",
+"Поле 5×5 из клише стрима. У каждого зрителя своя карточка, а отмечаешь ты: что случилось на стриме — то и закрывается у всех. Кто первым соберёт линию, побеждает.":"A 5×5 board of stream clichés. Every viewer gets their own card, and you mark what happens on stream — it closes for everyone. The first to complete a line wins.",
+"Свой список клише (от 24 до 60, по одному в строке)":"Your own cliché list (24 to 60, one per line)",
+"Запустить бинго":"Start bingo",
+"Отмечай, что случилось на стриме. Карточек у зрителей:":"Mark what happened on stream. Viewer cards:",
+"Победители":"Winners",
+"Закончить бинго":"End bingo",
+"Идёт бинго! Войди в аккаунт, чтобы получить свою карточку.":"Bingo is on! Sign in to get your card.",
+"Клетки закрываются сами, когда ведущий отмечает, что это случилось на стриме. Собери линию — ряд, столбец или диагональ.":"Cells close on their own when the host marks that it happened on stream. Complete a line — a row, column or diagonal.",
+"Бинго ведёт только ведущий сбора.":"Only the collection host runs the bingo.",
+"Нужно от 24 до 60 разных клише, каждое до 60 знаков.":"You need 24 to 60 different clichés, up to 60 characters each.",
+"Бинго ещё не запущено.":"Bingo hasn't started yet.",
+"Нет такого клише.":"No such cliché."};
   // слово после числа: 1 оценка, 5 оценок. [все русские формы, одна штука, несколько]
   const NOUNS = [
     [['рофлан', 'рофлана', 'рофланов', 'рофланы'], 'Soul', 'Souls'],
