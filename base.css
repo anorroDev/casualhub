@@ -64,6 +64,11 @@ html[data-bg="stars"]::after {
 }
 @keyframes bg-twinkle { from { opacity: .15; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { html[data-bg="stars"]::after { animation: none; opacity: .6; } }
+/* большие экраны: окна поверх страницы без размытия фона (backdrop-filter) — на 2K–4K и 144–240 Гц оно пересчитывалось,
+   стоило котику внизу шагнуть, и подтормаживало; фон под окнами и так затемнён */
+@media (min-width: 1700px) {
+  :is(.lv-ov, .lv-spot, .sh-ov, .st-sheet, .fp-sheet, .howto-modal, .wn-sheet, .tm-sheet, .rv-sheet, .st-pick, .rc-pick, .pv, .adm-modal) { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+}
 
 /* html.ui-still (ставят head-скрипты со второй страницы за сеанс): анимации появления страницы сразу доиграны,
    поэтому при переходах вид не «въезжает» заново. Окна, которые открывает сам человек, анимируются как обычно */

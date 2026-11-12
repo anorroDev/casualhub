@@ -690,7 +690,7 @@
     return new Promise((resolve) => {
       const timers = [];
       const at = (ms, f) => timers.push(setTimeout(f, ms));
-      let raf = 0;
+      let raf = 0, stopConf = null; // stopConf — остановить конфетти
       const stage = fx.querySelector('.fx-stage');
       const stick = fx.querySelector('.fx-sticker');
       const brow = fx.querySelector('.fx-eyebrow');
@@ -731,6 +731,7 @@
         fxDone = null;
         timers.forEach(clearTimeout);
         cancelAnimationFrame(raf);
+        if (stopConf) stopConf();
         fx.removeEventListener('click', end);
         document.removeEventListener('keydown', onKey, true);
         clearInterval(watch);
@@ -770,32 +771,12 @@
           stick.classList.add('in');
         }
       }, 400);
+      // конфетти — общий CasualUtil.confetti: по времени (на любой частоте экрана одинаково), 60 перерисовок в секунду
       function confetti() {
-        const cv = fx.querySelector('.fx-confetti');
-        const r = Math.min(2, devicePixelRatio || 1);
-        cv.width = innerWidth * r; cv.height = innerHeight * r;
-        const g = cv.getContext('2d');
-        g.scale(r, r);
         const nb = nameEl.getBoundingClientRect();
-        const ox = nb.left + nb.width / 2, oy = nb.top + nb.height / 2;
-        const parts = Array.from({ length: 160 }, (_, i) => {
-          const a = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.6, v = 6 + Math.random() * 11;
-          return { x: ox, y: oy, vx: Math.cos(a) * v, vy: Math.sin(a) * v, w: 6 + Math.random() * 6, h: 4 + Math.random() * 6, r: Math.random() * TAU, vr: (Math.random() - 0.5) * 0.4, c: PALETTE[i % PALETTE.length] };
-        });
-        const tick = () => {
-          g.clearRect(0, 0, innerWidth, innerHeight);
-          let alive = 0;
-          for (const p of parts) {
-            p.vx *= 0.985; p.vy = p.vy * 0.985 + 0.32; p.x += p.vx; p.y += p.vy; p.r += p.vr;
-            if (p.y > innerHeight + 20) continue;
-            alive++;
-            g.save(); g.translate(p.x, p.y); g.rotate(p.r); g.fillStyle = p.c;
-            g.fillRect(-p.w / 2, -p.h / 2 * Math.abs(Math.cos(p.r * 2)), p.w, p.h * Math.abs(Math.cos(p.r * 2)) + 1);
-            g.restore();
-          }
-          if (alive) raf = requestAnimationFrame(tick);
-        };
-        raf = requestAnimationFrame(tick);
+        cancelAnimationFrame(raf);
+        if (stopConf) stopConf();
+        stopConf = window.CasualUtil.confetti(fx.querySelector('.fx-confetti'), { x: nb.left + nb.width / 2, y: nb.top + nb.height / 2, colors: PALETTE });
       }
     });
   }

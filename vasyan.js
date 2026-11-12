@@ -692,6 +692,8 @@
   function loop(t) {
     raf = requestAnimationFrame(loop);
     if (document.hidden || !cat) { lastT = t; return; }
+    // на 120–240 Гц шаг не каждый кадр: котику хватает ~60 в секунду, а страница не греет процессор (движение — по времени, dt)
+    if (t - lastT < 12.5) return;
     const dt = Math.min(100, t - lastT) / 1000; lastT = t;
     st.hunger = Math.min(100, st.hunger + dt / 12);
     if (t - lastFrame > 160) { frame++; lastFrame = t; }
