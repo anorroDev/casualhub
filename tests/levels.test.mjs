@@ -65,8 +65,13 @@ test('флаг и награды по уровням', () => {
   assert.equal(levelsMode({ LEVELS: '1' }), 'all');
   assert.deepEqual(unlockedAt(1).frames, []);
   assert.deepEqual(unlockedAt(12).frames, ['frame1', 'frame5', 'frame2']);
-  assert.deepEqual(unlockedAt(17).nicks, []);
-  assert.deepEqual(unlockedAt(35).nicks, ['shadow', 'rainbow']);
+  assert.deepEqual(unlockedAt(7).nicks, []);
+  assert.deepEqual(unlockedAt(17).nicks, ['outline']);
+  assert.deepEqual(unlockedAt(35).nicks, ['outline', 'shadow', 'arcade', 'rainbow']);
+  // шрифты ника: пара — сразу всем, остальные — по уровням; админу — все
+  assert.deepEqual(unlockedAt(1).fonts, ['comfortaa', 'caveat']);
+  assert.ok(!unlockedAt(13).fonts.includes('aladin') && unlockedAt(14).fonts.includes('aladin'));
+  assert.equal(unlockedAt(1, true).fonts.length, 17);
   assert.ok(!unlockedAt(24).pet && unlockedAt(25).pet);
   assert.ok(!unlockedAt(49).bgs.includes('legend') && unlockedAt(50).bgs.includes('legend'));
   assert.equal(unlockedAt(1, true).frames.length, 6); // админу открыто всё
@@ -509,4 +514,12 @@ test('сезон: обращений к D1 — закрытие и /levels/me м
   t.diagnostic(`закрытие сезона: ${nClose} обращений к D1, /levels/me: ${nMe}`);
   assert.ok(nClose < 50 && nMe < 50);
   assert.equal(q(env, 'SELECT COUNT(*) AS n FROM season_results WHERE season = 1')[0].n, 31);
+});
+
+test('оформление, купленное в магазине раньше уровня, открыто так же, как за уровень', async () => {
+  const L = await import('../functions/_lib/levels.js');
+  assert.ok(!L.unlockedAt(3).fonts.includes('lobster'));
+  assert.ok(L.unlockedAt(3, false, new Set(['font:lobster'])).fonts.includes('lobster'));
+  assert.ok(L.unlockedAt(3, false, new Set(['frame6'])).frames.includes('frame6'));
+  assert.ok(L.unlockedAt(13).fx.includes('snow') && !L.unlockedAt(32).fx.includes('embers'));
 });

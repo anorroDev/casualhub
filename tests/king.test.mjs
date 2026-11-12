@@ -1,7 +1,7 @@
 // «Царь Горы»: посев сетки, бои горы и сетки, отмена, голоса. node --test tests/king.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { seedOrder, cleanConfig, newState, startState, decide, closeByVotes, undoLast, finishEarly, buildRounds } from '../functions/_lib/king.js';
+import { seedOrder, cleanConfig, newState, startState, decide, closeByVotes, undoLast, finishEarly, buildRounds, addPeople } from '../functions/_lib/king.js';
 
 const cfg = (b) => { const c = cleanConfig(b); assert.ok(!c.err, c.err); return c; };
 test('посев сетки: сильные встречаются как можно позже', () => {
@@ -51,4 +51,18 @@ test('настройки: мало участников — ошибка; зак
   decide(st, 'a', 'host', null, 2);
   assert.ok(finishEarly(st, 3).ok);
   assert.equal(st.status, 'done');
+});
+
+test('свои картинки участников (обложки из «Мнения»): маленький data URL — в king_imgs, в снимке «@»', () => {
+  const small = 'data:image/jpeg;base64,' + 'A'.repeat(100);
+  const big = 'data:image/jpeg;base64,' + 'A'.repeat(20000);
+  const imgs = [];
+  const st = newState(cleanConfig({ fmt: 'hill', p: [{ n: 'A', img: small }, { n: 'B', img: big }, { n: 'C', img: 'https://x.y/z.png' }, { n: 'D', img: 'data:text/html;base64,AAAA' }] }), imgs);
+  assert.deepEqual(st.p.map((x) => x.img), ['@', '', 'https://x.y/z.png', '']);
+  assert.deepEqual(imgs, [{ id: st.p[0].id, data: small }]);
+  const more = [];
+  assert.ok(addPeople(st, [{ n: 'E', img: small }], more).ok);
+  assert.deepEqual(more, [{ id: st.p[4].id, data: small }]);
+  // без списка картинок (старый вызов) участник остаётся без картинки, а не с «@» без данных
+  assert.equal(newState(cleanConfig({ fmt: 'hill', p: [{ n: 'A', img: small }, { n: 'B' }] })).p[0].img, '');
 });

@@ -78,23 +78,22 @@
 .lv-letter .act { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .lv-letter .gift { font-weight: 800; color: #D99A1E; }
 html.unslop .lv-hbtn.lv-pulse { animation-duration: 2.6s; }
-.lv-num { position: absolute; right: -5px; bottom: -4px; min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 9px; background: var(--accent, #3550E8); color: #fff; font: 700 10.5px/18px system-ui, sans-serif; text-align: center; box-shadow: 0 0 0 2px var(--panel, #1b1d24); pointer-events: none; z-index: 2; }
+.lv-num { position: absolute; right: -5px; bottom: -4px; min-width: 18px; height: 18px; padding: 0 4px; box-sizing: border-box; border-radius: 9px; background: var(--accent, #3550E8); color: #fff; font: 700 10.5px/18px system-ui, sans-serif; text-align: center; box-shadow: 0 0 0 2px var(--panel, #1b1d24); pointer-events: none; z-index: 3; }
 [data-ava].lv-has { position: relative; overflow: visible !important; }
 [data-ava] > .lv-num { right: -4px; bottom: -3px; min-width: 16px; height: 16px; font-size: 9.5px; line-height: 16px; }
-/* Рамки аватара — награды за уровни. Пиксельный дух: чёткие кольца без размытия, анимация ступеньками.
-   --u — толщина «пикселя» рамки: у маленьких аватаров в списках 1px, в профиле и в предпросмотре крупнее.
-   У анимированных рамок нет !important: он сильнее анимации, и рамка стояла бы на месте */
-#avaWrap { --u: 1.7px; }
-.lv-pick .dot { --u: .75px; }
-.lv-frame-frame1 { box-shadow: 0 0 0 calc(var(--u, 1px) * 2) var(--panel, #1b1d24), 0 0 0 calc(var(--u, 1px) * 4) #F2BA44 !important; border-radius: 50%; }
-.lv-frame-frame5 { box-shadow: 0 0 0 calc(var(--u, 1px) * 2) var(--panel, #1b1d24) !important; outline: calc(var(--u, 1px) * 3) dashed var(--accent, #5B74FF); outline-offset: calc(var(--u, 1px) * 2); border-radius: 50%; }
-.lv-frame-frame2 { border-radius: 50%; animation: lv-neon 1.6s steps(1, end) infinite; }
-@keyframes lv-neon { 0%, 100% { box-shadow: 0 0 0 calc(var(--u, 1px) * 2) var(--panel, #1b1d24), 0 0 0 calc(var(--u, 1px) * 4) #5B74FF, 0 0 0 calc(var(--u, 1px) * 6) var(--panel, #1b1d24), 0 0 0 calc(var(--u, 1px) * 7.5) #E85FA5; } 50% { box-shadow: 0 0 0 calc(var(--u, 1px) * 2) var(--panel, #1b1d24), 0 0 0 calc(var(--u, 1px) * 4) #E85FA5, 0 0 0 calc(var(--u, 1px) * 6) var(--panel, #1b1d24), 0 0 0 calc(var(--u, 1px) * 7.5) #5B74FF; } }
-.lv-frame-frame3 { border-radius: 50%; animation: lv-flow 3s steps(1, end) infinite; }
-@keyframes lv-flow { 0.0% { box-shadow: 0 0 0 calc(var(--u, 1px) * 2) var(--panel, #1b1d24), 0 0 0 calc(var(--u, 1px) * 4) #F26A55; } 16.7% { box-shadow: 0 0 0 calc(var(--u, 1px) * 2) var(--panel, #1b1d24), 0 0 0 calc(var(--u, 1px) * 4) #F2BA44; } 33.3% { box-shadow: 0 0 0 calc(var(--u, 1px) * 2) var(--panel, #1b1d24), 0 0 0 calc(var(--u, 1px) * 4) #43C97A; } 50.0% { box-shadow: 0 0 0 calc(var(--u, 1px) * 2) var(--panel, #1b1d24), 0 0 0 calc(var(--u, 1px) * 4) #14A3A8; } 66.7% { box-shadow: 0 0 0 calc(var(--u, 1px) * 2) var(--panel, #1b1d24), 0 0 0 calc(var(--u, 1px) * 4) #5B74FF; } 83.3% { box-shadow: 0 0 0 calc(var(--u, 1px) * 2) var(--panel, #1b1d24), 0 0 0 calc(var(--u, 1px) * 4) #E85FA5; } 100% { box-shadow: 0 0 0 calc(var(--u, 1px) * 2) var(--panel, #1b1d24), 0 0 0 calc(var(--u, 1px) * 4) #F26A55; } }
-.lv-frame-frame4 { box-shadow: 0 0 0 calc(var(--u, 1px) * 2) var(--panel, #1b1d24), 0 0 0 calc(var(--u, 1px) * 4) #E2A925, 0 0 0 calc(var(--u, 1px) * 6) var(--panel, #1b1d24), 0 0 0 calc(var(--u, 1px) * 7.5) #8C5A12, 0 0 0 calc(var(--u, 1px) * 9) #E2A925 !important; border-radius: 50%; }
-.lv-frame-frame6 { border-radius: 50%; outline: calc(var(--u, 1px) * 2.5) dashed #F2BA44; outline-offset: calc(var(--u, 1px) * 7); animation: lv-flow 1.5s steps(1, end) infinite; }
-@media (prefers-reduced-motion: reduce) { .lv-frame-frame2, .lv-frame-frame3, .lv-frame-frame6 { animation: none; box-shadow: 0 0 0 calc(var(--u, 1px) * 2) var(--panel, #1b1d24), 0 0 0 calc(var(--u, 1px) * 4) #5B74FF, 0 0 0 calc(var(--u, 1px) * 6) var(--panel, #1b1d24), 0 0 0 calc(var(--u, 1px) * 7.5) #E85FA5 !important; } }
+/* Рамки аватара — награды за уровни: пиксельные кольца в стиле значков званий (/art/frame/<id>.svg). Рамка — слой поверх
+   аватара (::after), шире его: у колец сетка 40 клеток на аватар в 30, у «Мастера» 44, у «Легенды» 52 (отсюда inset).
+   Анимированные — кадры в ряд, сдвиг ступеньками. Сам аватар должен быть position: relative (профиль, списки, предпросмотр) */
+[class*="lv-frame-"]::after { content: ''; position: absolute; inset: -16.67%; z-index: 2; pointer-events: none; background: var(--fr) 0 0 / 100% 100% no-repeat; image-rendering: pixelated; }
+.lv-frame-frame1 { --fr: url(/art/frame/frame1.svg); } .lv-frame-frame5 { --fr: url(/art/frame/frame5.svg); }
+.lv-frame-frame2 { --fr: url(/art/frame/frame2.svg); } .lv-frame-frame3 { --fr: url(/art/frame/frame3.svg); }
+.lv-frame-frame4 { --fr: url(/art/frame/frame4.svg); } .lv-frame-frame6 { --fr: url(/art/frame/frame6.svg); }
+.lv-frame-frame4::after { inset: -23.34%; }
+.lv-frame-frame6::after { inset: -36.67%; }
+.lv-frame-frame2::after, .lv-frame-frame6::after { background-size: 200% 100%; animation: lv-fr 1.4s steps(2, jump-none) infinite; }
+.lv-frame-frame3::after { background-size: 600% 100%; animation: lv-fr 2.4s steps(6, jump-none) infinite; }
+@keyframes lv-fr { to { background-position: 100% 0; } }
+@media (prefers-reduced-motion: reduce) { [class*="lv-frame-"]::after { animation: none; } }
 /* корона («Мастер», «Легенда») и котик Васян (25-й уровень): в профиле у аватара и в предпросмотре */
 #avaWrap > .lv-crown, .lv-lk-ava > .lv-crown { position: absolute; left: 50%; top: -28px; width: 46px; height: auto; transform: translateX(-50%) rotate(-8deg); image-rendering: pixelated; z-index: 3; pointer-events: none; }
 /* Васян — лист /art/pet-vasyan.webp из 6 кадров (последний — моргнул) */
@@ -102,7 +101,9 @@ html.unslop .lv-hbtn.lv-pulse { animation-duration: 2.6s; }
 @keyframes lv-blink { to { background-position: 100% 0; } }
 .lv-lk-ava > .lv-crown { width: 34px; top: -22px; }
 .lv-lk-ava > .lv-pet { width: 46px; height: 32px; right: -52px; top: 0; }
-/* ник: пиксельная тень (18-й) и радужный ступеньками (35-й) */
+/* ник: пиксельный контур (8-й), пиксельная тень (18-й), «Аркада» — объёмная тень ступеньками (27-й), радужный (35-й) */
+.lv-nick-outline { --nk-o: color-mix(in srgb, var(--accent, #5B74FF) 50%, #120e16); text-shadow: .05em 0 0 var(--nk-o), -.05em 0 0 var(--nk-o), 0 .05em 0 var(--nk-o), 0 -.05em 0 var(--nk-o), .05em .05em 0 var(--nk-o), -.05em -.05em 0 var(--nk-o), .05em -.05em 0 var(--nk-o), -.05em .05em 0 var(--nk-o); }
+.lv-nick-arcade { text-shadow: .04em .04em 0 var(--accent, #5B74FF), .08em .08em 0 color-mix(in srgb, var(--accent, #5B74FF) 65%, #120e16), .12em .12em 0 color-mix(in srgb, var(--accent, #5B74FF) 35%, #120e16), .16em .16em 0 #120e16; }
 .lv-nick-shadow { text-shadow: .06em .06em 0 color-mix(in srgb, var(--accent, #5B74FF) 80%, #000), .12em .12em 0 color-mix(in srgb, var(--ink, #fff) 16%, transparent); }
 .lv-nick-rainbow { background: linear-gradient(90deg, #F26A55 0 16.6%, #F2BA44 0 33.3%, #43C97A 0 50%, #14A3A8 0 66.6%, #5B74FF 0 83.3%, #E85FA5 0) 0 0 / 200% 100% repeat-x; -webkit-background-clip: text; background-clip: text; color: transparent !important; -webkit-text-fill-color: transparent; animation: lv-rb 3s steps(12) infinite; }
 @keyframes lv-rb { to { background-position: 200% 0; } }
@@ -111,18 +112,23 @@ html.unslop .lv-hbtn.lv-pulse { animation-duration: 2.6s; }
 .lv-nick-rainbow:has(> .ch) { background: none; -webkit-text-fill-color: currentColor; color: inherit !important; animation: lv-hue 3s steps(6) infinite; }
 .lv-nick-rainbow > .ch:nth-child(6n+1) { color: #F26A55 !important; } .lv-nick-rainbow > .ch:nth-child(6n+2) { color: #F2BA44 !important; } .lv-nick-rainbow > .ch:nth-child(6n+3) { color: #43C97A !important; } .lv-nick-rainbow > .ch:nth-child(6n+4) { color: #14A3A8 !important; } .lv-nick-rainbow > .ch:nth-child(6n+5) { color: #5B74FF !important; } .lv-nick-rainbow > .ch:nth-child(6n+6) { color: #E85FA5 !important; }
 @keyframes lv-hue { to { filter: hue-rotate(360deg); } }
-/* эффекты профиля: звездопад в шапке (22-й) и конфетти при открытии (45-й) */
+/* эффекты профиля: звездопад (22-й), пиксельный снег (13-й) и искры костра (33-й) в шапке, конфетти при открытии (45-й).
+   Снег и искры — пиксельные плитки /art/fx/*.svg: снег падает, искры поднимаются, ступеньками */
+.lv-fx-snow, .lv-fx-embers { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: url(/art/fx/snow.svg) 0 0 / 128px 128px repeat; image-rendering: pixelated; animation: lv-snow 9s steps(64) infinite linear; }
+.lv-fx-embers { background-image: url(/art/fx/embers.svg); animation: lv-embers 6s steps(48) infinite linear; }
+@keyframes lv-snow { to { background-position: 16px 128px; } }
+@keyframes lv-embers { to { background-position: -12px -128px; } }
 .lv-fx-stars { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: #fff; opacity: .85; -webkit-mask: url(/art/site/stars.webp) 0 0 / 260px 260px repeat; mask: url(/art/site/stars.webp) 0 0 / 260px 260px repeat; animation: lv-fall 10s steps(52) infinite linear; }
 @keyframes lv-fall { to { -webkit-mask-position: 0 260px; mask-position: 0 260px; } }
 .lv-conf { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 6; border-radius: inherit; }
 .lv-conf i { position: absolute; top: -14px; width: 10px; height: 10px; animation: lv-cf 1.9s steps(16) var(--d, 0s) forwards; }
 @keyframes lv-cf { to { transform: translate(var(--x, 0), 520px) rotate(180deg); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .lv-pet, .lv-nick-rainbow, .lv-fx-stars { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .lv-pet, .lv-nick-rainbow, .lv-fx-stars, .lv-fx-snow, .lv-fx-embers { animation: none !important; } }
 /* вкладка «Оформление»: предпросмотр профиля, замки, заметка для админа */
 .lv-lk { position: relative; border-radius: 14px; overflow: hidden; background: var(--panel-2, #1d2129); }
 .lv-lk-ban { position: relative; height: 112px; overflow: hidden; background: linear-gradient(135deg, color-mix(in srgb, var(--accent, #5B74FF) 35%, transparent), color-mix(in srgb, var(--good, #43C97A) 22%, transparent)); background-size: cover; background-position: center 70%; }
 .lv-lk-row { position: relative; z-index: 2; display: flex; align-items: flex-end; gap: 18px; padding: 0 16px 16px; margin-top: -34px; }
-.lv-lk-ava { --u: 1.3px; position: relative; flex: none; width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; background: var(--accent, #5B74FF); color: #fff; font: 800 30px/1 system-ui, sans-serif; }
+.lv-lk-ava { position: relative; flex: none; width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; background: var(--accent, #5B74FF); color: #fff; font: 800 30px/1 system-ui, sans-serif; }
 .lv-lk-who { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; padding-bottom: 4px; }
 .lv-lk-name { font: 800 24px/1.15 var(--font-display, system-ui), sans-serif; overflow-wrap: anywhere; color: var(--ink, #f3f4f6); }
 .lv-lk .lv-chip { display: inline-flex; padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--accent, #3550E8) 14%, transparent); font-size: 13px; font-weight: 600; }
@@ -310,6 +316,14 @@ html.lv-on .ava-wrap > .ava-ring { display: none !important; }
 .lv-pick button[aria-pressed="true"] { border-color: var(--accent, #3550E8); background: color-mix(in srgb, var(--accent, #3550E8) 12%, transparent); box-shadow: inset 0 0 0 1px var(--accent, #3550E8), 0 0 0 3px color-mix(in srgb, var(--accent, #3550E8) 22%, transparent); } /* выбранное — рамка цвета темы */
 .lv-pick button:disabled { opacity: .45; cursor: not-allowed; }
 .lv-pick .dot { width: 18px; height: 18px; border-radius: 50%; }
+/* цвет ника — пиксельный «камень»: квадрат с бликом и тенью внутри, как камни на значках званий */
+.lv-pick [data-color] .dot { width: 16px; height: 16px; border-radius: 0; box-shadow: inset 2px 2px 0 rgb(255 255 255 / .38), inset -2px -2px 0 rgb(0 0 0 / .32); outline: 2px solid #120e16; }
+/* рамка в выборе — маленький аватар с той же пиксельной рамкой; поля — чтобы рамке было куда выйти */
+.lv-pick .fr { position: relative; flex: none; width: 22px; height: 22px; margin: 4px; border-radius: 50%; background: var(--accent, #5B74FF); }
+.lv-pick .fr.lv-frame-frame4 { margin: 5px; } .lv-pick .fr.lv-frame-frame6 { margin: 8px 9px; }
+/* шрифт ника в выборе: твой ник этим шрифтом и подпись */
+.lv-pick .fnt { font-size: 18px; line-height: 1.15; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lv-pick .fnt-n { font-size: 11px; font-weight: 600; color: var(--ink-3, #8a8f9e); }
 .lv-pick .sw { width: 30px; height: 20px; border-radius: 6px; border: 1px solid var(--line, #2b2e38); }
 .lv-tg { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 14px; }
 .lv-tg input { width: 20px; height: 20px; accent-color: var(--accent, #3550E8); flex: none; }
@@ -393,6 +407,20 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   document.head.appendChild(style);
 
   let ME = null;
+  const FX_LAYER = ['stars', 'snow', 'embers']; // эффекты слоем в шапке профиля (конфетти — отдельно, при открытии)
+  // шрифты ника (награды за уровни; id — как NICK_FONTS в levels.js): Google Fonts, грузятся только буквы ника (&text=)
+  const FONTS = { comfortaa: ['Comfortaa', 700], caveat: ['Caveat', 700], lobster: ['Lobster', 400], press: ['Press Start 2P', 400], pacifico: ['Pacifico', 400], russo: ['Russo One', 400], amatic: ['Amatic SC', 700], kelly: ['Kelly Slab', 400], aladin: ['Aladin', 400], yeseva: ['Yeseva One', 400], unbounded: ['Unbounded', 700], underdog: ['Underdog', 400], marck: ['Marck Script', 400], glitch: ['Rubik Glitch', 400], ruslan: ['Ruslan Display', 400], paint: ['Rubik Wet Paint', 400], beastly: ['Rubik Beastly', 400] };
+  { const st = document.createElement('style'); st.textContent = Object.entries(FONTS).map(([id, [f, w]]) => `:root .lv-font-${id} { font-family: '${f}', var(--font-display, system-ui), sans-serif !important; font-weight: ${w} !important; font-synthesis: none; letter-spacing: normal; }`).join('\n'); document.head.appendChild(st); }
+  const fontSeen = new Set();
+  function needFonts(ids, text) {
+    const list = ids.filter((id) => FONTS[id]), chars = [...new Set(String(text || ''))].join('');
+    if (!list.length || !chars || fontSeen.has(list.join() + '|' + chars)) return;
+    fontSeen.add(list.join() + '|' + chars);
+    const l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = 'https://fonts.googleapis.com/css2?' + list.map((id) => 'family=' + FONTS[id][0].replace(/ /g, '+') + (FONTS[id][1] === 700 ? ':wght@700' : '')).join('&') + '&text=' + encodeURIComponent(chars) + '&display=swap';
+    document.head.appendChild(l);
+  }
   // значок звания сезона: /art/rank/<id>.svg (id из ответа сервера, только латиница). В окнах без lazy — нужен сразу
   const emblem = (id, size, cls) => (/^[a-z]{2,12}$/.test(String(id || '')) ? `<img class="lv-emb${cls ? ' ' + cls : ''}" src="/art/rank/${id}.svg" width="${size}" height="${size}" alt="" decoding="async">` : '');
   const rankTitle = (id) => { const r = ME && ME.season && (ME.season.ranks || []).find((x) => x.id === id); return r ? r.title : ''; };
@@ -686,13 +714,15 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     if (ava) { [...ava.classList].filter((c) => c.startsWith('lv-frame-')).forEach((c) => ava.classList.remove(c)); if (d.look.frame) ava.classList.add('lv-frame-' + d.look.frame); }
     // ник с тенью или радужный, корона у «Мастера» и «Легенды», котик Васян, звездопад в шапке, конфетти один раз за просмотр
     if (name) { [...name.classList].filter((c) => c.startsWith('lv-nick-')).forEach((c) => name.classList.remove(c)); if (d.look.nick) name.classList.add('lv-nick-' + d.look.nick); }
+    // шрифт ника: класс и сам шрифт (только буквы этого ника)
+    if (name) { [...name.classList].filter((c) => c.startsWith('lv-font-')).forEach((c) => name.classList.remove(c)); if (d.look.font && FONTS[d.look.font]) { name.classList.add('lv-font-' + d.look.font); needFonts([d.look.font], name.textContent); } }
     if (ava) {
       ava.querySelectorAll(':scope > .lv-crown, :scope > .lv-pet').forEach((x) => x.remove());
       if (d.look.frame === 'frame4' || d.look.frame === 'frame6') ava.insertAdjacentHTML('beforeend', '<img class="lv-crown" src="/art/crown.svg" width="44" height="30" alt="" aria-hidden="true">');
       if (d.look.pet) ava.insertAdjacentHTML('beforeend', '<i class="lv-pet" aria-hidden="true"></i>');
     }
     const anyBan = hero.querySelector('.banner');
-    if (anyBan) { anyBan.querySelectorAll(':scope > .lv-fx-stars').forEach((x) => x.remove()); if (d.look.fx === 'stars') anyBan.insertAdjacentHTML('beforeend', '<i class="lv-fx-stars" aria-hidden="true"></i>'); }
+    if (anyBan) { anyBan.querySelectorAll(':scope > .lv-fx-stars, :scope > .lv-fx-snow, :scope > .lv-fx-embers').forEach((x) => x.remove()); if (FX_LAYER.includes(d.look.fx)) anyBan.insertAdjacentHTML('beforeend', `<i class="lv-fx-${d.look.fx}" aria-hidden="true"></i>`); }
     if (d.look.fx === 'confetti' && confFor !== id) { confFor = id; burst(hero); }
     const banner = hero.querySelector('.banner.def');
     [...hero.classList].filter((c) => c.startsWith('lv-bg-')).forEach((c) => hero.classList.remove(c));
@@ -981,11 +1011,17 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       const opt = (attr, val, cur, open, need, inner) => `<button type="button" data-${attr}="${val}" aria-pressed="${cur === val}"${val && !open ? ` disabled title="Откроется на ${at(need)}-м уровне"` : ''}>${inner}${val && !open ? lock(need) : ''}</button>`;
       const FR = { '': 'Без рамки', frame1: 'Казуал', frame5: 'Пиксель', frame2: 'Неон', frame3: 'Переливы', frame4: 'Мастер', frame6: 'Легенда' };
       const BG = { '': 'Без фона', dawn: 'Закат', night: 'Ночь', city: 'Город', forest: 'Лес', ember: 'Уют', legend: 'Легенда' };
-      const NK = { '': 'Обычный', shadow: 'С тенью', rainbow: 'Радужный' };
-      const FX = { '': 'Без эффекта', stars: 'Звездопад', confetti: 'Конфетти' };
-      const frames = Object.keys(FR).map((f) => opt('frame', f, p.frame, u.frames.includes(f), f, `${f ? `<span class="dot lv-frame-${f}"></span>` : ''}${FR[f]}`)).join('');
+      const NK = { '': 'Обычный', outline: 'Контур', shadow: 'С тенью', arcade: 'Аркада', rainbow: 'Радужный' };
+      const nmOf = () => { const a = read('ocenshik.user.v1') || {}; return a.username || a.name || 'Ты'; };
+      const FX = { '': 'Без эффекта', snow: 'Снег', stars: 'Звездопад', embers: 'Искры', confetti: 'Конфетти' };
+      const frames = Object.keys(FR).map((f) => opt('frame', f, p.frame, u.frames.includes(f), f, `${f ? `<span class="fr lv-frame-${f}"></span>` : ''}${FR[f]}`)).join('');
       const colors = ['', ...Object.keys(m.colors)].map((c) => opt('color', c, p.color, u.colors.includes(c), c === 'gold' ? 'gold' : 'colors', c ? `<span class="dot" style="background:${m.colors[c]}" aria-label="${c}"></span>` : 'Обычный')).join('');
-      const nicks = Object.keys(NK).map((n) => opt('nick', n, p.nick, u.nicks.includes(n), n, NK[n])).join('');
+      const nicks = Object.keys(NK).map((n) => opt('nick', n, p.nick, u.nicks.includes(n), n, n ? `<span class="lv-nick-${n}">${NK[n]}</span>` : NK[n])).join('');
+      // шрифты: твой ник каждым шрифтом (закрытые тоже видно — чтобы было, ради чего расти)
+      const fontIds = Object.keys(FONTS);
+      const fonts = opt('font', '', p.font, true, '', '<span class="fnt">' + esc(nmOf()) + '</span><small class="fnt-n">Обычный</small>')
+        + fontIds.map((f) => opt('font', f, p.font, (u.fonts || []).includes(f), 'font:' + f, `<span class="fnt lv-font-${f}">${esc(nmOf())}</span><small class="fnt-n">${esc(FONTS[f][0])}</small>`)).join('');
+      needFonts(fontIds, nmOf());
       const bgs = ['', ...m.bgs].map((g) => opt('bg', g, p.bg, u.bgs.includes(g), g === 'legend' ? 'frame6' : 'bgs', `${g ? `<span class="sw lv-bg-${g}"></span>` : ''}${BG[g]}`)).join('');
       const fxs = Object.keys(FX).map((f) => opt('fx', f, p.fx, u.fx.includes(f), f, FX[f])).join('');
       const pet = [['', 'Не показывать'], ['1', 'Показывать']].map(([v, t]) => opt('pet', v, p.pet ? '1' : '', u.pet, 'pet', t)).join('');
@@ -996,16 +1032,19 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       const nm = acc.username || acc.name || 'Ты';
       const crown = p.frame === 'frame4' || p.frame === 'frame6' ? '<img class="lv-crown" src="/art/crown.svg" width="44" height="30" alt="">' : '';
       const prev = `<div class="lv-lk" aria-label="Так твой профиль увидят другие">
-          <div class="lv-lk-ban${p.bg ? ' lv-bg-' + p.bg : ''}">${p.fx === 'stars' ? '<i class="lv-fx-stars" aria-hidden="true"></i>' : ''}</div>
+          <div class="lv-lk-ban${p.bg ? ' lv-bg-' + p.bg : ''}">${FX_LAYER.includes(p.fx) ? `<i class="lv-fx-${p.fx}" aria-hidden="true"></i>` : ''}</div>
           <div class="lv-lk-row">
             <span class="lv-lk-ava${p.frame ? ' lv-frame-' + p.frame : ''}">${esc(nm.charAt(0).toUpperCase())}${crown}${p.pet ? '<i class="lv-pet" aria-hidden="true"></i>' : ''}</span>
-            <div class="lv-lk-who"><b class="lv-lk-name${p.nick ? ' lv-nick-' + p.nick : ''}"${p.color && m.colors[p.color] ? ` style="color:${m.colors[p.color]}"` : ''}>${esc(nm)}</b>${u.rankChip ? `<span class="lv-chip">${esc(m.rank)}</span>` : ''}${p.fx === 'confetti' ? '<span class="lv-muted">+ конфетти при открытии профиля</span>' : ''}</div>
+            <div class="lv-lk-who"><b class="lv-lk-name${p.nick ? ' lv-nick-' + p.nick : ''}${p.font ? ' lv-font-' + p.font : ''}"${p.color && m.colors[p.color] ? ` style="color:${m.colors[p.color]}"` : ''}>${esc(nm)}</b>${u.rankChip ? `<span class="lv-chip">${esc(m.rank)}</span>` : ''}${p.fx === 'confetti' ? '<span class="lv-muted">+ конфетти при открытии профиля</span>' : ''}</div>
           </div>
         </div>`;
-      return `${m.admin ? '<p class="lv-adm">Админу открыто всё оформление, чтобы проверять награды; остальным — по уровням. Другие видят твой выбор в профиле.</p>' : ''}
+      // закрытое: откроется уровнем или покупается раньше в магазине (раздел «Оформление»)
+      const shopTip = window.CasualShop && !m.admin && m.level < 50 ? '<p class="lv-muted lv-shop-tip">Закрытое откроется само на своём уровне — или купи раньше за рофланы: <button type="button" class="lv-btn" data-shop-look>Магазин → Оформление</button></p>' : '';
+      return `${shopTip}${m.admin ? '<p class="lv-adm">Админу открыто всё оформление, чтобы проверять награды; остальным — по уровням. Другие видят твой выбор в профиле.</p>' : ''}
         <div class="lv-box">${prev}</div>
         <div class="lv-box"><h3>Рамка аватара</h3><div class="lv-pick">${frames}</div></div>
         <div class="lv-box"><h3>Ник в профиле</h3><div class="lv-pick">${colors}</div><div class="lv-pick" style="margin-top:8px">${nicks}</div></div>
+        <div class="lv-box"><h3>Шрифт ника</h3><div class="lv-pick">${fonts}</div></div>
         <div class="lv-box"><h3>Фон профиля</h3><div class="lv-pick">${bgs}</div></div>
         <div class="lv-box"><h3>Эффект и котик</h3><div class="lv-pick">${fxs}</div><p class="lv-muted" style="margin:10px 0 6px">Котик Васян рядом с аватаром</p><div class="lv-pick">${pet}</div></div>
         <div class="lv-box"><h3>Награды за уровни</h3><div class="lv-rw">${rw}</div></div>
@@ -1089,6 +1128,9 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       b.querySelectorAll('[data-color]').forEach((x) => x.addEventListener('click', () => save({ color: x.dataset.color })));
       b.querySelectorAll('[data-bg]').forEach((x) => x.addEventListener('click', () => save({ bg: x.dataset.bg })));
       b.querySelectorAll('[data-nick]').forEach((x) => x.addEventListener('click', () => save({ nick: x.dataset.nick })));
+      b.querySelectorAll('[data-font]').forEach((x) => x.addEventListener('click', () => save({ font: x.dataset.font })));
+      const sh = b.querySelector('[data-shop-look]');
+      if (sh) sh.addEventListener('click', () => { if (window.CasualShop) window.CasualShop.open('look'); });
       b.querySelectorAll('[data-fx]').forEach((x) => x.addEventListener('click', () => save({ fx: x.dataset.fx })));
       b.querySelectorAll('[data-pet]').forEach((x) => x.addEventListener('click', () => save({ pet: x.dataset.pet === '1' })));
       b.querySelectorAll('[data-tg]').forEach((x) => x.addEventListener('change', () => save({ [x.dataset.tg]: x.checked })));
@@ -1277,7 +1319,8 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     pullNews();
   }
 
-  window.CasualLevels = { open: openProgress, refresh: refreshMe, news: pullNews, intro: openIntro };
+  // fonts — подгрузить шрифты ника (магазин показывает ими превью)
+  window.CasualLevels = { open: openProgress, refresh: refreshMe, news: pullNews, intro: openIntro, fonts: needFonts };
   if (!token()) return;
   { const u = read('ocenshik.user.v1'), c = read(HEAD_KEY); if (token() && u && c && c.id === u.id) paintHeader(c); }
   document.documentElement.classList.remove('hdr-wait'); // шапка собрана — показать разом (header-menu.js ждал значок уровня)

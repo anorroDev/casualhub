@@ -1053,7 +1053,10 @@ input::placeholder, textarea::placeholder { color: var(--ink-3); font-weight: 40
 .search input { height: 40px; padding: 0 12px; font-size: 14px; }
 .notice { margin-top: 14px; padding: 10px 12px; border-radius: 10px; background: var(--panel-2); color: var(--ink-2); font-size: 13px; }
 .example-bar { margin-top: 14px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 6px 6px 6px 12px; border: 1px dashed var(--line); border-radius: 10px; font-size: 13px; color: var(--ink-2); }
-.board-list { list-style: none; margin: 12px 0 0; padding: 0; }
+/* длинный рейтинг листается внутри карточки, а не растягивает страницу: до конца не надо крутить весь сайт (журнал — так же).
+   Поля −8px/+8px — чтобы строки с отрицательными полями (подсветка открытой оценки) не обрезались краем */
+.board-list { list-style: none; margin: 12px -8px 0; padding: 0 8px; }
+.board-list, .log-days { max-height: max(380px, calc(100dvh - 170px)); overflow-y: auto; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--ink) 28%, transparent) transparent; }
 .entry + .entry { border-top: 1px solid var(--line); }
 .entry summary { display: block; list-style: none; margin: 0 -8px; padding: 12px 8px; border-radius: 12px; cursor: pointer; }
 .sum { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto auto 16px; align-items: center; gap: 12px; }
@@ -1125,7 +1128,7 @@ details[open] .chev { transform: rotate(180deg); }
 .e-hist .link-btn { font-size: 13px; }
 
 /* Journal */
-.log-days { display: grid; gap: 24px; margin-top: 18px; }
+.log-days { display: grid; gap: 24px; margin-top: 18px; align-content: start; }
 .log-date { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding-bottom: 8px; border-bottom: 1px solid var(--line); font-size: 14px; font-weight: 700; }
 .log-date span { flex: none; font-size: 12.5px; font-weight: 500; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .log-list { list-style: none; margin: 0; padding: 0; }

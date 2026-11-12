@@ -1,7 +1,7 @@
 // «Прогнозы» на победителя сбора лотов: когда открыты и какой лот выпал. node --test tests/predict.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { predictOpen, winnerLot } from '../functions/_lib/lots-predict.js';
+import { predictOpen, winnerLot, namesVisible } from '../functions/_lib/lots-predict.js';
 
 test('прогнозы открыты до первой прокрутки и закрываются на ней', () => {
   assert.equal(predictOpen(null), true);
@@ -18,4 +18,10 @@ test('выпавший лот: по id, а без него — единстве�
   assert.equal(winnerLot({ winner: { n: 'Hades', at: 5 }, outIds: ['a1'] }, lots), 'a2');
   assert.equal(winnerLot({ winner: { n: 'Hades', at: 5 } }, lots), ''); // два «Hades» — не угадать, какой
   assert.equal(winnerLot({ mode: 'out' }, lots), '');
+});
+
+test('кто за кого: всем — после закрытия прогнозов, админу — и пока открыты', () => {
+  assert.equal(namesVisible(true, false), false);
+  assert.equal(namesVisible(true, true), true);
+  assert.equal(namesVisible(false, false), true);
 });

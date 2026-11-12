@@ -23,10 +23,12 @@ export const KING = {
   PAUSE: 4000, // столько после боя видно итог, потом открывается следующий
   ROOMS: 30, // турниров у ведущего: старые сверх этого удаляются
   NAME: 80, TITLE: 80, IMG: 600,
+  IMG_DATA: 16000, // своя обложка участника (из «Мнения»): маленький data URL, лежит у турнира в king_imgs
   HOST_MIN: 4, // опыт ведущему — за турнир хотя бы на 4 участника
 };
 export const CODE_RE = /^[A-Za-z0-9]{12}$/;
 const IMG_RE = /^(https:\/\/[^\s"'<>()\\]{8,590}|\/wheel\/hub\/[\w\/.-]{1,120}\.(?:gif|png|webp|jpe?g)|\/art\/[\w\/.-]{1,120}\.(?:svg|png|webp))$/;
+const DATA_RE = /^data:image\/(?:jpeg|png|webp);base64,[A-Za-z0-9+/]+=*$/;
 const clean = (s, max) => String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 const parse = (s) => { try { const v = JSON.parse(s || 'null'); return v && typeof v === 'object' ? v : null; } catch (e) { return null; } };
 const shuffle = (a, rnd) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
@@ -35,7 +37,8 @@ export function roomCode() {
   return [...crypto.getRandomValues(new Uint8Array(24))].filter((b) => b < 248).slice(0, 12).map((b) => abc[b % 62]).join('').padEnd(12, 'k');
 }
 
-// участники от страницы: название (обязательно) и картинка (ссылка https, стикер сайта или ничего). Повторы названий убираются
+// участники от страницы: название (обязательно) и картинка (ссылка https, стикер сайта, своя маленькая картинка или ничего).
+// Своя картинка: { img: '@', data } — data уходит в king_imgs, в снимке остаётся «@». Повторы названий убираются
 export function cleanPeople(list, max) {
   const out = [], seen = new Set();
   for (const x of Array.isArray(list) ? list : []) {
@@ -43,8 +46,9 @@ export function cleanPeople(list, max) {
     const k = n.toLowerCase();
     if (!n || seen.has(k)) continue;
     seen.add(k);
-    const img = clean(x && x.img, KING.IMG);
-    out.push({ n, img: IMG_RE.test(img) ? img : '' });
+    const raw = x && typeof x.img === 'string' ? x.img : '';
+    if (raw.length <= KING.IMG_DATA && DATA_RE.test(raw)) out.push({ n, img: '@', data: raw });
+    else { const img = clean(raw, KING.IMG); out.push({ n, img: IMG_RE.test(img) ? img : '' }); }
     if (out.length >= max) break;
   }
   return out;
@@ -67,14 +71,19 @@ export function cleanConfig(b) {
 }
 
 // ---------- снимок турнира ----------
-export function newState(cfg) {
+// imgs — куда сложить свои картинки участников ({ id, data }) для king_imgs; без него свои картинки не ставятся
+export function newState(cfg, imgs) {
   const st = {
     v: 1, fmt: cfg.fmt, mode: cfg.mode, timer: cfg.timer, seed: cfg.seed, size: cfg.size || 0,
     status: 'ready', p: [], pv: 1, pid: 1,
     king: null, streak: 0, queue: [], out: [], best: null, rounds: null,
     bout: null, next: 1, log: [], champ: null, doneAt: 0, undo: null,
   };
-  for (const x of cfg.p) st.p.push({ id: 'p' + (st.pid++).toString(36), n: x.n, img: x.img });
+  for (const x of cfg.p) {
+    const id = 'p' + (st.pid++).toString(36);
+    st.p.push({ id, n: x.n, img: x.data && !imgs ? '' : x.img });
+    if (x.data && imgs) imgs.push({ id, data: x.data });
+  }
   return st;
 }
 // стандартный посев: 1–8, 4–5, 2–7, 3–6 — сильные по списку встречаются как можно позже
@@ -205,7 +214,7 @@ export function finishEarly(st, now) {
   finish(st, now);
   return { ok: true, done: true };
 }
-export function addPeople(st, list) {
+export function addPeople(st, list, imgs) {
   if (st.status === 'done') return { err: [409, 'Турнир уже закончился.'] };
   if (st.fmt === 'bracket' && st.status !== 'ready') return { err: [409, 'В сетку добавлять можно только до начала.'] };
   const max = st.fmt === 'bracket' ? st.size : KING.HILL_MAX;
@@ -214,7 +223,8 @@ export function addPeople(st, list) {
   if (!add.length) return { err: [400, st.p.length >= max ? `Больше ${max} участников нельзя.` : 'Это уже есть.'] };
   for (const x of add) {
     const id = 'p' + (st.pid++).toString(36);
-    st.p.push({ id, n: x.n, img: x.img });
+    st.p.push({ id, n: x.n, img: x.data && !imgs ? '' : x.img });
+    if (x.data && imgs) imgs.push({ id, data: x.data });
     if (st.status === 'live') st.queue.push(id);
   }
   st.pv++;
@@ -274,6 +284,7 @@ export async function ensureKing(env) {
   await env.DB.batch([
     env.DB.prepare('CREATE TABLE IF NOT EXISTS king_rooms (id TEXT PRIMARY KEY, owner_id TEXT NOT NULL, title TEXT NOT NULL, fmt TEXT NOT NULL, status TEXT NOT NULL, ver INTEGER NOT NULL DEFAULT 1, bout INTEGER NOT NULL DEFAULT 0, state TEXT NOT NULL, people INTEGER NOT NULL DEFAULT 0, king TEXT, streak INTEGER NOT NULL DEFAULT 0, best TEXT, best_n INTEGER NOT NULL DEFAULT 0, bouts INTEGER NOT NULL DEFAULT 0, created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL, done_at INTEGER)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS king_rooms_owner ON king_rooms(owner_id, created_at)'),
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS king_imgs (room_id TEXT NOT NULL, pid TEXT NOT NULL, data TEXT NOT NULL, PRIMARY KEY (room_id, pid))'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS king_votes (room_id TEXT NOT NULL, bout INTEGER NOT NULL, user_id TEXT NOT NULL, pick TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (room_id, bout, user_id))'),
   ]);
   ready.add(env.DB);
@@ -368,10 +379,12 @@ export function makeKingRoutes(h) {
       const cfg = cleanConfig(b);
       if (cfg.err) return fail(400, cfg.err);
       const now = Date.now();
-      const st = newState(cfg);
+      const imgs = [];
+      const st = newState(cfg, imgs);
       if (b.start === true) startState(st, now);
       const old = await env.DB.prepare('SELECT id FROM king_rooms WHERE owner_id = ? ORDER BY created_at DESC LIMIT -1 OFFSET ?').bind(me.id, KING.ROOMS - 1).all();
-      const drop = (old.results || []).flatMap((x) => [env.DB.prepare('DELETE FROM king_votes WHERE room_id = ?').bind(x.id), env.DB.prepare('DELETE FROM king_rooms WHERE id = ?').bind(x.id)]);
+      const drop = (old.results || []).flatMap((x) => [env.DB.prepare('DELETE FROM king_votes WHERE room_id = ?').bind(x.id), env.DB.prepare('DELETE FROM king_imgs WHERE room_id = ?').bind(x.id), env.DB.prepare('DELETE FROM king_rooms WHERE id = ?').bind(x.id)]);
+      const imgSql = (c) => imgs.map((x) => env.DB.prepare('INSERT OR REPLACE INTO king_imgs (room_id, pid, data) VALUES (?, ?, ?)').bind(c, x.id, x.data));
       const m = mirror(st);
       let code = '';
       // код случайный (62^12): совпадение почти невозможно, но и тогда — просто следующий
@@ -379,7 +392,7 @@ export function makeKingRoutes(h) {
         const c = roomCode();
         try {
           await env.DB.batch([...(i ? [] : drop), env.DB.prepare('INSERT INTO king_rooms (id, owner_id, title, fmt, status, ver, bout, state, people, king, streak, best, best_n, bouts, created_at, updated_at, done_at) VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)')
-            .bind(c, me.id, cfg.title, cfg.fmt, m[0], m[1], JSON.stringify(st), ...m.slice(2), now, now)]);
+            .bind(c, me.id, cfg.title, cfg.fmt, m[0], m[1], JSON.stringify(st), ...m.slice(2), now, now), ...imgSql(c)]);
           code = c;
         } catch (e) { if (i === 2) throw e; }
       }
@@ -407,7 +420,9 @@ export function makeKingRoutes(h) {
       const code = codeOf(b.c);
       if (!code) return fail(404, 'Такого турнира нет.');
       const now = Date.now();
+      const imgs = []; // свои картинки добавленных участников (снимок может переписываться заново — тогда и список)
       const r = await tx(env, code, async (st, row) => {
+        imgs.length = 0;
         if (row.owner_id !== me.id) return { err: [403, 'Это может только ведущий.'] };
         const n = Math.floor(+b.n || 0);
         const tally = async () => (st.bout ? tallyOf((await env.DB.prepare(TALLY).bind(code, st.bout.n).all()).results) : { a: 0, b: 0 });
@@ -423,7 +438,7 @@ export function makeKingRoutes(h) {
             return closeByVotes(st, await tally(), 'vote', now);
           }
           case 'rules': return setRules(st, b, now);
-          case 'add': return addPeople(st, b.p);
+          case 'add': return addPeople(st, b.p, imgs);
           case 'remove': return removePerson(st, String(b.id || ''));
           case 'undo': return undoLast(st, now);
           case 'finish': return finishEarly(st, now);
@@ -435,6 +450,8 @@ export function makeKingRoutes(h) {
       if (r.wrote) {
         // отменили бой: голоса за бои, которых больше нет, не должны достаться новым
         if (b.act === 'undo') await env.DB.prepare('DELETE FROM king_votes WHERE room_id = ? AND bout >= ?').bind(code, r.st.next).run();
+        if (imgs.length) await env.DB.batch(imgs.map((x) => env.DB.prepare('INSERT OR REPLACE INTO king_imgs (room_id, pid, data) VALUES (?, ?, ?)').bind(code, x.id, x.data)));
+        if (b.act === 'remove') await env.DB.prepare('DELETE FROM king_imgs WHERE room_id = ? AND pid = ?').bind(code, String(b.id || '')).run();
         await after(env, code, r.row, r);
         if (r.done) await hostXp(env, request, me, r.row, r.st);
       }
@@ -462,6 +479,20 @@ export function makeKingRoutes(h) {
       await poke(env, code);
       return answer(env, request, me, code, b.pv, false);
     },
+    // своя картинка участника (обложка из «Мнения»): ?c=код&p=id. Открыта без входа, как и турнир; у участника она не меняется — кэш надолго
+    async 'GET /king/img'({ env, request }) {
+      const sp = new URL(request.url).searchParams;
+      const code = codeOf(sp.get('c')), pid = /^p[0-9a-z]{1,8}$/.test(sp.get('p') || '') ? sp.get('p') : '';
+      const none = (status) => new Response(null, { status, headers: { 'cache-control': 'no-store' } });
+      if (!code || !pid) return none(404);
+      if (slow('kingimg:' + (h.clientIp ? h.clientIp(request) : ''), 3000, 60e3)) return none(429);
+      await ensureKing(env);
+      const row = await env.DB.prepare('SELECT data FROM king_imgs WHERE room_id = ? AND pid = ?').bind(code, pid).first();
+      const m = row && /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/]+=*)$/.exec(row.data);
+      if (!m) return none(404);
+      const bin = Uint8Array.from(atob(m[2]), (c) => c.charCodeAt(0));
+      return new Response(bin, { headers: { 'content-type': m[1], 'cache-control': 'public, max-age=31536000, immutable', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'" } });
+    },
     // свои турниры: история; ?brief=1 — для карточки на главной (сколько всего и последний)
     async 'GET /king/mine'({ env, request, me }) {
       await ensureKing(env);
@@ -478,7 +509,7 @@ export function makeKingRoutes(h) {
       const code = codeOf((await readBody(request)).c);
       const row = code && (await env.DB.prepare('SELECT owner_id FROM king_rooms WHERE id = ?').bind(code).first());
       if (!row || row.owner_id !== me.id) return fail(404, 'Такого турнира нет.');
-      await env.DB.batch([env.DB.prepare('DELETE FROM king_votes WHERE room_id = ?').bind(code), env.DB.prepare('DELETE FROM king_rooms WHERE id = ?').bind(code)]);
+      await env.DB.batch([env.DB.prepare('DELETE FROM king_votes WHERE room_id = ?').bind(code), env.DB.prepare('DELETE FROM king_imgs WHERE room_id = ?').bind(code), env.DB.prepare('DELETE FROM king_rooms WHERE id = ?').bind(code)]);
       await poke(env, code);
       return json({ ok: true });
     },

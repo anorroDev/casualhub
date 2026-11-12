@@ -8,7 +8,7 @@ import {
   ACHIEVEMENTS, REWARDS, NAME_COLORS, PROFILE_BGS, isScored, textLen, award,
   SEASON_RANKS, seasonRankOf, rankFields, currentSeason, closeSeason, forgetSeason, seasonXpOf, seasonXpMany, seasonPlanLetter, fmtKyiv,
 } from './levels.js';
-import { FOODS } from './shop.js';
+import { FOODS, boughtLooks } from './shop.js';
 // еда Васяна, которая открывается уровнем: показывается в «Прогрессе» рядом с наградами оформления
 const FOOD_GIFTS = FOODS.filter((f) => f.unlock).map((f) => ({ level: f.unlock, title: f.title }));
 import { planSeasonReminder, cancelSeasonReminder, seasonReminderOf, mailOn } from './mailout.js';
@@ -112,13 +112,14 @@ export function makeLevelsRoutes(h) {
       const lv = levelView(+row.xp || 0, +row.level || 1);
       const prefs = prefsOf(row);
       const admin = !!(h.adminCandidate(me, env) || (await h.isAdmin(env, me)));
+      const bought = (await boughtLooks(env, [me.id])).get(me.id) || null; // оформление, купленное в магазине раньше уровня
       await ensureFirst(env, me.id);
       // сезон первым: если срок вышел, этот же запрос его закроет, и опыт сезона будет уже нового
       const season = await seasonOf(env, me.id, await currentSeason(env, now));
       const [quests, steps, ev] = await Promise.all([questState(env, me.id, { now, today, row }), firstSteps(env, me.id), currentEvent(env, now)]);
       const alive = row.streak_day === today || row.streak_day === shiftDay(today, -1) || (row.streak_day === shiftDay(today, -2) && +row.freezes > 0);
       return json({
-        on: true, mode: levelsMode(env), ...lv, ...rankFields(season.xp), season, prefs, look: lookOf(row, season.xp), unlocked: unlockedAt(lv.level, admin), admin,
+        on: true, mode: levelsMode(env), ...lv, ...rankFields(season.xp), season, prefs, look: lookOf(row, season.xp, bought), unlocked: unlockedAt(lv.level, admin, bought), admin,
         streak: { days: alive ? +row.streak || 0 : 0, best: +row.best_streak || 0, freezes: row.freezes == null ? 1 : +row.freezes, today: row.streak_day === today },
         quests, steps: steps.every((s) => s.paid) ? null : steps,
         event: ev ? { title: ev.title, kinds: ev.kinds, mult: ev.mult, until: ev.until } : null,
@@ -204,7 +205,8 @@ export function makeLevelsRoutes(h) {
       const cur = prefsOf(row);
       // админу открыто всё оформление — чтобы проверить награды, пока вкладка «Оформление» в разработке
       const admin = !!(h.adminCandidate(me, env) || (await h.isAdmin(env, me)));
-      const lv = levelView(+row.xp || 0, +row.level || 1).level, u = unlockedAt(lv, admin);
+      const bought = (await boughtLooks(env, [me.id])).get(me.id) || null;
+      const lv = levelView(+row.xp || 0, +row.level || 1).level, u = unlockedAt(lv, admin, bought);
       const next = { ...cur, adm: admin };
       if (!admin) delete next.adm;
       for (const k of ['intro', 'hideLevel', 'hideBoard', 'notify', 'anim']) if (typeof b[k] === 'boolean') next[k] = b[k];
@@ -216,17 +218,19 @@ export function makeLevelsRoutes(h) {
       if (typeof b.color === 'string') { if (b.color && !u.colors.includes(b.color)) return fail(403, 'Этот цвет ещё не открыт.'); next.color = b.color; }
       if (typeof b.bg === 'string') { if (b.bg && !u.bgs.includes(b.bg)) return fail(403, 'Этот фон ещё не открыт.'); next.bg = b.bg; }
       if (typeof b.nick === 'string') { if (b.nick && !u.nicks.includes(b.nick)) return fail(403, 'Этот ник ещё не открыт.'); next.nick = b.nick; }
+      if (typeof b.font === 'string') { if (b.font && !u.fonts.includes(b.font)) return fail(403, 'Этот шрифт ещё не открыт.'); next.font = b.font; }
       if (typeof b.fx === 'string') { if (b.fx && !u.fx.includes(b.fx)) return fail(403, 'Этот эффект ещё не открыт.'); next.fx = b.fx; }
       if (typeof b.pet === 'boolean') { if (b.pet && !u.pet) return fail(403, 'Васян откроется на 25-м уровне.'); next.pet = b.pet; }
       await env.DB.prepare('INSERT INTO user_level (user_id, updated_at, prefs) VALUES (?1, ?2, ?3) ON CONFLICT(user_id) DO UPDATE SET prefs = ?3').bind(me.id, Date.now(), JSON.stringify(next)).run();
       const sxp = await seasonXpOf(env, me.id, await currentSeason(env));
-      return json({ ok: true, prefs: next, look: lookOf({ ...row, prefs: JSON.stringify(next) }, sxp) });
+      return json({ ok: true, prefs: next, look: lookOf({ ...row, prefs: JSON.stringify(next) }, sxp, bought) });
     },
     // кружки уровня у чужих аватаров: ?ids=a,b,c
     async 'GET /levels/users'({ env, request, me }) {
       if (!(await gate(env, me))) return json({ users: {} });
       const ids = String(new URL(request.url).searchParams.get('ids') || '').split(',').map((x) => x.trim()).filter((x) => /^[0-9a-f]{24}$/.test(x)).slice(0, 200);
-      return json({ users: await levelsOf(env, [...new Set(ids)]) });
+      const uniq = [...new Set(ids)];
+      return json({ users: await levelsOf(env, uniq, await boughtLooks(env, uniq)) });
     },
     // профиль человека: уровень, звание, оформление и витрина
     async 'GET /levels/profile'({ env, request, me }) {
@@ -240,7 +244,8 @@ export function makeLevelsRoutes(h) {
       const all = await achievementsOf(env, id);
       const showcase = show.map((c) => all.find((a) => a.code === c && a.got)).filter(Boolean);
       const sxp = await seasonXpOf(env, id, await currentSeason(env));
-      return json({ on: true, level: lv.level, ...rankFields(sxp), seasonXp: sxp, xp: lv.xp, into: lv.into, need: lv.need, look: lookOf(row, sxp), showcase, achievements: all.filter((a) => a.got).length });
+      const bought = (await boughtLooks(env, [id])).get(id) || null;
+      return json({ on: true, level: lv.level, ...rankFields(sxp), seasonXp: sxp, xp: lv.xp, into: lv.into, need: lv.need, look: lookOf(row, sxp, bought), showcase, achievements: all.filter((a) => a.got).length });
     },
     // рейтинг недели: друзья или весь сайт. «Лучший прогресс» — рост к прошлой неделе
     async 'GET /levels/board'({ env, request, me }) {
