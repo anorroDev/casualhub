@@ -6,7 +6,8 @@
 //   hill    — «Царь горы»: участники в очереди, царь бьётся с очередным претендентом, победитель остаётся на горе.
 //             Проигравший выбывает. Считаем, сколько боёв подряд держится царь (streak), рекорд (best) и кто кого сверг (log.x).
 //   bracket — «Сетка» на 4, 8, 16 или 32: посев по порядку (1-й с последним, первые встретятся в финале) или случайный.
-//             Пустые места — пропуски: верхние по посеву проходят без боя.
+//             Участников ровно столько, каков размер сетки (bracketErr). Пропуски (верхние по посеву без боя) умеет
+//             buildRounds — они остались у старых турниров, созданных до этого правила.
 // Бой решает ведущий (mode: 'host') или голосование по ссылке (mode: 'vote'): ведущий закрывает бой или его закрывает
 // таймер. При равенстве голосов царь остаётся на горе, в сетке проходит верхний в паре.
 //
@@ -53,18 +54,26 @@ export function cleanPeople(list, max) {
   }
   return out;
 }
+const many = (n) => { const a = n % 100, b = n % 10; return a > 10 && a < 20 ? 'участников' : b === 1 ? 'участник' : b > 1 && b < 5 ? 'участника' : 'участников'; };
+// сетка заполняется целиком: участников ровно size. Пусто — всё в порядке, иначе понятный текст, сколько добавить или убрать
+export function bracketErr(n, size) {
+  if (n < size) return `Для сетки на ${size} нужно ровно ${size} ${many(size)}, сейчас ${n}: добавь ещё ${size - n}.`;
+  if (n > size) return `В сетку на ${size} помещается ровно ${size} ${many(size)}, сейчас ${n}: убери ${n - size}${size < 32 ? ' или выбери сетку побольше' : ''}.`;
+  return '';
+}
 // настройки нового турнира; ошибка — { err: текст }
 export function cleanConfig(b) {
   const fmt = b && b.fmt === 'bracket' ? 'bracket' : 'hill';
   const mode = b && b.mode === 'vote' ? 'vote' : 'host';
   const timer = KING.TIMERS.includes(+(b && b.timer)) ? +b.timer : 0;
   const seed = b && b.seed === 'random' ? 'random' : 'order';
-  const p = cleanPeople(b && b.p, fmt === 'bracket' ? 32 : KING.HILL_MAX);
+  // в сетку — не обрезаем молча: лишних считаем, чтобы сказать, сколько убрать
+  const p = cleanPeople(b && b.p, KING.HILL_MAX);
   let size = 0;
   if (fmt === 'bracket') {
     size = KING.SIZES.includes(+b.size) ? +b.size : KING.SIZES.find((s) => s >= p.length) || 32;
-    if (p.length > size) return { err: `В сетку на ${size} помещается ${size} участников.` };
-    if (p.length <= size / 2) return { err: `Для сетки на ${size} нужно хотя бы ${size / 2 + 1} участников.` };
+    const err = bracketErr(p.length, size);
+    if (err) return { err };
   } else if (p.length < 2) return { err: 'Нужно хотя бы двое участников.' };
   const title = clean(b && b.title, KING.TITLE) || (fmt === 'bracket' ? 'Сетка' : 'Царь горы');
   return { title, fmt, mode, timer, seed, size, p };
@@ -145,7 +154,8 @@ export function startState(st, now, rnd = Math.random) {
     if (ids.length < 2) return { err: [400, 'Нужно хотя бы двое участников.'] };
     st.queue = ids;
   } else {
-    if (ids.length <= st.size / 2 || ids.length > st.size) return { err: [400, `Для сетки на ${st.size} нужно от ${st.size / 2 + 1} до ${st.size} участников.`] };
+    const err = bracketErr(ids.length, st.size);
+    if (err) return { err: [400, err] };
     st.rounds = buildRounds(ids, st.size);
   }
   st.status = 'live';
@@ -371,7 +381,8 @@ export function makeKingRoutes(h) {
   const codeOf = (v) => (CODE_RE.test(String(v || '')) ? String(v) : '');
 
   return {
-    // новый турнир: { title, fmt, mode, timer, size, seed, p: [{ n, img }], start }
+    // новый турнир: { title, fmt, mode, timer, size, seed, p: [{ n, img }], start }. start: false — «Создать и начать позже»:
+    // турнир ждёт в статусе ready, ведущий правит список (add, remove) и начинает сам (act start)
     async 'POST /king'({ env, request, me }) {
       if (slow('kingnew:' + me.id, 20, 600e3)) return busy();
       await ensureKing(env);
