@@ -320,7 +320,10 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
       const lu = JSON.parse(localStorage.getItem('ocenshik.user.v1') || 'null');
       const lt = lu && (JSON.parse(localStorage.getItem('casualhub.tokens.v1') || 'null') || {})[lu.id];
       if (lt && !window.CasualLevels && !document.querySelector('script[src="/levels-ui.js"]')) { const sc = document.createElement('script'); sc.src = '/levels-ui.js'; document.head.appendChild(sc); }
-    } catch (e) {}
+      // шапка собрана: показать её разом. Значок уровня из прошлого ответа рисует levels-ui — тогда ждём его (не дольше 0,7 с из head-скрипта)
+      const head = lt && JSON.parse(localStorage.getItem('casualhub.lv.head.v1') || 'null');
+      if (!(head && head.id === lu.id)) document.documentElement.classList.remove('hdr-wait');
+    } catch (e) { document.documentElement.classList.remove('hdr-wait'); }
 
     // точка на ☰: непрочитанное «Что нового» внутри меню (заявки в друзья видны на самой кнопке «Друзья»)
     const sync = () => { dot.hidden = !panel.querySelector('.wn-dot'); };

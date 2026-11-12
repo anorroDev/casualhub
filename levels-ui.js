@@ -1280,5 +1280,6 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   window.CasualLevels = { open: openProgress, refresh: refreshMe, news: pullNews, intro: openIntro };
   if (!token()) return;
   { const u = read('ocenshik.user.v1'), c = read(HEAD_KEY); if (token() && u && c && c.id === u.id) paintHeader(c); }
+  document.documentElement.classList.remove('hdr-wait'); // шапка собрана — показать разом (header-menu.js ждал значок уровня)
   (meLoad = refreshMe()).then(() => { if (ME && !introDone()) { setTimeout(spotlight, 400); return; } if (ME) { pullNews(); if (/^#progress$/.test(location.hash)) { history.replaceState(null, '', location.pathname + location.search); openProgress('home'); } } });
 })();

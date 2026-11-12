@@ -70,3 +70,8 @@ html[data-bg="stars"]::after {
 html.ui-still :is(.card, .app, .apps, .tile, .stat, .masthead, .title, .wordmark, .mark, .lede, .hero, .feed, .recs, .board, .stage, .layout > *, .user-bar > *, .hm-left > *, .tl-tile, .fd) {
   animation-duration: 0s !important; animation-delay: 0s !important;
 }
+
+/* шапка, пока её достраивают скрипты (html.hdr-wait, ставят head-скрипты): кнопки справа и слот уровня невидимы, потом проявляются разом */
+html.hdr-wait header :is(.user-bar, .hm-left) { opacity: 0; }
+header :is(.user-bar, .hm-left) { transition: opacity .14s ease-out; }
+@media (prefers-reduced-motion: reduce) { header :is(.user-bar, .hm-left) { transition: none; } }
