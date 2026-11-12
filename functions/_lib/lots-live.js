@@ -29,10 +29,16 @@ export function cleanLive(b) {
     // что выпадало по очереди: каждый итог прокрутки (вылет или победа в режиме «Один победитель»)
     hist: (Array.isArray(b && b.hist) ? b.hist : []).slice(-MAX_LOTS).map((x) => clip(x, LOT_NAME)),
     winner: b && b.winner && b.winner.n ? { n: clip(b.winner.n, LOT_NAME), sum: clip(b.winner.sum, 40), at: finite(b.winner.at) } : null,
+    // «Настройка лотов» админа: прежние списки — по названиям (старые снимки и вкладки), новые — по id лота,
+    // чтобы при разрешённых повторах два «Hades» отмечались по отдельности
     keep: (Array.isArray(b && b.keep) ? b.keep : []).slice(0, MAX_LOTS).map((x) => clip(x, LOT_NAME)),
     kick: (Array.isArray(b && b.kick) ? b.kick : []).slice(0, MAX_LOTS).map((x) => clip(x, LOT_NAME)),
+    keepIds: lotIdList(b && b.keepIds),
+    kickIds: lotIdList(b && b.kickIds),
   };
 }
+const LOT_ID_RE = /^[0-9a-f]{6,32}$/;
+const lotIdList = (a) => [...new Set((Array.isArray(a) ? a : []).filter((x) => typeof x === 'string' && LOT_ID_RE.test(x)))].slice(0, MAX_LOTS);
 
 // что ведущий меняет своим снимком (PUT /lots/:code/live); остальное в снимке — работа сервера
 export const LIVE_OWNER = ['hub', 'hubImg', 'hubOwn', 'seen', 'ids', 'music', 'pics'];
@@ -77,10 +83,13 @@ const lotsAlive = (lots, live) => { const gone = goneIds(lots, live); return lot
 const lotSegs = (lots, alive) => alive.map((l) => { const c = LOT_PALETTE[Math.max(0, lots.indexOf(l)) % LOT_PALETTE.length]; return { n: l.name, p: 1 / alive.length, c, t: inkOn(c), l: l.id }; });
 // из кого выбирает прокрутка (номера в alive). «На выбывание»: сначала те, кого админ отметил на вылет, иначе все,
 // кроме оставленных. «Один победитель»: сначала оставленные, иначе все, кроме отмеченных на вылет. Иначе все
-function spinPool(alive, mode, keep, kick) {
+// Отметка — по id лота (keepIds/kickIds), а у снимков прежних версий — по названию (keep/kick)
+function spinPool(alive, mode, live) {
   const all = alive.map((_, i) => i);
-  const marked = all.filter((i) => inNames(mode === 'one' ? keep : kick, alive[i].name));
-  const free = all.filter((i) => !inNames(mode === 'one' ? kick : keep, alive[i].name));
+  const keepOf = (lot) => (live.keepIds || []).includes(lot.id) || inNames(live.keep, lot.name);
+  const kickOf = (lot) => (live.kickIds || []).includes(lot.id) || inNames(live.kick, lot.name);
+  const marked = all.filter((i) => (mode === 'one' ? keepOf : kickOf)(alive[i]));
+  const free = all.filter((i) => !(mode === 'one' ? kickOf : keepOf)(alive[i]));
   return marked.length ? marked : free.length ? free : all;
 }
 // идёт прокрутка или её итог ещё не записан
@@ -95,7 +104,7 @@ export function spinLive(live, lots, mode, dur, now, auto) {
   if (mode === 'out' && live.winner) return { err: [409, 'Победитель уже есть. Жми «Вернуть всех», чтобы крутить заново.'] };
   const alive = lotsAlive(lots, live);
   if (alive.length < 2) return { err: [409, 'Чтобы крутить, на колесе нужно хотя бы два лота.'] };
-  const pool = spinPool(alive, mode, live.keep, live.kick);
+  const pool = spinPool(alive, mode, live);
   const k = pool[uniform(pool.length)];
   // стрелка вверху: под ней окажется случайная точка выпавшего сектора, не у самого края.
   // Сектора равные, их границы — как у place() на странице сбора
@@ -230,6 +239,6 @@ export async function liveTx(env, code, fn) {
 // «Настройка лотов» (keep/kick) — только админу
 export function liveView(live, admin) {
   if (!live) return null;
-  const { res, keep, kick, ...rest } = live;
-  return admin ? { ...rest, keep: keep || [], kick: kick || [] } : rest;
+  const { res, keep, kick, keepIds, kickIds, ...rest } = live;
+  return admin ? { ...rest, keep: keep || [], kick: kick || [], keepIds: keepIds || [], kickIds: kickIds || [] } : rest;
 }

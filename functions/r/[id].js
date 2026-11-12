@@ -46,6 +46,10 @@ const HEADERS = {
   'cache-control': 'public, max-age=60',
   vary: 'Cookie',
   'x-content-type-options': 'nosniff',
+  // как в _headers: на ответы Functions он сам не действует
+  'strict-transport-security': 'max-age=31536000; includeSubDomains',
+  'x-frame-options': 'DENY',
+  'cross-origin-opener-policy': 'same-origin',
   'referrer-policy': 'no-referrer',
   'x-robots-tag': 'noindex, nofollow',
   'content-security-policy': "default-src 'none'; img-src 'self' https: data:; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; base-uri 'none'; form-action 'none'; frame-ancestors 'none'",

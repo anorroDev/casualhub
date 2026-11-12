@@ -13,6 +13,9 @@
     try { localStorage.setItem(KEY, JSON.stringify(store)); } catch (er) {}
   }, 300); };
   const esc = window.CasualUtil.esc; // общий, /util.js
+  // плашка IMDb — ссылка внутри кликабельной карточки: нажатие не должно открывать ещё и карточку.
+  // Раньше это делал onclick="…" в разметке, но CSP (_headers, script-src без 'unsafe-inline') такие обработчики не запускает
+  document.addEventListener('click', (e) => { if (e.target.closest && e.target.closest('.imdb-b')) e.stopPropagation(); }, true);
   const fmt = (n) => Number(n).toLocaleString('ru-RU', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
   const yearOf = (meta) => { const m = /\b(19|20)\d{2}\b/.exec(String(meta || '')); return m ? +m[0] : 0; };
   // ключ фильма: код IMDb, если он известен, иначе название и год
@@ -69,7 +72,7 @@
   // маленькая плашка для списков
   function badge(d) {
     if (!d || d.r == null) return '';
-    return `<a class="imdb-b" href="https://www.imdb.com/title/${esc(d.id)}/" target="_blank" rel="noopener noreferrer" title="Рейтинг IMDb ${fmt(d.r)}${d.v ? ' · ' + votes(d.v) : ''}" onclick="event.stopPropagation()">IMDb <b>${fmt(d.r)}</b></a>`;
+    return `<a class="imdb-b" href="https://www.imdb.com/title/${esc(d.id)}/" target="_blank" rel="noopener noreferrer" title="Рейтинг IMDb ${fmt(d.r)}${d.v ? ' · ' + votes(d.v) : ''}">IMDb <b>${fmt(d.r)}</b></a>`;
   }
   // строка для карточки оценки: IMDb, Rotten Tomatoes, Metacritic
   function row(d) {

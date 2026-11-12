@@ -1,0 +1,127 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap');
+/* Казуал Хаб: вид «Лобби» — как игровое лобби или чат для своих. Включён, когда у <html> класс unslop
+   и data-ui="lobby" (выбирается в Настройках). Плотные скруглённые панели без рамок, фон панелей чуть темнее
+   или светлее основного (смесь --panel с текстом темы), строки списков подсвечиваются при наведении, как каналы,
+   мягкий шрифт Nunito, акцент темы на активном, кнопки-пилюли. Анимации живые, но короткие: подъём на 1–2 px
+   при наведении, пружинка при нажатии, окна выпрыгивают. Цвета — только переменные темы. */
+
+/* ---------- основа ---------- */
+html[data-ui="lobby"]:root {
+  --v-font: "Nunito", "Onest", ui-sans-serif, system-ui, sans-serif;
+  --v-surf: color-mix(in srgb, var(--panel) 93%, var(--ink));
+  --v-side: color-mix(in srgb, var(--panel) 78%, var(--bg));
+  --v-input: color-mix(in srgb, var(--bg) 72%, var(--panel));
+  --v-hover: color-mix(in srgb, var(--ink) 7%, transparent);
+  --v-active: color-mix(in srgb, var(--ink) 12%, transparent);
+  --v-pop: cubic-bezier(.34, 1.56, .64, 1);
+  --v-out: cubic-bezier(.2, .8, .2, 1);
+  --font-display: var(--v-font);
+  --font-body: var(--v-font);
+  --shadow: none;
+  --r: 12px; --r-sm: 8px; --pad: 16px;
+}
+html[data-ui="lobby"] body { font-weight: 500; }
+html[data-ui="lobby"] :is(button, input, select, textarea) { font-family: var(--v-font); }
+/* звёзды фона остаются, но не мигают */
+html[data-ui="lobby"]::after { animation: none; opacity: .45; }
+
+/* ---------- шапка — панелью, как верхняя полоса чата ---------- */
+html[data-ui="lobby"] header.top { padding: 8px 10px; border-radius: 14px; background: var(--v-side); }
+html[data-ui="lobby"] .mark { font-family: var(--v-font); font-weight: 900; letter-spacing: 0; }
+
+/* ---------- заголовки ---------- */
+html[data-ui="lobby"] :is(.title, .wordmark) { font-family: var(--v-font); font-weight: 900; letter-spacing: -.02em; }
+html[data-ui="lobby"] .wordmark { font-size: clamp(58px, 14vw, 172px); line-height: .9; column-gap: .22em; }
+html[data-ui="lobby"] :is(h1, h2, h3, .app-name, .view-tab, .tl-view-title, .st-nav h2, .st-head h3, .lv-head h2, .wn-head h2, .howto-head) { font-family: var(--v-font); font-weight: 800; letter-spacing: 0; }
+/* Nunito шире узкого пиксельного Handjet: подписи, рассчитанные на него, — помельче */
+html[data-ui="lobby"] .app-name { font-size: clamp(22px, 2.1vw, 26px); line-height: 1.1; }
+html[data-ui="lobby"] .view-tab { font-size: clamp(20px, 6.8cqi, 36px); }
+
+/* ---------- панели: без рамок, чуть отличаются от фона ---------- */
+html[data-ui="lobby"] :is(.card, .sheet-card, .app, .tile, .stat, .fr-card, .rd-card, .e-note, .lv-box, .lv-bi, .lv-ach, .lv-letter, .lv-recap > div, .fol-box, .st-box, .rt, .cat-ask, .tl-row) { border-radius: var(--r); border-color: transparent; background-color: var(--v-surf); box-shadow: none; }
+html[data-ui="lobby"] :is(.pv, .pv-row, .pv-tier > span, .e-thumb, .e-photo, .rt-pic, .fd-pic, .e-body, .st-th, .app-icon) { border-radius: 8px; }
+html[data-ui="lobby"] .pv { background: var(--v-side); border-color: transparent; }
+html[data-ui="lobby"] .pv-row { border-color: transparent; background: var(--v-surf); }
+html[data-ui="lobby"] .app { transform: none; transition: transform .18s var(--v-out), background-color .18s; }
+html[data-ui="lobby"] :is(.app, .rt, .lv-bi, .lv-ach, .tile, .fr-card):hover { transform: translateY(-2px); }
+html[data-ui="lobby"] .app:hover { background-color: color-mix(in srgb, var(--panel) 88%, var(--ink)); }
+html[data-ui="lobby"] :is(.fd, .pv-row, .pv-tier b):hover, html[data-ui="lobby"] .app:hover :is(.pv-row, .pv-tier b) { transform: none; }
+html[data-ui="lobby"] .st-box { background: var(--v-side); border-color: transparent; border-radius: 10px; }
+html[data-ui="lobby"] .st-box > * + * { border-top-color: color-mix(in srgb, var(--ink) 6%, transparent); }
+html[data-ui="lobby"] .st-box > :first-child { border-radius: 10px 10px 0 0; }
+html[data-ui="lobby"] .st-box > :last-child { border-radius: 0 0 10px 10px; }
+html[data-ui="lobby"] .st-box > :only-child { border-radius: 10px; }
+
+/* ---------- окна: плотные, с тенью, выпрыгивают; подложка — тёмная ---------- */
+html[data-ui="lobby"] :is(.st-card, .fp-card, .howto, .wn-card, .lv-card, .hm-panel, .t-pop, .ban-menu, .hist-menu) { border-radius: 12px; border-color: color-mix(in srgb, var(--ink) 8%, transparent); box-shadow: 0 18px 44px -14px color-mix(in srgb, #000 50%, transparent); }
+html[data-ui="lobby"] .hm-panel { background: var(--v-side); }
+html[data-ui="lobby"] :is(.lv-toast, .site-ann, .site-note, .st-toast) { border-radius: 10px; border-color: transparent; background-color: var(--v-side); box-shadow: 0 10px 28px -12px color-mix(in srgb, #000 50%, transparent); }
+html[data-ui="lobby"] :is(.lv-ov, .st-sheet, .fp-sheet, .howto-modal, .wn-sheet, .sheet, .tm-sheet, .rv-sheet) { background-color: color-mix(in srgb, #000 55%, transparent) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+html[data-ui="lobby"] .st-nav { background: var(--v-side); border-color: transparent; }
+html[data-ui="lobby"] :is(.wn-head, .lv-tabs) { border-color: color-mix(in srgb, var(--ink) 8%, transparent); }
+
+/* ---------- кнопки: пилюли, подъём при наведении и пружинка при нажатии ---------- */
+html[data-ui="lobby"] :is(.pill, .theme-btn, .btn, .chip-btn, .sub-chip, .status-chip, .mini-btn, .tpl-btn, .user-pill, .opt, .st-btn, .fp-btn, .lv-btn, .howto-ok, .cm-send, .wg-btn, .mp-btn, .rx-btns button, .fx-mute, .fx-skip, .lots-opt, .crop-ratios button, .recs-tabs button, .lv-tabs button, .lv-pick button, .chip) { border-radius: 999px; border-color: transparent; background-color: var(--v-hover); font-weight: 700; transition: transform .3s var(--v-pop), background-color .15s, color .15s; }
+html[data-ui="lobby"] :is(.pill, .theme-btn, .btn, .chip-btn, .sub-chip, .status-chip, .mini-btn, .tpl-btn, .user-pill, .opt, .st-btn, .fp-btn, .lv-btn, .howto-ok, .cm-send, .wg-btn, .mp-btn, .rx-btns button, .fx-mute, .fx-skip, .lots-opt, .crop-ratios button, .recs-tabs button, .lv-tabs button, .lv-pick button, .chip):hover { background-color: var(--v-active); border-color: transparent; color: var(--ink); transform: translateY(-1px); }
+html[data-ui="lobby"] :is(.pill, .theme-btn, .btn, .chip-btn, .sub-chip, .status-chip, .mini-btn, .tpl-btn, .user-pill, .opt, .st-btn, .fp-btn, .lv-btn, .howto-ok, .cm-send, .wg-btn, .mp-btn, .rx-btns button, .fx-mute, .fx-skip, .lots-opt, .crop-ratios button, .recs-tabs button, .lv-tabs button, .lv-pick button, .chip):active { transform: scale(.94); transition-duration: .08s; }
+html[data-ui="lobby"] :is(.pill.primary, .btn.primary, .st-btn.pri, .fp-btn.primary, .howto-ok, .cm-send, .lv-btn:not(.ghost)) { background-color: var(--accent); color: var(--on-accent, #fff); }
+html[data-ui="lobby"] :is(.pill.primary, .btn.primary, .st-btn.pri, .fp-btn.primary, .howto-ok, .cm-send, .lv-btn:not(.ghost)):hover { background-color: color-mix(in srgb, var(--accent) 86%, #fff); color: var(--on-accent, #fff); }
+html[data-ui="lobby"] :is(.btn.danger, .btn.act-del, .st-btn.bad, .fp-btn.danger) { color: var(--bad-ink, var(--bad)); background-color: color-mix(in srgb, var(--bad) 14%, transparent); }
+html[data-ui="lobby"] :is(.btn.danger-solid, .fp-btn.danger-solid) { background-color: var(--bad); color: #fff; }
+html[data-ui="lobby"] :is(.wn-x, .st-x, .fp-x, .lv-head .x, .howto-close, .lv-toast .x, .site-note button, .site-ann button) { border-radius: 50%; border-color: transparent; background: transparent; transition: transform .3s var(--v-pop), background-color .15s; }
+html[data-ui="lobby"] :is(.wn-x, .st-x, .fp-x, .lv-head .x, .howto-close, .lv-toast .x, .site-note button, .site-ann button):hover { background: var(--v-hover); transform: rotate(90deg); }
+html[data-ui="lobby"] :is(.hm-panel > a, .hm-panel > button, .hm-panel > span) { border-radius: 8px !important; border-color: transparent !important; background: transparent !important; }
+html[data-ui="lobby"] :is(.hm-panel > a, .hm-panel > button, .hm-panel > span):hover { background: var(--v-hover) !important; color: var(--ink) !important; }
+html[data-ui="lobby"] .hm-panel > .hm-all { background: color-mix(in srgb, var(--accent) 16%, transparent) !important; border-color: transparent !important; }
+
+/* ---------- вкладки и переключатели: активное — цветом акцента ---------- */
+html[data-ui="lobby"] :is(.lv-tabs button, .recs-tabs button)[aria-selected="true"] { background: var(--accent); color: var(--on-accent, #fff); }
+html[data-ui="lobby"] :is(.seg, .st-seg, .lv-seg) { border-radius: 10px; border-color: transparent; background: var(--v-side); }
+html[data-ui="lobby"] :is(.seg button, .st-seg button, .lv-seg button) { border-radius: 7px; transition: background-color .15s, color .15s; }
+html[data-ui="lobby"] :is(.seg button, .st-seg button, .lv-seg button)[aria-pressed="true"] { background: var(--accent); color: var(--on-accent, #fff); }
+/* полоса разделов на телефоне: панелью, активный раздел — цветом акцента */
+html[data-ui="lobby"] .mnav { border-radius: 12px; border-color: transparent; background: var(--v-side); }
+html[data-ui="lobby"] .mnav button { border-radius: 8px; transition: background-color .15s, color .15s, transform .3s var(--v-pop); }
+html[data-ui="lobby"] .mnav button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent, #fff); }
+/* разделы Настроек — как каналы: подсветка при наведении, активный ярче */
+html[data-ui="lobby"] .st-nb { border-radius: 6px; min-height: 40px; }
+html[data-ui="lobby"] .st-nb:hover { background: var(--v-hover); }
+html[data-ui="lobby"] .st-nb[aria-current="page"] { background: var(--v-active); color: var(--ink); }
+
+/* ---------- поля: темнее панели, без рамки ---------- */
+html[data-ui="lobby"] :is(.inp, .name-input, textarea, .search input, .st-in, .st-at, .fr-form input, .lv-link input, .meta-input, .crit-note, .ed-input, .tl-find input, .name-edit input, select, input[type="text"], input[type="search"], input[type="email"], input[type="password"], input[type="url"], input[type="number"]) { border-radius: 8px; border-color: transparent; background-color: var(--v-input); }
+html[data-ui="lobby"] :is(.inp, .name-input, textarea, .search input, .st-in, .st-at, .fr-form input, .lv-link input, .meta-input, .crit-note, .ed-input, .tl-find input, .name-edit input, select, input[type="text"], input[type="search"], input[type="email"], input[type="password"], input[type="url"], input[type="number"]):focus { outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 0; border-color: transparent; }
+
+/* ---------- списки — как каналы и сообщения: без рамок, подсветка при наведении ---------- */
+html[data-ui="lobby"] .feed-list { gap: 2px; padding: 6px; border-radius: 12px; background: var(--v-surf); }
+html[data-ui="lobby"] :is(.fd, .lv-board > div, .fr-row, .rx-list li, .cm-item, .fol-it, a.fr-who, .fr-sug, .lots-rooms li) { border-radius: 6px; border-color: transparent; background: transparent; transition: background-color .12s; }
+html[data-ui="lobby"] :is(.fd, .lv-board > div, .fr-row, .rx-list li, .cm-item, .fol-it, a.fr-who, .fr-sug, .lots-rooms li):hover { background: var(--v-hover); }
+html[data-ui="lobby"] .fd:hover { transform: none; }
+html[data-ui="lobby"] .entry summary { border-radius: 8px; transition: background-color .12s; }
+html[data-ui="lobby"] .entry summary:hover { background: var(--v-hover); }
+html[data-ui="lobby"] .entry details[open] > summary { border-radius: 8px 8px 0 0; }
+html[data-ui="lobby"] .e-body { border-radius: 0 0 8px 8px; }
+
+/* ---------- оценки ---------- */
+html[data-ui="lobby"] :is(.badge, .score, .pv-badge, .fd-score, .bd-v, .kpi-val, .crit-val, .lv-num) { font-family: var(--v-font); font-weight: 900; font-variant-numeric: tabular-nums; border-radius: 8px; }
+html[data-ui="lobby"] :is(.rank, .pv-rank, .lv-hero .n) { font-family: var(--v-font); font-weight: 900; font-variant-numeric: tabular-nums; }
+html[data-ui="lobby"] :is(.lv-bar, .meter i, .bc, .pv-bar b, .spark i) { border-radius: 4px; }
+
+/* ---------- движение: живо и коротко ---------- */
+@keyframes lo-pop { from { opacity: 0; transform: scale(.94); } 70% { opacity: 1; transform: scale(1.012); } to { transform: none; } }
+@keyframes lo-up { from { opacity: 0; transform: translateY(8px); } }
+@keyframes lo-fade { from { opacity: 0; } }
+html[data-ui="lobby"] :is(.title, .wordmark) { animation: lo-up .3s var(--v-out) backwards; }
+html[data-ui="lobby"] :is(.card, .app, .tile, .stat, .lv-box, .lv-bi, .lv-ach, .rt, .st-box, .lv-letter) { animation: lo-up .26s var(--v-out) backwards; }
+html[data-ui="lobby"] .app:nth-child(2) { animation-delay: .05s; }
+html[data-ui="lobby"] .app:nth-child(3) { animation-delay: .1s; }
+html[data-ui="lobby"] :is(.st-card, .fp-card, .howto, .wn-card, .lv-card, .t-pop, .ban-menu, .hist-menu) { animation: lo-pop .28s var(--v-out) both; }
+html[data-ui="lobby"] .hm-panel { transform-origin: top right; animation: lo-pop .24s var(--v-out) both; }
+html[data-ui="lobby"] :is(.lv-toast, .site-ann, .site-note, .st-toast, .lv-ov, .st-sheet, .fp-sheet, .howto-modal, .wn-sheet, .sheet, .tm-sheet, .rv-sheet) { animation: lo-fade .18s var(--v-out) both; }
+html[data-ui="lobby"] .lv-body > * { animation: lo-up .22s var(--v-out) backwards; }
+html[data-ui="lobby"] .lv-body > :nth-child(2) { animation-delay: .03s; }
+html[data-ui="lobby"] .lv-body > :nth-child(n+3) { animation-delay: .06s; }
+@media (prefers-reduced-motion: reduce) {
+  html[data-ui="lobby"] :is(.title, .wordmark, .card, .app, .tile, .stat, .lv-box, .lv-bi, .lv-ach, .rt, .st-box, .lv-letter, .st-card, .fp-card, .howto, .wn-card, .lv-card, .t-pop, .ban-menu, .hist-menu, .hm-panel, .lv-toast, .site-ann, .site-note, .st-toast, .lv-ov, .st-sheet, .fp-sheet, .howto-modal, .wn-sheet, .sheet, .tm-sheet, .rv-sheet, .lv-body > *) { animation: none; }
+  html[data-ui="lobby"] :is(.pill, .theme-btn, .btn, .chip-btn, .sub-chip, .status-chip, .mini-btn, .tpl-btn, .user-pill, .opt, .st-btn, .fp-btn, .lv-btn, .howto-ok, .cm-send, .wg-btn, .mp-btn, .rx-btns button, .fx-mute, .fx-skip, .lots-opt, .crop-ratios button, .recs-tabs button, .lv-tabs button, .lv-pick button, .chip, .wn-x, .st-x, .fp-x, .lv-head .x, .howto-close, .lv-toast .x, .site-note button, .site-ann button, .app, .rt, .lv-bi, .lv-ach, .tile, .fr-card):is(:hover, :active) { transform: none; }
+}

@@ -7,8 +7,10 @@ import { imdbLookup } from '../_lib/imdb.js';
 import { NOTES } from '../_lib/admin-changes.js';
 import { LOT_NAME, MAX_LOTS, STICKER_RE, cleanLive, LIVE_OWNER, liveBusy, liveLots, spinLive, resetLive, stopAuto, settledLive, liveTx, liveView } from '../_lib/lots-live.js';
 import { ONLINE_MS, GUEST_RE, onlineCount, friendsAndIncoming, touchUsers, touchGuests } from '../_lib/presence.js';
-import { awardMany as lvAwardMany, revokeMany as lvRevokeMany, visit as lvVisit, shelfDiff, nightNow, levelsOn } from '../_lib/levels.js';
+import { awardMany as lvAwardMany, revokeMany as lvRevokeMany, visit as lvVisit, shelfDiff, nightNow, levelsOn, onSeasonClose } from '../_lib/levels.js';
 import { makeLevelsRoutes, acceptInvite, tzOf, ensurePast } from '../_lib/levels-api.js';
+import { makeShopRoutes } from '../_lib/shop-api.js';
+import { makeMailoutRoutes, rememberLang } from '../_lib/mailout.js';
 
 const enc = new TextEncoder();
 const ITER = 10000;
@@ -483,8 +485,12 @@ const routes = {
     const salt = randHex(16);
     const passHash = await hashPass(pass, salt);
     const made = await createUser(env, { name, uname, mail, passHash, salt, request });
-    // пришёл по ссылке друга: сразу друзья, а когда дойдёт до 3-го уровня — опыт обоим
-    if (invite && made && made.user) await acceptInvite(env, made.user.id, String(invite));
+    // пришёл по ссылке друга: пригласившему — заявка в друзья от новичка (принимает он сам, сразу друзьями не делаем:
+    // ссылку могли выложить публично), а когда новичок дойдёт до 3-го уровня — опыт обоим
+    if (invite && made && made.user) {
+      const by = await acceptInvite(env, made.user.id, String(invite));
+      if (by) await pokePresence(env, { what: 'users', ids: [by] });
+    }
     return json(made);
   },
   // вход по почте или по нику
@@ -1104,10 +1110,13 @@ const routes = {
     const me = await currentUser(env, request);
     if (me) {
       await touchUsers(env, [me.id], now);
+      // язык писем об обновлениях — тот, на котором человек смотрит сайт (пишется, только когда поменялся)
+      await rememberLang(env, me.id, langOf(request));
       // уровни: опыт за прошлое при первом заходе после запуска, потом «зашёл сегодня» (раз в день по его часовому поясу)
       await ensurePast(env, me.id);
       const v = await lvVisit(env, me.id, tzOf(request), now);
-      if (v && v.news && v.news.length) lvNews.set(request, true);
+      // новые плашки или уже лежащие (например, «Новый сезон», пока вкладка была без сокета) — страница их заберёт
+      if (v && ((v.news && v.news.length) || v.pending)) lvNews.set(request, true);
     }
     else {
       const { guest } = await readBody(request);
@@ -1922,14 +1931,17 @@ const routes = {
         if (Array.isArray(b.segs) && !liveBusy(live, now)) live.segs = clean.segs.map((x) => ({ ...x, p: 1 / clean.segs.length }));
       }
       if (isAdmin) {
+        // по названиям — старые вкладки, по id лота — нынешний пульт (повторы с одним названием — разные лоты)
         if (Array.isArray(b.keep)) live.keep = clean.keep;
         if (Array.isArray(b.kick)) live.kick = clean.kick;
+        if (Array.isArray(b.keepIds)) live.keepIds = clean.keepIds;
+        if (Array.isArray(b.kickIds)) live.kickIds = clean.kickIds;
       }
       return { live };
     });
     if (r.err) return fail(...r.err);
     if (r.big) return fail(413, 'Слишком много лотов на колесе.');
-    if (isAdmin && !isOwner && (Array.isArray(b.keep) || Array.isArray(b.kick))) await adminLog(env, request, me, `lots ${arg}: keep ${(r.live.keep || []).length}, kick ${(r.live.kick || []).length}`, true);
+    if (isAdmin && !isOwner && ['keep', 'kick', 'keepIds', 'kickIds'].some((k) => Array.isArray(b[k]))) await adminLog(env, request, me, `lots ${arg}: keep ${(r.live.keepIds || []).length + (r.live.keep || []).length}, kick ${(r.live.kickIds || []).length + (r.live.kick || []).length}`, true);
     await pokeRoom(env, arg, 'live');
     return json(refused ? { ok: true, refused } : { ok: true });
   },
@@ -2289,16 +2301,24 @@ const HANDLE_HINT = 'Юзернейм: от 3 до 20 символов, лати
 const HIST_KINDS = new Set(['avatar', 'banner']);
 const HIST_RE = /\.h\.\d+$/;
 const HIST_MAX = 8;
+// картинка без «#pos=x,y» (у баннера — какая часть видна): та же картинка с другим положением — та же картинка
+const photoBare = (d) => String(d || '').replace(/#pos=\d{1,3},\d{1,3}$/, '');
+// строки истории с этой картинкой при любом положении (сравнение точное, без LIKE: base64 различает регистр)
+const HIST_SAME = "user_id = ? AND key LIKE ? AND substr(data, 1, ?) = ? AND (length(data) = ? OR substr(data, ? + 1, 5) = '#pos=')";
 async function toHistory(env, uid, kind, next) {
   const old = await env.DB.prepare('SELECT data FROM photos WHERE key = ?').bind(`${uid}:${kind}`).first();
   if (!old || !old.data || old.data === next) return;
-  const now = Date.now(), hk = `${uid}:${kind}.h.${now}`;
-  // та же картинка уже лежит в истории — она просто поднимается наверх, без копии
-  const same = await env.DB.prepare('SELECT key FROM photos WHERE user_id = ? AND key LIKE ? AND data = ?').bind(uid, `${uid}:${kind}.h.%`, old.data).first();
-  if (same) await env.DB.prepare('UPDATE photos SET key = ?, updated_at = ? WHERE key = ?').bind(hk, now, same.key).run();
-  else await env.DB.prepare('INSERT OR REPLACE INTO photos (key, user_id, data, updated_at) VALUES (?, ?, ?, ?)').bind(hk, uid, old.data, now).run();
-  // картинку вернули из истории: теперь она текущая, в истории ей больше не место
-  if (next) await env.DB.prepare('DELETE FROM photos WHERE user_id = ? AND key LIKE ? AND data = ?').bind(uid, `${uid}:${kind}.h.%`, next).run();
+  const like = `${uid}:${kind}.h.%`, now = Date.now();
+  const same = (d) => { const b = photoBare(d); return env.DB.prepare(`DELETE FROM photos WHERE ${HIST_SAME}`).bind(uid, like, b.length, b, b.length, b.length); };
+  const writes = [];
+  // сдвинули только видимую часть баннера — это не новый баннер, в историю он не уходит
+  if (!next || photoBare(next) !== photoBare(old.data)) {
+    // прежняя картинка — наверх истории, одной строкой: её копии с другим положением больше не нужны
+    writes.push(same(old.data), env.DB.prepare('INSERT OR REPLACE INTO photos (key, user_id, data, updated_at) VALUES (?, ?, ?, ?)').bind(`${uid}:${kind}.h.${now}`, uid, old.data, now));
+  }
+  // новая картинка теперь текущая: если её вернули из истории, там ей больше не место (ни с каким положением)
+  if (next) writes.push(same(next));
+  if (writes.length) await env.DB.batch(writes);
   const { results } = await env.DB.prepare('SELECT key FROM photos WHERE user_id = ? AND key LIKE ? ORDER BY key DESC LIMIT -1 OFFSET ?').bind(uid, `${uid}:${kind}.h.%`, HIST_MAX).all();
   if (results.length) await env.DB.batch(results.map((r) => env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(r.key)));
 }
@@ -3026,9 +3046,34 @@ Object.assign(routes, makeLevelsRoutes({
   poke: (env, uid) => pokePresence(env, { what: 'notify', to: uid, n: { kind: 'award' } }),
   pokeAll: (env) => pokePresence(env, { what: 'mail' }),
   markNews: (request, r) => { if (r && r.news && r.news.length) lvNews.set(request, true); },
+  // объявление вверху сайта (то же, что вкладка «Объявление» в админке): сезоны пишут о сбросе званий
+  getAnnounce: async (env) => {
+    const r = await env.DB.prepare("SELECT v FROM meta WHERE k = 'announce'").first();
+    try { return r ? JSON.parse(r.v) : null; } catch (e) { return null; }
+  },
+  setAnnounce: async (env, a) => {
+    if (!a) await env.DB.prepare("DELETE FROM meta WHERE k = 'announce'").run();
+    else {
+      const v = { id: String(a.id || randHex(6)).slice(0, 40), text: clip(String(a.text || ''), 280), kind: ['info', 'warn', 'party'].includes(a.kind) ? a.kind : 'info', at: Date.now(), until: +a.until || 0, by: a.by || '' };
+      await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('announce', ?)").bind(JSON.stringify(v)).run();
+    }
+    announceCache.at = 0;
+    await pokePresence(env, { what: 'announce' });
+  },
+}));
+// сезон закрылся (первый запрос после срока или «Сбросить сейчас»): всем открытым вкладкам — «загляни за новостями»,
+// там плашка «Новый сезон» и письмо в почте
+onSeasonClose((env) => pokePresence(env, { what: 'mail' }));
+// магазин за рофланы (/api/shop/…, /api/admin/shop…) — в functions/_lib/shop-api.js
+Object.assign(routes, makeShopRoutes({ json, fail, readBody, adminActive, isAdmin, adminCandidate, adminLog }));
+
+// письма об обновлениях (/api/mail/*, /api/admin/mailout*) — functions/_lib/mailout.js
+Object.assign(routes, makeMailoutRoutes({
+  json, fail, readBody, adminActive, adminLog, burst, clientIp, langOf, maskMail,
+  pokeAll: (env) => pokePresence(env, { what: 'mail' }),
 }));
 
-const PUBLIC = new Set(['GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid']);
+const PUBLIC = new Set(['GET /shop/look', 'GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid', 'GET /mail/unsub', 'POST /mail/unsub']);
 // код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности
 const SHARE_RE = /^[A-Za-z0-9]{12}$/;
 function shareId() {

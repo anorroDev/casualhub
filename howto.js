@@ -94,15 +94,19 @@
 .howto li span b { font-weight: 800; }
 .howto-acts { display: flex; justify-content: flex-end; gap: 8px; }
 .howto-ok { height: 44px; padding: 0 22px; border-radius: 999px; border: 0; background: var(--accent); color: var(--on-accent, #fff); font: inherit; font-size: 15px; font-weight: 800; cursor: pointer; transition: transform .2s cubic-bezier(.34, 1.56, .64, 1); }
-.howto-ok:hover { transform: translateY(-2px) scale(1.03); }
+/* подъём при наведении — только с мышью: на телефоне после касания кнопка оставалась «приподнятой» */
+@media (hover: hover) { .howto-ok:hover { transform: translateY(-2px) scale(1.03); } }
 .howto-ok:active { transform: scale(.95); }
 .howto-close { position: absolute; top: 12px; right: 12px; width: 34px; height: 34px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--panel-2); color: var(--ink-2); font: inherit; font-size: 15px; cursor: pointer; }
 .howto-close:hover { color: var(--ink); }
 .howto-btn { gap: 5px; }
 @media (max-width: 560px) { .hb-t { display: none; } .howto-ok { flex: 1; } }
+/* большие экраны (2K, 4K): подсказка и кнопка «?» крупнее, строка шагов остаётся короткой */
+@media (min-width: 2200px) { .howto { width: min(100%, 560px); } .howto-head { font-size: 21px; } .howto li { font-size: 17px; } .howto-fab { width: 56px; height: 56px; font-size: 24px; } }
+@media (min-width: 3000px) { .howto { width: min(100%, 660px); } .howto-head { font-size: 24px; } .howto li { font-size: 19px; grid-template-columns: 38px minmax(0, 1fr); } .howto-fab { width: 64px; height: 64px; font-size: 28px; } }
 .howto-fab { position: fixed; right: max(14px, env(safe-area-inset-right, 0px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 16px + var(--fab-lift, 0px)); z-index: 60; display: grid; place-items: center; width: 48px; height: 48px; border-radius: 50%; border: 2px solid var(--accent); background: var(--panel); color: var(--ink); font: inherit; font-size: 21px; line-height: 1; cursor: pointer; box-shadow: 0 10px 26px -12px color-mix(in srgb, var(--accent) 80%, transparent); transform: translateY(calc(100% + 40px + var(--fab-lift, 0px))) scale(.6); transition: transform .45s cubic-bezier(.34, 1.56, .64, 1), bottom .25s; }
 .howto-fab.on { transform: none; }
-.howto-fab.on:hover { transform: translateY(-3px) scale(1.06); }
+@media (hover: hover) { .howto-fab.on:hover { transform: translateY(-3px) scale(1.06); } }
 .howto-fab.on:active { transform: scale(.92); }
 body.howto-lock { overflow: hidden; }
 @media (prefers-reduced-motion: reduce) { .howto-modal.in .howto, .howto-modal.out .howto, .howto-modal.in .howto li, .howto-wave { animation: none; } .howto-fab { transition: none; } }`;

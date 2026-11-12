@@ -13,6 +13,10 @@
   const lsSet = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) {} };
   const readTokens = () => { try { return JSON.parse(lsGet(TOKENS_KEY) || '{}') || {}; } catch (e) { return {}; } };
   const writeTokens = (t) => lsSet(TOKENS_KEY, JSON.stringify(t));
+  // код приглашения (header-menu.js кладёт его из ?invite=): уходит с регистрацией один раз, иначе следующий аккаунт
+  // из этого же браузера тоже отправил бы заявку пригласившему
+  const INVITE_KEY = 'casualhub.invite.v1';
+  const dropInvite = () => lsSet(INVITE_KEY, null);
   function setTokenFor(localId, token) {
     const t = readTokens();
     if (token) t[localId] = token; else delete t[localId];
@@ -360,7 +364,7 @@
         return false;
       }
       try {
-        r = await api('/register', 'POST', { username: nick, handle: state.user.handle || undefined, password: pass, email: mail, invite: localStorage.getItem('casualhub.invite.v1') || undefined }, null);
+        r = await api('/register', 'POST', { username: nick, handle: state.user.handle || undefined, password: pass, email: mail, invite: lsGet(INVITE_KEY) || undefined }, null);
       } catch (e2) {
         F.linkError = e2.status === 409
           ? `${e2.message} Если аккаунт твой, проверь пароль, иначе поменяй ник или почту в профиле.`
@@ -368,6 +372,7 @@
         return false;
       }
     }
+    dropInvite();
     if (!state.user || state.user.id !== localId) return false;
     setTokenFor(localId, r.token);
     state.user.serverId = r.user.id;
@@ -1214,12 +1219,13 @@ ${ICON.chev}
       const h = String(handle || '').trim().replace(/^@+/, '').toLowerCase();
       if (!HANDLE_RE.test(h)) { toast(h ? 'Юзернейм: от 3 до 20 символов, латинские буквы, цифры, «_» и «.»' : 'Придумай юзернейм: по нему тебя найдут друзья'); return false; }
       let r;
-      try { r = await api('/register', 'POST', { username: nick, handle: h, password: pass, email: em, invite: localStorage.getItem('casualhub.invite.v1') || undefined }, null); }
+      try { r = await api('/register', 'POST', { username: nick, handle: h, password: pass, email: em, invite: lsGet(INVITE_KEY) || undefined }, null); }
       catch (e) {
         if (e.status === 0 || e.status === 503) { toast(OFFLINE_REG); return false; }
         toast(e.status === 409 && /почт/.test(e.message) ? `${e.message} Если это твой аккаунт, войди на вкладке «Вход».` : e.message);
         return false;
       }
+      dropInvite();
       const ok = orig.register.call(this, nick, email, password, avatar, color, r.user.handle);
       if (ok && state.user) {
         setTokenFor(state.user.id, r.token);

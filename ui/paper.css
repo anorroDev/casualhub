@@ -1,0 +1,119 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800;900&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap');
+/* Казуал Хаб: вид «Газета». Включён, когда у <html> класс unslop и data-ui="paper" (выбирается в Настройках).
+   Строится поверх казуального вида (unslop.css и <style id="unslop-page"> у страниц), здесь только своё: газетные
+   шрифты (Playfair Display в заголовках, PT Serif в длинном тексте, интерфейс — прежним шрифтом), двойная линейка
+   под шапкой, плоские листы без теней, тонкие рамки и маленькие углы, строки списков через линейки, подчёркнутые
+   ссылки, табличные цифры и мягкое появление, как будто проступают чернила. Цвета — только переменные темы. */
+
+/* ---------- основа ---------- */
+html[data-ui="paper"]:root {
+  --v-head: "Playfair Display", "PT Serif", Georgia, "Times New Roman", serif;
+  --v-text: "PT Serif", Georgia, "Times New Roman", serif;
+  --v-rule: color-mix(in srgb, var(--ink) 72%, transparent);
+  --v-frame: color-mix(in srgb, var(--ink) 26%, var(--line));
+  --v-ease: cubic-bezier(.2, .7, .2, 1);
+  --font-display: var(--v-head);
+  --shadow: none;
+  --spring: var(--v-ease);
+  --r: 4px; --r-sm: 3px; --pad: 22px;
+}
+html[data-ui="paper"] body { font-variant-numeric: lining-nums tabular-nums; }
+/* чистая бумага: без звёзд и сетки точек; теней и размытия нет нигде */
+html[data-ui="paper"]::after, html[data-ui="paper"] body::after { content: none !important; }
+html[data-ui="paper"] *, html[data-ui="paper"] *::before, html[data-ui="paper"] *::after { box-shadow: none !important; text-shadow: none !important; }
+
+/* ---------- шапка: как у газеты, с двойной линейкой ---------- */
+html[data-ui="paper"] :is(header.top, .masthead) { padding-bottom: 14px; border-bottom: 4px double var(--v-rule); }
+html[data-ui="paper"] .mark { font-family: var(--v-head); font-weight: 800; letter-spacing: 0; }
+html[data-ui="paper"] :is(.feed-head, .board-head) { padding-top: 10px; border-top: 1px solid var(--v-rule); }
+
+/* ---------- заголовки и текст ---------- */
+html[data-ui="paper"] :is(.title, .wordmark) { font-family: var(--v-head); font-weight: 800; letter-spacing: -.015em; }
+html[data-ui="paper"] .wordmark { font-size: clamp(54px, 13vw, 164px); line-height: .92; column-gap: .22em; }
+html[data-ui="paper"] :is(h1, h2, h3, .app-name, .view-tab, .tl-view-title, .st-nav h2, .st-head h3, .lv-head h2, .wn-head h2, .howto-head) { font-family: var(--v-head); letter-spacing: 0; }
+/* у Playfair буквы шире, чем у узкого пиксельного Handjet: подписи, рассчитанные на него, — помельче */
+html[data-ui="paper"] .app-name { font-size: clamp(24px, 2.3vw, 29px); line-height: 1.05; }
+html[data-ui="paper"] .view-tab { font-size: clamp(17px, 6cqi, 36px); font-weight: 700; letter-spacing: -.01em; }
+html[data-ui="paper"] :is(.lede, .app-desc, .e-note p, .bd-note, .cm-text, .wn-body p, .wn-body li, .howto li, .rt-why, .notice) { font-family: var(--v-text); }
+html[data-ui="paper"] :is(.lede, .e-note p, .cm-text, .wn-body p, .wn-body li, .howto li) { line-height: 1.65; }
+html[data-ui="paper"] .lede { font-style: italic; }
+html[data-ui="paper"] :is(p, li, small, .lede, .wn-body, .cm-text, .e-note, .notice, .online-now) a:not([class*="pill"], [class*="btn"]),
+html[data-ui="paper"] .feed-all { text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: .18em; }
+
+/* ---------- листы: плоские, тонкая рамка, маленькие углы ---------- */
+html[data-ui="paper"] :is(.card, .sheet-card, .app, .tile, .stat, .fr-card, .rd-card, .e-note, .lv-box, .lv-bi, .lv-ach, .lv-letter, .lv-recap > div, .fol-box, .st-box, .rt, .cat-ask, .tl-row) { border-radius: var(--r); border-color: var(--line); }
+html[data-ui="paper"] :is(.pv, .pv-row, .pv-tier > span, .e-thumb, .e-photo, .rt-pic, .fd-pic, .e-body, .st-th, .app-icon) { border-radius: 2px; }
+html[data-ui="paper"] .pv { background: var(--panel-2); }
+html[data-ui="paper"] .app { transform: none; }
+html[data-ui="paper"] :is(.fd, .rt, .pv-row, .pv-tier b):hover, html[data-ui="paper"] .app:hover :is(.pv-row, .pv-tier b) { transform: none; }
+html[data-ui="paper"] .st-box > :is(:first-child, :last-child, :only-child) { border-radius: 0; }
+
+/* ---------- окна: в рамке, сверху двойная линейка; подложка — светлая, как лист поверх газеты ---------- */
+html[data-ui="paper"] :is(.st-card, .fp-card, .howto, .wn-card, .lv-card, .hm-panel, .t-pop, .ban-menu, .hist-menu) { border-radius: 4px; border: 1px solid var(--v-frame); border-top: 3px double var(--v-rule); }
+html[data-ui="paper"] :is(.lv-toast, .site-ann, .site-note, .st-toast) { border-radius: 3px; border: 1px solid var(--v-frame); }
+html[data-ui="paper"] :is(.lv-ov, .st-sheet, .fp-sheet, .howto-modal, .wn-sheet, .sheet, .tm-sheet, .rv-sheet) { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; background-color: color-mix(in srgb, var(--bg) 70%, transparent) !important; }
+html[data-ui="paper"] :is(.st-nav, .wn-head, .lv-tabs) { border-color: var(--v-rule); }
+html[data-ui="paper"] .st-nav { background: transparent; }
+
+/* ---------- кнопки: рамка 1px, без заливки; главная — тёмная, как заголовок ---------- */
+html[data-ui="paper"] :is(.pill, .theme-btn, .btn, .chip-btn, .sub-chip, .status-chip, .mini-btn, .tpl-btn, .user-pill, .opt, .st-btn, .fp-btn, .lv-btn, .howto-ok, .cm-send, .wg-btn, .mp-btn, .rx-btns button, .fx-mute, .fx-skip, .lots-opt, .crop-ratios button, .recs-tabs button, .lv-tabs button, .lv-pick button, .chip) { border-radius: 3px; border: 1px solid var(--v-frame); background-color: transparent; transition: background-color .2s var(--v-ease), color .2s var(--v-ease), border-color .2s var(--v-ease); }
+html[data-ui="paper"] :is(.pill, .theme-btn, .btn, .chip-btn, .sub-chip, .status-chip, .mini-btn, .tpl-btn, .user-pill, .opt, .st-btn, .fp-btn, .lv-btn, .howto-ok, .cm-send, .wg-btn, .mp-btn, .rx-btns button, .fx-mute, .fx-skip, .lots-opt, .crop-ratios button, .recs-tabs button, .lv-tabs button, .lv-pick button, .chip):hover { border-color: var(--ink); color: var(--ink); }
+html[data-ui="paper"] :is(.pill, .theme-btn, .btn, .chip-btn, .sub-chip, .status-chip, .mini-btn, .tpl-btn, .user-pill, .opt, .st-btn, .fp-btn, .lv-btn, .howto-ok, .cm-send, .wg-btn, .mp-btn, .rx-btns button, .fx-mute, .fx-skip, .lots-opt, .crop-ratios button, .recs-tabs button, .lv-tabs button, .lv-pick button, .chip):active { transform: translateY(1px); }
+html[data-ui="paper"] :is(.pill.primary, .btn.primary, .st-btn.pri, .fp-btn.primary, .howto-ok, .cm-send, .lv-btn:not(.ghost)) { background-color: var(--ink); border-color: var(--ink); color: var(--panel); }
+html[data-ui="paper"] :is(.pill.primary, .btn.primary, .st-btn.pri, .fp-btn.primary, .howto-ok, .cm-send, .lv-btn:not(.ghost)):hover { background-color: color-mix(in srgb, var(--ink) 84%, var(--accent)); color: var(--panel); }
+html[data-ui="paper"] :is(.btn.danger, .btn.act-del, .st-btn.bad, .fp-btn.danger) { color: var(--bad-ink, var(--bad)); border-color: color-mix(in srgb, var(--bad) 50%, var(--line)); }
+html[data-ui="paper"] :is(.btn.danger-solid, .fp-btn.danger-solid) { background-color: var(--bad); border-color: var(--bad); color: var(--on-tier); }
+html[data-ui="paper"] :is(.wn-x, .st-x, .fp-x, .lv-head .x, .howto-close, .lv-toast .x, .site-note button, .site-ann button) { border-radius: 3px; border: 1px solid var(--v-frame); background: transparent; }
+html[data-ui="paper"] :is(.hm-panel > a, .hm-panel > button, .hm-panel > span) { border-radius: 2px !important; }
+html[data-ui="paper"] .hm-panel > .hm-all { border: 1px solid var(--ink) !important; background: transparent !important; }
+
+/* ---------- вкладки: подчёркнутые, как рубрики; переключатели — в рамке ---------- */
+html[data-ui="paper"] :is(.lv-tabs button, .recs-tabs button) { border-color: transparent; border-radius: 0; padding-inline: 4px; }
+html[data-ui="paper"] :is(.lv-tabs button, .recs-tabs button)[aria-selected="true"] { background: transparent; color: var(--ink); border-color: transparent; border-bottom: 2px solid var(--ink); }
+html[data-ui="paper"] .lv-tabs { gap: 16px; }
+html[data-ui="paper"] :is(.seg, .st-seg, .lv-seg) { border-radius: 3px; border: 1px solid var(--v-frame); background: transparent; }
+html[data-ui="paper"] :is(.seg button, .st-seg button, .lv-seg button) { border-radius: 2px; }
+html[data-ui="paper"] :is(.seg button, .st-seg button, .lv-seg button)[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+/* нижняя полоса разделов на телефоне (Мнение, Колесо…): прилипает к краю, поэтому непрозрачная */
+html[data-ui="paper"] .mnav { border-radius: 3px; border-color: var(--v-frame); background: var(--panel); }
+html[data-ui="paper"] .mnav button { border-radius: 2px; }
+html[data-ui="paper"] .st-nb { border-radius: 0; }
+html[data-ui="paper"] .st-nb[aria-current="page"] { background: transparent; color: var(--ink); font-weight: 700; border-left: 3px solid var(--ink); }
+
+/* ---------- поля и переключатели ---------- */
+html[data-ui="paper"] :is(.inp, .name-input, textarea, .search input, .st-in, .st-at, .fr-form input, .lv-link input, .meta-input, .crit-note, .ed-input, .tl-find input, .name-edit input, select, input[type="text"], input[type="search"], input[type="email"], input[type="password"], input[type="url"], input[type="number"]) { border-radius: 3px; border: 1px solid var(--v-frame); background-color: var(--panel); }
+html[data-ui="paper"] :is(.inp, .name-input, textarea, .search input, .st-in, .st-at, .fr-form input, .lv-link input, .meta-input, .crit-note, .ed-input, .tl-find input, .name-edit input, select, input[type="text"], input[type="search"], input[type="email"], input[type="password"], input[type="url"], input[type="number"]):focus { outline: 1px solid var(--ink); outline-offset: 0; border-color: var(--ink); }
+html[data-ui="paper"] .st-sw { border-radius: 3px; }
+html[data-ui="paper"] .st-sw::after { border-radius: 2px; }
+
+/* ---------- списки: строки разделены линейками, а не коробками ---------- */
+html[data-ui="paper"] .feed-list { gap: 0; }
+html[data-ui="paper"] :is(.fd, .lv-board > div, .fr-row, .rx-list li, .cm-item, .fol-it, a.fr-who, .fr-sug, .lots-rooms li) { border-radius: 0; }
+html[data-ui="paper"] :is(.fd, .cm-item, .lv-board > div) { border: 0; border-bottom: 1px solid var(--line); background: transparent; }
+html[data-ui="paper"] :is(.fd, .lv-board > div) { padding-inline: 4px; }
+html[data-ui="paper"] .fd:hover { background: color-mix(in srgb, var(--ink) 4%, transparent); }
+html[data-ui="paper"] .entry summary, html[data-ui="paper"] .entry details[open] > summary { border-radius: 2px; }
+
+/* ---------- оценки и шкалы: цифры с засечками, ровные столбцы ---------- */
+html[data-ui="paper"] :is(.badge, .score, .pv-badge, .fd-score, .bd-v, .kpi-val, .crit-val, .lv-num) { font-family: var(--v-head); font-variant-numeric: lining-nums tabular-nums; border-radius: 3px; }
+html[data-ui="paper"] :is(.rank, .pv-rank, .lv-hero .n) { font-family: var(--v-head); font-variant-numeric: lining-nums tabular-nums; }
+html[data-ui="paper"] :is(.lv-bar, .meter i, .bc, .pv-bar b, .spark i, .cells i) { border-radius: 0; }
+
+/* ---------- движение: проявляется, как чернила на бумаге ---------- */
+@keyframes pa-ink { from { opacity: 0; filter: blur(2.5px); } to { opacity: 1; filter: blur(0); } }
+@keyframes pa-fade { from { opacity: 0; } }
+html[data-ui="paper"] :is(.title, .wordmark) { animation: pa-ink .8s var(--v-ease) backwards; }
+html[data-ui="paper"] .wordmark .ch { animation: pa-ink .7s var(--v-ease) backwards calc(.05s + var(--i, 0) * 45ms); }
+html[data-ui="paper"] :is(.card, .app, .tile, .stat, .lv-box, .lv-bi, .lv-ach, .rt, .st-box, .lv-letter) { animation: pa-ink .6s var(--v-ease) backwards; }
+html[data-ui="paper"] .app:nth-child(2) { animation-delay: .08s; }
+html[data-ui="paper"] .app:nth-child(3) { animation-delay: .16s; }
+html[data-ui="paper"] :is(.st-card, .fp-card, .howto, .wn-card, .lv-card, .hm-panel, .t-pop, .ban-menu, .hist-menu) { animation: pa-ink .45s var(--v-ease) both; }
+html[data-ui="paper"] :is(.lv-toast, .site-ann, .site-note, .st-toast) { animation: pa-fade .35s var(--v-ease) both; }
+html[data-ui="paper"] .lv-body > * { animation: pa-ink .45s var(--v-ease) backwards; }
+html[data-ui="paper"] .lv-body > :nth-child(2) { animation-delay: .05s; }
+html[data-ui="paper"] .lv-body > :nth-child(3) { animation-delay: .1s; }
+html[data-ui="paper"] .lv-body > :nth-child(n+4) { animation-delay: .15s; }
+@media (prefers-reduced-motion: reduce) {
+  html[data-ui="paper"] :is(.title, .wordmark, .wordmark .ch, .card, .app, .tile, .stat, .lv-box, .lv-bi, .lv-ach, .rt, .st-box, .lv-letter, .st-card, .fp-card, .howto, .wn-card, .lv-card, .hm-panel, .t-pop, .ban-menu, .hist-menu, .lv-toast, .site-ann, .site-note, .st-toast, .lv-body > *) { animation: none; }
+  html[data-ui="paper"] :is(.pill, .theme-btn, .btn, .chip-btn, .sub-chip, .status-chip, .mini-btn, .tpl-btn, .user-pill, .opt, .st-btn, .fp-btn, .lv-btn, .howto-ok, .cm-send, .wg-btn, .mp-btn, .rx-btns button, .fx-mute, .fx-skip, .lots-opt, .crop-ratios button, .recs-tabs button, .lv-tabs button, .lv-pick button, .chip):active { transform: none; }
+}

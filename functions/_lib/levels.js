@@ -26,7 +26,8 @@ export function levelOf(xp) {
   return { level, into: xp - totalFor(level), need: needFor(level) };
 }
 
-// ---------- звания ----------
+// ---------- звания по уровню (прежние) ----------
+// Больше нигде не показываются: звание теперь сезонное (ниже). Оставлены для старых тестов и записей.
 export const RANKS = [
   { from: 1, fun: 'Людишка', plain: 'Новичок' },
   { from: 5, fun: 'Казуал', plain: 'Зритель' },
@@ -38,6 +39,52 @@ export const RANKS = [
   { from: 50, fun: 'Легенда', plain: 'Легенда' },
 ];
 export const rankOf = (level) => RANKS.reduce((r, x) => (level >= x.from ? x : r), RANKS[0]);
+
+// ---------- сезоны: звание за три месяца, как на Faceit ----------
+// Уровень и опыт за всё время не сбрасываются: уровни открывают оформление, его не отнимают. Звание — сезонное:
+// по опыту, набранному с начала сезона (строки xp_log с at в сезоне и gone = 0). Сезон по умолчанию — три месяца
+// (SEASON_MONTHS), сброс 1-го числа в 00:00 по Москве; когда сбросить, может назначить админ. При сбросе итоги каждого
+// (опыт, звание, место) уходят в season_results, и все снова «Людишка».
+// Пороги — по модели живых действий с нынешними RULES, заданиями и сериями, ×3 к месяцу: заходит 8 дней в месяц по оценке —
+// ~480 опыта за сезон; обычный (18 дней в месяц, 2 оценки, иногда отзыв, пара реакций) — ~4 200; активный (каждый день,
+// 4 оценки, отзыв, 5 реакций, тир-лист в неделю) — ~16 000; всё до дневных лимитов каждый день — ~33 000.
+// id — имена значков званий (art/), не менять.
+export const SEASON_MONTHS = 3;
+export const SEASON_RANKS = [
+  { id: 'people', title: 'Людишка', xp: 0 },
+  { id: 'casual', title: 'Казуал', xp: 450 },
+  { id: 'couch', title: 'Диванный критик', xp: 1500 },
+  { id: 'whiner', title: 'Профессиональный нытик', xp: 3000 },
+  { id: 'champion', title: 'Чемпион', xp: 4500 },
+  { id: 'godlike', title: 'Рецензент от бога', xp: 7500 },
+  { id: 'taste', title: 'Хранитель вкуса', xp: 12000 },
+  { id: 'legend', title: 'Легенда', xp: 18000 },
+  { id: 'greatest', title: 'Величайший', xp: 27000 },
+];
+export const seasonRankOf = (xp) => SEASON_RANKS.reduce((r, x) => ((+xp || 0) >= x.xp ? x : r), SEASON_RANKS[0]);
+// следующее звание (null — уже самое высокое)
+export const nextSeasonRank = (xp) => SEASON_RANKS.find((x) => x.xp > (+xp || 0)) || null;
+// поля звания для ответов API: название и id значка
+export const rankFields = (xp) => { const r = seasonRankOf(xp); return { rank: r.title, rankId: r.id }; };
+const MSK = 3 * 3600e3; // Москва, без перехода на летнее время
+// начало месяца (1-е число, 00:00 по Москве), в котором момент t
+export function monthStartMsk(t) { const d = new Date(t + MSK); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) - MSK; }
+// конец сезона по умолчанию: 1-е число через три месяца от месяца начала, 00:00 по Москве (1 ноября → 1 февраля).
+// Сезон, начатый посреди месяца, чуть короче, но не меньше двух месяцев
+export function defaultSeasonEnd(start) {
+  const d = new Date(start + MSK);
+  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + SEASON_MONTHS, 1) - MSK;
+}
+// «1 декабря в 00:00 по Москве» — для писем и объявления
+export function fmtMsk(t) {
+  try {
+    const p = new Intl.DateTimeFormat('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(t));
+    const g = (k) => (p.find((x) => x.type === k) || {}).value || '';
+    return `${g('day')} ${g('month')} в ${g('hour')}:${g('minute')} по Москве`;
+  } catch (e) {
+    return new Date(t).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+  }
+}
 
 // ---------- за что сколько опыта ----------
 // xp — опыт; day — сколько раз в день полным опытом; tail — после дневного лимита ещё столько раз по tail.xp;
@@ -227,8 +274,115 @@ export async function ensureLevels(env) {
     env.DB.prepare('CREATE TABLE IF NOT EXISTS gifts (id TEXT PRIMARY KEY, to_id TEXT, kind TEXT NOT NULL DEFAULT \'gift\', title TEXT NOT NULL, body TEXT, xp INTEGER NOT NULL DEFAULT 0, at INTEGER NOT NULL, until INTEGER, by_id TEXT)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS gifts_to ON gifts(to_id, at)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS gift_box (gift_id TEXT NOT NULL, user_id TEXT NOT NULL, read INTEGER NOT NULL DEFAULT 0, claimed INTEGER NOT NULL DEFAULT 0, at INTEGER NOT NULL, PRIMARY KEY (gift_id, user_id))'),
+    // сезоны: открыт тот, у которого closed_at пустой (всегда один); end_at — когда сбросить (назначает админ)
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS seasons (n INTEGER PRIMARY KEY, title TEXT NOT NULL, start_at INTEGER NOT NULL, end_at INTEGER, closed_at INTEGER, closed_by TEXT, planned_by TEXT, planned_at INTEGER)'),
+    // итоги закрытого сезона: опыт за сезон, звание (id из SEASON_RANKS) и место среди всех
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS season_results (season INTEGER NOT NULL, user_id TEXT NOT NULL, xp INTEGER NOT NULL, rank TEXT NOT NULL, place INTEGER NOT NULL, PRIMARY KEY (season, user_id))'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS season_results_user ON season_results(user_id, season)'),
   ]);
   ready.add(env.DB);
+}
+
+// ---------- сезон ----------
+// Текущий сезон живёт в памяти Worker'а 30 секунд; срок сверяется при каждом обращении, поэтому сброс случается
+// с первым запросом после назначенного времени (начисление, заход, окно «Прогресс»), а ночной cron в rt —
+// подстраховка, если никто не заходил. Закрывает сезон ровно один запрос: см. closeSeason.
+let seasonCache = { at: 0, v: null, db: null };
+export const forgetSeason = () => { seasonCache = { at: 0, v: null, db: null }; };
+const rowSeason = (r) => ({ n: +r.n, title: r.title, start: +r.start_at, end: r.end_at == null ? null : +r.end_at });
+const OPEN_SQL = 'SELECT n, title, start_at, end_at FROM seasons WHERE closed_at IS NULL ORDER BY n DESC LIMIT 1';
+// кому сообщить о закрытии сезона (API и комната лотов — всем открытым вкладкам: «загляни за новостями»)
+const seasonHooks = [];
+export const onSeasonClose = (fn) => { if (!seasonHooks.includes(fn)) seasonHooks.push(fn); };
+// текущий сезон { n, title, start, end }; null — уровни выключены
+export async function currentSeason(env, now = Date.now()) {
+  if (!levelsOn(env)) return null;
+  const c = seasonCache;
+  let s = c.db === env.DB && c.at > now - 30e3 && c.at <= now ? c.v : null;
+  if (!s) {
+    await ensureLevels(env);
+    const r = await env.DB.prepare(OPEN_SQL).first();
+    s = r ? rowSeason(r) : await openSeason(env, now);
+    seasonCache = { at: now, v: s, db: env.DB };
+  }
+  if (s && s.end != null && now >= s.end) {
+    s = await closeSeason(env, s, now);
+    seasonCache = { at: now, v: s, db: env.DB };
+  }
+  return s;
+}
+// открытого сезона нет: первый — с начала этого месяца (опыт, набранный в нём до запуска сезонов, засчитывается),
+// а если прошлый почему-то закрыт без следующего — следующий с его конца
+async function openSeason(env, now) {
+  const last = await env.DB.prepare('SELECT n, end_at, closed_at FROM seasons ORDER BY n DESC LIMIT 1').first();
+  const n = last ? +last.n + 1 : 1;
+  const start = last ? +last.end_at || +last.closed_at || now : monthStartMsk(now);
+  await env.DB.prepare('INSERT OR IGNORE INTO seasons (n, title, start_at, end_at) VALUES (?, ?, ?, ?)').bind(n, `Сезон ${n}`, start, defaultSeasonEnd(Math.max(start, monthStartMsk(now)))).run();
+  const r = await env.DB.prepare(OPEN_SQL).first();
+  return r ? rowSeason(r) : null;
+}
+// закрыть сезон, у которого вышел срок, и открыть следующий — одной пачкой (в D1 пачка — одна транзакция и один запрос).
+// Первая строка «забирает» закрытие: ставит closed_by = случайная метка этого запроса, только если сезон ещё открыт.
+// Остальные строки срабатывают лишь там, где метка своя, поэтому второй запрос (даже в ту же миллисекунду) ничего
+// не делает. Итоги — одним INSERT … SELECT … GROUP BY, без цикла по людям; место — по опыту сезона.
+// Плашка «Новый сезон» с личными итогами — тоже одним UPDATE по всем user_level.
+export async function closeSeason(env, s, now = Date.now()) {
+  const n = s.n, next = n + 1, end = s.end != null ? Math.min(s.end, now) : now;
+  const nextEnd = defaultSeasonEnd(Math.max(end, monthStartMsk(now)));
+  const token = [...crypto.getRandomValues(new Uint8Array(8))].map((b) => b.toString(16).padStart(2, '0')).join('');
+  const mine = 'EXISTS (SELECT 1 FROM seasons WHERE n = ?1 AND closed_by = ?2)';
+  const caseRank = 'CASE ' + [...SEASON_RANKS].reverse().map((r) => `WHEN s >= ${+r.xp} THEN '${r.id}'`).join(' ') + ' END';
+  const nextTitle = `Сезон ${next}`;
+  const letter = seasonEndLetter(n, next, nextEnd);
+  const res = await env.DB.batch([
+    env.DB.prepare('UPDATE seasons SET closed_at = ?3, end_at = ?4, closed_by = ?2 WHERE n = ?1 AND closed_at IS NULL AND end_at <= ?3').bind(n, token, now, end),
+    env.DB.prepare(`INSERT OR IGNORE INTO season_results (season, user_id, xp, rank, place)
+      SELECT ?1, user_id, s, ${caseRank}, ROW_NUMBER() OVER (ORDER BY s DESC, user_id)
+      FROM (SELECT user_id, SUM(xp) AS s FROM xp_log WHERE gone = 0 AND at >= ?3 AND at < ?4 GROUP BY user_id)
+      WHERE s > 0 AND ${mine}`).bind(n, token, s.start, end),
+    env.DB.prepare(`INSERT OR IGNORE INTO seasons (n, title, start_at, end_at) SELECT ?3, ?4, ?5, ?6 WHERE ${mine}`).bind(n, token, next, nextTitle, end, nextEnd),
+    env.DB.prepare(`INSERT OR IGNORE INTO gifts (id, to_id, kind, title, body, xp, at) SELECT ?3, NULL, 'season', ?4, ?5, 0, ?6 WHERE ${mine}`).bind(n, token, `season:${n}:end`, letter.title, letter.body, now),
+    // письмо о назначенном сбросе больше не нужно: сброс случился
+    env.DB.prepare(`UPDATE gifts SET until = ?4 WHERE kind = 'season' AND id LIKE ?3 AND (until IS NULL OR until > ?4) AND ${mine}`).bind(n, token, `season:${n}:plan:%`, now),
+    env.DB.prepare(`UPDATE user_level SET news = json_insert(CASE WHEN json_valid(news) THEN news ELSE '[]' END, '$[#]', json_object('t', 'season', 'n', ?3, 'title', ?4, 'at', ?5,
+        'prev', json((SELECT json_object('n', r.season, 'rank', r.rank, 'xp', r.xp, 'place', r.place) FROM season_results r WHERE r.season = ?1 AND r.user_id = user_level.user_id))))
+      WHERE ${mine}`).bind(n, token, next, nextTitle, now),
+  ]);
+  const closed = !!(res[0] && res[0].meta && res[0].meta.changes);
+  if (closed) for (const fn of seasonHooks) { try { await fn(env, { n, next }); } catch (e) { console.error('season hook', e && e.message); } }
+  const r = await env.DB.prepare(OPEN_SQL).first();
+  return r ? rowSeason(r) : null;
+}
+function seasonEndLetter(n, next, nextEnd) {
+  return {
+    title: `Сезон ${n} закончился, начался сезон ${next}`,
+    body: `Звания сбросились: все снова начинают с «${SEASON_RANKS[0].title}», уровень и награды остались. Своё звание и место в прошлом сезоне — в окне «Прогресс». Следующий сброс — ${fmtMsk(nextEnd)}.`,
+  };
+}
+// письмо всем о назначенном сбросе (id свой у каждого назначения; прежние письма этого сезона гаснут)
+export function seasonPlanLetter(n, end) {
+  return {
+    id: `season:${n}:plan:${end}`,
+    title: `Сброс званий ${fmtMsk(end)}`,
+    body: `Сезон ${n} закончится ${fmtMsk(end)}. Звания сбросятся, и начнётся сезон ${n + 1}: уровень, опыт за всё время и награды останутся, а своё звание и место в сезоне ${n} будут видны в окне «Прогресс».`,
+  };
+}
+// опыт человека за сезон (с его начала)
+export async function seasonXpOf(env, uid, s) {
+  if (!s || !uid) return 0;
+  const r = await env.DB.prepare('SELECT COALESCE(SUM(xp), 0) AS s FROM xp_log WHERE user_id = ? AND gone = 0 AND at >= ?').bind(uid, s.start).first();
+  return +(r && r.s) || 0;
+}
+// опыт за сезон у нескольких людей: { id: опыт } (кого нет — 0)
+export async function seasonXpMany(env, ids, s) {
+  const out = {};
+  if (!s || !ids.length) return out;
+  for (let i = 0; i < ids.length; i += 90) {
+    const part = ids.slice(i, i + 90);
+    const { results } = await env.DB.prepare(`SELECT user_id, SUM(xp) AS s FROM xp_log WHERE gone = 0 AND at >= ? AND user_id IN (${inList(part.length)}) GROUP BY user_id`).bind(s.start, ...part).all();
+    for (const r of results || []) out[r.user_id] = +r.s || 0;
+  }
+  return out;
 }
 
 // ---------- тематическая неделя (админ включает в админке) ----------
@@ -338,13 +492,19 @@ async function doAward(env, uid, items, opts) {
   const evIds = [...new Set(rows.map((r) => r.ev).filter(Boolean))];
   for (const id of evIds) writes.push(env.DB.prepare('INSERT OR IGNORE INTO xp_log (user_id, kind, ref, xp, day, peer, at) VALUES (?, ?, ?, 0, ?, NULL, ?)').bind(uid, 'event', String(id).slice(0, 60), today, now));
   if (tzIn && (!known || known.tz !== tzIn)) writes.push(env.DB.prepare('INSERT INTO user_level (user_id, tz, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT(user_id) DO UPDATE SET tz = excluded.tz').bind(uid, tzIn, now));
-  const s = await settle(env, uid, now, writes);
+  const season = await currentSeason(env, now);
+  const s = await settle(env, uid, now, writes, season);
   const inserted = s.res.slice(0, Math.ceil(rows.length / CHUNK)).reduce((a, r) => a + ((r.meta && r.meta.changes) || 0), 0);
   if (!inserted) return null;
   const gained = rows.reduce((a, r) => a + r.xp, 0);
+  // звание сезона до и после: перешёл порог — «Новое звание» (опыт за прошлое званий не объявляет)
+  const inSeason = season ? rows.reduce((a, r) => a + (r.at >= season.start ? r.xp : 0), 0) : 0;
+  const rankNow = seasonRankOf(s.season), rankBefore = seasonRankOf(s.season - inSeason);
+  const rankUp = !opts.past && rankNow.xp > rankBefore.xp ? { t: 'rank', rank: rankNow.id, title: rankNow.title } : null;
   const news = [];
-  if (s.levelUp) news.push({ t: 'level', from: s.levelUp.from, to: s.levelUp.to, rank: rankOf(s.levelUp.to).fun });
-  if (s.levelUp && !opts.past) await levelLetter(env, uid, s.levelUp, now);
+  if (s.levelUp) news.push({ t: 'level', from: s.levelUp.from, to: s.levelUp.to, rank: rankNow.title });
+  if (rankUp) news.push(rankUp);
+  if (s.levelUp && !opts.past) await levelLetter(env, uid, s.levelUp, now, s.season);
   // серия, задания, достижения, приглашения — только за живые действия, не за пересчёт прошлого
   let extra = { gained: 0 };
   if (!opts.past && !opts.noExtras) extra = await extras(env, uid, { now, today, tz, rows, row: known, level: s.level, metrics: opts.metrics, news });
@@ -352,28 +512,36 @@ async function doAward(env, uid, items, opts) {
   const total = s.xp + extra.gained;
   const level = Math.max(s.level, extra.level || 0);
   if (news.length && !opts.silent) await pushNews(env, uid, news, now);
-  return { gained: gained + extra.gained, xp: total, level, levelUp: s.levelUp || extra.levelUp || null, news };
+  return { gained: gained + extra.gained, xp: total, level, levelUp: s.levelUp || extra.levelUp || null, rankUp: extra.rankUp || rankUp, seasonXp: extra.seasonXp != null ? extra.seasonXp : s.season, news };
 }
 
-// письмо в почту о новом уровне: звание и что открылось
-export async function levelLetter(env, uid, up, now = Date.now()) {
+// письмо в почту о новом уровне: звание сезона и сколько до следующего
+export async function levelLetter(env, uid, up, now = Date.now(), seasonXp = 0) {
   try {
-    const nextRank = RANKS.find((r) => r.from > up.to);
-    const body = `Звание: ${rankOf(up.to).fun}.` + (nextRank ? ` Следующее — «${nextRank.fun}» на ${nextRank.from}-м уровне.` : ' Это самое высокое звание.');
+    const r = seasonRankOf(seasonXp), next = nextSeasonRank(seasonXp);
+    let body = `Звание сезона: ${r.title}.` + (next ? ` До «${next.title}» в этом сезоне ещё ${next.xp - (+seasonXp || 0)} опыта.` : ' Это самое высокое звание сезона.');
+    // новая еда для Васяна — тем, у кого он есть (первая десятка или 25-й уровень). shop.js сам подключает этот файл,
+    // поэтому он берётся здесь, при вызове, а не наверху
+    const { foodsUnlocked } = await import('./shop.js');
+    const food = foodsUnlocked(up.from, up.to);
+    if (food.length && (up.to >= 25 || (await env.DB.prepare('SELECT 1 FROM gift_box WHERE gift_id = ? AND user_id = ? AND claimed = 1').bind('vasyan:' + uid, uid).first()))) {
+      body += ` Новая еда для Васяна: ${food.map((f) => f.title).join(', ')}.`;
+    }
     await env.DB.prepare("INSERT OR IGNORE INTO gifts (id, to_id, kind, title, body, xp, at) VALUES (?, ?, 'level', ?, ?, 0, ?)").bind(`lv:${uid}:${up.to}`, uid, `Новый уровень: ${up.to}`, body, now).run();
   } catch (e) { console.error('levels letter', e && e.message); }
 }
 
-// пересчитать итог по журналу; уровень поднимается, если опыта хватает, и никогда не опускается
+// пересчитать итог по журналу; уровень поднимается, если опыта хватает, и никогда не опускается.
+// В той же пачке — опыт за текущий сезон (для звания), отдельного запроса на это нет
 const SUM_SQL = 'INSERT INTO user_level (user_id, xp, level, updated_at) VALUES (?1, (SELECT COALESCE(SUM(xp), 0) FROM xp_log WHERE user_id = ?1 AND gone = 0), 1, ?2) '
   + 'ON CONFLICT(user_id) DO UPDATE SET xp = excluded.xp, updated_at = excluded.updated_at';
-async function settle(env, uid, now, batchFirst) {
+async function settle(env, uid, now, batchFirst, season = null) {
   const res = await env.DB.batch([
     ...batchFirst,
     env.DB.prepare(SUM_SQL).bind(uid, now),
-    env.DB.prepare('SELECT xp, level FROM user_level WHERE user_id = ?').bind(uid),
+    env.DB.prepare('SELECT xp, level, (SELECT COALESCE(SUM(xp), 0) FROM xp_log WHERE user_id = ?1 AND gone = 0 AND at >= ?2) AS season FROM user_level WHERE user_id = ?1').bind(uid, season ? season.start : now + 1),
   ]);
-  const row = (res[res.length - 1].results || [])[0] || { xp: 0, level: 1 };
+  const row = (res[res.length - 1].results || [])[0] || { xp: 0, level: 1, season: 0 };
   const xp = +row.xp || 0, stored = +row.level || 1;
   const want = levelOf(xp).level;
   let levelUp = null;
@@ -382,7 +550,7 @@ async function settle(env, uid, now, batchFirst) {
     const up = await env.DB.prepare('UPDATE user_level SET level = ?1 WHERE user_id = ?2 AND level < ?1').bind(want, uid).run();
     if (up && up.meta && up.meta.changes) levelUp = { from: stored, to: want };
   }
-  return { res, xp, level: Math.max(stored, want), levelUp };
+  return { res, xp, level: Math.max(stored, want), levelUp, season: +row.season || 0 };
 }
 
 // дописать уведомления человеку (их заберёт страница: по сокету или при следующем /ping)
@@ -433,7 +601,12 @@ async function extras(env, uid, c) {
   let res = { gained: 0 };
   if (bonus.length) {
     const r = await doAward(env, uid, bonus, { now, noExtras: true, silent: true, tz: c.tz });
-    if (r) { res = { gained: r.gained, level: r.level, levelUp: r.levelUp }; if (r.levelUp) news.push({ t: 'level', from: r.levelUp.from, to: r.levelUp.to, rank: rankOf(r.levelUp.to).fun }); }
+    if (r) {
+      res = { gained: r.gained, level: r.level, levelUp: r.levelUp, rankUp: r.rankUp, seasonXp: r.seasonXp };
+      if (r.levelUp) news.push({ t: 'level', from: r.levelUp.from, to: r.levelUp.to, rank: seasonRankOf(r.seasonXp).title });
+      // бонус (задание, серия, первый шаг) довёл до нового звания
+      if (r.rankUp) news.push(r.rankUp);
+    }
   }
   // приглашённый дошёл до 3-го уровня — опыт обоим
   const lvNow = Math.max(c.level, res.level || 0);
@@ -591,7 +764,7 @@ export async function visit(env, uid, tz, now = Date.now()) {
   if (!levelsOn(env) || !uid) return null;
   try {
     await ensureLevels(env);
-    const row = await env.DB.prepare('SELECT tz, streak_day FROM user_level WHERE user_id = ?').bind(uid).first();
+    const row = await env.DB.prepare('SELECT tz, streak_day, news IS NOT NULL AS pending FROM user_level WHERE user_id = ?').bind(uid).first();
     const zone = cleanTz(tz) || (row && row.tz) || 'UTC';
     const today = dayKey(now, zone);
     const r = await awardMany(env, uid, [{ kind: 'visit', ref: today }], { tz: zone, now });
@@ -601,7 +774,10 @@ export async function visit(env, uid, tz, now = Date.now()) {
       await checkAchievements(env, uid, { now, metrics: { comeback: 1 }, news: more });
       if (more.length) { await pushNews(env, uid, more, now); r.news.push(...more); }
     }
-    return r;
+    // у человека уже лежат плашки (например, «Новый сезон» после сброса, пока он был без сокета) — pending:
+    // API поставит x-levels, и страница их заберёт
+    const pending = !!(row && +row.pending);
+    return r ? { ...r, pending } : pending ? { news: [], pending } : null;
   } catch (e) {
     console.error('levels visit', e && e.message);
     return null;
@@ -609,9 +785,10 @@ export async function visit(env, uid, tz, now = Date.now()) {
 }
 
 // ---------- чтение ----------
+// уровень и опыт за всё время. Звания здесь нет: оно сезонное — rankFields(опыт сезона)
 export function levelView(xp, level) {
   const l = levelOf(xp), lv = Math.max(level || 1, l.level);
-  return { xp, level: lv, into: Math.max(0, xp - totalFor(lv)), need: needFor(lv), rank: rankOf(lv).fun, rankPlain: rankOf(lv).plain };
+  return { xp, level: lv, into: Math.max(0, xp - totalFor(lv)), need: needFor(lv) };
 }
 export async function readLevel(env, uid) {
   if (!levelsOn(env) || !uid) return levelView(0, 1);
@@ -624,10 +801,11 @@ export const prefsOf = (row) => {
   return { intro: !!p.intro, hideLevel: !!p.hideLevel, hideBoard: !!p.hideBoard, notify: p.notify !== false, anim: p.anim !== false, showcase: Array.isArray(p.showcase) ? p.showcase.slice(0, 3) : [], frame: p.frame || '', color: p.color || '', bg: p.bg || '', nick: p.nick || '', fx: p.fx || '', pet: !!p.pet, adm: !!p.adm };
 };
 // оформление, которое видят другие: только то, что открыто уровнем.
-// adm — выбор сохранил админ (PUT /levels/prefs ставит его сам): ему для проверки открыто всё
-export function lookOf(row) {
+// adm — выбор сохранил админ (PUT /levels/prefs ставит его сам): ему для проверки открыто всё.
+// rank — звание сезона рядом с ником (награда 7-го уровня), seasonXp — опыт человека за текущий сезон
+export function lookOf(row, seasonXp = 0) {
   const lv = levelView(+row.xp || 0, +row.level || 1).level;
-  const p = prefsOf(row), u = unlockedAt(lv, p.adm);
+  const p = prefsOf(row), u = unlockedAt(lv, p.adm), r = seasonRankOf(seasonXp);
   return {
     level: lv,
     frame: u.frames.includes(p.frame) ? p.frame : '',
@@ -636,18 +814,21 @@ export function lookOf(row) {
     nick: u.nicks.includes(p.nick) ? p.nick : '',
     fx: u.fx.includes(p.fx) ? p.fx : '',
     pet: u.pet && p.pet,
-    rank: u.rankChip ? rankOf(lv).fun : '',
+    rank: u.rankChip ? r.title : '',
+    rankId: u.rankChip ? r.id : '',
   };
 }
-// уровни для списка людей (кружки у аватаров): скрывшие уровень не попадают
+// уровни для списка людей (кружки у аватаров): скрывшие уровень не попадают. Опыт сезона — в том же запросе
 export async function levelsOf(env, ids) {
   if (!levelsOn(env) || !ids.length) return {};
   await ensureLevels(env);
+  const s = await currentSeason(env);
   const out = {};
   for (let i = 0; i < ids.length; i += 90) {
     const part = ids.slice(i, i + 90);
-    const { results } = await env.DB.prepare(`SELECT user_id, xp, level, prefs FROM user_level WHERE user_id IN (${inList(part.length)})`).bind(...part).all();
-    for (const r of results || []) if (!prefsOf(r).hideLevel) out[r.user_id] = lookOf(r);
+    const { results } = await env.DB.prepare(`SELECT ul.user_id, ul.xp, ul.level, ul.prefs, (SELECT COALESCE(SUM(l.xp), 0) FROM xp_log l WHERE l.user_id = ul.user_id AND l.gone = 0 AND l.at >= ?1) AS season
+      FROM user_level ul WHERE ul.user_id IN (${part.map((_, k) => '?' + (k + 2)).join(', ')})`).bind(s ? s.start : Date.now() + 1, ...part).all();
+    for (const r of results || []) if (!prefsOf(r).hideLevel) out[r.user_id] = lookOf(r, +r.season || 0);
   }
   return out;
 }

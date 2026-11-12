@@ -1080,7 +1080,8 @@
   // раньше здесь лежали и списки «Настройки лотов»: теперь они только на сервере
   if ('keep' in hostSaved || 'kick' in hostSaved) keepHost();
   // «Настройка лотов» админа: списки приходят с сервера только админу
-  let F = { keep: [], kick: [] };
+  // «Настройка лотов»: по id лота (keepIds/kickIds); keep/kick по названиям — отметки прежних вкладок
+  let F = { keep: [], kick: [], keepIds: [], kickIds: [] };
   const inList = (arr, name) => Array.isArray(arr) && arr.some((x) => low(x) === low(name));
   let hostRes = null, hostT = 0, hostArmT = 0, hostPushing = false;
   const isHost = () => !!(token && S.room && S.room.own);
@@ -1200,15 +1201,31 @@
   }
   // списки «Настройки лотов» из ответа сервера: они там есть, только если спрашивает админ
   function takeForce(live) {
-    if (live && Array.isArray(live.keep)) F.keep = live.keep;
-    if (live && Array.isArray(live.kick)) F.kick = live.kick;
+    if (live) for (const k of ['keep', 'kick', 'keepIds', 'kickIds']) if (Array.isArray(live[k])) F[k] = live[k];
+  }
+  // как отмечен лот: по id, а у отметок прежних вкладок — по названию. '' — «как выпадет»
+  function forceOf(l) {
+    if (F.keepIds.includes(l.id)) return 'keep';
+    if (F.kickIds.includes(l.id)) return 'kick';
+    if (inList(F.keep, l.name)) return 'keep';
+    if (inList(F.kick, l.name)) return 'kick';
+    return '';
+  }
+  // новые списки: у лота id — состояние to, у остальных — как сейчас; отметки по названиям переходят в id и снимаются
+  function forceNext(id, to) {
+    const next = { keep: [], kick: [], keepIds: [], kickIds: [] };
+    for (const l of S.lots) {
+      const st = id === null ? '' : l.id === id ? to : forceOf(l);
+      if (st === 'keep') next.keepIds.push(l.id); else if (st === 'kick') next.kickIds.push(l.id);
+    }
+    return next;
   }
   // админ поменял списки: уходят только они, остальное в снимке сервер не трогает
   async function forcePush(next) {
     F = next;
     pollSeq++;
     paintHost();
-    try { await api(`/lots/${encodeURIComponent(code)}/live`, 'PUT', { keep: next.keep, kick: next.kick, v: LIVE_V }); }
+    try { await api(`/lots/${encodeURIComponent(code)}/live`, 'PUT', { keep: next.keep, kick: next.kick, keepIds: next.keepIds, kickIds: next.kickIds, v: LIVE_V }); }
     catch (e) { lotMsg('Настройка лотов не сохранилась: ' + e.message); }
     clearTimeout(pollT);
     pollT = setTimeout(poll, 1500);
@@ -1320,17 +1337,20 @@
     if (forceWrap) {
       forceWrap.hidden = !admin;
       if (admin) {
+        // карточки живых лотов: обложка, название, состояние; отметки — по id лота (повторы с одним названием — отдельно)
         const aliveList = hostAlive();
-        const row = (l, kind) => {
-          const name = l.name, on = inList(F[kind], name);
-          const pic = /^https:\/\//.test(l.img || '') ? `<img class="hf-pic" src="${esc(l.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<em class="hf-pic" aria-hidden="true">${esc([...name][0] || '?')}</em>`;
-          return `<label class="lots-chk hf-row"><input type="checkbox" data-force-lot="${esc(name)}" data-force-kind="${kind}"${on ? ' checked' : ''}>${pic}<span>${esc(name)}</span></label>`;
+        const LABEL = { keep: 'Остаётся', kick: 'Вылетает', '': 'Как выпадет' };
+        const card = (l) => {
+          const st = forceOf(l), name = l.name || '';
+          const pic = /^https:\/\//.test(l.img || '') ? `<img src="${esc(l.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<em aria-hidden="true">${esc([...name][0] || '?')}</em>`;
+          return `<button type="button" class="hf-card${st ? ' ' + st : ''}" data-force-id="${esc(l.id)}" aria-label="${esc(name)}: ${LABEL[st]}" title="${esc(name)} — ${LABEL[st]}. Нажми, чтобы поменять">`
+            + `<span class="hf-img">${pic}<i class="hf-badge" aria-hidden="true">${st === 'keep' ? '✓' : st === 'kick' ? '✕' : ''}</i></span><b>${esc(name)}</b><small>${LABEL[st]}</small></button>`;
         };
-        const keepBox = $('#hostForceKeep'), kickBox = $('#hostForceKick');
-        const keepHtml = aliveList.length ? aliveList.map((l) => row(l, 'keep')).join('') : '<span class="host-force-empty">Пока пусто</span>';
-        const kickHtml = aliveList.length ? aliveList.map((l) => row(l, 'kick')).join('') : '<span class="host-force-empty">Пока пусто</span>';
-        if (keepBox && keepBox.dataset.sig !== keepHtml) { keepBox.dataset.sig = keepHtml; keepBox.innerHTML = keepHtml; }
-        if (kickBox && kickBox.dataset.sig !== kickHtml) { kickBox.dataset.sig = kickHtml; kickBox.innerHTML = kickHtml; }
+        const grid = $('#hostForceGrid');
+        const html = aliveList.length ? aliveList.map(card).join('') : '<span class="host-force-empty">Пока пусто</span>';
+        if (grid && grid.dataset.sig !== html) { grid.dataset.sig = html; grid.innerHTML = html; }
+        const sum = $('#hostForceSum');
+        if (sum) sum.textContent = `Остаются: ${aliveList.filter((l) => forceOf(l) === 'keep').length} · Вылетают: ${aliveList.filter((l) => forceOf(l) === 'kick').length}`;
       }
     }
 
@@ -1463,16 +1483,16 @@
       hostPush(hostBody({ pics: e.target.checked }));
     });
     // «Настройка лотов»: сервер принимает списки только от админа и учитывает их на следующей прокрутке
-    $('#hostForceWrap')?.addEventListener('change', (e) => {
-      const inp = e.target.closest('input[data-force-lot]');
-      if (!inp || !S.admin) return;
-      const name = inp.dataset.forceLot, kind = inp.dataset.forceKind, other = kind === 'keep' ? 'kick' : 'keep';
-      // названия лотов, которых в сборе уже нет, из списков уходят; вылетевшие остаются до «Вернуть всех»
-      const has = new Set(S.lots.map((l) => low(l.name)));
-      const next = { keep: F.keep.filter((n) => has.has(low(n))), kick: F.kick.filter((n) => has.has(low(n))) };
-      next[kind] = next[kind].filter((n) => low(n) !== low(name));
-      if (inp.checked) { next[kind].push(name); next[other] = next[other].filter((n) => low(n) !== low(name)); }
-      forcePush(next);
+    // нажатие на карточку: как выпадет → остаётся → вылетает → как выпадет. Удалённые лоты из списков уходят сами
+    $('#hostForceWrap')?.addEventListener('click', (e) => {
+      if (!S.admin) return;
+      if (e.target.closest('[data-force-clear]')) { forcePush(forceNext(null)); return; }
+      const b = e.target.closest('[data-force-id]');
+      if (!b) return;
+      const lot = S.lots.find((l) => l.id === b.dataset.forceId);
+      if (!lot) return;
+      const cur = forceOf(lot);
+      forcePush(forceNext(lot.id, cur === '' ? 'keep' : cur === 'keep' ? 'kick' : ''));
     });
     const room = $('#hostRoom');
     room.addEventListener('click', async (e) => {

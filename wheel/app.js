@@ -12,7 +12,14 @@
   const HUBS = [[24, 'Малый'], [34, 'Средний'], [44, 'Большой']];
 
   // сектора: цвета аватаров «Оценщика» плюс лайм и графит; подпись тёмная или белая, смотря что контрастнее
-  const PALETTE = ['#3550E8', '#EAA92C', '#2EAD60', '#EC4899', '#9333EA', '#F97316', '#06B6D4', '#E4553F', '#84CC16', '#64748B'];
+  // надетое из магазина (shop.js помнит его в casualhub.shop.v1 для вошедшего): палитра колеса и цвета конфетти
+  const SHOP = (() => {
+    try {
+      const s = JSON.parse(localStorage.getItem('casualhub.shop.v1') || 'null'), u = JSON.parse(localStorage.getItem('ocenshik.user.v1') || 'null');
+      return s && s.look && u && String(u.id) === s.uid ? s.look : {};
+    } catch (e) { return {}; }
+  })();
+  const PALETTE = (SHOP.wheel && Array.isArray(SHOP.wheel.palette) && SHOP.wheel.palette.length ? SHOP.wheel.palette : null) || ['#3550E8', '#EAA92C', '#2EAD60', '#EC4899', '#9333EA', '#F97316', '#06B6D4', '#E4553F', '#84CC16', '#64748B'];
   const INK_ON = '#14161C';
   const lum = (hex) => {
     const n = parseInt(hex.slice(1), 16);
@@ -1028,10 +1035,13 @@
         g.scale(dpr, dpr);
         const nb = name.getBoundingClientRect();
         const ox = nb.left + nb.width / 2, oy = nb.top + nb.height / 2;
+        // конфетти из магазина: свои цвета, а форму частицы рисует shop.js (сердечки, звёзды, рофланы)
+        const CONF = (SHOP.confetti && Array.isArray(SHOP.confetti.colors) && SHOP.confetti.colors.length) ? SHOP.confetti.colors : PALETTE;
+        const shopPart = window.CasualShop && window.CasualShop.confettiPart;
         const parts = Array.from({ length: 160 }, (_, i) => {
           const a = -Math.PI / 2 + (Math.random() - .5) * Math.PI * 1.6, v = 6 + Math.random() * 11;
           return { x: ox, y: oy, vx: Math.cos(a) * v, vy: Math.sin(a) * v, w: 6 + Math.random() * 6, h: 4 + Math.random() * 6,
-            r: Math.random() * TAU, vr: (Math.random() - .5) * .4, c: PALETTE[i % PALETTE.length] };
+            r: Math.random() * TAU, vr: (Math.random() - .5) * .4, c: CONF[i % CONF.length] };
         });
         const tick = () => {
           g.clearRect(0, 0, innerWidth, innerHeight);
@@ -1041,7 +1051,7 @@
             if (p.y > innerHeight + 20) continue;
             alive++;
             g.save(); g.translate(p.x, p.y); g.rotate(p.r); g.fillStyle = p.c;
-            g.fillRect(-p.w / 2, -p.h / 2 * Math.abs(Math.cos(p.r * 2)), p.w, p.h * Math.abs(Math.cos(p.r * 2)) + 1);
+            if (!(shopPart && shopPart(g, p.w, p.h))) g.fillRect(-p.w / 2, -p.h / 2 * Math.abs(Math.cos(p.r * 2)), p.w, p.h * Math.abs(Math.cos(p.r * 2)) + 1);
             g.restore();
           }
           if (alive) raf = requestAnimationFrame(tick);

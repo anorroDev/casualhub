@@ -54,6 +54,9 @@ a.fr-who:hover b { text-decoration: underline; }
 .fp-card { width: min(560px, 100%); max-height: min(720px, calc(100dvh - 32px)); overflow: auto; overscroll-behavior: contain; display: grid; gap: 14px; padding: 18px; background: var(--panel, #1b1d24); color: var(--ink, #f3f4f6); border: 1px solid var(--line, #2b2e38); border-radius: 20px; box-shadow: 0 30px 70px -30px rgba(0, 0, 0, .6); animation: fp-pop .3s cubic-bezier(.34, 1.56, .64, 1); font-family: inherit; }
 @keyframes fp-pop { from { transform: translateY(12px) scale(.97); } }
 @media (prefers-reduced-motion: reduce) { .fp-card { animation: none; } }
+/* большие экраны (2K, 4K): окно друзей шире и выше */
+@media (min-width: 2200px) { .fp-card { width: min(680px, 100%); max-height: min(900px, calc(100dvh - 32px)); padding: 22px; } }
+@media (min-width: 3000px) { .fp-card { width: min(820px, 100%); max-height: min(1100px, calc(100dvh - 32px)); font-size: 17px; } }
 .fp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .fp-head h3 { margin: 0; font-size: 20px; font-weight: 800; }
 .fp-head p { margin: 4px 0 0; font-size: 13px; color: var(--ink-2, #a3a7b3); }
@@ -108,6 +111,16 @@ a.fr-who:hover b { text-decoration: underline; }
         s.classList.add('img');
       });
     });
+    // купленное в магазине оформление: рамка аватара, ник и значок у ника (/shop.js, сервер отдаёт его одной пачкой)
+    const ids = [...new Set([...root.querySelectorAll('[data-ava]')].map((el) => el.dataset.ava))];
+    if (ids.length && window.CasualUtil && window.CasualUtil.script) {
+      window.CasualUtil.script('/shop.js', () => !!window.CasualShop).then(() => window.CasualShop.look(ids)).then((m) => {
+        root.querySelectorAll('[data-ava]').forEach((el) => {
+          const who = el.closest('.fr-who'), name = who && who.querySelector('span > b');
+          if (el.isConnected) window.CasualShop.dress({ avatar: el, name }, m[el.dataset.ava]);
+        });
+      }).catch(() => {});
+    }
   }
   // href — у друзей: нажатие на строку открывает профиль
   const whoHTML = (u, sub, href) => {

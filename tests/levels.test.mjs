@@ -297,7 +297,8 @@ test('почта: письмо о новом уровне с тем, что от
   const g = q(env, "SELECT id, to_id, kind, title, body FROM gifts WHERE to_id = 'u1'");
   assert.equal(g.length, 1);
   assert.equal(g[0].title, 'Новый уровень: 2');
-  assert.match(g[0].body, /Звание: Людишка\. Следующее — «Казуал» на 5-м уровне\./);
+  // звание теперь сезонное: 120 опыта за сезон — ещё «Людишка», до «Казуала» (450) — 330
+  assert.match(g[0].body, /Звание сезона: Людишка\. До «Казуал» в этом сезоне ещё 330 опыта\./);
   // опыт за прошлое писем не шлёт
   await award(env, 'u2', 'past', 'x', { xp: 500, now: NOON, past: true });
   assert.equal(q(env, "SELECT COUNT(*) AS n FROM gifts WHERE to_id = 'u2'")[0].n, 0);
@@ -315,4 +316,201 @@ test('опыт за прошлое сам при первом заходе (ensu
   await ensurePast(env, 'u1');
   assert.equal((await readLevel(env, 'u1')).xp, 35);
   assert.ok((await achievementsOf(env, 'u1')).find((a) => a.code === 'founder').got);
+});
+
+// ---------- сезоны ----------
+const MSK = 3 * 3600e3;
+const NOV1 = Date.UTC(2026, 10, 1) - MSK, DEC1 = Date.UTC(2026, 11, 1) - MSK, FEB1 = Date.UTC(2027, 1, 1) - MSK, MAY1 = Date.UTC(2027, 4, 1) - MSK; // сезон — три месяца
+const rates = (p, n) => Array.from({ length: n }, (_, i) => ({ kind: 'rate', ref: p + i }));
+// обращения к D1, как их считает Cloudflare: first/all/run — по одному, пачка (batch) — один запрос
+function counted(env) {
+  const db = env.DB;
+  let n = 0;
+  const wrap = (st) => ({ ...st, bind: (...a) => wrap(st.bind(...a)), first: () => { n++; return st.first(); }, all: () => { n++; return st.all(); }, run: () => { n++; return st.run(); } });
+  env.DB = { ...db, prepare: (sql) => wrap(db.prepare(sql)), batch: (list) => { n++; return db.batch(list); } };
+  return () => n;
+}
+// адреса уровней с заглушками помощников главного файла API
+async function levelRoutes(extra = {}) {
+  const { makeLevelsRoutes } = await import('../functions/_lib/levels-api.js');
+  const seen = { pokeAll: 0, ann: undefined };
+  const routes = makeLevelsRoutes({
+    json: (o) => o, fail: (status, message) => ({ status, message }), readBody: async (r) => (r && r.body) || {},
+    adminActive: async () => true, isAdmin: async () => !!extra.admin, adminCandidate: () => !!extra.admin, adminLog: async () => {},
+    poke: async () => {}, pokeAll: async () => { seen.pokeAll++; }, markNews: () => {},
+    getAnnounce: async () => seen.ann || null, setAnnounce: async (e, a) => { seen.ann = a; },
+  });
+  return { routes, seen };
+}
+async function atTime(t, fn) {
+  const real = Date.now;
+  Date.now = () => t;
+  try { return await fn(); } finally { Date.now = real; }
+}
+
+test('сезон: пороги званий, «Величайший» наверху', () => {
+  const R = L.SEASON_RANKS;
+  assert.deepEqual(R.map((r) => r.id), ['people', 'casual', 'couch', 'whiner', 'champion', 'godlike', 'taste', 'legend', 'greatest']);
+  assert.equal(R[R.length - 1].title, 'Величайший');
+  assert.equal(R[0].xp, 0);
+  for (let i = 1; i < R.length; i++) assert.ok(R[i].xp > R[i - 1].xp);
+  assert.equal(L.seasonRankOf(449).id, 'people');
+  assert.equal(L.seasonRankOf(450).id, 'casual');
+  assert.equal(L.seasonRankOf(4500).id, 'champion');
+  assert.equal(L.seasonRankOf(26999).id, 'legend');
+  assert.equal(L.seasonRankOf(1e9).id, 'greatest');
+  assert.equal(L.nextSeasonRank(460).id, 'couch');
+  assert.equal(L.nextSeasonRank(27000), null);
+});
+
+test('сезон: по умолчанию — три месяца по Москве, сброс 1-го в 00:00', () => {
+  assert.equal(L.SEASON_MONTHS, 3);
+  assert.equal(L.monthStartMsk(NOON), NOV1);
+  assert.equal(L.defaultSeasonEnd(NOV1), FEB1);
+  // начали посреди месяца (сброс админом 25 ноября): конец — тоже 1 февраля
+  assert.equal(L.defaultSeasonEnd(Date.UTC(2026, 10, 25)), FEB1);
+  assert.equal(L.defaultSeasonEnd(FEB1), MAY1);
+  assert.equal(L.fmtMsk(FEB1), '1 февраля в 00:00 по Москве');
+});
+
+test('сезон: первый — с начала месяца, звание по опыту за сезон, уровень — по всему опыту', async () => {
+  const env = envOf();
+  await L.ensureLevels(env);
+  // октябрьский опыт в сезон не входит
+  env.DB.raw.prepare("INSERT INTO xp_log (user_id, kind, ref, xp, day, peer, at) VALUES ('u1', 'gift', 'old', 5000, '2026-10-20', NULL, ?)").run(NOV1 - 10 * DAY);
+  const s = await L.currentSeason(env, NOON);
+  assert.deepEqual({ n: s.n, title: s.title, start: s.start, end: s.end }, { n: 1, title: 'Сезон 1', start: NOV1, end: FEB1 });
+  const r = await awardMany(env, 'u1', rates('r', 16), { now: NOON, ...bare });
+  assert.equal(r.seasonXp, 8 * 10 + 8 * 2);
+  assert.equal(await L.seasonXpOf(env, 'u1', s), 96);
+  assert.ok(r.level >= 10);
+  assert.ok(!r.news.some((n) => n.t === 'rank'));
+});
+
+test('сезон: «Новое звание» в плашках и звание сезона в письме о новом уровне', async () => {
+  const env = envOf();
+  await awardMany(env, 'u1', rates('a', 16), { now: NOON, ...bare }); // 96
+  const b = await awardMany(env, 'u1', [{ kind: 'gift', ref: 'g1', xp: 400 }], { now: NOON + DAY, ...bare }); // +400 → 496
+  assert.deepEqual(b.news.filter((n) => n.t === 'rank'), [{ t: 'rank', rank: 'casual', title: 'Казуал' }]);
+  assert.equal(b.news.find((n) => n.t === 'level').rank, 'Казуал');
+  const g = q(env, "SELECT body FROM gifts WHERE id = 'lv:u1:4'")[0];
+  assert.equal(g.body, 'Звание сезона: Казуал. До «Диванный критик» в этом сезоне ещё 1004 опыта.');
+  assert.ok((await takeNews(env, 'u1')).some((n) => n.t === 'rank' && n.rank === 'casual'));
+});
+
+test('сезон: закрывается один раз — итоги и места одним запросом, следующий сезон, письмо, плашка', async () => {
+  const env = envOf();
+  env.DB.raw.exec("INSERT INTO users (id, username, uname, created_at, email_ok) VALUES ('u1', 'Аня', 'anya', 1, 1), ('u2', 'Боб', 'bob', 1, 1), ('u3', 'Вера', 'vera', 1, 1)");
+  await L.ensureLevels(env);
+  const ins = env.DB.raw.prepare("INSERT INTO xp_log (user_id, kind, ref, xp, day, peer, at, gone) VALUES (?, 'gift', ?, ?, '2026-11-11', NULL, ?, ?)");
+  ins.run('u1', 'g1', 1600, NOON, 0);
+  ins.run('u2', 'g2', 200, NOON, 0);
+  ins.run('u2', 'g3', 50, NOV1 - DAY, 0); // до сезона
+  ins.run('u3', 'g4', 700, NOON, 1); // удалённое не считается
+  ins.run('u1', 'late', 999, FEB1 + 1000, 0); // уже следующий сезон
+  env.DB.raw.exec("INSERT INTO user_level (user_id, xp, level, updated_at) VALUES ('u1', 2599, 1, 1), ('u2', 250, 1, 1), ('u3', 0, 1, 1)");
+  assert.equal((await L.currentSeason(env, NOON)).n, 1);
+  // два запроса сразу после срока: закрывает один, оба видят сезон 2
+  const [a, b] = await Promise.all([L.currentSeason(env, FEB1 + 5000), L.currentSeason(env, FEB1 + 5000)]);
+  assert.deepEqual([a.n, b.n], [2, 2]);
+  assert.deepEqual({ start: a.start, end: a.end, title: a.title }, { start: FEB1, end: MAY1, title: 'Сезон 2' });
+  const res = q(env, 'SELECT user_id, xp, rank, place FROM season_results WHERE season = 1 ORDER BY place').map((r) => ({ ...r }));
+  assert.deepEqual(res, [{ user_id: 'u1', xp: 1600, rank: 'couch', place: 1 }, { user_id: 'u2', xp: 200, rank: 'people', place: 2 }]);
+  assert.equal(q(env, 'SELECT COUNT(*) AS n FROM seasons WHERE closed_at IS NULL')[0].n, 1);
+  const letter = q(env, "SELECT to_id, title, body FROM gifts WHERE kind = 'season'");
+  assert.equal(letter.length, 1);
+  assert.equal(letter[0].to_id, null);
+  assert.equal(letter[0].title, 'Сезон 1 закончился, начался сезон 2');
+  assert.match(letter[0].body, /Следующий сброс — 1 мая в 00:00 по Москве\./);
+  // плашка «Новый сезон» с итогами — у каждого, у кого есть уровни, один раз
+  const news = (await takeNews(env, 'u1')).filter((n) => n.t === 'season');
+  assert.equal(news.length, 1);
+  assert.equal(news[0].n, 2);
+  assert.deepEqual(news[0].prev, { n: 1, rank: 'couch', xp: 1600, place: 1 });
+  assert.equal((await takeNews(env, 'u3')).find((n) => n.t === 'season').prev, null);
+  // новый сезон: у u1 — только то, что после сброса; итоги видны в истории
+  assert.equal(await L.seasonXpOf(env, 'u1', a), 999);
+  // снова позже — ничего не удваивается
+  await L.currentSeason(env, FEB1 + 60e3);
+  assert.equal(q(env, 'SELECT COUNT(*) AS n FROM season_results')[0].n, 2);
+  assert.equal(q(env, 'SELECT COUNT(*) AS n FROM seasons')[0].n, 2);
+  assert.equal(q(env, "SELECT COUNT(*) AS n FROM gifts WHERE kind = 'season'")[0].n, 1);
+  // итоги года: звание — лучшее из сезонов года
+  env.DB.raw.exec('ALTER TABLE lot_rooms ADD COLUMN created_at INTEGER');
+  const { recap } = await import('../functions/_lib/levels-api.js');
+  const y = await recap(env, 'u1', 2026);
+  assert.deepEqual({ rank: y.rank, rankId: y.rankId }, { rank: 'Диванный критик', rankId: 'couch' });
+});
+
+test('сезон: поле season в /levels/me и звание в профиле', async () => {
+  const env = envOf();
+  env.DB.raw.exec("INSERT INTO users (id, username, uname, created_at, email_ok) VALUES ('u1', 'Аня', 'anya', 1, 0)");
+  const { routes } = await levelRoutes();
+  await awardMany(env, 'u1', rates('r', 30), { now: NOON, ...bare }); // 120
+  await awardMany(env, 'u1', rates('s', 8), { now: NOON + DAY, ...bare }); // +80 → 200
+  await awardMany(env, 'u1', [{ kind: 'gift', ref: 'g1', xp: 300 }], { now: NOON + DAY, ...bare }); // +300 → 500
+  const m = await atTime(NOON + DAY, () => routes['GET /levels/me']({ env, request: { cf: { timezone: 'Europe/Moscow' } }, me: { id: 'u1' } }));
+  assert.deepEqual({ n: m.season.n, start: m.season.start, end: m.season.end, xp: m.season.xp, rank: m.season.rank }, { n: 1, start: NOV1, end: FEB1, xp: 500, rank: 'casual' });
+  assert.deepEqual(m.season.ranks.map((r) => r.id), L.SEASON_RANKS.map((r) => r.id));
+  assert.deepEqual(m.season.history, []);
+  assert.equal(m.rank, 'Казуал');
+  assert.equal(m.rankId, 'casual');
+  // после сброса: опыт сезона с нуля, прошлый — в истории
+  const after = await atTime(FEB1 + 1000, () => routes['GET /levels/me']({ env, request: { cf: { timezone: 'Europe/Moscow' } }, me: { id: 'u1' } }));
+  assert.equal(after.season.n, 2);
+  assert.equal(after.season.xp, 0);
+  assert.equal(after.rank, 'Людишка');
+  assert.deepEqual(after.season.history, [{ n: 1, title: 'Сезон 1', rank: 'casual', xp: 500, place: 1 }]);
+  const p = await atTime(FEB1 + 2000, () => routes['GET /levels/profile']({ env, request: { url: 'https://x/api/levels/profile?id=u1' }, me: { id: 'u1' } }));
+  assert.equal(p.rank, 'Людишка');
+});
+
+test('сезон: админ назначает сброс — письмо всем и объявление; «Сбросить сейчас»', async () => {
+  const env = envOf();
+  const { routes, seen } = await levelRoutes({ admin: true });
+  const me = { id: 'a'.repeat(24), handle: 'admin' };
+  await atTime(NOON, async () => {
+    const end = DEC1 - 3600e3; // 30 ноября, 23:00 по Москве
+    const r = await routes['PUT /admin/levels/season']({ env, request: { body: { end, title: 'Сезон 1 — ноябрь' } }, me });
+    assert.equal(r.ok, true);
+    assert.deepEqual({ n: r.current.n, end: r.current.end, title: r.current.title }, { n: 1, end, title: 'Сезон 1 — ноябрь' });
+    const g = q(env, "SELECT to_id, title, until FROM gifts WHERE kind = 'season'");
+    assert.equal(g.length, 1);
+    assert.equal(g[0].to_id, null);
+    assert.equal(g[0].until, end);
+    assert.equal(g[0].title, 'Сброс званий 30 ноября в 23:00 по Москве');
+    assert.deepEqual({ id: seen.ann.id, until: seen.ann.until }, { id: 'season-1', until: end });
+    assert.match(seen.ann.text, /^Сброс званий 30 ноября в 23:00 по Москве — конец сезона 1\./);
+    assert.equal(seen.pokeAll, 1);
+    // перенесли на час раньше: прежнее письмо гаснет, живое — одно
+    await routes['PUT /admin/levels/season']({ env, request: { body: { end: end - 3600e3 } }, me });
+    assert.equal(q(env, "SELECT COUNT(*) AS n FROM gifts WHERE kind = 'season' AND (until IS NULL OR until > ?)", NOON)[0].n, 1);
+    // в прошлое — нельзя
+    assert.equal((await routes['PUT /admin/levels/season']({ env, request: { body: { end: NOON - 1 } }, me })).status, 400);
+    // сбросить сейчас: сезон 2 — с этого момента, объявление о сбросе снято, письмо о конце сезона пришло
+    const x = await routes['POST /admin/levels/season/reset']({ env, request: {}, me });
+    assert.deepEqual({ closed: x.closed, n: x.current.n, start: x.current.start, end: x.current.end }, { closed: 1, n: 2, start: NOON, end: FEB1 });
+    assert.equal(seen.ann, null);
+    assert.equal(q(env, "SELECT COUNT(*) AS n FROM gifts WHERE kind = 'season' AND (until IS NULL OR until > ?)", NOON)[0].n, 1);
+    const info = await routes['GET /admin/levels/seasons']({ env, request: {}, me });
+    assert.equal(info.current.n, 2);
+    assert.deepEqual(info.history.map((h) => [h.n, h.title]), [[1, 'Сезон 1 — ноябрь']]);
+  });
+});
+
+test('сезон: обращений к D1 — закрытие и /levels/me меньше 50', async (t) => {
+  const env = envOf();
+  env.DB.raw.exec("INSERT INTO users (id, username, uname, created_at, email_ok) VALUES ('u1', 'Аня', 'anya', 1, 1)");
+  for (let u = 0; u < 30; u++) await awardMany(env, 'p' + u, rates('r', 12), { now: NOON, ...bare });
+  await awardMany(env, 'u1', rates('r', 20), { now: NOON });
+  const { routes } = await levelRoutes();
+  const close = counted(env);
+  await L.currentSeason(env, FEB1 + 1); // холодный Worker: таблицы, сезон, закрытие, следующий
+  const nClose = close();
+  const me = counted(env);
+  await atTime(FEB1 + 2000, () => routes['GET /levels/me']({ env, request: { cf: { timezone: 'Europe/Moscow' } }, me: { id: 'u1' } }));
+  const nMe = me();
+  t.diagnostic(`закрытие сезона: ${nClose} обращений к D1, /levels/me: ${nMe}`);
+  assert.ok(nClose < 50 && nMe < 50);
+  assert.equal(q(env, 'SELECT COUNT(*) AS n FROM season_results WHERE season = 1')[0].n, 31);
 });

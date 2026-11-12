@@ -36,6 +36,12 @@
 .hm-panel > .lv-row > .lv-bar { display: block !important; }
 .lv-row .lv-top { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; width: 100%; font-size: 13.5px; }
 .lv-row .lv-top b { font-weight: 700; }
+/* длинное звание («Профессиональный нытик») переносится, а не раздвигает строку меню за край: колонка сетки — minmax(0, 1fr),
+   опыт «85 / 300» остаётся справа */
+.hm-panel > .lv-row { grid-template-columns: minmax(0, 1fr); }
+.lv-row .lv-top { flex-wrap: wrap; row-gap: 2px; min-width: 0; }
+.lv-row .lv-top b { min-width: 0; white-space: normal; overflow-wrap: anywhere; } /* строка — кнопка-«пилюля» с nowrap */
+.lv-row .lv-top > span { margin-left: auto; flex: none; }
 .lv-row .lv-top span { color: var(--ink-3, #8a8f9e); font-variant-numeric: tabular-nums; font-size: 12.5px; }
 .lv-bar { position: relative; display: block; height: 8px; width: 100%; background: linear-gradient(90deg, var(--bad, #E4553F) 0 40%, var(--mid, #EAA92C) 40% 70%, var(--good, #2EAD60) 70%);
   -webkit-mask: repeating-linear-gradient(90deg, #000 0 calc(10% - 3px), transparent calc(10% - 3px) 10%); mask: repeating-linear-gradient(90deg, #000 0 calc(10% - 3px), transparent calc(10% - 3px) 10%); }
@@ -53,19 +59,14 @@
 .lv-hbtn.lv-pulse::after { content: ""; position: absolute; top: -3px; right: -3px; width: 10px; height: 10px; border-radius: 50%; background: #E85FA5; box-shadow: 0 0 0 2px var(--panel, #1b1d24); }
 @keyframes lv-pulse { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent, #3550E8) 60%, transparent); } 50% { box-shadow: 0 0 0 7px color-mix(in srgb, var(--accent, #3550E8) 0%, transparent), 0 0 18px 2px color-mix(in srgb, var(--accent, #3550E8) 45%, transparent); } }
 @media (prefers-reduced-motion: reduce) { .lv-hbtn.lv-pulse { animation: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, #3550E8) 60%, transparent); } }
-/* магазин: пока серый, при наведении — «Soon» */
-.lv-shop { position: relative; display: inline-flex !important; align-items: center; justify-content: center; cursor: default; color: var(--ink-3, #8a8f9e) !important; filter: grayscale(1); opacity: .6; }
-.lv-shop:hover, .lv-shop:focus-visible, .lv-shop.lv-tip { opacity: .85; }
-.lv-shop::after { content: attr(data-soon); position: absolute; top: calc(100% + 8px); left: 50%; transform: translateX(-50%) translateY(-4px); padding: 4px 9px; border-radius: 8px; background: var(--ink, #f3f4f6); color: var(--panel, #1b1d24); font: 700 12px/1.2 system-ui, sans-serif; letter-spacing: .02em; white-space: nowrap; pointer-events: none; opacity: 0; transition: opacity .15s, transform .15s; z-index: 100; filter: none; }
-.lv-shop:hover::after, .lv-shop:focus-visible::after, .lv-shop.lv-tip::after { opacity: 1; transform: translateX(-50%) translateY(0); }
+/* магазин за рофланы (/shop.js грузится по первому нажатию) */
+.lv-shop { display: inline-flex !important; align-items: center; justify-content: center; cursor: pointer; }
 @media (max-width: 480px) { .lv-hbtn .lv-hl { display: none; } .lv-hbtn { padding: 0 9px !important; } header .lv-shop { display: none !important; } }
-/* строки меню: почта и (на телефоне) магазин */
+/* строки меню: почта и (на телефоне, где в шапке нет места) магазин */
 .hm-panel > .lv-mailrow, .hm-panel > .lv-shoprow { display: flex !important; align-items: center; gap: 8px !important; }
-.hm-panel > .lv-shoprow { display: none !important; color: var(--ink-3, #8a8f9e) !important; cursor: default; }
+.hm-panel > .lv-shoprow { display: none !important; }
 @media (max-width: 480px) { .hm-panel > .lv-shoprow { display: flex !important; } }
-.lv-mailrow .lv-cnt, .lv-shoprow .lv-soon { margin-left: auto; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 700; }
-.lv-mailrow .lv-cnt { background: #E4553F; color: #fff; }
-.lv-shoprow .lv-soon { border: 1px solid var(--line, #2b2e38); }
+.lv-mailrow .lv-cnt { margin-left: auto; padding: 1px 8px; border-radius: 999px; font-size: 11.5px; font-weight: 700; background: #E4553F; color: #fff; }
 .lv-mailrow .wn-dot { display: none !important; }
 .lv-mail { display: grid; gap: 10px; }
 .lv-letter { display: grid; gap: 6px; padding: 14px 16px; border-radius: 16px; border: 1px solid var(--line, #2b2e38); }
@@ -204,6 +205,48 @@ html.lv-on .ava-wrap > .ava-ring { display: none !important; }
 .lv-hero .r { display: grid; gap: 2px; min-width: 0; flex: 1; }
 .lv-hero .r b { font-size: 17px; }
 .lv-hero .r span { font-size: 13px; color: var(--ink-3, #8a8f9e); }
+/* значки званий сезона (/art/rank/<id>.svg): пиксельные, без сглаживания */
+.lv-emb { flex: none; image-rendering: pixelated; }
+.lv-emb.sm { width: 18px; height: 18px; margin-right: 6px; vertical-align: -4px; }
+/* шапка «Обзора» — кнопка: открывает звания сезона */
+.lv-hero-go { width: calc(100% + 16px); margin: -6px -8px; padding: 6px 8px; border: 0; border-radius: 16px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.lv-hero-go:hover { background: color-mix(in srgb, var(--ink, #fff) 5%, transparent); }
+.lv-hero-go:focus-visible { outline: 2px solid var(--accent, #3550E8); outline-offset: 2px; }
+.lv-hero .lv-go { flex: none; display: inline-flex; align-items: center; gap: 4px; padding: 6px 11px; border-radius: 999px; border: 1px solid var(--line, #2b2e38); font-size: 12.5px; font-weight: 700; color: var(--ink-2, #b5b5b5); }
+.lv-hero .lv-go i { font-style: normal; font-size: 17px; line-height: 1; }
+.lv-back { justify-self: start; padding: 6px 13px; border-radius: 999px; border: 1px solid var(--line, #2b2e38); background: transparent; color: var(--ink-2, #b5b5b5); font: 600 13px/1.2 inherit; font-family: inherit; cursor: pointer; }
+/* звания сезона: моё звание крупно, звёзды — сколько пройдено до следующего, ниже вся лестница */
+.lv-rk-head { display: flex; align-items: center; gap: 16px; }
+.lv-rk-head > div { display: grid; gap: 4px; min-width: 0; }
+.lv-rk-head small { font-size: 12.5px; color: var(--ink-3, #8a8f9e); }
+.lv-rk-head b { font: 800 26px/1.05 var(--font-display, system-ui); overflow-wrap: anywhere; }
+.lv-rk-head > div > span:last-child { font-size: 13px; color: var(--ink-2, #b5b5b5); font-variant-numeric: tabular-nums; }
+.lv-rk-stars { display: inline-flex; gap: 4px; }
+.lv-rk-stars i { width: 13px; height: 13px; background: color-mix(in srgb, var(--ink, #fff) 16%, transparent); clip-path: polygon(50% 0, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+.lv-rk-stars i.on { background: #F5B942; }
+.lv-rk { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.lv-rk-i { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 6px 10px; border-radius: 14px; }
+.lv-rk-i b { display: block; font-size: 14.5px; }
+.lv-rk-i small { display: block; font-size: 12px; color: var(--ink-3, #8a8f9e); }
+.lv-rk-i.now { background: color-mix(in srgb, var(--accent, #3550E8) 12%, transparent); box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent, #3550E8) 55%, transparent); }
+.lv-rk-i.next .lv-emb { filter: grayscale(1); opacity: .45; }
+.lv-rk-i.next b { color: var(--ink-2, #b5b5b5); }
+.lv-rk-i .ok { font-weight: 800; color: var(--good, #2EAD60); }
+.lv-rk-i .here { padding: 3px 9px; border-radius: 999px; background: var(--accent, #3550E8); color: #fff; font-size: 12px; font-weight: 700; white-space: nowrap; }
+.lv-rk-i .left { font-size: 12px; color: var(--ink-3, #8a8f9e); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.lv-rk-hist { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.lv-rk-hist li { display: flex; align-items: center; gap: 10px; }
+.lv-rk-hist b, .lv-rk-hist small { display: block; }
+.lv-rk-hist small { font-size: 12px; color: var(--ink-3, #8a8f9e); }
+.lv-board .lv-emb.sm { margin-right: 4px; }
+.lv-chip .lv-emb.sm { width: 16px; height: 16px; margin-right: 4px; vertical-align: -3px; }
+@media (max-width: 520px) {
+  .lv-hero .lv-go > span { display: none; }
+  .lv-rk-head .lv-emb { width: 72px; height: 72px; }
+  .lv-rk-head b { font-size: 21px; }
+  .lv-rk-i { grid-template-columns: 40px minmax(0, 1fr) auto; gap: 10px; padding: 6px 8px; }
+  .lv-rk-i .lv-emb { width: 40px; height: 40px; }
+}
 .lv-muted { color: var(--ink-3, #8a8f9e); font-size: 13px; margin: 0; }
 .lv-q { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 5px 12px; align-items: center; font-size: 14px; }
 .lv-q .xp { font-weight: 700; color: #D99A1E; font-variant-numeric: tabular-nums; }
@@ -325,14 +368,22 @@ html.unslop .lv-tour .nav .go, html.unslop .lv-tour .dots i.on { background: var
 @media (max-width: 600px) { .lv-ov { padding: 0; } .lv-card { width: 100%; height: 100%; border-radius: 0; border: 0; } .lv-body { padding: 14px 16px 24px; } }
 html.unslop .lv-bar { height: 7px; }
 html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3550E8); }
+/* большие экраны: окно «Прогресс» крупнее на 2K и 4K */
+@media (min-width: 2200px) { .lv-card { width: min(1240px, 100%); height: min(1000px, 100%); } }
+@media (min-width: 3000px) { .lv-card { width: min(1560px, 100%); height: min(1240px, 100%); font-size: 17px; } .lv-head h2 { font-size: 30px; } }
 `;
   const style = document.createElement('style');
   style.textContent = CSS;
   document.head.appendChild(style);
 
   let ME = null;
-  const NEWS_ICON = { level: '★', ach: '🏅', quest: '✓', quest_all: '✓', quest_week: '✓', streak: '🔥', first: '→', invite: '+', invite_me: '+', freeze: '❄' };
+  // значок звания сезона: /art/rank/<id>.svg (id из ответа сервера, только латиница). В окнах без lazy — нужен сразу
+  const emblem = (id, size, cls) => (/^[a-z]{2,12}$/.test(String(id || '')) ? `<img class="lv-emb${cls ? ' ' + cls : ''}" src="/art/rank/${id}.svg" width="${size}" height="${size}" alt="" decoding="async">` : '');
+  const rankTitle = (id) => { const r = ME && ME.season && (ME.season.ranks || []).find((x) => x.id === id); return r ? r.title : ''; };
+  const NEWS_ICON = { level: '★', ach: '🏅', quest: '✓', quest_all: '✓', quest_week: '✓', streak: '🔥', first: '→', invite: '+', invite_me: '+', freeze: '❄', rank: '★', season: '★' };
   function newsLine(n) {
+    if (n.t === 'rank') return `Новое звание: ${n.title}`;
+    if (n.t === 'season') return `Начался ${n.title || 'новый сезон'}` + (n.prev && n.prev.rank ? `. Прошлый: ${rankTitle(n.prev.rank) || n.prev.rank}${n.prev.place ? `, ${n.prev.place}-е место` : ''}` : '');
     if (n.t === 'level') return `Новый уровень: ${n.to} · ${n.rank}`;
     if (n.t === 'ach') return `Достижение «${n.title}»${n.tier ? ' · ' + ['', 'бронза', 'серебро', 'золото'][n.tier] : ''}`;
     if (n.t === 'quest') return `Задание выполнено: ${n.title}\u00a0·\u00a0+${n.xp}`;
@@ -360,17 +411,19 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   function showNews(list) {
     if (ME && ME.prefs && ME.prefs.notify === false) return;
     const lvl = [...list].reverse().find((n) => n.t === 'level');
-    // новый уровень — в заголовке плашки, в списке его не повторяем
-    const lines = list.filter((n) => !(lvl && n.t === 'level')).map(newsLine).filter(Boolean);
-    if (!lines.length && !lvl) return;
-    const head = lvl ? { big: lvl.to, title: `Новый уровень: ${lvl.rank}` } : { big: NEWS_ICON[list[0].t] || '★', title: lines.length > 1 ? 'Награды' : 'Награда' };
+    // новое звание сезона — его значок в заголовке плашки, если уровень не поднялся
+    const rk = !lvl ? [...list].reverse().find((n) => n.t === 'rank') : null;
+    // новый уровень или звание — в заголовке плашки, в списке их не повторяем
+    const lines = list.filter((n) => !(lvl && n.t === 'level') && n !== rk).map(newsLine).filter(Boolean);
+    if (!lines.length && !lvl && !rk) return;
+    const head = lvl ? { big: lvl.to, title: `Новый уровень: ${lvl.rank}` } : rk ? { img: rk.rank, title: `Новое звание: ${rk.title}` } : { big: NEWS_ICON[list[0].t] || '★', title: lines.length > 1 ? 'Награды' : 'Награда' };
     let box = document.getElementById('lvToast');
     if (box) box.remove();
     box = document.createElement('div');
     box.id = 'lvToast';
     box.className = 'lv-toast';
     box.setAttribute('role', 'status');
-    box.innerHTML = `<div class="lv-t-head"><span class="lv-big">${esc(head.big)}</span><b>${esc(head.title)}</b><button type="button" class="x" aria-label="Закрыть">✕</button></div><ul>${lines.slice(0, 5).map((l) => `<li>${esc(l)}</li>`).join('')}${lines.length > 5 ? `<li>и ещё ${lines.length - 5}</li>` : ''}</ul>`;
+    box.innerHTML = `<div class="lv-t-head"><span class="lv-big">${head.img ? emblem(head.img, 40) : esc(head.big)}</span><b>${esc(head.title)}</b><button type="button" class="x" aria-label="Закрыть">✕</button></div><ul>${lines.slice(0, 5).map((l) => `<li>${esc(l)}</li>`).join('')}${lines.length > 5 ? `<li>и ещё ${lines.length - 5}</li>` : ''}</ul>`;
     box.addEventListener('click', (e) => { box.remove(); if (!e.target.closest('.x')) openProgress('home'); });
     document.body.appendChild(box);
     clearTimeout(noteT);
@@ -404,16 +457,18 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       mail.title = 'Подарки и письма';
       mail.addEventListener('click', () => openProgress('mail'));
       row.after(mail);
-      const shop = document.createElement('span');
+      const shop = document.createElement('button');
+      shop.type = 'button';
       shop.className = row.className.replace(/\blv-row\b/, '') + ' lv-shoprow';
-      shop.setAttribute('aria-disabled', 'true');
-      shop.innerHTML = `${SHOP_ICON}<span class="hm-t">Магазин</span><span class="lv-soon">Soon</span>`;
+      shop.title = 'Магазин: рофланы';
+      shop.innerHTML = `${SHOP_ICON}<span class="hm-t">Магазин</span>`;
+      shop.addEventListener('click', () => openShop());
       mail.after(shop);
     }
     const m = +ME.mail || 0;
     const mh = `${MAIL_ICON}<span class="hm-t">Почта</span>${m ? `<span class="lv-cnt">${m}</span><i class="wn-dot"></i>` : ''}`;
     if (mail.innerHTML !== mh) mail.innerHTML = mh;
-    row.innerHTML = `<span class="lv-top"><b>Уровень ${ME.level} · ${esc(ME.rank)}</b><span>${nf(ME.into)} / ${nf(ME.need)}</span></span>
+    row.innerHTML = `<span class="lv-top"><b>${emblem(ME.rankId, 18, 'sm')}Уровень ${ME.level} · ${esc(ME.rank)}</b><span>${nf(ME.into)} / ${nf(ME.need)}</span></span>
       ${bar(Math.min(100, Math.round((ME.into / ME.need) * 100)))}
       <span class="lv-sub"><span>Задания ${qd}/${q.length}</span>${ME.streak.days ? `<span>🔥 ${ME.streak.days} ${plural(ME.streak.days, 'день', 'дня', 'дней')}</span>` : ''}${ME.event ? `<span>${esc(ME.event.title)}</span>` : ''}</span>`;
   }
@@ -427,7 +482,12 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     const n = acc.querySelector(':scope > .lv-num');
     if (n) n.remove();
   }
-  // ---------- кнопки в шапке: уровень (мигает до первого нажатия) и магазин «Soon» ----------
+  // ---------- магазин за рофланы: /shop.js (window.CasualShop) грузится один раз — по нажатию или после /levels/me,
+  // чтобы надетое (рамки, ник, курсор, фон) и проверка «куплено» для Васяна работали на любой странице ----------
+  const loadShop = () => (window.CasualShop ? Promise.resolve(window.CasualShop)
+    : window.CasualUtil && window.CasualUtil.script ? window.CasualUtil.script('/shop.js', () => !!window.CasualShop).then(() => window.CasualShop) : Promise.reject(new Error('нет util.js')));
+  const openShop = (section) => loadShop().then((s) => s && s.open(section)).catch(() => {});
+  // ---------- кнопки в шапке: уровень (мигает до первого нажатия) и магазин ----------
   const SEEN_KEY = 'casualhub.levels.seen.v1';
   const seen = () => { try { return localStorage.getItem(SEEN_KEY) === '1'; } catch (e) { return true; } };
   const markSeen = () => { try { localStorage.setItem(SEEN_KEY, '1'); } catch (e) {} document.querySelectorAll('.lv-hbtn.lv-pulse').forEach((b) => b.classList.remove('lv-pulse')); };
@@ -452,12 +512,10 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       const shop = document.createElement('button');
       shop.type = 'button';
       shop.className = cls + ' lv-shop';
-      shop.dataset.soon = 'Soon';
-      shop.setAttribute('aria-disabled', 'true');
-      shop.setAttribute('aria-label', 'Магазин — скоро');
+      shop.title = 'Магазин: рофланы';
+      shop.setAttribute('aria-label', 'Магазин');
       shop.innerHTML = SHOP_ICON;
-      // на телефоне наведения нет: подсказка «Soon» показывается по нажатию
-      shop.addEventListener('click', () => { shop.classList.add('lv-tip'); clearTimeout(tipT); tipT = setTimeout(() => shop.classList.remove('lv-tip'), 1600); });
+      shop.addEventListener('click', () => openShop());
       // место слева у логотипа (header-menu.js), иначе — перед «Друзьями»
       const slot = header.querySelector('.hm-left');
       if (slot) { slot.appendChild(btn); slot.appendChild(shop); }
@@ -482,6 +540,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       if (!d.on) { ME = null; return; }
       ME = d;
       vasyanOwn(!!d.vasyan);
+      loadShop().catch(() => {}); // надетое из магазина и «куплено» для Васяна — на любой странице
       document.documentElement.classList.add('lv-on');
       paintMenu();
       paintHeader();
@@ -565,7 +624,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     box.className = 'lv-prof';
     box.dataset.for = id;
     const pr = Math.min(100, Math.round(((+d.into || 0) / Math.max(1, +d.need || 1)) * 100));
-    box.innerHTML = `<span class="lv-pring" style="--p:${pr}%" title="Уровень ${d.level} · ${esc(d.rank)}" aria-label="Уровень ${d.level}"><b>${d.level}</b></span>${d.look.rank ? `<span class="lv-chip">${esc(d.look.rank)}</span>` : ''}${(d.showcase || []).map((a) => { const art = ACH_ART[a.code] || ACH_ART.critic; return `<span class="lv-show"><i class="lv-sic px" style="--c1:${art[0]};--c2:${art[1]}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${art[2]}</svg>${achPx(a.code)}</i>${esc(a.title)}</span>`; }).join('')}`;
+    box.innerHTML = `<span class="lv-pring" style="--p:${pr}%" title="Уровень ${d.level} · ${esc(d.rank)}" aria-label="Уровень ${d.level}"><b>${d.level}</b></span>${d.look.rank ? `<span class="lv-chip">${emblem(d.look.rankId, 16, 'sm')}${esc(d.look.rank)}</span>` : ''}${(d.showcase || []).map((a) => { const art = ACH_ART[a.code] || ACH_ART.critic; return `<span class="lv-show"><i class="lv-sic px" style="--c1:${art[0]};--c2:${art[1]}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${art[2]}</svg>${achPx(a.code)}</i>${esc(a.title)}</span>`; }).join('')}`;
     const sub = who.querySelector('.sub');
     if (sub) sub.after(box); else who.appendChild(box);
     const name = hero.querySelector('#profileName');
@@ -652,7 +711,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     if (soon(tab)) tab = 'home';
     t.innerHTML = TABS.filter(([k]) => k !== 'recap' || ME.recap).map(([k, n]) => soon(k)
       ? `<button type="button" class="soon" data-soon-tab="${k}" aria-disabled="true" aria-label="${n} — в разработке">${n}</button>`
-      : `<button type="button" role="tab" data-tab="${k}" aria-selected="${k === tab}">${n}${k === 'mail' && +ME.mail ? ` (${ME.mail})` : ''}</button>`).join('');
+      : `<button type="button" role="tab" data-tab="${k}" aria-selected="${k === tab || (k === 'home' && tab === 'ranks')}">${n}${k === 'mail' && +ME.mail ? ` (${ME.mail})` : ''}</button>`).join('');
     t.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { tab = b.dataset.tab; renderTabs(); render(); }));
     t.querySelectorAll('[data-soon-tab]').forEach((b) => {
       const show = () => soonTip(b), hide = () => soonTip(null);
@@ -749,13 +808,46 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       const daily = q.daily.map((x) => `<div class="lv-q${x.done ? ' done' : ''}"><span>${esc(x.title)}</span><span class="xp">+${x.xp}</span>${bar(pct(x.progress, x.goal))}</div>`).join('');
       const w = q.weekly;
       const steps = m.steps ? `<div class="lv-box"><h3>Первые шаги</h3>${m.steps.map((s) => `<div class="lv-q${s.done ? ' done' : ''}"><span>${esc(s.title)}</span><span class="xp">+${s.xp}</span></div>`).join('')}</div>` : '';
-      return `<div class="lv-hero"><span class="n">${m.level}</span><div class="r"><b>${esc(m.rank)}</b><span>${nf(m.xp)} опыта всего · до ${m.level + 1}-го уровня ещё ${nf(m.need - m.into)}</span>${bar(pct(m.into, m.need))}</div></div>
+      // шапка: значок звания сезона, уровень и опыт за всё время; нажатие открывает звания сезона и всю лестницу
+      const hero = `<span class="n">${m.level}</span><span class="r"><b>${esc(m.rank)}</b><span>${nf(m.xp)} опыта всего · до ${m.level + 1}-го уровня ещё ${nf(m.need - m.into)}</span>${bar(pct(m.into, m.need))}</span>`;
+      return `${m.season ? `<button type="button" class="lv-hero lv-hero-go" data-ranks aria-label="Звания сезона: ${esc(m.rank)}">${emblem(m.season.rank, 56)}${hero}<span class="lv-go"><span>Звания</span><i aria-hidden="true">›</i></span></button>` : `<div class="lv-hero">${hero}</div>`}
         ${m.event ? `<div class="lv-box"><h3>${esc(m.event.title)}</h3><p class="lv-muted">×${m.event.mult} опыта до ${new Date(m.event.until).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}.</p></div>` : ''}
         <div class="lv-box"><div class="lv-streak"><span class="big">🔥 ${m.streak.days}</span><div><b>${m.streak.days ? `${plural(m.streak.days, 'день', 'дня', 'дней')} подряд` : 'Серии пока нет'}</b><p class="lv-muted">${m.streak.today ? 'Сегодня уже засчитан.' : 'Оцени что-нибудь или отреагируй другу, чтобы засчитать сегодня.'} Лучшая серия: ${m.streak.best}. «Заморозок»: ${m.streak.freezes} — спасают серию, если пропустишь день.</p></div></div></div>
         <div class="lv-box"><h3>Задания дня</h3>${daily || '<p class="lv-muted">Заданий пока нет.</p>'}<p class="lv-muted">За все три — ещё +${q.allXp}${q.allPaid ? ' (получено)' : ''}. Новые задания — завтра.</p></div>
         ${w ? `<div class="lv-box"><h3>Задание недели</h3><div class="lv-q${w.done ? ' done' : ''}"><span>${esc(w.title)} · ${w.progress} из ${w.goal}</span><span class="xp">+${w.xp}</span>${bar(pct(w.progress, w.goal))}</div></div>` : ''}
         ${steps}
         <p class="lv-muted">Опыт дают оценки, отзывы, тир-листы, реакции и комментарии друзьям, лоты. У каждого действия дневной лимит; удалишь — опыт уйдёт.</p>`;
+    },
+    // звания сезона: моё крупно со звёздами до следующего, лестница от «Величайшего» вниз, уровень и прошлые сезоны
+    async ranks() {
+      const m = ME, s = m && m.season;
+      if (!s || !(s.ranks || []).length) return '<button type="button" class="lv-back" data-home>‹ Обзор</button><p class="lv-muted">Звания сезона пока не включены.</p>';
+      const rs = s.ranks, i = Math.max(0, rs.findIndex((r) => r.id === s.rank)), cur = rs[i], next = rs[i + 1];
+      const days = s.end ? Math.max(0, Math.ceil((s.end - Date.now()) / 864e5)) : null;
+      // сброс назначают по Москве (админка, объявление): дата и время — тоже по Москве, иначе у кого-то вышло бы «30 ноября»
+      // на английском строка собирается здесь же: месяц и «дней» внутри одной строки словарь lang-en не переведёт
+      const en = window.CasualLang && window.CasualLang.lang === 'en', loc = en ? 'en-GB' : 'ru-RU';
+      const T = (t) => (window.CasualLang && window.CasualLang.t ? window.CasualLang.t(t) : t);
+      const msk = { timeZone: 'Europe/Moscow' };
+      const when = s.end ? `${new Date(s.end).toLocaleDateString(loc, { ...msk, day: 'numeric', month: 'long' })}, ${new Date(s.end).toLocaleTimeString(loc, { ...msk, hour: '2-digit', minute: '2-digit' })} ${en ? 'MSK' : 'МСК'}` : '';
+      const reset = days == null ? '' : en ? ` · resets in ${days} ${days === 1 ? 'day' : 'days'}, ${when}` : ` · до сброса ${days} ${plural(days, 'день', 'дня', 'дней')}, ${when}`;
+      const part = next ? Math.max(0, Math.min(1, (s.xp - cur.xp) / Math.max(1, next.xp - cur.xp))) : 1;
+      const lit = Math.min(5, Math.floor(part * 5));
+      const stars = Array.from({ length: 5 }, (_, k) => `<i class="${k < lit ? 'on' : ''}"></i>`).join('');
+      const list = rs.map((r, k) => {
+        const st = k < i ? 'done' : k === i ? 'now' : 'next';
+        const right = st === 'done' ? '<span class="ok" aria-label="Пройдено">✓</span>' : st === 'now' ? '<span class="here">Ты здесь</span>' : `<span class="left">ещё ${nf(r.xp - s.xp)}</span>`;
+        return `<li class="lv-rk-i ${st}">${emblem(r.id, 48)}<span><b>${esc(r.title)}</b><small>${r.xp ? `от ${nf(r.xp)} опыта за сезон` : 'с начала сезона'}</small></span>${right}</li>`;
+      }).reverse().join('');
+      const hist = (s.history || []).map((h) => `<li>${emblem(h.rank, 32)}<span><b>${esc(h.title)}</b><small>${esc(rankTitle(h.rank))} · ${nf(h.xp)} опыта${h.place ? ` · ${h.place}-е место` : ''}</small></span></li>`).join('');
+      const reward = (m.rewards || []).find((r) => r.level > m.level);
+      return `<button type="button" class="lv-back" data-home>‹ Обзор</button>
+        <div class="lv-box"><div class="lv-rk-head">${emblem(cur.id, 96)}<div><small>${esc(en ? T(s.title) : s.title)}${reset}</small><b>${esc(cur.title)}</b><span class="lv-rk-stars" role="img" aria-label="${lit} из 5 звёзд до следующего звания">${stars}</span><span>${nf(s.xp)} опыта за сезон</span></div></div>
+          ${next ? `${bar(Math.round(part * 100))}<p class="lv-muted">До звания «${esc(next.title)}» ещё ${nf(next.xp - s.xp)} опыта.</p>` : '<p class="lv-muted">Это самое высокое звание сезона.</p>'}</div>
+        <div class="lv-box"><h3>Звания сезона</h3><ol class="lv-rk">${list}</ol>
+          <p class="lv-muted">Звание считается по опыту, набранному за сезон. Сезон длится три месяца: в конце звания у всех сбрасываются, а итог остаётся в истории.</p></div>
+        <div class="lv-box"><h3>Уровень ${m.level}</h3><p class="lv-muted">${nf(m.xp)} опыта за всё время. Уровень не сбрасывается и открывает оформление${reward ? `: на ${reward.level}-м — ${esc(reward.title)}` : ''}.</p></div>
+        ${hist ? `<div class="lv-box"><h3>Прошлые сезоны</h3><ul class="lv-rk-hist">${hist}</ul></div>` : ''}`;
     },
     async mail() {
       const d = await api('/levels/mail');
@@ -780,7 +872,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
         return `<div class="lv-seg" role="group" aria-label="Чей рейтинг"><button type="button" data-scope="friends" aria-pressed="true">Друзья</button><button type="button" data-scope="all" aria-pressed="false">Весь сайт</button></div>
           <div class="lv-box"><h3>Пока соревноваться не с кем</h3><p class="lv-muted">Добавь друзей через кнопку «Друзья» в шапке — тут появится, кто из вас набрал больше опыта за неделю. А пока загляни во «Весь сайт».</p></div>`;
       }
-      const rows = d.top.map((x) => `<div class="${x.me ? 'me' : ''}"><em>${x.place}</em><span>${esc(x.username)}${x.level ? ` · ур. ${x.level}` : ''}</span><b>${nf(x.week)}</b></div>`).join('');
+      const rows = d.top.map((x) => `<div class="${x.me ? 'me' : ''}"><em>${x.place}</em><span>${emblem(x.rankId, 18, 'sm')}<span class="lv-bn" data-uid="${esc(x.id)}">${esc(x.username)}</span>${x.level ? ` · ур. ${x.level}` : ''}</span><b>${nf(x.week)}</b></div>`).join('');
       return `<div class="lv-seg" role="group" aria-label="Чей рейтинг"><button type="button" data-scope="friends" aria-pressed="${scope === 'friends'}">Друзья</button><button type="button" data-scope="all" aria-pressed="${scope === 'all'}">Весь сайт</button></div>
         <div class="lv-box"><h3>Опыт за неделю</h3><div class="lv-board">${rows || '<p class="lv-muted">На этой неделе пока никто не набрал опыта.</p>'}</div>
         ${d.best ? `<p class="lv-muted">Лучший прогресс: ${esc(d.best.username)}${d.best.growth != null ? ` — +${d.best.growth}% к прошлой неделе` : ' — новичок недели'}.</p>` : ''}
@@ -859,6 +951,9 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     },
   };
   const BIND = {
+    // шапка «Обзора» → звания сезона и обратно (вкладка «Обзор» остаётся выбранной)
+    home(b) { const go = b.querySelector('[data-ranks]'); if (go) go.addEventListener('click', () => { tab = 'ranks'; renderTabs(); render(); }); },
+    ranks(b) { const back = b.querySelector('[data-home]'); if (back) { back.addEventListener('click', () => { tab = 'home'; renderTabs(); render(); }); back.focus({ preventScroll: true }); } },
     mail(b) {
       // открыл почту — всё прочитано
       if ((VIEWS.mailIds || []).length) api('/levels/mail/read', 'POST', {}).then((r) => { ME.mail = r.unread; paintMenu(); renderTabs(); }).catch(() => {});
@@ -886,6 +981,9 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     },
     board(b) {
       b.querySelectorAll('[data-scope]').forEach((btn) => btn.addEventListener('click', () => { VIEWS.scope = btn.dataset.scope; render(); }));
+      // ники из магазина (эффект и значок) — как у людей в профиле
+      const names = [...b.querySelectorAll('.lv-bn[data-uid]')];
+      if (names.length) loadShop().then((s) => s.look(names.map((n) => n.dataset.uid))).then((m) => names.forEach((n) => { if (n.isConnected) window.CasualShop.dress({ name: n }, m[n.dataset.uid]); })).catch(() => {});
     },
     look(b) {
       const msg = b.querySelector('#lvLookMsg');

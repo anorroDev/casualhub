@@ -28,6 +28,8 @@ export const SECRETS = {
   users: { cols: { pass_hash: '', salt: '', totp: null, totp_pending: null } },
   admins: { cols: { pin_hash: null, pin_salt: null } },
   meta: { cols: { v: null }, only: ['k', 'admin_notes_key'] },
+  // токен ссылки «Отписаться» из писем: после восстановления без ключа — пустой, новый появится со следующей рассылкой
+  mail_prefs: { cols: { token: '' } },
 };
 const MAX_Q = 40; // запросов к D1 за будильник: на бесплатном плане за вызов можно 50
 const PART = 8e6; // символов в куске (base64 и латиница — по байту на символ)
