@@ -121,7 +121,7 @@ export function makeLevelsRoutes(h) {
       const [quests, steps, ev] = await Promise.all([questState(env, me.id, { now, today, row }), firstSteps(env, me.id), currentEvent(env, now)]);
       const alive = row.streak_day === today || row.streak_day === shiftDay(today, -1) || (row.streak_day === shiftDay(today, -2) && +row.freezes > 0);
       return json({
-        on: true, mode: levelsMode(env), ...lv, ...rankFields(season.xp), season, prefs, look: lookOf(row, season.xp, bought), unlocked: unlockedAt(lv.level, admin, bought), admin,
+        on: true, mode: levelsMode(env), ...lv, ...rankFields(season.xp), season, prefs, look: lookOf(row, season.xp, bought), unlocked: unlockedAt(lv.level, false, bought), admin,
         streak: { days: alive ? +row.streak || 0 : 0, best: +row.best_streak || 0, freezes: row.freezes == null ? 1 : +row.freezes, today: row.streak_day === today },
         quests, steps: steps.every((s) => s.paid) ? null : steps,
         event: ev ? { title: ev.title, kinds: ev.kinds, mult: ev.mult, until: ev.until } : null,
@@ -205,12 +205,9 @@ export function makeLevelsRoutes(h) {
       const b = await h.readBody(request);
       const row = (await userRow(env, me.id)) || {};
       const cur = prefsOf(row);
-      // админу открыто всё оформление — чтобы проверить награды, пока вкладка «Оформление» в разработке
-      const admin = !!(h.adminCandidate(me, env) || (await h.isAdmin(env, me)));
       const bought = (await boughtLooks(env, [me.id])).get(me.id) || null;
-      const lv = levelView(+row.xp || 0, +row.level || 1).level, u = unlockedAt(lv, admin, bought);
-      const next = { ...cur, adm: admin };
-      if (!admin) delete next.adm;
+      const lv = levelView(+row.xp || 0, +row.level || 1).level, u = unlockedAt(lv, false, bought);
+      const next = { ...cur }; // оформление — по уровню у всех, у админа тоже
       for (const k of ['intro', 'hideLevel', 'hideBoard', 'notify', 'anim']) if (typeof b[k] === 'boolean') next[k] = b[k];
       if (Array.isArray(b.showcase)) {
         const own = new Set(((await env.DB.prepare('SELECT code FROM achievements WHERE user_id = ?').bind(me.id).all()).results || []).map((x) => x.code));

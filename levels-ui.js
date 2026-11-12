@@ -133,7 +133,6 @@ html.unslop .lv-hbtn.lv-pulse { animation-duration: 2.6s; }
 .lv-lk-name { font: 800 24px/1.15 var(--font-display, system-ui), sans-serif; overflow-wrap: anywhere; color: var(--ink, #f3f4f6); }
 .lv-lk .lv-chip { display: inline-flex; padding: 3px 10px; border-radius: 999px; background: color-mix(in srgb, var(--accent, #3550E8) 14%, transparent); font-size: 13px; font-weight: 600; }
 .lv-lock { margin-left: 6px; font-size: 11px; font-weight: 700; color: var(--ink-3, #8a8f9e); }
-.lv-adm { margin: 0 0 12px; padding: 10px 12px; border-radius: 12px; border: 1px dashed var(--accent, #5B74FF); font-size: 13px; color: var(--ink-2, #b5b5b5); }
 /* фон профиля: у карточки профиля — лёгкий оттенок, у баннера по умолчанию и у образца в «Оформлении» — пиксельная картинка из /art/bg */
 .lv-bg-dawn { background-image: linear-gradient(135deg, color-mix(in srgb, #F5B942 16%, transparent), color-mix(in srgb, #E85FA5 14%, transparent)) !important; }
 .lv-bg-night { background-image: linear-gradient(135deg, color-mix(in srgb, #3550E8 22%, transparent), color-mix(in srgb, #0D0F14 30%, transparent)) !important; }
@@ -1112,7 +1111,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
             <div class="lv-lk-who"><b class="lv-lk-name${p.nick ? ' lv-nick-' + p.nick : ''}${p.font ? ' lv-font-' + p.font : ''}"${p.color && m.colors[p.color] ? ` style="color:${m.colors[p.color]}"` : ''}>${esc(nm)}</b>${u.rankChip ? `<span class="lv-chip">${esc(m.rank)}</span>` : ''}${p.fx === 'confetti' ? '<span class="lv-muted">+ конфетти при открытии профиля</span>' : ''}</div>
           </div>
         </div>`;
-      return `${m.admin ? '<p class="lv-adm">Админу открыто всё оформление, чтобы проверять награды; остальным — по уровням. Другие видят твой выбор в профиле.</p>' : ''}
+      return `
         <div class="lv-box">${prev}</div>
         <div class="lv-box"><h3>Рамка аватара</h3><div class="lv-pick">${frames}</div></div>
         <div class="lv-box"><h3>Ник в профиле</h3><div class="lv-pick">${colors}</div><div class="lv-pick" style="margin-top:8px">${nicks}</div></div>

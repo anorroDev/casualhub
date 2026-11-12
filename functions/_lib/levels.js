@@ -845,14 +845,13 @@ export async function readLevel(env, uid) {
 }
 export const prefsOf = (row) => {
   const p = parse(row && row.prefs, {});
-  return { intro: !!p.intro, hideLevel: !!p.hideLevel, hideBoard: !!p.hideBoard, notify: p.notify !== false, anim: p.anim !== false, showcase: Array.isArray(p.showcase) ? p.showcase.slice(0, 3) : [], frame: p.frame || '', color: p.color || '', bg: p.bg || '', font: p.font || '', nick: p.nick || '', fx: p.fx || '', pet: !!p.pet, adm: !!p.adm };
+  return { intro: !!p.intro, hideLevel: !!p.hideLevel, hideBoard: !!p.hideBoard, notify: p.notify !== false, anim: p.anim !== false, showcase: Array.isArray(p.showcase) ? p.showcase.slice(0, 3) : [], frame: p.frame || '', color: p.color || '', bg: p.bg || '', font: p.font || '', nick: p.nick || '', fx: p.fx || '', pet: !!p.pet };
 };
 // оформление, которое видят другие: только то, что открыто уровнем.
-// adm — выбор сохранил админ (PUT /levels/prefs ставит его сам): ему для проверки открыто всё.
 // rank — звание сезона рядом с ником (награда 7-го уровня), seasonXp — опыт человека за текущий сезон
 export function lookOf(row, seasonXp = 0, bought = null) {
   const lv = levelView(+row.xp || 0, +row.level || 1).level;
-  const p = prefsOf(row), u = unlockedAt(lv, p.adm, bought), r = seasonRankOf(seasonXp);
+  const p = prefsOf(row), u = unlockedAt(lv, false, bought), r = seasonRankOf(seasonXp);
   return {
     level: lv,
     frame: u.frames.includes(p.frame) ? p.frame : '',
