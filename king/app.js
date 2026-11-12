@@ -118,7 +118,9 @@ html.unslop:not([data-ui]) .kg .card { animation: none; }
     PK.loaded = true;
     const refs = myRatings().map((r) => r.photo && r.photo.ref).filter(Boolean);
     if (!refs.length) return;
-    if (!window.CasualPhotos) await new Promise((ok) => (U.script ? U.script('/photo-store.js', ok) : ok()));
+    // хранилище фото «Мнения»: скрипт грузится только здесь; script() ждёт, пока появится CasualPhotos
+    if (!window.CasualPhotos && U.script) await U.script('/photo-store.js', () => !!window.CasualPhotos).catch(() => {});
+    if (!window.CasualPhotos) return;
     try { Object.assign(PK.photos, await window.CasualPhotos.getMany(refs)); } catch (e) {}
   }
   // своя картинка уходит на сервер маленькой (120×120, до ~16 КБ): турнир хранит её у себя и показывает всем зрителям

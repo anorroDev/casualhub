@@ -112,13 +112,18 @@ html.unslop .lv-hbtn.lv-pulse { animation-duration: 2.6s; }
 .lv-nick-rainbow:has(> .ch) { background: none; -webkit-text-fill-color: currentColor; color: inherit !important; animation: lv-hue 3s steps(6) infinite; }
 .lv-nick-rainbow > .ch:nth-child(6n+1) { color: #F26A55 !important; } .lv-nick-rainbow > .ch:nth-child(6n+2) { color: #F2BA44 !important; } .lv-nick-rainbow > .ch:nth-child(6n+3) { color: #43C97A !important; } .lv-nick-rainbow > .ch:nth-child(6n+4) { color: #14A3A8 !important; } .lv-nick-rainbow > .ch:nth-child(6n+5) { color: #5B74FF !important; } .lv-nick-rainbow > .ch:nth-child(6n+6) { color: #E85FA5 !important; }
 @keyframes lv-hue { to { filter: hue-rotate(360deg); } }
-/* эффекты профиля: звездопад в шапке (22-й) и конфетти при открытии (45-й) */
+/* эффекты профиля: звездопад (22-й), пиксельный снег (13-й) и искры костра (33-й) в шапке, конфетти при открытии (45-й).
+   Снег и искры — пиксельные плитки /art/fx/*.svg: снег падает, искры поднимаются, ступеньками */
+.lv-fx-snow, .lv-fx-embers { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: url(/art/fx/snow.svg) 0 0 / 128px 128px repeat; image-rendering: pixelated; animation: lv-snow 9s steps(64) infinite linear; }
+.lv-fx-embers { background-image: url(/art/fx/embers.svg); animation: lv-embers 6s steps(48) infinite linear; }
+@keyframes lv-snow { to { background-position: 16px 128px; } }
+@keyframes lv-embers { to { background-position: -12px -128px; } }
 .lv-fx-stars { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: #fff; opacity: .85; -webkit-mask: url(/art/site/stars.webp) 0 0 / 260px 260px repeat; mask: url(/art/site/stars.webp) 0 0 / 260px 260px repeat; animation: lv-fall 10s steps(52) infinite linear; }
 @keyframes lv-fall { to { -webkit-mask-position: 0 260px; mask-position: 0 260px; } }
 .lv-conf { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 6; border-radius: inherit; }
 .lv-conf i { position: absolute; top: -14px; width: 10px; height: 10px; animation: lv-cf 1.9s steps(16) var(--d, 0s) forwards; }
 @keyframes lv-cf { to { transform: translate(var(--x, 0), 520px) rotate(180deg); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .lv-pet, .lv-nick-rainbow, .lv-fx-stars { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .lv-pet, .lv-nick-rainbow, .lv-fx-stars, .lv-fx-snow, .lv-fx-embers { animation: none !important; } }
 /* вкладка «Оформление»: предпросмотр профиля, замки, заметка для админа */
 .lv-lk { position: relative; border-radius: 14px; overflow: hidden; background: var(--panel-2, #1d2129); }
 .lv-lk-ban { position: relative; height: 112px; overflow: hidden; background: linear-gradient(135deg, color-mix(in srgb, var(--accent, #5B74FF) 35%, transparent), color-mix(in srgb, var(--good, #43C97A) 22%, transparent)); background-size: cover; background-position: center 70%; }
@@ -402,6 +407,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   document.head.appendChild(style);
 
   let ME = null;
+  const FX_LAYER = ['stars', 'snow', 'embers']; // эффекты слоем в шапке профиля (конфетти — отдельно, при открытии)
   // шрифты ника (награды за уровни; id — как NICK_FONTS в levels.js): Google Fonts, грузятся только буквы ника (&text=)
   const FONTS = { comfortaa: ['Comfortaa', 700], caveat: ['Caveat', 700], lobster: ['Lobster', 400], press: ['Press Start 2P', 400], pacifico: ['Pacifico', 400], russo: ['Russo One', 400], amatic: ['Amatic SC', 700], kelly: ['Kelly Slab', 400], aladin: ['Aladin', 400], yeseva: ['Yeseva One', 400], unbounded: ['Unbounded', 700], underdog: ['Underdog', 400], marck: ['Marck Script', 400], glitch: ['Rubik Glitch', 400], ruslan: ['Ruslan Display', 400], paint: ['Rubik Wet Paint', 400], beastly: ['Rubik Beastly', 400] };
   { const st = document.createElement('style'); st.textContent = Object.entries(FONTS).map(([id, [f, w]]) => `:root .lv-font-${id} { font-family: '${f}', var(--font-display, system-ui), sans-serif !important; font-weight: ${w} !important; font-synthesis: none; letter-spacing: normal; }`).join('\n'); document.head.appendChild(st); }
@@ -716,7 +722,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       if (d.look.pet) ava.insertAdjacentHTML('beforeend', '<i class="lv-pet" aria-hidden="true"></i>');
     }
     const anyBan = hero.querySelector('.banner');
-    if (anyBan) { anyBan.querySelectorAll(':scope > .lv-fx-stars').forEach((x) => x.remove()); if (d.look.fx === 'stars') anyBan.insertAdjacentHTML('beforeend', '<i class="lv-fx-stars" aria-hidden="true"></i>'); }
+    if (anyBan) { anyBan.querySelectorAll(':scope > .lv-fx-stars, :scope > .lv-fx-snow, :scope > .lv-fx-embers').forEach((x) => x.remove()); if (FX_LAYER.includes(d.look.fx)) anyBan.insertAdjacentHTML('beforeend', `<i class="lv-fx-${d.look.fx}" aria-hidden="true"></i>`); }
     if (d.look.fx === 'confetti' && confFor !== id) { confFor = id; burst(hero); }
     const banner = hero.querySelector('.banner.def');
     [...hero.classList].filter((c) => c.startsWith('lv-bg-')).forEach((c) => hero.classList.remove(c));
@@ -1007,7 +1013,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       const BG = { '': 'Без фона', dawn: 'Закат', night: 'Ночь', city: 'Город', forest: 'Лес', ember: 'Уют', legend: 'Легенда' };
       const NK = { '': 'Обычный', outline: 'Контур', shadow: 'С тенью', arcade: 'Аркада', rainbow: 'Радужный' };
       const nmOf = () => { const a = read('ocenshik.user.v1') || {}; return a.username || a.name || 'Ты'; };
-      const FX = { '': 'Без эффекта', stars: 'Звездопад', confetti: 'Конфетти' };
+      const FX = { '': 'Без эффекта', snow: 'Снег', stars: 'Звездопад', embers: 'Искры', confetti: 'Конфетти' };
       const frames = Object.keys(FR).map((f) => opt('frame', f, p.frame, u.frames.includes(f), f, `${f ? `<span class="fr lv-frame-${f}"></span>` : ''}${FR[f]}`)).join('');
       const colors = ['', ...Object.keys(m.colors)].map((c) => opt('color', c, p.color, u.colors.includes(c), c === 'gold' ? 'gold' : 'colors', c ? `<span class="dot" style="background:${m.colors[c]}" aria-label="${c}"></span>` : 'Обычный')).join('');
       const nicks = Object.keys(NK).map((n) => opt('nick', n, p.nick, u.nicks.includes(n), n, n ? `<span class="lv-nick-${n}">${NK[n]}</span>` : NK[n])).join('');
@@ -1026,13 +1032,15 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       const nm = acc.username || acc.name || 'Ты';
       const crown = p.frame === 'frame4' || p.frame === 'frame6' ? '<img class="lv-crown" src="/art/crown.svg" width="44" height="30" alt="">' : '';
       const prev = `<div class="lv-lk" aria-label="Так твой профиль увидят другие">
-          <div class="lv-lk-ban${p.bg ? ' lv-bg-' + p.bg : ''}">${p.fx === 'stars' ? '<i class="lv-fx-stars" aria-hidden="true"></i>' : ''}</div>
+          <div class="lv-lk-ban${p.bg ? ' lv-bg-' + p.bg : ''}">${FX_LAYER.includes(p.fx) ? `<i class="lv-fx-${p.fx}" aria-hidden="true"></i>` : ''}</div>
           <div class="lv-lk-row">
             <span class="lv-lk-ava${p.frame ? ' lv-frame-' + p.frame : ''}">${esc(nm.charAt(0).toUpperCase())}${crown}${p.pet ? '<i class="lv-pet" aria-hidden="true"></i>' : ''}</span>
             <div class="lv-lk-who"><b class="lv-lk-name${p.nick ? ' lv-nick-' + p.nick : ''}${p.font ? ' lv-font-' + p.font : ''}"${p.color && m.colors[p.color] ? ` style="color:${m.colors[p.color]}"` : ''}>${esc(nm)}</b>${u.rankChip ? `<span class="lv-chip">${esc(m.rank)}</span>` : ''}${p.fx === 'confetti' ? '<span class="lv-muted">+ конфетти при открытии профиля</span>' : ''}</div>
           </div>
         </div>`;
-      return `${m.admin ? '<p class="lv-adm">Админу открыто всё оформление, чтобы проверять награды; остальным — по уровням. Другие видят твой выбор в профиле.</p>' : ''}
+      // закрытое: откроется уровнем или покупается раньше в магазине (раздел «Оформление»)
+      const shopTip = window.CasualShop && !m.admin && m.level < 50 ? '<p class="lv-muted lv-shop-tip">Закрытое откроется само на своём уровне — или купи раньше за рофланы: <button type="button" class="lv-btn" data-shop-look>Магазин → Оформление</button></p>' : '';
+      return `${shopTip}${m.admin ? '<p class="lv-adm">Админу открыто всё оформление, чтобы проверять награды; остальным — по уровням. Другие видят твой выбор в профиле.</p>' : ''}
         <div class="lv-box">${prev}</div>
         <div class="lv-box"><h3>Рамка аватара</h3><div class="lv-pick">${frames}</div></div>
         <div class="lv-box"><h3>Ник в профиле</h3><div class="lv-pick">${colors}</div><div class="lv-pick" style="margin-top:8px">${nicks}</div></div>
@@ -1121,6 +1129,8 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       b.querySelectorAll('[data-bg]').forEach((x) => x.addEventListener('click', () => save({ bg: x.dataset.bg })));
       b.querySelectorAll('[data-nick]').forEach((x) => x.addEventListener('click', () => save({ nick: x.dataset.nick })));
       b.querySelectorAll('[data-font]').forEach((x) => x.addEventListener('click', () => save({ font: x.dataset.font })));
+      const sh = b.querySelector('[data-shop-look]');
+      if (sh) sh.addEventListener('click', () => { if (window.CasualShop) window.CasualShop.open('look'); });
       b.querySelectorAll('[data-fx]').forEach((x) => x.addEventListener('click', () => save({ fx: x.dataset.fx })));
       b.querySelectorAll('[data-pet]').forEach((x) => x.addEventListener('click', () => save({ pet: x.dataset.pet === '1' })));
       b.querySelectorAll('[data-tg]').forEach((x) => x.addEventListener('change', () => save({ [x.dataset.tg]: x.checked })));
@@ -1309,7 +1319,8 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     pullNews();
   }
 
-  window.CasualLevels = { open: openProgress, refresh: refreshMe, news: pullNews, intro: openIntro };
+  // fonts — подгрузить шрифты ника (магазин показывает ими превью)
+  window.CasualLevels = { open: openProgress, refresh: refreshMe, news: pullNews, intro: openIntro, fonts: needFonts };
   if (!token()) return;
   { const u = read('ocenshik.user.v1'), c = read(HEAD_KEY); if (token() && u && c && c.id === u.id) paintHeader(c); }
   document.documentElement.classList.remove('hdr-wait'); // шапка собрана — показать разом (header-menu.js ждал значок уровня)

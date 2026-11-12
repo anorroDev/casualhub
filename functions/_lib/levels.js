@@ -212,6 +212,8 @@ export const REWARDS = [
   { level: 50, kind: 'frame', id: 'frame6', title: 'Рамка и фон «Легенда»' },
   { level: 8, kind: 'nick', id: 'outline', title: 'Ник с пиксельным контуром' },
   { level: 27, kind: 'nick', id: 'arcade', title: 'Ник «Аркада»: объёмная пиксельная тень' },
+  { level: 13, kind: 'fx', id: 'snow', title: 'Пиксельный снег в шапке профиля' },
+  { level: 33, kind: 'fx', id: 'embers', title: 'Искры костра в шапке профиля' },
   // шрифты ника: пара — сразу всем, остальные — по уровням
   { level: 1, kind: 'font', id: 'font:comfortaa', title: 'Шрифт ника «Comfortaa»' },
   { level: 1, kind: 'font', id: 'font:caveat', title: 'Шрифт ника «Caveat»' },
@@ -237,10 +239,11 @@ const FRAMES = ['frame1', 'frame5', 'frame2', 'frame3', 'frame4', 'frame6']; // 
 const NICKS = ['outline', 'shadow', 'arcade', 'rainbow'];
 // шрифты ника (Google Fonts, сами шрифты подключает levels-ui.js): id → название
 export const NICK_FONTS = { comfortaa: 'Comfortaa', caveat: 'Caveat', lobster: 'Lobster', press: 'Press Start 2P', pacifico: 'Pacifico', russo: 'Russo One', amatic: 'Amatic SC', kelly: 'Kelly Slab', aladin: 'Aladin', yeseva: 'Yeseva One', unbounded: 'Unbounded', underdog: 'Underdog', marck: 'Marck Script', glitch: 'Rubik Glitch', ruslan: 'Ruslan Display', paint: 'Rubik Wet Paint', beastly: 'Rubik Beastly' };
-const FXS = ['stars', 'confetti'];
-// что из оформления доступно на уровне; all — админу открыто всё (проверять награды до выхода)
-export function unlockedAt(level, all = false) {
-  const got = new Set(REWARDS.filter((r) => all || level >= r.level).map((r) => r.id));
+const FXS = ['stars', 'snow', 'embers', 'confetti'];
+// что из оформления доступно на уровне; all — админу открыто всё (проверять награды до выхода);
+// bought — id наград, купленных в магазине раньше уровня (раздел «Оформление», shop.js → boughtLooks)
+export function unlockedAt(level, all = false, bought = null) {
+  const got = new Set(REWARDS.filter((r) => all || level >= r.level || (bought && bought.has(r.id))).map((r) => r.id));
   return {
     frames: FRAMES.filter((f) => got.has(f)),
     colors: got.has('colors') ? Object.keys(NAME_COLORS).filter((c) => c !== 'gold' || got.has('gold')) : [],
@@ -847,9 +850,9 @@ export const prefsOf = (row) => {
 // оформление, которое видят другие: только то, что открыто уровнем.
 // adm — выбор сохранил админ (PUT /levels/prefs ставит его сам): ему для проверки открыто всё.
 // rank — звание сезона рядом с ником (награда 7-го уровня), seasonXp — опыт человека за текущий сезон
-export function lookOf(row, seasonXp = 0) {
+export function lookOf(row, seasonXp = 0, bought = null) {
   const lv = levelView(+row.xp || 0, +row.level || 1).level;
-  const p = prefsOf(row), u = unlockedAt(lv, p.adm), r = seasonRankOf(seasonXp);
+  const p = prefsOf(row), u = unlockedAt(lv, p.adm, bought), r = seasonRankOf(seasonXp);
   return {
     level: lv,
     frame: u.frames.includes(p.frame) ? p.frame : '',
@@ -864,7 +867,8 @@ export function lookOf(row, seasonXp = 0) {
   };
 }
 // уровни для списка людей (кружки у аватаров): скрывшие уровень не попадают. Опыт сезона — в том же запросе
-export async function levelsOf(env, ids) {
+// boughtMap — uid → купленное оформление (shop.js → boughtLooks), чтобы в списках было видно и купленное
+export async function levelsOf(env, ids, boughtMap = null) {
   if (!levelsOn(env) || !ids.length) return {};
   await ensureLevels(env);
   const s = await currentSeason(env);
@@ -873,7 +877,7 @@ export async function levelsOf(env, ids) {
     const part = ids.slice(i, i + 90);
     const { results } = await env.DB.prepare(`SELECT ul.user_id, ul.xp, ul.level, ul.prefs, (SELECT COALESCE(SUM(l.xp), 0) FROM xp_log l WHERE l.user_id = ul.user_id AND l.gone = 0 AND l.at >= ?1) AS season
       FROM user_level ul WHERE ul.user_id IN (${part.map((_, k) => '?' + (k + 2)).join(', ')})`).bind(s ? s.start : Date.now() + 1, ...part).all();
-    for (const r of results || []) if (!prefsOf(r).hideLevel) out[r.user_id] = lookOf(r, +r.season || 0);
+    for (const r of results || []) if (!prefsOf(r).hideLevel) out[r.user_id] = lookOf(r, +r.season || 0, boughtMap && boughtMap.get(r.user_id));
   }
   return out;
 }

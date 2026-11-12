@@ -515,3 +515,11 @@ test('сезон: обращений к D1 — закрытие и /levels/me м
   assert.ok(nClose < 50 && nMe < 50);
   assert.equal(q(env, 'SELECT COUNT(*) AS n FROM season_results WHERE season = 1')[0].n, 31);
 });
+
+test('оформление, купленное в магазине раньше уровня, открыто так же, как за уровень', async () => {
+  const L = await import('../functions/_lib/levels.js');
+  assert.ok(!L.unlockedAt(3).fonts.includes('lobster'));
+  assert.ok(L.unlockedAt(3, false, new Set(['font:lobster'])).fonts.includes('lobster'));
+  assert.ok(L.unlockedAt(3, false, new Set(['frame6'])).frames.includes('frame6'));
+  assert.ok(L.unlockedAt(13).fx.includes('snow') && !L.unlockedAt(32).fx.includes('embers'));
+});

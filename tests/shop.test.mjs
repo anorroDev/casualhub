@@ -221,9 +221,9 @@ test('надеть: только купленное, купленное наде
 });
 
 test('каталог: для всех 20–30 платных товаров в 6 разделах, от дешёвых до дорогих', () => {
-  const all = S.ITEMS.filter((x) => x.sec !== 'vasyan' && x.price > 0);
+  const all = S.ITEMS.filter((x) => x.sec !== 'vasyan' && x.sec !== 'look' && x.price > 0);
   assert.ok(all.length >= 20 && all.length <= 30, String(all.length));
-  assert.deepEqual([...new Set(S.ITEMS.filter((x) => x.sec !== 'vasyan').map((x) => x.sec))].sort(), ['nick', 'perks', 'profile', 'site', 'tier', 'wheel']);
+  assert.deepEqual([...new Set(S.ITEMS.filter((x) => x.sec !== 'vasyan').map((x) => x.sec))].sort(), ['look', 'nick', 'perks', 'profile', 'site', 'tier', 'wheel']);
   assert.ok(Math.min(...all.map((x) => x.price)) <= 30);
   assert.ok(Math.max(...all.map((x) => x.price)) >= 700);
   for (const s of S.SLOTS) assert.equal(S.ITEMS.filter((x) => x.slot === s && !x.price).length, 1, 'бесплатное в слоте ' + s);
@@ -322,4 +322,16 @@ test('еда: id и названия общие с vasyan.js, в том же п�
   const client = [...block.matchAll(/\{ id: '([a-z]+)', name: '([^']+)'/g)].map((m) => [m[1], m[2]]);
   const server = S.ITEMS.filter((x) => x.kind === 'food').map((x) => [x.id.split('.').pop(), x.title]);
   assert.deepEqual(client, server);
+});
+
+test('оформление из «Прогресса»: каждая награда — за уровень или раньше за рофланы, первого уровня в магазине нет', () => {
+  assert.ok(S.LOOK_ITEMS.length >= 20);
+  for (const x of S.LOOK_ITEMS) {
+    assert.ok(x.unlock > 1, x.id);
+    assert.equal(x.price, S.lookPrice(x.unlock));
+    assert.ok(/^look\.[a-z0-9.]+$/.test(x.id), x.id);
+  }
+  assert.ok(S.LOOK_ITEMS.some((x) => x.id === 'look.font.lobster'));
+  assert.ok(!S.LOOK_ITEMS.some((x) => x.id === 'look.font.comfortaa')); // открыт всем с первого уровня
+  assert.ok(S.lookPrice(50) > S.lookPrice(10));
 });

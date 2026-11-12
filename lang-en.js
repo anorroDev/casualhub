@@ -2928,7 +2928,19 @@
 "Ник с пиксельным контуром":"Nick with a pixel outline",
 "Ник «Аркада»: объёмная пиксельная тень":"“Arcade” nick: a stacked pixel shadow",
 "Шрифт ника «{}»":"Nick font “{}”",
-"Этот шрифт ещё не открыт.":"This font isn’t unlocked yet."};
+"Этот шрифт ещё не открыт.":"This font isn’t unlocked yet.",
+// Магазин: оформление из «Прогресса»; эффекты снег и искры
+"Рамки, цвета, стили и шрифты ника, фоны и эффекты из «Прогресса». Всё откроется само на своём уровне — здесь можно взять раньше. Купленное выбирается в «Прогрессе» → «Оформление».":"Frames, nick colors, styles and fonts, backgrounds and effects from Progress. Everything unlocks on its own at its level — here you can get it earlier. Pick what you bought in Progress → Looks.",
+"Цвет ника":"Nick color",
+"Стиль ника":"Nick style",
+"Эффекты":"Effects",
+"Котик в профиле":"Cat in the profile",
+"Закрытое откроется само на своём уровне — или купи раньше за рофланы:":"Locked items unlock on their own at their level — or buy them earlier for Souls:",
+"Магазин → Оформление":"Shop → Looks",
+"Снег":"Snow",
+"Искры":"Sparks",
+"Пиксельный снег в шапке профиля":"Pixel snow in the profile header",
+"Искры костра в шапке профиля":"Campfire sparks in the profile header"};
   // слово после числа: 1 оценка, 5 оценок. [все русские формы, одна штука, несколько]
   const NOUNS = [
     [['рофлан', 'рофлана', 'рофланов', 'рофланы'], 'Soul', 'Souls'],

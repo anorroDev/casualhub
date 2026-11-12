@@ -13,7 +13,7 @@
 // Что купил — shop_owned; как это носить, решает страница: vasyan.js — окрасы и наряды Васяна, /shop.js — фон и курсор.
 // Купить можно только оформление и «заморозку» серии; ни опыта, ни званий за рофланы нет, случайных наград тоже.
 // Папка _lib не становится адресом сайта.
-import { levelsMode, ensureLevels, ACHIEVEMENTS } from './levels.js';
+import { levelsMode, ensureLevels, ACHIEVEMENTS, REWARDS } from './levels.js';
 
 // ---------- сколько рофланов за что ----------
 export const XP_PER_ROFLAN = 10; // 1 рофлан за каждые 10 опыта
@@ -93,6 +93,14 @@ export const FOODS = [
   ['cake', 'Тортик', 200],
 ].map(([name, title, price], i) => ({ id: 'vasyan.food.' + name, sec: 'vasyan', kind: 'food', title, price, unlock: price ? i + 1 : 0 }));
 const FOOD_ITEMS = FOODS;
+// оформление из «Прогресса» (рамки, цвета, стили и шрифты ника, фоны, эффекты, котик в профиле): своё с уровня награды
+// (unlock) или покупается раньше — как еда Васяна. Награды первого уровня есть у всех, их тут нет. Выбирают купленное там же,
+// в «Прогрессе» → «Оформление»; levels.js узнаёт о покупке через boughtLooks
+const LOOK_KINDS = ['frame', 'color', 'bg', 'nick', 'font', 'fx', 'pet'];
+export const lookPrice = (level) => Math.max(40, Math.round(level * 1.4) * 10);
+export const LOOK_ITEMS = REWARDS.filter((r) => LOOK_KINDS.includes(r.kind) && r.level > 1)
+  .map((r) => ({ id: 'look.' + r.id.replace(':', '.'), sec: 'look', kind: 'lk_' + r.kind, title: r.title, price: lookPrice(r.level), unlock: r.level, reward: r.id }));
+const LOOK_REWARD = new Map(LOOK_ITEMS.map((x) => [x.id, x.reward]));
 // своё ли: бесплатное, куплено или открыто уровнем
 const ownedBy = (it, st) => !it.price || st.owned.has(it.id) || (!!it.unlock && st.level >= it.unlock);
 // какая еда открылась, когда уровень вырос с from до to (для письма о новом уровне)
@@ -118,6 +126,7 @@ export const ITEMS = [
   { id: 'vasyan.outfit.headphones', sec: 'vasyan', kind: 'outfit', title: 'Наушники', price: 150 },
   { id: 'vasyan.outfit.crown', sec: 'vasyan', kind: 'outfit', title: 'Корона', price: 300 },
   ...FOOD_ITEMS,
+  ...LOOK_ITEMS,
 ];
 const BY_ID = new Map(ITEMS.map((x) => [x.id, x]));
 export const itemOf = (id) => BY_ID.get(String(id || '')) || null;
@@ -193,7 +202,7 @@ export async function shopState(env, uid) {
     wear: wearMap(worn.results || [], ownedSet),
     level,
     // Васян есть у «Первой десятки» (забрал письмо с котиком) и у всех с 25-го уровня (награда «Васян в профиле»)
-    vasyan: !!(gift.results || []).length || level >= 25,
+    vasyan: !!(gift.results || []).length || level >= 25 || ownedSet.has('look.pet'),
     hasLevel: !!row,
     freezes: row ? (row.freezes == null ? 1 : +row.freezes) : 1,
   };
@@ -244,6 +253,22 @@ export async function wear(env, uid, itemId, now = Date.now()) {
     + 'ON CONFLICT(user_id, slot) DO UPDATE SET item = excluded.item, at = excluded.at').bind(uid, it.slot, it.id, now).run();
   if (!(r.meta && r.meta.changes)) return { err: [403, 'Сначала это нужно купить.'] };
   return { ok: true, st: await shopState(env, uid) };
+}
+// купленное оформление из «Прогресса» у людей из списка: uid → Set(id наград) — для levels.js (что открыто и что видят другие)
+export async function boughtLooks(env, ids) {
+  const out = new Map();
+  const list = [...new Set((ids || []).map(String).filter(Boolean))].slice(0, 200);
+  if (!list.length) return out;
+  await ensureShop(env);
+  for (let i = 0; i < list.length; i += 90) {
+    const part = list.slice(i, i + 90);
+    const { results } = await env.DB.prepare(`SELECT user_id, item FROM shop_owned WHERE item LIKE 'look.%' AND user_id IN (${part.map(() => '?').join(', ')})`).bind(...part).all();
+    for (const r of results || []) {
+      const rid = LOOK_REWARD.get(r.item);
+      if (rid) (out.get(r.user_id) || out.set(r.user_id, new Set()).get(r.user_id)).add(rid);
+    }
+  }
+  return out;
 }
 // что надето у людей из списка — только то, что видят другие (рамка, значок, ник)
 export async function looksOf(env, ids) {

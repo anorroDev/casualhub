@@ -307,6 +307,7 @@ html.sh-cur :is(input:not([type="checkbox"], [type="radio"], [type="range"], [ty
   function picOf(it) {
     const name = tail(it.id);
     if (it.sec === 'vasyan') return vyPreview(it.id);
+    if (it.sec === 'look') return lookPic(it);
     if (it.kind === 'frame') return `<span class="sh-ava${FRAMES[name] ? ' sh-fr-' + name : ''}">${esc(me().letter)}</span>`;
     if (it.kind === 'badge') return `<span class="sh-nmp">${esc(me().name)}${badgeHTML(it.id, it.title)}</span>`;
     if (it.kind === 'nick') return `<span class="sh-nmp${NICKS[name] ? ' sh-nk-' + name : ''}">${esc(me().name)}</span>`;
@@ -319,6 +320,25 @@ html.sh-cur :is(input:not([type="checkbox"], [type="radio"], [type="range"], [ty
       return c ? `<span class="sh-curp" aria-hidden="true">${c.a.svg}${c.b.svg}</span>` : '<span class="sh-curp" aria-hidden="true"><svg viewBox="0 0 24 24" width="30" height="30" fill="currentColor"><path d="M5 3l14 8-6.2 1.5L16 20l-2.6 1.2-3.2-7.4L5 18z"/></svg></span>';
     }
     if (it.kind === 'freeze') return FLAKE.replace('<svg ', '<svg aria-hidden="true" ');
+    return '';
+  }
+
+  // превью оформления из «Прогресса»: рамки, стили и шрифты ника рисует levels-ui.js (его классы), остальное — здесь
+  const LOOK_COLORS = { colors: ['#5B74FF', '#E85FA5', '#2EAD60', '#F08A24', '#9B6BFF', '#14A3A8'], gold: ['#E2A925'] };
+  function lookPic(it) {
+    const r = it.id.slice(5); // look.<id награды>, «:» → «.»
+    const nm = esc(me().name);
+    if (it.kind === 'lk_frame') return `<span class="sh-ava sh-lkf lv-frame-${esc(r)}">${esc(me().letter)}</span>`;
+    if (it.kind === 'lk_nick') return `<span class="sh-nmp lv-nick-${esc(r)}">${nm}</span>`;
+    if (it.kind === 'lk_font') {
+      const f = r.replace(/^font\./, '');
+      try { if (window.CasualLevels && window.CasualLevels.fonts) window.CasualLevels.fonts([f], me().name); } catch (e) {}
+      return `<span class="sh-nmp lv-font-${esc(f)}">${nm}</span>`;
+    }
+    if (it.kind === 'lk_color') return `<span class="sh-gems">${(LOOK_COLORS[r] || []).map((c) => `<i style="background:${c}"></i>`).join('')}</span>`;
+    if (it.kind === 'lk_bg') return `<span class="sh-bgp sh-lkb" aria-hidden="true">${['dawn', 'night', 'city', 'forest', 'ember'].map((b) => `<i style="background-image:url(/art/bg/${b}-s.webp)"></i>`).join('')}</span>`;
+    if (it.kind === 'lk_fx') return r === 'confetti' ? confettiSvg(null) : `<span class="sh-bgp sh-lkx" aria-hidden="true"><i class="lv-fx-${esc(r)}"></i></span>`;
+    if (it.kind === 'lk_pet') return catSvg('classic');
     return '';
   }
 
@@ -347,7 +367,7 @@ html.sh-cur :is(input:not([type="checkbox"], [type="radio"], [type="range"], [ty
   }
 
   // ---------- окно ----------
-  const SECTIONS = [['profile', 'Профиль'], ['nick', 'Ник'], ['wheel', 'Колесо'], ['tier', 'Тир-листы'], ['site', 'Сайт'], ['perks', 'Бонусы'], ['vasyan', 'Васян'], ['earn', 'Как заработать']];
+  const SECTIONS = [['profile', 'Профиль'], ['nick', 'Ник'], ['look', 'Оформление'], ['wheel', 'Колесо'], ['tier', 'Тир-листы'], ['site', 'Сайт'], ['perks', 'Бонусы'], ['vasyan', 'Васян'], ['earn', 'Как заработать']];
   let ov = null, sec = 'profile', lastFocus = null, armed = null, armT = 0, msgT = 0;
   function css() {
     if (document.getElementById('shCss')) return;
@@ -385,6 +405,11 @@ html.sh-cur :is(input:not([type="checkbox"], [type="radio"], [type="range"], [ty
 .sh-it small { font-size: 12px; color: var(--ink-3, #8a8f9e); line-height: 1.3; }
 .sh-it .sh-tag { position: absolute; top: 8px; right: 8px; z-index: 1; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: var(--accent, #3550E8); color: #fff; }
 .sh-ava { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--accent, #3550E8); color: #fff; font-weight: 800; font-size: 18px; }
+/* оформление из «Прогресса»: рамка — слой поверх аватара (levels-ui.js), цвета — пиксельные камни, фоны — полоски, эффект — в окошке */
+.sh-lkf { position: relative; width: 40px; height: 40px; }
+.sh-gems { display: flex; gap: 6px; } .sh-gems i { width: 14px; height: 14px; box-shadow: inset 2px 2px 0 rgb(255 255 255 / .38), inset -2px -2px 0 rgb(0 0 0 / .32); outline: 2px solid #120e16; }
+.sh-lkb { display: grid; grid-template-columns: repeat(5, 1fr); } .sh-lkb i { background-size: cover; background-position: center; }
+.sh-lkx { background: #0d0f14; overflow: hidden; }
 .sh-nmp { display: inline-flex; align-items: center; max-width: 100%; padding: 0 6px; font-weight: 700; font-size: 16px; color: var(--ink, #f2f2f2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .sh-cf { position: relative; display: block; width: 64px; height: 64px; }
 .sh-cf img { position: absolute; width: 13px; height: 13px; border-radius: 50%; }
@@ -477,6 +502,7 @@ html.unslop .sh-it.on { box-shadow: none; }`;
     return `<div class="sh-me"><span class="sh-ava${FRAMES[f] ? ' sh-fr-' + f : ''}">${esc(me().letter)}</span><div><span class="sh-nmp${NICKS[n] ? ' sh-nk-' + n : ''}">${esc(me().name)}${badgeHTML(w.badge, titleOf(w.badge))}</span><small>Так тебя видят в профиле и в списках друзей</small></div></div>`;
   }
   const NOTES = {
+    look: 'Рамки, цвета, стили и шрифты ника, фоны и эффекты из «Прогресса». Всё откроется само на своём уровне — здесь можно взять раньше. Купленное выбирается в «Прогрессе» → «Оформление».',
     profile: 'Рамку и значок видят все, кто открывает твой профиль или видит тебя в списке друзей.',
     nick: 'Стиль ника видят все: в профиле и в списках.',
     wheel: 'Цвета секторов и конфетти на победу — на твоём Колесе.',
@@ -494,6 +520,7 @@ html.unslop .sh-it.on { box-shadow: none; }`;
     }
     if (k === 'profile') return meHTML() + note(NOTES.profile) + group('frame', 'Рамки аватара') + group('badge', 'Значки у ника');
     if (k === 'nick') return meHTML() + note(NOTES.nick) + group('nick', '');
+    if (k === 'look') return note(NOTES.look) + group('lk_frame', 'Рамки аватара') + group('lk_color', 'Цвет ника') + group('lk_nick', 'Стиль ника') + group('lk_font', 'Шрифт ника') + group('lk_bg', 'Фон профиля') + group('lk_fx', 'Эффекты') + group('lk_pet', 'Котик в профиле');
     if (k === 'wheel') return note(NOTES.wheel) + group('wheel', 'Колесо') + group('confetti', 'Конфетти');
     if (k === 'tier') return note(NOTES.tier) + group('tier', '');
     if (k === 'site') return note(NOTES.site) + group('bg', 'Фон') + group('cursor', 'Курсор');
@@ -509,6 +536,7 @@ html.unslop .sh-it.on { box-shadow: none; }`;
     else if (it.kind === 'freeze') btn = D.freezes >= D.freezeMax ? '<button type="button" class="sh-btn" disabled>Больше не помещается</button>' : buyBtn(it);
     else if (!it.owned) btn = buyBtn(it);
     else if (on) btn = `<button type="button" class="sh-btn" disabled>${food ? 'В миске' : 'Надето'}</button>`;
+    else if (it.sec === 'look') btn = '<button type="button" class="sh-btn" data-look>Выбрать</button>'; // носится в «Прогрессе» → «Оформление»
     else if (it.sec === 'vasyan' && !vyCan(it.kind)) btn = `<button type="button" class="sh-btn" disabled>${it.byLevel ? 'Открыто' : 'Куплено'}</button>`;
     else btn = `<button type="button" class="sh-btn" data-wear="${esc(it.id)}">${food ? 'Насыпать' : 'Надеть'}</button>`;
     // еда: своя за уровень — «За N-й уровень»; закрытая — цена и с какого уровня откроется сама
@@ -530,6 +558,8 @@ html.unslop .sh-it.on { box-shadow: none; }`;
       ${D.debt ? `<p class="sh-note">Часть опыта ушла (например, удалены оценки), и потрачено больше, чем заработано: нужно ещё ${coins(D.debt)}, прежде чем копить на новое.</p>` : ''}`;
   }
   async function onCard(e) {
+    // купленное оформление выбирается в «Прогрессе»: закрываем магазин и открываем вкладку
+    if (e.target.closest('[data-look]')) { close(); if (window.CasualLevels) window.CasualLevels.open('look'); return; }
     const w = e.target.closest('[data-wear]');
     if (w) {
       const it = (D.items || []).find((x) => x.id === w.dataset.wear);
