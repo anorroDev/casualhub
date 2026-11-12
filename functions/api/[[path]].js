@@ -2955,11 +2955,31 @@ const COVER_FIND = {
     }
     return out;
   },
-  // Steam: вертикальная обложка 600×900, у старых игр её может не быть — тогда шапка магазина
+  // Steam: вертикальная обложка, у старых игр её может не быть — тогда шапка магазина.
+  // У новых игр картинки лежат по путям с хешем (…/apps/<id>/<хеш>/library_capsule.jpg): по старому пути без хеша
+  // Steam отдаёт серую заглушку, а у DLC — 404 (так было с Battlefield 6). Настоящие пути и тип (0 — игра, 4 — DLC)
+  // отдаёт IStoreBrowseService/GetItems одним запросом; не ответил — старые пути, как раньше
   async game(q) {
     const d = await cachedJson('https://store.steampowered.com/api/storesearch/?l=english&cc=US&term=' + encodeURIComponent(q), null, 86400);
-    return (d.items || []).filter((i) => i && Number.isInteger(i.id) && !/\b(soundtrack|ost|artbook|dlc)\b/i.test(i.name || ''))
-      .map((i) => ({ id: String(i.id), title: String(i.name || '').slice(0, 140), sub: 'Игра', year: '', art: STEAM_ART(i.id, 'library_600x900.jpg'), alt: STEAM_ART(i.id, 'header.jpg'), tall: true }));
+    const found = (d.items || []).filter((i) => i && Number.isInteger(i.id) && !/\b(soundtrack|ost|artbook|dlc)\b/i.test(i.name || '')).slice(0, 12);
+    if (!found.length) return [];
+    let info = null;
+    try {
+      const input = { ids: found.map((i) => ({ appid: i.id })), context: { language: 'english', country_code: 'US' }, data_request: { include_assets: true } };
+      const r = await cachedJson('https://api.steampowered.com/IStoreBrowseService/GetItems/v1/?input_json=' + encodeURIComponent(JSON.stringify(input)), null, 86400);
+      info = new Map(((r && r.response && r.response.store_items) || []).filter((it) => it && it.appid).map((it) => [it.appid, it]));
+    } catch (e) { info = null; }
+    const asset = (it, file) => (file ? 'https://shared.akamai.steamstatic.com/store_item_assets/' + String(it.assets.asset_url_format || '').replace('${FILENAME}', file) : '');
+    const out = [];
+    for (const i of found) {
+      const it = info && info.get(i.id);
+      if (it && it.type !== 0) continue; // дополнения, паки, саундтреки — не игра
+      const a = it && it.assets && it.assets.asset_url_format ? it.assets : null;
+      out.push({ id: String(i.id), title: String(i.name || '').slice(0, 140), sub: 'Игра', year: '',
+        art: a ? asset(it, a.library_capsule_2x || a.library_capsule || a.header) : STEAM_ART(i.id, 'library_600x900.jpg'),
+        alt: a ? asset(it, a.header || a.main_capsule) : STEAM_ART(i.id, 'header.jpg'), tall: true });
+    }
+    return out;
   },
   async movie(q) {
     const d = await cachedJson(`https://v3.sg.media-imdb.com/suggestion/x/${encodeURIComponent(q.toLowerCase())}.json`, null, 86400);
