@@ -15,6 +15,7 @@ import { makePredictRoutes } from '../_lib/lots-predict.js';
 import { makeRiddleRoutes } from '../_lib/riddle.js';
 import { makeEveningRoutes } from '../_lib/lots-evening.js';
 import { makeBingoRoutes } from '../_lib/bingo.js';
+import { makeKingRoutes } from '../_lib/king.js';
 
 const enc = new TextEncoder();
 const ITER = 10000;
@@ -3085,8 +3086,10 @@ Object.assign(routes, makeRiddleRoutes({ json, fail, readBody, burst, lvGive }))
 Object.assign(routes, makeEveningRoutes({ json, fail, readBody, burst, currentUser, pokeRoom }));
 // бинго для стрима в сборе лотов (/api/lots/:code/bingo) — functions/_lib/bingo.js
 Object.assign(routes, makeBingoRoutes({ json, fail, readBody, burst, currentUser, lvGive }));
+// «Царь Горы» — турниры по ссылке (/api/king…) — functions/_lib/king.js, страница /king/
+Object.assign(routes, makeKingRoutes({ json, fail, readBody, burst, clientIp, currentUser, lvGive, sha256 }));
 
-const PUBLIC = new Set(['GET /lots/:code/predict', 'GET /lots/:code/veto', 'GET /lots/:code/bingo', 'GET /shop/look', 'GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid', 'GET /mail/unsub', 'POST /mail/unsub']);
+const PUBLIC = new Set(['GET /king/room', 'GET /lots/:code/predict', 'GET /lots/:code/veto', 'GET /lots/:code/bingo', 'GET /shop/look', 'GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid', 'GET /mail/unsub', 'POST /mail/unsub']);
 // код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности
 const SHARE_RE = /^[A-Za-z0-9]{12}$/;
 function shareId() {

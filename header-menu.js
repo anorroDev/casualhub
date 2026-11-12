@@ -131,7 +131,8 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     '/wheel/': '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="#3550E8"/><path d="M8 8V1.5A6.5 6.5 0 0 1 14.5 8z" fill="#EAA92C"/><path d="M8 8h6.5A6.5 6.5 0 0 1 8 14.5z" fill="#2EAD60"/><circle cx="8" cy="8" r="1.8" fill="#fff"/></svg>',
     '/tierlist/': '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1" y="1.5" width="4" height="3.6" rx="1" fill="#2EAD60"/><rect x="6" y="1.5" width="9" height="3.6" rx="1" fill="currentColor" opacity=".55"/><rect x="1" y="6.2" width="4" height="3.6" rx="1" fill="#EAA92C"/><rect x="6" y="6.2" width="6" height="3.6" rx="1" fill="currentColor" opacity=".55"/><rect x="1" y="10.9" width="4" height="3.6" rx="1" fill="#E4553F"/><rect x="6" y="10.9" width="3" height="3.6" rx="1" fill="currentColor" opacity=".55"/></svg>',
   };
-  const NAMES = { '/opinion/': 'Мнение', '/wheel/': 'Колесо', '/tierlist/': 'Тир-листы' };
+  ICON['/king/'] = '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M2.2 12.2 1.4 4.9l3.5 2.6L8 2.4l3.1 5.1 3.5-2.6-.8 7.3z" fill="#F2C230"/><rect x="2.2" y="12.6" width="11.6" height="2" rx=".6" fill="#D9A21B"/></svg>';
+  const NAMES = { '/opinion/': 'Мнение', '/wheel/': 'Колесо', '/tierlist/': 'Тир-листы', '/king/': 'Царь Горы' };
   // окно «Настройки» живёт в /settings.js и грузится при первом открытии: страницам оно не нужно, пока его не открыли
   let setLoad = null;
   function openSettings(section) {
@@ -171,7 +172,7 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     const here = location.pathname.replace(/index\.html$/, '');
 
     // «Мнение», «Колесо» и «Тир-листы» всегда на виду (кроме страницы, где ты уже находишься), с подписью
-    ['/opinion/', '/wheel/', '/tierlist/'].forEach((href) => {
+    ['/opinion/', '/wheel/', '/tierlist/', '/king/'].forEach((href) => {
       let a = bar.querySelector(`a[href="${href}"]`);
       if (here.startsWith(href)) return;
       if (!a) {
@@ -183,7 +184,7 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
       a.classList.remove('ic');
       a.classList.add('hm-nav');
       if (!a.textContent.trim()) a.insertAdjacentHTML('beforeend', `<span class="hm-t">${NAMES[href]}</span>`);
-      a.title = NAMES[href] + ' Казуала';
+      a.title = href === '/king/' ? 'Царь Горы: турниры' : NAMES[href] + ' Казуала';
       if (account) bar.insertBefore(a, account); else bar.appendChild(a);
     });
 
@@ -254,7 +255,7 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     const secs = document.createElement('nav');
     secs.className = 'hm-secs';
     secs.setAttribute('aria-label', 'Разделы');
-    secs.innerHTML = ['/opinion/', '/wheel/', '/tierlist/'].map((h) => `<a href="${h}"${here.startsWith(h) ? ' aria-current="page"' : ''}>${ICON[h]}<span>${NAMES[h]}</span></a>`).join('');
+    secs.innerHTML = ['/opinion/', '/wheel/', '/tierlist/', '/king/'].map((h) => `<a href="${h}"${here.startsWith(h) ? ' aria-current="page"' : ''}>${ICON[h]}<span>${NAMES[h]}</span></a>`).join('');
     all.after(secs);
     const lots = document.createElement('a');
     lots.className = cls + ' hm-lots';
