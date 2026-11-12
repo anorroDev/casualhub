@@ -198,6 +198,17 @@ html.lv-on .ava-wrap > .ava-ring { display: none !important; }
 .lv-tabs { position: relative; }
 .lv-soon-tip { position: fixed; z-index: 140; padding: 4px 9px; border-radius: 8px; background: var(--ink, #f3f4f6); color: var(--panel, #1b1d24); font: 700 12px/1.2 system-ui, sans-serif; pointer-events: none; white-space: nowrap; }
 .lv-body { overflow-y: auto; padding: 22px 28px 32px; display: grid; gap: 18px; align-content: start; }
+/* награды за уровни в «Обзоре» */
+.lv-gifts { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 4px 14px; }
+.lv-gifts li { display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 3px 10px 3px 3px; border-radius: 10px; font-size: 13.5px; line-height: 1.3; color: var(--ink-2, #b8bcc8); }
+.lv-gifts .l { flex: none; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; background: color-mix(in srgb, var(--ink, #fff) 7%, transparent); color: var(--ink, #f2f2f2); font-size: 12.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.lv-gifts .t { flex: 1; min-width: 0; }
+.lv-gifts li.got { color: var(--ink-3, #8a8f9c); }
+.lv-gifts li.got .l { background: color-mix(in srgb, #2EAD60 22%, transparent); color: #2EAD60; }
+.lv-gifts li.next { background: color-mix(in srgb, var(--accent, #5B74FF) 12%, transparent); color: var(--ink, #f2f2f2); }
+.lv-gifts li.next .l { background: var(--accent, #5B74FF); color: #fff; }
+.lv-gifts i { flex: none; font-style: normal; font-weight: 800; color: #2EAD60; }
+.lv-gifts b { flex: none; font-size: 11.5px; font-weight: 800; color: var(--accent, #5B74FF); }
 .lv-box { border: 1px solid var(--line, #2b2e38); border-radius: 18px; padding: 18px 20px; display: grid; gap: 10px; background: var(--panel-2, color-mix(in srgb, var(--ink, #fff) 3%, transparent)); }
 .lv-box h3 { margin: 0; font-size: 15px; }
 .lv-hero { display: flex; align-items: center; gap: 16px; }
@@ -757,6 +768,20 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     }
   }
   const pct = (a, b) => Math.min(100, Math.round((a / Math.max(1, b)) * 100));
+  // что даёт каждый уровень: оформление (rewards) и еда Васяну (foods); взятые — с галочкой, ближайшая — подсвечена
+  function levelGifts(m) {
+    const by = new Map();
+    const add = (lv, html) => { if (!by.has(lv)) by.set(lv, []); by.get(lv).push(html); };
+    (m.rewards || []).forEach((r) => add(+r.level, esc(r.title)));
+    (m.foods || []).forEach((f) => add(+f.level, `<span>Еда Васяну:</span> <span>${esc(f.title)}</span>`));
+    const lvls = [...by.keys()].filter((l) => l > 1).sort((a, b) => a - b);
+    if (!lvls.length) return '';
+    const next = lvls.find((l) => l > m.level);
+    return `<ol class="lv-gifts">${lvls.map((l) => {
+      const got = l <= m.level;
+      return `<li class="${got ? 'got' : l === next ? 'next' : ''}"><span class="l">${l}</span><span class="t">${by.get(l).join('<span class="sep"> · </span>')}</span>${got ? '<i aria-hidden="true">✓</i>' : l === next ? '<b>следующая</b>' : ''}</li>`;
+    }).join('')}</ol>`;
+  }
   // эмблемы достижений: [цвет 1, цвет 2, рисунок 24×24] — тот же вид, что у ачивок в профиле
   const ACH_ART = {
     first10: ['#F9A8D4', '#F28E4C', '<path d="M5 20v-9L4 4l4.5 3h7L20 4l-1 7v9z"/><path d="M9.5 12.5h.01M14.5 12.5h.01M11 15.5h2"/>'],
@@ -858,7 +883,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
           ${next ? `${bar(Math.round(part * 100))}<p class="lv-muted">До звания «${esc(next.title)}» ещё ${nf(next.xp - s.xp)} опыта.</p>` : '<p class="lv-muted">Это самое высокое звание сезона.</p>'}</div>
         <div class="lv-box"><h3>Звания сезона</h3><ol class="lv-rk">${list}</ol>
           <p class="lv-muted">Звание считается по опыту, набранному за сезон. Сезон длится три месяца: в конце звания у всех сбрасываются, а итог остаётся в истории.</p></div>
-        <div class="lv-box"><h3>Уровень ${m.level}</h3><p class="lv-muted">${nf(m.xp)} опыта за всё время. Уровень не сбрасывается и открывает оформление${reward ? `: на ${reward.level}-м — ${esc(reward.title)}` : ''}.</p></div>
+        <div class="lv-box"><h3>Уровень ${m.level}</h3><p class="lv-muted">${nf(m.xp)} опыта за всё время. Уровень не сбрасывается и открывает награды: оформление профиля и еду для Васяна.</p>${levelGifts(m)}</div>
         ${hist ? `<div class="lv-box"><h3>Прошлые сезоны</h3><ul class="lv-rk-hist">${hist}</ul></div>` : ''}`;
     },
     async mail() {

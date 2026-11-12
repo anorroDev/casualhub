@@ -52,6 +52,27 @@
   // что стоит на этой странице сейчас
   const uiNow = () => document.documentElement.dataset.ui || (document.documentElement.classList.contains('unslop') ? 'casual' : 'normal');
   let uiSeq = 0;
+  // мягкая смена вида: старая страница растворяется в новой (View Transitions); без него, в фоне и при «меньше движения» — сразу
+  function softSwap(fn) {
+    const root = document.documentElement;
+    if (!document.startViewTransition || document.visibilityState !== 'visible' || matchMedia('(prefers-reduced-motion: reduce)').matches) { fn(); return; }
+    if (!document.getElementById('ui-swap-css')) {
+      const st = document.createElement('style');
+      st.id = 'ui-swap-css';
+      st.textContent = 'html.ui-swap::view-transition-old(root){animation:ui-swap-out .36s cubic-bezier(.4,0,.2,1) both}html.ui-swap::view-transition-new(root){animation:ui-swap-in .36s cubic-bezier(.4,0,.2,1) both}@keyframes ui-swap-out{to{opacity:0}}@keyframes ui-swap-in{from{opacity:0}}';
+      document.head.appendChild(st);
+    }
+    root.classList.add('ui-swap');
+    let ran = false;
+    const go = () => { if (!ran) { ran = true; fn(); } };
+    try {
+      const vt = document.startViewTransition(go);
+      vt.ready.catch(() => {});
+      if (vt.updateCallbackDone) vt.updateCallbackDone.catch(() => {});
+      vt.finished.catch(() => {}).finally(() => root.classList.remove('ui-swap'));
+      setTimeout(go, 400); // переход не начался (вкладка ушла в фон) — вид всё равно сменится
+    } catch (e) { root.classList.remove('ui-swap'); go(); }
+  }
   function uiApply(id, save) {
     const v = uiIds.includes(id) ? id : 'normal';
     if (save) {
@@ -65,10 +86,12 @@
     const set = () => {
       if (done || my !== uiSeq) return;
       done = true;
-      el.classList.toggle('unslop', v !== 'normal');
-      if (withFile(v)) el.dataset.ui = v; else delete el.dataset.ui;
-      document.querySelectorAll('link[data-ui-css]').forEach((l) => { if (l.dataset.uiCss !== v) l.remove(); });
-      document.dispatchEvent(new CustomEvent('casualhub:ui', { detail: v }));
+      softSwap(() => {
+        el.classList.toggle('unslop', v !== 'normal');
+        if (withFile(v)) el.dataset.ui = v; else delete el.dataset.ui;
+        document.querySelectorAll('link[data-ui-css]').forEach((l) => { if (l.dataset.uiCss !== v) l.remove(); });
+        document.dispatchEvent(new CustomEvent('casualhub:ui', { detail: v }));
+      });
     };
     if (!withFile(v) || document.querySelector(`link[data-ui-css="${v}"]`)) { set(); return v; }
     // файл вида грузится заранее, а включается, когда загрузился: страница не мелькает наполовину оформленной

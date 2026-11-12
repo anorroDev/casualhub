@@ -8,6 +8,9 @@ import {
   ACHIEVEMENTS, REWARDS, NAME_COLORS, PROFILE_BGS, FIRST_STEPS, isScored, textLen, rankOf, award,
   SEASON_RANKS, seasonRankOf, rankFields, currentSeason, closeSeason, forgetSeason, seasonXpOf, seasonXpMany, seasonPlanLetter, fmtKyiv,
 } from './levels.js';
+import { FOODS } from './shop.js';
+// еда Васяна, которая открывается уровнем: показывается в «Прогрессе» рядом с наградами оформления
+const FOOD_GIFTS = FOODS.filter((f) => f.unlock).map((f) => ({ level: f.unlock, title: f.title }));
 import { planSeasonReminder, cancelSeasonReminder, seasonReminderOf, mailOn } from './mailout.js';
 
 // подписи для истории опыта
@@ -119,7 +122,7 @@ export function makeLevelsRoutes(h) {
         streak: { days: alive ? +row.streak || 0 : 0, best: +row.best_streak || 0, freezes: row.freezes == null ? 1 : +row.freezes, today: row.streak_day === today },
         quests, steps: steps.every((s) => s.paid) ? null : steps,
         event: ev ? { title: ev.title, kinds: ev.kinds, mult: ev.mult, until: ev.until } : null,
-        rewards: REWARDS, colors: NAME_COLORS, bgs: Object.keys(PROFILE_BGS),
+        rewards: REWARDS, foods: FOOD_GIFTS, colors: NAME_COLORS, bgs: Object.keys(PROFILE_BGS),
         recap: recapOpen(now) ? 2026 : null,
         mail: await mailUnread(env, me.id),
         vasyan: await vasyanOwned(env, me.id),
