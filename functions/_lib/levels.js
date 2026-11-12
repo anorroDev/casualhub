@@ -109,6 +109,7 @@ export const RULES = {
   lots_host: { xp: 30, day: 1 }, // провёл сбор лотов до победителя (от 3 участников)
   lot_add: { xp: 5, day: 3 }, // добавил лот в чужой сбор
   lot_win: { xp: 15 }, // твой лот победил
+  riddle: { xp: 25, day: 1 }, // отгадал загадку дня (opinion/riddle.js)
   predict_win: { xp: 20, day: 5 }, // угадал победителя сбора лотов (прогноз; не в своём сборе, от трёх участников)
   visit: { xp: 5, day: 1 }, // зашёл на сайт сегодня
   invite: { xp: 100 }, // друг пришёл по ссылке и дошёл до 3-го уровня (обоим)
@@ -133,6 +134,7 @@ export const ACHIEVEMENTS = [
   { code: 'first_steps', title: 'Первые шаги', desc: 'Прошёл все первые шаги', special: true },
   { code: 'critic', title: 'Критик', desc: 'Оценки', metric: ['rate', 'import'], tiers: [10, 100, 500] },
   { code: 'reviewer', title: 'Рецензент', desc: 'Отзывы от 100 символов', metric: 'review', tiers: [5, 25, 100] },
+  { code: 'riddler', title: 'Отгадчик', desc: 'Отгаданные загадки дня', metric: 'riddle', tiers: [5, 25, 100] },
   { code: 'omnivore', title: 'Всеядный', desc: 'Оценки в разных категориях', metric: '@cats', tiers: [3, 5, 8] },
   { code: 'finisher', title: 'Довёл до конца', desc: 'Оценил то, что было «В планах»', metric: 'plan_done', tiers: [5, 25, 100] },
   { code: 'moved', title: 'Переезд', desc: 'Перенёс оценки из Letterboxd', metric: 'import', tiers: [1] },

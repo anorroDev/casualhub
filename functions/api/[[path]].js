@@ -12,6 +12,7 @@ import { makeLevelsRoutes, acceptInvite, tzOf, ensurePast } from '../_lib/levels
 import { makeShopRoutes } from '../_lib/shop-api.js';
 import { makeMailoutRoutes, rememberLang } from '../_lib/mailout.js';
 import { makePredictRoutes } from '../_lib/lots-predict.js';
+import { makeRiddleRoutes } from '../_lib/riddle.js';
 
 const enc = new TextEncoder();
 const ITER = 10000;
@@ -3076,6 +3077,8 @@ Object.assign(routes, makeMailoutRoutes({
 
 // прогнозы на победителя сбора (/api/lots/:code/predict) — functions/_lib/lots-predict.js
 Object.assign(routes, makePredictRoutes({ json, fail, readBody, burst, currentUser, lvGive }));
+// загадка дня (/api/riddle…) — functions/_lib/riddle.js
+Object.assign(routes, makeRiddleRoutes({ json, fail, readBody, burst, lvGive }));
 
 const PUBLIC = new Set(['GET /lots/:code/predict', 'GET /shop/look', 'GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid', 'GET /mail/unsub', 'POST /mail/unsub']);
 // код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности
