@@ -3095,7 +3095,7 @@ Object.assign(routes, makeRiddleRoutes({ json, fail, readBody, burst, lvGive }))
 // «Вечер с друзьями»: вето в сборе лотов (/api/lots/:code/veto, /evening) — functions/_lib/lots-evening.js
 Object.assign(routes, makeEveningRoutes({ json, fail, readBody, burst, currentUser, pokeRoom }));
 // бинго для стрима в сборе лотов (/api/lots/:code/bingo) — functions/_lib/bingo.js
-Object.assign(routes, makeBingoRoutes({ json, fail, readBody, burst, currentUser, lvGive }));
+Object.assign(routes, makeBingoRoutes({ json, fail, readBody, burst, currentUser, lvGive, pokeRoom }));
 // «Царь Горы» — турниры по ссылке (/api/king…) — functions/_lib/king.js, страница /king/
 Object.assign(routes, makeKingRoutes({ json, fail, readBody, burst, clientIp, currentUser, lvGive, sha256 }));
 // описание и трейлер для карточки «В планах» на колесе (functions/_lib/plan-info.js)

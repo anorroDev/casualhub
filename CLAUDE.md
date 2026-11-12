@@ -65,6 +65,7 @@
 - Каждый режим — свой модуль в `functions/_lib/` с `make…Routes(h)`, подключённый в API одной строкой: `king.js` («Царь Горы», `/api/king…`, страница `/king/`), `riddle.js` («Загадка дня», `/api/riddle…`, `opinion/riddle.js`), `lots-predict.js`, `lots-evening.js`, `bingo.js` (прогнозы, вечер с друзьями и бинго — `/api/lots/:code/predict|veto|evening|bingo`, файлы `lots/*.js`), `tiercoop.js` («Тир-лист вместе», `/api/tiercoop…`, `tierlist/coop.js`).
 - Таблицы режимов создаются сами (`CREATE TABLE IF NOT EXISTS`) и попадают в копию. Опыт — правила в `RULES`: `riddle`, `predict_win`, `bingo_win`, `king_host`, `king_vote`, `tier_coop`, `tier_coop_host`.
 - Модули страницы сбора получают снимок событием `casualhub:lots` (его шлёт `paintAll` в `lots/app.js`) и ставят свой блок в колонку лотов. Вето убирает вариант из прокрутки в `liveLots` (`lots-live.js`) — так правило действует и в комнате rt.
+- Чтобы зрители узнали о перемене в модуле сразу, а не своим частым опросом, сервер меняет метку в снимке колеса: у бинго это `xb` (`stamp` в `bingo.js`: `json_set` в `lot_rooms.live`, потом `pokeRoom`). Модуль сравнивает метку снимка с той, что пришла в его ответе, и перечитывает себя. «Открыт/закрыт» у прогнозов страница берёт прямо из снимка (`spin`, `winner`, `hist`, `outIds` — то же правило, что `predictOpen`).
 - Загадки — список `POOL` в `riddle.js`: день по Киеву, №1 — 12 ноября 2026, порядок перемешан постоянным зерном. Новые загадки дописывай в конец списка; ответ и варианты написания проверяет `tests/riddle.test.mjs`.
 
 ## Письма об обновлениях
