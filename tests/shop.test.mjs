@@ -234,7 +234,7 @@ test('каталог: id уникальны, цены целые, у Васян�
   assert.equal(new Set(ids).size, ids.length);
   for (const x of S.ITEMS) assert.ok(Number.isInteger(x.price) && x.price >= 0, x.id);
   const skins = S.ITEMS.filter((x) => x.kind === 'skin').map((x) => x.id.split('.').pop());
-  assert.deepEqual(skins.sort(), ['black', 'calico', 'classic', 'ghost', 'ginger', 'siamese', 'tabby', 'white']);
+  assert.deepEqual(skins.sort(), ['black', 'btabby', 'calico', 'classic', 'ghost', 'ginger', 'siamese', 'tabby', 'white']);
   const outfits = S.ITEMS.filter((x) => x.kind === 'outfit').map((x) => x.id.split('.').pop());
   assert.deepEqual(outfits.sort(), ['bow', 'crown', 'glasses', 'hat', 'headphones', 'none', 'scarf']);
 });

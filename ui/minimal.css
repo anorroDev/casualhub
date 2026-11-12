@@ -8,8 +8,8 @@
 /* ---------- основа ---------- */
 html[data-ui="minimal"]:root {
   --v-font: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
-  --v-ease: cubic-bezier(.2, .8, .2, 1);
-  --mo-in: .26s; --mo-ease: var(--v-ease); --mo-hop: -2px;
+  --v-ease: cubic-bezier(.32, .72, 0, 1);
+  --mo-in: .34s; --mo-ease: var(--v-ease); --mo-hop: -2px;
   --v-hair: color-mix(in srgb, var(--ink) 9%, transparent);
   --v-fill: color-mix(in srgb, var(--ink) 6%, transparent);
   --v-fill-2: color-mix(in srgb, var(--ink) 11%, transparent);
@@ -24,7 +24,8 @@ html[data-ui="minimal"]:root {
 html[data-ui="minimal"] body { letter-spacing: -.006em; line-height: 1.55; }
 html[data-ui="minimal"] :is(button, input, select, textarea) { font-family: var(--v-font); }
 /* чистый фон без звёзд и сетки точек */
-html[data-ui="minimal"]::after, html[data-ui="minimal"] body::after { content: none !important; }
+/* фон сайта (звёзды или купленный в магазине) остаётся и в этом виде — только тише, под спокойный стиль */
+html[data-ui="minimal"]::after, html[data-ui="minimal"] body::after { opacity: .45; }
 
 /* ---------- воздух ---------- */
 html[data-ui="minimal"] .page { padding-block: 30px 64px; }
@@ -120,8 +121,8 @@ html[data-ui="minimal"] :is(.lv-bar, .meter i, .bc, .pv-bar b, .spark i) { borde
 html[data-ui="minimal"] .lv-bar::after { border-radius: 0 999px 999px 0; }
 
 /* ---------- движение: спокойное появление — прозрачность и сдвиг на несколько пикселей или лёгкий масштаб ---------- */
-@keyframes mi-in { from { opacity: 0; transform: translateY(6px); } }
-@keyframes mi-pop { from { opacity: 0; transform: scale(.98); } }
+@keyframes mi-in { from { opacity: 0; transform: translateY(4px) scale(.985); filter: blur(4px); } }
+@keyframes mi-pop { from { opacity: 0; transform: scale(.96); filter: blur(6px); } }
 @keyframes mi-fade { from { opacity: 0; } }
 html[data-ui="minimal"] :is(.title, .wordmark) { animation: mi-fade var(--mo-in) var(--v-ease) backwards; } /* буквы внутри поднимаются сами */
 html[data-ui="minimal"] :is(.card, .app, .tile, .stat, .lv-box, .lv-bi, .lv-ach, .rt, .st-box, .lv-letter, .fd) { animation: mi-in var(--mo-in) var(--v-ease) backwards; }
