@@ -2005,6 +2005,14 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
 
   const ANIM_MAX = 1.3 * 1048576, ANIM_MAX_MB = '1,3', AVA_ANIM_MAX = 1048576;
   const asDataUrl = (f) => new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(f); });
+  // большая анимация (GIF, WebP) — ужать в браузере до лимита: /gif-shrink.js грузится только тут. data URL или null
+  const shrinkAnim = async (f, opt) => {
+    try {
+      if (!window.CasualGif) await window.CasualUtil.script('/gif-shrink.js', () => !!window.CasualGif);
+      const r = await window.CasualGif.shrink(f, opt);
+      return r ? r.data : null;
+    } catch (e) { return null; }
+  };
   // картинку «по размеру» w×h: обрезаем по центру, как background-size: cover
   const fitImage = (bmp, w, h, type, q) => {
     const c = document.createElement('canvas');
@@ -2084,14 +2092,22 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     async function setAvatar(f) {
       if (!f) return;
       if (!/^image\//.test(f.type)) { toast('Нужна картинка: JPG, PNG, WebP или GIF'); return; }
-      const animated = /^image\/(gif|webp)$/.test(f.type) && f.size <= AVA_ANIM_MAX;
-      if (f.type === 'image/gif' && f.size > AVA_ANIM_MAX) toast('GIF больше 1 МБ, поставлю его первый кадр без анимации');
+      const big = /^image\/(gif|webp)$/.test(f.type) && f.size > AVA_ANIM_MAX;
+      let animated = /^image\/(gif|webp)$/.test(f.type) && !big;
       wrap.classList.add('busy');
       try {
         const bmp = await createImageBitmap(f);
         const still = fitImage(bmp, 160, 160, 'image/jpeg', 0.88); // первый кадр, квадратом
         if (bmp.close) bmp.close();
-        const anim = animated ? await asDataUrl(f) : null;
+        // большая анимация: ужимаем в браузере до лимита (реже кадры, меньше цветов, меньше размер); не вышло — первый кадр
+        let shrunk = null;
+        if (big) {
+          toast('Анимация больше 1 МБ — ужимаю, чтобы влезла…');
+          shrunk = await shrinkAnim(f, { square: true, size: 200, max: AVA_ANIM_MAX });
+          if (shrunk) animated = true;
+          else if (f.type === 'image/gif') toast('Ужать эту анимацию не вышло — поставлю её первый кадр');
+        }
+        const anim = animated ? shrunk || (await asDataUrl(f)) : null;
         wrap.classList.remove('busy');
         if (!(await confirmPic(anim || still, 'Поставить этот аватар?', 'Поставить'))) return;
         wrap.classList.add('busy');
@@ -2305,7 +2321,13 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       // GIF и WebP могут быть анимированными: их не перерисовываем, а ставим как есть, чтобы анимация осталась
       if (/^image\/(gif|webp)$/.test(f.type)) {
         if (f.size <= ANIM_MAX) { apply(await asDataUrl(f), true); return; }
-        if (f.type === 'image/gif') { say(`Анимированный баннер должен весить до ${ANIM_MAX_MB} МБ, этот ${(f.size / 1048576).toFixed(1)} МБ. Сожми GIF или возьми WebP.`, true); return; }
+        // большая анимация: ужимаем в браузере до лимита; не вышло — GIF не ставим (объясняем), WebP — первым кадром
+        say('Анимация большая — ужимаю, чтобы влезла…');
+        banner.classList.add('busy');
+        const d = await shrinkAnim(f, { box: [640, 256], max: ANIM_MAX });
+        banner.classList.remove('busy');
+        if (d) { say(''); apply(d, true); return; }
+        if (f.type === 'image/gif') { say(`Ужать эту анимацию до ${ANIM_MAX_MB} МБ не вышло. Возьми GIF покороче или поменьше.`, true); return; }
       }
       try {
         const bmp = await createImageBitmap(f);
