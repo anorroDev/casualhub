@@ -142,6 +142,28 @@ button.kg-side:disabled { cursor: default; }
 @keyframes kg-fill { from { transform: scaleX(0); } }
 .kg-wait small { font-size: 12.5px; font-weight: 700; color: var(--ink-3); }
 .kg-ctl { justify-content: center; margin-top: 12px; }
+/* кто в комнате: зрители (ведущий не в счёт). В бою с голосованием — проголосовал (галочка), «пас» или ещё думает */
+.kg-room { max-width: 640px; margin: 16px auto 0; text-align: center; }
+.kg-room .label { display: block; margin: 0 0 8px; }
+.kg-pps { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.kg-pp { display: inline-flex; align-items: center; gap: 6px; max-width: 190px; min-width: 0; padding: 3px 10px 3px 3px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2, var(--panel)); font-size: 12.5px; font-weight: 700; color: var(--ink-2); transition: border-color .2s, opacity .2s; }
+.kg-pp a { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: inherit; text-decoration: none; }
+.kg-pp a:hover { color: var(--accent); }
+.kg-pp-ava { flex: none; width: 22px; height: 22px; display: grid; place-items: center; border-radius: 50%; background: var(--c, var(--accent)); color: #fff; font-size: 11.5px; font-weight: 800; line-height: 1; }
+.kg-pp-st { flex: none; display: inline-grid; place-items: center; font-style: normal; font-size: 11.5px; font-weight: 800; }
+.kg-pp.v { border-color: color-mix(in srgb, var(--good) 55%, var(--line)); color: var(--ink); }
+.kg-pp.v .kg-pp-st { color: var(--good); }
+.kg-pp.x { color: var(--ink-3); }
+.kg-pp.w { opacity: .8; }
+.kg-pp.w .kg-pp-st { color: var(--ink-3); animation: kg-think 1.4s ease-in-out infinite; }
+.kg-pp.in { animation: kg-pp-in .32s cubic-bezier(.2, .8, .2, 1) backwards; }
+.kg-pp.pop { animation: kg-pp-pop .42s cubic-bezier(.34, 1.56, .64, 1); }
+@keyframes kg-pp-in { from { opacity: 0; transform: translateY(6px) scale(.9); } }
+@keyframes kg-pp-pop { 40% { transform: scale(1.12); } }
+@keyframes kg-think { 50% { opacity: .35; } }
+.kg-pass { display: flex; justify-content: center; margin-top: 12px; }
+.kg-pass .btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+html.unslop:not([data-ui]) :is(.kg-pp.in, .kg-pp.pop) { animation: none; }
 /* победитель турнира */
 .kg-champ { display: grid; justify-items: center; gap: 8px; padding: 4px 0 2px; text-align: center; }
 .kg-champ-art { position: relative; margin-top: 30px; }
@@ -227,12 +249,28 @@ button.kg-side:disabled { cursor: default; }
 }
 @media (prefers-reduced-motion: reduce) {
   .kg-line { display: none; }
-  .kg .card, .kg-person.new, .kg-decide *, .kg-enter, .kg-enter * { animation: none !important; }
+  .kg .card, .kg-person.new, .kg-decide *, .kg-enter, .kg-enter *, .kg-pp, .kg-pp * { animation: none !important; }
   .kg-side, .kg-bar, .kg-seg button, .kg-pk-it { transition: none; }
 }
 `;
   document.head.appendChild(css);
   view.classList.add('kg');
+  // заголовок по буквам (как на других страницах режимов: колесо, сбор лотов, тир-листы) и въезд шапки при загрузке.
+  // Стили букв (.title .ch) и въезда (html.intro) — в king/index.html. Перевод (lang-en) к этому времени уже заменил текст
+  (() => {
+    const title = document.getElementById('kTitle');
+    if (!title || calm()) return;
+    const text = title.textContent.trim();
+    let i = 0;
+    title.setAttribute('aria-label', text);
+    title.innerHTML = text.split(' ').map((w) => `<span class="w" aria-hidden="true">${[...w].map((c) => `<span class="ch" style="--i:${i++}">${esc(c)}</span>`).join('')}</span>`).join(' ');
+    document.documentElement.classList.add('intro');
+    setTimeout(() => document.documentElement.classList.remove('intro'), 1400);
+  })();
+  // кто в комнате: кружок с первой буквой (цвета — как у чата) и ссылка на профиль
+  const COLORS = ['#3550E8', '#EAA92C', '#2EAD60', '#EC4899', '#9333EA', '#06B6D4', '#F97316', '#14B8A6'];
+  const colorOf = (id) => COLORS[[...String(id)].reduce((a, c) => a + c.charCodeAt(0), 0) % COLORS.length];
+  const profUrl = (u) => (/^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/.test(u.handle || '') ? '/profile/' + u.handle : '/profile/?id=' + encodeURIComponent(u.id));
 
   const svg = (w, path, sw) => `<svg viewBox="0 0 16 16" width="${w}" height="${w}" fill="none" stroke="currentColor" stroke-width="${sw || 1.8}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${path}</svg>`;
   const ICON = {
@@ -249,7 +287,7 @@ button.kg-side:disabled { cursor: default; }
   // ---------- общее: перерисовка кусками, картинки, названия ----------
   // фокус: поле ввода — с текстом и курсором, кнопка — та же по data-*, чтобы клавиатура не теряла место
   const focusSel = (a) => {
-    for (const k of ['k', 'del', 'rule', 'set', 'pkTab', 'delI', 'rm']) {
+    for (const k of ['k', 'del', 'rule', 'set', 'pkTab', 'delI', 'rm', 'vote']) {
       if (a.dataset && a.dataset[k] != null) {
         const attr = 'data-' + k.replace(/[A-Z]/g, (c) => '-' + c.toLowerCase());
         return `[${attr}="${CSS.escape(a.dataset[k])}"]${a.dataset.v != null ? `[data-v="${CSS.escape(a.dataset.v)}"]` : ''}`;
@@ -585,7 +623,7 @@ button.kg-side:disabled { cursor: default; }
   let logLen = -1, holdKey = '', holdUntil = 0;
   let shown = '', enteredN = 0, decided = '', picked = null, cheered = false, newIds = new Set();
   let editing = false, delArmed = false, delT = 0;
-  let $head, $stage, $note, $ctl, $msg, $side, $log, $own;
+  let $head, $stage, $note, $ctl, $room, $msg, $side, $log, $own, roomWas = null;
   const now = () => Date.now() + off;
   const P = (id) => people.get(id) || { id, n: '…', img: '' };
   const lastLog = () => { const l = R && R.state.log; return l && l.length ? l[l.length - 1] : null; };
@@ -693,14 +731,21 @@ button.kg-side:disabled { cursor: default; }
     if (ph.startsWith('wait:')) return `<div class="kg-wait"><span class="kg-line" aria-hidden="true"><i></i></span><small>${T('Следующий бой…')}</small></div>`;
     let t;
     if (st.mode === 'vote') {
-      const who = own ? T('Закрой голосование, когда хватит голосов.') : token() ? T(R.mine ? 'Твой голос учтён, можно передумать.' : 'Нажми на того, кто лучше.') : T('Войди, чтобы голосовать.');
-      const clock = bt.ends ? `<span class="kg-clock"><span class="kg-clock-on">${T('Голосование')}: <b data-k-tick></b> ${T('с')}.</span><span class="kg-clock-end" hidden>${T('Подводим итоги…')}</span></span> ` : bt.idle ? `${T('Никто не проголосовал — решает ведущий.')} ` : '';
+      // в комнате кто-то есть: бой закрывается сам, как только все проголосуют или скажут «пас»
+      const ppl = R.people || [], said = ppl.filter((p) => p.v || p.x).length;
+      const all = ppl.length ? ' ' + T('Бой закончится, как только проголосуют все в комнате.') : '';
+      const who = own
+        ? (ppl.length ? T(`Проголосовали ${said} из ${ppl.length}.`) + all : T('Закрой голосование, когда хватит голосов.'))
+        : token() ? T(R.mine === 'x' ? 'Ты сказал «пас», можно передумать.' : R.mine ? 'Твой голос учтён, можно передумать.' : 'Нажми на того, кто лучше, или «Пас».') + all : T('Войди, чтобы голосовать.');
+      const clock = bt.ends ? `<span class="kg-clock"><span class="kg-clock-on">${T('Голосование')}: <b data-k-tick></b> ${T('с')}.</span><span class="kg-clock-end" hidden>${T('Подводим итоги…')}</span></span> ` : bt.idle ? `${T(bt.pass ? 'Все сказали «пас» — решает ведущий.' : 'Никто не проголосовал — решает ведущий.')} ` : '';
       t = clock + who;
     } else t = own ? T('Нажми на победителя боя.') : T('Бой решает ведущий.');
     return `<p class="kg-note">${t}</p>`;
   }
   function ctlHTML(ph) {
-    if (!R.room.own || !ph.startsWith('bout:') || R.state.mode !== 'vote') return '';
+    if (!ph.startsWith('bout:') || R.state.mode !== 'vote') return '';
+    // зрителю — «Пас»: не голосует ни за кого, но и бой не держит (когда высказались все в комнате, он закрывается)
+    if (!R.room.own) return token() ? `<div class="kg-pass"><button type="button" class="btn ghost small" data-vote="x" aria-pressed="${R.mine === 'x'}">${T(R.mine === 'x' ? 'Ты сказал «пас»' : 'Пас')}</button></div>` : '';
     return `<div class="kg-acts kg-ctl"><button type="button" class="btn primary small" data-k="close">${T('Закрыть голосование')}</button><button type="button" class="btn ghost small" data-win="a">${T('Победил левый')}</button><button type="button" class="btn ghost small" data-win="b">${T('Победил правый')}</button></div>`;
   }
   const xBtn = (x) => `<button type="button" class="kg-x" data-rm="${esc(x.id)}" title="${esc(T('Убрать'))}" aria-label="${esc(T('Убрать'))}: ${esc(x.n)}">${ICON.x}</button>`;
@@ -756,10 +801,38 @@ button.kg-side:disabled { cursor: default; }
   }
   function frame() {
     if ($head && $head.isConnected) return;
-    view.innerHTML = `<section class="card kg-main"><div id="kgHead"></div><div id="kgStage" class="kg-stage"></div><div id="kgNote"></div><div id="kgCtl"></div><div id="kgMsgMain"></div></section>
+    view.innerHTML = `<section class="card kg-main"><div id="kgHead"></div><div id="kgStage" class="kg-stage"></div><div id="kgNote"></div><div id="kgCtl"></div><div id="kgRoom"></div><div id="kgMsgMain"></div></section>
       <section class="card" id="kgSide" hidden></section><section class="card" id="kgLog" hidden></section><section class="card kg-own" id="kgOwn" hidden></section>`;
     const $ = (id) => document.getElementById(id);
-    $head = $('kgHead'); $stage = $('kgStage'); $note = $('kgNote'); $ctl = $('kgCtl'); $msg = $('kgMsgMain'); $side = $('kgSide'); $log = $('kgLog'); $own = $('kgOwn');
+    $head = $('kgHead'); $stage = $('kgStage'); $note = $('kgNote'); $ctl = $('kgCtl'); $room = $('kgRoom'); $msg = $('kgMsgMain'); $side = $('kgSide'); $log = $('kgLog'); $own = $('kgOwn');
+    roomWas = null;
+  }
+  // кто сейчас в комнате (зрители, без ведущего). В бою с голосованием — кто проголосовал, кто «пас», кто ещё думает
+  // (за кого голосовал — не видно до конца боя: сервер этого и не отдаёт)
+  function roomHTML(ph) {
+    const list = R.people || [];
+    if (!list.length || R.state.status === 'done') return '';
+    const live = ph.startsWith('bout:') && R.state.mode === 'vote';
+    const items = list.map((p) => {
+      const s = live ? (p.v ? 'v' : p.x ? 'x' : 'w') : '';
+      const tag = s === 'v' ? `<i class="kg-pp-st" title="${esc(T('проголосовал'))}" aria-label="${esc(T('проголосовал'))}">${ICON.check}</i>`
+        : s === 'x' ? `<i class="kg-pp-st">${T('пас')}</i>` : s === 'w' ? `<i class="kg-pp-st" title="${esc(T('думает'))}" aria-label="${esc(T('думает'))}">…</i>` : '';
+      return `<li class="kg-pp${s ? ' ' + s : ''}" data-uid="${esc(p.id)}" data-s="${s}"><span class="kg-pp-ava" style="--c:${colorOf(p.id)}" aria-hidden="true">${esc(letter(p.name))}</span><a href="${esc(profUrl(p))}">${esc(p.name)}</a>${tag}</li>`;
+    }).join('');
+    const said = list.filter((p) => p.v || p.x).length;
+    return `<div class="kg-room"><h3 class="label">${T('В комнате')} · ${list.length}${live ? ` · ${T('проголосовали')} ${said}/${list.length}` : ''}</h3><ul class="kg-pps">${items}</ul></div>`;
+  }
+  // пришёл — фишка въезжает; проголосовал или сказал «пас» — подпрыгивает (при первой отрисовке — без движения)
+  function roomMotion() {
+    const now = new Map([...$room.querySelectorAll('.kg-pp')].map((li) => [li.dataset.uid, li.dataset.s]));
+    if (roomWas && !calm()) {
+      $room.querySelectorAll('.kg-pp').forEach((li) => {
+        const was = roomWas.get(li.dataset.uid), s = li.dataset.s;
+        if (was === undefined) li.classList.add('in');
+        else if (s && s !== was && (s === 'v' || s === 'x')) li.classList.add('pop');
+      });
+    }
+    roomWas = now;
   }
   function paintRoom() {
     if (!R) return;
@@ -775,6 +848,7 @@ button.kg-side:disabled { cursor: default; }
     picked = null;
     if (put($note, noteHTML(ph))) line(ph);
     put($ctl, ctlHTML(ph));
+    if (put($room, roomHTML(ph))) roomMotion();
     put($msg, msg && msgAt === 'main' ? `<p class="kg-msg${msgOk ? ' ok' : ''}" role="status">${esc(msg)}</p>` : '');
     put($side, st.status === 'ready' ? '' : st.fmt === 'hill' ? hillHTML() : bracketHTML());
     put($log, logHTML());

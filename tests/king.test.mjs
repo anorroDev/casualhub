@@ -1,7 +1,7 @@
 // «Царь Горы»: посев сетки, бои горы и сетки, отмена, голоса. node --test tests/king.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { seedOrder, cleanConfig, newState, startState, decide, closeByVotes, undoLast, finishEarly, buildRounds, addPeople, removePerson, setRules, bracketErr } from '../functions/_lib/king.js';
+import { seedOrder, cleanConfig, newState, startState, decide, closeByVotes, undoLast, finishEarly, buildRounds, addPeople, removePerson, setRules, bracketErr, allIn, closeAll } from '../functions/_lib/king.js';
 
 const cfg = (b) => { const c = cleanConfig(b); assert.ok(!c.err, c.err); return c; };
 test('посев сетки: сильные встречаются как можно позже', () => {
@@ -123,4 +123,28 @@ test('свои картинки участников (обложки из «Мн
   assert.deepEqual(more, [{ id: st.p[4].id, data: small }]);
   // без списка картинок (старый вызов) участник остаётся без картинки, а не с «@» без данных
   assert.equal(newState(cleanConfig({ fmt: 'hill', p: [{ n: 'A', img: small }, { n: 'B' }] })).p[0].img, '');
+});
+
+test('все в комнате высказались: голоса есть — бой закрывается сразу, все «пас» — ждём ведущего', () => {
+  assert.equal(allIn([]), false, 'никого — ждать некого, но и закрывать не по кому');
+  assert.equal(allIn([{ pick: 'a' }, { pick: null }]), false);
+  assert.equal(allIn([{ pick: 'a' }, { pick: 'x' }, { pick: 'b' }]), true);
+  const st = newState(cfg({ fmt: 'hill', mode: 'vote', timer: 60, p: ['A', 'B', 'C'] }));
+  startState(st, 0);
+  const n = st.bout.n;
+  assert.ok(closeAll(st, { a: 0, b: 0 }, -1).same, 'бой ещё не открылся');
+  // все сказали «пас»: таймер стоит, решает ведущий; второй раз — без перемен
+  assert.ok(closeAll(st, { a: 0, b: 0 }, 10).idle);
+  assert.deepEqual([st.bout.n, st.bout.ends, st.bout.idle, st.bout.pass], [n, 0, 1, 1]);
+  assert.ok(closeAll(st, { a: 0, b: 0 }, 11).same);
+  // кто-то передумал и проголосовал — бой закрывается по голосам, отметка «все»
+  const r = closeAll(st, { a: 1, b: 2 }, 12);
+  assert.equal(r.closed.w, 'b');
+  assert.equal(r.closed.by, 'all');
+  assert.deepEqual([r.closed.va, r.closed.vb], [1, 2]);
+  assert.notEqual(st.bout.n, n);
+  // в бою, который решает ведущий, голосов нет — закрывать нечего
+  const host = newState(cfg({ fmt: 'hill', p: ['A', 'B'] }));
+  startState(host, 0);
+  assert.ok(closeAll(host, { a: 1, b: 0 }, 10).same);
 });
