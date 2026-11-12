@@ -216,6 +216,20 @@
     const cy = cat && year ? `${cat}<span> · ${year}</span>` : cat || year || '';
     return `<span>${cy}</span>${imdb}`;
   }
+  // год из описания оценки («2010, боевик…»): тот же, по которому ищется IMDb
+  const planYear = (r) => +(String(r.meta || '').match(/(?:^|\D)((?:19|20)\d{2})(?!\d)/) || [])[1] || 0;
+  // рейтинг IMDb, если уже известен (null — нет или ещё не пришёл)
+  const planImdb = (r) => { const I = window.CasualIMDb; if (!I || !I.isMovie(r.catName)) return null; const d = I.peek({ name: r.name, year: planYear(r) }); return d && d.r != null ? d.r : null; };
+  // порядок по IMDb: нужны рейтинги всех фильмов списка — спрашиваем по 40 (сколько сервер берёт за раз), каждый один раз
+  const imdbAsked = new Set();
+  function wantImdbAll(rows) {
+    const I = window.CasualIMDb;
+    if (!I) return;
+    const need = rows.filter((r) => I.isMovie(r.catName)).map((r) => ({ name: r.name, year: planYear(r) })).filter((x) => I.peek(x) === undefined && !imdbAsked.has(I.keyOf(x))).slice(0, 40);
+    if (!need.length) return;
+    need.forEach((x) => imdbAsked.add(I.keyOf(x)));
+    I.want(need).then(() => { if (plansPane && /^imdb/.test(plansSort)) renderPlans(); });
+  }
   // жанры — из описания оценки («2006, боевик, триллер»), как в фильтре жанров Мнения
   const planGenres = (r) => [...new Set(String(r.meta || '').split(/\s*[,;]\s*/).map((x) => x.trim().toLowerCase()).filter((x) => x && x.length <= 24 && !/^\d{4}$/.test(x)))];
   const planAdded = (r) => +new Date(r.createdAt || r.updatedAt || 0) || 0;
@@ -229,6 +243,11 @@
       rows = rows.filter((r) => { const t = planAdded(r); return t && (plansWhen === 'old' ? now - t > 365 * D : now - t <= +plansWhen * D); });
     }
     const byName = (x, y) => x.name.localeCompare(y.name, 'ru', { sensitivity: 'base', numeric: true });
+    // по IMDb: без рейтинга (игры, не нашлось) — в конце, по названию
+    if (plansSort === 'imdb' || plansSort === 'imdb-low') {
+      const sg = plansSort === 'imdb' ? -1 : 1;
+      return rows.map((r) => [r, planImdb(r)]).sort(([x, a], [y, b]) => (a == null && b == null ? byName(x, y) : a == null ? 1 : b == null ? -1 : sg * (a - b) || byName(x, y))).map(([r]) => r);
+    }
     return rows.slice().sort(plansSort === 'name' ? byName : plansSort === 'old' ? (x, y) => planAdded(x) - planAdded(y) || byName(x, y) : (x, y) => planAdded(y) - planAdded(x) || byName(x, y));
   }
   // вкладки: «Имена» — участники колеса, «В планах» — список из Мнения на их месте
@@ -366,14 +385,15 @@
     $('#plansSort').value = plansSort;
     $('#plansFilt').hidden = all.length < 2;
     const rows = plansRows(all);
+    if (/^imdb/.test(plansSort)) wantImdbAll(rows);
     planById.clear();
     rows.forEach((r) => planById.set(String(r.id), r));
     $('#plansList').innerHTML = rows.map((r) => {
       const on = onWheel.has(nameKey(r.name));
       const added = planAdded(r) ? new Date(planAdded(r)).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
-      return `<li class="plrow${on ? ' on' : ''}"${added ? ` title="Добавлено в планы ${added}"` : ''}>
+      return `<li class="plrow${on ? ' on' : ''}" data-id="${esc(r.id)}"${added ? ` title="Добавлено в планы ${added}"` : ''}>
         <span class="pl-pic" data-pic="${esc(r.id)}" aria-hidden="true">${esc((String(r.name).trim()[0] || '?').toUpperCase())}</span>
-        <div class="e-text"><span class="e-name">${esc(r.name)}</span><span class="e-sub">${planSub(r)}</span></div>
+        <div class="e-text"><button type="button" class="e-name pl-open">${esc(r.name)}</button><span class="e-sub">${planSub(r)}</span></div>
         <button type="button" class="pl-btn" data-plan="${esc(r.id)}" aria-pressed="${on}" aria-label="${on ? 'Убрать с колеса' : 'Добавить на колесо'}: ${esc(r.name)}" title="${on ? 'Убрать с колеса' : 'Добавить на колесо'}">${on ? ICON.check : ICON.add}</button>
       </li>`;
     }).join('');
@@ -387,6 +407,134 @@
     $('#plansAll').parentElement.hidden = !rows.length;
     if (window.CasualIMDb) window.CasualIMDb.fill($('#plansList'));
     hydratePlanPics();
+  }
+// ---------- карточка «В планах»: обложка крупно, IMDb, описание из Википедии, трейлер с YouTube (сервер — /api/plan/info) ----------
+  // вид для поиска описания и трейлера: по категории, у «Фильмов и сериалов» — по ответу IMDb (фильм или сериал)
+  function planKind(r, d) {
+    const c = String(r.catName || '').toLowerCase();
+    if (/аниме|anime/.test(c)) return 'anime';
+    if (d && d.type === 'series') return 'series';
+    if (/фильм|кино|мульт|movie|film|cartoon/.test(c)) return 'movie';
+    if (/сериал|series/.test(c)) return 'series';
+    if (/игр|game/.test(c)) return 'game';
+    if (/книг|book|манг/.test(c)) return 'book';
+    return 'other';
+  }
+  // постер IMDb (картинки Amazon) крупно: без «_SX300» в адресе отдаётся исходный размер
+  const bigPic = (src) => String(src || '').replace(/\._V1_[^/]*?(\.(?:jpe?g|png|webp))$/i, '._V1_$1');
+  const planInfo = new Map(); // ключ → Promise ответа сервера
+  let cardOv = null, cardBack = null;
+  function closeCard() {
+    if (!cardOv) return;
+    cardOv.remove();
+    cardOv = null;
+    document.removeEventListener('keydown', cardKey, true);
+    if (cardBack && cardBack.isConnected) cardBack.focus({ preventScroll: true });
+  }
+  function cardKey(e) {
+    if (e.key !== 'Escape') return;
+    e.preventDefault(); e.stopPropagation();
+    const z = document.querySelector('.plc-zoom');
+    if (z) z.remove(); else closeCard();
+  }
+  function planCard(id) {
+    const r = planById.get(String(id)) || planRating(String(id));
+    if (!r) return;
+    closeCard();
+    cardBack = document.activeElement;
+    const I = window.CasualIMDb, year = planYear(r), movie = !!(I && I.isMovie(r.catName));
+    const imdb = movie ? I.peek({ name: r.name, year }) : null;
+    const genres = planGenres(r).slice(0, 4).join(', ');
+    const sub = [r.catName || '', year || '', genres].filter(Boolean).map((x) => `<span>${esc(x)}</span>`).join('<span aria-hidden="true"> · </span>');
+    const onW = () => alive().some((i) => nameKey(i.name) === nameKey(r.name));
+    const ov = document.createElement('div');
+    ov.className = 'plc-ov';
+    ov.innerHTML = `<div class="plc" role="dialog" aria-modal="true" aria-labelledby="plcT">
+      <button type="button" class="plc-x" data-plc="x" aria-label="Закрыть">${ICON.x}</button>
+      <div class="plc-top">
+        <button type="button" class="plc-cover" data-plc="zoom" aria-label="Обложка крупно" disabled><span aria-hidden="true">${esc((String(r.name).trim()[0] || '?').toUpperCase())}</span></button>
+        <div class="plc-main">
+          <h3 id="plcT">${esc(r.name)}</h3>
+          ${sub ? `<p class="plc-sub">${sub}</p>` : ''}
+          ${movie ? `<div class="plc-imdb"><span class="imdb-slot" data-imdb-row="1" data-imdb-n="${esc(r.name)}" data-imdb-y="${year || ''}"></span></div>` : ''}
+          <div class="plc-acts"><button type="button" class="btn small primary" data-plc="wheel"></button><span class="plc-tr"></span></div>
+        </div>
+      </div>
+      <div class="plc-desc"><p class="plc-muted">Ищу описание…</p></div>
+      <div class="plc-video" hidden></div>
+    </div>`;
+    document.body.appendChild(ov);
+    cardOv = ov;
+    const wbtn = ov.querySelector('[data-plc="wheel"]');
+    const paintW = () => { const on = onW(); wbtn.innerHTML = on ? `${ICON.check} На колесе — убрать` : `${ICON.add} На колесо`; wbtn.classList.toggle('primary', !on); };
+    paintW();
+    if (I) I.fill(ov);
+    // обложка: та же, что в списке; крупно — по нажатию
+    const cover = ov.querySelector('.plc-cover');
+    const known = planPicDone.get(String(r.id));
+    (known !== undefined ? Promise.resolve(known) : planPicSrc(r)).then((src) => {
+      if (!src || !cover.isConnected) return;
+      const im = new Image(); im.alt = ''; im.decoding = 'async'; im.referrerPolicy = 'no-referrer'; im.src = src;
+      cover.textContent = ''; cover.appendChild(im); cover.disabled = false; cover.dataset.src = src;
+    });
+    // описание и трейлер: у фильма сначала узнаём его код IMDb (по нему — трейлер с IMDb), потом спрашиваем сервер
+    let kind = planKind(r, imdb);
+    const imdbP = movie ? I.want([{ name: r.name, year }]).then((m) => m.get(I.keyOf({ name: r.name, year })) || null, () => null) : Promise.resolve(null);
+    imdbP.then((imd) => {
+      kind = planKind(r, imd);
+      const iid = imd && /^tt\d{5,10}$/.test(imd.id || '') ? imd.id : '';
+      const key = [kind, nameKey(r.name), year || '', iid].join('|');
+      if (!planInfo.has(key)) {
+        const q = new URLSearchParams({ name: r.name, kind });
+        if (year) q.set('year', year);
+        if (iid) q.set('imdb', iid);
+        planInfo.set(key, fetch('/api/plan/info?' + q).then((x) => (x.ok ? x.json() : null)).catch(() => null));
+      }
+      return planInfo.get(key);
+    }).then((d) => {
+      if (!ov.isConnected) return;
+      const box = ov.querySelector('.plc-desc');
+      if (d && d.desc) {
+        box.innerHTML = `<p>${esc(d.desc)}</p>${d.src ? `<p class="plc-src"><a href="${esc(d.src)}" target="_blank" rel="noopener noreferrer">${d.lang === 'en' ? 'Википедия (на английском)' : 'Википедия'}</a></p>` : ''}`;
+      } else box.innerHTML = '<p class="plc-muted">Описания не нашлось.</p>';
+      const tr = ov.querySelector('.plc-tr');
+      const yt = 'https://www.youtube.com/results?search_query=' + encodeURIComponent([r.name, year || '', 'трейлер'].filter(Boolean).join(' '));
+      // трейлер с IMDb (у фильмов и сериалов) и с YouTube (обычно русский); нет ни того, ни другого — поиск на YouTube
+      const btns = [];
+      if (d && /^vi\d{5,12}$/.test(d.iv || '')) btns.push(`<button type="button" class="btn small ghost" data-plc="trailer" data-src="imdb" data-v="${esc(d.iv)}" aria-pressed="false">${ICON.play} Трейлер IMDb</button>`);
+      if (d && /^[\w-]{11}$/.test(d.trailer || '')) btns.push(`<button type="button" class="btn small ghost" data-plc="trailer" data-src="yt" data-v="${esc(d.trailer)}" aria-pressed="false">${ICON.play} ${btns.length ? 'Трейлер YouTube' : 'Трейлер'}</button>`);
+      if (!btns.length && kind !== 'other') btns.push(`<a class="btn small ghost" href="${esc(yt)}" target="_blank" rel="noopener noreferrer">Трейлер на YouTube</a>`);
+      tr.innerHTML = btns.join('');
+    });
+    ov.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-plc]');
+      if (!b) { if (e.target === ov) closeCard(); return; }
+      const k = b.dataset.plc;
+      if (k === 'x') closeCard();
+      else if (k === 'wheel') {
+        const lb = $('#plansList').querySelector(`[data-plan="${CSS.escape(String(r.id))}"]`);
+        if (lb) { lb.click(); paintW(); }
+      } else if (k === 'trailer') {
+        // плеер IMDb или YouTube прямо в карточке; кнопки остаются — можно переключить
+        const v = ov.querySelector('.plc-video');
+        v.hidden = false;
+        const src = b.dataset.src === 'imdb'
+          ? `https://www.imdb.com/videoembed/${encodeURIComponent(b.dataset.v)}`
+          : `https://www.youtube-nocookie.com/embed/${encodeURIComponent(b.dataset.v)}?autoplay=1&rel=0`;
+        v.innerHTML = `<iframe src="${esc(src)}" title="Трейлер: ${esc(r.name)}" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe>`;
+        ov.querySelectorAll('[data-plc="trailer"]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+      } else if (k === 'zoom' && b.dataset.src) {
+        const z = document.createElement('div');
+        z.className = 'plc-zoom';
+        z.innerHTML = `<img src="${esc(bigPic(b.dataset.src))}" alt="Обложка: ${esc(r.name)}" referrerpolicy="no-referrer">`;
+        const im = z.querySelector('img');
+        im.addEventListener('error', () => { if (im.src !== b.dataset.src) im.src = b.dataset.src; }, { once: true }); // крупной нет — обычная
+        z.addEventListener('click', () => z.remove());
+        document.body.appendChild(z);
+      }
+    });
+    document.addEventListener('keydown', cardKey, true);
+    ov.querySelector('[data-plc="x"]').focus({ preventScroll: true });
   }
   function plansAdd(list) {
     if (S.spinning) return;
@@ -420,7 +568,9 @@
     });
     $('#plansList').addEventListener('click', (e) => {
       const b = e.target.closest('[data-plan]');
-      if (!b || S.spinning) return;
+      // нажатие на строку (кроме «+» и плашки IMDb) — карточка: обложка, описание, трейлер
+      if (!b) { const row = !e.target.closest('.imdb-b, a') && e.target.closest('.plrow[data-id]'); if (row) planCard(row.dataset.id); return; }
+      if (S.spinning) return;
       const r = readPlans().find((x) => String(x.id) === b.dataset.plan);
       if (!r) return renderPlans();
       const k = nameKey(r.name);

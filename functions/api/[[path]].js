@@ -16,6 +16,7 @@ import { makeRiddleRoutes } from '../_lib/riddle.js';
 import { makeEveningRoutes } from '../_lib/lots-evening.js';
 import { makeBingoRoutes } from '../_lib/bingo.js';
 import { makeKingRoutes } from '../_lib/king.js';
+import { makePlanInfoRoutes } from '../_lib/plan-info.js';
 import { makeTierCoopRoutes } from '../_lib/tiercoop.js';
 
 const enc = new TextEncoder();
@@ -3089,10 +3090,12 @@ Object.assign(routes, makeEveningRoutes({ json, fail, readBody, burst, currentUs
 Object.assign(routes, makeBingoRoutes({ json, fail, readBody, burst, currentUser, lvGive }));
 // «Царь Горы» — турниры по ссылке (/api/king…) — functions/_lib/king.js, страница /king/
 Object.assign(routes, makeKingRoutes({ json, fail, readBody, burst, clientIp, currentUser, lvGive, sha256 }));
+// описание и трейлер для карточки «В планах» на колесе (functions/_lib/plan-info.js)
+Object.assign(routes, makePlanInfoRoutes({ json, fail, burst, clientIp }));
 // «Тир-лист вместе» (/api/tiercoop…) — functions/_lib/tiercoop.js, страница tierlist/coop.js
 Object.assign(routes, makeTierCoopRoutes({ json, fail, readBody, burst, currentUser, lvGive }));
 
-const PUBLIC = new Set(['GET /tiercoop/room', 'GET /king/room', 'GET /king/img', 'GET /lots/:code/predict', 'GET /lots/:code/veto', 'GET /lots/:code/bingo', 'GET /shop/look', 'GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid', 'GET /mail/unsub', 'POST /mail/unsub']);
+const PUBLIC = new Set(['GET /tiercoop/room', 'GET /king/room', 'GET /king/img', 'GET /plan/info', 'GET /lots/:code/predict', 'GET /lots/:code/veto', 'GET /lots/:code/bingo', 'GET /shop/look', 'GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid', 'GET /mail/unsub', 'POST /mail/unsub']);
 // код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности
 const SHARE_RE = /^[A-Za-z0-9]{12}$/;
 function shareId() {
