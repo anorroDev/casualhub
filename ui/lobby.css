@@ -127,3 +127,13 @@ html[data-ui="lobby"] .lv-body > :nth-child(n+3) { animation-delay: .04s; }
   html[data-ui="lobby"] :is(.title, .wordmark, .card, .app, .tile, .stat, .lv-box, .lv-bi, .lv-ach, .rt, .st-box, .lv-letter, .st-card, .fp-card, .howto, .wn-card, .lv-card, .t-pop, .ban-menu, .hist-menu, .hm-panel, .lv-toast, .site-ann, .site-note, .st-toast, .lv-ov, .st-sheet, .fp-sheet, .howto-modal, .wn-sheet, .sheet, .tm-sheet, .rv-sheet, .lv-body > *) { animation: none; }
   html[data-ui="lobby"] :is(.pill, .theme-btn, .btn, .chip-btn, .sub-chip, .status-chip, .mini-btn, .tpl-btn, .user-pill, .opt, .st-btn, .fp-btn, .lv-btn, .howto-ok, .cm-send, .wg-btn, .mp-btn, .rx-btns button, .fx-mute, .fx-skip, .lots-opt, .crop-ratios button, .recs-tabs button, .lv-tabs button, .lv-pick button, .chip, .wn-x, .st-x, .fp-x, .lv-head .x, .howto-close, .lv-toast .x, .site-note button, .site-ann button, .app, .rt, .lv-bi, .lv-ach, .tile, .fr-card):is(:hover, :active) { transform: none; }
 }
+
+/* наведение на кнопки: в этом виде свой отклик (без него базовый :hover страниц перекрывался оформлением вида) */
+@media (hover: hover) {
+  html[data-ui="lobby"] :is(.pill, .theme-btn, .lv-hbtn, .lv-shop, .btn:not(.primary), .seg button, .chip[data-go], .tc-btn, .kg-seg button, .ev-btn, .bg-btn:not(.main), .rd-open, .lp-opt, .qvol-btn, .hm-wrap > button):hover { background: color-mix(in srgb, var(--accent, #5865F2) 20%, var(--panel, #2b2d31)) !important; border-color: color-mix(in srgb, var(--accent, #5865F2) 45%, var(--line, #3f4147)) !important; color: var(--ink, #f2f3f5) !important; transition: background-color .15s, border-color .15s; }
+  html[data-ui="lobby"] :is(.btn.primary, .bg-btn.main, .rd-form button):hover { filter: brightness(1.1); }
+}
+html[data-ui="lobby"] :is(.pill, .theme-btn, .lv-hbtn, .lv-shop, .btn:not(.primary), .seg button, .chip[data-go], .tc-btn, .kg-seg button, .ev-btn, .bg-btn:not(.main), .rd-open, .lp-opt, .qvol-btn, .hm-wrap > button, .btn.primary, .bg-btn.main, .rd-form button):focus-visible { outline: 2px solid var(--accent, #5B74FF) !important; outline-offset: 2px; }
+
+/* окно подсказки закрывается своей анимацией: появление вида не должно её перебивать (иначе окно «двоилось» на выходе) */
+html[data-ui="lobby"]:root .howto-modal.out .howto { animation: howto-out .2s cubic-bezier(.5, 0, .75, 0) both !important; }

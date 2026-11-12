@@ -765,7 +765,11 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     t.innerHTML = TABS.filter(([k]) => k !== 'recap' || ME.recap).map(([k, n]) => soon(k)
       ? `<button type="button" class="soon" data-soon-tab="${k}" aria-disabled="true" aria-label="${n} — в разработке">${n}</button>`
       : `<button type="button" role="tab" data-tab="${k}" aria-selected="${k === tab || (k === 'home' && tab === 'ranks')}">${n}${k === 'mail' && +ME.mail ? ` (${ME.mail})` : ''}</button>`).join('');
-    t.querySelectorAll('[data-tab]').forEach((b) => b.addEventListener('click', () => { tab = b.dataset.tab; renderTabs(); render(); }));
+    t.querySelectorAll('[data-tab]').forEach((b) => {
+      b.addEventListener('click', () => { tab = b.dataset.tab; renderTabs(); render(); });
+      b.addEventListener('pointerenter', () => prefetch(b.dataset.tab));
+      b.addEventListener('focus', () => prefetch(b.dataset.tab));
+    });
     t.querySelectorAll('[data-soon-tab]').forEach((b) => {
       const show = () => soonTip(b), hide = () => soonTip(null);
       b.addEventListener('mouseenter', show); b.addEventListener('mouseleave', hide); b.addEventListener('focus', show); b.addEventListener('blur', hide);
@@ -784,6 +788,10 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   }
   const body = () => ov.querySelector('#lvBody');
   let seq = 0, shown = '';
+  // вкладка → последний HTML: при переключении показывается сразу, свежий приходит следом
+  const tabCache = new Map();
+  const PREFETCH = new Set(['home', 'ach', 'board', 'hist', 'look']); // без побочных действий: их можно грузить заранее
+  const prefetch = (k) => { if (!PREFETCH.has(k) || tabCache.has(k) || !VIEWS[k]) return; Promise.resolve().then(() => VIEWS[k]()).then((h) => { if (!tabCache.has(k)) tabCache.set(k, h); }, () => {}); };
   // перерисовка той же вкладки (после нажатия): прокрутка на месте, анимации появления сразу доиграны —
   // иначе в видах интерфейса карточки «въезжали» заново на каждый клик. Бесконечные (рамки, радужный ник) идут как шли
   const settle = (b) => { try { b.getAnimations({ subtree: true }).forEach((a) => { if (a.effect && a.effect.getTiming().iterations !== Infinity) a.finish(); }); } catch (e) {} };
@@ -791,13 +799,25 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     const my = ++seq;
     const b = body();
     const again = shown === tab && b.childElementCount > 0;
-    if (!again) b.scrollTop = 0;
+    const switched = !!shown && shown !== tab;
+    let instant = again;
+    if (!again) {
+      // сразу, не дожидаясь сервера: прошлый вид этой вкладки или «Загружаю…»
+      b.scrollTop = 0;
+      const c = tabCache.get(tab);
+      b.innerHTML = c || '<p class="lv-muted">Загружаю…</p>';
+      if (switched) settle(b);
+      if (c && BIND[tab]) BIND[tab](b);
+      shown = tab;
+      instant = switched || !!c;
+    }
     try {
       const html = await VIEWS[tab]();
       if (my !== seq || !ov.isConnected) return;
+      tabCache.set(tab, html);
       const top = b.scrollTop;
       b.innerHTML = html;
-      if (again) { b.scrollTop = top; settle(b); }
+      if (instant) { b.scrollTop = top; settle(b); }
       shown = tab;
       if (BIND[tab]) BIND[tab](b);
     } catch (e) {

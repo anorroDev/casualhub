@@ -443,7 +443,7 @@ html.unslop .sh-it.on { box-shadow: none; }`;
       ov.innerHTML = `<div class="sh-card" role="dialog" aria-modal="true" aria-labelledby="shTitle" tabindex="-1"><div class="sh-head"><h2 id="shTitle">Магазин</h2><span class="sh-bal" id="shBal">${coinImg(22)}<span>…</span></span><button type="button" class="x" aria-label="Закрыть">✕</button></div><div class="sh-tabs" role="tablist" aria-label="Разделы магазина"></div><div class="sh-body" id="shBody"></div><p class="sh-msg" role="status" aria-live="polite"></p></div>`;
       ov.addEventListener('click', (e) => { if (e.target === ov || e.target.closest('.sh-head .x')) close(); });
       ov.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
-      ov.querySelector('.sh-tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-sec]'); if (b) { sec = b.dataset.sec; armed = null; render(); } });
+      ov.querySelector('.sh-tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-sec]'); if (b) { sec = b.dataset.sec; armed = null; render(); try { ov.querySelector('#shBody').getAnimations({ subtree: true }).forEach((a) => { if (a.effect && a.effect.getTiming().iterations !== Infinity) a.finish(); }); } catch (er) {} } });
       ov.querySelector('#shBody').addEventListener('click', onCard);
     }
     document.body.appendChild(ov);
