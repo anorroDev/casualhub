@@ -393,34 +393,44 @@
   const mine = (el) => !!el && (el === cat || el === bowl || (cat && cat.contains(el)) || (bowl && bowl.contains(el)) || (toy && toy.el === el));
   const floorY = () => innerHeight - floor - 2;
   const bowlRight = () => 10 + 18 * K + 4;
-  // блоки, по верху которых можно ходить: крупные карточки, верхний край виден и ничем не закрыт
-  // баннер профиля — тоже: на него котик запрыгивает, когда страницу листают вверх
+  // блоки, по верху которых можно ходить: крупные карточки, верхний край виден и ничем не закрыт.
+  // Баннер профиля — «место в профиле»: котик садится не на верх баннера, а на его нижний край, рядом с аватаркой
+  // (правее котика из профиля, если он есть) — туда он приходит, когда страницу домотали до самого верха
   const PLAT = '.card, .app, .lv-box, .panel, .feed-list > li, .tl-tile, .recs, .feed, section, .banner';
+  const isSeat = (s) => !!(s && s.classList && s.classList.contains('banner'));
+  // линия, на которой котик стоит: верх блока, у баннера — низ
+  const edgeOf = (s, r = s.getBoundingClientRect()) => (isSeat(s) ? r.bottom : r.top);
+  function seatLeft(r) {
+    let left = r.left + 2;
+    for (const el of document.querySelectorAll('#avaWrap, #avaWrap > .lv-pet')) { const q = el.getBoundingClientRect(); if (q.width && q.bottom > r.bottom - 160) left = Math.max(left, q.right + 12); }
+    return left;
+  }
   function platforms() {
     const fy = floorY(), out = [];
     for (const el of document.querySelectorAll(PLAT)) {
       if (mine(el)) continue;
-      const r = el.getBoundingClientRect();
-      if (r.width < 150 || r.height < 50 || r.top < (el.classList.contains('banner') ? 40 : 80) || r.top > fy - 60 || r.left < 0 || r.right > innerWidth) continue;
-      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + 3);
+      const r = el.getBoundingClientRect(), seat = isSeat(el), top = seat ? r.bottom : r.top;
+      if (r.width < 150 || r.height < 50 || top < (seat ? 110 : 80) || top > fy - 60 || r.left < 0 || r.right > innerWidth) continue;
+      if (seat && r.right - seatLeft(r) < size.w + 20) continue; // рядом с аватаркой нет места
+      const hit = document.elementFromPoint(r.left + r.width / 2, seat ? top - 3 : top + 3);
       if (!hit || !(el === hit || el.contains(hit))) continue;
-      if (out.some((p) => Math.abs(p.r.top - r.top) < 6 && Math.abs(p.r.left - r.left) < 6)) continue;
-      out.push({ el, r });
+      if (out.some((p) => Math.abs(p.top - top) < 6 && Math.abs(p.r.left - r.left) < 6)) continue;
+      out.push({ el, r, top, seat });
       if (out.length > 40) break;
     }
     return out;
   }
-  const surfTop = (s, px = x) => (s ? s.getBoundingClientRect().top : floorAt(px + size.w / 2));
+  const surfTop = (s, px = x) => (s ? edgeOf(s) : floorAt(px + size.w / 2));
   function bounds(s) {
     if (!s) return [bowlRight(), innerWidth - size.w - 6];
-    const r = s.getBoundingClientRect();
-    return [r.left + 2, Math.max(r.left + 2, r.right - size.w - 2)];
+    const r = s.getBoundingClientRect(), a = isSeat(s) ? seatLeft(r) : r.left + 2;
+    return [a, Math.max(a, r.right - size.w - 2)];
   }
   const surfaceOk = (s) => {
     if (!s) return true;
     if (!s.isConnected) return false;
-    const r = s.getBoundingClientRect();
-    return r.width >= 100 && r.top > 60 && r.top < floorY() - 30;
+    const r = s.getBoundingClientRect(), top = edgeOf(s, r);
+    return r.width >= 100 && top > 60 && top < floorY() - 30;
   };
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -562,8 +572,8 @@
       case 'walk': { const [a, b] = bounds(surf); mode = 'walk'; target = a + Math.random() * Math.max(10, b - a); return; }
       case 'jump': {
         // прыжок на другой блок недалеко (или вниз, на пол)
-        const ps = platforms().filter((p) => p.el !== surf && Math.abs((p.r.left + p.r.right) / 2 - x) < 520 && Math.abs(p.r.top - y) < 420);
-        if (ps.length && Math.random() < 0.8) { const p = ps[Math.floor(Math.random() * ps.length)]; prepJump(p.el, p.r.left + Math.random() * Math.max(10, p.r.width - size.w)); return; }
+        const ps = platforms().filter((p) => p.el !== surf && Math.abs((p.r.left + p.r.right) / 2 - x) < 520 && Math.abs(p.top - y) < 420);
+        if (ps.length && Math.random() < 0.8) { const p = ps[Math.floor(Math.random() * ps.length)], [a, b] = bounds(p.el); prepJump(p.el, a + Math.random() * Math.max(10, b - a)); return; }
         if (surf) { jumpTo(null, x + (Math.random() - 0.5) * 200); return; }
         act('walk', t); return;
       }
@@ -589,7 +599,7 @@
     chaseT = t;
     const ps = platforms();
     let best = null;
-    for (const p of ps) if (mouse.x >= p.r.left && mouse.x <= p.r.right && p.r.top >= mouse.y - 12 && (!best || p.r.top < best.r.top)) best = p;
+    for (const p of ps) if (mouse.x >= p.r.left && mouse.x <= p.r.right && p.top >= mouse.y - 12 && (!best || p.top < best.top)) best = p;
     const s = best ? best.el : null;
     const tx = mouse.x - size.w / 2;
     if (s === surf) {
@@ -715,7 +725,7 @@
       rows = HANG_B;
       // приземлиться на блок, через верх которого пролетели, или на пол
       const cx = x + size.w / 2;
-      const hit = platforms().find((p) => cx >= p.r.left && cx <= p.r.right && p.r.top >= prev - 2 && p.r.top <= y);
+      const hit = platforms().find((p) => cx >= (p.seat ? seatLeft(p.r) : p.r.left) && cx <= p.r.right && p.top >= prev - 2 && p.top <= y); // в профиле — только правее аватарки
       if (hit) land(hit.el); else if (y >= floorAt(cx)) { x = Math.max(bowlRight(), x); land(null); }
     } else if (mode === 'jump' && jump) {
       const k = Math.min(1, (t - jump.t0) / jump.dur), y1 = surfTop(jump.s, jump.x1) + (jump.climb ? HANG_DY() : 0);
@@ -961,8 +971,11 @@
   addEventListener('resize', () => { if (alive) measure(); });
   addEventListener('mousemove', (e) => { mouse = { x: e.clientX, y: e.clientY, t: performance.now() }; }, { passive: true });
   addEventListener('pagehide', () => { if (alive) save(); });
-  // прокрутка страницы: вниз — котик спрыгивает на плитку ниже (а с нижней — на пол), вверх — запрыгивает на плитку выше,
-  // до самого баннера. Не чаще раза в ~0,6 с, не посреди прыжка и не когда его держат; при «меньше движения» — как раньше
+  // прокрутка страницы: вниз — котик спрыгивает на плитку ниже (а с нижней — на пол), вверх — запрыгивает на ближайшую
+  // плитку выше, не дальше REACH за прыжок (по плиточкам, а не сразу наверх). Домотали до самого верха — приходит
+  // в профиль: садится на низ баннера рядом с аватаркой. Не чаще раза в ~0,6 с, не посреди прыжка и не когда его держат;
+  // при «меньше движения» — как раньше
+  const REACH = 320;
   let scrollY0 = scrollY, scrollHop = 0;
   addEventListener('scroll', () => {
     const dy = scrollY - scrollY0;
@@ -972,9 +985,13 @@
     if (t - scrollHop < 600 || ['drag', 'jump', 'climb', 'fall', 'prep', 'eat', 'goEat', 'scared'].includes(mode)) return;
     const cx = x + size.w / 2, near = (p) => Math.abs((p.r.left + p.r.right) / 2 - cx);
     const ps = platforms().filter((p) => p.el !== surf && near(p) < 700);
-    const next = dy > 0
-      ? ps.filter((p) => p.r.top > y + 20).sort((a, b) => a.r.top - b.r.top || near(a) - near(b))[0]
-      : ps.filter((p) => p.r.top < y - 30).sort((a, b) => b.r.top - a.r.top || near(a) - near(b))[0];
+    let next;
+    if (dy > 0) next = ps.filter((p) => !p.seat && p.top > y + 20).sort((a, b) => a.top - b.top || near(a) - near(b))[0];
+    else {
+      // наверху страницы — место в профиле (если оно есть и котик ещё не там), иначе ближайшая плитка выше в пределах прыжка
+      const seat = scrollY < 40 && !isSeat(surf) ? ps.find((p) => p.seat) : null;
+      next = seat || ps.filter((p) => !p.seat && p.top < y - 30 && p.top >= y - REACH).sort((a, b) => b.top - a.top || near(a) - near(b))[0];
+    }
     if (!next && (dy < 0 || !surf)) return; // выше прыгать некуда / уже на полу
     scrollHop = t;
     stopPlay(); clearBubble('zz');
