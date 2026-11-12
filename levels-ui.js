@@ -1038,9 +1038,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
             <div class="lv-lk-who"><b class="lv-lk-name${p.nick ? ' lv-nick-' + p.nick : ''}${p.font ? ' lv-font-' + p.font : ''}"${p.color && m.colors[p.color] ? ` style="color:${m.colors[p.color]}"` : ''}>${esc(nm)}</b>${u.rankChip ? `<span class="lv-chip">${esc(m.rank)}</span>` : ''}${p.fx === 'confetti' ? '<span class="lv-muted">+ конфетти при открытии профиля</span>' : ''}</div>
           </div>
         </div>`;
-      // закрытое: откроется уровнем или покупается раньше в магазине (раздел «Оформление»)
-      const shopTip = window.CasualShop && !m.admin && m.level < 50 ? '<p class="lv-muted lv-shop-tip">Закрытое откроется само на своём уровне — или купи раньше за рофланы: <button type="button" class="lv-btn" data-shop-look>Магазин → Оформление</button></p>' : '';
-      return `${shopTip}${m.admin ? '<p class="lv-adm">Админу открыто всё оформление, чтобы проверять награды; остальным — по уровням. Другие видят твой выбор в профиле.</p>' : ''}
+      return `${m.admin ? '<p class="lv-adm">Админу открыто всё оформление, чтобы проверять награды; остальным — по уровням. Другие видят твой выбор в профиле.</p>' : ''}
         <div class="lv-box">${prev}</div>
         <div class="lv-box"><h3>Рамка аватара</h3><div class="lv-pick">${frames}</div></div>
         <div class="lv-box"><h3>Ник в профиле</h3><div class="lv-pick">${colors}</div><div class="lv-pick" style="margin-top:8px">${nicks}</div></div>
@@ -1129,8 +1127,6 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       b.querySelectorAll('[data-bg]').forEach((x) => x.addEventListener('click', () => save({ bg: x.dataset.bg })));
       b.querySelectorAll('[data-nick]').forEach((x) => x.addEventListener('click', () => save({ nick: x.dataset.nick })));
       b.querySelectorAll('[data-font]').forEach((x) => x.addEventListener('click', () => save({ font: x.dataset.font })));
-      const sh = b.querySelector('[data-shop-look]');
-      if (sh) sh.addEventListener('click', () => { if (window.CasualShop) window.CasualShop.open('look'); });
       b.querySelectorAll('[data-fx]').forEach((x) => x.addEventListener('click', () => save({ fx: x.dataset.fx })));
       b.querySelectorAll('[data-pet]').forEach((x) => x.addEventListener('click', () => save({ pet: x.dataset.pet === '1' })));
       b.querySelectorAll('[data-tg]').forEach((x) => x.addEventListener('change', () => save({ [x.dataset.tg]: x.checked })));
