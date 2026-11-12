@@ -114,11 +114,11 @@ html.unslop .lv-hbtn.lv-pulse { animation-duration: 2.6s; }
 @keyframes lv-hue { to { filter: hue-rotate(360deg); } }
 /* эффекты профиля: звездопад (22-й), пиксельный снег (13-й) и искры костра (33-й) в шапке, конфетти при открытии (45-й).
    Снег и искры — пиксельные плитки /art/fx/*.svg: снег падает, искры поднимаются, ступеньками */
-.lv-fx-snow, .lv-fx-embers { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: url(/art/fx/snow.svg) 0 0 / 128px 128px repeat; image-rendering: pixelated; animation: lv-snow 9s steps(64) infinite linear; }
-.lv-fx-embers { background-image: url(/art/fx/embers.svg); animation: lv-embers 6s steps(48) infinite linear; }
-@keyframes lv-snow { to { background-position: 16px 128px; } }
-@keyframes lv-embers { to { background-position: -12px -128px; } }
-.lv-fx-stars { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: #fff; opacity: .85; -webkit-mask: url(/art/site/stars.webp) 0 0 / 260px 260px repeat; mask: url(/art/site/stars.webp) 0 0 / 260px 260px repeat; animation: lv-fall 10s steps(52) infinite linear; }
+.lv-fx-snow, .lv-fx-embers { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: url(/art/fx/snow.svg) 0 0 / 128px 128px repeat; image-rendering: pixelated; animation: lv-snow 9s steps(64) infinite; }
+.lv-fx-embers { background-image: url(/art/fx/embers.svg); animation: lv-embers 6s steps(48) infinite; }
+@keyframes lv-snow { to { background-position: 0 128px; } }
+@keyframes lv-embers { to { background-position: 0 -128px; } }
+.lv-fx-stars { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: #fff; opacity: .85; -webkit-mask: url(/art/site/stars.webp) 0 0 / 260px 260px repeat; mask: url(/art/site/stars.webp) 0 0 / 260px 260px repeat; animation: lv-fall 10s steps(52) infinite; }
 @keyframes lv-fall { to { -webkit-mask-position: 0 260px; mask-position: 0 260px; } }
 .lv-conf { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 6; border-radius: inherit; }
 .lv-conf i { position: absolute; top: -14px; width: 10px; height: 10px; animation: lv-cf 1.9s steps(16) var(--d, 0s) forwards; }
@@ -127,7 +127,7 @@ html.unslop .lv-hbtn.lv-pulse { animation-duration: 2.6s; }
 /* вкладка «Оформление»: предпросмотр профиля, замки, заметка для админа */
 .lv-lk { position: relative; border-radius: 14px; overflow: hidden; background: var(--panel-2, #1d2129); }
 .lv-lk-ban { position: relative; height: 112px; overflow: hidden; background: linear-gradient(135deg, color-mix(in srgb, var(--accent, #5B74FF) 35%, transparent), color-mix(in srgb, var(--good, #43C97A) 22%, transparent)); background-size: cover; background-position: center 70%; }
-.lv-lk-row { position: relative; z-index: 2; display: flex; align-items: flex-end; gap: 18px; padding: 0 16px 16px; margin-top: -34px; }
+.lv-lk-row { position: relative; z-index: 2; display: flex; align-items: flex-end; gap: 18px; padding: 0 16px 30px 30px; margin-top: -34px; }
 .lv-lk-ava { position: relative; flex: none; width: 72px; height: 72px; border-radius: 50%; display: grid; place-items: center; background: var(--accent, #5B74FF); color: #fff; font: 800 30px/1 system-ui, sans-serif; }
 .lv-lk-who { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; min-width: 0; padding-bottom: 4px; }
 .lv-lk-name { font: 800 24px/1.15 var(--font-display, system-ui), sans-serif; overflow-wrap: anywhere; color: var(--ink, #f3f4f6); }
@@ -410,17 +410,21 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   let ME = null;
   // до новых заданий дня — полночь по местному времени (сервер меняет задания по часовому поясу человека). Таймер в «Обзоре»
   const untilMidnight = () => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1) - n; };
+  // до нового задания недели — до понедельника, 00:00 по местному времени (неделя на сервере — с понедельника)
+  const untilMonday = () => { const n = new Date(), d = (8 - n.getDay()) % 7 || 7; return new Date(n.getFullYear(), n.getMonth(), n.getDate() + d) - n; };
   const hms = (ms) => { const t = Math.max(0, Math.floor(ms / 1000)); return Math.floor(t / 3600) + ':' + String(Math.floor(t / 60) % 60).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); };
+  const dhms = (ms) => { const d = Math.floor(ms / 864e5); return (d ? d + ' ' + plural(d, 'день', 'дня', 'дней') + ' ' : '') + hms(ms - d * 864e5); };
   let resetT = 0;
   function tickReset() {
     clearInterval(resetT);
+    const dayEnd = Date.now() + untilMidnight();
     const tick = () => {
       const els = document.querySelectorAll('[data-lv-reset]');
       if (!els.length) { clearInterval(resetT); return; }
-      const ms = untilMidnight();
-      els.forEach((e) => { e.textContent = hms(ms); });
+      const ms = untilMidnight(), wk = untilMonday();
+      els.forEach((e) => { e.textContent = e.dataset.lvReset === 'week' ? dhms(wk) : hms(ms); });
       // полночь: задания уже новые — обновить «Обзор»
-      if (ms < 1000) { clearInterval(resetT); setTimeout(() => refreshMe().then(() => { if (tab === 'home' && document.querySelector('[data-lv-reset]')) render(); }).catch(() => {}), 2500); }
+      if (Date.now() >= dayEnd) { clearInterval(resetT); setTimeout(() => refreshMe().then(() => { if (tab === 'home' && document.querySelector('[data-lv-reset]')) render(); }).catch(() => {}), 2500); }
     };
     tick();
     resetT = setInterval(tick, 1000);
@@ -959,7 +963,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
         ${m.event ? `<div class="lv-box"><h3>${esc(m.event.title)}</h3><p class="lv-muted">×${m.event.mult} опыта до ${new Date(m.event.until).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}.</p></div>` : ''}
         <div class="lv-box"><div class="lv-streak"><span class="big">🔥 ${m.streak.days}</span><div><b>${m.streak.days ? `${plural(m.streak.days, 'день', 'дня', 'дней')} подряд` : 'Серии пока нет'}</b><p class="lv-muted">${m.streak.today ? 'Сегодня уже засчитан.' : 'Оцени что-нибудь или отреагируй другу, чтобы засчитать сегодня.'} Лучшая серия: ${m.streak.best}. «Заморозок»: ${m.streak.freezes} — спасают серию, если пропустишь день.</p></div></div></div>
         <div class="lv-box"><h3>Задания дня</h3>${daily || '<p class="lv-muted">Заданий пока нет.</p>'}<p class="lv-muted">За все три — ещё +${q.allXp}${q.allPaid ? ' (получено)' : ''}. Новые задания через <b class="lv-reset" data-lv-reset>${hms(untilMidnight())}</b>.</p></div>
-        ${w ? `<div class="lv-box"><h3>Задание недели</h3><div class="lv-q${w.done ? ' done' : ''}"><span>${esc(w.title)} · ${w.progress} из ${w.goal}</span><span class="xp">+${w.xp}</span>${bar(pct(w.progress, w.goal))}</div></div>` : ''}
+        ${w ? `<div class="lv-box"><h3>Задание недели</h3><div class="lv-q${w.done ? ' done' : ''}"><span>${esc(w.title)} · ${w.progress} из ${w.goal}</span><span class="xp">+${w.xp}</span>${bar(pct(w.progress, w.goal))}</div><p class="lv-muted">Новое задание через <b class="lv-reset" data-lv-reset="week">${dhms(untilMonday())}</b>.</p></div>` : ''}
         ${steps}
         <p class="lv-muted">Опыт дают оценки, отзывы, тир-листы, реакции и комментарии друзьям, лоты. У каждого действия дневной лимит; удалишь — опыт уйдёт.</p>`;
     },
@@ -1034,7 +1038,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       const NK = { '': 'Обычный', outline: 'Контур', shadow: 'С тенью', arcade: 'Аркада', rainbow: 'Радужный' };
       const nmOf = () => { const a = read('ocenshik.user.v1') || {}; return a.username || a.name || 'Ты'; };
       const FX = { '': 'Без эффекта', snow: 'Снег', stars: 'Звездопад', embers: 'Искры', confetti: 'Конфетти' };
-      const frames = Object.keys(FR).map((f) => opt('frame', f, p.frame, u.frames.includes(f), f, `${f ? `<span class="fr lv-frame-${f}"></span>` : ''}${FR[f]}`)).join('');
+      const frames = Object.keys(FR).map((f) => opt('frame', f, p.frame, u.frames.includes(f), f, `${f ? `<span class="fr fr-ava lv-frame-${f}"></span>` : ''}${FR[f]}`)).join('');
       const colors = ['', ...Object.keys(m.colors)].map((c) => opt('color', c, p.color, u.colors.includes(c), c === 'gold' ? 'gold' : 'colors', c ? `<span class="dot" style="background:${m.colors[c]}" aria-label="${c}"></span>` : 'Обычный')).join('');
       const nicks = Object.keys(NK).map((n) => opt('nick', n, p.nick, u.nicks.includes(n), n, n ? `<span class="lv-nick-${n}">${NK[n]}</span>` : NK[n])).join('');
       // шрифты: твой ник каждым шрифтом (закрытые тоже видно — чтобы было, ради чего расти)

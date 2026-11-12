@@ -140,6 +140,23 @@
   const EDGE_B = F(EDGE.slice(), EDGE.head, { drop: 3 }); EDGE_B[10] = '...MM..MM....K..'; EDGE_B[11] = '..MM....MM...K..'; EDGE_B[12] = '.............K..';
   const EDGE_BLINK = F(EDGE.slice(), EDGE.head, { drop: 3 }); EDGE_BLINK[4] = '...OMMMMMMK.....'; EDGE_BLINK[5] = '...MEEMMEEM.....';
 
+  // ест из миски: пригнулся, голова опущена в миску (на dy строк ниже, чем когда крадётся), глаза довольно прищурены,
+  // хвост трубой. Два кадра — голова чуть ниже и чуть выше: жуёт
+  function eatFrame(dy) {
+    const h = STALK_A.head, W = 20, g = STALK_A.map((r) => [...r.padEnd(W, '.')]);
+    const out = g.map((r, y) => r.map((ch, x) => (y >= h.neck || x < h.L - 1 ? ch : '.')));
+    for (let x = 0; x < 6; x++) if (out[8][x] === 'K') out[8][x] = '.';
+    [[4, 2], [5, 2], [6, 2], [7, 2], [7, 3], [8, 3], [8, 4], [8, 5]].forEach(([y, x]) => { out[y][x] = 'K'; });
+    for (let y = h.top; y < h.neck; y++) for (let x = h.L - 1; x < W; x++) {
+      let ch = g[y][x];
+      if (ch === '.' || y + dy >= out.length) continue;
+      if (y === h.top + 3 && ch === 'E') ch = 'M';
+      out[y + dy][x] = ch;
+    }
+    return F(out.map((r) => r.join('')), { L: h.L, top: h.top + dy, neck: h.neck + dy });
+  }
+  const EAT_A = eatFrame(2), EAT_B = eatFrame(3);
+
   const HEART = ['.RR.RR.', 'RRRRRRR', 'RRRRRRR', '.RRRRR.', '..RRR..', '...R...'];
   // игрушки: клубок (два кадра — катится) и мышка
   const YARN_A = ['..nn..', '.nonn.', 'nnoonn', 'nonnon', '.nnon.', '..nn..'];
@@ -266,6 +283,10 @@
 .vy-cat.flipjump .vy-body { animation: vy-flip var(--fd, .7s) steps(8, jump-none) both; }
 @keyframes vy-flip { to { rotate: var(--fr, 360deg); } }
 /* пыль из-под лап */
+.vy-crumb { position: fixed; z-index: 41; width: 4px; height: 4px; pointer-events: none; animation: vy-crumb .6s steps(6, jump-none) forwards; }
+@keyframes vy-crumb { 45% { translate: calc(var(--dx, 0px) * .6) -12px; } to { translate: var(--dx, 0px) 5px; opacity: 0; } }
+.vy-bowl.nom svg { animation: vy-nom .22s steps(2, jump-none); }
+@keyframes vy-nom { 50% { transform: translateX(1px) rotate(-3deg); } }
 .vy-dust { position: fixed; z-index: 39; width: 6px; height: 6px; margin: -3px 0 0 -3px; background: var(--ink-3, #8a8f9c); opacity: .75; pointer-events: none; animation: vy-dust .5s steps(4, jump-none) forwards; }
 @keyframes vy-dust { to { translate: var(--dx, 10px) -9px; opacity: 0; } }
 .vy-bowl { left: 10px; bottom: 6px; filter: drop-shadow(0 3px 0 rgb(0 0 0 / .18)); }
@@ -285,7 +306,7 @@
 @keyframes vy-love { to { translate: 0 -22px; opacity: 0; } }
 .vy-heart { position: absolute; bottom: 78%; margin-left: -9px; pointer-events: none; line-height: 0; animation: vy-love 1.3s steps(7) forwards; }
 .vy-plus { position: fixed; z-index: 41; font: 700 14px/1 var(--font-display, system-ui), sans-serif; color: var(--good, #43C97A); text-shadow: 1px 1px 0 #1B1B1F; pointer-events: none; animation: vy-love .9s steps(5) forwards; }
-@media (prefers-reduced-motion: reduce) { .vy-cat.land .vy-body, .vy-cat.flipjump .vy-body, .vy-dust, .vy-cat.hop .vy-body, .vy-bowl.add svg, .vy-bub.zz, .vy-bub.love, .vy-bub.bang, .vy-bub.achoo, .vy-bub.purr, .vy-bub.yum, .vy-heart, .vy-plus { animation: none; } .vy-cat.rolling .vy-body { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .vy-cat.land .vy-body, .vy-cat.flipjump .vy-body, .vy-dust, .vy-crumb, .vy-bowl.nom svg, .vy-cat.hop .vy-body, .vy-bowl.add svg, .vy-bub.zz, .vy-bub.love, .vy-bub.bang, .vy-bub.achoo, .vy-bub.purr, .vy-bub.yum, .vy-heart, .vy-plus { animation: none; } .vy-cat.rolling .vy-body { transition: none; } }
 @media print { .vy-cat, .vy-bowl, .vy-toy { display: none; } }
 /* выбор окраса и наряда в Настройках (блок data-vasyan-skins) */
 .vy-skins { display: grid; gap: 12px; margin-top: 4px; }
@@ -325,6 +346,8 @@
   let mouse = { x: -1, y: -1, t: 0 }, chaseT = 0, measureT = 0;
   let press = null, dragged = false, shown = null, turnUntil = 0, faced = 1;
   let wagFrom = 0, wagUntil = 0, roll = null, toy = null, play = '', playT = 0, sneezeAt = 0, runMood = '', lastAct = '';
+  // оглядывается, кружится (за хвостом и перед сном), жуёт: когда началось, что потом, на каком «укусе» сыпались крошки
+  let lookT0 = 0, spinT0 = 0, spinThen = '', biteN = -1;
   const clicks = [];
 
   function mount() {
@@ -393,34 +416,44 @@
   const mine = (el) => !!el && (el === cat || el === bowl || (cat && cat.contains(el)) || (bowl && bowl.contains(el)) || (toy && toy.el === el));
   const floorY = () => innerHeight - floor - 2;
   const bowlRight = () => 10 + 18 * K + 4;
-  // блоки, по верху которых можно ходить: крупные карточки, верхний край виден и ничем не закрыт
-  // баннер профиля — тоже: на него котик запрыгивает, когда страницу листают вверх
+  // блоки, по верху которых можно ходить: крупные карточки, верхний край виден и ничем не закрыт.
+  // Баннер профиля — «место в профиле»: котик садится не на верх баннера, а на его нижний край, рядом с аватаркой
+  // (правее котика из профиля, если он есть) — туда он приходит, когда страницу домотали до самого верха
   const PLAT = '.card, .app, .lv-box, .panel, .feed-list > li, .tl-tile, .recs, .feed, section, .banner';
+  const isSeat = (s) => !!(s && s.classList && s.classList.contains('banner'));
+  // линия, на которой котик стоит: верх блока, у баннера — низ
+  const edgeOf = (s, r = s.getBoundingClientRect()) => (isSeat(s) ? r.bottom : r.top);
+  function seatLeft(r) {
+    let left = r.left + 2;
+    for (const el of document.querySelectorAll('#avaWrap, #avaWrap > .lv-pet')) { const q = el.getBoundingClientRect(); if (q.width && q.bottom > r.bottom - 160) left = Math.max(left, q.right + 12); }
+    return left;
+  }
   function platforms() {
     const fy = floorY(), out = [];
     for (const el of document.querySelectorAll(PLAT)) {
       if (mine(el)) continue;
-      const r = el.getBoundingClientRect();
-      if (r.width < 150 || r.height < 50 || r.top < (el.classList.contains('banner') ? 40 : 80) || r.top > fy - 60 || r.left < 0 || r.right > innerWidth) continue;
-      const hit = document.elementFromPoint(r.left + r.width / 2, r.top + 3);
+      const r = el.getBoundingClientRect(), seat = isSeat(el), top = seat ? r.bottom : r.top;
+      if (r.width < 150 || r.height < 50 || top < (seat ? 110 : 80) || top > fy - 60 || r.left < 0 || r.right > innerWidth) continue;
+      if (seat && r.right - seatLeft(r) < size.w + 20) continue; // рядом с аватаркой нет места
+      const hit = document.elementFromPoint(r.left + r.width / 2, seat ? top - 3 : top + 3);
       if (!hit || !(el === hit || el.contains(hit))) continue;
-      if (out.some((p) => Math.abs(p.r.top - r.top) < 6 && Math.abs(p.r.left - r.left) < 6)) continue;
-      out.push({ el, r });
+      if (out.some((p) => Math.abs(p.top - top) < 6 && Math.abs(p.r.left - r.left) < 6)) continue;
+      out.push({ el, r, top, seat });
       if (out.length > 40) break;
     }
     return out;
   }
-  const surfTop = (s, px = x) => (s ? s.getBoundingClientRect().top : floorAt(px + size.w / 2));
+  const surfTop = (s, px = x) => (s ? edgeOf(s) : floorAt(px + size.w / 2));
   function bounds(s) {
     if (!s) return [bowlRight(), innerWidth - size.w - 6];
-    const r = s.getBoundingClientRect();
-    return [r.left + 2, Math.max(r.left + 2, r.right - size.w - 2)];
+    const r = s.getBoundingClientRect(), a = isSeat(s) ? seatLeft(r) : r.left + 2;
+    return [a, Math.max(a, r.right - size.w - 2)];
   }
   const surfaceOk = (s) => {
     if (!s) return true;
     if (!s.isConnected) return false;
-    const r = s.getBoundingClientRect();
-    return r.width >= 100 && r.top > 60 && r.top < floorY() - 30;
+    const r = s.getBoundingClientRect(), top = edgeOf(s, r);
+    return r.width >= 100 && top > 60 && top < floorY() - 30;
   };
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -435,6 +468,24 @@
     p.style.left = r.left + r.width / 2 - 8 + 'px'; p.style.top = r.top - 18 + 'px';
     document.body.appendChild(p); setTimeout(() => p.remove(), 1000);
     if (st.hunger > 60 && !['eat', 'goEat', 'drag', 'fall', 'jump', 'climb', 'prep'].includes(mode)) goEat();
+  }
+  // крошки еды из миски, пока ест (цвета — из палитры еды), и миска подрагивает
+  function crumbs() {
+    if (!bowl) return;
+    bowl.classList.remove('nom'); void bowl.offsetWidth; bowl.classList.add('nom');
+    if (calm) return;
+    const r = bowl.getBoundingClientRect(), cols = Object.values(foodOf(st.food).pal || {});
+    for (let i = 0; i < 2; i++) {
+      const c = document.createElement('i');
+      c.className = 'vy-crumb';
+      c.setAttribute('aria-hidden', 'true');
+      c.style.left = Math.round(r.left + r.width * (0.3 + Math.random() * 0.45)) + 'px';
+      c.style.top = Math.round(r.top + r.height * 0.35) + 'px';
+      c.style.background = cols.length ? cols[Math.floor(Math.random() * cols.length)] : '#D39A5E';
+      c.style.setProperty('--dx', Math.round((Math.random() - 0.5) * 30) + 'px');
+      document.body.appendChild(c);
+      setTimeout(() => c.remove(), 640);
+    }
   }
   function hop() { if (!cat) return; cat.classList.remove('hop'); void cat.offsetWidth; cat.classList.add('hop'); }
   // несколько сердечек вразлёт
@@ -551,9 +602,9 @@
     if (st.hunger > 60 && st.bowl > 0) { goEat(); return; }
     // при «меньше движения» — только спокойные позы на месте
     const opts = calm
-      ? [['sit', 3], ['loaf', 2], ['sleep', 2], ['wash', 1.2], ['yawn', 0.6]]
+      ? [['sit', 3], ['loaf', 2], ['sleep', 2], ['wash', 1.2], ['yawn', 0.6], ['look', 1]]
       : [['walk', 3.2], ['jump', 2.4], ['sit', 2], ['loaf', 1.3], ['sleep', 1], ['wash', 1], ['stretch', 0.7], ['scratch', 0.5],
-        ['roll', 0.6], ['yawn', 0.5], ['sneeze', 0.25], ['play', surf ? 0.4 : 0.7], ['edge', surf ? 1.8 : 0]];
+        ['roll', 0.6], ['yawn', 0.5], ['sneeze', 0.25], ['look', 1.1], ['spin', 0.35], ['play', isSeat(surf) ? 0 : surf ? 0.4 : 0.7], ['edge', surf && !isSeat(surf) ? 1.8 : 0]];
     act(pick(opts), t);
   }
   function act(k, t = performance.now()) {
@@ -562,13 +613,17 @@
       case 'walk': { const [a, b] = bounds(surf); mode = 'walk'; target = a + Math.random() * Math.max(10, b - a); return; }
       case 'jump': {
         // прыжок на другой блок недалеко (или вниз, на пол)
-        const ps = platforms().filter((p) => p.el !== surf && Math.abs((p.r.left + p.r.right) / 2 - x) < 520 && Math.abs(p.r.top - y) < 420);
-        if (ps.length && Math.random() < 0.8) { const p = ps[Math.floor(Math.random() * ps.length)]; prepJump(p.el, p.r.left + Math.random() * Math.max(10, p.r.width - size.w)); return; }
+        const ps = platforms().filter((p) => p.el !== surf && Math.abs((p.r.left + p.r.right) / 2 - x) < 520 && Math.abs(p.top - y) < 420);
+        if (ps.length && Math.random() < 0.8) { const p = ps[Math.floor(Math.random() * ps.length)], [a, b] = bounds(p.el); prepJump(p.el, a + Math.random() * Math.max(10, b - a)); return; }
         if (surf) { jumpTo(null, x + (Math.random() - 0.5) * 200); return; }
         act('walk', t); return;
       }
       case 'loaf': mode = 'loaf'; until = t + 8000 + Math.random() * 9000; return;
-      case 'sleep': mode = 'sleep'; until = t + 10000 + Math.random() * 15000; return;
+      // перед сном кружится на месте, как кот устраивается
+      case 'sleep': if (!calm) { mode = 'spin'; spinT0 = t; until = t + 900; spinThen = 'sleep'; return; } mode = 'sleep'; until = t + 10000 + Math.random() * 15000; return;
+      case 'look': mode = 'look'; lookT0 = t; until = t + 2600; return;
+      // гоняется за хвостом
+      case 'spin': if (calm) break; mode = 'spin'; spinT0 = t; until = t + 1500; spinThen = ''; hop(); return;
       case 'wash': mode = 'wash'; until = t + 2600 + Math.random() * 2400; return;
       case 'yawn': mode = 'yawn'; until = t + 1500; return;
       case 'stretch': mode = 'stretch'; until = t + 1700; return;
@@ -589,7 +644,7 @@
     chaseT = t;
     const ps = platforms();
     let best = null;
-    for (const p of ps) if (mouse.x >= p.r.left && mouse.x <= p.r.right && p.r.top >= mouse.y - 12 && (!best || p.r.top < best.r.top)) best = p;
+    for (const p of ps) if (mouse.x >= p.r.left && mouse.x <= p.r.right && p.top >= mouse.y - 12 && (!best || p.top < best.top)) best = p;
     const s = best ? best.el : null;
     const tx = mouse.x - size.w / 2;
     if (s === surf) {
@@ -681,7 +736,7 @@
   }
 
   // ---------- кадр ----------
-  const GROUND = new Set(['prep', 'sit', 'walk', 'run', 'sleep', 'goEat', 'eat', 'loaf', 'wash', 'yawn', 'stretch', 'scratch', 'roll', 'play', 'edge', 'stalk', 'wiggle', 'scared', 'sneeze', 'purr']);
+  const GROUND = new Set(['look', 'spin', 'prep', 'sit', 'walk', 'run', 'sleep', 'goEat', 'eat', 'loaf', 'wash', 'yawn', 'stretch', 'scratch', 'roll', 'play', 'edge', 'stalk', 'wiggle', 'scared', 'sneeze', 'purr']);
   function land(s) {
     const air = mode === 'jump' || mode === 'fall';
     surf = s; y = surfTop(s); jump = null;
@@ -715,7 +770,7 @@
       rows = HANG_B;
       // приземлиться на блок, через верх которого пролетели, или на пол
       const cx = x + size.w / 2;
-      const hit = platforms().find((p) => cx >= p.r.left && cx <= p.r.right && p.r.top >= prev - 2 && p.r.top <= y);
+      const hit = platforms().find((p) => cx >= (p.seat ? seatLeft(p.r) : p.r.left) && cx <= p.r.right && p.top >= prev - 2 && p.top <= y); // в профиле — только правее аватарки
       if (hit) land(hit.el); else if (y >= floorAt(cx)) { x = Math.max(bowlRight(), x); land(null); }
     } else if (mode === 'jump' && jump) {
       const k = Math.min(1, (t - jump.t0) / jump.dur), y1 = surfTop(jump.s, jump.x1) + (jump.climb ? HANG_DY() : 0);
@@ -782,12 +837,30 @@
           if (t > playT && !toy.vx) play = 'go';
         } else { stopPlay(); mode = 'sit'; until = t + 4000; say('love'); rows = SIT; }
       } else if (mode === 'eat') {
-        rows = frame % 2 ? BLINK : SIT; dir = -1;
-        if (t > until) { st.bowl = Math.max(0, st.bowl - 1); st.hunger = Math.max(0, st.hunger - 70); save(); drawBowl(); clearBubble('think'); say('love'); decide(); }
+        // ест: голова в миске, жуёт (голова вверх-вниз), на каждый укус — крошки и миска подрагивает
+        const n = Math.floor(frame / 2);
+        rows = n % 2 ? EAT_B : EAT_A; dir = -1;
+        if (n % 2 && n !== biteN) { biteN = n; crumbs(); }
+        // доел — облизывает лапу
+        if (t > until) { st.bowl = Math.max(0, st.bowl - 1); st.hunger = Math.max(0, st.hunger - 70); save(); drawBowl(); clearBubble('think'); say('love'); mode = 'wash'; until = t + 1600 + Math.random() * 900; }
       } else if (mode === 'sleep') {
         rows = Math.floor(frame / 6) % 2 ? SLEEP_B : SLEEP;
         if (!bubble || !bubble.classList.contains('zz')) say('zz');
-        if (t > until || (hungry && st.bowl > 0)) { clearBubble('zz'); decide(); }
+        // проснулся — потягивается (а голодный и с кормом — сразу к миске)
+        if (t > until || (hungry && st.bowl > 0)) { clearBubble('zz'); if (!calm && !(hungry && st.bowl > 0)) { mode = 'stretch'; until = t + 1700; } else decide(); }
+      } else if (mode === 'look') {
+        // оглядывается: влево, вправо, вверх и снова прямо
+        const seq = ['left', 'left', 'right', 'right', 'up', 'open'];
+        rows = sitRows(seq[Math.min(seq.length - 1, Math.floor((t - lookT0) / 420))]);
+        if (t > until) { mode = 'sit'; until = t + 2000 + Math.random() * 2500; }
+      } else if (mode === 'spin') {
+        // кружится: за хвостом или перед сном (как устраивается). Разворот каждые 140 мс
+        rows = frame % 2 ? WALK_B : WALK_A;
+        dir = Math.floor((t - spinT0) / 140) % 2 ? 1 : -1;
+        if (t > until) {
+          if (spinThen === 'sleep') { spinThen = ''; mode = 'sleep'; until = t + 10000 + Math.random() * 15000; }
+          else { mode = 'sit'; until = t + 2500 + Math.random() * 2000; hop(); }
+        }
       } else if (mode === 'loaf') {
         rows = frame % 24 === 23 ? LOAF_BLINK : LOAF;
         if (t > until || (hungry && st.bowl > 0)) decide();
@@ -961,20 +1034,40 @@
   addEventListener('resize', () => { if (alive) measure(); });
   addEventListener('mousemove', (e) => { mouse = { x: e.clientX, y: e.clientY, t: performance.now() }; }, { passive: true });
   addEventListener('pagehide', () => { if (alive) save(); });
-  // прокрутка страницы: вниз — котик спрыгивает на плитку ниже (а с нижней — на пол), вверх — запрыгивает на плитку выше,
-  // до самого баннера. Не чаще раза в ~0,6 с, не посреди прыжка и не когда его держат; при «меньше движения» — как раньше
-  let scrollY0 = scrollY, scrollHop = 0;
+  // вернулся на вкладку после перерыва — котик радуется: подпрыгивает и сердечки (спящего не будит)
+  let awayAt = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { awayAt = Date.now(); return; }
+    if (!alive || !cat || !awayAt || Date.now() - awayAt < 30000 || BUSY.includes(mode) || mode === 'sleep') return;
+    awayAt = 0;
+    hop(); hearts(2); say('love');
+    if (['sit', 'loaf', 'look', 'walk'].includes(mode)) { mode = 'sit'; until = performance.now() + 3000; }
+  });
+  // прокрутка страницы: вниз — котик спрыгивает на плитку ниже (а с нижней — на пол), вверх — запрыгивает на ближайшую
+  // плитку выше, не дальше REACH за прыжок (по плиточкам, а не сразу наверх). Домотали до самого верха — приходит
+  // в профиль: садится на низ баннера рядом с аватаркой. Не чаще раза в ~0,6 с, не посреди прыжка и не когда его держат;
+  // при «меньше движения» — как раньше
+  const REACH = 320;
+  let scrollY0 = scrollY, scrollHop = 0, scrollLook = 0;
   addEventListener('scroll', () => {
     const dy = scrollY - scrollY0;
     scrollY0 = scrollY;
     if (!alive || !cat || calm || Math.abs(dy) < 2) return;
     const t = performance.now();
+    // очень резкая прокрутка (рывок колесом или «в начало») — иногда пугается: хвост трубой, «!»
+    if (Math.abs(dy) > 900 && !BUSY.includes(mode) && mode !== 'scared' && Math.random() < 0.35) { stopPlay(); scrollHop = t; scare(t); return; }
     if (t - scrollHop < 600 || ['drag', 'jump', 'climb', 'fall', 'prep', 'eat', 'goEat', 'scared'].includes(mode)) return;
+    if ((dy > 0 && !surf) || t - scrollLook < 160) return; // на полу и листают вниз — прыгать некуда; площадки ищем не на каждое событие
+    scrollLook = t;
     const cx = x + size.w / 2, near = (p) => Math.abs((p.r.left + p.r.right) / 2 - cx);
     const ps = platforms().filter((p) => p.el !== surf && near(p) < 700);
-    const next = dy > 0
-      ? ps.filter((p) => p.r.top > y + 20).sort((a, b) => a.r.top - b.r.top || near(a) - near(b))[0]
-      : ps.filter((p) => p.r.top < y - 30).sort((a, b) => b.r.top - a.r.top || near(a) - near(b))[0];
+    let next;
+    if (dy > 0) next = ps.filter((p) => !p.seat && p.top > y + 20).sort((a, b) => a.top - b.top || near(a) - near(b))[0];
+    else {
+      // наверху страницы — место в профиле (если оно есть и котик ещё не там), иначе ближайшая плитка выше в пределах прыжка
+      const seat = scrollY < 40 && !isSeat(surf) ? ps.find((p) => p.seat) : null;
+      next = seat || ps.filter((p) => !p.seat && p.top < y - 30 && p.top >= y - REACH).sort((a, b) => b.top - a.top || near(a) - near(b))[0];
+    }
     if (!next && (dy < 0 || !surf)) return; // выше прыгать некуда / уже на полу
     scrollHop = t;
     stopPlay(); clearBubble('zz');

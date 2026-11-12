@@ -71,7 +71,7 @@
       const a = -Math.PI / 2 + (Math.random() - 0.5) * Math.PI * 1.6, v = 6 + Math.random() * 11;
       return { x: o.x, y: o.y, vx: Math.cos(a) * v, vy: Math.sin(a) * v, w: 6 + Math.random() * 6, h: 4 + Math.random() * 6, r: Math.random() * Math.PI * 2, vr: (Math.random() - 0.5) * 0.4, c: cols[i % cols.length], gone: false };
     });
-    return loop((k) => {
+    const stop = loop((k) => {
       g.setTransform(r, 0, 0, r, 0, 0);
       g.clearRect(0, 0, W, H);
       const damp = Math.pow(0.985, k);
@@ -86,8 +86,10 @@
         g.fillStyle = p.c;
         if (!(o.part && o.part(g, p.w, p.h))) { const f = Math.abs(Math.cos(p.r * 2)); g.fillRect(-p.w / 2, -p.h / 2 * f, p.w, p.h * f + 1); }
       }
+      if (!alive) { g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height); }
       return alive > 0;
     }, 60);
+    return () => { stop(); g.setTransform(1, 0, 0, 1, 0, 0); g.clearRect(0, 0, cv.width, cv.height); };
   };
   window.CasualUtil = Object.freeze({ esc, read, plural, script, emptyArt, loop, confetti });
   // котик Васян внизу экрана (vasyan.js сам проверяет, не выключен ли он в Настройках; в админке и на /r/ его нет)

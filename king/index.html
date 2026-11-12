@@ -867,6 +867,17 @@ html.unslop[data-ui] .hub { font-size: clamp(9px, calc(5.4cqw - 3px), 26px); let
   html.unslop[data-ui] .hub:hover:not(:disabled) { transform: translate(-50%, -50%) scale(1.04); }
   html.unslop[data-ui] .th:hover { transform: translateY(-2px) scale(1.02); }
 }
+/* «Царь горы» (king/app.js): без пружин и подскока. Победитель — рамка цветом акцента без свечения, проигравший гаснет;
+   новый бой и карточка победителя появляются кадрами вида (--mo-in, --mo-ease) */
+html.unslop:not([data-ui]) .kg .card { animation: none; }
+html.unslop :is(.kg-side.win, .kg-champ-art .kg-pic) { box-shadow: 0 0 0 3px var(--accent); }
+html.unslop .kg-decide .kg-side.win { animation: kg-ring var(--mo-in) var(--mo-ease); }
+html.unslop .kg-decide .kg-side.lose { animation: kg-lose calc(var(--mo-in) * 1.8) var(--mo-ease) backwards; }
+html.unslop .kg-decide .kg-won { animation: u-fade var(--mo-in) var(--mo-ease) backwards; }
+html.unslop .kg-enter .kg-side.in, html.unslop .kg-person.new { animation: u-in var(--mo-in) var(--mo-ease) backwards; }
+html.unslop .kg-champ.kg-enter :is(.kg-champ-art, .kg-champ-name, .kg-stats) { animation: u-pop var(--mo-in) var(--mo-ease) backwards; }
+html.unslop .kg-champ.kg-enter .kg-crown { animation: u-fade var(--mo-in) var(--mo-ease) .1s backwards; }
+@media (hover: hover) { html.unslop button.kg-side:not(:disabled):hover { transform: translateY(-1px); box-shadow: none; } }
 </style>
 </head>
 <body>
@@ -894,6 +905,7 @@ html.unslop[data-ui] .hub { font-size: clamp(9px, calc(5.4cqw - 3px), 26px); let
 </div>
 
 <script src="/themes.js"></script>
+<script src="/chat.js"></script>
 <script src="/king/app.js"></script>
 </body>
 </html>

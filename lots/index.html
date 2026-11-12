@@ -829,6 +829,28 @@ html.intro .masthead .scale { animation: card-rise .3s var(--out) .04s backwards
   .lots-list, .hist-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (min-width: 3000px) { .page { max-width: 2480px; } .wheel-wrap { width: min(100%, 1180px); } .title { font-size: 128px; } body { font-size: 17px; } }
+/* Чат сбора (lots/chat.js, виджет /chat.js): на широком экране — справа над лотами, колесо слева на всю высоту;
+   на телефоне — своя вкладка «Чат» в переключателе сверху */
+@media (min-width: 980px) {
+  .layout.has-chat { grid-template-rows: auto 1fr; }
+  .layout.has-chat > .stage { grid-column: 1; grid-row: 1 / span 2; }
+  .layout.has-chat > .ch-card { grid-column: 2; grid-row: 1; }
+  .layout.has-chat > .board { grid-column: 2; grid-row: 2; }
+  .ch-card { --ch-h: clamp(220px, 34vh, 360px); }
+}
+@media (max-width: 979px) {
+  .layout[data-section="chat"] > .stage, .layout[data-section="chat"] > .board, .layout:not([data-section="chat"]) > .ch-card { display: none; }
+  .mnav.has-chat { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .ch-card { --ch-h: max(260px, calc(100vh - 330px)); }
+}
+@supports selector(:has(a)) {
+  @media (max-width: 979px) {
+    .mnav.has-chat::before { width: calc((100% - 8px - 8px) / 3); }
+    .mnav.has-chat:has(button:nth-child(3)[aria-pressed="true"])::before { transform: translateX(calc(200% + 8px)); }
+  }
+}
+.mnav .ch-badge { display: inline-block; min-width: 18px; height: 18px; margin-left: 6px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--on-accent, #fff); font-style: normal; font-size: 11px; font-weight: 800; line-height: 18px; text-align: center; font-variant-numeric: tabular-nums; vertical-align: 1px; }
+@media (max-width: 360px) { .mnav.has-chat button svg { display: none; } }
 </style>
 <script src="/whatsnew.js"></script>
 <script src="/online.js" defer></script><script src="/friends-panel.js" defer></script><script src="/header-menu.js" defer></script>
@@ -1026,5 +1048,7 @@ html.unslop[data-ui] .hub { font-size: clamp(9px, calc(5.4cqw - 3px), 26px); let
 <script src="/lots/predict.js"></script>
 <script src="/lots/evening.js"></script>
 <script src="/lots/bingo.js"></script>
+<script src="/chat.js"></script>
+<script src="/lots/chat.js"></script>
 </body>
 </html>
