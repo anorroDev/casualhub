@@ -6,6 +6,14 @@
 (() => {
   // музыка чужого аука не обрывается при уходе со страницы зрителя: мини-плеер сам решает, нужно ли ему что-то делать
   try { if (localStorage.getItem('casualhub.lots.follow.v1')) { const f = document.createElement('script'); f.src = '/lots-follow.js'; f.defer = true; document.head.appendChild(f); } } catch (e) {}
+  // iPhone и iPad увеличивают страницу, когда нажимаешь на поле с шрифтом меньше 16 px, и она так и остаётся увеличенной.
+  // maximum-scale=1 убирает это, а пальцами масштаб на iOS всё равно меняется (Safari этого не запрещает).
+  // Только на iOS: на Android та же настройка запретила бы увеличивать страницу пальцами
+  try {
+    const ios = /iP(hone|ad|od)/.test(navigator.platform) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const vp = document.querySelector('meta[name="viewport"]');
+    if (ios && vp && !/maximum-scale/.test(vp.content)) vp.content += ', maximum-scale=1';
+  } catch (e) {}
   const MOVE = '#howtoBtn, .howto-btn, a[href*="github.com"]';
   const css = document.createElement('style');
   css.textContent = `
@@ -28,11 +36,25 @@
 .hm-panel > a, .hm-panel > button, .hm-panel > span { width: 100% !important; min-width: 0 !important; height: auto !important; min-height: 40px; padding: 8px 12px !important; gap: 8px !important; border-radius: 11px !important; font-size: 13.5px !important; line-height: 1.2 !important; align-items: center; }
 .hm-t { margin-left: 2px; }
 .hm-panel > .hm-all { border: 1.5px solid transparent !important; background: linear-gradient(var(--panel, #1b1d24), var(--panel, #1b1d24)) padding-box, linear-gradient(120deg, var(--accent, #3550E8), #E85FA5 55%, #F5B942) border-box !important; color: var(--ink, #f3f4f6) !important; font-weight: 700 !important; min-height: 46px; margin-bottom: 4px !important; text-decoration: none; transition: box-shadow .2s, transform .2s; }
-.hm-panel > .hm-all:hover, .hm-panel > .hm-all:focus-visible { transform: translateY(-1px); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #3550E8) 20%, transparent), 0 10px 24px -14px #E85FA5; }
+.hm-panel > .hm-all:focus-visible { transform: translateY(-1px); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #3550E8) 20%, transparent), 0 10px 24px -14px #E85FA5; }
+/* подъём при наведении — только с мышью: на телефоне после касания строка оставалась «приподнятой» */
+@media (hover: hover) { .hm-panel > .hm-all:hover { transform: translateY(-1px); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #3550E8) 20%, transparent), 0 10px 24px -14px #E85FA5; } }
 .hm-all svg { color: var(--accent, #3550E8); flex: none; }
 .hm-all .hm-go { margin-left: auto; font-size: 18px; line-height: 1; opacity: .55; }
-/* на узком экране «Мнение» и «Колесо» — только значки, чтобы шапка помещалась в одну строку */
-@media (max-width: 480px) { .hm-nav .hm-t, .hm-nav .t, .hm-fr .fb-t { display: none !important; } .hm-nav, .hm-fr { padding: 0 11px !important; } }
+/* до 1000 px (телефон боком, планшет) «Мнение», «Колесо», «Тир-листы» и «Друзья» — только значки, а у профиля — только аватар:
+   с подписями шапка шла в 2–4 строки (на телефоне боком 640×360 она занимала больше трети экрана). Подписи — в подсказках и в меню ☰ */
+@media (max-width: 1000px) {
+  /* .ml-text и .wl-text — подписи «Мнение» в Колесе и «Колесо» в Мнении (их ссылки стоят в разметке страниц) */
+  .hm-nav .hm-t, .hm-nav .t, .hm-nav .ml-text, .hm-nav .wl-text, .hm-fr .fb-t { display: none !important; }
+  .hm-nav, .hm-fr { padding: 0 11px !important; }
+  /* в Мнении кнопка профиля своя (.user-pill), в Колесе и Тир-листах — .acct-btn: у них тоже только аватар, размером с соседние кнопки */
+  header .acc-name, header .user-pill .user-name, header .acct-btn .acct-name { display: none !important; }
+  header .user-pill { width: 40px; height: 40px; padding: 0 !important; gap: 0 !important; justify-content: center; flex: none; }
+  header .acct-btn { min-width: 40px; padding: 0 !important; gap: 0 !important; justify-content: center; flex: none; }
+}
+/* на главной надпись у логотипа — только когда для неё есть место: до 420 px разделы уходят в меню и она помещается,
+   а с 481 до 700 px разделы снова в шапке значками */
+@media (max-width: 420px), (min-width: 481px) and (max-width: 700px) { header.top > .mark { font-size: 0 !important; gap: 0 !important; } }
 /* телефон: «← Хаб» только стрелкой, а на самых узких ещё и без счётчика, чтобы разделы, «Друзья», профиль и ☰ поместились в одну строку */
 @media (max-width: 400px) { #homeLink, #backLink, header .pill[href="/"] { margin-right: 0 !important; } .hm-left { margin-right: auto !important; } }
 /* место слева, сразу после логотипа: туда levels-ui.js ставит кнопку уровня (и магазин); пустое — ничего не занимает */
@@ -47,11 +69,22 @@ header.top > .hm-left { margin-left: 4px; }
 .hm-panel > .hm-secs { display: none !important; }
 @media (max-width: 480px) {
   header .hm-nav { display: none !important; }
-  /* у профиля на телефоне — только аватар (ник есть на странице профиля и в подсказке): так всё влезает в одну строку */
-  header .acc-name { display: none !important; }
   .hm-panel > .hm-secs { display: grid !important; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
   .hm-secs a { display: grid; justify-items: center; gap: 5px; padding: 10px 4px; border-radius: 12px; border: 1px solid var(--line, #2b2e38); color: var(--ink, #f3f4f6); text-decoration: none; font-size: 12.5px; font-weight: 600; min-height: 56px; }
   .hm-secs a[aria-current="page"] { border-color: var(--accent, #3550E8); background: color-mix(in srgb, var(--accent, #3550E8) 12%, transparent); }
+}
+/* большие экраны (2K, 4K): меню ☰ шире и крупнее, а на 4K при масштабе 100% (от 3000 px) и сами кнопки шапки —
+   36 px там выглядели точками */
+@media (min-width: 2200px) { .hm-panel { width: 340px; top: 72px; } }
+@media (min-width: 3000px) {
+  .hm-panel { width: 400px; top: 84px; }
+  .hm-panel > a, .hm-panel > button, .hm-panel > span { min-height: 48px; font-size: 16px !important; }
+  header .theme-btn, header .pill, header .user-pill, .wn-corner > * { height: 48px; min-width: 48px; font-size: 16.5px; }
+  header .theme-btn:not(.hm-btn):not(.lv-shop), header .pill:not(.hm-btn):not(.lv-shop) { padding-inline: 16px; }
+  header .theme-btn svg, header .pill svg, .wn-corner svg { width: 19px; height: 19px; }
+  header .user-avatar, header .avatar, header .acct-ava { width: 34px; height: 34px; font-size: 15px; }
+  header.top > .mark { font-size: 28px; }
+  header.top > .mark img { width: 40px; height: 40px; }
 }
 /* счётчик «на сайте»: в правом углу страницы, а если места нет — строкой в меню */
 .wn-corner .oc-mini { box-shadow: 0 10px 24px -14px rgba(0, 0, 0, .6); }

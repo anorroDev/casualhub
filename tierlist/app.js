@@ -11,8 +11,20 @@
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const touch = matchMedia('(pointer: coarse)').matches;
   const rid = (p) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-  const COLORS = ['#43C97A', '#9BCF4E', '#F2BA44', '#F28E4C', '#F26A55', '#E85FA5', '#8C7BFF', '#5B9BF5', '#4CC9C0', '#9AA0AE'];
-  const DEFAULT_ROWS = [['S', '#43C97A'], ['A', '#9BCF4E'], ['B', '#F2BA44'], ['C', '#F28E4C'], ['D', '#F26A55']];
+  // тема тир-листа из магазина (shop.js помнит надетое в casualhub.shop.v1 для вошедшего): цвета рядов у новых
+  // тир-листов, палитра выбора цвета, фон и цвет заголовка у картинки при скачивании
+  const SHOP_TIER = (() => {
+    try {
+      const s = JSON.parse(localStorage.getItem('casualhub.shop.v1') || 'null'), u = JSON.parse(localStorage.getItem('ocenshik.user.v1') || 'null');
+      return (s && s.look && s.look.tier && u && String(u.id) === s.uid && s.look.tier) || {};
+    } catch (e) { return {}; }
+  })();
+  const hex = (c) => typeof c === 'string' && /^#[0-9a-f]{6}$/i.test(c);
+  const COLORS = Array.isArray(SHOP_TIER.palette) && SHOP_TIER.palette.length && SHOP_TIER.palette.every(hex) ? SHOP_TIER.palette
+    : ['#43C97A', '#9BCF4E', '#F2BA44', '#F28E4C', '#F26A55', '#E85FA5', '#8C7BFF', '#5B9BF5', '#4CC9C0', '#9AA0AE'];
+  const DEFAULT_ROWS = Array.isArray(SHOP_TIER.rows) && SHOP_TIER.rows.length === 5 && SHOP_TIER.rows.every(hex) ? ['S', 'A', 'B', 'C', 'D'].map((n, i) => [n, SHOP_TIER.rows[i]])
+    : [['S', '#43C97A'], ['A', '#9BCF4E'], ['B', '#F2BA44'], ['C', '#F28E4C'], ['D', '#F26A55']];
+  const EXPORT_BG = hex(SHOP_TIER.bg) ? SHOP_TIER.bg : '#0D0F14', EXPORT_INK = hex(SHOP_TIER.ink) ? SHOP_TIER.ink : '#F3F4F6';
   const LIMIT = { rows: 20, items: 500, title: 80, label: 40, name: 80, file: 20 * 1024 * 1024, json: 80 * 1024 * 1024 };
   const COLOR_RE = /^#[0-9a-f]{6}$/i, SRC_RE = /^\/wheel\/hub\/(?!.*\.\.)[\w\-/.]+\.(png|webp|gif|jpe?g)$/i, DATA_RE = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/;
   const ITEM_RE = /^(?!__proto__$|constructor$|prototype$)[\w.:-]{1,80}$/;
@@ -865,10 +877,10 @@
     const c = document.createElement('canvas');
     c.width = W; c.height = H;
     const g = c.getContext('2d');
-    g.fillStyle = '#0D0F14'; g.fillRect(0, 0, W, H);
+    g.fillStyle = EXPORT_BG; g.fillRect(0, 0, W, H);
     let y = PAD;
     if (hasTitle) {
-      g.fillStyle = '#F3F4F6'; g.font = '800 60px Handjet, Onest, sans-serif'; g.textBaseline = 'middle'; g.textAlign = 'left';
+      g.fillStyle = EXPORT_INK; g.font = '800 60px Handjet, Onest, sans-serif'; g.textBaseline = 'middle'; g.textAlign = 'left';
       let t = l.title;
       while (g.measureText(t).width > W - PAD * 2 && t.length > 2) t = t.slice(0, -2);
       g.fillText(t === l.title ? t : t + '…', PAD, y + 26);

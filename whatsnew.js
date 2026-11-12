@@ -65,6 +65,27 @@
 .wn-msg { padding: 24px 0; color: var(--ink-2); }
 [data-whatsnew] { position: relative; }
 [data-whatsnew] .wn-dot { position: absolute; top: 4px; right: 4px; width: 9px; height: 9px; border-radius: 50%; background: var(--bad); box-shadow: 0 0 0 2px var(--panel); }
+/* большие экраны (2K, 4K): окно шире, а текст крупнее в той же мере — строка остаётся около 62 знаков */
+@media (min-width: 2200px) {
+  .wn-card { width: min(760px, 100%); }
+  .wn-head h2 { font-size: 42px; }
+  .wn-body .rel { grid-template-columns: 84px minmax(0, 1fr); }
+  .wn-body .rel-v { font-size: 26px; }
+  .wn-body .rel h4 { font-size: 17px; }
+  .wn-body .rel p { font-size: 15.5px; }
+  .wn-body .rel p > b:first-child { font-size: 16.5px; }
+  .wn-emo { width: 36px; height: 36px; }
+}
+@media (min-width: 3000px) {
+  .wn-card { width: min(920px, 100%); }
+  .wn-head h2 { font-size: 50px; }
+  .wn-body .rel { grid-template-columns: 100px minmax(0, 1fr); }
+  .wn-body .rel-v { font-size: 30px; }
+  .wn-body .rel h4 { font-size: 19px; }
+  .wn-body .rel p { font-size: 18px; }
+  .wn-body .rel p > b:first-child { font-size: 19px; }
+  .wn-emo { width: 42px; height: 42px; }
+}
 @media (max-width: 560px) {
   .wn-sheet { place-items: end stretch; padding: 0; }
   .wn-card { width: 100%; max-height: 90vh; max-height: 90dvh; border-bottom: 0; border-radius: 20px 20px 0 0; animation-name: wn-up; }
@@ -132,6 +153,14 @@
     }, () => {});
   }
 
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bindButtons);
-  else bindButtons();
+  // ссылка из письма об обновлениях (/#whatsnew): окно открывается сразу, а метка убирается из адреса
+  function openFromLink() {
+    if (location.hash !== '#whatsnew') return;
+    ensureStyle();
+    open();
+    try { history.replaceState(null, '', location.pathname + location.search); } catch (e) {}
+  }
+  const start = () => { bindButtons(); openFromLink(); };
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
 })();

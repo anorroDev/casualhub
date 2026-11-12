@@ -1,0 +1,139 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+/* Казуал Хаб: вид «Минимал» — в духе Apple. Включён, когда у <html> класс unslop и data-ui="minimal" (выбирается
+   в Настройках). Это не «Казуальный» (тот оставляет прежнюю вёрстку, только тише): здесь своя — много воздуха,
+   крупные чистые заголовки, системный шрифт Apple на их устройствах и Inter у остальных, тонкие разделители,
+   крупные радиусы, кнопки-«пилюли» без рамок с лёгкой заливкой, сегменты как в iOS, едва заметные тени,
+   меню из матового стекла и плавные появления с лёгким масштабом. Цвета — только переменные темы. */
+
+/* ---------- основа ---------- */
+html[data-ui="minimal"]:root {
+  --v-font: -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif;
+  --v-ease: cubic-bezier(.2, .8, .2, 1);
+  --v-hair: color-mix(in srgb, var(--ink) 9%, transparent);
+  --v-fill: color-mix(in srgb, var(--ink) 6%, transparent);
+  --v-fill-2: color-mix(in srgb, var(--ink) 11%, transparent);
+  --v-lift: 0 1px 2px color-mix(in srgb, #000 6%, transparent), 0 10px 30px -16px color-mix(in srgb, #000 22%, transparent);
+  --v-float: 0 1px 3px color-mix(in srgb, #000 8%, transparent), 0 28px 70px -30px color-mix(in srgb, #000 38%, transparent);
+  --font-display: var(--v-font);
+  --font-body: var(--v-font);
+  --shadow: var(--v-lift);
+  --spring: var(--v-ease);
+  --r: 20px; --r-sm: 14px; --pad: 28px;
+}
+html[data-ui="minimal"] body { letter-spacing: -.006em; line-height: 1.55; }
+html[data-ui="minimal"] :is(button, input, select, textarea) { font-family: var(--v-font); }
+/* чистый фон без звёзд и сетки точек */
+html[data-ui="minimal"]::after, html[data-ui="minimal"] body::after { content: none !important; }
+
+/* ---------- воздух ---------- */
+html[data-ui="minimal"] .page { padding-block: 30px 64px; }
+html[data-ui="minimal"] .hero { gap: 30px; }
+html[data-ui="minimal"] .apps { gap: 22px; }
+@media (min-width: 760px) { html[data-ui="minimal"] .apps { gap: 28px; } }
+html[data-ui="minimal"] .masthead { margin-bottom: 34px; }
+html[data-ui="minimal"] .lv-body { gap: 22px; padding: 26px 30px 40px; }
+html[data-ui="minimal"] .st-row { min-height: 60px; padding: 12px 16px; }
+@media (max-width: 560px) { html[data-ui="minimal"] .lv-body { padding: 20px 18px 32px; } }
+
+/* ---------- заголовки ---------- */
+html[data-ui="minimal"] :is(.title, .wordmark) { font-family: var(--v-font); font-weight: 700; letter-spacing: -.04em; line-height: .96; }
+html[data-ui="minimal"] .wordmark { font-weight: 800; letter-spacing: -.055em; font-size: clamp(62px, 15vw, 180px); line-height: .9; column-gap: .2em; }
+html[data-ui="minimal"] :is(h1, h2, h3, .app-name, .view-tab, .tl-view-title, .st-nav h2, .st-head h3, .lv-head h2, .wn-head h2, .howto-head) { font-family: var(--v-font); letter-spacing: -.022em; }
+html[data-ui="minimal"] :is(h2, .feed h2, .recs h2) { font-weight: 700; }
+/* Inter шире узкого пиксельного Handjet: подписи, рассчитанные на него, — помельче */
+html[data-ui="minimal"] .app-name { font-size: clamp(22px, 2.1vw, 26px); font-weight: 700; line-height: 1.1; letter-spacing: -.025em; }
+html[data-ui="minimal"] .view-tab { font-size: clamp(20px, 6.6cqi, 34px); font-weight: 700; letter-spacing: -.03em; }
+html[data-ui="minimal"] .mark { font-family: var(--v-font); font-weight: 700; letter-spacing: -.02em; }
+html[data-ui="minimal"] :is(.lede, .app-desc, .e-note p, .bd-note, .cm-text, .wn-body p, .wn-body li, .howto li, .rt-why, .notice) { line-height: 1.6; }
+
+/* ---------- карточки: крупные радиусы, едва заметная тень вместо рамки ---------- */
+html[data-ui="minimal"] :is(.card, .sheet-card, .app, .tile, .stat, .fr-card, .rd-card, .e-note, .lv-box, .lv-bi, .lv-ach, .lv-letter, .lv-recap > div, .fol-box, .st-box, .rt, .cat-ask, .tl-row) { border-radius: var(--r); border-color: var(--v-hair); }
+html[data-ui="minimal"] :is(.card, .app, .tile, .stat, .fr-card, .rd-card, .rt, .lv-box, .lv-bi, .lv-ach, .lv-letter) { box-shadow: var(--v-lift); }
+html[data-ui="minimal"] :is(.pv, .pv-row, .pv-tier > span, .e-thumb, .e-photo, .rt-pic, .fd-pic, .e-body, .st-th, .app-icon) { border-radius: 14px; }
+html[data-ui="minimal"] :is(.e-thumb, .fd-pic) { border-radius: 12px; }
+html[data-ui="minimal"] .pv { background: var(--v-fill); border-color: transparent; }
+html[data-ui="minimal"] .app { transform: none; padding: 18px 18px 22px; transition: box-shadow .35s var(--v-ease); }
+html[data-ui="minimal"] .app:hover { box-shadow: 0 2px 6px color-mix(in srgb, #000 7%, transparent), 0 22px 48px -22px color-mix(in srgb, #000 30%, transparent); }
+html[data-ui="minimal"] :is(.fd, .rt, .pv-row, .pv-tier b):hover, html[data-ui="minimal"] .app:hover :is(.pv-row, .pv-tier b) { transform: none; }
+html[data-ui="minimal"] .pv-row { border-color: transparent; box-shadow: 0 1px 2px color-mix(in srgb, #000 6%, transparent); }
+html[data-ui="minimal"] .st-box { background: var(--panel); border-radius: 16px; }
+html[data-ui="minimal"] .st-box > * + * { border-top-color: var(--v-hair); }
+html[data-ui="minimal"] .st-box > :first-child { border-radius: 15px 15px 0 0; }
+html[data-ui="minimal"] .st-box > :last-child { border-radius: 0 0 15px 15px; }
+html[data-ui="minimal"] .st-box > :only-child { border-radius: 15px; }
+
+/* ---------- окна: крупные радиусы, тонкая рамка, мягкая тень; меню — матовое стекло ---------- */
+html[data-ui="minimal"] :is(.st-card, .fp-card, .howto, .wn-card, .lv-card, .hm-panel, .t-pop, .ban-menu, .hist-menu) { border-radius: 22px; border-color: var(--v-hair); box-shadow: var(--v-float); }
+html[data-ui="minimal"] .hm-panel { background: color-mix(in srgb, var(--panel) 80%, transparent); -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6); }
+html[data-ui="minimal"] :is(.lv-toast, .site-ann, .site-note, .st-toast) { border-radius: 16px; border-color: var(--v-hair); box-shadow: var(--v-float); }
+html[data-ui="minimal"] :is(.lv-ov, .st-sheet, .fp-sheet, .howto-modal, .wn-sheet, .sheet, .tm-sheet, .rv-sheet) { background-color: color-mix(in srgb, #000 26%, transparent) !important; -webkit-backdrop-filter: blur(10px) !important; backdrop-filter: blur(10px) !important; }
+html[data-ui="minimal"] :is(.st-nav, .wn-head, .lv-tabs) { border-color: var(--v-hair); }
+html[data-ui="minimal"] .st-nav { background: color-mix(in srgb, var(--ink) 3%, transparent); }
+
+/* ---------- кнопки: пилюли без рамок, лёгкая заливка; главная — цветом акцента ---------- */
+html[data-ui="minimal"] :is(.pill, .theme-btn, .btn, .chip-btn, .sub-chip, .status-chip, .mini-btn, .tpl-btn, .user-pill, .opt, .st-btn, .fp-btn, .lv-btn, .howto-ok, .cm-send, .wg-btn, .mp-btn, .rx-btns button, .fx-mute, .fx-skip, .lots-opt, .crop-ratios button, .recs-tabs button, .lv-tabs button, .lv-pick button, .chip) { border-radius: 999px; border-color: transparent; background-color: var(--v-fill); font-weight: 600; transition: background-color .25s var(--v-ease), color .2s var(--v-ease), transform .25s var(--v-ease); }
+html[data-ui="minimal"] :is(.pill, .theme-btn, .btn, .chip-btn, .sub-chip, .status-chip, .mini-btn, .tpl-btn, .user-pill, .opt, .st-btn, .fp-btn, .lv-btn, .howto-ok, .cm-send, .wg-btn, .mp-btn, .rx-btns button, .fx-mute, .fx-skip, .lots-opt, .crop-ratios button, .recs-tabs button, .lv-tabs button, .lv-pick button, .chip):hover { background-color: var(--v-fill-2); border-color: transparent; color: var(--ink); }
+html[data-ui="minimal"] :is(.pill, .theme-btn, .btn, .chip-btn, .sub-chip, .status-chip, .mini-btn, .tpl-btn, .user-pill, .opt, .st-btn, .fp-btn, .lv-btn, .howto-ok, .cm-send, .wg-btn, .mp-btn, .rx-btns button, .fx-mute, .fx-skip, .lots-opt, .crop-ratios button, .recs-tabs button, .lv-tabs button, .lv-pick button, .chip):active { transform: scale(.97); }
+html[data-ui="minimal"] :is(.pill.primary, .btn.primary, .st-btn.pri, .fp-btn.primary, .howto-ok, .cm-send, .lv-btn:not(.ghost)) { background-color: var(--accent); border-color: transparent; color: var(--on-accent, #fff); }
+html[data-ui="minimal"] :is(.pill.primary, .btn.primary, .st-btn.pri, .fp-btn.primary, .howto-ok, .cm-send, .lv-btn:not(.ghost)):hover { background-color: color-mix(in srgb, var(--accent) 88%, var(--ink)); color: var(--on-accent, #fff); }
+html[data-ui="minimal"] :is(.btn.danger, .btn.act-del, .st-btn.bad, .fp-btn.danger) { color: var(--bad-ink, var(--bad)); background-color: color-mix(in srgb, var(--bad) 10%, transparent); }
+html[data-ui="minimal"] :is(.btn.danger-solid, .fp-btn.danger-solid) { background-color: var(--bad); color: #fff; }
+html[data-ui="minimal"] :is(.wn-x, .st-x, .fp-x, .lv-head .x, .howto-close, .lv-toast .x, .site-note button, .site-ann button) { border-radius: 50%; border-color: transparent; background: var(--v-fill); }
+html[data-ui="minimal"] :is(.wn-x, .st-x, .fp-x, .lv-head .x, .howto-close, .lv-toast .x, .site-note button, .site-ann button):hover { background: var(--v-fill-2); }
+html[data-ui="minimal"] :is(.hm-panel > a, .hm-panel > button, .hm-panel > span) { border-radius: 12px !important; border-color: transparent !important; background: transparent !important; }
+html[data-ui="minimal"] :is(.hm-panel > a, .hm-panel > button, .hm-panel > span):hover { background: var(--v-fill) !important; }
+html[data-ui="minimal"] .hm-panel > .hm-all { background: var(--v-fill) !important; border-color: transparent !important; }
+
+/* ---------- вкладки — пилюли, переключатели — сегменты как в iOS ---------- */
+html[data-ui="minimal"] :is(.lv-tabs button, .recs-tabs button) { border-color: transparent; }
+html[data-ui="minimal"] :is(.lv-tabs button, .recs-tabs button)[aria-selected="true"] { background: var(--ink); color: var(--bg); }
+html[data-ui="minimal"] :is(.seg, .st-seg, .lv-seg) { border-radius: 10px; border-color: transparent; background: var(--v-fill); padding: 2px; }
+html[data-ui="minimal"] :is(.seg button, .st-seg button, .lv-seg button) { border-radius: 8px; transition: background-color .25s var(--v-ease), color .2s var(--v-ease); }
+html[data-ui="minimal"] :is(.seg button, .st-seg button, .lv-seg button)[aria-pressed="true"] { background: var(--panel); color: var(--ink); box-shadow: 0 1px 3px color-mix(in srgb, #000 14%, transparent), 0 1px 1px color-mix(in srgb, #000 6%, transparent); }
+/* полоса разделов на телефоне — как панель вкладок iOS: матовая, с тонкой рамкой */
+html[data-ui="minimal"] .mnav { border-radius: 16px; border-color: var(--v-hair); background: color-mix(in srgb, var(--panel) 84%, transparent); -webkit-backdrop-filter: blur(20px) saturate(1.5); backdrop-filter: blur(20px) saturate(1.5); }
+html[data-ui="minimal"] .mnav button { border-radius: 12px; transition: background-color .25s var(--v-ease), color .2s var(--v-ease); }
+html[data-ui="minimal"] .st-nb { border-radius: 10px; }
+html[data-ui="minimal"] .st-nb[aria-current="page"] { background: var(--accent); color: var(--on-accent, #fff); }
+html[data-ui="minimal"] .st-nb[aria-current="page"] .st-ni { color: inherit; }
+
+/* ---------- поля: без рамки, с заливкой; в фокусе — мягкое кольцо акцента ---------- */
+html[data-ui="minimal"] :is(.inp, .name-input, textarea, .search input, .st-in, .st-at, .fr-form input, .lv-link input, .meta-input, .crit-note, .ed-input, .tl-find input, .name-edit input, select, input[type="text"], input[type="search"], input[type="email"], input[type="password"], input[type="url"], input[type="number"]) { border-radius: 12px; border-color: transparent; background-color: var(--v-fill); transition: background-color .2s var(--v-ease), box-shadow .2s var(--v-ease); }
+html[data-ui="minimal"] :is(.inp, .name-input, textarea, .search input, .st-in, .st-at, .fr-form input, .lv-link input, .meta-input, .crit-note, .ed-input, .tl-find input, .name-edit input, select, input[type="text"], input[type="search"], input[type="email"], input[type="password"], input[type="url"], input[type="number"]):focus { outline: none; background-color: var(--panel); border-color: color-mix(in srgb, var(--accent) 55%, transparent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 18%, transparent); }
+html[data-ui="minimal"] .st-sw:checked { background: var(--good); }
+
+/* ---------- списки: тонкие разделители, подсветка при наведении ---------- */
+html[data-ui="minimal"] :is(.fd, .lv-board > div, .fr-row, .rx-list li, .cm-item, .fol-it, a.fr-who, .fr-sug, .lots-rooms li) { border-radius: 14px; }
+html[data-ui="minimal"] .fd { border-color: transparent; box-shadow: var(--v-lift); }
+html[data-ui="minimal"] .feed-list { gap: 10px; }
+html[data-ui="minimal"] :is(.cm-item, .lv-board > div) { border-color: transparent; background: var(--v-fill); }
+html[data-ui="minimal"] .entry summary { border-radius: 14px; }
+html[data-ui="minimal"] .entry details[open] > summary { border-radius: 14px 14px 0 0; }
+html[data-ui="minimal"] .e-body { border-radius: 0 0 14px 14px; }
+html[data-ui="minimal"] .entry + .entry { border-top-color: var(--v-hair); }
+
+/* ---------- оценки ---------- */
+html[data-ui="minimal"] :is(.badge, .score, .pv-badge, .fd-score, .bd-v, .kpi-val, .crit-val, .lv-num) { font-family: var(--v-font); font-weight: 700; letter-spacing: -.03em; font-variant-numeric: tabular-nums; border-radius: 12px; }
+html[data-ui="minimal"] :is(.rank, .pv-rank, .lv-hero .n) { font-family: var(--v-font); font-weight: 700; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+html[data-ui="minimal"] :is(.lv-bar, .meter i, .bc, .pv-bar b, .spark i) { border-radius: 999px; }
+html[data-ui="minimal"] .lv-bar::after { border-radius: 0 999px 999px 0; }
+
+/* ---------- движение: плавное появление с лёгким масштабом ---------- */
+@keyframes mi-in { from { opacity: 0; transform: translateY(6px) scale(.985); } }
+@keyframes mi-pop { from { opacity: 0; transform: scale(.97); } }
+@keyframes mi-fade { from { opacity: 0; } }
+html[data-ui="minimal"] :is(.title, .wordmark) { animation: mi-in .4s var(--v-ease) backwards; }
+html[data-ui="minimal"] :is(.card, .app, .tile, .stat, .lv-box, .lv-bi, .lv-ach, .rt, .st-box, .lv-letter, .fd) { animation: mi-in .36s var(--v-ease) backwards; }
+html[data-ui="minimal"] .app:nth-child(2) { animation-delay: .06s; }
+html[data-ui="minimal"] .app:nth-child(3) { animation-delay: .12s; }
+html[data-ui="minimal"] :is(.st-card, .fp-card, .howto, .wn-card, .lv-card, .t-pop, .ban-menu, .hist-menu) { animation: mi-pop .32s var(--v-ease) both; }
+html[data-ui="minimal"] .hm-panel { transform-origin: top right; animation: mi-pop .26s var(--v-ease) both; }
+html[data-ui="minimal"] :is(.lv-toast, .site-ann, .site-note, .st-toast, .lv-ov, .st-sheet, .fp-sheet, .howto-modal, .wn-sheet, .sheet, .tm-sheet, .rv-sheet) { animation: mi-fade .25s var(--v-ease) both; }
+html[data-ui="minimal"] .lv-body > * { animation: mi-in .3s var(--v-ease) backwards; }
+html[data-ui="minimal"] .lv-body > :nth-child(2) { animation-delay: .04s; }
+html[data-ui="minimal"] .lv-body > :nth-child(3) { animation-delay: .08s; }
+html[data-ui="minimal"] .lv-body > :nth-child(n+4) { animation-delay: .12s; }
+@media (prefers-reduced-motion: reduce) {
+  html[data-ui="minimal"] :is(.title, .wordmark, .card, .app, .tile, .stat, .lv-box, .lv-bi, .lv-ach, .rt, .st-box, .lv-letter, .fd, .st-card, .fp-card, .howto, .wn-card, .lv-card, .t-pop, .ban-menu, .hist-menu, .hm-panel, .lv-toast, .site-ann, .site-note, .st-toast, .lv-ov, .st-sheet, .fp-sheet, .howto-modal, .wn-sheet, .sheet, .tm-sheet, .rv-sheet, .lv-body > *) { animation: none; }
+  html[data-ui="minimal"] :is(.pill, .theme-btn, .btn, .chip-btn, .sub-chip, .status-chip, .mini-btn, .tpl-btn, .user-pill, .opt, .st-btn, .fp-btn, .lv-btn, .howto-ok, .cm-send, .wg-btn, .mp-btn, .rx-btns button, .fx-mute, .fx-skip, .lots-opt, .crop-ratios button, .recs-tabs button, .lv-tabs button, .lv-pick button, .chip):active { transform: none; }
+}

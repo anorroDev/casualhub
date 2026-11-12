@@ -115,6 +115,39 @@ label.st-row { cursor: pointer; }
 .st-th i { position: relative; display: block; height: 40px; border-radius: 8px; background: var(--pb); box-shadow: inset 0 0 0 1px rgb(127 127 127 / .25); overflow: hidden; }
 .st-th i::before { content: ''; position: absolute; left: 6px; right: 6px; top: 6px; height: 12px; border-radius: 4px; background: var(--pp); }
 .st-th i::after { content: ''; position: absolute; left: 6px; bottom: 6px; width: 46%; height: 8px; border-radius: 99px; background: var(--pa); }
+/* вид интерфейса: карточка с маленьким превью — «Аа» шрифтом вида, полоска-карточка и кнопка в его манере.
+   Превью рисуются здесь, а не файлами /ui/*.css: те грузятся, только когда вид выбран */
+.st-uis { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(232px, 100%), 1fr)); gap: 8px; padding: 12px; }
+.st-ui { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 12px; align-items: center; padding: 8px; border: 2px solid transparent; border-radius: 12px; background: transparent; color: var(--ink, #f3f4f6); font: inherit; text-align: left; cursor: pointer; }
+.st-ui:hover { background: color-mix(in srgb, var(--ink, #fff) 5%, transparent); }
+.st-ui[aria-pressed="true"] { border-color: var(--accent, #3550E8); background: var(--accent-soft, rgba(53, 80, 232, .16)); }
+.st-ui > span { display: grid; gap: 2px; min-width: 0; }
+.st-ui > span b { font-size: 14px; }
+.st-ui > span small { font-size: 12px; line-height: 1.35; color: var(--ink-3, #8a8f9e); }
+.st-uis .st-pv { position: relative; display: block; width: 72px; height: 52px; border-radius: 10px; background: var(--bg, #0d0f14); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink, #888) 18%, transparent); overflow: hidden; font-style: normal; }
+.st-uis .st-pv b { position: absolute; left: 8px; top: 5px; font: 700 15px/1 system-ui, sans-serif; color: var(--ink, #f3f4f6); }
+.st-uis .st-pv s { position: absolute; left: 8px; right: 8px; top: 25px; height: 9px; border-radius: 5px; background: var(--panel, #1b1d24); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--ink, #888) 22%, transparent); }
+.st-uis .st-pv u { position: absolute; left: 8px; bottom: 6px; width: 30px; height: 8px; border-radius: 99px; background: var(--accent, #3550E8); }
+.st-uis .st-pv[data-pv="normal"] s { box-shadow: 0 0 10px color-mix(in srgb, var(--accent, #3550E8) 55%, transparent); }
+.st-uis .st-pv[data-pv="normal"]::before { content: ''; position: absolute; right: -10px; top: -12px; width: 38px; height: 38px; border-radius: 50%; background: color-mix(in srgb, var(--accent, #3550E8) 40%, transparent); filter: blur(8px); }
+.st-uis .st-pv[data-pv="minimal"] b { font: 600 16px/1 -apple-system, BlinkMacSystemFont, "Inter", system-ui, sans-serif; letter-spacing: -.02em; }
+.st-uis .st-pv[data-pv="minimal"] s { border-radius: 8px; height: 10px; box-shadow: 0 2px 6px -3px rgb(0 0 0 / .4); }
+.st-uis .st-pv[data-pv="minimal"] u { background: color-mix(in srgb, var(--accent, #3550E8) 25%, transparent); }
+.st-uis .st-pv[data-pv="pixel"] b { font: 700 18px/1 var(--font-display, monospace); }
+.st-uis .st-pv[data-pv="pixel"] s { border-radius: 0; box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--ink, #888) 45%, transparent), 2px 2px 0 color-mix(in srgb, var(--ink, #888) 35%, transparent); }
+.st-uis .st-pv[data-pv="pixel"] u { border-radius: 0; box-shadow: 2px 2px 0 color-mix(in srgb, var(--ink, #888) 45%, transparent); }
+.st-uis .st-pv[data-pv="paper"] b { font: 700 16px/1 Georgia, "Times New Roman", serif; }
+.st-uis .st-pv[data-pv="paper"] s { border-radius: 0; background: transparent; box-shadow: none; border-top: 1px solid var(--ink-3, #8a8f9e); border-bottom: 1px solid var(--ink-3, #8a8f9e); height: 7px; }
+.st-uis .st-pv[data-pv="paper"] u { border-radius: 2px; background: transparent; box-shadow: inset 0 0 0 1px var(--ink-2, #b9bdc8); }
+.st-uis .st-pv[data-pv="lobby"] { background: var(--panel, #1b1d24); }
+.st-uis .st-pv[data-pv="lobby"]::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 12px; background: color-mix(in srgb, var(--bg, #000) 70%, #000); }
+.st-uis .st-pv[data-pv="lobby"] b { left: 18px; font: 700 14px/1 system-ui, sans-serif; }
+.st-uis .st-pv[data-pv="lobby"] s { left: 18px; border-radius: 6px; background: color-mix(in srgb, var(--ink, #fff) 8%, transparent); box-shadow: inset 3px 0 0 var(--accent, #3550E8); }
+.st-uis .st-pv[data-pv="lobby"] u { left: 18px; }
+.st-uis .st-pv[data-pv="arena"] b { font: 700 15px/1 "Oswald", "Arial Narrow", sans-serif; font-stretch: condensed; text-transform: uppercase; letter-spacing: .04em; }
+.st-uis .st-pv[data-pv="arena"] s { border-radius: 0; clip-path: polygon(6px 0, 100% 0, 100% calc(100% - 6px), calc(100% - 6px) 100%, 0 100%, 0 6px); }
+.st-uis .st-pv[data-pv="arena"] u { border-radius: 0; clip-path: polygon(5px 0, 100% 0, calc(100% - 5px) 100%, 0 100%); }
+.st-uis .st-pv[data-pv="arena"]::after { content: ''; position: absolute; left: 0; top: 0; width: 14px; height: 2px; background: var(--accent, #3550E8); }
 .st-seg { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--line, #2b2e38); border-radius: 12px; }
 .st-seg button { min-height: 36px; padding: 0 14px; border: 0; border-radius: 9px; background: transparent; color: var(--ink-2, #b9bdc8); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
 .st-seg button[aria-pressed="true"] { background: var(--ink, #f3f4f6); color: var(--panel, #1b1d24); }
@@ -146,7 +179,10 @@ label.st-row { cursor: pointer; }
 @media (min-width: 720px) { .st-nav-x { display: none; } }
 @media (prefers-reduced-motion: reduce) { .st-card { animation: none; } .st-sw, .st-sw::after { transition: none; } }
 html.unslop .st-card { box-shadow: 0 24px 60px -30px rgb(0 0 0 / .45); }
-html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }`;
+html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
+/* большие экраны: на 2K (и 4K при масштабе 150%) и на 4K окно крупнее, а не узкое, как на телефоне */
+@media (min-width: 2200px) { .st-card { width: min(1100px, 100%); height: min(820px, calc(100dvh - 32px)); grid-template-columns: 270px minmax(0, 1fr); } }
+@media (min-width: 3000px) { .st-card { width: min(1380px, 100%); height: min(1040px, calc(100dvh - 32px)); grid-template-columns: 320px minmax(0, 1fr); font-size: 17px; } }`;
 
   let box = null, card = null, cur = 'account', me = null, toastT = 0, mailOn = false;
   fetch(API + '/auth/options', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : {})).then((o) => { mailOn = !!(o && o.mail); }).catch(() => {});
@@ -361,12 +397,14 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }`
     const curTheme = window.CasualThemes ? window.CasualThemes.current() : 'auto';
     const list = (window.CasualThemes && window.CasualThemes.list) || [];
     const en = window.CasualLang && window.CasualLang.lang === 'en';
+    const ui = window.CasualThemes && window.CasualThemes.ui; // вид интерфейса: «Обычный», «Казуальный», «Пиксель»…
     return grp('Тема', `<div class="st-themes">${list.map((t) => {
         const p = t.prev, bg = t.id === 'auto' ? `linear-gradient(135deg, ${p.bg} 50%, ${p.panel} 50%)` : p.bg;
         return `<button type="button" class="st-th" data-st-theme="${esc(t.id)}" aria-pressed="${t.id === curTheme}"><i style="--pb:${bg};--pp:${t.id === 'auto' ? '#FFFFFF' : p.panel};--pa:${p.accent}"></i>${esc(t.name)}</button>`;
       }).join('')}</div>`)
-      + grp('Вид', toggle({ name: 'Казуальный вид', desc: 'Спокойнее: без свечений, цветных пятен и прыгающих анимаций. Работает с любой темой', attr: 'data-unslop', on: document.documentElement.classList.contains('unslop') })
-        + (window.CasualVasyan && window.CasualVasyan.own() ? toggle({ name: 'Котик Васян на сайте', desc: 'Гуляет внизу экрана: его можно погладить и покормить из миски в левом углу', attr: 'data-vasyan', on: window.CasualVasyan.on() }) : ''))
+      + (ui ? grp('Вид интерфейса', `<div class="st-uis">${ui.list.map((x) => `<button type="button" class="st-ui" data-st-ui="${esc(x.id)}" aria-pressed="${x.id === ui.current()}"><i class="st-pv" data-pv="${esc(x.id)}" aria-hidden="true"><b>Аа</b><s></s><u></u></i><span><b>${esc(x.name)}</b><small>${esc(x.desc)}</small></span></button>`).join('')}</div>`) : '')
+      // выбор скинов Васяна рисует сам vasyan.js в [data-vasyan-skins]
+      + (window.CasualVasyan && window.CasualVasyan.own() ? grp('Котик Васян', toggle({ name: 'Котик Васян на сайте', desc: 'Гуляет внизу экрана: его можно погладить и покормить из миски в левом углу', attr: 'data-vasyan', on: window.CasualVasyan.on() }) + '<div data-vasyan-skins></div>') : '')
       + grp('Язык', `<div class="st-row"><span class="st-t"><b>Язык сайта</b><small>Страница перезагрузится</small></span><span class="st-seg" role="group" aria-label="Язык сайта"><button type="button" data-lang="ru" aria-pressed="${!en}">Русский</button><button type="button" data-lang="en" aria-pressed="${en}">English</button></span></div>`);
   };
   R.data = () => grp('Импорт', row({ name: 'Импорт из Letterboxd', desc: 'Перенести оценки фильмов из архива Letterboxd', href: '/opinion/#letterboxd', attr: 'data-lb-open data-close' }))
@@ -376,6 +414,8 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }`
   R.general = () => {
     const ex = (() => { try { return localStorage.getItem('casualhub.examples.v1') !== '0'; } catch (e) { return true; } })();
     return grp('Примеры', toggle({ name: 'Показывать примеры', desc: 'Пример топа на главной и участники в пустом Колесе. Выключишь — они уберутся и больше не появятся', attr: 'data-examples', on: ex }))
+      // письма об обновлениях (functions/_lib/mailout.js): состояние приходит с сервера — loadMailPrefs() после отрисовки
+      + (user() && token() ? grp('Письма', toggle({ name: 'Письма об обновлениях', desc: 'Когда на сайте выходит что-то новое — короткое письмо на подтверждённую почту. Отписаться можно и из самого письма', attr: 'data-mailnews disabled', on: false })) : '')
       + grp('Подсказки', `<div class="st-row"><span class="st-t"><b>Показать подсказки снова</b><small>Окно «Впервые тут?» снова откроется на каждой странице при следующем заходе</small></span><button type="button" class="st-btn" data-do="howto">Показать</button></div>`);
   };
 
@@ -408,7 +448,20 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }`
     $('.st-body').scrollTop = 0;
     card.dataset.view = 'sec';
     if (cur === 'security') loadDevices();
+    if (cur === 'general') loadMailPrefs();
     if (fromList && narrow()) $('.st-back').focus({ preventScroll: true });
+  }
+  // «Письма об обновлениях»: включён ли, и можно ли вообще (почта подтверждена)
+  async function loadMailPrefs() {
+    const t = $('[data-mailnews]');
+    if (!t) return;
+    try {
+      const p = await api('/mail/prefs');
+      if (!t.isConnected) return;
+      t.checked = !!p.news;
+      t.disabled = !p.verified;
+      if (!p.verified) { const d = t.closest('.st-row') && t.closest('.st-row').querySelector('small'); if (d) d.textContent = 'Письма приходят только на подтверждённую почту. Подтверди её в разделе «Безопасность».'; }
+    } catch (e) { /* сервер без рассылки или нет связи: переключатель так и остаётся выключенным */ }
   }
 
   function build() {
@@ -435,6 +488,13 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }`
         // тема ставится и запоминается для всех страниц (/themes.js), новая расходится кругом от нажатой карточки
         if (window.CasualThemes) window.CasualThemes.apply(th.dataset.stTheme, true, th);
         box.querySelectorAll('[data-st-theme]').forEach((b) => b.setAttribute('aria-pressed', String(b === th)));
+        return;
+      }
+      // вид интерфейса ставится и запоминается для всех страниц (/themes.js), без перезагрузки
+      const uib = e.target.closest('[data-st-ui]');
+      if (uib) {
+        if (window.CasualThemes && window.CasualThemes.ui) window.CasualThemes.ui.apply(uib.dataset.stUi, true);
+        box.querySelectorAll('[data-st-ui]').forEach((b) => b.setAttribute('aria-pressed', String(b === uib)));
         return;
       }
       const lang = e.target.closest('[data-lang]');
@@ -535,6 +595,13 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }`
       if (t.matches('[data-examples]')) {
         try { localStorage.setItem('casualhub.examples.v1', t.checked ? '1' : '0'); } catch (er) {}
         window.dispatchEvent(new CustomEvent('casualhub:examples', { detail: t.checked }));
+        return;
+      }
+      if (t.matches('[data-mailnews]')) {
+        t.disabled = true;
+        try { const r = await api('/mail/prefs', 'PUT', { news: t.checked }); t.checked = !!r.news; toast(t.checked ? 'Письма об обновлениях будут приходить' : 'Письма об обновлениях больше не придут'); }
+        catch (er) { t.checked = !t.checked; toast(er.message); }
+        t.disabled = false;
         return;
       }
       if (t.matches('[data-online]')) {

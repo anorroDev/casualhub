@@ -1,7 +1,15 @@
 /* тема ставится до первой отрисовки, чтобы при обновлении страница не мелькала */
 try { var cp = JSON.parse(localStorage.getItem('ocenshik.prefs.v1') || 'null'); if (cp && cp.theme && cp.theme !== 'auto') document.documentElement.setAttribute('data-theme', cp.theme); } catch (e) {}
-/* экспериментальный вид (unslop) из меню тем */
-try { if (localStorage.getItem('casualhub.unslop.v1') === '1') document.documentElement.classList.add('unslop'); } catch (e) {}
+/* вид интерфейса (Настройки → «Внешний вид», themes.js): «Казуальный» — класс unslop, остальные — unslop + data-ui и свой
+   /ui/<вид>.css. Файл пишется в разметку сразу, чтобы страница не мелькнула в обычном виде. Список — как UI в themes.js */
+try {
+  var uv = localStorage.getItem('casualhub.ui.v1');
+  if (!uv && localStorage.getItem('casualhub.unslop.v1') === '1') uv = 'casual';
+  if (['casual', 'minimal', 'pixel', 'paper', 'lobby', 'arena'].indexOf(uv) >= 0) {
+    document.documentElement.classList.add('unslop');
+    if (uv !== 'casual') { document.documentElement.setAttribute('data-ui', uv); document.write('<link rel="stylesheet" href="/ui/' + uv + '.css" data-ui-css="' + uv + '">'); }
+  }
+} catch (e) {}
 /* вступительные анимации не играют при обновлении (F5) и поверх сдвига между страницами: всё сразу на месте. Бесконечные не трогаем */
 function settleIntro(ms) {
   if (!document.getAnimations) return;

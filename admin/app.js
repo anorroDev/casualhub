@@ -435,13 +435,30 @@
     const my = fresh();
     try {
       const d = await call('GET', '/admin/levels');
-      const gifts = d.mode === 'off' ? { items: [] } : await call('GET', '/admin/levels/gifts');
+      const [gifts, seasons] = d.mode === 'off' ? [{ items: [] }, null] : await Promise.all([call('GET', '/admin/levels/gifts'), call('GET', '/admin/levels/seasons')]);
       if (stale(my)) return;
       const MODE = { off: 'выключены (LEVELS = "0")', admins: 'видят только админы', all: 'включены для всех' };
       const ev = d.event;
+      // время для <input type="datetime-local">: по часам этого компьютера
+      const localInput = (t) => (t ? new Date(t - new Date(t).getTimezoneOffset() * 60e3).toISOString().slice(0, 16) : '');
+      const cur = seasons && seasons.current;
+      const seasonBox = !cur ? '' : `<div class="adm-lv-ev"><h3 class="h3">Сезон ${cur.n}${cur.title && cur.title !== 'Сезон ' + cur.n ? ' · ' + esc(cur.title) : ''}</h3>
+          <p class="muted">Звание считается по опыту за сезон. В конце сезона звания сбрасываются: итоги каждого (опыт, звание, место) сохраняются, все снова «Людишка», уровень и награды остаются. Всем приходит письмо в почту.</p>
+          <p>Идёт с ${esc(when(cur.start))} · сброс ${cur.end ? esc(when(cur.end)) : 'не назначен'} · с опытом за сезон: ${cur.players}</p>
+          ${cur.top.length ? `<div class="adm-lv-log" style="display:grid">${cur.top.map((t) => `<div><span>${t.place}.</span><span>${esc(t.username)} · ${esc(t.rank)}</span><b>${t.xp}</b></div>`).join('')}</div>` : ''}
+          <div class="adm-ann-row"><input type="datetime-local" id="lvSeEnd" value="${esc(localInput(cur.end))}" aria-label="Когда сбросить звания"><input id="lvSeTitle" maxlength="60" placeholder="Название сезона, например: Сезон 2 — зима" value="${esc(cur.title || '')}" aria-label="Название сезона"></div>
+          <div class="adm-lv-kinds"><label><input type="checkbox" id="lvSeAnn" checked> объявление вверху сайта до самого сброса</label>
+            <label><input type="checkbox" id="lvSeRemind"${cur.remind && !cur.remind.canceled && !cur.remind.doneAt ? ' checked' : ''}${seasons.mail ? '' : ' disabled'}> напомнить письмом за 3 дня до сброса</label></div>
+          ${cur.remind && !cur.remind.canceled ? `<p class="muted">${cur.remind.doneAt ? `Напоминание ушло: ${cur.remind.sent} из ${cur.remind.total}.` : cur.remind.queuedAt ? `Напоминание уходит: ${cur.remind.sent} из ${cur.remind.total}.` : `Напоминание уйдёт ${esc(when(cur.remind.startAt))} (с ближайшей пачкой рассылки).`}</p>` : ''}
+          <div class="adm-ann-row"><button type="button" class="btn primary" id="lvSePlan">Запланировать сброс</button><button type="button" class="btn ghost" id="lvSeNow">Сбросить сейчас</button></div>
+          <p class="muted">Время — по часам этого компьютера. По умолчанию сброс 1-го числа в 00:00 по Москве.</p>
+          ${seasons.history.length ? `<details class="adm-lv-hist"><summary>Прошлые сезоны (${seasons.history.length})</summary>${seasons.history.map((s) => `<div class="adm-lv-log" style="display:grid">
+            <div><span>${esc(when(s.start))} — ${esc(when(s.closed))}</span><span><b>Сезон ${s.n}</b>${s.title && s.title !== 'Сезон ' + s.n ? ' · ' + esc(s.title) : ''} · участников ${s.players}</span><b></b></div>
+            ${s.top.map((t) => `<div><span>${t.place}.</span><span>${esc(t.username)} · ${esc(t.rank)}</span><b>${t.xp}</b></div>`).join('')}</div>`).join('')}</details>` : ''}
+        </div>`;
       sec().innerHTML = `<div class="head"><h2 class="h2">Уровни</h2><span class="label">${esc(MODE[d.mode] || d.mode)}</span></div>
         <p class="muted">Опыт за оценки, общение, тир-листы и лоты. Правила — в functions/_lib/levels.js, включение — LEVELS в wrangler.toml.</p>
-        ${d.mode === 'off' ? '' : `<div class="adm-ann-row"><button type="button" class="btn ghost" id="lvBack">Начислить опыт за прошлое всем</button></div>
+        ${d.mode === 'off' ? '' : `${seasonBox}<div class="adm-ann-row"><button type="button" class="btn ghost" id="lvBack">Начислить опыт за прошлое всем</button></div>
         <p class="adm-err" id="lvMsg" role="status"></p>
         <div class="adm-lv-ev"><h3 class="h3">Почта: подарок</h3>
           <p class="muted">Письмо придёт в «Почту» в меню ☰. Если указать опыт, у письма будет кнопка «Забрать»; каждый заберёт один раз.</p>
@@ -458,11 +475,27 @@
         </div>
         <ul class="adm-list">${d.users.map((u, i) => `<li class="adm-row" style="--k:${Math.min(i, 12)}">
           <div class="adm-who"><b>${esc(u.username)} <span class="muted">@${esc(u.handle)}</span>${u.fast ? ' <em class="adm-badge bad" title="Больше 60 начислений за последний час">быстро</em>' : ''}${u.hidden ? ' <em class="adm-badge mute">уровень скрыт</em>' : ''}</b>
-            <small>ур. ${u.level} · ${esc(u.rank)} · ${u.xp} опыта · за неделю ${u.week} · серия ${u.streak} (лучшая ${u.best}) · ачивок ${u.ach}</small></div>
+            <small>ур. ${u.level} · ${esc(u.rank)} (за сезон ${u.season}) · ${u.xp} опыта всего · за неделю ${u.week} · серия ${u.streak} (лучшая ${u.best}) · ачивок ${u.ach}</small></div>
           <div class="adm-acts"><button type="button" class="btn ghost small" data-lvlog="${esc(u.id)}">Журнал</button><button type="button" class="btn ghost small" data-lvadj="${esc(u.id)}" data-name="${esc(u.username)}">Опыт ±</button></div>
           <div class="adm-lv-log" id="lvLog-${esc(u.id)}" hidden></div>
         </li>`).join('')}</ul>`}`;
       const msg = $('#lvMsg');
+      // сезон: назначить сброс или сбросить сразу
+      const plan = $('#lvSePlan');
+      if (plan) plan.addEventListener('click', async () => {
+        const v = $('#lvSeEnd').value, end = v ? new Date(v).getTime() : NaN;
+        if (!Number.isFinite(end)) { msg.textContent = 'Выбери дату и время сброса.'; return; }
+        plan.disabled = true;
+        try { await call('PUT', '/admin/levels/season', { end, title: $('#lvSeTitle').value, announce: $('#lvSeAnn').checked, remind: $('#lvSeRemind').checked }); levels(); }
+        catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else { msg.textContent = x.message; plan.disabled = false; } }
+      });
+      const now_ = $('#lvSeNow');
+      if (now_) now_.addEventListener('click', async () => {
+        const ok = await dialog({ icon: '⏱', danger: true, title: `Сбросить звания сейчас?`, who: `Сезон ${cur.n}`,
+          text: 'Сезон закончится прямо сейчас: итоги каждого сохранятся, все начнут следующий сезон с «Людишки», всем придёт письмо. Уровень и награды останутся. Отменить нельзя.',
+          button: 'Сбросить', submit: () => call('POST', '/admin/levels/season/reset') });
+        if (ok) levels();
+      });
       const back = $('#lvBack');
       if (back) back.addEventListener('click', async () => {
         back.disabled = true; msg.textContent = 'Считаю…';
@@ -516,13 +549,48 @@
     } catch (x) { if (!stale(my)) fail(x); }
   }
 
+  // рассылка «Что нового»: черновик письма живёт в этом браузере, пока его не разослали
+  const MO_DRAFT = 'casualhub.admin.mailout.v1';
+  const moItems = (s) => String(s || '').split('\n').map((l) => l.trim()).filter(Boolean).slice(0, 6)
+    .map((l) => { const m = l.match(/^(.+?)\s+[—–-]\s+(.+)$/); return m ? { t: m[1].trim(), d: m[2].trim() } : { t: l, d: '' }; });
+  const moLines = (items) => items.map((it) => (it.d ? `${it.t} — ${it.d}` : it.t)).join('\n');
+  // последний выпуск «Что нового»: заголовок и первые пункты (у пункта — первое предложение)
+  async function moFromLog(name) {
+    let r = await fetch('/' + name, { cache: 'no-cache' });
+    if (!r.ok) r = await fetch('/' + name + '.html', { cache: 'no-cache' });
+    if (!r.ok) throw new Error('Не получилось открыть «Что нового»');
+    const box = new DOMParser().parseFromString(await r.text(), 'text/html');
+    const rel = box.querySelector('.rel');
+    if (!rel) throw new Error('В «Что нового» нет выпусков');
+    const items = [...rel.querySelectorAll('p')].slice(0, 5).map((p) => {
+      const b = p.querySelector('b'), t = b ? b.textContent.replace(/\s+/g, ' ').trim() : '';
+      let d = p.textContent.replace(/\s+/g, ' ').trim();
+      if (t && d.startsWith(t)) d = d.slice(t.length).trim();
+      const cut = d.indexOf('. ', 40);
+      if (d.length > 170) d = cut > 0 && cut < 220 ? d.slice(0, cut + 1) : d.slice(0, 170).replace(/\s+\S*$/, '') + '…';
+      return t ? { t, d } : { t: d.slice(0, 80), d: '' };
+    });
+    const h = rel.querySelector('h4');
+    return { subject: h ? h.textContent.replace(/\s+/g, ' ').trim() : '', items };
+  }
   async function mail() {
     const my = fresh();
     try {
-      const d = await call('GET', '/admin/mail');
+      const [d, mo] = await Promise.all([call('GET', '/admin/mail'), call('GET', '/admin/mailout')]);
       if (stale(my)) return;
       const last = d.last;
       const kinds = { reset: 'сброс пароля', verify: 'подтверждение почты', test: 'тестовое' };
+      let draft = null;
+      try { draft = JSON.parse(localStorage.getItem(MO_DRAFT) || 'null'); } catch (e) {}
+      const dr = draft || {};
+      const cur = mo.current;
+      const why = cur && cur.pausedUntil ? (cur.pauseKind === 'limit'
+        ? `Лимит писем на сутки исчерпан — остальное уйдёт после ${esc(when(cur.pausedUntil))} (ночью сам cron в rt или кнопка «Продолжить»).`
+        : `Resend не принял пачку: ${esc(cur.lastError || '—')}. Исправь причину и нажми «Продолжить».`) : '';
+      const curBox = !cur ? '' : `<div class="adm-mo-st"><p><b>«${esc(cur.subject)}»</b>: отправлено ${cur.sent} из ${cur.total}.${cur.total > cur.sent && !cur.pausedUntil ? ' Остальное — следующими пачками.' : ''}</p>
+          ${why ? `<p class="muted">${why}</p>` : ''}
+          <div class="adm-ann-row"><button type="button" class="btn primary" id="moMore">Продолжить</button><button type="button" class="btn ghost" id="moStop" data-id="${cur.id}">Остановить</button></div></div>`;
+      const recent = (mo.recent || []).filter((x) => !cur || x.id !== cur.id);
       sec().innerHTML = `<div class="head"><h2 class="h2">Почта</h2><span class="label">${d.on ? 'подключена' : 'не подключена'}</span></div>
         <p class="muted">Письма для «Забыли пароль?» и подтверждения почты уходят через Resend. Ключ задаётся в Cloudflare (MAIL_KEY), здесь не показывается.</p>
         <ul class="adm-mail">
@@ -532,7 +600,25 @@
           ${last && !last.ok ? `<li><b>Ответ Resend</b> ${esc(last.msg || '—')}</li>` : ''}
         </ul>
         <div class="adm-ann-row"><button type="button" class="btn primary" id="admMailTest"${d.on ? '' : ' disabled'}>Отправить тестовое письмо себе${d.to ? ' (' + esc(d.to) + ')' : ''}</button></div>
-        <p class="adm-err" id="admMailMsg" role="status"></p>`;
+        <p class="adm-err" id="admMailMsg" role="status"></p>
+        <div class="adm-lv-ev"><h3 class="h3">Рассылка «Что нового»</h3>
+          <p class="muted">Письмо всем с подтверждённой почтой, кроме заблокированных и отписавшихся: сейчас это ${mo.eligible} ${plural(mo.eligible, 'человек', 'человека', 'человек')}. Уходит пачками, не больше ${mo.cap} писем за сутки (у бесплатного Resend 100 в день на все письма, остальное оставляем кодам входа); за последние сутки ушло ${mo.sent24}. В каждом письме — ссылка «Отписаться». То же письмо появится во «внутренней» почте уровней.</p>
+          ${curBox}
+          ${(mo.planned || []).length ? `<p class="muted">Запланировано: ${mo.planned.map((p) => `«${esc(p.subject)}» — ${esc(when(p.startAt))}`).join(', ')}.</p>` : ''}
+          <div class="adm-ann-row"><button type="button" class="btn ghost" id="moFill">Подставить из «Что нового»</button></div>
+          <input id="moSubject" maxlength="120" placeholder="Тема письма" aria-label="Тема письма" value="${esc(dr.subject || '')}">
+          <textarea id="moTeaser" maxlength="500" rows="2" placeholder="Пара слов, чтобы захотелось зайти" aria-label="Текст под заголовком">${esc(dr.teaser || '')}</textarea>
+          <textarea id="moItems" rows="6" placeholder="Что нового — 3–6 пунктов, по одному в строке: Заголовок — короткий текст" aria-label="Пункты">${esc(dr.items || '')}</textarea>
+          <details class="adm-lv-hist"><summary>Английская версия — для тех, у кого сайт на английском</summary>
+            <input id="moSubjectEn" maxlength="120" placeholder="Subject" aria-label="Subject" value="${esc(dr.subjectEn || '')}">
+            <textarea id="moTeaserEn" maxlength="500" rows="2" placeholder="A couple of words to make people curious" aria-label="Teaser">${esc(dr.teaserEn || '')}</textarea>
+            <textarea id="moItemsEn" rows="6" placeholder="3–6 items, one per line: Title — short text" aria-label="Items">${esc(dr.itemsEn || '')}</textarea>
+          </details>
+          <input id="moLink" maxlength="500" placeholder="Ссылка кнопки" aria-label="Ссылка кнопки" value="${esc(dr.link || location.origin + '/#whatsnew')}">
+          <div class="adm-ann-row"><button type="button" class="btn ghost" id="moTest"${mo.on ? '' : ' disabled'}>Отправить себе</button><button type="button" class="btn primary" id="moSend"${mo.on && !cur ? '' : ' disabled'}>Разослать всем</button></div>
+          <p class="adm-err" id="moMsg" role="status"></p>
+          ${recent.length ? `<div class="adm-lv-log" style="display:grid">${recent.map((x) => `<div><span>${esc(when(x.createdAt))}</span><span>«${esc(x.subject)}» · ${x.sent} из ${x.total}${x.canceled ? ' · остановлена' : x.doneAt ? ' · готово' : ''}</span><b></b></div>`).join('')}</div>` : ''}
+        </div>`;
       $('#admMailTest').addEventListener('click', async (e) => {
         const b = e.currentTarget, m = $('#admMailMsg');
         b.disabled = true; m.textContent = 'Отправляю…';
@@ -541,6 +627,73 @@
           m.textContent = r.ok ? `Ушло на ${r.to}. Проверь почту, в том числе «Спам».` : 'Не ушло. Ответ Resend — в строке выше.';
           setTimeout(mail, r.ok ? 1500 : 0);
         } catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else { m.textContent = x.message; b.disabled = false; } }
+      });
+      // рассылка: черновик, «Подставить», «Отправить себе», «Разослать всем», «Продолжить», «Остановить»
+      const moMsg = $('#moMsg');
+      const val = (id) => $('#' + id).value.trim();
+      const saveDraft = () => {
+        try { localStorage.setItem(MO_DRAFT, JSON.stringify({ subject: val('moSubject'), teaser: val('moTeaser'), items: $('#moItems').value, subjectEn: val('moSubjectEn'), teaserEn: val('moTeaserEn'), itemsEn: $('#moItemsEn').value, link: val('moLink') })); } catch (e) {}
+      };
+      sec().querySelectorAll('#moSubject, #moTeaser, #moItems, #moSubjectEn, #moTeaserEn, #moItemsEn, #moLink').forEach((n) => n.addEventListener('input', saveDraft));
+      const content = () => {
+        const en = val('moSubjectEn') && moItems($('#moItemsEn').value).length ? { subject: val('moSubjectEn'), teaser: val('moTeaserEn'), items: moItems($('#moItemsEn').value) } : null;
+        return { ru: { subject: val('moSubject'), teaser: val('moTeaser'), items: moItems($('#moItems').value) }, en, link: val('moLink') };
+      };
+      const ready = (c) => {
+        if (!c.ru.subject) return 'Нужна тема письма.';
+        if (c.ru.items.length < 3) return 'Нужно хотя бы 3 пункта, что нового (по одному в строке).';
+        return '';
+      };
+      $('#moFill').addEventListener('click', async (e) => {
+        const b = e.currentTarget;
+        b.disabled = true; moMsg.textContent = 'Беру из «Что нового»…';
+        try {
+          const [ru, en] = await Promise.all([moFromLog('whatsnew'), moFromLog('whatsnew-en').catch(() => null)]);
+          $('#moSubject').value = ru.subject;
+          if (!val('moTeaser')) $('#moTeaser').value = 'Мы обновили Казуал Хаб — вот главное:';
+          $('#moItems').value = moLines(ru.items);
+          if (en) {
+            $('#moSubjectEn').value = en.subject;
+            if (!val('moTeaserEn')) $('#moTeaserEn').value = 'We’ve updated Casual Hub — here are the highlights:';
+            $('#moItemsEn').value = moLines(en.items);
+          }
+          saveDraft();
+          moMsg.textContent = 'Готово: поправь, если нужно, и отправь себе для проверки.';
+        } catch (x) { moMsg.textContent = x.message; }
+        b.disabled = false;
+      });
+      $('#moTest').addEventListener('click', async (e) => {
+        const b = e.currentTarget, c = content(), bad = ready(c);
+        if (bad) { moMsg.textContent = bad; return; }
+        b.disabled = true; moMsg.textContent = 'Отправляю себе…';
+        try {
+          const r = await call('POST', '/admin/mailout/test', { content: c });
+          moMsg.textContent = `Ушло на ${r.to}${r.n > 1 ? ' (русское и английское)' : ''}. Проверь, как выглядит, в том числе в тёмной теме почты.`;
+        } catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else moMsg.textContent = x.message; }
+        b.disabled = false;
+      });
+      $('#moSend').addEventListener('click', async () => {
+        const c = content(), bad = ready(c);
+        if (bad) { moMsg.textContent = bad; return; }
+        const ok = await dialog({ icon: '✉', title: 'Разослать письмо всем?', who: c.ru.subject,
+          text: `Получат ${mo.eligible} ${plural(mo.eligible, 'человек', 'человека', 'человек')}. За сутки уйдёт не больше ${mo.cap} писем, остальные — в следующие дни. Отменить отправленное нельзя.`,
+          button: 'Разослать', submit: () => call('POST', '/admin/mailout', { content: c }) });
+        if (ok) { try { localStorage.removeItem(MO_DRAFT); } catch (e) {} mail(); }
+      });
+      const more = $('#moMore');
+      if (more) more.addEventListener('click', async () => {
+        more.disabled = true; moMsg.textContent = 'Отправляю пачку…';
+        try {
+          const r = await call('POST', '/admin/mailout/continue');
+          const s = r.step || {};
+          moMsg.textContent = s.sentNow ? `Ушло ещё ${s.sentNow}.` : s.limited || s.paused ? `Отправлено ${r.current ? r.current.sent : 0} из ${r.current ? r.current.total : 0}, остальное — завтра.` : s.done ? 'Рассылка закончилась.' : s.failed ? 'Resend не принял пачку, причина — выше.' : '';
+          setTimeout(mail, 1200);
+        } catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else { moMsg.textContent = x.message; more.disabled = false; } }
+      });
+      const stop = $('#moStop');
+      if (stop) stop.addEventListener('click', async () => {
+        const ok = await dialog({ icon: '✉', danger: true, title: 'Остановить рассылку?', text: 'Кто ещё не получил письмо, уже не получит. Отправленное останется.', button: 'Остановить', submit: () => call('DELETE', '/admin/mailout?id=' + stop.dataset.id) });
+        if (ok) mail();
       });
     } catch (x) { if (!stale(my)) fail(x); }
   }

@@ -18,6 +18,12 @@ Thumbs.db
 # Wrangler local dev state (local D1 database)
 .wrangler/
 
+# Выгрузки и копии базы (wrangler d1 export, «Копии» в админке, rt/restore.mjs): в них хеши паролей и почты.
+# Корень репозитория — это сайт (pages_build_output_dir = "."), случайно закоммиченная выгрузка стала бы открытой
+*.sql
+*.sql.part
+*.ndjson
+
 # Local notes
 *.local.*
 

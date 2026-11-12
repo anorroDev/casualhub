@@ -15,6 +15,8 @@
 // gone (сбор удалён), error {code, msg}
 import { cleanLive, liveTx, settledLive, liveWake, liveLots, liveView, spinLive, resetLive, stopAuto } from '../functions/_lib/lots-live.js';
 import { ONLINE_MS, GUEST_RE, onlineCount, friendsAndIncoming, friendIds, readAnnounce, touchUsers, touchGuests } from '../functions/_lib/presence.js';
+import { levelsOn, currentSeason, onSeasonClose } from '../functions/_lib/levels.js';
+import { mailOn, mailoutStep } from '../functions/_lib/mailout.js';
 export { BackupDO } from './backup.js';
 
 const ROLES = ['viewer', 'host', 'admin'];
@@ -382,8 +384,16 @@ export default {
   // раз в сутки (triggers в rt/wrangler.toml): начать копию базы. Сам cron только будит комнату — на бесплатном плане
   // у него 10 мс процессора, а у будильников комнаты по 30 секунд
   async scheduled(event, env, ctx) {
+    // сезон званий: срок сброса прошёл, а на сайт никто не заходил — закрыть его здесь (обычно его закрывает
+    // первый же запрос после срока; повторное закрытие ничего не делает). Процессора тут почти не нужно: ждём базу
+    if (env.DB && levelsOn(env)) ctx.waitUntil(currentSeason(env).catch((e) => console.error('season cron', e && e.message)));
+    // письма об обновлениях: следующая пачка идущей рассылки и напоминание о сбросе званий, когда подошёл срок.
+    // Нужны MAIL_KEY и MAIL_FROM и у этого Worker'а (README, «Письма об обновлениях»)
+    if (env.DB && mailOn(env)) ctx.waitUntil(mailoutStep(env).catch((e) => console.error('mailout cron', e && e.message)));
     if (!env.BACKUPS || !env.BACKUP_ROOM) return; // хранилище R2 не подключено: копий нет, комнаты лотов и присутствия работают
     const room = env.BACKUP_ROOM.get(env.BACKUP_ROOM.idFromName('backup'));
     ctx.waitUntil(room.fetch('https://rt/start', { method: 'POST', headers: { 'x-backup-by': 'cron' } }));
   },
 };
+// сезон закрылся здесь (cron или победа в лотах, доведённая комнатой): всем открытым вкладкам — «загляни за новостями»
+onSeasonClose((env) => (env.PRESENCE_ROOM ? env.PRESENCE_ROOM.get(env.PRESENCE_ROOM.idFromName('global')).fetch('https://rt/poke', { method: 'POST', body: JSON.stringify({ what: 'mail' }) }) : null));

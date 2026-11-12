@@ -1757,6 +1757,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     wirePhotoView(p);
     if (isMe) { wireBanner(p); wireAvatar(p); wireTopics(p); const sb = $('#stBtn'); if (sb) sb.addEventListener('click', () => stickerPicker(p)); }
     hydrateFriendAvatars(p);
+    dressFromShop(p);
     if (window.CasualOnline) window.CasualOnline.paint(app);
     hydratePhotos(p, app);
     countUp();
@@ -2131,14 +2132,24 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     if (!items.length) { box.innerHTML = `<p class="hist-empty">Пока пусто: прошлые ${kind === 'avatar' ? 'аватарки' : 'баннеры'} появятся тут, когда поставишь новые.</p>`; return; }
     box.innerHTML = items.map((x) => `<span class="hist-it" data-id="${esc(x.id)}"><button type="button" class="hist-pic" data-use title="Вернуть (${esc(dayFmt(x.at))})" aria-label="Вернуть картинку от ${esc(dayFmt(x.at))}"></button><button type="button" class="hist-x" data-del aria-label="Удалить из истории" title="Удалить из истории">✕</button></span>`).join('');
     const data = new Map();
-    box.querySelectorAll('.hist-it').forEach((it) => {
+    // одна картинка — одна строка: копии с другим положением (у баннера «#pos=») и ту, что стоит сейчас, не показываем.
+    // Такие копии остались в истории с прежних версий сайта; из копий видна самая свежая (список идёт от новых к старым)
+    const cur = bare(kind === 'banner' ? p.banner : p.avatar);
+    const seen = new Map(); // картинка без положения → её строка в истории
+    const gone = (it) => { it.remove(); if (box.isConnected && !box.querySelector('.hist-it')) box.innerHTML = `<p class="hist-empty">Пока пусто: прошлые ${kind === 'avatar' ? 'аватарки' : 'баннеры'} появятся тут, когда поставишь новые.</p>`; };
+    const order = [...box.querySelectorAll('.hist-it')];
+    order.forEach((it, i) => {
       api(`/photo/${encodeURIComponent(p.uid)}/${encodeURIComponent(it.dataset.id)}`).then((d) => {
-        if (!d.data) { it.remove(); return; }
+        if (!d.data) { gone(it); return; }
+        const k = bare(d.data), twin = seen.get(k);
+        if (k === cur || (twin && order.indexOf(twin) < i)) { gone(it); return; }
+        if (twin) gone(twin);
+        seen.set(k, it);
         data.set(it.dataset.id, d.data);
         const b = it.querySelector('.hist-pic');
         b.style.backgroundImage = `url("${bare(d.data)}")`;
         if (kind === 'banner') { const ps = posOf(d.data); b.style.backgroundPosition = `${ps.x}% ${ps.y}%`; }
-      }, () => it.remove());
+      }, () => gone(it));
     });
     // onclick, а не addEventListener: меню баннера открывают много раз, обработчик должен быть один
     box.onclick = async (e) => {
@@ -2154,6 +2165,14 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     };
   }
 
+  // купленное в магазине оформление хозяина профиля (рамка аватара, ник, значок у ника) — /shop.js, только у вошедших
+  function dressFromShop(p) {
+    if (!token || !p.uid || !window.CasualUtil || !window.CasualUtil.script) return;
+    window.CasualUtil.script('/shop.js', () => !!window.CasualShop).then(() => window.CasualShop.look([p.uid])).then((m) => {
+      const avatar = $('#avaWrap'), name = $('#profileName');
+      if (avatar && avatar.isConnected) window.CasualShop.dress({ avatar, name }, m[p.uid]);
+    }).catch(() => {});
+  }
   // аватарки друзей: каждый ставит свою в профиле, сервер отдаёт её друзьям
   const friendAva = new Map();
   function hydrateFriendAvatars(p) {

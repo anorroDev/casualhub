@@ -6,7 +6,9 @@ import {
   levelsMode, levelsOn, ensureLevels, readLevel, levelView, prefsOf, lookOf, unlockedAt, levelsOf, achievementsOf, questState,
   firstSteps, takeNews, dayKey, weekStart, shiftDay, cleanTz, backfillUser, grantSpecial, currentEvent, forgetEvent, RULES, awardMany,
   ACHIEVEMENTS, REWARDS, NAME_COLORS, PROFILE_BGS, FIRST_STEPS, isScored, textLen, rankOf, award,
+  SEASON_RANKS, seasonRankOf, rankFields, currentSeason, closeSeason, forgetSeason, seasonXpOf, seasonXpMany, seasonPlanLetter, fmtMsk,
 } from './levels.js';
+import { planSeasonReminder, cancelSeasonReminder, seasonReminderOf, mailOn } from './mailout.js';
 
 // подписи для истории опыта
 export const KIND_LABEL = {
@@ -73,6 +75,22 @@ export async function mailUnread(env, uid) {
   return +(r && r.n) || 0;
 }
 
+// сезон для окна «Прогресс» (поле season в /levels/me): номер, срок сброса, мой опыт и звание за сезон,
+// все звания по возрастанию порога и мои прошлые сезоны (новые сверху, не больше 12) — одной пачкой
+export async function seasonOf(env, uid, s) {
+  if (!s) return null;
+  const [sx, hist] = await env.DB.batch([
+    env.DB.prepare('SELECT COALESCE(SUM(xp), 0) AS s FROM xp_log WHERE user_id = ? AND gone = 0 AND at >= ?').bind(uid, s.start),
+    env.DB.prepare('SELECT r.season AS n, s.title, r.rank, r.xp, r.place FROM season_results r JOIN seasons s ON s.n = r.season WHERE r.user_id = ? ORDER BY r.season DESC LIMIT 12').bind(uid),
+  ]);
+  const xp = +(((sx.results || [])[0] || {}).s) || 0;
+  return {
+    n: s.n, title: s.title, start: s.start, end: s.end, xp, rank: seasonRankOf(xp).id,
+    ranks: SEASON_RANKS.map((r) => ({ id: r.id, title: r.title, xp: r.xp })),
+    history: (hist.results || []).map((x) => ({ n: +x.n, title: x.title, rank: x.rank, xp: +x.xp || 0, place: +x.place || 0 })),
+  };
+}
+
 export function makeLevelsRoutes(h) {
   const { json, fail } = h;
   const off = () => json({ on: false });
@@ -92,10 +110,12 @@ export function makeLevelsRoutes(h) {
       const prefs = prefsOf(row);
       const admin = !!(h.adminCandidate(me, env) || (await h.isAdmin(env, me)));
       await ensureFirst(env, me.id);
+      // сезон первым: если срок вышел, этот же запрос его закроет, и опыт сезона будет уже нового
+      const season = await seasonOf(env, me.id, await currentSeason(env, now));
       const [quests, steps, ev] = await Promise.all([questState(env, me.id, { now, today, row }), firstSteps(env, me.id), currentEvent(env, now)]);
       const alive = row.streak_day === today || row.streak_day === shiftDay(today, -1) || (row.streak_day === shiftDay(today, -2) && +row.freezes > 0);
       return json({
-        on: true, mode: levelsMode(env), ...lv, prefs, look: lookOf(row), unlocked: unlockedAt(lv.level, admin), admin,
+        on: true, mode: levelsMode(env), ...lv, ...rankFields(season.xp), season, prefs, look: lookOf(row, season.xp), unlocked: unlockedAt(lv.level, admin), admin,
         streak: { days: alive ? +row.streak || 0 : 0, best: +row.best_streak || 0, freezes: row.freezes == null ? 1 : +row.freezes, today: row.streak_day === today },
         quests, steps: steps.every((s) => s.paid) ? null : steps,
         event: ev ? { title: ev.title, kinds: ev.kinds, mult: ev.mult, until: ev.until } : null,
@@ -196,7 +216,8 @@ export function makeLevelsRoutes(h) {
       if (typeof b.fx === 'string') { if (b.fx && !u.fx.includes(b.fx)) return fail(403, 'Этот эффект ещё не открыт.'); next.fx = b.fx; }
       if (typeof b.pet === 'boolean') { if (b.pet && !u.pet) return fail(403, 'Васян откроется на 25-м уровне.'); next.pet = b.pet; }
       await env.DB.prepare('INSERT INTO user_level (user_id, updated_at, prefs) VALUES (?1, ?2, ?3) ON CONFLICT(user_id) DO UPDATE SET prefs = ?3').bind(me.id, Date.now(), JSON.stringify(next)).run();
-      return json({ ok: true, prefs: next, look: lookOf({ ...row, prefs: JSON.stringify(next) }) });
+      const sxp = await seasonXpOf(env, me.id, await currentSeason(env));
+      return json({ ok: true, prefs: next, look: lookOf({ ...row, prefs: JSON.stringify(next) }, sxp) });
     },
     // кружки уровня у чужих аватаров: ?ids=a,b,c
     async 'GET /levels/users'({ env, request, me }) {
@@ -215,7 +236,8 @@ export function makeLevelsRoutes(h) {
       const show = prefsOf(row).showcase;
       const all = await achievementsOf(env, id);
       const showcase = show.map((c) => all.find((a) => a.code === c && a.got)).filter(Boolean);
-      return json({ on: true, level: lv.level, rank: lv.rank, xp: lv.xp, into: lv.into, need: lv.need, look: lookOf(row), showcase, achievements: all.filter((a) => a.got).length });
+      const sxp = await seasonXpOf(env, id, await currentSeason(env));
+      return json({ on: true, level: lv.level, ...rankFields(sxp), seasonXp: sxp, xp: lv.xp, into: lv.into, need: lv.need, look: lookOf(row, sxp), showcase, achievements: all.filter((a) => a.got).length });
     },
     // рейтинг недели: друзья или весь сайт. «Лучший прогресс» — рост к прошлой неделе
     async 'GET /levels/board'({ env, request, me }) {
@@ -245,7 +267,11 @@ export function makeLevelsRoutes(h) {
       // лучший прогресс: больше всех вырос относительно прошлой недели (от 30 опыта, чтобы не выигрывал «с 1 до 5»)
       const grown = list.filter((x) => x.week >= 30).map((x) => ({ ...x, growth: x.prev ? Math.round(((x.week - x.prev) / x.prev) * 100) : null }))
         .filter((x) => x.growth === null || x.growth > 0).sort((a, b) => (b.growth === null ? 1e9 : b.growth) - (a.growth === null ? 1e9 : a.growth))[0] || null;
-      return json({ scope, week: wk, top, best: grown });
+      // звание сезона у каждого в списке (у скрывших уровень — нет)
+      const shown = [...top, ...(grown ? [grown] : [])].filter((x) => x.level != null);
+      const sx = await seasonXpMany(env, [...new Set(shown.map((x) => x.id))], await currentSeason(env));
+      const withRank = (x) => (x.level != null ? { ...x, ...rankFields(sx[x.id] || 0) } : x);
+      return json({ scope, week: wk, top: top.map(withRank), best: grown ? withRank(grown) : null });
     },
     // личная ссылка-приглашение
     async 'GET /levels/invite'({ env, request, me }) {
@@ -280,12 +306,14 @@ export function makeLevelsRoutes(h) {
       if (!(await h.adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
       if (!levelsOn(env)) return json({ mode: 'off', users: [], event: null });
       await ensureLevels(env);
+      const s = await currentSeason(env);
       const { results } = await env.DB.prepare(
         `SELECT u.id, u.username, u.uname, ul.xp, ul.level, ul.streak, ul.best_streak, ul.streak_day, ul.prefs,
                 (SELECT COUNT(*) FROM achievements a WHERE a.user_id = u.id) AS ach,
-                (SELECT COALESCE(SUM(xp), 0) FROM xp_log l WHERE l.user_id = u.id AND l.gone = 0 AND l.at > ?1) AS week
+                (SELECT COALESCE(SUM(xp), 0) FROM xp_log l WHERE l.user_id = u.id AND l.gone = 0 AND l.at > ?1) AS week,
+                (SELECT COALESCE(SUM(xp), 0) FROM xp_log l WHERE l.user_id = u.id AND l.gone = 0 AND l.at >= ?2) AS season
          FROM users u LEFT JOIN user_level ul ON ul.user_id = u.id ORDER BY COALESCE(ul.xp, 0) DESC LIMIT 200`
-      ).bind(Date.now() - 7 * 864e5).all();
+      ).bind(Date.now() - 7 * 864e5, s ? s.start : Date.now() + 1).all();
       const ev = await currentEvent(env);
       // подозрительно быстро: больше трёх дневных лимитов за последний час
       const { results: fast } = await env.DB.prepare('SELECT user_id, COUNT(*) AS n FROM xp_log WHERE at > ? AND xp > 0 GROUP BY user_id HAVING n > 60').bind(Date.now() - 3600e3).all();
@@ -294,7 +322,7 @@ export function makeLevelsRoutes(h) {
         mode: levelsMode(env), event: ev, kinds: Object.keys(RULES).filter((k) => !RULES[k].given && !['visit', 'quest', 'quest_all', 'quest_week', 'invite'].includes(k)).map((k) => ({ k, label: KIND_LABEL[k] || k })),
         users: (results || []).map((r) => {
           const lv = levelView(+r.xp || 0, +r.level || 1);
-          return { id: r.id, username: r.username, handle: r.uname, xp: lv.xp, level: lv.level, rank: lv.rank, streak: +r.streak || 0, best: +r.best_streak || 0, ach: +r.ach || 0, week: +r.week || 0, hidden: prefsOf(r).hideLevel, fast: flagged.has(r.id) };
+          return { id: r.id, username: r.username, handle: r.uname, xp: lv.xp, level: lv.level, ...rankFields(+r.season || 0), season: +r.season || 0, streak: +r.streak || 0, best: +r.best_streak || 0, ach: +r.ach || 0, week: +r.week || 0, hidden: prefsOf(r).hideLevel, fast: flagged.has(r.id) };
         }),
       });
     },
@@ -408,26 +436,103 @@ export function makeLevelsRoutes(h) {
       await h.adminLog(env, request, me, 'levels: event off', true);
       return json({ ok: true });
     },
+
+    // ---------- сезоны ----------
+    // текущий сезон (кто сейчас впереди) и прошлые — с числом участников и тремя лучшими
+    async 'GET /admin/levels/seasons'({ env, request, me }) {
+      if (!(await h.adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+      if (!levelsOn(env)) return json({ current: null, history: [], ranks: SEASON_RANKS });
+      const cur = await currentSeason(env);
+      const { results: past } = await env.DB.prepare('SELECT n, title, start_at, end_at, closed_at, planned_by FROM seasons WHERE closed_at IS NOT NULL ORDER BY n DESC LIMIT 12').all();
+      const ns = (past || []).map((s) => +s.n);
+      const marks = ns.map(() => '?').join(', ') || 'NULL';
+      const [top, cnt, live, players] = await env.DB.batch([
+        env.DB.prepare(`SELECT r.season, r.place, r.xp, r.rank, u.username, u.uname FROM season_results r LEFT JOIN users u ON u.id = r.user_id WHERE r.place <= 3 AND r.season IN (${marks}) ORDER BY r.season DESC, r.place`).bind(...ns),
+        env.DB.prepare(`SELECT season, COUNT(*) AS n FROM season_results WHERE season IN (${marks}) GROUP BY season`).bind(...ns),
+        env.DB.prepare('SELECT l.user_id, SUM(l.xp) AS s, u.username, u.uname FROM xp_log l LEFT JOIN users u ON u.id = l.user_id WHERE l.gone = 0 AND l.at >= ? GROUP BY l.user_id HAVING s > 0 ORDER BY s DESC LIMIT 3').bind(cur.start),
+        env.DB.prepare('SELECT COUNT(*) AS n FROM (SELECT user_id FROM xp_log WHERE gone = 0 AND at >= ? GROUP BY user_id HAVING SUM(xp) > 0)').bind(cur.start),
+      ]);
+      const who = (x) => ({ username: x.username || '?', handle: x.uname || '' });
+      const remind = await seasonReminderOf(env, cur.n);
+      return json({
+        ranks: SEASON_RANKS, mail: mailOn(env),
+        current: { ...cur, remind, players: +(((players.results || [])[0] || {}).n) || 0, top: (live.results || []).map((x, i) => ({ place: i + 1, ...who(x), xp: +x.s || 0, ...rankFields(+x.s || 0) })) },
+        history: (past || []).map((s) => ({
+          n: +s.n, title: s.title, start: +s.start_at, end: +s.end_at, closed: +s.closed_at, by: s.planned_by || '',
+          players: +(((cnt.results || []).find((x) => +x.season === +s.n) || {}).n) || 0,
+          top: (top.results || []).filter((x) => +x.season === +s.n).map((x) => ({ place: +x.place, ...who(x), xp: +x.xp || 0, rankId: x.rank, rank: (SEASON_RANKS.find((r) => r.id === x.rank) || SEASON_RANKS[0]).title })),
+        })),
+      });
+    },
+    // назначить сброс: когда кончится текущий сезон (и, если хочется, его название). Всем — письмо в почту уровней
+    // и объявление вверху сайта до самого сброса; прежние письма о сбросе этого сезона гаснут
+    async 'PUT /admin/levels/season'({ env, request, me }) {
+      if (!(await h.adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+      if (!levelsOn(env)) return fail(400, 'Уровни выключены (LEVELS = "0").');
+      const b = await h.readBody(request);
+      const now = Date.now();
+      const end = Math.round(+b.end || 0);
+      if (!(end > now + 60e3) || end > now + 120 * 864e5) return fail(400, 'Сброс можно назначить не раньше чем через минуту и не дальше чем через 120 дней.');
+      const cur = await currentSeason(env, now);
+      if (!cur) return fail(500, 'Сезон не найден, обнови страницу.');
+      const title = typeof b.title === 'string' ? b.title.replace(/\s+/g, ' ').trim().slice(0, 60) : '';
+      const letter = seasonPlanLetter(cur.n, end);
+      await env.DB.batch([
+        env.DB.prepare("UPDATE seasons SET end_at = ?2, title = COALESCE(NULLIF(?3, ''), title), planned_by = ?4, planned_at = ?5 WHERE n = ?1 AND closed_at IS NULL").bind(cur.n, end, title, String(me.handle || me.id), now),
+        env.DB.prepare("UPDATE gifts SET until = ?2 WHERE kind = 'season' AND id LIKE ?1 AND id != ?3 AND (until IS NULL OR until > ?2)").bind(`season:${cur.n}:plan:%`, now, letter.id),
+        env.DB.prepare("INSERT OR IGNORE INTO gifts (id, to_id, kind, title, body, xp, at, until, by_id) VALUES (?, NULL, 'season', ?, ?, 0, ?, ?, ?)").bind(letter.id, letter.title, letter.body, now, end, me.id),
+      ]);
+      forgetSeason();
+      if (b.announce !== false && h.setAnnounce) {
+        await h.setAnnounce(env, { id: `season-${cur.n}`, text: `Сброс званий ${fmtMsk(end)} — конец сезона ${cur.n}. Уровень, опыт и награды останутся.`, kind: 'info', until: end, by: me.handle });
+      }
+      // письмо на почту за 3 дня до сброса (functions/_lib/mailout.js; уходит с ближайшим шагом рассылки — cron в rt
+      // или «Продолжить» в админке). Без галочки прежнее напоминание этого сезона снимается
+      let origin = '';
+      try { origin = new URL(request.url).origin; } catch (e) {}
+      await planSeasonReminder(env, { n: cur.n, end, whenText: fmtMsk(end), origin, by: me.id, remind: b.remind === true && !!origin, now });
+      await h.pokeAll(env);
+      await h.adminLog(env, request, me, `levels: сброс сезона ${cur.n} — ${fmtMsk(end)}`, true);
+      return json({ ok: true, current: await currentSeason(env) });
+    },
+    // сбросить сейчас: сезон закрывает этот запрос (итоги, письмо, плашки), сразу начинается следующий
+    async 'POST /admin/levels/season/reset'({ env, request, me }) {
+      if (!(await h.adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+      if (!levelsOn(env)) return fail(400, 'Уровни выключены (LEVELS = "0").');
+      const now = Date.now();
+      const cur = await currentSeason(env, now);
+      if (!cur) return fail(500, 'Сезон не найден, обнови страницу.');
+      await env.DB.prepare('UPDATE seasons SET end_at = ?2 WHERE n = ?1 AND closed_at IS NULL').bind(cur.n, now).run();
+      const next = await closeSeason(env, { ...cur, end: now }, now);
+      forgetSeason();
+      // объявление о сбросе этого сезона и неотправленное напоминание письмом больше не нужны
+      if (h.getAnnounce && h.setAnnounce) { const a = await h.getAnnounce(env); if (a && a.id === `season-${cur.n}`) await h.setAnnounce(env, null); }
+      await cancelSeasonReminder(env, cur.n);
+      await h.adminLog(env, request, me, `levels: сезон ${cur.n} сброшен вручную`, true);
+      return json({ ok: true, closed: cur.n, current: next });
+    },
   };
 }
 
-// приглашение при регистрации: запомнить, кто пригласил, и сразу подружить
+// приглашение при регистрации: запомнить, кто пригласил, и отправить ему заявку в друзья от новичка.
+// Принимает её пригласивший сам: ссылку могли выложить публично, а друзьям открыты оценки «только для друзей».
+// Опыт за дружбу — как у любой заявки, когда её примут (POST /friends/accept). Возвращает id пригласившего или null
 export async function acceptInvite(env, uid, code) {
-  if (!levelsOn(env) || !INVITE_RE.test(String(code || ''))) return;
+  if (!levelsOn(env) || !INVITE_RE.test(String(code || ''))) return null;
   try {
     await ensureLevels(env);
     const inv = await env.DB.prepare('SELECT user_id FROM invites WHERE code = ?').bind(code).first();
-    if (!inv || inv.user_id === uid) return;
+    if (!inv || inv.user_id === uid) return null;
     const now = Date.now();
     const [a, b] = inv.user_id < uid ? [inv.user_id, uid] : [uid, inv.user_id];
     await env.DB.batch([
       env.DB.prepare('INSERT OR IGNORE INTO invited (user_id, by_id, at) VALUES (?, ?, ?)').bind(uid, inv.user_id, now),
-      env.DB.prepare("INSERT OR IGNORE INTO friendships (a, b, status, requested_by, created_at) VALUES (?, ?, 'accepted', ?, ?)").bind(a, b, inv.user_id, now),
+      env.DB.prepare("INSERT OR IGNORE INTO friendships (a, b, status, requested_by, created_at) VALUES (?, ?, 'pending', ?, ?)").bind(a, b, uid, now),
     ]);
-    await award(env, uid, 'friend', inv.user_id);
-    await award(env, inv.user_id, 'friend', uid);
+    return inv.user_id;
   } catch (e) {
     console.error('levels invite', e && e.message);
+    return null;
   }
 }
 
@@ -437,7 +542,8 @@ export const recapOpen = (now) => { const d = new Date(now); const m = d.getUTCM
 export async function recap(env, uid, year) {
   const from = Date.UTC(year, 0, 1), to = Date.UTC(year + 1, 0, 1);
   const inYear = (t) => { const v = +new Date(t || 0) || 0; return v >= from && v < to; };
-  const [sh, rcOut, rcIn, cmOut, cmIn, tl, lots, lv, ach, me] = await env.DB.batch([
+  const cur = await currentSeason(env);
+  const [sh, rcOut, rcIn, cmOut, cmIn, tl, lots, lv, ach, me, past, now_] = await env.DB.batch([
     env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(uid),
     env.DB.prepare('SELECT owner_id AS id, COUNT(*) AS n FROM reactions WHERE from_id = ? AND owner_id != ? AND at >= ? AND at < ? GROUP BY owner_id').bind(uid, uid, from, to),
     env.DB.prepare('SELECT from_id AS id, COUNT(*) AS n FROM reactions WHERE owner_id = ? AND from_id != ? AND at >= ? AND at < ? GROUP BY from_id').bind(uid, uid, from, to),
@@ -448,7 +554,13 @@ export async function recap(env, uid, year) {
     env.DB.prepare('SELECT xp, level, best_streak FROM user_level WHERE user_id = ?').bind(uid),
     env.DB.prepare('SELECT COUNT(*) AS n FROM achievements WHERE user_id = ? AND at >= ? AND at < ?').bind(uid, from, to),
     env.DB.prepare('SELECT username, created_at FROM users WHERE id = ?').bind(uid),
+    // звание года — лучшее из сезонов этого года (и текущего)
+    env.DB.prepare('SELECT r.rank FROM season_results r JOIN seasons s ON s.n = r.season WHERE r.user_id = ? AND s.start_at >= ? AND s.start_at < ?').bind(uid, from - 31 * 864e5, to),
+    env.DB.prepare('SELECT COALESCE(SUM(xp), 0) AS s FROM xp_log WHERE user_id = ? AND gone = 0 AND at >= ?').bind(uid, cur ? cur.start : Date.now() + 1),
   ]);
+  const rankIdx = (id) => SEASON_RANKS.findIndex((r) => r.id === id);
+  const bestRank = [...(past.results || []).map((x) => x.rank), seasonRankOf(+(((now_.results || [])[0] || {}).s) || 0).id]
+    .reduce((a, id) => (rankIdx(id) > rankIdx(a) ? id : a), SEASON_RANKS[0].id);
   let ratings = [];
   try { const d = JSON.parse(((sh.results || [])[0] || {}).data || '{}'); ratings = Array.isArray(d) ? d : d.ratings || []; } catch (e) {}
   const year_ = ratings.filter((r) => r && !r.example && isScored(r) && inYear(r.createdAt || r.updatedAt));
@@ -477,7 +589,7 @@ export async function recap(env, uid, year) {
     best: name(best), worst: worst && best && worst.id !== best.id ? name(worst) : null, longest: longest && textLen(longest) >= 100 ? { ...name(longest), chars: textLen(longest) } : null,
     reactsGiven: sum(rcOut), reactsGot: sum(rcIn), commentsGiven: sum(cmOut), commentsGot: sum(cmIn),
     tierlists: ((tl.results || [])[0] || {}).n || 0, lotRooms: ((lots.results || [])[0] || {}).n || 0,
-    friend, level: view.level, rank: view.rank, xp: view.xp, bestStreak: +l.best_streak || 0, achievements: ((ach.results || [])[0] || {}).n || 0,
+    friend, level: view.level, rank: (SEASON_RANKS[rankIdx(bestRank)] || SEASON_RANKS[0]).title, rankId: bestRank, xp: view.xp, bestStreak: +l.best_streak || 0, achievements: ((ach.results || [])[0] || {}).n || 0,
   };
 }
 export { rankOf, FIRST_STEPS };

@@ -23,18 +23,66 @@
     T('vampire', 'Вампир', '🦇', 'dark', '#140A0C', '#1D0F12', '#FF4D5E'),
     T('graphite', 'Графит', '🖤', 'dark', '#000000', '#0E0E0F', '#FFB020'),
   ];
-  // «Казуальный вид» (unslop): тише, без свечений, пятен фона и прыгающих анимаций; работает с любой темой.
-  // Переключатель — в Настройках, раздел «Внешний вид» (settings.js), а включает и запоминает его обработчик ниже
-  const UNSLOP_KEY = 'casualhub.unslop.v1';
-  document.addEventListener('change', (e) => {
-    const c = e.target.closest && e.target.closest('[data-unslop]');
-    if (!c) return;
-    document.documentElement.classList.toggle('unslop', c.checked);
-    try { if (c.checked) localStorage.setItem(UNSLOP_KEY, '1'); else localStorage.removeItem(UNSLOP_KEY); } catch (er) {}
-    document.querySelectorAll('[data-unslop]').forEach((x) => { x.checked = c.checked; });
-  });
-  // включили в другой вкладке — эта тоже переключается
-  addEventListener('storage', (e) => { if (e.key === UNSLOP_KEY) { const on = e.newValue === '1'; document.documentElement.classList.toggle('unslop', on); document.querySelectorAll('[data-unslop]').forEach((x) => { x.checked = on; }); } });
+  // ---------- вид интерфейса (Настройки → «Внешний вид», settings.js); работает с любой темой ----------
+  // «Казуальный» — класс unslop на <html>: тише, без свечений, пятен фона и прыгающих анимаций. Остальные виды строятся
+  // поверх него: unslop + data-ui="<id>" и свой файл /ui/<id>.css со своими шрифтами и анимациями.
+  // До первой отрисовки вид ставят head-скрипты страниц (файл — через document.write), здесь — выбор и смена без перезагрузки.
+  // Прежний ключ casualhub.unslop.v1 («1» у любого вида, кроме обычного) остаётся: старые вкладки покажут хотя бы казуальный
+  const UI_KEY = 'casualhub.ui.v1', UNSLOP_KEY = 'casualhub.unslop.v1';
+  // новый вид: строка здесь, файл /ui/<id>.css и id в списке head-скриптов (hub.head.js и другие)
+  const UI = [
+    { id: 'normal', name: 'Обычный', desc: 'Привычный сайт: цветные пятна, свечения и живые анимации' },
+    { id: 'casual', name: 'Казуальный', desc: 'Спокойнее: без свечений, цветных пятен и прыгающих анимаций' },
+    { id: 'minimal', name: 'Минимал', desc: 'Много воздуха, крупные чистые заголовки, плавные переходы' },
+    { id: 'pixel', name: 'Пиксель', desc: 'Как меню старой игры: прямые углы, жёсткие тени, пиксельный шрифт' },
+    { id: 'paper', name: 'Газета', desc: 'Как журнал: шрифт с засечками, тонкие линии, без теней' },
+    { id: 'lobby', name: 'Лобби', desc: 'Плотные скруглённые панели и подсветка строк, как в чате' },
+    { id: 'arena', name: 'Арена', desc: 'Срезанные углы, узкий шрифт заглавными, резкие анимации' },
+  ];
+  const uiIds = UI.map((x) => x.id);
+  const withFile = (id) => id !== 'normal' && id !== 'casual';
+  // что выбрано в этом браузере (без ключа — по прежнему переключателю «Казуальный вид»)
+  function uiStored() {
+    try {
+      const v = localStorage.getItem(UI_KEY);
+      if (uiIds.includes(v)) return v;
+      return localStorage.getItem(UNSLOP_KEY) === '1' ? 'casual' : 'normal';
+    } catch (e) { return 'normal'; }
+  }
+  // что стоит на этой странице сейчас
+  const uiNow = () => document.documentElement.dataset.ui || (document.documentElement.classList.contains('unslop') ? 'casual' : 'normal');
+  let uiSeq = 0;
+  function uiApply(id, save) {
+    const v = uiIds.includes(id) ? id : 'normal';
+    if (save) {
+      try {
+        localStorage.setItem(UI_KEY, v);
+        if (v === 'normal') localStorage.removeItem(UNSLOP_KEY); else localStorage.setItem(UNSLOP_KEY, '1');
+      } catch (e) {}
+    }
+    const my = ++uiSeq, el = document.documentElement;
+    let done = false;
+    const set = () => {
+      if (done || my !== uiSeq) return;
+      done = true;
+      el.classList.toggle('unslop', v !== 'normal');
+      if (withFile(v)) el.dataset.ui = v; else delete el.dataset.ui;
+      document.querySelectorAll('link[data-ui-css]').forEach((l) => { if (l.dataset.uiCss !== v) l.remove(); });
+      document.dispatchEvent(new CustomEvent('casualhub:ui', { detail: v }));
+    };
+    if (!withFile(v) || document.querySelector(`link[data-ui-css="${v}"]`)) { set(); return v; }
+    // файл вида грузится заранее, а включается, когда загрузился: страница не мелькает наполовину оформленной
+    const l = document.createElement('link');
+    l.rel = 'stylesheet';
+    l.href = `/ui/${v}.css`;
+    l.dataset.uiCss = v;
+    l.onload = l.onerror = set;
+    document.head.appendChild(l);
+    setTimeout(set, 3000); // не дождались файла — включаем как есть
+    return v;
+  }
+  // выбрали в другой вкладке — эта тоже переключается
+  addEventListener('storage', (e) => { if (e.key === UI_KEY || e.key === UNSLOP_KEY) uiApply(uiStored(), false); });
 
   const PREFS_KEY = 'ocenshik.prefs.v1'; // общий для сайта: тема и то, что запоминает Мнение
   const root = document.documentElement;
@@ -76,5 +124,6 @@
   }
 
   // current — тема, которая сейчас на этой странице (id из list)
-  window.CasualThemes = { list: LIST, ids: LIST.map((t) => t.id), find, apply, current: () => current };
+  // ui — вид интерфейса: list (порядок для Настроек), current() — что стоит сейчас, apply(id, save)
+  window.CasualThemes = { list: LIST, ids: LIST.map((t) => t.id), find, apply, current: () => current, ui: { list: UI, current: uiNow, apply: uiApply } };
 })();
