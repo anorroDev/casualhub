@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
 import * as L from '../functions/_lib/levels.js';
 
-const { needFor, totalFor, levelOf, rankOf, dayKey, shiftDay, weekStart, award, awardMany, revoke, readLevel, levelsMode, RULES, ACHIEVEMENTS, streakStep, shelfDiff, takeNews, questState, firstSteps, backfillUser, lotsWon, visit, achievementsOf, levelsOf, unlockedAt } = L;
+const { needFor, totalFor, levelOf, dayKey, shiftDay, weekStart, award, awardMany, revoke, readLevel, levelsMode, RULES, ACHIEVEMENTS, streakStep, shelfDiff, takeNews, questState, firstSteps, backfillUser, lotsWon, visit, achievementsOf, levelsOf, unlockedAt } = L;
 
 function fakeD1() {
   const db = new DatabaseSync(':memory:');
@@ -59,11 +59,7 @@ test('формула уровня', () => {
   for (let l = 1; l < 60; l++) assert.ok(needFor(l + 1) > needFor(l));
 });
 
-test('звания, флаг, награды по уровням', () => {
-  assert.equal(rankOf(1).fun, 'Людишка');
-  assert.equal(rankOf(20).fun, 'Чемпион');
-  assert.equal(rankOf(50).fun, 'Легенда');
-  assert.equal(rankOf(10).fun, 'Диванный критик');
+test('флаг и награды по уровням', () => {
   assert.equal(levelsMode({}), 'off');
   assert.equal(levelsMode({ LEVELS: 'admins' }), 'admins');
   assert.equal(levelsMode({ LEVELS: '1' }), 'all');

@@ -316,7 +316,6 @@ button, input { font: inherit; color: inherit; }
 .bell svg { transform-origin: 50% 12%; }
 .bell.bell-swing svg { animation: bell-ring .9s ease-in-out; }
 @keyframes bell-ring { 0%, 100% { transform: rotate(0); } 15% { transform: rotate(18deg); } 30% { transform: rotate(-15deg); } 45% { transform: rotate(11deg); } 60% { transform: rotate(-7deg); } 75% { transform: rotate(3deg); } }
-.ic-btn { width: 42px; padding: 0; display: inline-grid; place-items: center; }
 @media (prefers-reduced-motion: reduce) { .bell.bell-swing svg { animation: none; } }
 /* история аватарок (меню у аватарки) и баннеров (в меню «Баннер») */
 .hist-menu { position: fixed; z-index: 80; width: min(300px, calc(100vw - 32px)); display: grid; gap: 10px; padding: 12px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 24px 48px -20px rgba(0, 0, 0, .5); cursor: default; animation: hist-in .4s var(--spring); }

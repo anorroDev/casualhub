@@ -26,20 +26,6 @@ export function levelOf(xp) {
   return { level, into: xp - totalFor(level), need: needFor(level) };
 }
 
-// ---------- звания по уровню (прежние) ----------
-// Больше нигде не показываются: звание теперь сезонное (ниже). Оставлены для старых тестов и записей.
-export const RANKS = [
-  { from: 1, fun: 'Людишка', plain: 'Новичок' },
-  { from: 5, fun: 'Казуал', plain: 'Зритель' },
-  { from: 10, fun: 'Диванный критик', plain: 'Казуал' },
-  { from: 15, fun: 'Профессиональный нытик', plain: 'Ценитель' },
-  { from: 20, fun: 'Чемпион', plain: 'Критик' },
-  { from: 30, fun: 'Рецензент от бога', plain: 'Эксперт' },
-  { from: 40, fun: 'Хранитель вкуса', plain: 'Мастер вкуса' },
-  { from: 50, fun: 'Легенда', plain: 'Легенда' },
-];
-export const rankOf = (level) => RANKS.reduce((r, x) => (level >= x.from ? x : r), RANKS[0]);
-
 // ---------- сезоны: звание за три месяца, как на Faceit ----------
 // Уровень и опыт за всё время не сбрасываются: уровни открывают оформление, его не отнимают. Звание — сезонное:
 // по опыту, набранному с начала сезона (строки xp_log с at в сезоне и gone = 0). Сезон по умолчанию — три месяца
@@ -168,7 +154,6 @@ export const ACHIEVEMENTS = [
   { code: 'recap2026', title: 'Итоги 2026', desc: 'Посмотрел свои итоги 2026 года', special: true },
 ];
 const ACH = Object.fromEntries(ACHIEVEMENTS.map((a) => [a.code, a]));
-export const TIER_NAMES = ['', 'бронза', 'серебро', 'золото'];
 // какая ступень достигнута при значении v (0 — никакая)
 export const tierFor = (a, v) => (a.tiers || []).reduce((t, need, i) => (v >= need ? i + 1 : t), 0);
 

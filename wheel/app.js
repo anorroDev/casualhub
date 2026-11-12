@@ -78,11 +78,6 @@
   const linkFresh = () => ({ items: [], seq: 0, outSeq: 0, rot: 0, sample: false, pick: 'out', auto: false });
   const wheelPart = (o) => { const r = {}; WHEEL_FIELDS.forEach((k) => { r[k] = o[k]; }); return r; };
   let scope = 'main', savedScope = 'main', stash = linkFresh(), linkStatus = '';
-  function swapWheel() {
-    const cur = wheelPart(S);
-    WHEEL_FIELDS.forEach((k) => { S[k] = stash[k]; });
-    stash = cur;
-  }
 
   // ---------- helpers ----------
   const pct = (x) => {

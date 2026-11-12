@@ -5,7 +5,7 @@
 import {
   levelsMode, levelsOn, ensureLevels, readLevel, levelView, prefsOf, lookOf, unlockedAt, levelsOf, achievementsOf, questState,
   firstSteps, takeNews, dayKey, weekStart, shiftDay, cleanTz, backfillUser, grantSpecial, currentEvent, forgetEvent, RULES, awardMany,
-  ACHIEVEMENTS, REWARDS, NAME_COLORS, PROFILE_BGS, FIRST_STEPS, isScored, textLen, rankOf, award,
+  ACHIEVEMENTS, REWARDS, NAME_COLORS, PROFILE_BGS, isScored, textLen, award,
   SEASON_RANKS, seasonRankOf, rankFields, currentSeason, closeSeason, forgetSeason, seasonXpOf, seasonXpMany, seasonPlanLetter, fmtKyiv,
 } from './levels.js';
 import { FOODS } from './shop.js';
@@ -595,4 +595,3 @@ export async function recap(env, uid, year) {
     friend, level: view.level, rank: (SEASON_RANKS[rankIdx(bestRank)] || SEASON_RANKS[0]).title, rankId: bestRank, xp: view.xp, bestStreak: +l.best_streak || 0, achievements: ((ach.results || [])[0] || {}).n || 0,
   };
 }
-export { rankOf, FIRST_STEPS };

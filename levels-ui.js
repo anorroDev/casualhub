@@ -877,7 +877,6 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
         return `<li class="lv-rk-i ${st}">${emblem(r.id, 48)}<span><b>${esc(r.title)}</b><small>${r.xp ? `от ${nf(r.xp)} опыта за сезон` : 'с начала сезона'}</small></span>${right}</li>`;
       }).reverse().join('');
       const hist = (s.history || []).map((h) => `<li>${emblem(h.rank, 32)}<span><b>${esc(h.title)}</b><small>${esc(rankTitle(h.rank))} · ${nf(h.xp)} опыта${h.place ? ` · ${h.place}-е место` : ''}</small></span></li>`).join('');
-      const reward = (m.rewards || []).find((r) => r.level > m.level);
       return `<button type="button" class="lv-back" data-home>‹ Обзор</button>
         <div class="lv-box"><div class="lv-rk-head">${emblem(cur.id, 96)}<div><small>${esc(en ? T(s.title) : s.title)}${reset}</small><b>${esc(cur.title)}</b><span class="lv-rk-stars" role="img" aria-label="${lit} из 5 звёзд до следующего звания">${stars}</span><span>${nf(s.xp)} опыта за сезон</span></div></div>
           ${next ? `${bar(Math.round(part * 100))}<p class="lv-muted">До звания «${esc(next.title)}» ещё ${nf(next.xp - s.xp)} опыта.</p>` : '<p class="lv-muted">Это самое высокое звание сезона.</p>'}</div>
