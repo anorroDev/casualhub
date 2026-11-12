@@ -106,6 +106,7 @@ export const ITEMS = [
   { id: 'vasyan.skin.black', sec: 'vasyan', kind: 'skin', title: 'Чёрный', price: 120 },
   { id: 'vasyan.skin.white', sec: 'vasyan', kind: 'skin', title: 'Белый', price: 150 },
   { id: 'vasyan.skin.tabby', sec: 'vasyan', kind: 'skin', title: 'Серый полосатый', price: 150 },
+  { id: 'vasyan.skin.btabby', sec: 'vasyan', kind: 'skin', title: 'Коричневый табби', price: 150 },
   { id: 'vasyan.skin.siamese', sec: 'vasyan', kind: 'skin', title: 'Сиамский', price: 200 },
   { id: 'vasyan.skin.calico', sec: 'vasyan', kind: 'skin', title: 'Трёхцветный', price: 200 },
   { id: 'vasyan.skin.ghost', sec: 'vasyan', kind: 'skin', title: 'Призрак', price: 400 },
