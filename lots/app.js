@@ -1053,7 +1053,8 @@
     </section>`;
     $('#lotsJoin').addEventListener('submit', (e) => {
       e.preventDefault();
-      const m = /([A-Za-z0-9]{12})\/?\s*$/.exec($('#lotsCode').value.trim().replace('#', '/'));
+      // ссылка целиком, код или ссылка на итог (…/lots/<код>?w=…): код — 12 букв и цифр после начала, / или #
+      const m = /(?:^|[\/#])([A-Za-z0-9]{12})(?=[\/?#&\s]|$)/.exec($('#lotsCode').value.trim());
       if (m) location.href = '/lots/' + m[1];
       else $('#lotsJoinMsg').textContent = 'Не похоже на ссылку сбора: в ней после /lots/ идут 12 букв и цифр.';
     });

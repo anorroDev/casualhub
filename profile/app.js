@@ -520,6 +520,9 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     pen: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg>',
     trash: '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 12.5h9l1-12.5"/></svg>',
   };
+  // из Настроек («Аватар, обложка и виджеты») приходят с ?edit=1 — сразу режим правки, параметр из адреса убирается
+  let EDIT_ASK = new URLSearchParams(location.search).has('edit');
+  const dropEditParam = () => { try { const u = new URL(location.href); u.searchParams.delete('edit'); history.replaceState(history.state, '', u.pathname + u.search + u.hash); } catch (e) {} };
   let EDIT = false, tpOpen = false; // режим редактирования профиля; открыт ли список званий
   let lySnap = null, lyDirty = false; // раскладка до правок (для «Отмены») и есть ли несохранённые правки
   const localLayout = () => (read(LAYOUT_KEY) || {})[hideOwner()] || null;
@@ -1725,7 +1728,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
           ${!isMe && p.uid ? `<p class="sub" data-seen="${esc(p.uid)}" data-last="${+p.lastSeen || ''}"></p>` : ''}
           ${titlesRowHTML(p, rs)}
           <div class="hero-acts">${isMe
-            ? `<a class="btn primary" href="/opinion/">Оценить что-нибудь</a><button type="button" class="btn ghost ic-btn" id="layoutBtn" aria-pressed="${EDIT}" title="${EDIT ? 'Сохрани или отмени изменения внизу' : 'Редактировать профиль: блоки, витрины, звания'}" aria-label="Редактировать профиль">${ICON_LAYOUT}</button>`
+            ? `<a class="btn primary" href="/opinion/">Оценить что-нибудь</a><button type="button" class="btn ghost" id="layoutBtn" aria-pressed="${EDIT}" title="${EDIT ? 'Сохрани или отмени изменения внизу' : 'Аватар, обложка, блоки, витрины и звания'}">${ICON_LAYOUT}<span>Изменить профиль</span></button>`
             : `<a class="btn ghost" href="/profile/">Мой профиль</a>${p.common && p.common.length ? '<a class="btn primary" href="#taste">Сравнить вкусы</a>' : ''}`}</div>
         </div>
       </section>
@@ -1749,6 +1752,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         else if (!lyDirty) endEdit(p, false);
         else toast('Сохрани или отмени изменения кнопками внизу');
       });
+      if (EDIT_ASK && !EDIT) { EDIT_ASK = false; dropEditParam(); setTimeout(() => { if (!EDIT) startEdit(p); }, 0); }
       wireProfileName(p);
     }
     wireBoard(p);

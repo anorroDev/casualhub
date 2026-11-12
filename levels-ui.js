@@ -489,14 +489,18 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   const openShop = (section) => loadShop().then((s) => s && s.open(section)).catch(() => {});
   // ---------- кнопки в шапке: уровень (мигает до первого нажатия) и магазин ----------
   const SEEN_KEY = 'casualhub.levels.seen.v1';
+  // прошлый ответ /levels/me для шапки (уровень, прогресс, звание) — чтобы значок не появлялся с задержкой на каждой странице
+  const HEAD_KEY = 'casualhub.lv.head.v1';
+  let meLoad = null;
+  const dropHead = () => { try { localStorage.removeItem(HEAD_KEY); } catch (e) {} document.querySelectorAll('header .lv-hbtn, header .lv-shop').forEach((b) => b.remove()); };
   const seen = () => { try { return localStorage.getItem(SEEN_KEY) === '1'; } catch (e) { return true; } };
   const markSeen = () => { try { localStorage.setItem(SEEN_KEY, '1'); } catch (e) {} document.querySelectorAll('.lv-hbtn.lv-pulse').forEach((b) => b.classList.remove('lv-pulse')); };
   const MAIL_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg>';
   const SHOP_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1.2 11.1a2 2 0 0 1-2 1.9H8.2a2 2 0 0 1-2-1.9L5 8z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></svg>';
   let tipT = 0;
-  function paintHeader() {
+  function paintHeader(m = ME) {
     const header = document.querySelector('header');
-    if (!header || !ME) return;
+    if (!header || !m) return;
     const bar = header.querySelector('.masthead-right > .user-bar') || header.querySelector('.user-bar') || header;
     const twin = bar.querySelector('.pill, .theme-btn');
     const cls = twin && /\bpill\b/.test(twin.className) ? 'pill' : 'theme-btn';
@@ -508,7 +512,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       btn = document.createElement('button');
       btn.type = 'button';
       btn.className = cls + ' lv-hbtn';
-      btn.addEventListener('click', () => { markSeen(); openProgress('home'); });
+      btn.addEventListener('click', () => { markSeen(); if (ME) openProgress('home'); else if (meLoad) meLoad.then(() => { if (ME) openProgress('home'); }); });
       const shop = document.createElement('button');
       shop.type = 'button';
       shop.className = cls + ' lv-shop';
@@ -521,10 +525,10 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       if (slot) { slot.appendChild(btn); slot.appendChild(shop); }
       else if (before) { bar.insertBefore(btn, before); bar.insertBefore(shop, before); } else { bar.appendChild(btn); bar.appendChild(shop); }
     }
-    const p = Math.min(100, Math.round((ME.into / Math.max(1, ME.need)) * 100));
-    const html = `<span class="lv-ring" style="--p:${p}%"><b>${ME.level}</b></span><span class="lv-hl">Уровень</span>`;
+    const p = Math.min(100, Math.round((m.into / Math.max(1, m.need)) * 100));
+    const html = `<span class="lv-ring" style="--p:${p}%"><b>${m.level}</b></span><span class="lv-hl">Уровень</span>`;
     if (btn.innerHTML !== html) btn.innerHTML = html;
-    const t = `Уровень ${ME.level} · ${ME.rank} · ${ME.into} / ${ME.need} опыта`;
+    const t = `Уровень ${m.level} · ${m.rank} · ${m.into} / ${m.need} опыта`;
     if (btn.title !== t) { btn.title = t; btn.setAttribute('aria-label', t); }
     btn.classList.toggle('lv-pulse', !seen());
   }
@@ -537,8 +541,9 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   async function refreshMe() {
     try {
       const d = await api('/levels/me');
-      if (!d.on) { ME = null; return; }
+      if (!d.on) { ME = null; dropHead(); return; }
       ME = d;
+      try { const u = read('ocenshik.user.v1'); if (u) localStorage.setItem(HEAD_KEY, JSON.stringify({ id: u.id, level: d.level, into: d.into, need: d.need, rank: d.rank })); } catch (e) {}
       vasyanOwn(!!d.vasyan);
       loadShop().catch(() => {}); // надетое из магазина и «куплено» для Васяна — на любой странице
       document.documentElement.classList.add('lv-on');
@@ -1184,5 +1189,6 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
 
   window.CasualLevels = { open: openProgress, refresh: refreshMe, news: pullNews, intro: openIntro };
   if (!token()) return;
-  refreshMe().then(() => { if (ME && !introDone()) { setTimeout(spotlight, 400); return; } if (ME) { pullNews(); if (/^#progress$/.test(location.hash)) { history.replaceState(null, '', location.pathname + location.search); openProgress('home'); } } });
+  { const u = read('ocenshik.user.v1'), c = read(HEAD_KEY); if (token() && u && c && c.id === u.id) paintHeader(c); }
+  (meLoad = refreshMe()).then(() => { if (ME && !introDone()) { setTimeout(spotlight, 400); return; } if (ME) { pullNews(); if (/^#progress$/.test(location.hash)) { history.replaceState(null, '', location.pathname + location.search); openProgress('home'); } } });
 })();

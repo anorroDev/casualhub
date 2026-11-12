@@ -329,6 +329,8 @@ h1, h2, p { margin: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .hero-art i, .mark img { animation: none; } }
 html.unslop .hero-art i { animation: none; filter: none; }
+/* в видах интерфейса картинки за заголовком тоже подпрыгивают — без появления «пружиной» и без тени */
+@media (prefers-reduced-motion: no-preference) { html.unslop .hero-art i { animation: art-bob 2.4s steps(2, jump-none) infinite var(--d, 0s); } }
 
 /* App cards: a live preview on top, the name under it, the footer with counters */
 .apps { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; perspective: 1200px; }
