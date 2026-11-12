@@ -859,12 +859,22 @@ button.kg-side:disabled { cursor: default; }
     clearTimeout(pollT); clearTimeout(tickT);
     view.innerHTML = `<section class="card"><p class="lots-empty">${esc(text)}</p><div class="kg-acts" style="justify-content:center"><a class="btn primary" href="/king/">${T('К турнирам')}</a></div></section>`;
   }
+  // чат турнира (/chat.js): под турниром, вне #view — paintRoom перерисовывает view целиком, а чат живёт своей жизнью
+  let chat = null;
+  function mountChat() {
+    if (chat || !code || !R || !window.CasualChat) return;
+    const sec = document.createElement('section');
+    sec.className = 'card kg-chat';
+    sec.style.marginTop = '18px';
+    view.after(sec);
+    chat = window.CasualChat.mount(sec, { scope: 'king', room: code, canModerate: !!R.room.own });
+  }
   async function poll(soon) {
     clearTimeout(pollT);
     if (!document.hidden || soon) {
       try {
         const r = await api('GET', `/king/room?c=${code}&pv=${encodeURIComponent(pv)}`, null, etag);
-        if (!r.same) { etag = r.etag; take(r.d); if (!busy) paintRoom(); }
+        if (!r.same) { etag = r.etag; take(r.d); mountChat(); if (!busy) paintRoom(); }
       } catch (e) {
         if (!R || e.status === 404) { gone(e.status === 404 && R ? T('Этот турнир удалили.') : e.message); return; }
       }

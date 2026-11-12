@@ -3022,7 +3022,29 @@
 "Этот турнир удалили.":"This tournament was deleted.",
 "Для сетки на {} нужно ровно {} {}, сейчас {}: добавь ещё {}.":"A bracket of {} needs exactly {} {}, now {}: add {} more.",
 "В сетку на {} помещается ровно {} {}, сейчас {}: убери {} или выбери сетку побольше.":"A bracket of {} holds exactly {} {}, now {}: remove {} or pick a bigger bracket.",
-"В сетку на {} помещается ровно {} {}, сейчас {}: убери {}.":"A bracket of {} holds exactly {} {}, now {}: remove {}."};
+"В сетку на {} помещается ровно {} {}, сейчас {}: убери {}.":"A bracket of {} holds exactly {} {}, now {}: remove {}.",
+// Чат в сборе лотов и «Царе горы»
+"Чат":"Chat",
+"Сообщения чата":"Chat messages",
+"новые сообщения ↓":"new messages ↓",
+"Наборы стикеров":"Sticker sets",
+"Сообщение…":"Message…",
+"Сообщение":"Message",
+"Стикер":"Sticker",
+"Чат закрыт: комнаты больше нет.":"Chat closed: the room no longer exists.",
+"Пока тихо. Напиши первым или кинь стикер.":"It’s quiet here. Say something first or drop a sticker.",
+"Аккаунт заблокирован: писать в чат нельзя.":"Your account is blocked: you can’t post in the chat.",
+"Войди, чтобы писать":"Log in to chat",
+"Такого чата нет: комнату удалили или ссылка с ошибкой.":"No such chat: the room was deleted or the link is wrong.",
+"Не похоже на сообщение.":"That doesn’t look like a message.",
+"Слишком длинно: в сообщении до {} символов.":"Too long: a message can have up to {} characters.",
+"Такого стикера нет.":"No such sticker.",
+"Пустое сообщение: напиши что-нибудь или выбери стикер.":"Empty message: type something or pick a sticker.",
+"Слишком часто. Подожди немного.":"Too often. Wait a bit.",
+"Не так быстро: подожди немного.":"Not so fast: wait a moment.",
+"Какое сообщение удалить?":"Which message should be deleted?",
+"Чужие сообщения удаляют только ведущий и админ.":"Only the host and admins can delete other people’s messages.",
+"Нужен WebSocket.":"A WebSocket is required."};
   // слово после числа: 1 оценка, 5 оценок. [все русские формы, одна штука, несколько]
   const NOUNS = [
     [['рофлан', 'рофлана', 'рофланов', 'рофланы'], 'Soul', 'Souls'],
@@ -3160,7 +3182,7 @@
   const ATTRS = ['title', 'placeholder', 'aria-label', 'alt', 'aria-valuetext'];
   const SKIP_TAG = new Set(['SCRIPT', 'STYLE', 'TEXTAREA', 'NOSCRIPT']);
   // написанное людьми и журнал «Что нового» не трогаем, даже если слово случайно есть в словаре
-  const SKIP = '.pv-cap, .cm-text, .rx-list span, .adm-text, .site-ann span, .wn-body, .cm-meta b, .adm-who b, .fr-who b, .tl-txt, .tl-lab, .tl-tile b';
+  const SKIP = '.pv-cap, .cm-text, .rx-list span, .adm-text, .site-ann span, .wn-body, .cm-meta b, .adm-who b, .fr-who b, .tl-txt, .tl-lab, .tl-tile b, .ch-txt, .ch-who';
   function text(n) {
     const v = n.nodeValue;
     // шкала в подписях: 7,5–10 → 7.5–10

@@ -13,6 +13,12 @@
 // Комната → клиент: state {live, ver, now, re?} (при подключении, после каждой перемены и в ответ на hello с re = id;
 // keep/kick — только админу),
 // gone (сбор удалён), error {code, msg}
+//
+// Чат комнаты (functions/_lib/chat.js) живёт в том же классе, но в своём экземпляре: idFromName('chat:<scope>:<код>'),
+// scope — lots или king. Кода сбора у него нет, снимка, будильников и прокруток — тоже: только сокеты читателей (метка chat).
+//   GET  /chat/ws — сокет читателя чата; комнату уже проверил маршрут /api/chat/ws. Писать в него нечего, кроме "ping"
+//   POST /chat    — API записал сообщение или удалил его: {t: 'chat', m} | {t: 'chatdel', id} | {t: 'gone'} — разослать всем
+//                   читателям как есть (gone — и закрыть сокеты с кодом 4404)
 import { cleanLive, liveTx, settledLive, liveWake, liveLots, liveView, spinLive, resetLive, stopAuto } from '../functions/_lib/lots-live.js';
 import { ONLINE_MS, GUEST_RE, onlineCount, friendsAndIncoming, friendIds, readAnnounce, touchUsers, touchGuests } from '../functions/_lib/presence.js';
 import { levelsOn, currentSeason, onSeasonClose } from '../functions/_lib/levels.js';
@@ -38,6 +44,8 @@ export class LotRoomDO {
   }
   async fetch(request) {
     const url = new URL(request.url);
+    // чат — до всего остального: у комнаты чата нет кода сбора, и лоты она не трогает
+    if (url.pathname === '/chat/ws' || url.pathname === '/chat') return this.chat(request, url);
     const code = request.headers.get('x-rt-code') || '';
     if (/^[A-Za-z0-9]{12}$/.test(code) && code !== this.code) { this.code = code; await this.ctx.storage.put('code', code); }
     if (!this.code) return new Response('no room', { status: 400 });
@@ -49,6 +57,29 @@ export class LotRoomDO {
       return new Response('ok');
     }
     return new Response('not found', { status: 404 });
+  }
+  // чат: сокеты читателей и рассылка того, что прислал API. В комнату сбора (у неё есть код) чат не пускаем:
+  // её рассылка снимка идёт по всем сокетам
+  async chat(request, url) {
+    if (await this.room()) return new Response('not a chat room', { status: 400 });
+    if (url.pathname === '/chat/ws') {
+      if ((request.headers.get('upgrade') || '').toLowerCase() !== 'websocket') return new Response('websocket only', { status: 426 });
+      const [client, server] = Object.values(new WebSocketPair());
+      this.ctx.acceptWebSocket(server, ['chat']);
+      server.serializeAttachment({ role: 'chat' });
+      const proto = request.headers.get('x-rt-proto');
+      return new Response(null, { status: 101, webSocket: client, headers: proto ? { 'sec-websocket-protocol': proto } : {} });
+    }
+    if (request.method !== 'POST') return new Response('not found', { status: 404 });
+    const b = await request.json().catch(() => null);
+    const msg = !b ? null : b.t === 'chat' && b.m && typeof b.m === 'object' ? { t: 'chat', m: b.m } : b.t === 'chatdel' && Number.isInteger(b.id) ? { t: 'chatdel', id: b.id } : b.t === 'gone' ? { t: 'gone' } : null;
+    if (!msg) return new Response('bad', { status: 400 });
+    const text = JSON.stringify(msg);
+    for (const ws of this.ctx.getWebSockets('chat')) {
+      this.send(ws, text);
+      if (msg.t === 'gone') this.drop(ws, 4404, 'gone');
+    }
+    return new Response('ok');
   }
   async connect(request) {
     if ((request.headers.get('upgrade') || '').toLowerCase() !== 'websocket') return new Response('websocket only', { status: 426 });
@@ -118,8 +149,17 @@ export class LotRoomDO {
     this.rate.delete(ws);
     try { ws.close(code, why); } catch (e) {}
   }
+  // читателю чата писать в комнату нечего: "ping" отвечает сама платформа, остальное — повод закрыть, если его много
+  chatMessage(ws, msg) {
+    const now = Date.now(), r = this.rate.get(ws) || [now, 0];
+    if (now - r[0] > RATE_MS) { r[0] = now; r[1] = 0; }
+    r[1]++;
+    this.rate.set(ws, r);
+    if (r[1] > RATE_N || typeof msg !== 'string' || msg.length > 256) this.drop(ws, 1008, 'unexpected');
+  }
   async webSocketMessage(ws, msg) {
     if (this.dead.has(ws)) return;
+    if (this.ctx.getTags(ws).includes('chat')) return this.chatMessage(ws, msg);
     if (typeof msg !== 'string' || msg.length > MAX_MSG) { this.error(ws, 413, 'Слишком длинное сообщение.'); this.drop(ws, 1009, 'too big'); return; }
     const now = Date.now(), r = this.rate.get(ws) || [now, 0];
     if (now - r[0] > RATE_MS) { r[0] = now; r[1] = 0; }

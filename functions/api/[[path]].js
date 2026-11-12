@@ -18,6 +18,7 @@ import { makeBingoRoutes } from '../_lib/bingo.js';
 import { makeKingRoutes } from '../_lib/king.js';
 import { makePlanInfoRoutes } from '../_lib/plan-info.js';
 import { makeTierCoopRoutes } from '../_lib/tiercoop.js';
+import { makeChatRoutes, ensureChat, chatDrop, chatGone, CHAT_USER_SQL } from '../_lib/chat.js';
 
 const enc = new TextEncoder();
 const ITER = 10000;
@@ -702,6 +703,7 @@ const routes = {
     if (u.id === me.id || (await isAdminAccount(env, u))) return fail(400, 'Админа удалить нельзя.');
     if (cleanHandle(confirm) !== u.uname) return fail(400, `Чтобы удалить, впиши его юзернейм @${u.uname}.`);
     const id = u.id;
+    await ensureChat(env);
     await env.DB.batch([
       // до удаления лотов: у сборов, где они были, новая версия, и страницы сразу перечитают список
       'UPDATE lot_rooms SET ver = ver + 1 WHERE id IN (SELECT room_id FROM lots WHERE user_id = ?1)',
@@ -709,6 +711,7 @@ const routes = {
       'DELETE FROM shelves WHERE user_id = ?1',
       'DELETE FROM tierlists WHERE user_id = ?1',
       'DELETE FROM lots WHERE user_id = ?1 OR room_id IN (SELECT id FROM lot_rooms WHERE owner_id = ?1)',
+      CHAT_USER_SQL, // его сообщения в чатах и чаты его сборов — до удаления самих сборов
       'DELETE FROM lot_rooms WHERE owner_id = ?1',
       'DELETE FROM photos WHERE user_id = ?1',
       'DELETE FROM friendships WHERE a = ?1 OR b = ?1',
@@ -1072,12 +1075,14 @@ const routes = {
     const pass = String(password || '');
     if (pass.length > 200 || !sameHex(await hashPass(pass, u.salt), u.pass_hash)) return fail(403, 'Текущий пароль не подходит.');
     if (cleanHandle(confirm) !== u.uname) return fail(400, `Чтобы удалить, впиши свой юзернейм @${u.uname}.`);
+    await ensureChat(env);
     await env.DB.batch([
       'UPDATE lot_rooms SET ver = ver + 1 WHERE id IN (SELECT room_id FROM lots WHERE user_id = ?1)',
       'DELETE FROM sessions WHERE user_id = ?1',
       'DELETE FROM shelves WHERE user_id = ?1',
       'DELETE FROM tierlists WHERE user_id = ?1',
       'DELETE FROM lots WHERE user_id = ?1 OR room_id IN (SELECT id FROM lot_rooms WHERE owner_id = ?1)',
+      CHAT_USER_SQL, // его сообщения в чатах и чаты его сборов — до удаления самих сборов
       'DELETE FROM lot_rooms WHERE owner_id = ?1',
       'DELETE FROM photos WHERE user_id = ?1',
       'DELETE FROM friendships WHERE a = ?1 OR b = ?1',
@@ -1724,8 +1729,9 @@ const routes = {
     const id = shareId();
     // старые сборы остаются со своими ссылками; убираем только самые давние сверх лимита
     const old = await env.DB.prepare('SELECT id FROM lot_rooms WHERE owner_id = ? ORDER BY created_at DESC LIMIT -1 OFFSET ?').bind(me.id, MAX_LOT_ROOMS - 1).all();
+    if (old.results.length) await ensureChat(env); // вместе со старыми сборами уходит и их чат
     await env.DB.batch([
-      ...old.results.flatMap((x) => [env.DB.prepare('DELETE FROM lots WHERE room_id = ?').bind(x.id), env.DB.prepare('DELETE FROM lot_rooms WHERE id = ?').bind(x.id)]),
+      ...old.results.flatMap((x) => [env.DB.prepare('DELETE FROM lots WHERE room_id = ?').bind(x.id), env.DB.prepare('DELETE FROM lot_rooms WHERE id = ?').bind(x.id), chatDrop(env, 'lots', x.id)]),
       env.DB.prepare('INSERT INTO lot_rooms (id, owner_id, title, kind, per_user, ends_at, created_at, edit_own, uniq, fuzzy) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)').bind(id, me.id, lotTitle(b.title), LOT_KINDS.includes(b.kind) ? b.kind : 'game', lotLimit(b.perUser), lotEnds(b.minutes, now), now, b.editOwn === true ? 1 : 0, b.uniq === false ? 0 : 1, b.fuzzy === false ? 0 : 1),
     ]);
     return lotAnswer(env, id, me, null, request);
@@ -1893,8 +1899,10 @@ const routes = {
   async 'DELETE /lots/:code'({ env, me, arg }) {
     const room = await env.DB.prepare('SELECT 1 FROM lot_rooms WHERE id = ? AND owner_id = ?').bind(arg, me.id).first();
     if (!room) return fail(404, 'Такого сбора нет.');
-    await env.DB.batch([env.DB.prepare('DELETE FROM lots WHERE room_id = ?').bind(arg), env.DB.prepare('DELETE FROM lot_rooms WHERE id = ?').bind(arg)]);
+    await ensureChat(env);
+    await env.DB.batch([env.DB.prepare('DELETE FROM lots WHERE room_id = ?').bind(arg), env.DB.prepare('DELETE FROM lot_rooms WHERE id = ?').bind(arg), chatDrop(env, 'lots', arg)]);
     await pokeRoom(env, arg, 'gone');
+    await chatGone(env, 'lots', arg); // чат сбора: читателям — «комнаты больше нет»
     return json({ ok: true });
   },
   // что сейчас на колесе у ведущего: зрители рисуют то же самое
@@ -3094,8 +3102,10 @@ Object.assign(routes, makeKingRoutes({ json, fail, readBody, burst, clientIp, cu
 Object.assign(routes, makePlanInfoRoutes({ json, fail, burst, clientIp }));
 // «Тир-лист вместе» (/api/tiercoop…) — functions/_lib/tiercoop.js, страница tierlist/coop.js
 Object.assign(routes, makeTierCoopRoutes({ json, fail, readBody, burst, currentUser, lvGive }));
+// чат в комнатах — сбор лотов и «Царь Горы» (/api/chat…) — functions/_lib/chat.js, виджет /chat.js
+Object.assign(routes, makeChatRoutes({ json, fail, readBody, burst, clientIp, currentUser, isAdmin, adminCandidate, adminLog }));
 
-const PUBLIC = new Set(['GET /tiercoop/room', 'GET /king/room', 'GET /king/img', 'GET /plan/info', 'GET /lots/:code/predict', 'GET /lots/:code/veto', 'GET /lots/:code/bingo', 'GET /shop/look', 'GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid', 'GET /mail/unsub', 'POST /mail/unsub']);
+const PUBLIC = new Set(['GET /chat', 'GET /chat/ws', 'GET /tiercoop/room', 'GET /king/room', 'GET /king/img', 'GET /plan/info', 'GET /lots/:code/predict', 'GET /lots/:code/veto', 'GET /lots/:code/bingo', 'GET /shop/look', 'GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid', 'GET /mail/unsub', 'POST /mail/unsub']);
 // код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности
 const SHARE_RE = /^[A-Za-z0-9]{12}$/;
 function shareId() {

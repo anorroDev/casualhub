@@ -17,6 +17,7 @@
 // Как подключить комнату позже — h.poke (зовётся после каждой записи), см. notes.
 
 // ---------- правила ----------
+import { ensureChat, chatDrop, chatGone } from './chat.js'; // чат турнира удаляется вместе с ним
 export const KING = {
   HILL_MAX: 64, // участников в «Царе горы»
   SIZES: [4, 8, 16, 32], // сетка
@@ -394,7 +395,8 @@ export function makeKingRoutes(h) {
       const st = newState(cfg, imgs);
       if (b.start === true) startState(st, now);
       const old = await env.DB.prepare('SELECT id FROM king_rooms WHERE owner_id = ? ORDER BY created_at DESC LIMIT -1 OFFSET ?').bind(me.id, KING.ROOMS - 1).all();
-      const drop = (old.results || []).flatMap((x) => [env.DB.prepare('DELETE FROM king_votes WHERE room_id = ?').bind(x.id), env.DB.prepare('DELETE FROM king_imgs WHERE room_id = ?').bind(x.id), env.DB.prepare('DELETE FROM king_rooms WHERE id = ?').bind(x.id)]);
+      if ((old.results || []).length) await ensureChat(env); // чаты старых турниров уходят вместе с ними
+      const drop = (old.results || []).flatMap((x) => [chatDrop(env, 'king', x.id), env.DB.prepare('DELETE FROM king_votes WHERE room_id = ?').bind(x.id), env.DB.prepare('DELETE FROM king_imgs WHERE room_id = ?').bind(x.id), env.DB.prepare('DELETE FROM king_rooms WHERE id = ?').bind(x.id)]);
       const imgSql = (c) => imgs.map((x) => env.DB.prepare('INSERT OR REPLACE INTO king_imgs (room_id, pid, data) VALUES (?, ?, ?)').bind(c, x.id, x.data));
       const m = mirror(st);
       let code = '';
@@ -520,8 +522,10 @@ export function makeKingRoutes(h) {
       const code = codeOf((await readBody(request)).c);
       const row = code && (await env.DB.prepare('SELECT owner_id FROM king_rooms WHERE id = ?').bind(code).first());
       if (!row || row.owner_id !== me.id) return fail(404, 'Такого турнира нет.');
-      await env.DB.batch([env.DB.prepare('DELETE FROM king_votes WHERE room_id = ?').bind(code), env.DB.prepare('DELETE FROM king_imgs WHERE room_id = ?').bind(code), env.DB.prepare('DELETE FROM king_rooms WHERE id = ?').bind(code)]);
+      await ensureChat(env);
+      await env.DB.batch([chatDrop(env, 'king', code), env.DB.prepare('DELETE FROM king_votes WHERE room_id = ?').bind(code), env.DB.prepare('DELETE FROM king_imgs WHERE room_id = ?').bind(code), env.DB.prepare('DELETE FROM king_rooms WHERE id = ?').bind(code)]);
       await poke(env, code);
+      await chatGone(env, 'king', code);
       return json({ ok: true });
     },
   };
