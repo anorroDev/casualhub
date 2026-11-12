@@ -24,8 +24,8 @@ html[data-ui="paper"] :where(button, input, select, textarea) { font-family: var
 /* чистая бумага: без звёзд и сетки точек; теней и размытия нет нигде */
 /* фон сайта (звёзды или купленный в магазине) остаётся и в этом виде — только тише, под спокойный стиль */
 html[data-ui="paper"]::after, html[data-ui="paper"] body::after { opacity: .35; }
-/* без теней — кроме рамок аватара: они нарисованы кольцами box-shadow и иначе пропадают совсем (и в профиле, и в «Оформлении») */
-html[data-ui="paper"] :not([class*="lv-frame-"]), html[data-ui="paper"] *::before, html[data-ui="paper"] *::after { box-shadow: none !important; text-shadow: none !important; }
+/* без теней — кроме стилей ника (контур и тени — сама награда, иначе она пропала бы в этом виде) */
+html[data-ui="paper"] :not([class*="lv-nick-"], [class*="lv-nick-"] *), html[data-ui="paper"] *::before, html[data-ui="paper"] *::after { box-shadow: none !important; text-shadow: none !important; }
 
 /* ---------- шапка: как у газеты, с двойной линейкой ---------- */
 html[data-ui="paper"] :is(header.top, .masthead) { padding-bottom: 14px; border-bottom: 4px double var(--v-rule); }

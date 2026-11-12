@@ -2920,7 +2920,15 @@
 // «Прогнозы»: админ видит, кто на что поставил
 "Ставили:":"Predicted by:",
 "На него никто не ставил.":"Nobody predicted it.",
-"Имена под лотами видишь только ты как админ: остальным до первой прокрутки видны лишь проценты.":"Only you see the names under the lots, as an admin: everyone else sees just the percentages until the first spin."};
+"Имена под лотами видишь только ты как админ: остальным до первой прокрутки видны лишь проценты.":"Only you see the names under the lots, as an admin: everyone else sees just the percentages until the first spin.",
+// «Оформление»: шрифты и стили ника
+"Шрифт ника":"Nick font",
+"Контур":"Outline",
+"Аркада":"Arcade",
+"Ник с пиксельным контуром":"Nick with a pixel outline",
+"Ник «Аркада»: объёмная пиксельная тень":"“Arcade” nick: a stacked pixel shadow",
+"Шрифт ника «{}»":"Nick font “{}”",
+"Этот шрифт ещё не открыт.":"This font isn’t unlocked yet."};
   // слово после числа: 1 оценка, 5 оценок. [все русские формы, одна штука, несколько]
   const NOUNS = [
     [['рофлан', 'рофлана', 'рофланов', 'рофланы'], 'Soul', 'Souls'],

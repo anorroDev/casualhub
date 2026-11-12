@@ -210,11 +210,33 @@ export const REWARDS = [
   { level: 40, kind: 'frame', id: 'frame4', title: 'Рамка «Мастер» с короной' },
   { level: 45, kind: 'fx', id: 'confetti', title: 'Конфетти, когда открывают твой профиль' },
   { level: 50, kind: 'frame', id: 'frame6', title: 'Рамка и фон «Легенда»' },
-];
+  { level: 8, kind: 'nick', id: 'outline', title: 'Ник с пиксельным контуром' },
+  { level: 27, kind: 'nick', id: 'arcade', title: 'Ник «Аркада»: объёмная пиксельная тень' },
+  // шрифты ника: пара — сразу всем, остальные — по уровням
+  { level: 1, kind: 'font', id: 'font:comfortaa', title: 'Шрифт ника «Comfortaa»' },
+  { level: 1, kind: 'font', id: 'font:caveat', title: 'Шрифт ника «Caveat»' },
+  { level: 4, kind: 'font', id: 'font:lobster', title: 'Шрифт ника «Lobster»' },
+  { level: 6, kind: 'font', id: 'font:press', title: 'Шрифт ника «Press Start 2P»' },
+  { level: 8, kind: 'font', id: 'font:pacifico', title: 'Шрифт ника «Pacifico»' },
+  { level: 9, kind: 'font', id: 'font:russo', title: 'Шрифт ника «Russo One»' },
+  { level: 11, kind: 'font', id: 'font:amatic', title: 'Шрифт ника «Amatic SC»' },
+  { level: 13, kind: 'font', id: 'font:kelly', title: 'Шрифт ника «Kelly Slab»' },
+  { level: 14, kind: 'font', id: 'font:aladin', title: 'Шрифт ника «Aladin»' },
+  { level: 16, kind: 'font', id: 'font:yeseva', title: 'Шрифт ника «Yeseva One»' },
+  { level: 17, kind: 'font', id: 'font:unbounded', title: 'Шрифт ника «Unbounded»' },
+  { level: 19, kind: 'font', id: 'font:underdog', title: 'Шрифт ника «Underdog»' },
+  { level: 21, kind: 'font', id: 'font:marck', title: 'Шрифт ника «Marck Script»' },
+  { level: 24, kind: 'font', id: 'font:glitch', title: 'Шрифт ника «Rubik Glitch»' },
+  { level: 28, kind: 'font', id: 'font:ruslan', title: 'Шрифт ника «Ruslan Display»' },
+  { level: 32, kind: 'font', id: 'font:paint', title: 'Шрифт ника «Rubik Wet Paint»' },
+  { level: 38, kind: 'font', id: 'font:beastly', title: 'Шрифт ника «Rubik Beastly»' },
+].sort((a, b) => a.level - b.level);
 export const NAME_COLORS = { blue: '#5B74FF', pink: '#E85FA5', green: '#2EAD60', orange: '#F08A24', violet: '#9B6BFF', teal: '#14A3A8', gold: '#E2A925' };
 export const PROFILE_BGS = { dawn: 1, night: 1, city: 1, forest: 1, ember: 1, legend: 1 };
 const FRAMES = ['frame1', 'frame5', 'frame2', 'frame3', 'frame4', 'frame6']; // по уровню
-const NICKS = ['shadow', 'rainbow'];
+const NICKS = ['outline', 'shadow', 'arcade', 'rainbow'];
+// шрифты ника (Google Fonts, сами шрифты подключает levels-ui.js): id → название
+export const NICK_FONTS = { comfortaa: 'Comfortaa', caveat: 'Caveat', lobster: 'Lobster', press: 'Press Start 2P', pacifico: 'Pacifico', russo: 'Russo One', amatic: 'Amatic SC', kelly: 'Kelly Slab', aladin: 'Aladin', yeseva: 'Yeseva One', unbounded: 'Unbounded', underdog: 'Underdog', marck: 'Marck Script', glitch: 'Rubik Glitch', ruslan: 'Ruslan Display', paint: 'Rubik Wet Paint', beastly: 'Rubik Beastly' };
 const FXS = ['stars', 'confetti'];
 // что из оформления доступно на уровне; all — админу открыто всё (проверять награды до выхода)
 export function unlockedAt(level, all = false) {
@@ -224,6 +246,7 @@ export function unlockedAt(level, all = false) {
     colors: got.has('colors') ? Object.keys(NAME_COLORS).filter((c) => c !== 'gold' || got.has('gold')) : [],
     bgs: got.has('bgs') ? Object.keys(PROFILE_BGS).filter((b) => b !== 'legend' || got.has('frame6')) : [],
     nicks: NICKS.filter((n) => got.has(n)),
+    fonts: Object.keys(NICK_FONTS).filter((f) => got.has('font:' + f)),
     fx: FXS.filter((f) => got.has(f)),
     pet: got.has('pet'),
     rankChip: got.has('rankchip'),
@@ -819,7 +842,7 @@ export async function readLevel(env, uid) {
 }
 export const prefsOf = (row) => {
   const p = parse(row && row.prefs, {});
-  return { intro: !!p.intro, hideLevel: !!p.hideLevel, hideBoard: !!p.hideBoard, notify: p.notify !== false, anim: p.anim !== false, showcase: Array.isArray(p.showcase) ? p.showcase.slice(0, 3) : [], frame: p.frame || '', color: p.color || '', bg: p.bg || '', nick: p.nick || '', fx: p.fx || '', pet: !!p.pet, adm: !!p.adm };
+  return { intro: !!p.intro, hideLevel: !!p.hideLevel, hideBoard: !!p.hideBoard, notify: p.notify !== false, anim: p.anim !== false, showcase: Array.isArray(p.showcase) ? p.showcase.slice(0, 3) : [], frame: p.frame || '', color: p.color || '', bg: p.bg || '', font: p.font || '', nick: p.nick || '', fx: p.fx || '', pet: !!p.pet, adm: !!p.adm };
 };
 // оформление, которое видят другие: только то, что открыто уровнем.
 // adm — выбор сохранил админ (PUT /levels/prefs ставит его сам): ему для проверки открыто всё.
@@ -833,6 +856,7 @@ export function lookOf(row, seasonXp = 0) {
     color: u.colors.includes(p.color) ? p.color : '',
     bg: u.bgs.includes(p.bg) ? p.bg : '',
     nick: u.nicks.includes(p.nick) ? p.nick : '',
+    font: u.fonts.includes(p.font) ? p.font : '',
     fx: u.fx.includes(p.fx) ? p.fx : '',
     pet: u.pet && p.pet,
     rank: u.rankChip ? r.title : '',

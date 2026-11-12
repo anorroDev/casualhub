@@ -65,8 +65,13 @@ test('флаг и награды по уровням', () => {
   assert.equal(levelsMode({ LEVELS: '1' }), 'all');
   assert.deepEqual(unlockedAt(1).frames, []);
   assert.deepEqual(unlockedAt(12).frames, ['frame1', 'frame5', 'frame2']);
-  assert.deepEqual(unlockedAt(17).nicks, []);
-  assert.deepEqual(unlockedAt(35).nicks, ['shadow', 'rainbow']);
+  assert.deepEqual(unlockedAt(7).nicks, []);
+  assert.deepEqual(unlockedAt(17).nicks, ['outline']);
+  assert.deepEqual(unlockedAt(35).nicks, ['outline', 'shadow', 'arcade', 'rainbow']);
+  // шрифты ника: пара — сразу всем, остальные — по уровням; админу — все
+  assert.deepEqual(unlockedAt(1).fonts, ['comfortaa', 'caveat']);
+  assert.ok(!unlockedAt(13).fonts.includes('aladin') && unlockedAt(14).fonts.includes('aladin'));
+  assert.equal(unlockedAt(1, true).fonts.length, 17);
   assert.ok(!unlockedAt(24).pet && unlockedAt(25).pet);
   assert.ok(!unlockedAt(49).bgs.includes('legend') && unlockedAt(50).bgs.includes('legend'));
   assert.equal(unlockedAt(1, true).frames.length, 6); // админу открыто всё
