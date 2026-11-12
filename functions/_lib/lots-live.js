@@ -64,8 +64,12 @@ const inkOn = (c) => { const L = lum(c); return (L + 0.05) / (lum('#14161C') + 0
 const lowName = (s) => String(s || '').toLowerCase();
 const inNames = (arr, name) => Array.isArray(arr) && arr.some((x) => lowName(x) === lowName(name));
 // лоты сбора в том порядке, в каком их видит страница (по времени добавления, без лотов удалённых аккаунтов)
+// «Вечер с друзьями» (functions/_lib/lots-evening.js): вариант под вето в прокрутку не попадает — и в API, и в комнате
+export const VETO_SQL = 'CREATE TABLE IF NOT EXISTS lot_vetoes (room_id TEXT NOT NULL, user_id TEXT NOT NULL, lot_id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (room_id, user_id))';
+let vetoReady = null;
 export async function liveLots(env, code) {
-  const { results } = await env.DB.prepare('SELECT l.id, l.name FROM lots l JOIN users u ON u.id = l.user_id WHERE l.room_id = ? ORDER BY l.created_at LIMIT ?').bind(code, MAX_LOTS).all();
+  if (vetoReady !== env.DB) { await env.DB.prepare(VETO_SQL).run(); vetoReady = env.DB; }
+  const { results } = await env.DB.prepare('SELECT l.id, l.name FROM lots l JOIN users u ON u.id = l.user_id WHERE l.room_id = ? AND l.id NOT IN (SELECT lot_id FROM lot_vetoes WHERE room_id = ?) ORDER BY l.created_at LIMIT ?').bind(code, code, MAX_LOTS).all();
   return results;
 }
 // кто вылетел — id лотов (outIds): когда повторы разрешены, два «Hades» — разные лоты, и вылетает только один из них.

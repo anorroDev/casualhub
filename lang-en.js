@@ -2801,7 +2801,24 @@
 "Напиши ответ.":"Type an answer.",
 "Этот ответ уже был.":"You already tried that.",
 "Отгадчик":"Riddler",
-"Отгаданные загадки дня":"Riddles of the day solved"};
+"Отгаданные загадки дня":"Riddles of the day solved",
+// вечер с друзьями (lots/evening.js, wheel/app.js)
+"Вечер с друзьями":"Evening with friends",
+"Без стрима: компания накидывает варианты, у каждого одно вето, колесо выбирает из оставшихся.":"No stream: friends add options, everyone gets one veto, the wheel picks from what is left.",
+"У каждого одно вето: убери чужой вариант, который точно не хочешь. Колесо крутится из оставшихся.":"Everyone gets one veto: remove an option you really don't want. The wheel spins through the rest.",
+"Вето":"Veto",
+"Вето сюда":"Move veto here",
+"вето от":"vetoed by",
+"Войди в аккаунт, чтобы добавить вариант и получить вето.":"Sign in to add an option and get a veto.",
+"Колесо уже крутится: вето больше не меняются.":"The wheel is already spinning: vetoes are locked.",
+"Вето есть у тех, кто добавил вариант.":"Only those who added an option get a veto.",
+"Твоё вето использовано. Можно передумать до прокрутки.":"Your veto is used. You can change it before the spin.",
+"У тебя одно вето.":"You have one veto.",
+"Свой вариант убрать вето нельзя.":"You can't veto your own option.",
+"Этот вариант уже убрали.":"This option has already been vetoed.",
+"Нужно оставить хотя бы два варианта.":"At least two options must stay.",
+"Вето бывает только в «Вечере с друзьями».":"Vetoes are only for “Evening with friends”.",
+"Такого варианта в сборе нет.":"There is no such option in this collection."};
   // слово после числа: 1 оценка, 5 оценок. [все русские формы, одна штука, несколько]
   const NOUNS = [
     [['рофлан', 'рофлана', 'рофланов', 'рофланы'], 'Soul', 'Souls'],
