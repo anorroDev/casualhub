@@ -744,6 +744,12 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       <button type="button" class="wg-rh" title="Тяни, чтобы поменять высоту. Двойной щелчок — высота по содержимому" aria-label="Высота блока «${name}»"><i></i></button>
       ${html}</div>`;
   }
+  // «Совпадение вкусов»: что друг советует тебе (его 8.5+ без твоей оценки) и что ты можешь посоветовать ему
+  function tasteRecs(p) {
+    if (!p.forMe && !p.forThem) return '';
+    const list = (a, empty) => (a && a.length ? `<ul class="tst-list">${a.map((r) => `<li><span title="${esc(r.name)}">${esc(r.name)}</span>${badge(r.total)}</li>`).join('')}</ul>` : `<p class="muted tst-empty">${empty}</p>`);
+    return `<div class="tst-recs"><div><h3 class="tst-h"><span>Тебе советует</span> ${esc(p.name)}</h3>${list(p.forMe, 'Всё любимое друга у тебя уже оценено.')}</div><div><h3 class="tst-h"><span>Посоветуй другу</span></h3>${list(p.forThem, 'Твоё любимое уже есть у друга в оценках.')}</div></div>`;
+  }
   const editBarHTML = (p) => `<div class="ed-bar" id="edBar" role="toolbar" aria-label="Редактирование профиля">
     <span class="ed-tx"><b>Редактирование профиля</b><small id="edHint"${lyDirty ? ' class="dirty"' : ''}>${lyDirty ? 'Есть несохранённые изменения' : 'Тащи блоки за ✥, размер — за правый и нижний край, глаз скрывает'}</small></span>
     ${((p.layout && p.layout.showcases) || []).length < SC_MAX ? '<button type="button" class="btn ghost ed-add" data-ed="add">＋ Витрина</button>' : ''}
@@ -1684,10 +1690,10 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     if (p.common) W.taste = `<section class="card rise" id="taste" style="--d:${d++}">
             <div class="head"><h2 class="h2">Вкусы</h2><span class="label">ты и ${esc(p.name)}</span></div>
             ${p.common.length ? `<div class="match"><div class="ring" data-tier="${tierT(p.match / 10)}" style="--p:${p.match}"><b>${p.match}%</b></div>
-              <p class="muted">${p.match >= 80 ? 'Вы смотрите на мир почти одинаково.' : p.match >= 60 ? 'Во многом сходитесь, но есть о чём поспорить.' : 'Вкусы расходятся: отличный повод для спора.'} Общих оценок: <b>${p.common.length}</b>.</p></div>
+              <p class="muted">${p.match >= 80 ? 'Вы смотрите на мир почти одинаково.' : p.match >= 60 ? 'Во многом сходитесь, но есть о чём поспорить.' : 'Вкусы расходятся: отличный повод для спора.'} Общих оценок: <b>${p.common.length}</b>.${p.common.length < 5 ? ' Общих оценок мало, процент пока примерный.' : ''}</p></div>
               <div class="cmp-head"><span>Что</span><span>ты</span><span>${esc([...p.name][0] || '')}</span><span></span></div>
               <div class="cmp">${p.common.slice(0, 12).map((c) => `<div class="cmp-row"><span title="${esc(c.name)}">${esc(c.name)}</span>${badge(c.mine)}${badge(c.theirs)}<em>${c.diff ? (c.diff > 0 ? '+' : '') + fmt(c.diff) : '='}</em></div>`).join('')}</div>`
-              : '<p class="muted">Общих оценок пока нет. Оцените одно и то же, и здесь появится, насколько совпадают ваши вкусы.</p>'}
+              : '<p class="muted">Общих оценок пока нет. Оцените одно и то же, и здесь появится, насколько совпадают ваши вкусы.</p>'}${tasteRecs(p)}
           </section>`;
     if (p.friends || isMe) W.friends = p.friends ? `<section class="card rise" style="--d:${d++}">
             <div class="head" id="friendsSec"><h2 class="h2">Друзья</h2><span class="label">${p.friends.length}</span></div>
@@ -2467,9 +2473,14 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         return { name: r.name, mine: m.total, theirs: r.total, diff: Math.round((r.total - m.total) * 10) / 10 };
       }).sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
       const match = common.length ? Math.max(0, Math.min(100, Math.round(100 - (common.reduce((a, c) => a + Math.abs(c.diff), 0) / common.length) * 10))) : 0;
+      // советы друг другу: любимое (8.5+) одного, чего нет в оценках другого
+      const theirs = new Set(ratings.map((r) => keyOf(r.name)));
+      const pickTop = (list) => list.sort((a, b) => b.total - a.total).slice(0, 6).map((r) => ({ name: r.name, total: r.total }));
+      const forMe = pickTop(ratings.filter((r) => r.total != null && r.total >= 8.5 && !mine.has(keyOf(r.name))));
+      const forThem = pickTop([...mine.values()].filter((r) => r.total >= 8.5 && !theirs.has(keyOf(r.name))));
       render({
         kind: 'friend', limited: !!s.limited, name: s.user.username, sub: [s.user.handle ? '@' + s.user.handle : '', s.limited ? 'видны оценки, открытые всем' : s.updatedAt ? 'оценки обновлены ' + ago(s.updatedAt) : 'оценок пока нет'].filter(Boolean).join(' · '),
-        ratings, uid: s.user.id, handle: s.user.handle || '', common, match, layout: s.layout || null, followed: (fol.ids || []).includes(s.user.id), isAdmin: !!s.user.admin,
+        ratings, uid: s.user.id, handle: s.user.handle || '', common, match, forMe, forThem, layout: s.layout || null, followed: (fol.ids || []).includes(s.user.id), isAdmin: !!s.user.admin,
         friends: fr && !fr.hidden ? fr.friends || [] : null, createdAt: s.user.createdAt, lastSeen: s.user.lastSeen, sticker: s.sticker && s.sticker.src, friendCount: s.user.friends != null ? s.user.friends : null,
       });
       document.title = `${s.user.username} · Казуал Хаб`;

@@ -2758,7 +2758,13 @@
 "Окрасы, наряды и еда для котика Васяна. Купленное надевается здесь же или в Настройках → «Внешний вид». Еда открывается и сама: по одной за каждый уровень, начиная со 2-го, — купить можно раньше.":"Coats, outfits and food for Vasyan the cat. Put on what you bought right here or in Settings → “Appearance”. Food also unlocks by itself, one for every level starting from level 2 — or buy it sooner.",
 "Котик Васян есть у первой десятки и у всех с 25-го уровня. Окрасы, наряды и еда откроются, когда он появится у тебя.":"Vasyan the cat belongs to the first ten and to everyone from level 25. Coats, outfits and food open up once you have him.",
 "Окрасы, наряды и еда — для тех, у кого есть котик Васян: первая десятка и все с 25-го уровня.":"Coats, outfits and food are for those who have Vasyan the cat: the first ten and everyone from level 25.",
-"Новая еда для Васяна: {}.":"New food for Vasyan: {}."};
+"Новая еда для Васяна: {}.":"New food for Vasyan: {}.",
+// совпадение вкусов (profile/app.js)
+"Тебе советует":"Recommended to you by",
+"Посоветуй другу":"Recommend to your friend",
+"Всё любимое друга у тебя уже оценено.":"You have already rated everything your friend loves.",
+"Твоё любимое уже есть у друга в оценках.":"Your friend has already rated your favourites.",
+". Общих оценок мало, процент пока примерный.":". Few shared ratings, so the percentage is rough for now."};
   // слово после числа: 1 оценка, 5 оценок. [все русские формы, одна штука, несколько]
   const NOUNS = [
     [['рофлан', 'рофлана', 'рофланов', 'рофланы'], 'Soul', 'Souls'],

@@ -906,6 +906,14 @@ body.prof-edit #app [data-photo] { cursor: inherit; }
 .ring { --p: 0; width: 96px; height: 96px; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--tier) calc(var(--p) * 1%), var(--cell) 0); }
 .ring b { display: grid; place-items: center; width: 74px; height: 74px; border-radius: 50%; background: var(--panel); font-family: var(--font-display); font-weight: 800; font-size: 34px; line-height: 1; }
 .cmp { display: grid; gap: 6px; }
+/* совпадение вкусов: советы друг другу */
+.tst-recs { display: grid; gap: 14px; margin-top: 16px; }
+.tst-h { margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--ink-2); }
+.tst-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.tst-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 10px; background: var(--panel-2); }
+.tst-list span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 600; }
+.tst-list .badge { min-width: 38px; height: 26px; font-size: 19px; }
+.tst-empty { margin: 0; font-size: 13px; }
 .cmp-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 10px; background: var(--panel-2); }
 .cmp-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 600; }
 .cmp-row .badge { min-width: 38px; height: 26px; font-size: 19px; }
