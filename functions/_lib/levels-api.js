@@ -5,9 +5,12 @@
 import {
   levelsMode, levelsOn, ensureLevels, readLevel, levelView, prefsOf, lookOf, unlockedAt, levelsOf, achievementsOf, questState,
   firstSteps, takeNews, dayKey, weekStart, shiftDay, cleanTz, backfillUser, grantSpecial, currentEvent, forgetEvent, RULES, awardMany,
-  ACHIEVEMENTS, REWARDS, NAME_COLORS, PROFILE_BGS, FIRST_STEPS, isScored, textLen, rankOf, award,
-  SEASON_RANKS, seasonRankOf, rankFields, currentSeason, closeSeason, forgetSeason, seasonXpOf, seasonXpMany, seasonPlanLetter, fmtMsk,
+  ACHIEVEMENTS, REWARDS, NAME_COLORS, PROFILE_BGS, isScored, textLen, award,
+  SEASON_RANKS, seasonRankOf, rankFields, currentSeason, closeSeason, forgetSeason, seasonXpOf, seasonXpMany, seasonPlanLetter, fmtKyiv,
 } from './levels.js';
+import { FOODS } from './shop.js';
+// еда Васяна, которая открывается уровнем: показывается в «Прогрессе» рядом с наградами оформления
+const FOOD_GIFTS = FOODS.filter((f) => f.unlock).map((f) => ({ level: f.unlock, title: f.title }));
 import { planSeasonReminder, cancelSeasonReminder, seasonReminderOf, mailOn } from './mailout.js';
 
 // подписи для истории опыта
@@ -119,7 +122,7 @@ export function makeLevelsRoutes(h) {
         streak: { days: alive ? +row.streak || 0 : 0, best: +row.best_streak || 0, freezes: row.freezes == null ? 1 : +row.freezes, today: row.streak_day === today },
         quests, steps: steps.every((s) => s.paid) ? null : steps,
         event: ev ? { title: ev.title, kinds: ev.kinds, mult: ev.mult, until: ev.until } : null,
-        rewards: REWARDS, colors: NAME_COLORS, bgs: Object.keys(PROFILE_BGS),
+        rewards: REWARDS, foods: FOOD_GIFTS, colors: NAME_COLORS, bgs: Object.keys(PROFILE_BGS),
         recap: recapOpen(now) ? 2026 : null,
         mail: await mailUnread(env, me.id),
         vasyan: await vasyanOwned(env, me.id),
@@ -484,15 +487,15 @@ export function makeLevelsRoutes(h) {
       ]);
       forgetSeason();
       if (b.announce !== false && h.setAnnounce) {
-        await h.setAnnounce(env, { id: `season-${cur.n}`, text: `Сброс званий ${fmtMsk(end)} — конец сезона ${cur.n}. Уровень, опыт и награды останутся.`, kind: 'info', until: end, by: me.handle });
+        await h.setAnnounce(env, { id: `season-${cur.n}`, text: `Сброс званий ${fmtKyiv(end)} — конец сезона ${cur.n}. Уровень, опыт и награды останутся.`, kind: 'info', until: end, by: me.handle });
       }
       // письмо на почту за 3 дня до сброса (functions/_lib/mailout.js; уходит с ближайшим шагом рассылки — cron в rt
       // или «Продолжить» в админке). Без галочки прежнее напоминание этого сезона снимается
       let origin = '';
       try { origin = new URL(request.url).origin; } catch (e) {}
-      await planSeasonReminder(env, { n: cur.n, end, whenText: fmtMsk(end), origin, by: me.id, remind: b.remind === true && !!origin, now });
+      await planSeasonReminder(env, { n: cur.n, end, whenText: fmtKyiv(end), origin, by: me.id, remind: b.remind === true && !!origin, now });
       await h.pokeAll(env);
-      await h.adminLog(env, request, me, `levels: сброс сезона ${cur.n} — ${fmtMsk(end)}`, true);
+      await h.adminLog(env, request, me, `levels: сброс сезона ${cur.n} — ${fmtKyiv(end)}`, true);
       return json({ ok: true, current: await currentSeason(env) });
     },
     // сбросить сейчас: сезон закрывает этот запрос (итоги, письмо, плашки), сразу начинается следующий
@@ -592,4 +595,3 @@ export async function recap(env, uid, year) {
     friend, level: view.level, rank: (SEASON_RANKS[rankIdx(bestRank)] || SEASON_RANKS[0]).title, rankId: bestRank, xp: view.xp, bestStreak: +l.best_streak || 0, achievements: ((ach.results || [])[0] || {}).n || 0,
   };
 }
-export { rankOf, FIRST_STEPS };

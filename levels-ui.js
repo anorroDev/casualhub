@@ -172,7 +172,7 @@ html.lv-on .ava-wrap > .ava-ring { display: none !important; }
 .lv-medal { display: inline-grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 7px; color: #fff; font: 800 11px/1 system-ui, sans-serif; }
 .lv-t0 { background: linear-gradient(135deg, var(--accent, #3550E8), #E85FA5); } .lv-t1 { background: #B06A35; } .lv-t2 { background: #8893A3; } .lv-t3 { background: #D99A1E; } .lv-tx { background: color-mix(in srgb, var(--ink, #fff) 12%, transparent); color: var(--ink-3, #8a8f9e); }
 
-.lv-toast { position: fixed; z-index: 96; top: max(12px, env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); width: min(420px, calc(100vw - 32px)); box-sizing: border-box; display: grid; gap: 4px; padding: 12px 10px 12px 14px; border-radius: 16px; border: 1px solid var(--line, #2b2e38); background: var(--panel, #17181c); color: var(--ink, #f2f2f2); box-shadow: 0 14px 34px rgb(0 0 0 / .3); font-size: 14px; line-height: 1.35; cursor: pointer; animation: lv-in .35s cubic-bezier(.22, 1, .36, 1); }
+.lv-toast { position: fixed; z-index: 96; top: max(12px, env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); width: min(420px, calc(100vw - 32px)); box-sizing: border-box; display: grid; gap: 4px; padding: 12px 10px 12px 14px; border-radius: 16px; border: 1px solid var(--line, #2b2e38); background: var(--panel, #17181c); color: var(--ink, #f2f2f2); box-shadow: 0 14px 34px rgb(0 0 0 / .3); font-size: 14px; line-height: 1.35; cursor: pointer; animation: lv-in .28s cubic-bezier(.22, 1, .36, 1); }
 .lv-toast .lv-t-head { display: flex; align-items: center; gap: 10px; }
 .lv-toast .lv-big { flex: none; display: grid; place-items: center; width: 40px; height: 40px; border-radius: 12px; color: #fff; font: 800 18px/1 system-ui, sans-serif; background: linear-gradient(135deg, var(--accent, #3550E8), #E85FA5); }
 .lv-toast b { font-weight: 700; }
@@ -182,7 +182,12 @@ html.lv-on .ava-wrap > .ava-ring { display: none !important; }
 @media (prefers-reduced-motion: reduce) { .lv-toast { animation: none; } }
 
 .lv-ov { position: fixed; inset: 0; z-index: 120; display: grid; place-items: center; padding: max(20px, env(safe-area-inset-top, 0px)) 20px max(20px, env(safe-area-inset-bottom, 0px)); background: rgb(6 8 12 / .5); -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
-.lv-card { width: min(980px, 100%); height: min(820px, 100%); display: grid; grid-template-rows: auto auto minmax(0, 1fr); border-radius: 24px; border: 1px solid var(--line, #2b2e38); background: var(--panel, #17181c); color: var(--ink, #f2f2f2); overflow: hidden; box-shadow: 0 40px 90px -30px rgb(0 0 0 / .7); }
+.lv-card { width: min(980px, 100%); height: min(820px, 100%); display: grid; grid-template-rows: auto auto minmax(0, 1fr); border-radius: 24px; border: 1px solid var(--line, #2b2e38); background: var(--panel, #17181c); color: var(--ink, #f2f2f2); overflow: hidden; box-shadow: 0 40px 90px -30px rgb(0 0 0 / .7); animation: lv-card-in .28s cubic-bezier(.2, .9, .3, 1.12) both; }
+@keyframes lv-card-in { from { opacity: 0; transform: translateY(10px) scale(.97); } }
+.lv-body > * { animation: lv-up .24s cubic-bezier(.2, .8, .2, 1) backwards; }
+.lv-body > :nth-child(2) { animation-delay: .03s; } .lv-body > :nth-child(n+3) { animation-delay: .06s; }
+@keyframes lv-up { from { opacity: 0; transform: translateY(6px); } }
+@media (prefers-reduced-motion: reduce) { .lv-card, .lv-body > * { animation: none; } }
 .lv-head { display: flex; align-items: center; gap: 12px; padding: 22px 22px 14px 28px; }
 .lv-head h2 { margin: 0; font-size: 24px; font-family: var(--font-display, inherit); }
 .lv-head .x { margin-left: auto; width: 36px; height: 36px; border: 0; border-radius: 50%; background: color-mix(in srgb, var(--ink, #fff) 8%, transparent); color: var(--ink, #fff); font-size: 16px; cursor: pointer; }
@@ -198,6 +203,17 @@ html.lv-on .ava-wrap > .ava-ring { display: none !important; }
 .lv-tabs { position: relative; }
 .lv-soon-tip { position: fixed; z-index: 140; padding: 4px 9px; border-radius: 8px; background: var(--ink, #f3f4f6); color: var(--panel, #1b1d24); font: 700 12px/1.2 system-ui, sans-serif; pointer-events: none; white-space: nowrap; }
 .lv-body { overflow-y: auto; padding: 22px 28px 32px; display: grid; gap: 18px; align-content: start; }
+/* награды за уровни в «Обзоре» */
+.lv-gifts { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 280px), 1fr)); gap: 4px 14px; }
+.lv-gifts li { display: flex; align-items: center; gap: 10px; min-height: 34px; padding: 3px 10px 3px 3px; border-radius: 10px; font-size: 13.5px; line-height: 1.3; color: var(--ink-2, #b8bcc8); }
+.lv-gifts .l { flex: none; width: 28px; height: 28px; display: grid; place-items: center; border-radius: 8px; background: color-mix(in srgb, var(--ink, #fff) 7%, transparent); color: var(--ink, #f2f2f2); font-size: 12.5px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.lv-gifts .t { flex: 1; min-width: 0; }
+.lv-gifts li.got { color: var(--ink-3, #8a8f9c); }
+.lv-gifts li.got .l { background: color-mix(in srgb, #2EAD60 22%, transparent); color: #2EAD60; }
+.lv-gifts li.next { background: color-mix(in srgb, var(--accent, #5B74FF) 12%, transparent); color: var(--ink, #f2f2f2); }
+.lv-gifts li.next .l { background: var(--accent, #5B74FF); color: #fff; }
+.lv-gifts i { flex: none; font-style: normal; font-weight: 800; color: #2EAD60; }
+.lv-gifts b { flex: none; font-size: 11.5px; font-weight: 800; color: var(--accent, #5B74FF); }
 .lv-box { border: 1px solid var(--line, #2b2e38); border-radius: 18px; padding: 18px 20px; display: grid; gap: 10px; background: var(--panel-2, color-mix(in srgb, var(--ink, #fff) 3%, transparent)); }
 .lv-box h3 { margin: 0; font-size: 15px; }
 .lv-hero { display: flex; align-items: center; gap: 16px; }
@@ -322,11 +338,11 @@ html.lv-on .ava-wrap > .ava-ring { display: none !important; }
 .lv-recap .wide b { font-size: 18px; }
 .lv-err { color: #E4553F; font-size: 13px; margin: 0; }
 /* знакомство: всё размыто, кроме кнопки уровня (её копия лежит поверх размытия ровно на месте настоящей) */
-.lv-spot { position: fixed; inset: 0; z-index: 130; background: rgb(8 10 16 / .55); -webkit-backdrop-filter: blur(9px) saturate(.8); backdrop-filter: blur(9px) saturate(.8); animation: lv-fade .35s ease both; }
+.lv-spot { position: fixed; inset: 0; z-index: 130; background: rgb(8 10 16 / .55); -webkit-backdrop-filter: blur(9px) saturate(.8); backdrop-filter: blur(9px) saturate(.8); animation: lv-fade .25s ease both; }
 @keyframes lv-fade { from { opacity: 0; } }
 .lv-ov.lv-blur { -webkit-backdrop-filter: blur(9px) saturate(.8); backdrop-filter: blur(9px) saturate(.8); background: rgb(8 10 16 / .55); }
 .lv-spot-btn { position: fixed; z-index: 131; margin: 0 !important; box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent, #3550E8) 45%, transparent), 0 0 34px 6px color-mix(in srgb, var(--accent, #3550E8) 55%, transparent) !important; animation: lv-pulse 1.6s ease-in-out infinite; }
-.lv-spot-tip { position: fixed; z-index: 131; width: min(300px, calc(100vw - 32px)); padding: 14px 16px; border-radius: 16px; background: var(--panel, #17181c); color: var(--ink, #f2f2f2); border: 1px solid color-mix(in srgb, var(--accent, #3550E8) 50%, var(--line, #2b2e38)); box-shadow: 0 18px 40px -12px rgb(0 0 0 / .6); display: grid; gap: 4px; animation: lv-tip-in .45s .15s cubic-bezier(.22, 1, .36, 1) both; }
+.lv-spot-tip { position: fixed; z-index: 131; width: min(300px, calc(100vw - 32px)); padding: 14px 16px; border-radius: 16px; background: var(--panel, #17181c); color: var(--ink, #f2f2f2); border: 1px solid color-mix(in srgb, var(--accent, #3550E8) 50%, var(--line, #2b2e38)); box-shadow: 0 18px 40px -12px rgb(0 0 0 / .6); display: grid; gap: 4px; animation: lv-tip-in .28s .06s cubic-bezier(.22, 1, .36, 1) both; }
 .lv-spot-tip b { font-size: 16px; }
 .lv-spot-tip span { font-size: 13.5px; color: var(--ink-2, #b5b5b5); line-height: 1.4; }
 .lv-spot-tip::before { content: ""; position: absolute; top: -7px; left: var(--ax, 28px); width: 12px; height: 12px; background: inherit; border-left: 1px solid color-mix(in srgb, var(--accent, #3550E8) 50%, var(--line, #2b2e38)); border-top: 1px solid color-mix(in srgb, var(--accent, #3550E8) 50%, var(--line, #2b2e38)); transform: rotate(45deg); }
@@ -343,7 +359,7 @@ html.lv-on .ava-wrap > .ava-ring { display: none !important; }
 .lv-tour .nav { display: flex; gap: 10px; }
 .lv-tour .nav button { flex: 1; padding: 12px; border-radius: 14px; font: 700 14.5px/1.2 inherit; font-family: inherit; cursor: pointer; border: 1px solid var(--line, #2b2e38); background: transparent; color: var(--ink, #fff); }
 .lv-tour .nav .go { background: var(--accent, #3550E8); border-color: transparent; color: #fff; }
-.lv-tour .slide { display: grid; gap: 10px; animation: lv-slide .35s cubic-bezier(.22, 1, .36, 1); }
+.lv-tour .slide { display: grid; gap: 10px; animation: lv-slide .26s cubic-bezier(.22, 1, .36, 1); }
 @keyframes lv-slide { from { opacity: 0; transform: translateX(14px); } }
 @media (prefers-reduced-motion: reduce) { .lv-tour .slide { animation: none; } }
 .lv-bigring { position: relative; width: 112px; height: 112px; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--accent, #3550E8) var(--p, 60%), color-mix(in srgb, var(--ink, #fff) 12%, transparent) 0); }
@@ -489,14 +505,18 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   const openShop = (section) => loadShop().then((s) => s && s.open(section)).catch(() => {});
   // ---------- кнопки в шапке: уровень (мигает до первого нажатия) и магазин ----------
   const SEEN_KEY = 'casualhub.levels.seen.v1';
+  // прошлый ответ /levels/me для шапки (уровень, прогресс, звание) — чтобы значок не появлялся с задержкой на каждой странице
+  const HEAD_KEY = 'casualhub.lv.head.v1';
+  let meLoad = null;
+  const dropHead = () => { try { localStorage.removeItem(HEAD_KEY); } catch (e) {} document.querySelectorAll('header .lv-hbtn, header .lv-shop').forEach((b) => b.remove()); };
   const seen = () => { try { return localStorage.getItem(SEEN_KEY) === '1'; } catch (e) { return true; } };
   const markSeen = () => { try { localStorage.setItem(SEEN_KEY, '1'); } catch (e) {} document.querySelectorAll('.lv-hbtn.lv-pulse').forEach((b) => b.classList.remove('lv-pulse')); };
   const MAIL_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M3.5 7l8.5 6 8.5-6"/></svg>';
   const SHOP_ICON = '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 8h14l-1.2 11.1a2 2 0 0 1-2 1.9H8.2a2 2 0 0 1-2-1.9L5 8z"/><path d="M9 8V6.5a3 3 0 0 1 6 0V8"/></svg>';
   let tipT = 0;
-  function paintHeader() {
+  function paintHeader(m = ME) {
     const header = document.querySelector('header');
-    if (!header || !ME) return;
+    if (!header || !m) return;
     const bar = header.querySelector('.masthead-right > .user-bar') || header.querySelector('.user-bar') || header;
     const twin = bar.querySelector('.pill, .theme-btn');
     const cls = twin && /\bpill\b/.test(twin.className) ? 'pill' : 'theme-btn';
@@ -508,7 +528,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       btn = document.createElement('button');
       btn.type = 'button';
       btn.className = cls + ' lv-hbtn';
-      btn.addEventListener('click', () => { markSeen(); openProgress('home'); });
+      btn.addEventListener('click', () => { markSeen(); if (ME) openProgress('home'); else if (meLoad) meLoad.then(() => { if (ME) openProgress('home'); }); });
       const shop = document.createElement('button');
       shop.type = 'button';
       shop.className = cls + ' lv-shop';
@@ -521,10 +541,10 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       if (slot) { slot.appendChild(btn); slot.appendChild(shop); }
       else if (before) { bar.insertBefore(btn, before); bar.insertBefore(shop, before); } else { bar.appendChild(btn); bar.appendChild(shop); }
     }
-    const p = Math.min(100, Math.round((ME.into / Math.max(1, ME.need)) * 100));
-    const html = `<span class="lv-ring" style="--p:${p}%"><b>${ME.level}</b></span><span class="lv-hl">Уровень</span>`;
+    const p = Math.min(100, Math.round((m.into / Math.max(1, m.need)) * 100));
+    const html = `<span class="lv-ring" style="--p:${p}%"><b>${m.level}</b></span><span class="lv-hl">Уровень</span>`;
     if (btn.innerHTML !== html) btn.innerHTML = html;
-    const t = `Уровень ${ME.level} · ${ME.rank} · ${ME.into} / ${ME.need} опыта`;
+    const t = `Уровень ${m.level} · ${m.rank} · ${m.into} / ${m.need} опыта`;
     if (btn.title !== t) { btn.title = t; btn.setAttribute('aria-label', t); }
     btn.classList.toggle('lv-pulse', !seen());
   }
@@ -537,8 +557,9 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   async function refreshMe() {
     try {
       const d = await api('/levels/me');
-      if (!d.on) { ME = null; return; }
+      if (!d.on) { ME = null; dropHead(); return; }
       ME = d;
+      try { const u = read('ocenshik.user.v1'); if (u) localStorage.setItem(HEAD_KEY, JSON.stringify({ id: u.id, level: d.level, into: d.into, need: d.need, rank: d.rank })); } catch (e) {}
       vasyanOwn(!!d.vasyan);
       loadShop().catch(() => {}); // надетое из магазина и «куплено» для Васяна — на любой странице
       document.documentElement.classList.add('lv-on');
@@ -589,10 +610,27 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     el.appendChild(n);
   }
   let moT = 0;
-  new MutationObserver(() => { if (!ME) return; clearTimeout(moT); moT = setTimeout(() => { paintAvatars(); paintProfile(); paintAccount(); paintHeader(); }, 150); })
-    .observe(document.documentElement, { subtree: true, childList: true });
+  new MutationObserver(() => {
+    // строка уровня в профиле — в том же кадре, что и карточка профиля (из прошлого раза), а не через запрос: вёрстка не прыгает
+    if (location.pathname.startsWith('/profile')) paintProfile();
+    if (!ME) return;
+    clearTimeout(moT); moT = setTimeout(() => { paintAvatars(); paintProfile(); paintAccount(); paintHeader(); }, 150);
+  }).observe(document.documentElement, { subtree: true, childList: true });
 
   // ---------- профиль: уровень, звание, витрина, рамка, цвет ника и фон ----------
+  // прошлый ответ /levels/profile для последних открытых профилей: строку уровня рисуем сразу, свежий ответ её поправит
+  const PROF_KEY = 'casualhub.lv.prof.v1';
+  const profCached = (id) => { const all = read(PROF_KEY); return (all && all[id]) || null; };
+  const profKeep = (id, d) => {
+    try {
+      const all = read(PROF_KEY) || {};
+      delete all[id];
+      if (d && d.on && !d.hidden) all[id] = { on: true, level: d.level, into: d.into, need: d.need, rank: d.rank, look: d.look || {}, showcase: d.showcase || [] };
+      const ids = Object.keys(all);
+      ids.slice(0, Math.max(0, ids.length - 12)).forEach((k) => delete all[k]);
+      localStorage.setItem(PROF_KEY, JSON.stringify(all));
+    } catch (e) {}
+  };
   let profFor = '', profData = null;
   let confFor = '';
   // пиксельное конфетти над карточкой профиля (награда 45-го уровня); при «меньше движения» — нет
@@ -607,28 +645,43 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   }
   const ACH_TOTAL = 25;
   async function paintProfile() {
-    if (!ME || !location.pathname.startsWith('/profile')) return;
+    if (!location.pathname.startsWith('/profile')) return;
     const hero = document.querySelector('.card.hero');
     const who = hero && hero.querySelector('.who');
-    if (!who) return;
-    const seen = who.querySelector('[data-seen]');
-    const me = read('ocenshik.user.v1');
-    const id = seen ? seen.getAttribute('data-seen') : (me && me.serverId) || (me && me.id) || '';
+    if (!who || who.querySelector(':scope > .lv-prof:not([data-stale])')) return; // уже нарисовано (карточка своя у каждого профиля)
+    const idOf = (w) => { const seen = w.querySelector('[data-seen]'), me = read('ocenshik.user.v1'); return seen ? seen.getAttribute('data-seen') : (me && me.serverId) || (me && me.id) || ''; };
+    const id = idOf(who);
     if (!/^[0-9a-f]{24}$/.test(id)) return;
-    if (who.querySelector('.lv-prof[data-for="' + id + '"]')) return;
-    if (profFor !== id) { profFor = id; profData = null; try { profData = await api('/levels/profile?id=' + id); } catch (e) { profData = { hidden: true }; } }
-    const d = profData;
-    if (!d || !d.on || d.hidden || who.querySelector('.lv-prof[data-for="' + id + '"]')) return;
+    // строка из прошлого раза (data-stale) заменяется свежей, когда придёт ответ; готовую не трогаем
+    const cur = who.querySelector('.lv-prof[data-for="' + id + '"]');
+    if (cur && !cur.dataset.stale) return;
+    // /levels/me ещё не пришёл: только то, что помним с прошлого раза, без запросов
+    if (!ME) { const c = !cur && profCached(id); if (c) paintProf(hero, who, id, c, true); return; }
+    if (profFor !== id) {
+      profFor = id; profData = null;
+      const c = !cur && profCached(id);
+      if (c) paintProf(hero, who, id, c, true);
+      try { profData = await api('/levels/profile?id=' + id); profKeep(id, profData); } catch (e) { profData = null; }
+    }
+    // пока ждали ответа, профиль мог перерисоваться: берём карточку заново
+    const d = profData, hero2 = document.querySelector('.card.hero'), who2 = hero2 && hero2.querySelector('.who');
+    const now = who2 && who2.querySelector('.lv-prof[data-for="' + id + '"]');
+    if (!d || !who2 || idOf(who2) !== id || (now && !now.dataset.stale)) return;
+    if (!d.on || d.hidden) { who2.querySelectorAll('.lv-prof').forEach((x) => x.remove()); return; }
+    paintProf(hero2, who2, id, d, false);
+  }
+  function paintProf(hero, who, id, d, stale) {
     who.querySelectorAll('.lv-prof').forEach((x) => x.remove());
     const box = document.createElement('div');
     box.className = 'lv-prof';
     box.dataset.for = id;
+    if (stale) box.dataset.stale = '1';
     const pr = Math.min(100, Math.round(((+d.into || 0) / Math.max(1, +d.need || 1)) * 100));
     box.innerHTML = `<span class="lv-pring" style="--p:${pr}%" title="Уровень ${d.level} · ${esc(d.rank)}" aria-label="Уровень ${d.level}"><b>${d.level}</b></span>${d.look.rank ? `<span class="lv-chip">${emblem(d.look.rankId, 16, 'sm')}${esc(d.look.rank)}</span>` : ''}${(d.showcase || []).map((a) => { const art = ACH_ART[a.code] || ACH_ART.critic; return `<span class="lv-show"><i class="lv-sic px" style="--c1:${art[0]};--c2:${art[1]}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${art[2]}</svg>${achPx(a.code)}</i>${esc(a.title)}</span>`; }).join('')}`;
     const sub = who.querySelector('.sub');
     if (sub) sub.after(box); else who.appendChild(box);
     const name = hero.querySelector('#profileName');
-    if (name && d.look.color && ME.colors) name.style.color = ME.colors[d.look.color] || '';
+    if (name && d.look.color && ME && ME.colors) name.style.color = ME.colors[d.look.color] || '';
     const ava = hero.querySelector('#avaWrap');
     if (ava) { [...ava.classList].filter((c) => c.startsWith('lv-frame-')).forEach((c) => ava.classList.remove(c)); if (d.look.frame) ava.classList.add('lv-frame-' + d.look.frame); }
     // ник с тенью или радужный, корона у «Мастера» и «Легенды», котик Васян, звездопад в шапке, конфетти один раз за просмотр
@@ -645,7 +698,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     [...hero.classList].filter((c) => c.startsWith('lv-bg-')).forEach((c) => hero.classList.remove(c));
     if (d.look.bg) hero.classList.add('lv-bg-' + d.look.bg);
     if (banner && d.look.bg) banner.classList.add('lv-bg-' + d.look.bg);
-    paintProfileAch(id);
+    if (!stale) paintProfileAch(id);
   }
   // карточка «Ачивки» в профиле: одна система с «Прогрессом» (свой профиль — всё, чужой — только полученное)
   let achFor = '', achData = null;
@@ -676,13 +729,13 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
 
   // ---------- окно «Прогресс» ----------
   const TABS = [['home', 'Обзор'], ['mail', 'Почта'], ['ach', 'Достижения'], ['board', 'Рейтинг'], ['hist', 'История'], ['recap', 'Итоги 2026'], ['look', 'Оформление'], ['invite', 'Пригласить']];
-  const SOON_TABS = new Set(['look', 'invite']); // пока в разработке: серые, с подсказкой
-  // «Оформление» админу уже открыто: проверять награды до выхода (сервер отдаёт admin в /levels/me)
-  const soon = (k) => SOON_TABS.has(k) && !(k === 'look' && ME && ME.admin);
+  const SOON_TABS = new Set(['invite']); // пока в разработке: серые, с подсказкой
+  const soon = (k) => SOON_TABS.has(k);
   let ov = null, tab = 'home', lastFocus = null;
   function openProgress(which) {
     if (!ME) return;
     markSeen();
+    shown = ''; // открыли окно — вкладка появляется с анимацией
     tab = which || tab;
     lastFocus = document.activeElement;
     if (!ov) {
@@ -730,26 +783,48 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     tip.style.top = r.bottom + 8 + 'px';
   }
   const body = () => ov.querySelector('#lvBody');
-  let seq = 0;
+  let seq = 0, shown = '';
+  // перерисовка той же вкладки (после нажатия): прокрутка на месте, анимации появления сразу доиграны —
+  // иначе в видах интерфейса карточки «въезжали» заново на каждый клик. Бесконечные (рамки, радужный ник) идут как шли
+  const settle = (b) => { try { b.getAnimations({ subtree: true }).forEach((a) => { if (a.effect && a.effect.getTiming().iterations !== Infinity) a.finish(); }); } catch (e) {} };
   async function render() {
     const my = ++seq;
     const b = body();
-    b.scrollTop = 0;
+    const again = shown === tab && b.childElementCount > 0;
+    if (!again) b.scrollTop = 0;
     try {
       const html = await VIEWS[tab]();
       if (my !== seq || !ov.isConnected) return;
+      const top = b.scrollTop;
       b.innerHTML = html;
+      if (again) { b.scrollTop = top; settle(b); }
+      shown = tab;
       if (BIND[tab]) BIND[tab](b);
     } catch (e) {
       if (my === seq) b.innerHTML = `<p class="lv-err">${esc(e.message || 'Не получилось загрузить')}</p>`;
     }
   }
   const pct = (a, b) => Math.min(100, Math.round((a / Math.max(1, b)) * 100));
+  // что даёт каждый уровень: оформление (rewards) и еда Васяну (foods); взятые — с галочкой, ближайшая — подсвечена
+  function levelGifts(m) {
+    const by = new Map();
+    const add = (lv, html) => { if (!by.has(lv)) by.set(lv, []); by.get(lv).push(html); };
+    (m.rewards || []).forEach((r) => add(+r.level, esc(r.title)));
+    (m.foods || []).forEach((f) => add(+f.level, `<span>Еда Васяну:</span> <span>${esc(f.title)}</span>`));
+    const lvls = [...by.keys()].filter((l) => l > 1).sort((a, b) => a - b);
+    if (!lvls.length) return '';
+    const next = lvls.find((l) => l > m.level);
+    return `<ol class="lv-gifts">${lvls.map((l) => {
+      const got = l <= m.level;
+      return `<li class="${got ? 'got' : l === next ? 'next' : ''}"><span class="l">${l}</span><span class="t">${by.get(l).join('<span class="sep"> · </span>')}</span>${got ? '<i aria-hidden="true">✓</i>' : l === next ? '<b>следующая</b>' : ''}</li>`;
+    }).join('')}</ol>`;
+  }
   // эмблемы достижений: [цвет 1, цвет 2, рисунок 24×24] — тот же вид, что у ачивок в профиле
   const ACH_ART = {
     first10: ['#F9A8D4', '#F28E4C', '<path d="M5 20v-9L4 4l4.5 3h7L20 4l-1 7v9z"/><path d="M9.5 12.5h.01M14.5 12.5h.01M11 15.5h2"/>'],
     founder: ['#67E8F9', '#0284C7', '<path d="M12 3c3 2 4.5 5.5 4.5 9.5L14.6 16H9.4l-1.9-3.5C7.5 8.5 9 5 12 3z"/><circle cx="12" cy="9.6" r="1.6"/><path d="M7.6 12.4L5 15v3.2l4.2-2.2M16.4 12.4L19 15v3.2l-4.2-2.2M10.6 18.5L12 21l1.4-2.5"/>'],
     first_steps: ['#86EFAC', '#16A34A', '<path d="M8 3.5c1.6 0 2.6 1.6 2.6 3.6S9.6 11 8 11 5.4 9.1 5.4 7.1 6.4 3.5 8 3.5zM7.4 13.5h1.8l.4 2.5c.2 1.4-.6 2.5-1.6 2.5s-1.8-1.1-1.6-2.5zM16 7.5c1.6 0 2.6 1.6 2.6 3.6S17.6 15 16 15s-2.6-1.9-2.6-3.9 1-3.6 2.6-3.6zM15.4 17.5h1.8l.4 1.5c.2 1.4-.6 1.5-1.6 1.5s-1.8-.1-1.6-1.5z"/>'],
+    riddler: ['#FDE68A', '#D97706', '<circle cx="12" cy="12" r="8.2"/><path d="M9.6 9.7a2.5 2.5 0 1 1 3.4 2.3c-.7.3-1 .8-1 1.5v.5M12 16.9h.01"/>'],
     critic: ['#60A5FA', '#4F46E5', '<path d="M3.5 9L12 4.5 20.5 9z"/><path d="M6.5 11v6M10.2 11v6M13.8 11v6M17.5 11v6M4 20h16"/>'],
     reviewer: ['#5EEAD4', '#0D9488', '<path d="M4.5 19.5l2.6-7.6L15 4l5 5-7.9 7.9z"/><path d="M4.5 19.5l5.2-5.2"/><circle cx="11.2" cy="12.8" r="1.5"/>'],
     omnivore: ['#C084FC', '#7C3AED', '<circle cx="12" cy="12" r="8.2"/><path d="M15.6 8.4l-2.1 5.1-5.1 2.1 2.1-5.1z" fill="currentColor"/>'],
@@ -824,12 +899,12 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       if (!s || !(s.ranks || []).length) return '<button type="button" class="lv-back" data-home>‹ Обзор</button><p class="lv-muted">Звания сезона пока не включены.</p>';
       const rs = s.ranks, i = Math.max(0, rs.findIndex((r) => r.id === s.rank)), cur = rs[i], next = rs[i + 1];
       const days = s.end ? Math.max(0, Math.ceil((s.end - Date.now()) / 864e5)) : null;
-      // сброс назначают по Москве (админка, объявление): дата и время — тоже по Москве, иначе у кого-то вышло бы «30 ноября»
+      // сброс назначают по Киеву (админка, объявление): дата и время — тоже по Киеву, иначе у кого-то вышло бы «30 ноября»
       // на английском строка собирается здесь же: месяц и «дней» внутри одной строки словарь lang-en не переведёт
       const en = window.CasualLang && window.CasualLang.lang === 'en', loc = en ? 'en-GB' : 'ru-RU';
       const T = (t) => (window.CasualLang && window.CasualLang.t ? window.CasualLang.t(t) : t);
-      const msk = { timeZone: 'Europe/Moscow' };
-      const when = s.end ? `${new Date(s.end).toLocaleDateString(loc, { ...msk, day: 'numeric', month: 'long' })}, ${new Date(s.end).toLocaleTimeString(loc, { ...msk, hour: '2-digit', minute: '2-digit' })} ${en ? 'MSK' : 'МСК'}` : '';
+      const kyiv = { timeZone: 'Europe/Kiev' };
+      const when = s.end ? `${new Date(s.end).toLocaleDateString(loc, { ...kyiv, day: 'numeric', month: 'long' })}, ${new Date(s.end).toLocaleTimeString(loc, { ...kyiv, hour: '2-digit', minute: '2-digit' })} ${en ? 'Kyiv time' : 'по Киеву'}` : '';
       const reset = days == null ? '' : en ? ` · resets in ${days} ${days === 1 ? 'day' : 'days'}, ${when}` : ` · до сброса ${days} ${plural(days, 'день', 'дня', 'дней')}, ${when}`;
       const part = next ? Math.max(0, Math.min(1, (s.xp - cur.xp) / Math.max(1, next.xp - cur.xp))) : 1;
       const lit = Math.min(5, Math.floor(part * 5));
@@ -840,13 +915,12 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
         return `<li class="lv-rk-i ${st}">${emblem(r.id, 48)}<span><b>${esc(r.title)}</b><small>${r.xp ? `от ${nf(r.xp)} опыта за сезон` : 'с начала сезона'}</small></span>${right}</li>`;
       }).reverse().join('');
       const hist = (s.history || []).map((h) => `<li>${emblem(h.rank, 32)}<span><b>${esc(h.title)}</b><small>${esc(rankTitle(h.rank))} · ${nf(h.xp)} опыта${h.place ? ` · ${h.place}-е место` : ''}</small></span></li>`).join('');
-      const reward = (m.rewards || []).find((r) => r.level > m.level);
       return `<button type="button" class="lv-back" data-home>‹ Обзор</button>
         <div class="lv-box"><div class="lv-rk-head">${emblem(cur.id, 96)}<div><small>${esc(en ? T(s.title) : s.title)}${reset}</small><b>${esc(cur.title)}</b><span class="lv-rk-stars" role="img" aria-label="${lit} из 5 звёзд до следующего звания">${stars}</span><span>${nf(s.xp)} опыта за сезон</span></div></div>
           ${next ? `${bar(Math.round(part * 100))}<p class="lv-muted">До звания «${esc(next.title)}» ещё ${nf(next.xp - s.xp)} опыта.</p>` : '<p class="lv-muted">Это самое высокое звание сезона.</p>'}</div>
         <div class="lv-box"><h3>Звания сезона</h3><ol class="lv-rk">${list}</ol>
           <p class="lv-muted">Звание считается по опыту, набранному за сезон. Сезон длится три месяца: в конце звания у всех сбрасываются, а итог остаётся в истории.</p></div>
-        <div class="lv-box"><h3>Уровень ${m.level}</h3><p class="lv-muted">${nf(m.xp)} опыта за всё время. Уровень не сбрасывается и открывает оформление${reward ? `: на ${reward.level}-м — ${esc(reward.title)}` : ''}.</p></div>
+        <div class="lv-box"><h3>Уровень ${m.level}</h3><p class="lv-muted">${nf(m.xp)} опыта за всё время. Уровень не сбрасывается и открывает награды: оформление профиля и еду для Васяна.</p>${levelGifts(m)}</div>
         ${hist ? `<div class="lv-box"><h3>Прошлые сезоны</h3><ul class="lv-rk-hist">${hist}</ul></div>` : ''}`;
     },
     async mail() {
@@ -908,7 +982,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
             <div class="lv-lk-who"><b class="lv-lk-name${p.nick ? ' lv-nick-' + p.nick : ''}"${p.color && m.colors[p.color] ? ` style="color:${m.colors[p.color]}"` : ''}>${esc(nm)}</b>${u.rankChip ? `<span class="lv-chip">${esc(m.rank)}</span>` : ''}${p.fx === 'confetti' ? '<span class="lv-muted">+ конфетти при открытии профиля</span>' : ''}</div>
           </div>
         </div>`;
-      return `${m.admin ? '<p class="lv-adm">Вкладка пока видна только админам. Тебе открыто всё оформление, чтобы проверить его до выхода; другие увидят твой выбор в профиле.</p>' : ''}
+      return `${m.admin ? '<p class="lv-adm">Админу открыто всё оформление, чтобы проверять награды; остальным — по уровням. Другие видят твой выбор в профиле.</p>' : ''}
         <div class="lv-box">${prev}</div>
         <div class="lv-box"><h3>Рамка аватара</h3><div class="lv-pick">${frames}</div></div>
         <div class="lv-box"><h3>Ник в профиле</h3><div class="lv-pick">${colors}</div><div class="lv-pick" style="margin-top:8px">${nicks}</div></div>
@@ -1185,5 +1259,6 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
 
   window.CasualLevels = { open: openProgress, refresh: refreshMe, news: pullNews, intro: openIntro };
   if (!token()) return;
-  refreshMe().then(() => { if (ME && !introDone()) { setTimeout(spotlight, 400); return; } if (ME) { pullNews(); if (/^#progress$/.test(location.hash)) { history.replaceState(null, '', location.pathname + location.search); openProgress('home'); } } });
+  { const u = read('ocenshik.user.v1'), c = read(HEAD_KEY); if (token() && u && c && c.id === u.id) paintHeader(c); }
+  (meLoad = refreshMe()).then(() => { if (ME && !introDone()) { setTimeout(spotlight, 400); return; } if (ME) { pullNews(); if (/^#progress$/.test(location.hash)) { history.replaceState(null, '', location.pathname + location.search); openProgress('home'); } } });
 })();

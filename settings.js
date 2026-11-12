@@ -332,7 +332,7 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
           <label class="st-f"><span>Юзернейм</span><span class="st-at"><span>@</span><input class="st-in" name="handle" value="${esc((me && me.handle) || u.handle || '')}" minlength="3" maxlength="21" autocapitalize="none" autocorrect="off" spellcheck="false"></span></label>
           <span class="st-hint">По нему тебя находят друзья и по нему можно войти. Латиница, цифры, «_» и «.».</span>
           <div class="st-acts"><button type="submit" class="st-btn pri">Сохранить</button><span class="st-msg" role="status"></span></div></form>`)
-      + grp('Профиль', row({ name: 'Аватар, обложка и виджеты', desc: 'Меняются прямо на странице профиля: нажми «Изменить профиль»', href: '/profile/' })
+      + grp('Профиль', row({ name: 'Аватар, обложка и виджеты', desc: 'Меняются прямо на странице профиля: нажми «Изменить профиль»', href: '/profile/?edit=1' })
         + row({ name: 'Все мои оценки', desc: 'Список, плитки и тир-лист на отдельной странице', href: '/profile/?all=1' }))
       + grp('', `<div class="st-row"><span class="st-t"><b>Выйти из аккаунта</b><small>Оценки в этом браузере останутся, войти можно в любой момент</small></span><button type="button" class="st-btn" data-do="logout">Выйти</button></div>`);
   };

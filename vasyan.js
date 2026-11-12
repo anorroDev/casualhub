@@ -257,6 +257,15 @@
 .vy-cat.rolling .vy-body { transition: transform .45s steps(4, jump-none); }
 .vy-cat.hop .vy-body { animation: vy-hop .35s steps(3, jump-none); }
 @keyframes vy-hop { 50% { translate: 0 -8px; } }
+/* приземление: присел от удара (от лап, не от середины) */
+.vy-cat.land .vy-body { transform-origin: 50% 100%; animation: vy-land .3s steps(3, jump-none); }
+@keyframes vy-land { 0% { scale: 1.18 .78; } 55% { scale: .94 1.07; } }
+/* сальто на длинном прыжке: оборот за время полёта, по шагам, как пиксельный спрайт */
+.vy-cat.flipjump .vy-body { animation: vy-flip var(--fd, .7s) steps(8, jump-none) both; }
+@keyframes vy-flip { to { rotate: var(--fr, 360deg); } }
+/* пыль из-под лап */
+.vy-dust { position: fixed; z-index: 39; width: 6px; height: 6px; margin: -3px 0 0 -3px; background: var(--ink-3, #8a8f9c); opacity: .75; pointer-events: none; animation: vy-dust .5s steps(4, jump-none) forwards; }
+@keyframes vy-dust { to { translate: var(--dx, 10px) -9px; opacity: 0; } }
 .vy-bowl { left: 10px; bottom: 6px; filter: drop-shadow(0 3px 0 rgb(0 0 0 / .18)); }
 .vy-bowl.add svg { animation: vy-hop .3s steps(2, jump-none); }
 .vy-cat:focus-visible, .vy-bowl:focus-visible { outline: 2px solid var(--accent, #5B74FF); outline-offset: 3px; }
@@ -274,7 +283,7 @@
 @keyframes vy-love { to { translate: 0 -22px; opacity: 0; } }
 .vy-heart { position: absolute; bottom: 78%; margin-left: -9px; pointer-events: none; line-height: 0; animation: vy-love 1.3s steps(7) forwards; }
 .vy-plus { position: fixed; z-index: 41; font: 700 14px/1 var(--font-display, system-ui), sans-serif; color: var(--good, #43C97A); text-shadow: 1px 1px 0 #1B1B1F; pointer-events: none; animation: vy-love .9s steps(5) forwards; }
-@media (prefers-reduced-motion: reduce) { .vy-cat.hop .vy-body, .vy-bowl.add svg, .vy-bub.zz, .vy-bub.love, .vy-bub.bang, .vy-bub.achoo, .vy-bub.purr, .vy-bub.yum, .vy-heart, .vy-plus { animation: none; } .vy-cat.rolling .vy-body { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .vy-cat.land .vy-body, .vy-cat.flipjump .vy-body, .vy-dust, .vy-cat.hop .vy-body, .vy-bowl.add svg, .vy-bub.zz, .vy-bub.love, .vy-bub.bang, .vy-bub.achoo, .vy-bub.purr, .vy-bub.yum, .vy-heart, .vy-plus { animation: none; } .vy-cat.rolling .vy-body { transition: none; } }
 @media print { .vy-cat, .vy-bowl, .vy-toy { display: none; } }
 /* выбор окраса и наряда в Настройках (блок data-vasyan-skins) */
 .vy-skins { display: grid; gap: 12px; margin-top: 4px; }
@@ -310,7 +319,7 @@
   let cat, body, bubble, bowl, alive = false, raf = 0;
   // положение: x — левый край, y — линия лап (в координатах окна). surf — блок, на котором стоит (null — пол)
   let x = 120, y = 0, vy = 0, dir = 1, mode = 'sit', until = 0, target = 0, frame = 0, lastFrame = 0, saveT = 0, floor = 0, lastT = 0;
-  let surf = null, jump = null, after = null, size = { w: 57, h: 39 };
+  let surf = null, jump = null, after = null, prep = null, climb = null, thudT = 0, size = { w: 57, h: 39 };
   let mouse = { x: -1, y: -1, t: 0 }, chaseT = 0, measureT = 0;
   let press = null, dragged = false, shown = null, turnUntil = 0, faced = 1;
   let wagFrom = 0, wagUntil = 0, roll = null, toy = null, play = '', playT = 0, sneezeAt = 0, runMood = '', lastAct = '';
@@ -422,7 +431,7 @@
     const p = document.createElement('span'); p.className = 'vy-plus'; p.textContent = '+1';
     p.style.left = r.left + r.width / 2 - 8 + 'px'; p.style.top = r.top - 18 + 'px';
     document.body.appendChild(p); setTimeout(() => p.remove(), 1000);
-    if (st.hunger > 60 && !['eat', 'goEat', 'drag', 'fall', 'jump'].includes(mode)) goEat();
+    if (st.hunger > 60 && !['eat', 'goEat', 'drag', 'fall', 'jump', 'climb', 'prep'].includes(mode)) goEat();
   }
   function hop() { if (!cat) return; cat.classList.remove('hop'); void cat.offsetWidth; cat.classList.add('hop'); }
   // несколько сердечек вразлёт
@@ -440,7 +449,7 @@
     }
   }
   // погладили: мурчит; гладят часто и много — пугается
-  const BUSY = ['drag', 'fall', 'jump'];
+  const BUSY = ['drag', 'fall', 'jump', 'climb'];
   function pet() {
     const t = performance.now();
     // уже напуган и удирает — ещё клик только подгоняет
@@ -470,7 +479,7 @@
   function move(e) {
     if (!press) return;
     if (!dragged && Math.hypot(e.clientX - press.x, e.clientY - press.y) < 6) return;
-    if (!dragged) { dragged = true; mode = 'drag'; jump = null; after = null; stopPlay(); clearBubble(); cat.classList.add('drag'); }
+    if (!dragged) { dragged = true; mode = 'drag'; jump = null; after = null; prep = null; climb = null; stopPlay(); clearBubble(); cat.classList.remove('flipjump'); cat.classList.add('drag'); }
     const s = sprite(HANG, K);
     x = e.clientX - s.cw / 2; y = e.clientY + s.ch - 6;
   }
@@ -481,13 +490,47 @@
   }
 
   // ---------- что делать дальше ----------
+  // насколько ниже края висит, когда зацепился: голова над краем, лапы болтаются
+  const HANG_DY = () => (HANG.length - 4) * K;
   function jumpTo(s, tx) {
     const [a, b] = bounds(s);
     tx = Math.max(a, Math.min(b, tx));
-    const dist = Math.hypot(tx - x, surfTop(s, tx) - y);
-    jump = { s, x0: x, y0: y, x1: tx, t0: performance.now(), dur: Math.min(900, 380 + dist * 0.9) };
+    const top = surfTop(s, tx), dist = Math.hypot(tx - x, top - y);
+    // высоко — не долетает: цепляется за край и вскарабкивается; далеко — иногда сальто
+    const climbIt = !!s && y - top > 110 && Math.random() < 0.75;
+    const flip = !calm && !climbIt && dist > 240 && Math.random() < 0.22;
+    jump = { s, x0: x, y0: y, x1: tx, t0: performance.now(), dur: Math.min(900, 380 + dist * 0.9), climb: climbIt };
     dir = tx >= x ? 1 : -1;
-    mode = 'jump'; clearBubble('zz');
+    mode = 'jump'; prep = null; clearBubble('zz');
+    if (cat) {
+      cat.classList.toggle('flipjump', flip);
+      if (flip) { cat.style.setProperty('--fd', jump.dur + 'ms'); cat.style.setProperty('--fr', (dir > 0 ? 360 : -360) + 'deg'); }
+    }
+  }
+  // наверх — сначала присесть и повилять задом, как перед охотой; вниз и на пол — прыгает сразу
+  function prepJump(s, tx, ms) {
+    const [a, b] = bounds(s), gx = Math.max(a, Math.min(b, tx));
+    if (calm || surfTop(s, gx) > y - 24) { jumpTo(s, tx); return; }
+    prep = { s, tx, until: performance.now() + (ms || 380 + Math.random() * 420) };
+    dir = gx >= x ? 1 : -1;
+    mode = 'prep'; clearBubble('zz');
+  }
+  // приземление: присел от удара и пыль из-под лап
+  function thud() {
+    if (!cat || calm) return;
+    cat.classList.remove('land'); void cat.offsetWidth; cat.classList.add('land');
+    clearTimeout(thudT); thudT = setTimeout(() => { if (cat) cat.classList.remove('land'); }, 320);
+    const fx = x + size.w / 2;
+    for (const dx of [-1, 1]) {
+      const d = document.createElement('i');
+      d.className = 'vy-dust';
+      d.setAttribute('aria-hidden', 'true');
+      d.style.left = Math.round(fx + dx * size.w * 0.3) + 'px';
+      d.style.top = Math.round(y - 3) + 'px';
+      d.style.setProperty('--dx', dx * 12 + 'px');
+      document.body.appendChild(d);
+      setTimeout(() => d.remove(), 540);
+    }
   }
   function goEat() {
     if (surf) { jumpTo(null, x); after = 'goEat'; return; }
@@ -517,7 +560,7 @@
       case 'jump': {
         // прыжок на другой блок недалеко (или вниз, на пол)
         const ps = platforms().filter((p) => p.el !== surf && Math.abs((p.r.left + p.r.right) / 2 - x) < 520 && Math.abs(p.r.top - y) < 420);
-        if (ps.length && Math.random() < 0.8) { const p = ps[Math.floor(Math.random() * ps.length)]; jumpTo(p.el, p.r.left + Math.random() * Math.max(10, p.r.width - size.w)); return; }
+        if (ps.length && Math.random() < 0.8) { const p = ps[Math.floor(Math.random() * ps.length)]; prepJump(p.el, p.r.left + Math.random() * Math.max(10, p.r.width - size.w)); return; }
         if (surf) { jumpTo(null, x + (Math.random() - 0.5) * 200); return; }
         act('walk', t); return;
       }
@@ -555,7 +598,7 @@
         if (Math.abs(d) > 300) { mode = 'run'; runMood = 'hunt'; target = goal - sg * 220; }
         else { mode = 'stalk'; target = goal - sg * 70; }
       } else { mode = 'run'; target = goal; runMood = ''; }
-    } else jumpTo(s, tx);
+    } else prepJump(s, tx, 220);
   }
   function pounce() {
     const [a, b] = bounds(surf);
@@ -635,9 +678,11 @@
   }
 
   // ---------- кадр ----------
-  const GROUND = new Set(['sit', 'walk', 'run', 'sleep', 'goEat', 'eat', 'loaf', 'wash', 'yawn', 'stretch', 'scratch', 'roll', 'play', 'edge', 'stalk', 'wiggle', 'scared', 'sneeze', 'purr']);
+  const GROUND = new Set(['prep', 'sit', 'walk', 'run', 'sleep', 'goEat', 'eat', 'loaf', 'wash', 'yawn', 'stretch', 'scratch', 'roll', 'play', 'edge', 'stalk', 'wiggle', 'scared', 'sneeze', 'purr']);
   function land(s) {
+    const air = mode === 'jump' || mode === 'fall';
     surf = s; y = surfTop(s); jump = null;
+    if (air) thud();
     if (after === 'goEat') { after = null; mode = 'goEat'; target = bowlRight() - 6; }
     else if (after === 'caught') { after = null; mode = 'sit'; until = performance.now() + 3500; say('love'); }
     else decide();
@@ -668,12 +713,25 @@
       const hit = platforms().find((p) => cx >= p.r.left && cx <= p.r.right && p.r.top >= prev - 2 && p.r.top <= y);
       if (hit) land(hit.el); else if (y >= floorAt(cx)) { x = Math.max(bowlRight(), x); land(null); }
     } else if (mode === 'jump' && jump) {
-      const k = Math.min(1, (t - jump.t0) / jump.dur), y1 = surfTop(jump.s, jump.x1);
+      const k = Math.min(1, (t - jump.t0) / jump.dur), y1 = surfTop(jump.s, jump.x1) + (jump.climb ? HANG_DY() : 0);
       const h = 50 + Math.max(0, jump.y0 - y1) * 0.6;
       x = jump.x0 + (jump.x1 - jump.x0) * k;
       y = jump.y0 + (y1 - jump.y0) * k - h * 4 * k * (1 - k);
-      rows = k < 0.5 ? JUMP : WALK_A;
-      if (k >= 1) { if (surfaceOk(jump.s)) land(jump.s); else { mode = 'fall'; vy = 0; surf = null; jump = null; } }
+      rows = jump.climb && k > 0.6 ? (frame % 2 ? HANG : HANG_B) : k < 0.5 ? JUMP : WALK_A;
+      if (k >= 1) {
+        if (!surfaceOk(jump.s)) { mode = 'fall'; vy = 0; surf = null; jump = null; }
+        else if (jump.climb) { climb = { s: jump.s, t0: t }; jump = null; mode = 'climb'; }
+        else land(jump.s);
+      }
+    } else if (mode === 'climb' && climb) {
+      // висит на краю и сучит лапами, потом подтягивается
+      const k = Math.min(1, (t - climb.t0) / 680), top = surfTop(climb.s, x), hang = top + HANG_DY();
+      if (!surfaceOk(climb.s)) { climb = null; mode = 'fall'; vy = 0; surf = null; rows = HANG_B; }
+      else {
+        if (k < 0.65) { rows = frame % 2 ? HANG : HANG_B; y = hang; }
+        else { rows = JUMP; y = hang + (top - hang) * ((k - 0.65) / 0.35); }
+        if (k >= 1) { const cs = climb.s; climb = null; land(cs); hop(); }
+      }
     } else {
       y = surfTop(surf);
       if (mode === 'walk' || mode === 'run' || mode === 'goEat' || mode === 'stalk' || (mode === 'play' && play === 'go')) {
@@ -696,6 +754,11 @@
           else if (mode === 'play') { play = 'bat'; playT = t + 380; dir = toy.x > x ? 1 : -1; }
           else decide();
         }
+      } else if (mode === 'prep') {
+        // перед прыжком наверх: присел, смотрит на цель и виляет задом
+        rows = frame % 2 ? WIGGLE : STALK_A;
+        if (!prep) decide();
+        else if (t > prep.until) { const pj = prep; prep = null; if (!pj.s || surfaceOk(pj.s)) jumpTo(pj.s, pj.tx); else decide(); }
       } else if (mode === 'wiggle') {
         rows = frame % 2 ? WIGGLE : STALK_A;
         dir = mouse.x > x + size.w / 2 ? 1 : -1;
@@ -780,7 +843,8 @@
     if (!['walk', 'run', 'goEat', 'stalk', 'play'].includes(mode)) faced = dir;
     const face = rows.head && rows.head.face === 'l' ? -1 : 1;
     cat.classList.toggle('flip', dir * face < 0);
-    if (mode !== 'drag' && mode !== 'fall' && mode !== 'jump') {
+    if (mode !== 'jump' && cat.classList.contains('flipjump')) cat.classList.remove('flipjump');
+    if (mode !== 'drag' && mode !== 'fall' && mode !== 'jump' && mode !== 'climb') {
       const [a, b] = surf ? bounds(surf) : [mode === 'eat' || mode === 'goEat' ? bowlRight() - 8 : bowlRight(), innerWidth - s.cw - 6];
       x = Math.max(a, Math.min(b, x));
     }

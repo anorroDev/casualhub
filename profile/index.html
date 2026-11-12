@@ -208,7 +208,7 @@ button, input { font: inherit; color: inherit; }
 .page { max-width: 1180px; margin: 0 auto; padding-block: 20px 56px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
 
 /* Top bar */
-.top { display: flex; flex-wrap: wrap; justify-content: flex-end; row-gap: 6px; align-items: center; gap: 8px; margin-bottom: 22px; animation: drop-in .6s var(--out) backwards; }
+.top { display: flex; flex-wrap: wrap; justify-content: flex-end; row-gap: 6px; align-items: center; gap: 8px; margin-bottom: 22px; animation: drop-in .25s var(--out) backwards; }
 .top .sp { flex: 1; }
 .rd-listen { justify-self: start; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel-2); color: var(--ink); font-size: 13.5px; font-weight: 600; text-decoration: none; transition: border-color .15s; }
 .rd-listen:hover { border-color: var(--accent); }
@@ -234,7 +234,7 @@ button, input { font: inherit; color: inherit; }
   background: linear-gradient(180deg, color-mix(in srgb, var(--panel) 93%, var(--accent)) 0, var(--panel) 140px);
   border: 1px solid var(--line); border-radius: 22px; padding: 22px; box-shadow: var(--lift); min-width: 0;
 }
-.rise { animation: rise .8s var(--spring) backwards; animation-delay: calc(var(--d, 0) * 70ms); }
+.rise { animation: rise .3s var(--spring) backwards; animation-delay: calc(min(var(--d, 0), 8) * 30ms); }
 @keyframes rise { from { transform: translateY(30px) scale(.985); } }
 .label { display: block; font-size: 12px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); }
 .h2 { font-family: var(--font-display); font-weight: 800; font-size: clamp(30px, 4vw, 40px); line-height: .9; }
@@ -316,7 +316,6 @@ button, input { font: inherit; color: inherit; }
 .bell svg { transform-origin: 50% 12%; }
 .bell.bell-swing svg { animation: bell-ring .9s ease-in-out; }
 @keyframes bell-ring { 0%, 100% { transform: rotate(0); } 15% { transform: rotate(18deg); } 30% { transform: rotate(-15deg); } 45% { transform: rotate(11deg); } 60% { transform: rotate(-7deg); } 75% { transform: rotate(3deg); } }
-.ic-btn { width: 42px; padding: 0; display: inline-grid; place-items: center; }
 @media (prefers-reduced-motion: reduce) { .bell.bell-swing svg { animation: none; } }
 /* история аватарок (меню у аватарки) и баннеров (в меню «Баннер») */
 .hist-menu { position: fixed; z-index: 80; width: min(300px, calc(100vw - 32px)); display: grid; gap: 10px; padding: 12px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 24px 48px -20px rgba(0, 0, 0, .5); cursor: default; animation: hist-in .4s var(--spring); }
@@ -411,8 +410,8 @@ button.nick-st:focus-visible { outline: 2px solid var(--accent); outline-offset:
   color: #fff; font-family: var(--font-display); font-weight: 800; font-size: 54px; line-height: 1; text-transform: uppercase;
 }
 .who { min-width: 0; display: grid; gap: 8px; }
-.name { font-family: var(--font-display); font-weight: 800; font-size: clamp(44px, 7vw, 76px); line-height: .85; overflow-wrap: anywhere; }
-.name .ch { display: inline-block; transform-origin: 50% 100%; animation: ch-in .7s cubic-bezier(.2, .9, .25, 1.25) backwards calc(var(--i) * 40ms); }
+.name { font-family: var(--font-display); font-weight: 800; font-size: clamp(44px, 7vw, 76px); line-height: .85; overflow-wrap: anywhere; padding-bottom: .06em; } /* снизу место под хвосты «у», «д», «р»: не задевают строку «@ник · в Казуал Хабе с …» */
+.name .ch { display: inline-block; transform-origin: 50% 100%; animation: ch-in .3s cubic-bezier(.2, .9, .25, 1.25) backwards calc(min(var(--i), 10) * 18ms); }
 @keyframes ch-in { from { transform: translateY(60%) scaleY(.3); } }
 .sub { color: var(--ink-2); font-size: 14px; }
 .titles { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -455,7 +454,7 @@ button.nick-st:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .bdg-more summary { cursor: pointer; padding: 8px 2px; font-size: 13.5px; font-weight: 700; color: var(--accent); list-style: none; }
 .bdg-more summary::-webkit-details-marker { display: none; }
 .bdg-more[open] summary { margin-bottom: 6px; }
-.bdg-i { animation: rise .7s var(--spring) backwards; animation-delay: calc(var(--k, 0) * 45ms + .2s); }
+.bdg-i { animation: rise .3s var(--spring) backwards; animation-delay: calc(min(var(--k, 0), 8) * 20ms + .04s); }
 .st-card { animation: menu-in .28s var(--spring) both; transform-origin: 50% 0; }
 .nick-st.pop { animation: st-pop .55s var(--spring); }
 @keyframes st-pop { 0% { transform: scale(.4) rotate(-20deg); } 100% { transform: none; } }
@@ -469,18 +468,18 @@ button.nick-st:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .bdg-i .ok { position: absolute; top: 7px; right: 7px; width: 17px; height: 17px; border-radius: 50%; display: grid; place-items: center; background: linear-gradient(140deg, var(--c1), var(--c2)); color: #fff; font-size: 10px; font-weight: 900; }
 .bdg-i .pg { display: flex; align-items: center; gap: 8px; margin-top: 7px; }
 .bdg-i .pg .tr { flex: 1; height: 7px; margin: 0; border-radius: 99px; background: var(--cell, var(--line)); overflow: hidden; }
-.bdg-i .pg .tr i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--c1), var(--c2)); transform-origin: 0 50%; animation: ach-fill 1s var(--spring) backwards; animation-delay: calc(var(--k, 0) * 45ms + .35s); }
+.bdg-i .pg .tr i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--c1), var(--c2)); transform-origin: 0 50%; animation: ach-fill .3s var(--spring) backwards; animation-delay: calc(min(var(--k, 0), 8) * 20ms + .08s); }
 .bdg-i .pg em { flex: none; min-width: 30px; text-align: right; font-style: normal; font-size: 11.5px; font-weight: 800; color: var(--ink-2); font-variant-numeric: tabular-nums; }
 .bdg-i.next .pg em { color: var(--ink); }
 @keyframes ach-fill { from { transform: scaleX(0); } }
 .ach-sum { display: flex; align-items: center; gap: 12px; margin: -4px 0 14px; }
 .ach-sum .tr { flex: 1; height: 10px; border-radius: 99px; background: var(--cell, var(--line)); overflow: hidden; }
-.ach-sum .tr i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #34D399, #60A5FA 50%, #C084FC); transform-origin: 0 50%; animation: ach-fill 1.1s var(--spring) .3s backwards; }
+.ach-sum .tr i { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, #34D399, #60A5FA 50%, #C084FC); transform-origin: 0 50%; animation: ach-fill .3s var(--spring) .06s backwards; }
 .ach-sum b { font-family: var(--font-display); font-size: 24px; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .bdg-i .pg .tr i, .ach-sum .tr i { animation: none; } }
 .hist { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 6px; align-items: end; height: 140px; }
 .hist div { display: grid; grid-template-rows: 1fr auto auto; height: 100%; gap: 4px; text-align: center; }
-.hist .bar { align-self: end; border-radius: 6px; background: var(--tier); min-height: 4px; transform-origin: 50% 100%; animation: grow-y .8s var(--spring) backwards; animation-delay: calc(.3s + var(--d) * 45ms); }
+.hist .bar { align-self: end; border-radius: 6px; background: var(--tier); min-height: 4px; transform-origin: 50% 100%; animation: grow-y .3s var(--spring) backwards; animation-delay: calc(.06s + var(--d) * 20ms); }
 .hist .bar.zero { background: var(--cell); }
 .hist small { font-size: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .hist em { font-style: normal; font-family: var(--font-display); font-weight: 700; font-size: 18px; line-height: 1; color: var(--ink-2); }
@@ -864,8 +863,8 @@ body.prof-edit #app [data-photo] { cursor: inherit; }
 .chip b { font-weight: 600; opacity: .55; }
 .chip[aria-pressed="true"] { background: var(--ink); border-color: var(--ink); color: var(--panel); }
 .chip:active { transform: scale(.95); }
-.seg { display: inline-flex; gap: 2px; padding: 3px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 11px; }
-.seg button { height: 32px; padding: 0 11px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); font-size: 13px; font-weight: 600; cursor: pointer; }
+.seg { display: inline-flex; flex-wrap: wrap; max-width: 100%; gap: 2px; padding: 3px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 11px; } /* не влезает в строку (узкий экран, широкий шрифт вида) — переносится, а не вылезает за край */
+.seg button { height: 32px; padding: 0 11px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-2); font-size: 13px; font-weight: 600; white-space: nowrap; cursor: pointer; }
 .seg button[aria-pressed="true"] { background: var(--panel); color: var(--ink); box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 18%, transparent); }
 .search { flex: 1 1 200px; height: 40px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel-2); font-size: 14px; transition: border-color .15s, box-shadow .2s; }
 .search:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
@@ -901,12 +900,20 @@ body.prof-edit #app [data-photo] { cursor: inherit; }
 .cat b { font-size: 14px; font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cat small { font-size: 12.5px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
 .cat .tr { grid-column: 1 / -1; height: 8px; border-radius: 4px; background: var(--cell); overflow: hidden; }
-.cat .tr i { display: block; height: 100%; border-radius: 4px; background: var(--tier); transform-origin: 0 50%; animation: grow-x .9s var(--out) backwards .4s; }
+.cat .tr i { display: block; height: 100%; border-radius: 4px; background: var(--tier); transform-origin: 0 50%; animation: grow-x .3s var(--out) backwards .06s; }
 @keyframes grow-x { from { transform: scaleX(0); } }
 .match { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 16px; align-items: center; margin-bottom: 14px; }
 .ring { --p: 0; width: 96px; height: 96px; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--tier) calc(var(--p) * 1%), var(--cell) 0); }
 .ring b { display: grid; place-items: center; width: 74px; height: 74px; border-radius: 50%; background: var(--panel); font-family: var(--font-display); font-weight: 800; font-size: 34px; line-height: 1; }
 .cmp { display: grid; gap: 6px; }
+/* совпадение вкусов: советы друг другу */
+.tst-recs { display: grid; gap: 14px; margin-top: 16px; }
+.tst-h { margin: 0 0 8px; font-size: 13px; font-weight: 700; color: var(--ink-2); }
+.tst-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.tst-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 10px; background: var(--panel-2); }
+.tst-list span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 600; }
+.tst-list .badge { min-width: 38px; height: 26px; font-size: 19px; }
+.tst-empty { margin: 0; font-size: 13px; }
 .cmp-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 10px; background: var(--panel-2); }
 .cmp-row span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13.5px; font-weight: 600; }
 .cmp-row .badge { min-width: 38px; height: 26px; font-size: 19px; }
@@ -966,8 +973,14 @@ body.prof-edit #app [data-photo] { cursor: inherit; }
 <style id="unslop-page">
 /* Казуальный вид (unslop): действует, только когда в Настройках включён «Казуальный вид». Собрано из правок, которые убирают
    цветные пятна, свечения, пружинные и вечные анимации, заглавные подписи. Обычный вид выше не меняется */
-@keyframes ch-in-u { from { opacity: 0; transform: translateY(.12em); } }
 :root.unslop { --spring: cubic-bezier(.22, 1, .36, 1); }
+/* появление шапки, карточек, ачивок и окошек — мягкое (кадры u-* из /unslop.css), без больших въездов; задержки — прежние, короткие */
+html.unslop .top { animation-name: u-down; animation-duration: var(--mo-in); animation-timing-function: var(--mo-ease); }
+html.unslop :is(.rise, .bdg-i) { animation-name: u-in; animation-duration: var(--mo-in); animation-timing-function: var(--mo-ease); }
+html.unslop :is(.st-card, .ban-menu) { animation-name: u-pop; animation-duration: var(--mo-in); animation-timing-function: var(--mo-ease); }
+html.unslop :is(.hist .bar, .ach-sum .tr i, .bdg-i .pg .tr i, .cat .tr i) { animation-name: u-fade; animation-duration: var(--mo-in); animation-timing-function: var(--mo-ease); }
+/* у шрифтов видов хвосты букв длиннее, чем у Handjet */
+html.unslop[data-ui] .name { padding-bottom: .14em; }
 html.unslop .pill:hover { box-shadow: 0 6px 18px -10px rgb(0 0 0 / .28); }
 html.unslop .card { background: var(--panel); }
 html.unslop .label { text-transform: none; letter-spacing: normal; }
@@ -983,7 +996,7 @@ html.unslop .st-card { box-shadow: 0 20px 44px -22px rgb(0 0 0 / .45); }
 html.unslop .ban-presets button:hover { transform: none; }
 html.unslop .ava-wrap.can:hover .ava-edit { transform: none; }
 html.unslop .ava-ring { background: conic-gradient(from 210deg, var(--good), var(--mid), var(--bad), var(--good)); will-change: auto; animation: none; }
-html.unslop .name .ch { animation: ch-in-u .7s cubic-bezier(.22, 1, .36, 1) backwards calc(var(--i) * 40ms); }
+html.unslop .name .ch { animation: u-in var(--mo-in) var(--mo-ease) backwards calc(min(var(--i), 10) * 14ms); }
 html.unslop .title-chip.t-admin i { box-shadow: none; }
 html.unslop .pod:hover { transform: translateY(-1px); }
 html.unslop .badge { box-shadow: 0 8px 18px -10px rgb(0 0 0 / .28); }
@@ -996,6 +1009,15 @@ html.unslop .tile:hover { transform: translateY(-1px); }
 html.unslop .tl-it:hover { transform: translateY(-1px); }
 html.unslop .item:hover { transform: translateY(-1px); }
 html.unslop .cmp-head { text-transform: none; letter-spacing: normal; }
+/* виды интерфейса (кроме спокойного казуального): значки, стикер, плитки и витрины снова откликаются на наведение — мягко */
+@media (prefers-reduced-motion: no-preference) and (hover: hover) {
+  html.unslop[data-ui] .hist-pic:hover { transform: scale(1.04); }
+  html.unslop[data-ui] button.nick-st:hover { transform: scale(1.06) rotate(-3deg); }
+  html.unslop[data-ui] .ban-presets button:hover { transform: scale(1.03); }
+  html.unslop[data-ui] .ava-wrap.can:hover .ava-edit { transform: scale(1.08) rotate(-6deg); }
+  html.unslop[data-ui] :is(.wg-btn:hover, .wg-btn:focus-visible) { transform: scale(1.05); }
+  html.unslop[data-ui] :is(.pod, .sc-it, .tile, .ly-it .pic):hover { transform: translateY(-2px); }
+}
 </style>
 </head>
 <body>

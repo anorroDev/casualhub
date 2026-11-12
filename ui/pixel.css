@@ -1,15 +1,17 @@
-@import url('https://fonts.googleapis.com/css2?family=Pixelify+Sans:wght@400..700&family=Press+Start+2P&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Tiny5&family=Golos+Text:wght@400..800&display=swap');
 /* Казуал Хаб: вид «Пиксель» — как меню старой игры. Включается выбором вида в Настройках: <html class="unslop" data-ui="pixel">,
    поэтому строится поверх казуального вида (/unslop.css уже убрал свечения, пятна и вечные анимации).
-   Углы прямые, рамки 2px, жёсткие тени без размытия, пиксельные шрифты с кириллицей (Pixelify Sans — заголовки, кнопки,
-   вкладки; Press Start 2P — мелкие подписи), анимации ступеньками steps(). Цвета — только переменные темы.
-   Длинный текст (отзывы, комментарии, описания) остаётся читаемым шрифтом страницы.
+   Углы прямые, рамки 2px, жёсткие тени без размытия. Пиксельный шрифт Tiny5 (чистая кириллица, один вес) — только у крупных
+   заголовков, логотипа и больших цифр; текст, кнопки, вкладки, подписи и поля — гротеском Golos Text. Цвета — только переменные темы.
+   Анимации мягкие и короткие (прозрачность и сдвиг на несколько пикселей); ступеньки — только у пиксельных спрайтов.
    :root после [data-ui] — чтобы перебить правила страниц вида html.unslop .x независимо от порядка подключения. */
 
 html[data-ui="pixel"]:root {
-  --font-display: "Pixelify Sans", "Handjet", "Onest", ui-sans-serif, system-ui, sans-serif;
-  --px-font: "Pixelify Sans", "Handjet", "Onest", ui-sans-serif, system-ui, sans-serif;
-  --px-tiny: "Press Start 2P", "Pixelify Sans", ui-monospace, monospace;
+  --font-display: "Tiny5", "Golos Text", "Onest", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Golos Text", "Onest", ui-sans-serif, system-ui, sans-serif;
+  --px-font: "Tiny5", "Golos Text", "Onest", ui-sans-serif, system-ui, sans-serif;
+  --px-text: "Golos Text", "Onest", ui-sans-serif, system-ui, sans-serif;
+  --mo-in: .18s; --mo-ease: cubic-bezier(.2, .8, .2, 1); --mo-hop: -4px;
   --px-line: color-mix(in srgb, var(--ink, #888) 34%, var(--line, #2b2e38));
   --px-sh: color-mix(in srgb, var(--ink, #888) 26%, transparent);
   --px-shadow: 3px 3px 0 var(--px-sh);
@@ -25,8 +27,8 @@ html[data-ui="pixel"]:root body :not(.hub, .knob, .lv-pring, .lv-bigring, [class
 html[data-ui="pixel"]:root body :not(.hub, .knob, .lv-pring, .lv-bigring, [class*="ava"], [class*="ring"], [class*="dot"], [class*="wheel"])::after {
   border-radius: 0 !important;
 }
-/* бегунок выбранного раздела в нижней панели на телефоне — брусок с тенью, едет ступеньками */
-html[data-ui="pixel"]:root .mnav::before { box-shadow: 2px 2px 0 var(--px-sh); transition-timing-function: steps(3, end) !important; }
+/* бегунок выбранного раздела в нижней панели на телефоне — брусок с тенью */
+html[data-ui="pixel"]:root .mnav::before { box-shadow: 2px 2px 0 var(--px-sh); }
 
 /* ---------- окна и карточки: рамка 2px и тень-ступенька ---------- */
 html[data-ui="pixel"]:root :is(.card, .app, .fd, .kpi-card, .mcard, .tl-go, .tl-tile, .stat, .pod, .tile, .fr-card, .lots-list li, .hist-list li, .lv-box, .st-box, .site-ann) {
@@ -41,21 +43,22 @@ html[data-ui="pixel"]:root :is(.wn-head, .lv-tabs) { border-width: 0 0 2px 0; }
 /* затемнение под окном — сплошное, без размытия */
 html[data-ui="pixel"]:root :is(.st-sheet, .fp-sheet, .lv-ov, .howto-modal, .wn-sheet) { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
 
-/* ---------- шрифты: пиксельные заголовки, кнопки, вкладки и подписи ---------- */
-html[data-ui="pixel"]:root :is(h1, h2, h3, .title, .view-tab, .st-nav h2, .st-head h3, .lv-head h2, .wn-head h2, .howto-head, .lv-hero .n, .lv-box h3) {
-  font-family: var(--px-font); letter-spacing: .01em;
+/* ---------- шрифты: пиксельный — у крупных заголовков, логотипа и больших цифр (--font-display страниц);
+   текст, кнопки, вкладки, подписи и поля — гротеском Golos Text. У Tiny5 один вес: жирность не подделываем, пиксели остаются чёткими ---------- */
+html[data-ui="pixel"] body { font-synthesis-weight: none; }
+html[data-ui="pixel"] :where(button, input, select, textarea) { font-family: var(--px-text); }
+html[data-ui="pixel"]:root :is(h1, h2, .title, .wordmark, .mark, .app-name, .view-tab, .st-nav h2, .lv-head h2, .wn-head h2, .lv-hero .n) {
+  font-family: var(--px-font); letter-spacing: .02em;
 }
-html[data-ui="pixel"]:root :is(.title, .wn-head h2, .lv-head h2) { font-weight: 700; line-height: .95; }
-html[data-ui="pixel"]:root .title { font-size: clamp(40px, 8vw, 72px); }
-html[data-ui="pixel"]:root :is(
-  .btn, .pill, .user-pill, .theme-btn, .cmp-tray, .chip, .chip-btn, .status-chip, .sub-chip, .tpl-btn, .seg button, .st-btn, .st-nb, .st-seg button, .st-back, .fp-btn,
-  .howto-ok, .lv-tabs button, .lv-seg button, .lv-pick button, .lv-bi .pin, .lv-ach .pin, .hm-panel > a, .hm-panel > button, .hm-secs a,
-  .mnav button, .mnav a, .lots-opt, .tl-chip, .cm-send, .feed-all, .recs-more, .app-name, .lv-row .lv-top b, .lv-hbtn .lv-hl, .st-t b, .badge
-) { font-family: var(--px-font); font-weight: 600; letter-spacing: .01em; }
-html[data-ui="pixel"]:root :is(.eyebrow, .label, .fp-card .label, .rx-title, .lv-muted.lv-tag, .wn-head small) {
-  font-family: var(--px-tiny); font-weight: 400; font-size: 9px; line-height: 1.7; letter-spacing: 0; text-transform: none;
-}
-html[data-ui="pixel"]:root .eyebrow { font-size: 10px; }
+html[data-ui="pixel"]:root :is(h3, .st-head h3, .lv-box h3, .howto-head) { font-family: var(--px-text); letter-spacing: 0; }
+html[data-ui="pixel"]:root :is(.title, .wn-head h2, .lv-head h2) { line-height: 1; }
+html[data-ui="pixel"]:root .title { font-size: clamp(36px, 7vw, 64px); }
+/* у Tiny5 буквы шире, чем у узкого Handjet: надпись на главной — помельче, чтобы «Казуал Хаб» не вылезал за край */
+html[data-ui="pixel"]:root .wordmark { font-size: clamp(46px, 11vw, 150px); line-height: .95; }
+html[data-ui="pixel"]:root .app-name { font-size: clamp(22px, 2.3vw, 28px); line-height: 1.05; }
+html[data-ui="pixel"]:root .view-tab { font-size: clamp(17px, 6cqi, 32px); }
+/* подписи разделов — обычным шрифтом, без заглавных и разрядки */
+html[data-ui="pixel"]:root :is(.eyebrow, .label, .fp-card .label, .rx-title, .lv-muted.lv-tag, .wn-head small) { font-family: var(--px-text); letter-spacing: 0; text-transform: none; }
 
 /* ---------- кнопки: брусок с тенью, при нажатии «вдавливается» ---------- */
 html[data-ui="pixel"]:root :is(.btn, .pill, .user-pill, .theme-btn, .cmp-tray, .chip-btn, .st-btn, .fp-btn, .howto-ok, .status-chip, .sub-chip, .tpl-btn, .lv-hbtn, .hm-btn, .cm-send, .lv-bi .pin, .lv-ach .pin, .wn-x, .st-x) {
@@ -99,12 +102,11 @@ html[data-ui="pixel"]:root :focus-visible:not(input, textarea, select) { outline
 
 /* ---------- переключатели: квадратная дорожка и квадратный бегунок ---------- */
 html[data-ui="pixel"]:root .st-sw { border-radius: 0 !important; box-shadow: inset 0 0 0 2px var(--px-line); }
-html[data-ui="pixel"]:root .st-sw::after { border-radius: 0 !important; box-shadow: none; transition: transform .12s steps(2); }
+html[data-ui="pixel"]:root .st-sw::after { border-radius: 0 !important; box-shadow: none; transition: transform var(--mo-in) var(--mo-ease); }
 html[data-ui="pixel"]:root :is(.lv-tg input, input[type="checkbox"]):not(.st-sw) { border-radius: 0; }
 
 /* ---------- полоски прогресса и шкалы: блоками ---------- */
 html[data-ui="pixel"]:root .lv-bar { -webkit-mask: repeating-linear-gradient(90deg, #000 0 8px, transparent 8px 10px); mask: repeating-linear-gradient(90deg, #000 0 8px, transparent 8px 10px); }
-html[data-ui="pixel"]:root .lv-bar::after { transition: width .4s steps(5); }
 html[data-ui="pixel"]:root .meter i { border-radius: 0 !important; box-shadow: none !important; }
 html[data-ui="pixel"]:root .meter i.knob { box-shadow: 0 0 0 2px var(--bg), 0 0 0 4px var(--ink) !important; }
 html[data-ui="pixel"]:root .badge { box-shadow: var(--px-shadow); }
@@ -115,25 +117,25 @@ html[data-ui="pixel"]:root .howto li > b { box-shadow: var(--px-shadow); }
 html[data-ui="pixel"]:root .howto-fab { border: 2px solid var(--px-line); box-shadow: var(--px-shadow); }
 html[data-ui="pixel"]:root .lv-hero .n { font-weight: 700; }
 
-/* ---------- анимации: ступеньками, один раз, только если человек не просил «меньше движения» ---------- */
+/* ---------- анимации: мягкие и короткие, один раз, только если человек не просил «меньше движения».
+   Появление — прозрачность и сдвиг на несколько пикселей; ступенек нет (они остаются у пиксельных спрайтов) ---------- */
 @media (prefers-reduced-motion: no-preference) {
-  /* появление окон: собираются блоками в три шага */
-  html[data-ui="pixel"]:root :is(.st-card, .fp-card, .wn-card, .lv-card, .sheet-card, .howto) { animation: px-pop .2s steps(3, end) backwards; }
-  html[data-ui="pixel"]:root .hm-panel { animation: px-drop .15s steps(3, end) backwards; }
-  html[data-ui="pixel"]:root .hm-panel > * { animation: px-step .18s steps(2, end) backwards; animation-delay: calc(var(--i, 0) * 30ms); }
+  /* окна и меню */
+  html[data-ui="pixel"]:root :is(.st-card, .fp-card, .wn-card, .lv-card, .sheet-card, .howto) { animation: px-pop var(--mo-in) var(--mo-ease) backwards; }
+  html[data-ui="pixel"]:root .hm-panel { animation: px-drop var(--mo-in) var(--mo-ease) backwards; }
+  html[data-ui="pixel"]:root .hm-panel > * { animation: px-step var(--mo-in) var(--mo-ease) backwards; animation-delay: calc(min(var(--i, 0), 8) * 12ms); }
   /* карточки страницы и строки списков при появлении */
-  html[data-ui="pixel"]:root :is(.card, .app, .fd, .lv-box, .lv-bi, .tl-tile, .tile, .stat, .lots-list li, .hist-list li, .lv-board > div) { animation: px-rise .24s steps(3, end) backwards; }
-  html[data-ui="pixel"]:root :is(.site-note, .lv-toast, .toast) { animation: px-drop .18s steps(3, end) backwards; }
+  html[data-ui="pixel"]:root :is(.card, .app, .fd, .lv-box, .lv-bi, .tl-tile, .tile, .stat, .lots-list li, .hist-list li, .lv-board > div) { animation: px-rise var(--mo-in) var(--mo-ease) backwards; }
+  /* плашки стоят по центру через transform: сдвиг — отдельным свойством translate, чтобы они не уезжали вбок */
+  html[data-ui="pixel"]:root :is(.site-note, .lv-toast, .toast) { animation: px-note var(--mo-in) var(--mo-ease) backwards; }
   /* нажатие: брусок уходит вниз-вправо на 2px, тень почти исчезает */
   html[data-ui="pixel"]:root :is(.btn, .pill, .user-pill, .theme-btn, .cmp-tray, .chip-btn, .st-btn, .fp-btn, .howto-ok, .status-chip, .sub-chip, .tpl-btn, .lv-hbtn, .hm-btn, .cm-send, .lv-tabs button, .lv-bi .pin, .lv-ach .pin, .wn-x, .st-x):active { transform: translate(2px, 2px) !important; }
-  html[data-ui="pixel"]:root :is(.btn, .pill, .user-pill, .theme-btn, .cmp-tray, .chip-btn, .st-btn, .fp-btn, .howto-ok, .status-chip, .sub-chip, .tpl-btn, .lv-hbtn, .hm-btn, .cm-send, .lv-tabs button) { transition: transform 60ms steps(1), border-color .1s steps(2), background-color .1s steps(2), color .1s steps(2), box-shadow 60ms steps(1); }
+  html[data-ui="pixel"]:root :is(.btn, .pill, .user-pill, .theme-btn, .cmp-tray, .chip-btn, .st-btn, .fp-btn, .howto-ok, .status-chip, .sub-chip, .tpl-btn, .lv-hbtn, .hm-btn, .cm-send, .lv-tabs button) { transition: transform 90ms var(--mo-ease), border-color .12s, background-color .12s, color .12s, box-shadow 90ms var(--mo-ease); }
   /* наведение: брусок приподнимается на пиксель */
   html[data-ui="pixel"]:root :is(.btn, .pill, .chip-btn, .st-btn, .fp-btn, .howto-ok, .lv-tabs button):hover:not(:active):not(:disabled) { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--px-sh); }
-  /* выбранная вкладка мигает два раза, как курсор в меню игры */
-  html[data-ui="pixel"]:root :is(.lv-tabs button[aria-selected="true"], .seg button[aria-pressed="true"], .st-seg button[aria-pressed="true"], .lv-seg button[aria-pressed="true"], .view-tab.on) { animation: px-blink .3s steps(2, jump-none) 2; }
 }
-@keyframes px-pop { 0% { opacity: 0; transform: scale(.92); } 50% { opacity: .6; transform: scale(.97); } }
-@keyframes px-drop { from { opacity: 0; transform: translateY(-8px); } }
-@keyframes px-rise { from { opacity: 0; transform: translateY(8px); } }
+@keyframes px-pop { from { opacity: 0; transform: scale(.98); } }
+@keyframes px-drop { from { opacity: 0; transform: translateY(-6px); } }
+@keyframes px-rise { from { opacity: 0; transform: translateY(6px); } }
 @keyframes px-step { from { opacity: 0; transform: translateX(-6px); } }
-@keyframes px-blink { 50% { opacity: .35; } }
+@keyframes px-note { from { opacity: 0; translate: 0 -6px; } }

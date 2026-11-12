@@ -7,40 +7,63 @@
 html.unslop .u-old { display: none !important; }
 html.unslop .u-new { display: revert !important; }
 html.unslop svg.u-new { display: inline-block !important; vertical-align: -.2em; }
+/* Движение казуального вида и видов поверх него: появление — прозрачность и сдвиг на несколько пикселей или лёгкий масштаб,
+   без пружин с перелётом, ступенек и шторок. Длительность и кривую задаёт вид (--mo-in, --mo-ease в /ui/<вид>.css),
+   --mo-hop — высота «подпрыгивания» букв заголовка в видах. Эти же кадры берут правила видов на страницах (<style id="unslop-page">) */
+:root.unslop { --mo-in: .22s; --mo-ease: cubic-bezier(.2, .8, .2, 1); --mo-hop: -4px; }
+@keyframes u-in { from { opacity: 0; transform: translateY(6px); } }
+@keyframes u-down { from { opacity: 0; transform: translateY(-6px); } }
+@keyframes u-pop { from { opacity: 0; transform: translateY(4px) scale(.98); } }
+@keyframes u-fade { from { opacity: 0; } }
+@keyframes u-tap { 50% { transform: scale(1.05); } }
+@keyframes u-hop { 0%, 12%, 100% { translate: 0 0; } 6% { translate: 0 var(--mo-hop, -4px); } }
 /* howto.js */
 html.unslop .howto { background: var(--panel); border: 1px solid var(--line); box-shadow: 0 30px 70px -24px rgba(0, 0, 0, .55), 0 14px 34px -18px rgb(0 0 0 / .28); border-radius: 22px; }
-html.unslop .howto-modal.in .howto { animation: howto-in .55s cubic-bezier(.22, 1, .36, 1) both; }
+html.unslop .howto-modal.in .howto { animation: u-pop var(--mo-in) var(--mo-ease) both; }
 html.unslop .howto-head small { letter-spacing: normal; text-transform: none; }
-html.unslop .howto-modal.in .howto li { animation: howto-step .5s cubic-bezier(.22, 1, .36, 1) backwards; }
+html.unslop .howto-modal.in .howto li { animation: u-in var(--mo-in) var(--mo-ease) backwards; }
+html.unslop .howto-modal.in .howto li:nth-child(2) { animation-delay: .03s; }
+html.unslop .howto-modal.in .howto li:nth-child(3) { animation-delay: .06s; }
+html.unslop .howto-modal.in .howto li:nth-child(n+4) { animation-delay: .09s; }
 html.unslop .howto li > b { box-shadow: 0 4px 10px -4px rgb(0 0 0 / .28); }
 html.unslop .howto-ok { transition: transform .2s cubic-bezier(.22, 1, .36, 1); }
 html.unslop .howto-ok:hover { transform: translateY(-1px); }
-html.unslop .howto-fab { border: 1px solid var(--line); color: var(--ink-2); box-shadow: 0 10px 26px -12px rgb(0 0 0 / .28); transition: transform .45s cubic-bezier(.22, 1, .36, 1), bottom .25s; border-radius: 50%; }
+html.unslop .howto-fab { border: 1px solid var(--line); color: var(--ink-2); box-shadow: 0 10px 26px -12px rgb(0 0 0 / .28); transition: transform .25s cubic-bezier(.22, 1, .36, 1), bottom .25s; border-radius: 50%; }
 html.unslop .howto-fab.on:hover { transform: translateY(-1px); }
 /* header-menu.js */
-html.unslop .hm-panel { animation: hm-in .22s cubic-bezier(.22, 1, .36, 1); }
-html.unslop .hm-panel > * { animation: hm-item .34s cubic-bezier(.22, 1, .36, 1) backwards; animation-delay: calc(var(--i, 0) * 22ms); }
+html.unslop .hm-panel { animation: u-pop .18s var(--mo-ease); }
+html.unslop .hm-panel > * { animation: u-in .18s var(--mo-ease) backwards; animation-delay: calc(min(var(--i, 0), 8) * 12ms); }
 html.unslop .hm-panel > .hm-all { background: var(--panel, #1b1d24) !important; border-color: color-mix(in srgb, var(--accent, #3550E8) 45%, var(--line, #2b2e38)) !important; }
 html.unslop .hm-panel > .hm-all:hover, html.unslop .hm-panel > .hm-all:focus-visible { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent, #3550E8) 20%, transparent), 0 10px 24px -14px rgb(0 0 0 / .28); }
 /* friends-panel.js */
-html.unslop .fp-card { animation: fp-pop .3s cubic-bezier(.22, 1, .36, 1); }
+html.unslop .fp-card { animation: u-pop var(--mo-in) var(--mo-ease); }
 html.unslop .fp-card .label { letter-spacing: normal; text-transform: none; }
 html.unslop .fp-btn { transition: transform .2s cubic-bezier(.22, 1, .36, 1), border-color .15s; }
 /* online.js */
-html.unslop .site-ann { animation: ann-in .5s cubic-bezier(.22, 1, .36, 1); }
-html.unslop .site-note { animation: note-in-u .3s cubic-bezier(.22, 1, .36, 1); box-shadow: 0 6px 18px rgb(0 0 0 / .18); }
+html.unslop .site-ann { animation: u-down var(--mo-in) var(--mo-ease); }
+html.unslop .site-note { animation: note-in-u var(--mo-in) var(--mo-ease); box-shadow: 0 6px 18px rgb(0 0 0 / .18); }
 html.unslop .site-note i { color: var(--ink-2); }
-@keyframes note-in-u { from { transform: translate(-50%, -8px); } }
+@keyframes note-in-u { from { opacity: 0; transform: translate(-50%, -6px); } }
 /* whatsnew.js */
-html.unslop .wn-card { animation: wn-pop .32s cubic-bezier(.22, 1, .36, 1); }
+html.unslop .wn-card { animation: u-pop var(--mo-in) var(--mo-ease); }
+/* levels-ui.js: окно «Прогресс» и его разделы */
+html.unslop .lv-card { animation: u-pop var(--mo-in) var(--mo-ease) both; }
+html.unslop .lv-body > * { animation-name: u-in; animation-duration: var(--mo-in); animation-timing-function: var(--mo-ease); }
 /* comments.js */
-html.unslop .cm-item.fresh { animation: cm-in .5s cubic-bezier(.22, 1, .36, 1); }
+html.unslop .cm-item.fresh { animation: u-in var(--mo-in) var(--mo-ease); }
 html.unslop .cm-send { transition: transform .2s cubic-bezier(.22, 1, .36, 1); }
 /* friends.js */
 html.unslop .rx-btns button { transition: transform .2s cubic-bezier(.22, 1, .36, 1), border-color .15s, background-color .15s; }
-html.unslop .rx-btns .rx-e { transition: transform .25s cubic-bezier(.22, 1, .36, 1); }
+html.unslop .rx-btns .rx-e { transition: transform .2s cubic-bezier(.22, 1, .36, 1); }
 html.unslop .rx-btns button:hover .rx-e { transform: none; }
-html.unslop #friendBoard .entry.fr-in { animation: fr-in .55s cubic-bezier(.22, 1, .36, 1) backwards; animation-delay: calc(var(--k, 0) * 35ms); }
-html.unslop .rx-btns button[aria-pressed="true"] { animation: rx-pop .45s cubic-bezier(.22, 1, .36, 1); }
+html.unslop #friendBoard .entry.fr-in { animation: u-in var(--mo-in) var(--mo-ease) backwards; animation-delay: calc(min(var(--k, 0), 8) * 15ms); }
+html.unslop .rx-btns button[aria-pressed="true"] { animation: u-tap .2s var(--mo-ease); }
+/* виды интерфейса (не казуальный): реакция подпрыгивает при наведении — мягко, со скоростью вида */
+@media (prefers-reduced-motion: no-preference) and (hover: hover) {
+  html.unslop[data-ui] .rx-btns button:hover .rx-e { transform: translateY(-2px) scale(1.08); }
+}
+@media (prefers-reduced-motion: reduce) {
+  html.unslop :is(.howto, .howto li, .hm-panel, .hm-panel > *, .fp-card, .site-ann, .site-note, .wn-card, .lv-card, .lv-body > *, .cm-item, #friendBoard .entry, .rx-btns button) { animation: none !important; }
+}
 html.unslop .rx-title { letter-spacing: normal; text-transform: none; }
 html.unslop .fol-it { transition: border-color .15s, transform .2s cubic-bezier(.22, 1, .36, 1); }

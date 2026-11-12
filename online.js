@@ -8,6 +8,16 @@
   const WINDOW = 150e3; // «в сети» — заходил за последние 2,5 минуты, как на сервере
   // on — друзья, у кого сайт открыт сейчас (по сокету), left — закрыли последнюю вкладку: уже не «в сети»
   const st = { online: 0, friends: new Map(), incoming: 0, ready: false, on: new Set(), left: new Set() };
+  // «N на сайте»: при заходе на страницу — последнее известное число (не старше 10 минут), а не прочерк до ответа сервера
+  const OC_KEY = 'casualhub.online.last';
+  let ocSaved = -1;
+  try {
+    const c = JSON.parse(localStorage.getItem(OC_KEY) || 'null');
+    if (c && c.n > 0 && Date.now() - c.at < 6e5) {
+      const early = () => document.querySelectorAll('[data-online-count] b').forEach((b) => { if (b.textContent.trim() === '—') b.textContent = c.n; });
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', early); else early();
+    }
+  } catch (e) {}
 
   const token = () => {
     const u = read('ocenshik.user.v1');
@@ -71,7 +81,7 @@
     if (!document.getElementById('annCss')) {
       const css = document.createElement('style');
       css.id = 'annCss';
-      css.textContent = `.site-ann { position: relative; z-index: 50; display: flex; align-items: center; gap: 10px; max-width: 1180px; margin: 10px auto 0; padding: 10px 12px 10px 16px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--ann) 45%, transparent); background: color-mix(in srgb, var(--ann) 14%, var(--panel, #161920)); color: var(--ink, #e8eaf0); font: 600 14px/1.4 var(--font-body, system-ui, sans-serif); animation: ann-in .5s cubic-bezier(.34, 1.56, .64, 1); }
+      css.textContent = `.site-ann { position: relative; z-index: 50; display: flex; align-items: center; gap: 10px; max-width: 1180px; margin: 10px auto 0; padding: 10px 12px 10px 16px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--ann) 45%, transparent); background: color-mix(in srgb, var(--ann) 14%, var(--panel, #161920)); color: var(--ink, #e8eaf0); font: 600 14px/1.4 var(--font-body, system-ui, sans-serif); animation: ann-in .3s cubic-bezier(.34, 1.56, .64, 1); }
 .site-ann[data-kind="info"] { --ann: var(--accent, #3550E8); } .site-ann[data-kind="warn"] { --ann: var(--mid, #EAA92C); } .site-ann[data-kind="party"] { --ann: var(--good, #2EAD60); }
 .site-ann span { flex: 1; min-width: 0; overflow-wrap: anywhere; } .site-ann i { font-style: normal; font-size: 18px; }
 .site-ann button { flex: none; width: 30px; height: 30px; border: 0; border-radius: 50%; background: color-mix(in srgb, var(--ann) 20%, transparent); color: inherit; font: inherit; cursor: pointer; }
@@ -157,6 +167,7 @@
     // общий счётчик «N на сайте» на всех страницах
     const bump = (n, v) => { if (!n || n.textContent === String(v)) return; n.textContent = v; n.classList.remove('bump'); void n.offsetWidth; n.classList.add('bump'); };
     document.querySelectorAll('[data-online-count]').forEach((el) => { bump(el.querySelector('b'), st.online); el.hidden = false; });
+    if (st.ready && st.online !== ocSaved) { ocSaved = st.online; try { localStorage.setItem(OC_KEY, JSON.stringify({ n: st.online, at: Date.now() })); } catch (e) {} }
     // кнопка «Друзья»: зелёная цифра — друзья в сети, красная — заявки, которые ждут ответа
     const on = new Set([...st.friends.keys(), ...st.on].filter((id) => seen(id).on)).size;
     document.querySelectorAll('[data-friends-btn]').forEach((el) => {
@@ -229,7 +240,7 @@
     if (!document.getElementById('noteCss')) {
       const css = document.createElement('style');
       css.id = 'noteCss';
-      css.textContent = `.site-note { position: fixed; z-index: 95; top: max(12px, env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); width: min(440px, calc(100vw - 32px)); box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 10px 8px 10px 12px; border-radius: 14px; border: 1px solid var(--line, #2a2b30); background: var(--panel, #17181c); color: var(--ink, #f2f2f2); box-shadow: 0 12px 32px rgb(0 0 0 / .28); font-size: 14px; line-height: 1.35; animation: note-in .35s cubic-bezier(.34, 1.56, .64, 1); }
+      css.textContent = `.site-note { position: fixed; z-index: 95; top: max(12px, env(safe-area-inset-top, 0px)); left: 50%; transform: translateX(-50%); width: min(440px, calc(100vw - 32px)); box-sizing: border-box; display: flex; align-items: center; gap: 10px; padding: 10px 8px 10px 12px; border-radius: 14px; border: 1px solid var(--line, #2a2b30); background: var(--panel, #17181c); color: var(--ink, #f2f2f2); box-shadow: 0 12px 32px rgb(0 0 0 / .28); font-size: 14px; line-height: 1.35; animation: note-in .28s cubic-bezier(.34, 1.56, .64, 1); }
 .site-note i { flex: none; width: 28px; font-style: normal; font-size: 20px; line-height: 1; text-align: center; color: var(--accent, #3550E8); }
 .site-note a { flex: 1; min-width: 0; display: grid; gap: 2px; color: inherit; text-decoration: none; }
 .site-note b { font-weight: 700; overflow-wrap: anywhere; }

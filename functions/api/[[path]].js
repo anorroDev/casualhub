@@ -11,6 +11,12 @@ import { awardMany as lvAwardMany, revokeMany as lvRevokeMany, visit as lvVisit,
 import { makeLevelsRoutes, acceptInvite, tzOf, ensurePast } from '../_lib/levels-api.js';
 import { makeShopRoutes } from '../_lib/shop-api.js';
 import { makeMailoutRoutes, rememberLang } from '../_lib/mailout.js';
+import { makePredictRoutes } from '../_lib/lots-predict.js';
+import { makeRiddleRoutes } from '../_lib/riddle.js';
+import { makeEveningRoutes } from '../_lib/lots-evening.js';
+import { makeBingoRoutes } from '../_lib/bingo.js';
+import { makeKingRoutes } from '../_lib/king.js';
+import { makeTierCoopRoutes } from '../_lib/tiercoop.js';
 
 const enc = new TextEncoder();
 const ITER = 10000;
@@ -3073,7 +3079,20 @@ Object.assign(routes, makeMailoutRoutes({
   pokeAll: (env) => pokePresence(env, { what: 'mail' }),
 }));
 
-const PUBLIC = new Set(['GET /shop/look', 'GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid', 'GET /mail/unsub', 'POST /mail/unsub']);
+// прогнозы на победителя сбора (/api/lots/:code/predict) — functions/_lib/lots-predict.js
+Object.assign(routes, makePredictRoutes({ json, fail, readBody, burst, currentUser, lvGive }));
+// загадка дня (/api/riddle…) — functions/_lib/riddle.js
+Object.assign(routes, makeRiddleRoutes({ json, fail, readBody, burst, lvGive }));
+// «Вечер с друзьями»: вето в сборе лотов (/api/lots/:code/veto, /evening) — functions/_lib/lots-evening.js
+Object.assign(routes, makeEveningRoutes({ json, fail, readBody, burst, currentUser, pokeRoom }));
+// бинго для стрима в сборе лотов (/api/lots/:code/bingo) — functions/_lib/bingo.js
+Object.assign(routes, makeBingoRoutes({ json, fail, readBody, burst, currentUser, lvGive }));
+// «Царь Горы» — турниры по ссылке (/api/king…) — functions/_lib/king.js, страница /king/
+Object.assign(routes, makeKingRoutes({ json, fail, readBody, burst, clientIp, currentUser, lvGive, sha256 }));
+// «Тир-лист вместе» (/api/tiercoop…) — functions/_lib/tiercoop.js, страница tierlist/coop.js
+Object.assign(routes, makeTierCoopRoutes({ json, fail, readBody, burst, currentUser, lvGive }));
+
+const PUBLIC = new Set(['GET /tiercoop/room', 'GET /king/room', 'GET /lots/:code/predict', 'GET /lots/:code/veto', 'GET /lots/:code/bingo', 'GET /shop/look', 'GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid', 'GET /mail/unsub', 'POST /mail/unsub']);
 // код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности
 const SHARE_RE = /^[A-Za-z0-9]{12}$/;
 function shareId() {
@@ -3122,6 +3141,8 @@ export async function onRequest({ request, env, params }) {
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'spin') { key = `${request.method} /lots/:code/spin`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'ws') { key = `${request.method} /lots/:code/ws`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'hub') { key = `${request.method} /lots/:code/hub`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'predict') { key = `${request.method} /lots/:code/predict`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && (segs[2] === 'veto' || segs[2] === 'evening' || segs[2] === 'bingo')) { key = `${request.method} /lots/:code/${segs[2]}`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'sessions' && /^[0-9a-f]{16}$/.test(segs[1])) { key = `${request.method} /sessions/:id`; arg = segs[1]; }
   if (!routes[key] && segs.length === 2 && segs[0] === 'share' && SHARE_RE.test(segs[1])) { key = `${request.method} /share/:id`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'share' && segs[2] === 'img' && SHARE_RE.test(segs[1])) { key = `${request.method} /share/:id/img`; arg = segs[1]; }

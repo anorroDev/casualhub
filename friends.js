@@ -52,9 +52,9 @@
 .rx-btns button[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); color: var(--ink); }
 .rx-btns button:active { transform: scale(.94); }
 /* оценки друга въезжают по очереди, нажатая реакция подпрыгивает — без растворения */
-#friendBoard .entry.fr-in { animation: fr-in .55s cubic-bezier(.34, 1.56, .64, 1) backwards; animation-delay: calc(var(--k, 0) * 35ms); }
+#friendBoard .entry.fr-in { animation: fr-in .3s cubic-bezier(.34, 1.56, .64, 1) backwards; animation-delay: calc(min(var(--k, 0), 8) * 20ms); }
 @keyframes fr-in { from { transform: translateY(16px) scale(.985); } }
-.rx-btns button[aria-pressed="true"] { animation: rx-pop .45s cubic-bezier(.34, 1.56, .64, 1); }
+.rx-btns button[aria-pressed="true"] { animation: rx-pop .3s cubic-bezier(.34, 1.56, .64, 1); }
 @keyframes rx-pop { 40% { transform: scale(1.15) rotate(-3deg); } }
 @media (prefers-reduced-motion: reduce) { #friendBoard .entry.fr-in, .rx-btns button[aria-pressed="true"] { animation: none; } }
 .rx-list { display: grid; gap: 6px; margin: 0; padding: 0; list-style: none; }

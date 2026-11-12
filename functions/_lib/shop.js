@@ -98,7 +98,6 @@ const ownedBy = (it, st) => !it.price || st.owned.has(it.id) || (!!it.unlock && 
 // какая еда открылась, когда уровень вырос с from до to (для письма о новом уровне)
 export const foodsUnlocked = (from, to) => FOODS.filter((f) => f.unlock > (+from || 0) && f.unlock <= (+to || 0));
 export const SLOTS = ['frame', 'badge', 'nick', 'wheel', 'confetti', 'tier', 'bg', 'cursor'];
-export const PUB_SLOTS = ['frame', 'badge', 'nick'];
 export const ITEMS = [
   ...wearable,
   { id: 'perk.freeze', sec: 'perks', kind: 'freeze', title: 'Заморозка серии', price: 60, consumable: true },

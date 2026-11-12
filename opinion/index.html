@@ -531,10 +531,10 @@ html:active-view-transition-type(back)::view-transition-new(root) { animation: v
 /* While ratings load, the main part waits hidden and then shows up ready (no intermediate layout) */
 html.booting .layout, html.booting .mnav, html.booting .offline-bar { visibility: hidden; }
 /* Windows (profile, friends, compare, export) pop up from below, no fading */
-.sheet:not([hidden]) > .sheet-card { animation: sheet-pop .34s cubic-bezier(.2, .9, .3, 1.12) both; }
+.sheet:not([hidden]) > .sheet-card { animation: sheet-pop .26s cubic-bezier(.2, .9, .3, 1.12) both; }
 @keyframes sheet-pop { from { transform: translateY(22px) scale(.95); } }
 @media (max-width: 560px) {
-  .sheet:not([hidden]) > .sheet-card { animation: sheet-up .32s cubic-bezier(.2, .8, .2, 1) both; }
+  .sheet:not([hidden]) > .sheet-card { animation: sheet-up .28s cubic-bezier(.2, .8, .2, 1) both; }
   @keyframes sheet-up { from { transform: translateY(100%); } }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -561,7 +561,6 @@ html.booting .layout, html.booting .mnav, html.booting .offline-bar { visibility
 <style id="unslop-page">
 /* Казуальный вид (unslop): действует, только когда в Настройках включён «Казуальный вид». Собрано из правок, которые убирают
    цветные пятна, свечения, пружинные и вечные анимации, заглавные подписи. Обычный вид выше не меняется */
-@keyframes ch-in-u { from { opacity: 0; transform: translateY(.12em); } }
 html.unslop .avatar-upload-trigger:hover { transform: none; }
 html.unslop .avatar-upload-trigger:hover .avatar-camera-badge, html.unslop .profile-avatar-wrap:hover .avatar-camera-badge { transform: none; }
 html.unslop .backup-title { text-transform: none; letter-spacing: normal; }
@@ -574,7 +573,7 @@ html.unslop .board-more-body { box-shadow: 0 20px 44px -22px rgb(0 0 0 / .45); }
 html.unslop .tl-item { transition: transform .25s cubic-bezier(.22, 1, .36, 1); }
 html.unslop .tl-item:hover { transform: translateY(-1px); }
 html.unslop .stat-block h4 { text-transform: none; letter-spacing: normal; }
-html.unslop .sheet:not([hidden]) > .sheet-card { animation: sheet-pop .34s cubic-bezier(.22, 1, .36, 1) both; }
+html.unslop .sheet:not([hidden]) > .sheet-card { animation: u-pop var(--mo-in) var(--mo-ease) both; }
 html.unslop .label { text-transform: none; letter-spacing: normal; }
 html.unslop .label::first-letter { text-transform: uppercase; }
 html.unslop .eyebrow { text-transform: none; letter-spacing: normal; }
@@ -582,7 +581,12 @@ html.unslop .crop-ratios button { transition: transform .2s cubic-bezier(.22, 1,
 html.unslop .tag.ex { text-transform: none; letter-spacing: normal; }
 html.unslop .toast { box-shadow: 0 20px 44px -22px rgb(0 0 0 / .45); }
 :root.unslop { --spring: cubic-bezier(.22, 1, .36, 1); }
-html.unslop .title .ch { animation: ch-in-u .7s cubic-bezier(.22, 1, .36, 1) backwards calc(var(--i) * 40ms); transition: color .15s; }
+html.unslop .title .ch { animation: u-in var(--mo-in) var(--mo-ease) backwards calc(min(var(--i), 10) * 14ms); transition: color .15s; }
+/* появление шапки, карточек, сводки и рядов — мягкое (кадры u-* из /unslop.css), без больших въездов; задержки — прежние, короткие */
+html.unslop.intro .masthead-right { animation-name: u-down; animation-duration: var(--mo-in); animation-timing-function: var(--mo-ease); }
+html.unslop :is(.intro .layout > .card, .intro .masthead .scale, .kpi-card, .tier-row) { animation-name: u-in; animation-duration: var(--mo-in); animation-timing-function: var(--mo-ease); }
+html.unslop .entry details[open] > .e-body { animation: u-down var(--mo-in) var(--mo-ease); }
+html.unslop :is(.intro .spark i, .dist-fill) { animation-name: u-fade; animation-duration: var(--mo-in); animation-timing-function: var(--mo-ease); }
 html.unslop .title .ch:hover { scale: none; }
 html.unslop .theme-btn:hover { box-shadow: 0 6px 18px -10px rgb(0 0 0 / .28); }
 html.unslop #wheelLink:hover svg { transform: none; }
@@ -597,6 +601,17 @@ html.unslop .entry .badge { box-shadow: 0 8px 18px -10px rgb(0 0 0 / .28); }
 @media (hover: hover) { html.unslop .entry summary:hover .badge { transform: none; } }
 @supports selector(:has(a)) { @media (max-width: 979px) { html.unslop .mnav::before { box-shadow: inset 0 1px 0 rgb(255 255 255 / .12); } } }
 html.unslop .eyebrow .dot::after { animation: none; }
+/* виды интерфейса (кроме спокойного казуального): буквы заголовка подпрыгивают по очереди, значки и оценки откликаются на наведение —
+   мягко, со скоростью и кривой вида (--mo-in, --mo-ease) */
+@media (prefers-reduced-motion: no-preference) {
+  html.unslop[data-ui] .title .ch { animation: u-in var(--mo-in) var(--mo-ease) backwards calc(min(var(--i), 10) * 14ms), u-hop 8s ease-in-out calc(.5s + var(--i) * 60ms) infinite; transition: color .15s, scale var(--mo-in) var(--mo-ease); }
+  html.unslop[data-ui] .title .ch:hover { scale: 1 1.06; }
+  html.unslop[data-ui] #wheelLink svg { transition: transform .4s var(--mo-ease); }
+  html.unslop[data-ui] #wheelLink:hover svg { transform: rotate(120deg); }
+  html.unslop[data-ui] .avatar-upload-trigger:hover { transform: scale(1.03); }
+  html.unslop[data-ui] .tl-item:hover { transform: translateY(-2px); }
+}
+@media (prefers-reduced-motion: no-preference) and (hover: hover) { html.unslop[data-ui] .entry summary:hover .badge { transform: scale(1.04); } }
 </style>
 </head><body>
 <style>
@@ -1352,7 +1367,7 @@ html::after {
 }
 
 /* Title letters rise one by one and breathe, like the hub wordmark */
-.title .ch { display: inline-block; transform-origin: 50% 100%; animation: ch-in .7s cubic-bezier(.2, .9, .25, 1.25) backwards calc(var(--i) * 40ms), ch-wave 8s ease-in-out calc(1.6s + var(--i) * 60ms) infinite; transition: color .25s, scale .35s var(--spring); }
+.title .ch { display: inline-block; transform-origin: 50% 100%; animation: ch-in .3s cubic-bezier(.2, .9, .25, 1.25) backwards calc(min(var(--i), 10) * 18ms), ch-wave 8s ease-in-out calc(.5s + var(--i) * 60ms) infinite; transition: color .25s, scale .35s var(--spring); }
 .title .ch:hover { color: var(--accent); scale: 1 1.08; }
 .title .w { display: inline-block; white-space: nowrap; }
 @keyframes ch-in { from { transform: translateY(60%) scaleY(.3); } }
@@ -1363,7 +1378,7 @@ html::after {
 .masthead-right { align-items: stretch; }
 .masthead-right > .user-bar { justify-content: flex-end; }
 #homeLink { margin-right: auto; }
-html.intro .masthead-right { animation: drop-in .6s var(--out) backwards; }
+html.intro .masthead-right { animation: drop-in .25s var(--out) backwards; }
 @keyframes drop-in { from { transform: translateY(-14px); } }
 
 /* Header pills: glassy, with a soft accent glow */
@@ -1389,9 +1404,9 @@ html.theme-swap::view-transition-new(root) { animation: theme-circle .6s cubic-b
   box-shadow: var(--lift);
 }
 .scorebar { border-radius: 0 0 21px 21px; }
-html.intro .layout > .card { animation: card-rise .8s var(--spring) backwards; }
-html.intro .layout > .card + .card { animation-delay: .1s; }
-html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards; }
+html.intro .layout > .card { animation: card-rise .3s var(--spring) backwards; }
+html.intro .layout > .card + .card { animation-delay: .04s; }
+html.intro .masthead .scale { animation: card-rise .3s var(--out) .04s backwards; }
 @keyframes card-rise { from { transform: translateY(34px) scale(.985); } }
 
 /* Inputs: calm focus that grows in */
@@ -1447,21 +1462,21 @@ html.intro .masthead .scale { animation: card-rise .7s var(--out) .15s backwards
   .entry summary:hover .badge { transform: scale(1.06); }
   .entry summary:hover .rank { color: var(--ink-2); }
 }
-.entry details[open] > .e-body { animation: drawer .38s var(--out); }
+.entry details[open] > .e-body { animation: drawer .24s var(--out); }
 @keyframes drawer { from { transform: translateY(-8px); } }
 .rank { transition: color .2s; }
-html.intro .spark i { transform-origin: 50% 100%; animation: grow-y .6s var(--spring) backwards; }
-html.intro .spark i:nth-child(2n) { animation-delay: .05s; }
+html.intro .spark i { transform-origin: 50% 100%; animation: grow-y .3s var(--spring) backwards; }
+html.intro .spark i:nth-child(2n) { animation-delay: .03s; }
 html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
 @keyframes grow-y { from { transform: scaleY(0); } }
 
 /* Stats, tiers and the empty state come alive when shown */
-.dist-fill { transform-origin: 0 50%; animation: grow-x .8s var(--out) backwards .1s; }
+.dist-fill { transform-origin: 0 50%; animation: grow-x .3s var(--out) backwards .04s; }
 @keyframes grow-x { from { transform: scaleX(0); } }
-.kpi-card { animation: card-rise .6s var(--spring) backwards; }
-.kpi-card:nth-child(2) { animation-delay: .05s; } .kpi-card:nth-child(3) { animation-delay: .1s; } .kpi-card:nth-child(4) { animation-delay: .15s; }
-.tier-row { animation: row-in .55s var(--spring) backwards; }
-.tier-row:nth-child(2) { animation-delay: .05s; } .tier-row:nth-child(3) { animation-delay: .1s; } .tier-row:nth-child(4) { animation-delay: .15s; } .tier-row:nth-child(5) { animation-delay: .2s; }
+.kpi-card { animation: card-rise .3s var(--spring) backwards; }
+.kpi-card:nth-child(2) { animation-delay: .03s; } .kpi-card:nth-child(3) { animation-delay: .06s; } .kpi-card:nth-child(4) { animation-delay: .09s; }
+.tier-row { animation: row-in .3s var(--spring) backwards; }
+.tier-row:nth-child(2) { animation-delay: .03s; } .tier-row:nth-child(3) { animation-delay: .06s; } .tier-row:nth-child(4) { animation-delay: .09s; } .tier-row:nth-child(5) { animation-delay: .12s; }
 @keyframes row-in { from { transform: translateX(-24px); } }
 .tier-item { transition: transform .3s var(--spring); }
 .ghost-rows b, .ghost-rows i {
@@ -1876,7 +1891,8 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
 <script src="/fx.js"></script>
 <script src="/comments.js"></script>
 <script src="/howto.js"></script>
-<script src="/photo-store.js"></script><script src="/opinion/app.js"></script><script src="/opinion/letterboxd.js"></script><script src="/opinion/refresh.js"></script>
+<script src="/photo-store.js"></script><script src="/opinion/app.js"></script>
+<script src="/opinion/riddle.js"></script><script src="/opinion/letterboxd.js"></script><script src="/opinion/refresh.js"></script>
 <script src="/imdb.js"></script>
 <script src="/rating-card.js"></script>
 <script src="/friends.js"></script>

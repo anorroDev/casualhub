@@ -357,6 +357,8 @@ html.sh-cur :is(input:not([type="checkbox"], [type="radio"], [type="range"], [ty
 .sh-ov { position: fixed; inset: 0; z-index: 125; display: grid; place-items: center; padding: max(20px, env(safe-area-inset-top, 0px)) 20px max(20px, env(safe-area-inset-bottom, 0px)); background: rgb(6 8 12 / .5); }
 .sh-card { width: min(880px, 100%); height: min(780px, 100%); display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto; border-radius: 24px; border: 1px solid var(--line, #2b2e38); background: var(--panel, #17181c); color: var(--ink, #f2f2f2); overflow: hidden; box-shadow: 0 30px 80px -30px rgb(0 0 0 / .6); animation: sh-in .22s cubic-bezier(.2, .8, .2, 1); }
 @keyframes sh-in { from { transform: translateY(10px) scale(.985); opacity: 0; } }
+.sh-ov { animation: sh-fade .16s ease-out; }
+@keyframes sh-fade { from { opacity: 0; } }
 .sh-head { display: flex; align-items: center; gap: 12px; padding: 20px 20px 12px 26px; }
 .sh-head h2 { margin: 0; font-size: 24px; font-family: var(--font-display, inherit); }
 .sh-bal { display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px 5px 6px; border-radius: 999px; background: color-mix(in srgb, var(--ink, #fff) 7%, transparent); font-weight: 700; font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -414,10 +416,12 @@ html.sh-cur :is(input:not([type="checkbox"], [type="radio"], [type="range"], [ty
   .sh-it { padding: 10px; }
   .sh-msg { padding: 10px 16px max(12px, env(safe-area-inset-bottom, 0px)); }
 }
-@media (prefers-reduced-motion: reduce) { .sh-card, .sh-pop { animation: none; } .sh-it { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .sh-ov, .sh-card, .sh-pop { animation: none; } .sh-it { transition: none; } }
 /* казуальный вид: без теней, свечений и подпрыгиваний */
-html.unslop .sh-card { box-shadow: 0 24px 60px -30px rgb(0 0 0 / .45); animation: none; }
-html.unslop .sh-pop { animation: none; }
+html.unslop .sh-card { box-shadow: 0 24px 60px -30px rgb(0 0 0 / .45); }
+/* спокойный только «Казуальный» вид; в остальных видах окно появляется с анимацией */
+html.unslop:not([data-ui]) :is(.sh-ov, .sh-card) { animation: none; }
+html.unslop:not([data-ui]) .sh-pop { animation: none; }
 html.unslop .sh-it.on { box-shadow: none; }`;
     document.head.appendChild(s);
   }

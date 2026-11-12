@@ -1,14 +1,18 @@
-@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400..700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400..700&family=Roboto+Condensed:wght@400..700&display=swap');
 /* Казуал Хаб: вид «Арена» — интерфейс тактического шутера (только жанр: свои формы, без чужих логотипов и картинок).
    Включается выбором вида в Настройках: <html class="unslop" data-ui="arena">, поверх казуального вида.
    Острые углы, срезанные уголки у кнопок, вкладок и плашек (clip-path), угловые метки цветом акцента у карточек и окон,
-   тонкие линии, узкий шрифт Oswald заглавными в заголовках, кнопках, вкладках и подписях. Анимации короткие и резкие:
-   «вжух» слева направо при появлении, полоса-заливка при наведении, 120–200 мс. Цвета — только переменные темы.
+   тонкие линии. Узкий Oswald заглавными — у крупных заголовков и логотипа; текст, кнопки, вкладки, подписи и поля —
+   Roboto Condensed (кнопки и подписи заглавными). Анимации короткие и чуть резче, чем в других видах: прозрачность и сдвиг
+   на несколько пикселей слева, полоса-заливка при наведении, 150–180 мс. Цвета — только переменные темы.
    :root после [data-ui] — чтобы перебить правила страниц вида html.unslop .x независимо от порядка подключения. */
 
 html[data-ui="arena"]:root {
-  --font-display: "Oswald", "Onest", ui-sans-serif, system-ui, sans-serif;
-  --ar-font: "Oswald", "Onest", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Oswald", "Roboto Condensed", "Onest", ui-sans-serif, system-ui, sans-serif;
+  --font-body: "Roboto Condensed", "Onest", ui-sans-serif, system-ui, sans-serif;
+  --ar-font: "Oswald", "Roboto Condensed", "Onest", ui-sans-serif, system-ui, sans-serif;
+  --ar-text: "Roboto Condensed", "Onest", ui-sans-serif, system-ui, sans-serif;
+  --mo-in: .16s; --mo-ease: cubic-bezier(.2, .9, .1, 1); --mo-hop: -4px;
   --ar-line: color-mix(in srgb, var(--ink, #888) 16%, var(--line, #2b2e38));
   --ar-plate: color-mix(in srgb, var(--ink, #888) 6%, var(--panel, #1b1d24));
   --ar-tint: color-mix(in srgb, var(--accent, #3550E8) 14%, var(--panel, #1b1d24));
@@ -47,26 +51,30 @@ html[data-ui="arena"]:root .st-nav { border-right: 1px solid var(--ar-line); }
 /* затемнение под окном — ровное, без размытия */
 html[data-ui="arena"]:root :is(.st-sheet, .fp-sheet, .lv-ov, .howto-modal, .wn-sheet) { -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
 
-/* ---------- шрифт: узкий, заглавными ---------- */
-html[data-ui="arena"]:root :is(h1, h2, h3, .title, .view-tab, .st-nav h2, .st-head h3, .lv-head h2, .wn-head h2, .howto-head, .lv-box h3, .lv-hero .n) {
+/* ---------- шрифты: Oswald заглавными — крупные заголовки, логотип и большие цифры (--font-display страниц);
+   текст, кнопки, вкладки, подписи и поля — Roboto Condensed ---------- */
+html[data-ui="arena"] :where(button, input, select, textarea) { font-family: var(--ar-text); }
+html[data-ui="arena"]:root :is(h1, h2, .title, .wordmark, .mark, .app-name, .view-tab, .st-nav h2, .lv-head h2, .wn-head h2, .lv-hero .n) {
   font-family: var(--ar-font); text-transform: uppercase; letter-spacing: .02em; font-weight: 700;
 }
+html[data-ui="arena"]:root :is(h3, .st-head h3, .lv-box h3, .howto-head) { font-family: var(--ar-text); text-transform: uppercase; letter-spacing: .04em; font-weight: 700; }
 html[data-ui="arena"]:root .title { font-size: clamp(42px, 8.5vw, 80px); line-height: .9; letter-spacing: .01em; }
-html[data-ui="arena"]:root :is(.view-tab) { font-weight: 600; }
+html[data-ui="arena"]:root :is(.view-tab, .mark) { font-weight: 600; }
+/* заглавные Oswald шире узкого Handjet: вкладки над списками — помельче, чтобы не вылезали за край на телефоне */
+html[data-ui="arena"]:root .view-tab { font-size: clamp(19px, 7.4cqi, 40px); }
 html[data-ui="arena"]:root :is(
   .btn, .pill, .user-pill, .theme-btn, .cmp-tray, .chip, .chip-btn, .status-chip, .sub-chip, .tpl-btn, .seg button, .st-btn, .st-nb, .st-seg button,
   .st-back, .fp-btn, .howto-ok, .lv-tabs button, .lv-seg button, .lv-pick button, .lv-bi .pin, .lv-ach .pin, .hm-panel > a, .hm-panel > button,
-  .hm-secs a, .mnav button, .mnav a, .lots-opt, .tl-chip, .cm-send, .feed-all, .recs-more, .badge
-) { font-family: var(--ar-font); text-transform: uppercase; letter-spacing: .06em; font-weight: 500; }
-html[data-ui="arena"]:root :is(.eyebrow, .label, .hub-label, .fp-card .label, .rx-title, .wn-head small) {
-  font-family: var(--ar-font); text-transform: uppercase; letter-spacing: .16em; font-weight: 500; font-size: 11.5px; color: var(--ink-3);
+  .hm-secs a, .mnav button, .mnav a, .lots-opt, .tl-chip, .cm-send, .feed-all, .recs-more
+) { font-family: var(--ar-text); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
+html[data-ui="arena"]:root :is(.eyebrow, .label, .fp-card .label, .rx-title, .wn-head small) {
+  font-family: var(--ar-text); text-transform: uppercase; letter-spacing: .1em; font-weight: 600; font-size: 12px; color: var(--ink-3);
 }
 /* подписи разделов: квадратная метка акцентом слева */
-html[data-ui="arena"]:root :is(.eyebrow, .label, .hub-label) {
+html[data-ui="arena"]:root :is(.eyebrow, .label) {
   padding-left: 12px; background: linear-gradient(var(--accent, #3550E8), var(--accent, #3550E8)) left center / 6px 6px no-repeat;
 }
-html[data-ui="arena"]:root .st-t b, html[data-ui="arena"]:root .lv-row .lv-top b { font-family: var(--ar-font); font-weight: 500; letter-spacing: .02em; }
-html[data-ui="arena"]:root .badge { font-family: var(--ar-font); font-weight: 600; letter-spacing: 0; clip-path: var(--ar-clip-s); }
+html[data-ui="arena"]:root .badge { font-family: var(--ar-font); font-weight: 600; letter-spacing: 0; text-transform: uppercase; clip-path: var(--ar-clip-s); }
 
 /* ---------- кнопки: срезанные уголки, при наведении снизу пробегает полоса акцентом ---------- */
 html[data-ui="arena"]:root :is(.btn, .pill, .user-pill, .theme-btn, .cmp-tray, .chip-btn, .st-btn, .fp-btn, .howto-ok, .status-chip, .sub-chip, .tpl-btn, .lv-hbtn, .hm-btn, .cm-send, .lv-tabs button, .lv-pick button, .lv-bi .pin, .lv-ach .pin, .wn-x, .st-x, .seg, .st-seg, .lv-seg, .mnav) {
@@ -124,25 +132,26 @@ html[data-ui="arena"]:root :is(.site-note, .lv-toast, .toast, .site-ann) { borde
 html[data-ui="arena"]:root .howto li > b { clip-path: var(--ar-clip-s); box-shadow: none; }
 html[data-ui="arena"]:root .howto-fab { border: 1px solid var(--ar-line); box-shadow: inset 0 -2px 0 var(--accent, #3550E8); }
 
-/* ---------- анимации: резкие и короткие, один раз, только если человек не просил «меньше движения» ---------- */
+/* ---------- анимации: короткие и чуть резче, один раз, только если человек не просил «меньше движения».
+   Появление — прозрачность и сдвиг на несколько пикселей слева, без шторок и перелётов ---------- */
 @media (prefers-reduced-motion: no-preference) {
-  /* появление окон, меню и карточек: «вжух» слева направо */
-  html[data-ui="arena"]:root :is(.st-card, .fp-card, .wn-card, .lv-card, .sheet-card, .howto) { animation: ar-in .19s cubic-bezier(.2, .9, .1, 1) backwards; }
-  html[data-ui="arena"]:root .hm-panel { animation: ar-in .16s cubic-bezier(.2, .9, .1, 1) backwards; }
-  html[data-ui="arena"]:root .hm-panel > * { animation: ar-slide .16s cubic-bezier(.2, .9, .1, 1) backwards; animation-delay: calc(var(--i, 0) * 18ms); }
-  html[data-ui="arena"]:root :is(.card, .app, .fd, .lv-box, .lv-bi, .tl-tile, .tile, .stat, .lots-list li, .hist-list li, .lv-board > div, .lv-body > *) { animation: ar-in .2s cubic-bezier(.2, .9, .1, 1) backwards; }
-  /* плашки и кнопки с обрезанными углами появляются «шторкой» той же формы */
-  html[data-ui="arena"]:root :is(.site-note, .lv-toast, .toast) { animation: ar-cut-in .18s cubic-bezier(.2, .9, .1, 1) backwards; }
-  html[data-ui="arena"]:root .lv-tabs button[aria-selected="true"] { animation: ar-cut-in .16s cubic-bezier(.2, .9, .1, 1) backwards; }
-  html[data-ui="arena"]:root :is(.seg button, .st-seg button, .lv-seg button)[aria-pressed="true"] { animation: ar-bar .16s cubic-bezier(.2, .9, .1, 1) backwards; }
+  /* появление окон, меню и карточек */
+  html[data-ui="arena"]:root :is(.st-card, .fp-card, .wn-card, .lv-card, .sheet-card, .howto) { animation: ar-pop var(--mo-in) var(--mo-ease) backwards; }
+  html[data-ui="arena"]:root .hm-panel { animation: ar-pop var(--mo-in) var(--mo-ease) backwards; }
+  html[data-ui="arena"]:root .hm-panel > * { animation: ar-in var(--mo-in) var(--mo-ease) backwards; animation-delay: calc(min(var(--i, 0), 8) * 10ms); }
+  html[data-ui="arena"]:root :is(.card, .app, .fd, .lv-box, .lv-bi, .tl-tile, .tile, .stat, .lots-list li, .hist-list li, .lv-board > div, .lv-body > *) { animation: ar-in var(--mo-in) var(--mo-ease) backwards; }
+  /* плашки стоят по центру через transform: сдвиг — отдельным свойством translate, чтобы они не уезжали вбок */
+  html[data-ui="arena"]:root :is(.site-note, .lv-toast, .toast) { animation: ar-note var(--mo-in) var(--mo-ease) backwards; }
+  /* выбранный сегмент: полоса акцентом снизу проступает */
+  html[data-ui="arena"]:root :is(.seg button, .st-seg button, .lv-seg button)[aria-pressed="true"] { animation: ar-bar var(--mo-in) var(--mo-ease) backwards; }
   /* полоса при наведении и нажатие */
   html[data-ui="arena"]:root :is(.btn, .pill, .user-pill, .theme-btn, .cmp-tray, .chip-btn, .st-btn, .fp-btn, .howto-ok, .status-chip, .sub-chip, .tpl-btn, .lv-hbtn, .hm-btn, .cm-send, .lv-pick button, .wn-x, .st-x) {
-    transition: background-size .16s cubic-bezier(.2, .9, .1, 1), background-color .12s, border-color .12s, color .12s, box-shadow .14s, transform 90ms;
+    transition: background-size var(--mo-in) var(--mo-ease), background-color .12s, border-color .12s, color .12s, box-shadow .14s, transform 90ms;
   }
   html[data-ui="arena"]:root :is(.btn, .pill, .user-pill, .theme-btn, .chip-btn, .st-btn, .fp-btn, .howto-ok, .status-chip, .sub-chip, .tpl-btn, .lv-hbtn, .hm-btn, .cm-send, .lv-tabs button, .lv-pick button):active:not(:disabled) { transform: translateY(1px) scale(.985); }
   html[data-ui="arena"]:root .hm-panel > :is(a, button) { transition: background-color .12s, box-shadow .12s; }
 }
-@keyframes ar-in { from { clip-path: inset(0 100% 0 0); transform: translateX(-12px); } to { clip-path: inset(0 0 0 0); transform: none; } }
-@keyframes ar-slide { from { opacity: 0; transform: translateX(-10px); } }
-@keyframes ar-cut-in { from { clip-path: polygon(0 0, 0 0, 0 0, 0 100%, 0 100%, 0 100%); } }
+@keyframes ar-in { from { opacity: 0; transform: translateX(-6px); } }
+@keyframes ar-pop { from { opacity: 0; transform: scale(.98); } }
+@keyframes ar-note { from { opacity: 0; translate: -6px 0; } }
 @keyframes ar-bar { from { box-shadow: inset 0 0 0 var(--accent, #3550E8); } }

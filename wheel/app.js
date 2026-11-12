@@ -78,11 +78,6 @@
   const linkFresh = () => ({ items: [], seq: 0, outSeq: 0, rot: 0, sample: false, pick: 'out', auto: false });
   const wheelPart = (o) => { const r = {}; WHEEL_FIELDS.forEach((k) => { r[k] = o[k]; }); return r; };
   let scope = 'main', savedScope = 'main', stash = linkFresh(), linkStatus = '';
-  function swapWheel() {
-    const cur = wheelPart(S);
-    WHEEL_FIELDS.forEach((k) => { S[k] = stash[k]; });
-    stash = cur;
-  }
 
   // ---------- helpers ----------
   const pct = (x) => {
@@ -1660,9 +1655,25 @@
     el.className = 'field-msg' + (kind ? ' ' + kind : '');
   }
 
+  // громкость на виду (у заголовка колеса): значок выключает и возвращает звук, ползунок — тот же S.vol, что в «Музыке»
+  const tr = (t) => (window.CasualLang && window.CasualLang.t ? window.CasualLang.t(t) : t);
+  let qvolPrev = 80;
+  function paintQvol() {
+    const v = S.vol == null ? 80 : +S.vol, r = $('#qvolRange'), b = $('#qvolBtn'), t = $('#qvolVal');
+    if (r && document.activeElement !== r) r.value = v;
+    if (t) t.textContent = v + '%';
+    if (b) { const l = tr(v === 0 ? 'Включить звук' : 'Выключить звук'); b.classList.toggle('off', v === 0); b.title = l; b.setAttribute('aria-label', l); }
+  }
+  function setVol(v) {
+    const el = $('#vol');
+    if (!el) return;
+    el.value = v;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
   function renderMusic() {
     const vol = $('#vol');
     if (vol && document.activeElement !== vol) { vol.value = S.vol == null ? 80 : S.vol; $('#volVal').textContent = vol.value + '%'; }
+    paintQvol();
     $('#mslots').innerHTML = MUSIC_SLOTS.map(([slot, title, when]) => {
       const v = S.music[slot];
       const rec = A.find((a) => a.id === v);
@@ -1808,9 +1819,13 @@
     $('#vol').addEventListener('input', (e) => {
       S.vol = +e.target.value;
       $('#volVal').textContent = S.vol + '%';
+      paintQvol();
       applyVolume('bg'); applyVolume('win');
       clearTimeout(volSave); volSave = setTimeout(save, 300);
     });
+    const qr = $('#qvolRange'), qb = $('#qvolBtn');
+    if (qr) qr.addEventListener('input', () => setVol(+qr.value));
+    if (qb) qb.addEventListener('click', () => { const v = S.vol == null ? 80 : +S.vol; if (v > 0) { qvolPrev = v; setVol(0); } else setVol(qvolPrev || 80); });
     // фон включается от первого действия на странице: без него браузер звук не пустит
     const kickBg = (e) => {
       if (e.target && e.target.closest && e.target.closest('#mslots')) return;
@@ -2134,7 +2149,7 @@
   const lotsAccount = (() => { try { const u = JSON.parse(localStorage.getItem('ocenshik.user.v1') || 'null'); const t = u && (JSON.parse(localStorage.getItem('casualhub.tokens.v1') || 'null') || {})[u.id]; return u && t ? { id: u.id, token: t } : null; } catch (e) { return null; } })();
   // хранилище прошлого колеса по ссылке: save() по-прежнему его пишет, данные никому не мешают
   const LINK_KEY = KEY + '.link' + (lotsAccount ? ':' + lotsAccount.id : '');
-  let lotsEditNew = false, lotsUniqNew = true, lotsFuzzyNew = true, lotsPerNew = 3, lotsMinsNew = 10, lotsKindNew = 'game', lotsErr = '', lotsRooms = [], lotsOffset = 0;
+  let lotsEveningNew = false, lotsEditNew = false, lotsUniqNew = true, lotsFuzzyNew = true, lotsPerNew = 3, lotsMinsNew = 10, lotsKindNew = 'game', lotsErr = '', lotsRooms = [], lotsOffset = 0;
   // прокрутку, победителя и снимок для зрителей теперь ведёт страница сбора; здесь эти вызовы ничего не делают
   let lotsWinner = null, livePick = '';
   function lotsLiveSoon() {}
@@ -2169,6 +2184,7 @@
       <div class="lots-f"><span>Лотов на человека</span><div class="seg" role="group" aria-label="Лотов на человека">${[1, 2, 3, 4, 5].map((n) => `<button type="button" data-lots-per="${n}" aria-pressed="${n === lotsPerNew}">${n}</button>`).join('')}</div></div>
       <label class="lots-f">Сколько минут можно вписывать (0 — пока не закроешь сам)<input class="inp lots-mins" id="lotsMins" type="number" inputmode="numeric" min="0" max="1440" value="${lotsMinsNew}"></label>
       ${lotsRules({ editOwn: lotsEditNew, uniq: lotsUniqNew, fuzzy: lotsFuzzyNew && lotsUniqNew })}
+      <label class="lots-f lots-evening"><span><input type="checkbox" data-lots-evening${lotsEveningNew ? ' checked' : ''}> <b>Вечер с друзьями</b></span><small>Без стрима: компания накидывает варианты, у каждого одно вето, колесо выбирает из оставшихся.</small></label>
       <div class="dfoot"><button type="button" class="btn small primary" data-lots="create">Открыть сбор</button></div>
       ${lotsErr ? `<p class="lots-note bad">${esc(lotsErr)}</p>` : ''}
       <div id="lotsRooms"></div>`;
@@ -2194,6 +2210,8 @@
     lotsPaint();
     const keepForm = () => { lotsMinsNew = +$('#lotsMins').value || 0; const title = $('#lotsTitle').value; lotsPaint(); $('#lotsTitle').value = title; };
     box.addEventListener('change', (e) => {
+      const ev = e.target.closest('[data-lots-evening]');
+      if (ev) { lotsEveningNew = ev.checked; if (lotsEveningNew) lotsPerNew = Math.min(lotsPerNew, 2); keepForm(); return; }
       const c = e.target.closest('[data-lots-rule]');
       if (!c) return;
       const k = c.dataset.lotsRule, v = c.checked;
@@ -2239,7 +2257,10 @@
       try {
         const d = await lotsApi('/lots', 'POST', { title: $('#lotsTitle').value, kind: lotsKindNew, perUser: lotsPerNew, minutes, editOwn: lotsEditNew, uniq: lotsUniqNew, fuzzy: lotsFuzzyNew && lotsUniqNew });
         // пульт ведущего — на странице сбора: туда же зрители придут по ссылке
-        if (d.room && d.room.id) { location.href = '/lots/' + d.room.id; return; }
+        if (d.room && d.room.id) {
+          if (lotsEveningNew) await lotsApi('/lots/' + d.room.id + '/evening', 'POST', { on: true }).catch(() => {});
+          location.href = '/lots/' + d.room.id; return;
+        }
         lotsRefreshRooms();
       } catch (er) { lotsErr = er.message; lotsPaint(); }
       b.disabled = false;

@@ -1,9 +1,9 @@
-@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700;800;900&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700..900&family=PT+Serif:ital,wght@0,400;0,700;1,400&display=swap');
 /* Казуал Хаб: вид «Газета». Включён, когда у <html> класс unslop и data-ui="paper" (выбирается в Настройках).
    Строится поверх казуального вида (unslop.css и <style id="unslop-page"> у страниц), здесь только своё: газетные
-   шрифты (Playfair Display в заголовках, PT Serif в длинном тексте, интерфейс — прежним шрифтом), двойная линейка
-   под шапкой, плоские листы без теней, тонкие рамки и маленькие углы, строки списков через линейки, подчёркнутые
-   ссылки, табличные цифры и мягкое появление, как будто проступают чернила. Цвета — только переменные темы. */
+   шрифты (Playfair Display — крупные заголовки, логотип и большие цифры; PT Serif — весь текст, кнопки, подписи и поля),
+   двойная линейка под шапкой, плоские листы без теней, тонкие рамки и маленькие углы, строки списков через линейки,
+   подчёркнутые ссылки, табличные цифры и спокойное мягкое появление. Цвета — только переменные темы. */
 
 /* ---------- основа ---------- */
 html[data-ui="paper"]:root {
@@ -11,13 +11,16 @@ html[data-ui="paper"]:root {
   --v-text: "PT Serif", Georgia, "Times New Roman", serif;
   --v-rule: color-mix(in srgb, var(--ink) 72%, transparent);
   --v-frame: color-mix(in srgb, var(--ink) 26%, var(--line));
-  --v-ease: cubic-bezier(.2, .7, .2, 1);
+  --v-ease: cubic-bezier(.2, .8, .2, 1);
+  --mo-in: .26s; --mo-ease: var(--v-ease); --mo-hop: -2px;
   --font-display: var(--v-head);
+  --font-body: var(--v-text);
   --shadow: none;
   --spring: var(--v-ease);
   --r: 4px; --r-sm: 3px; --pad: 22px;
 }
 html[data-ui="paper"] body { font-variant-numeric: lining-nums tabular-nums; }
+html[data-ui="paper"] :where(button, input, select, textarea) { font-family: var(--v-text); }
 /* чистая бумага: без звёзд и сетки точек; теней и размытия нет нигде */
 html[data-ui="paper"]::after, html[data-ui="paper"] body::after { content: none !important; }
 html[data-ui="paper"] *, html[data-ui="paper"] *::before, html[data-ui="paper"] *::after { box-shadow: none !important; text-shadow: none !important; }
@@ -99,20 +102,20 @@ html[data-ui="paper"] :is(.badge, .score, .pv-badge, .fd-score, .bd-v, .kpi-val,
 html[data-ui="paper"] :is(.rank, .pv-rank, .lv-hero .n) { font-family: var(--v-head); font-variant-numeric: lining-nums tabular-nums; }
 html[data-ui="paper"] :is(.lv-bar, .meter i, .bc, .pv-bar b, .spark i, .cells i) { border-radius: 0; }
 
-/* ---------- движение: проявляется, как чернила на бумаге ---------- */
-@keyframes pa-ink { from { opacity: 0; filter: blur(2.5px); } to { opacity: 1; filter: blur(0); } }
+/* ---------- движение: спокойное — проступает и чуть поднимается, без размытия и перелётов ---------- */
+@keyframes pa-ink { from { opacity: 0; transform: translateY(4px); } }
 @keyframes pa-fade { from { opacity: 0; } }
-html[data-ui="paper"] :is(.title, .wordmark) { animation: pa-ink .8s var(--v-ease) backwards; }
-html[data-ui="paper"] .wordmark .ch { animation: pa-ink .7s var(--v-ease) backwards calc(.05s + var(--i, 0) * 45ms); }
-html[data-ui="paper"] :is(.card, .app, .tile, .stat, .lv-box, .lv-bi, .lv-ach, .rt, .st-box, .lv-letter) { animation: pa-ink .6s var(--v-ease) backwards; }
-html[data-ui="paper"] .app:nth-child(2) { animation-delay: .08s; }
-html[data-ui="paper"] .app:nth-child(3) { animation-delay: .16s; }
-html[data-ui="paper"] :is(.st-card, .fp-card, .howto, .wn-card, .lv-card, .hm-panel, .t-pop, .ban-menu, .hist-menu) { animation: pa-ink .45s var(--v-ease) both; }
-html[data-ui="paper"] :is(.lv-toast, .site-ann, .site-note, .st-toast) { animation: pa-fade .35s var(--v-ease) both; }
-html[data-ui="paper"] .lv-body > * { animation: pa-ink .45s var(--v-ease) backwards; }
-html[data-ui="paper"] .lv-body > :nth-child(2) { animation-delay: .05s; }
-html[data-ui="paper"] .lv-body > :nth-child(3) { animation-delay: .1s; }
-html[data-ui="paper"] .lv-body > :nth-child(n+4) { animation-delay: .15s; }
+html[data-ui="paper"] :is(.title, .wordmark) { animation: pa-fade var(--mo-in) var(--v-ease) backwards; }
+html[data-ui="paper"] .wordmark .ch { animation: pa-ink var(--mo-in) var(--v-ease) backwards calc(min(var(--i, 0), 10) * 14ms); }
+html[data-ui="paper"] :is(.card, .app, .tile, .stat, .lv-box, .lv-bi, .lv-ach, .rt, .st-box, .lv-letter) { animation: pa-ink var(--mo-in) var(--v-ease) backwards; }
+html[data-ui="paper"] .app:nth-child(2) { animation-delay: .03s; }
+html[data-ui="paper"] .app:nth-child(3) { animation-delay: .06s; }
+html[data-ui="paper"] :is(.st-card, .fp-card, .howto, .wn-card, .lv-card, .hm-panel, .t-pop, .ban-menu, .hist-menu) { animation: pa-ink var(--mo-in) var(--v-ease) both; }
+html[data-ui="paper"] :is(.lv-toast, .site-ann, .site-note, .st-toast) { animation: pa-fade .22s var(--v-ease) both; }
+html[data-ui="paper"] .lv-body > * { animation: pa-ink .24s var(--v-ease) backwards; }
+html[data-ui="paper"] .lv-body > :nth-child(2) { animation-delay: .02s; }
+html[data-ui="paper"] .lv-body > :nth-child(3) { animation-delay: .04s; }
+html[data-ui="paper"] .lv-body > :nth-child(n+4) { animation-delay: .06s; }
 @media (prefers-reduced-motion: reduce) {
   html[data-ui="paper"] :is(.title, .wordmark, .wordmark .ch, .card, .app, .tile, .stat, .lv-box, .lv-bi, .lv-ach, .rt, .st-box, .lv-letter, .st-card, .fp-card, .howto, .wn-card, .lv-card, .hm-panel, .t-pop, .ban-menu, .hist-menu, .lv-toast, .site-ann, .site-note, .st-toast, .lv-body > *) { animation: none; }
   html[data-ui="paper"] :is(.pill, .theme-btn, .btn, .chip-btn, .sub-chip, .status-chip, .mini-btn, .tpl-btn, .user-pill, .opt, .st-btn, .fp-btn, .lv-btn, .howto-ok, .cm-send, .wg-btn, .mp-btn, .rx-btns button, .fx-mute, .fx-skip, .lots-opt, .crop-ratios button, .recs-tabs button, .lv-tabs button, .lv-pick button, .chip):active { transform: none; }

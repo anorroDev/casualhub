@@ -26,7 +26,7 @@
 .cm-head span { font-size: 12.5px; color: var(--ink-3); }
 .cm-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
 .cm-item { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; padding: 10px 12px; border-radius: 14px; background: var(--panel-2); border: 1px solid var(--line); }
-.cm-item.fresh { animation: cm-in .5s cubic-bezier(.34, 1.56, .64, 1); }
+.cm-item.fresh { animation: cm-in .3s cubic-bezier(.34, 1.56, .64, 1); }
 .cm-item.gone { animation: cm-out .3s cubic-bezier(.5, 0, .75, 0) forwards; }
 @keyframes cm-in { from { transform: translateY(12px) scale(.97); } }
 @keyframes cm-out { to { transform: translateX(40px) scale(.9); } }
