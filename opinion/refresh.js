@@ -36,7 +36,7 @@
 .rf-quick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 13px; color: var(--ink-2); }
 .rf-quick button { padding: 4px 10px; border: 1px solid var(--line); border-radius: 99px; background: var(--panel); color: var(--ink); font: inherit; font-weight: 600; cursor: pointer; }
 .rf-quick button:hover { border-color: var(--accent); }
-.rf-list { display: grid; gap: 4px; max-height: min(46vh, 380px); overflow: auto; margin: 0; padding: 0; list-style: none; }
+.rf-list { display: grid; gap: 4px; max-height: min(46 * var(--vh, 1vh), 380px); overflow: auto; margin: 0; padding: 0; list-style: none; }
 .rf-list li { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border: 1px solid var(--line); border-radius: 10px; background: var(--panel); font-size: 13.5px; }
 .rf-list label { display: flex; align-items: center; gap: 9px; flex: 1; min-width: 0; cursor: pointer; }
 .rf-th { flex: none; width: 30px; height: 40px; border-radius: 6px; overflow: hidden; display: grid; place-items: center; background: var(--panel-2); color: var(--ink-3); font-weight: 800; }

@@ -31,7 +31,7 @@
 
   let box = null, yt = null, ytReady = null, want = null, cur = null, blocked = false, stopped = false, ver = '', offset = 0, seenWin = '', timer = 0, title = rec.title || '';
   const css = document.createElement('style');
-  css.textContent = `.lf-bar{position:fixed;left:12px;bottom:12px;z-index:70;display:flex;align-items:center;gap:8px;max-width:calc(100vw - 24px);padding:6px 8px 6px 12px;border-radius:999px;background:var(--panel,#1b1d27);color:var(--ink,#f4f5f8);border:1px solid var(--line,#3a3d4d);box-shadow:0 6px 22px rgba(0,0,0,.28);font:600 13px/1.2 var(--font,system-ui,sans-serif)}
+  css.textContent = `.lf-bar{position:fixed;left:12px;bottom:12px;z-index:70;display:flex;align-items:center;gap:8px;max-width:calc(100 * var(--vw, 1vw) - 24px);padding:6px 8px 6px 12px;border-radius:999px;background:var(--panel,#1b1d27);color:var(--ink,#f4f5f8);border:1px solid var(--line,#3a3d4d);box-shadow:0 6px 22px rgba(0,0,0,.28);font:600 13px/1.2 var(--font,system-ui,sans-serif)}
 .lf-bar[hidden]{display:none}
 .lf-bar a{color:inherit;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
 .lf-bar button{flex:none;height:30px;padding:0 10px;border-radius:999px;border:1px solid var(--line,#3a3d4d);background:var(--panel-2,transparent);color:inherit;font:inherit;cursor:pointer}

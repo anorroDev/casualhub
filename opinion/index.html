@@ -1056,7 +1056,7 @@ input::placeholder, textarea::placeholder { color: var(--ink-3); font-weight: 40
 /* длинный рейтинг листается внутри карточки, а не растягивает страницу: до конца не надо крутить весь сайт (журнал — так же).
    Поля −8px/+8px — чтобы строки с отрицательными полями (подсветка открытой оценки) не обрезались краем */
 .board-list { list-style: none; margin: 12px -8px 0; padding: 0 8px; }
-.board-list, #logList { max-height: max(380px, calc(100dvh - 170px)); overflow-y: auto; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--ink) 28%, transparent) transparent; }
+.board-list, #logList { max-height: max(380px, calc(100 * var(--dvh, 1vh) - 170px)); overflow-y: auto; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--ink) 28%, transparent) transparent; }
 .entry + .entry { border-top: 1px solid var(--line); }
 .entry summary { display: block; list-style: none; margin: 0 -8px; padding: 12px 8px; border-radius: 12px; cursor: pointer; }
 .sum { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto auto 16px; align-items: center; gap: 12px; }
@@ -1206,7 +1206,7 @@ button.lg-ref:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 /* Toast and export sheet */
 .toast {
   position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 14px); z-index: 70;
-  width: max-content; max-width: min(92vw, 460px); padding: 10px 16px; border-radius: 12px;
+  width: max-content; max-width: min(92 * var(--vw, 1vw), 460px); padding: 10px 16px; border-radius: 12px;
   background: var(--ink); color: var(--panel); font-size: 14px; font-weight: 600; text-align: center;
   box-shadow: 0 12px 30px -12px color-mix(in srgb, var(--ink) 60%, transparent);
   opacity: 0; transform: translate(-50%, -10px); pointer-events: none; transition: opacity .2s, transform .2s;
@@ -1234,7 +1234,7 @@ button.lg-ref:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .sheet-preview img { transition: opacity .15s; }
 .sheet-preview.busy img { opacity: .45; }
 .sheet-preview { display: grid; place-items: center; min-height: 180px; padding: 10px; background: var(--panel-2); border-radius: 12px; }
-.sheet-preview img { display: block; max-width: 100%; max-height: 56vh; width: auto; height: auto; border-radius: 8px; }
+.sheet-preview img { display: block; max-width: 100%; max-height: calc(56 * var(--vh, 1vh)); width: auto; height: auto; border-radius: 8px; }
 .sheet-wait { color: var(--ink-2); font-size: 14px; text-align: center; }
 .sheet-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 /* «Кто видит оценки»: всем своим оценкам сразу или выбранным */
@@ -1244,7 +1244,7 @@ button.lg-ref:focus-visible { outline: 2px solid var(--accent); outline-offset: 
 .vis-pick .search { margin-top: 0; }
 .vis-pick-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 4px 8px; font-size: 13px; color: var(--ink-2); }
 .vis-pick-bar .btn.text { height: 30px; padding: 0 8px; }
-.vis-list { list-style: none; margin: 0; padding: 0 4px 0 0; max-height: min(42vh, 360px); overflow-y: auto; overscroll-behavior: contain; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.vis-list { list-style: none; margin: 0; padding: 0 4px 0 0; max-height: min(42 * var(--vh, 1vh), 360px); overflow-y: auto; overscroll-behavior: contain; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .vis-row { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 8px 2px; cursor: pointer; }
 li + li > .vis-row { border-top: 1px solid var(--line); }
 .vis-row input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); cursor: pointer; }
@@ -1311,10 +1311,10 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
   .ed-tools .mini-btn { width: 40px; height: 34px; }
   .sheet { place-items: end stretch; padding: 0; }
   .sheet-card {
-    width: 100%; max-height: 92vh; max-height: 92dvh; border-bottom: 0; border-radius: 18px 18px 0 0;
+    width: 100%; max-height: calc(92 * var(--dvh, 1vh)); border-bottom: 0; border-radius: 18px 18px 0 0;
     padding: 16px max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
   }
-  .sheet-preview img { max-height: 46vh; max-height: 46dvh; }
+  .sheet-preview img { max-height: calc(46 * var(--dvh, 1vh)); }
   .sheet-actions .btn { flex: 1 1 100%; }
 }
 @media (max-width: 340px) { .e-thumb { display: none; } }
@@ -1351,7 +1351,8 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
 }
 /* Section tabs scale with their card instead of wrapping onto a second line */
 .card:has(> .views) { container-type: inline-size; }
-.views { flex-wrap: nowrap; gap: 2px clamp(10px, 4cqi, 22px); }
+/* перенос — на крайний случай: в виде с широким шрифтом или при крупном размере интерфейса вкладки, не влезшие в строку, уходят на вторую, а не за край экрана */
+.views { flex-wrap: wrap; gap: 2px clamp(10px, 4cqi, 22px); }
 .view-tab { font-size: clamp(24px, 9cqi, 46px); white-space: nowrap; }
 /* узкая карточка (телефон): три вкладки не влезают в строку — переносятся, а не вылезают за экран */
 @container (max-width: 380px) { .views { flex-wrap: wrap; } .view-tab { font-size: 26px; } }

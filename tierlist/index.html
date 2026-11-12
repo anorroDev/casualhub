@@ -290,7 +290,7 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
   .user-bar, .scale { justify-content: flex-start; }
   .sheet { place-items: end stretch; padding: 0; }
   .sheet-card {
-    width: 100%; max-height: 92vh; max-height: 92dvh; border-bottom: 0; border-radius: 18px 18px 0 0;
+    width: 100%; max-height: calc(92 * var(--dvh, 1vh)); border-bottom: 0; border-radius: 18px 18px 0 0;
     padding: 18px max(16px, env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
   }
 }
@@ -407,7 +407,7 @@ html.intro .masthead .scale { animation: card-rise .3s var(--out) .04s backwards
 
 .toast {
   position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 14px); z-index: 70;
-  width: max-content; max-width: min(92vw, 460px); padding: 10px 16px; border-radius: 12px;
+  width: max-content; max-width: min(92 * var(--vw, 1vw), 460px); padding: 10px 16px; border-radius: 12px;
   background: var(--ink); color: var(--panel); font-size: 14px; font-weight: 600; text-align: center;
   box-shadow: 0 12px 30px -12px color-mix(in srgb, var(--ink) 60%, transparent);
   opacity: 0; transform: translate(-50%, -10px); pointer-events: none; transition: opacity .2s, transform .2s;
@@ -522,7 +522,7 @@ body.tl-dropping .tl-pool { border-color: var(--accent); box-shadow: inset 0 0 0
 .tl-pool-h { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; padding: 10px 12px 0; font-size: 13px; font-weight: 600; }
 .tl-vis button { white-space: nowrap; }
 .tl-selbar { display: flex; flex-wrap: wrap; gap: 6px; }
-.tl-pool .tl-items { max-height: 30vh; overflow: auto; min-height: 60px; padding-top: 8px; }
+.tl-pool .tl-items { max-height: calc(30 * var(--vh, 1vh)); overflow: auto; min-height: 60px; padding-top: 8px; }
 .tl-social { display: grid; gap: 18px; }
 .rx { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 .rx-title { font-size: 12px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-2); }
@@ -550,7 +550,7 @@ body.tl-dropping .tl-pool { border-color: var(--accent); box-shadow: inset 0 0 0
 .tl-body { display: grid; gap: 10px; min-height: 0; }
 .tl-foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
 .tl-spread { justify-content: space-between; }
-.tl-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); gap: 6px; max-height: 48vh; overflow: auto; padding: 2px; }
+.tl-picks { display: grid; grid-template-columns: repeat(auto-fill, minmax(68px, 1fr)); gap: 6px; max-height: calc(48 * var(--vh, 1vh)); overflow: auto; padding: 2px; }
 .tl-pick { aspect-ratio: 1; padding: 4px; border: 2px solid transparent; border-radius: 10px; background: var(--panel-2); cursor: pointer; transition: transform .22s var(--spring); }
 .tl-pick img { width: 100%; height: 100%; object-fit: contain; }
 .tl-pick[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); }
@@ -578,7 +578,7 @@ body.tl-dropping .tl-pool { border-color: var(--accent); box-shadow: inset 0 0 0
   .tl-it, .tl-face, .tl-ghost { width: 62px; }
   .tl-face { height: 62px; }
   .tl-txt { font-size: 11px; -webkit-line-clamp: 4; }
-  .tl-pool .tl-items { max-height: 26vh; }
+  .tl-pool .tl-items { max-height: calc(26 * var(--vh, 1vh)); }
 }
 /* Большие экраны (2K, 4K): шире страница, плитки тир-листов крупнее и их больше в ряду, карточки в редакторе крупнее.
    До 1600 px всё как было (картинка «Скачать PNG» рисуется отдельно и от этого не меняется) */

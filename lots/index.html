@@ -439,7 +439,7 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
   .user-bar, .scale { justify-content: flex-start; }
   .sheet { place-items: end stretch; padding: 0; }
   .sheet-card {
-    width: 100%; max-height: 92vh; max-height: 92dvh; border-bottom: 0; border-radius: 18px 18px 0 0;
+    width: 100%; max-height: calc(92 * var(--dvh, 1vh)); border-bottom: 0; border-radius: 18px 18px 0 0;
     padding: 18px max(16px, env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
   }
   .sheet-actions .btn { flex: 1 1 100%; }
@@ -581,7 +581,7 @@ html.intro .masthead .scale { animation: card-rise .3s var(--out) .04s backwards
 @keyframes fx-close { from { clip-path: circle(150vmax at 50% 50%); } to { clip-path: circle(0 at 50% 50%); } }
 .fx-rays {
   /* лучи видны только до ~50vmax от центра — слой ровно такой (раньше 220vmax: на 4K вращался слой ~8400×8400 точек) */
-  --ray: min(104vmax, 2600px);
+  --ray: calc(min(104vmax, 2600px) / var(--uiz, 1));
   position: absolute; left: 50%; top: 50%; width: var(--ray); height: var(--ray); margin: calc(var(--ray) / -2) 0 0 calc(var(--ray) / -2); pointer-events: none;
   background: repeating-conic-gradient(color-mix(in srgb, var(--accent) 16%, transparent) 0 9deg, transparent 9deg 22.5deg);
   -webkit-mask: radial-gradient(closest-side, #000 17%, transparent 97%); mask: radial-gradient(closest-side, #000 17%, transparent 97%);
@@ -599,8 +599,8 @@ html.intro .masthead .scale { animation: card-rise .3s var(--out) .04s backwards
 .fx-eyebrow.in { animation: fx-unroll .5s cubic-bezier(.3, 1.4, .5, 1) forwards; }
 @keyframes fx-unroll { to { transform: none; } }
 .fx-name {
-  font-family: var(--font-display); font-weight: 800; line-height: .9; color: var(--ink); max-width: 94vw; text-wrap: balance;
-  font-size: clamp(40px, calc(150vw / max(var(--len, 6), 6)), 150px);
+  font-family: var(--font-display); font-weight: 800; line-height: .9; color: var(--ink); max-width: calc(94 * var(--vw, 1vw)); text-wrap: balance;
+  font-size: clamp(40px, calc(150 * var(--vw, 1vw) / max(var(--len, 6), 6)), 150px);
 }
 .fx-word { display: inline-block; white-space: nowrap; }
 /* слово длиннее экрана переносится по буквам, а не уходит за край */
@@ -836,12 +836,12 @@ html.intro .masthead .scale { animation: card-rise .3s var(--out) .04s backwards
   .layout.has-chat > .stage { grid-column: 1; grid-row: 1 / span 2; }
   .layout.has-chat > .ch-card { grid-column: 2; grid-row: 1; }
   .layout.has-chat > .board { grid-column: 2; grid-row: 2; }
-  .ch-card { --ch-h: clamp(220px, 34vh, 360px); }
+  .ch-card { --ch-h: clamp(220px, 34 * var(--vh, 1vh), 360px); }
 }
 @media (max-width: 979px) {
   .layout[data-section="chat"] > .stage, .layout[data-section="chat"] > .board, .layout:not([data-section="chat"]) > .ch-card { display: none; }
   .mnav.has-chat { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-  .ch-card { --ch-h: max(260px, calc(100vh - 330px)); }
+  .ch-card { --ch-h: max(260px, calc(100 * var(--vh, 1vh) - 330px)); }
 }
 @supports selector(:has(a)) {
   @media (max-width: 979px) {

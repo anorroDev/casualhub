@@ -80,3 +80,11 @@ html.ui-still :is(.card, .app, .apps, .tile, .stat, .masthead, .title, .wordmark
 html.hdr-wait header :is(.user-bar, .hm-left) { opacity: 0; }
 header :is(.user-bar, .hm-left) { transition: opacity .14s ease-out; }
 @media (prefers-reduced-motion: reduce) { header :is(.user-bar, .hm-left) { transition: none; } }
+
+/* Размер интерфейса (Настройки → «Внешний вид», /util.js): zoom на <html> и --uiz (1 — обычный размер).
+   Внутри zoom единицы окна (vh, dvh, vw) умножаются вместе со всем остальным: окно высотой calc(100dvh - 32px)
+   при 125 % стало бы выше экрана. Поэтому высоту и ширину «от экрана» считай через --vh, --dvh и --vw — это 1 % окна,
+   уже делённый на размер: calc(100 * var(--dvh, 1vh) - 32px), min(42 * var(--vh, 1vh), 360px). Запасное значение в var() —
+   на случай, если этот файл не загрузился. В размерах шрифта (clamp с vw) делить не нужно */
+:root { --uiz: 1; --vh: calc(1vh / var(--uiz)); --vw: calc(1vw / var(--uiz)); --dvh: var(--vh); }
+@supports (height: 1dvh) { :root { --dvh: calc(1dvh / var(--uiz)); } }
