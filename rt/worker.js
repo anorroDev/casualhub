@@ -144,9 +144,13 @@ export class LotRoomDO {
     else if (m.t === 'stop' && control) change = async (live) => stopAuto(live);
     else if (m.t === 'reset' && control) change = async (live) => resetLive(live, Date.now());
     else if (m.t === 'force' && role === 'admin') {
-      const clean = cleanLive({ keep: m.keep, kick: m.kick });
-      change = async (live) => { if (Array.isArray(m.keep)) live.keep = clean.keep; if (Array.isArray(m.kick)) live.kick = clean.kick; return { live }; };
-      log = `lots ${code}: keep ${clean.keep.length}, kick ${clean.kick.length} (rt)`;
+      // как PUT /lots/:code/live: по названиям — старые вкладки, по id лота — нынешний пульт
+      const clean = cleanLive({ keep: m.keep, kick: m.kick, keepIds: m.keepIds, kickIds: m.kickIds });
+      change = async (live) => {
+        for (const k of ['keep', 'kick', 'keepIds', 'kickIds']) if (Array.isArray(m[k])) live[k] = clean[k];
+        return { live };
+      };
+      log = `lots ${code}: keep ${clean.keep.length + clean.keepIds.length}, kick ${clean.kick.length + clean.kickIds.length} (rt)`;
     } else if (['spin', 'stop', 'reset', 'force'].includes(m.t)) return this.error(ws, 403, 'Недостаточно прав.');
     else return this.error(ws, 400, 'Непонятное сообщение.');
     const res = await liveTx(this.env, code, change);

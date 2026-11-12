@@ -1931,14 +1931,17 @@ const routes = {
         if (Array.isArray(b.segs) && !liveBusy(live, now)) live.segs = clean.segs.map((x) => ({ ...x, p: 1 / clean.segs.length }));
       }
       if (isAdmin) {
+        // по названиям — старые вкладки, по id лота — нынешний пульт (повторы с одним названием — разные лоты)
         if (Array.isArray(b.keep)) live.keep = clean.keep;
         if (Array.isArray(b.kick)) live.kick = clean.kick;
+        if (Array.isArray(b.keepIds)) live.keepIds = clean.keepIds;
+        if (Array.isArray(b.kickIds)) live.kickIds = clean.kickIds;
       }
       return { live };
     });
     if (r.err) return fail(...r.err);
     if (r.big) return fail(413, 'Слишком много лотов на колесе.');
-    if (isAdmin && !isOwner && (Array.isArray(b.keep) || Array.isArray(b.kick))) await adminLog(env, request, me, `lots ${arg}: keep ${(r.live.keep || []).length}, kick ${(r.live.kick || []).length}`, true);
+    if (isAdmin && !isOwner && ['keep', 'kick', 'keepIds', 'kickIds'].some((k) => Array.isArray(b[k]))) await adminLog(env, request, me, `lots ${arg}: keep ${(r.live.keepIds || []).length + (r.live.keep || []).length}, kick ${(r.live.kickIds || []).length + (r.live.kick || []).length}`, true);
     await pokeRoom(env, arg, 'live');
     return json(refused ? { ok: true, refused } : { ok: true });
   },
