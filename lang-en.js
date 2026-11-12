@@ -2889,7 +2889,24 @@
 "Последние бои":"Recent matches",
 "К турнирам":"To tournaments",
 "Ссылка скопирована: зрители откроют турнир и смогут голосовать.":"Link copied: viewers can open the tournament and vote.",
-"Закончить турнир? Победителем станет нынешний царь горы.":"Finish the tournament? The current king of the hill becomes the winner."};
+"Закончить турнир? Победителем станет нынешний царь горы.":"Finish the tournament? The current king of the hill becomes the winner.",
+// тир-лист вместе (tierlist/coop.js)
+"Вместе":"Together",
+"Тир-лист вместе: каждый раскладывает по ссылке, все видят средний":"Tier list together: everyone ranks by link, everyone sees the average",
+"Тир-лист вместе":"Tier list together",
+"Элемент":"Item",
+"Голосование закрыто: это итог компании.":"Voting is closed: this is the group's result.",
+"Нажми на элемент, потом на ряд. Раскладка сохраняется сама.":"Tap an item, then a row. Your ranking saves automatically.",
+"Войди в аккаунт, чтобы разложить по-своему.":"Sign in to make your own ranking.",
+"Средний тир-лист: элемент стоит там, куда его в среднем ставили. Цифра — сколько голосов, красная рамка — мнения сильно разошлись.":"Average tier list: each item sits where people put it on average. The number is the vote count, a red frame means opinions split.",
+"голосов":"votes",
+"Моя раскладка":"My ranking",
+"Ещё не разложено":"Not placed yet",
+"Пока без голосов":"No votes yet",
+"Закрыть голосование? Раскладки больше не будут меняться.":"Close voting? Rankings will no longer change.",
+"Голосование закрыто.":"Voting is closed.",
+"Нужно хотя бы два ряда.":"You need at least two rows.",
+"Нужно хотя бы два элемента.":"You need at least two items."};
   // слово после числа: 1 оценка, 5 оценок. [все русские формы, одна штука, несколько]
   const NOUNS = [
     [['рофлан', 'рофлана', 'рофланов', 'рофланы'], 'Soul', 'Souls'],
