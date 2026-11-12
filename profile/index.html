@@ -734,7 +734,8 @@ button.sc-slot:hover em, button.sc-slot:focus-visible em { opacity: 1; }
 .all-card { margin-top: 16px; }
 .all-card .more { margin-top: 12px; }
 .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px; }
-.tile { display: grid; gap: 6px; align-content: start; padding: 8px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); color: inherit; text-decoration: none; transition: transform .25s var(--spring), border-color .15s; }
+/* колонка не шире плитки: иначе строка «Фильмы и сериалы + балл» (без переноса) раздвигала её, и обложка с баллом вылезали за рамку */
+.tile { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; align-content: start; padding: 8px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); color: inherit; text-decoration: none; transition: transform .25s var(--spring), border-color .15s; }
 .tile:hover { transform: translateY(-3px); border-color: color-mix(in srgb, var(--tier) 55%, var(--line)); }
 .tile .pic { aspect-ratio: 3 / 4; border-radius: 11px; }
 .tile strong { font-size: 13.5px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
