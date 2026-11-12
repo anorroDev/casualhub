@@ -270,6 +270,15 @@ svg { flex: none; }
 }
 
 .card-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+/* громкость на виду — у заголовка колеса (тот же уровень, что в «Музыке») */
+.qvol { display: inline-flex; align-items: center; gap: 4px; margin-right: 4px; padding: 0 8px 0 2px; border-radius: 999px; background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.qvol-btn { min-width: 34px; padding: 0 6px; }
+.qvol-btn svg { display: block; }
+.qvol-btn .qv-off, .qvol-btn.off .qv-on { display: none; }
+.qvol-btn.off .qv-off { display: block; }
+.qvol input { width: 92px; height: 24px; margin: 0; accent-color: var(--accent); cursor: pointer; }
+.qvol b { min-width: 2.6em; font-size: 12px; font-weight: 700; color: var(--ink-2); text-align: right; font-variant-numeric: tabular-nums; }
+@media (max-width: 520px) { .qvol { padding: 0; background: none; } .qvol input, .qvol b { display: none; } }
 .eyebrow { display: flex; align-items: center; gap: 9px; font-size: 13px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; }
 .eyebrow .dot { width: 9px; height: 9px; border-radius: 2px; background: var(--accent); transition: background-color .15s; }
 .stage.is-spinning .eyebrow .dot { background: var(--mid); }
@@ -920,7 +929,7 @@ html.unslop .exp-btn:not([hidden]) { animation: exp-in .5s cubic-bezier(.22, 1, 
     <section class="card stage" id="stage" aria-labelledby="stageTitle">
       <div class="card-head">
         <h2 class="eyebrow"><span class="dot" aria-hidden="true"></span><span id="stageTitle">Колесо</span></h2>
-        <span class="head-acts"><button type="button" class="btn text exp-btn" id="exportRes" hidden title="Картинка или текст с итогом: скопировать или скачать"><span class="u-old">📤</span><svg class="u-new" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M5 13v5.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V13"/></svg> Экспорт</button>
+        <span class="head-acts"><span class="qvol"><button type="button" class="btn text qvol-btn" id="qvolBtn" title="Выключить звук" aria-label="Выключить звук"><svg class="qv-on" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></svg><svg class="qv-off" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M16 9.5l5 5M21 9.5l-5 5"/></svg></button><input type="range" id="qvolRange" min="0" max="100" step="1" value="80" aria-label="Громкость колеса"><b id="qvolVal" aria-hidden="true">80%</b></span><button type="button" class="btn text exp-btn" id="exportRes" hidden title="Картинка или текст с итогом: скопировать или скачать"><span class="u-old">📤</span><svg class="u-new" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 15V4M8 8l4-4 4 4"/><path d="M5 13v5.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V13"/></svg> Экспорт</button>
         <button type="button" class="btn text" id="restart">Вернуть всех</button></span>
       </div>
 

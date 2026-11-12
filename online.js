@@ -8,6 +8,16 @@
   const WINDOW = 150e3; // «в сети» — заходил за последние 2,5 минуты, как на сервере
   // on — друзья, у кого сайт открыт сейчас (по сокету), left — закрыли последнюю вкладку: уже не «в сети»
   const st = { online: 0, friends: new Map(), incoming: 0, ready: false, on: new Set(), left: new Set() };
+  // «N на сайте»: при заходе на страницу — последнее известное число (не старше 10 минут), а не прочерк до ответа сервера
+  const OC_KEY = 'casualhub.online.last';
+  let ocSaved = -1;
+  try {
+    const c = JSON.parse(localStorage.getItem(OC_KEY) || 'null');
+    if (c && c.n > 0 && Date.now() - c.at < 6e5) {
+      const early = () => document.querySelectorAll('[data-online-count] b').forEach((b) => { if (b.textContent.trim() === '—') b.textContent = c.n; });
+      if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', early); else early();
+    }
+  } catch (e) {}
 
   const token = () => {
     const u = read('ocenshik.user.v1');
@@ -157,6 +167,7 @@
     // общий счётчик «N на сайте» на всех страницах
     const bump = (n, v) => { if (!n || n.textContent === String(v)) return; n.textContent = v; n.classList.remove('bump'); void n.offsetWidth; n.classList.add('bump'); };
     document.querySelectorAll('[data-online-count]').forEach((el) => { bump(el.querySelector('b'), st.online); el.hidden = false; });
+    if (st.ready && st.online !== ocSaved) { ocSaved = st.online; try { localStorage.setItem(OC_KEY, JSON.stringify({ n: st.online, at: Date.now() })); } catch (e) {} }
     // кнопка «Друзья»: зелёная цифра — друзья в сети, красная — заявки, которые ждут ответа
     const on = new Set([...st.friends.keys(), ...st.on].filter((id) => seen(id).on)).size;
     document.querySelectorAll('[data-friends-btn]').forEach((el) => {

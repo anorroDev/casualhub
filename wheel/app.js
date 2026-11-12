@@ -1660,9 +1660,25 @@
     el.className = 'field-msg' + (kind ? ' ' + kind : '');
   }
 
+  // громкость на виду (у заголовка колеса): значок выключает и возвращает звук, ползунок — тот же S.vol, что в «Музыке»
+  const tr = (t) => (window.CasualLang && window.CasualLang.t ? window.CasualLang.t(t) : t);
+  let qvolPrev = 80;
+  function paintQvol() {
+    const v = S.vol == null ? 80 : +S.vol, r = $('#qvolRange'), b = $('#qvolBtn'), t = $('#qvolVal');
+    if (r && document.activeElement !== r) r.value = v;
+    if (t) t.textContent = v + '%';
+    if (b) { const l = tr(v === 0 ? 'Включить звук' : 'Выключить звук'); b.classList.toggle('off', v === 0); b.title = l; b.setAttribute('aria-label', l); }
+  }
+  function setVol(v) {
+    const el = $('#vol');
+    if (!el) return;
+    el.value = v;
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  }
   function renderMusic() {
     const vol = $('#vol');
     if (vol && document.activeElement !== vol) { vol.value = S.vol == null ? 80 : S.vol; $('#volVal').textContent = vol.value + '%'; }
+    paintQvol();
     $('#mslots').innerHTML = MUSIC_SLOTS.map(([slot, title, when]) => {
       const v = S.music[slot];
       const rec = A.find((a) => a.id === v);
@@ -1808,9 +1824,13 @@
     $('#vol').addEventListener('input', (e) => {
       S.vol = +e.target.value;
       $('#volVal').textContent = S.vol + '%';
+      paintQvol();
       applyVolume('bg'); applyVolume('win');
       clearTimeout(volSave); volSave = setTimeout(save, 300);
     });
+    const qr = $('#qvolRange'), qb = $('#qvolBtn');
+    if (qr) qr.addEventListener('input', () => setVol(+qr.value));
+    if (qb) qb.addEventListener('click', () => { const v = S.vol == null ? 80 : +S.vol; if (v > 0) { qvolPrev = v; setVol(0); } else setVol(qvolPrev || 80); });
     // фон включается от первого действия на странице: без него браузер звук не пустит
     const kickBg = (e) => {
       if (e.target && e.target.closest && e.target.closest('#mslots')) return;

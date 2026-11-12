@@ -687,6 +687,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   function openProgress(which) {
     if (!ME) return;
     markSeen();
+    shown = ''; // открыли окно — вкладка появляется с анимацией
     tab = which || tab;
     lastFocus = document.activeElement;
     if (!ov) {
@@ -734,15 +735,22 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     tip.style.top = r.bottom + 8 + 'px';
   }
   const body = () => ov.querySelector('#lvBody');
-  let seq = 0;
+  let seq = 0, shown = '';
+  // перерисовка той же вкладки (после нажатия): прокрутка на месте, анимации появления сразу доиграны —
+  // иначе в видах интерфейса карточки «въезжали» заново на каждый клик. Бесконечные (рамки, радужный ник) идут как шли
+  const settle = (b) => { try { b.getAnimations({ subtree: true }).forEach((a) => { if (a.effect && a.effect.getTiming().iterations !== Infinity) a.finish(); }); } catch (e) {} };
   async function render() {
     const my = ++seq;
     const b = body();
-    b.scrollTop = 0;
+    const again = shown === tab && b.childElementCount > 0;
+    if (!again) b.scrollTop = 0;
     try {
       const html = await VIEWS[tab]();
       if (my !== seq || !ov.isConnected) return;
+      const top = b.scrollTop;
       b.innerHTML = html;
+      if (again) { b.scrollTop = top; settle(b); }
+      shown = tab;
       if (BIND[tab]) BIND[tab](b);
     } catch (e) {
       if (my === seq) b.innerHTML = `<p class="lv-err">${esc(e.message || 'Не получилось загрузить')}</p>`;

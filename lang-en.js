@@ -557,6 +557,8 @@
 "Обложки лотов на колесе":"Lot covers on the wheel",
 "На паузе: {}":"Paused: {}",
 "Громкость музыки и звуков колеса":"Volume of the music and wheel sounds",
+"Выключить звук":"Mute",
+"Громкость колеса":"Wheel volume",
 "Группа базовых картинок":"Group of built-in pictures",
 "Да":"Yes",
 "Дальше":"Next",
