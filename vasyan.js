@@ -302,11 +302,11 @@
 @keyframes vy-zz { from { translate: 0 6px; opacity: .3; } to { translate: 8px -10px; opacity: 1; } }
 .vy-bub.bang { font-size: 24px; color: #F2C230; animation: vy-pop .45s steps(3, jump-none) both; }
 @keyframes vy-pop { from { scale: .4; } 60% { scale: 1.3; } }
-.vy-bub.love, .vy-bub.achoo, .vy-bub.purr, .vy-bub.yum { animation: vy-love 1.4s steps(7) forwards; }
+.vy-bub.love, .vy-bub.achoo, .vy-bub.purr, .vy-bub.yum, .vy-bub.meow { animation: vy-love 1.4s steps(7) forwards; }
 @keyframes vy-love { to { translate: 0 -22px; opacity: 0; } }
 .vy-heart { position: absolute; bottom: 78%; margin-left: -9px; pointer-events: none; line-height: 0; animation: vy-love 1.3s steps(7) forwards; }
 .vy-plus { position: fixed; z-index: 41; font: 700 14px/1 var(--font-display, system-ui), sans-serif; color: var(--good, #43C97A); text-shadow: 1px 1px 0 #1B1B1F; pointer-events: none; animation: vy-love .9s steps(5) forwards; }
-@media (prefers-reduced-motion: reduce) { .vy-cat.land .vy-body, .vy-cat.flipjump .vy-body, .vy-dust, .vy-crumb, .vy-bowl.nom svg, .vy-cat.hop .vy-body, .vy-bowl.add svg, .vy-bub.zz, .vy-bub.love, .vy-bub.bang, .vy-bub.achoo, .vy-bub.purr, .vy-bub.yum, .vy-heart, .vy-plus { animation: none; } .vy-cat.rolling .vy-body { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .vy-cat.land .vy-body, .vy-cat.flipjump .vy-body, .vy-dust, .vy-crumb, .vy-bowl.nom svg, .vy-cat.hop .vy-body, .vy-bowl.add svg, .vy-bub.zz, .vy-bub.love, .vy-bub.bang, .vy-bub.achoo, .vy-bub.purr, .vy-bub.yum, .vy-bub.meow, .vy-heart, .vy-plus { animation: none; } .vy-cat.rolling .vy-body { transition: none; } }
 @media print { .vy-cat, .vy-bowl, .vy-toy { display: none; } }
 /* выбор окраса и наряда в Настройках (блок data-vasyan-skins) */
 .vy-skins { display: grid; gap: 12px; margin-top: 4px; }
@@ -428,17 +428,22 @@
     for (const el of document.querySelectorAll('#avaWrap, #avaWrap > .lv-pet')) { const q = el.getBoundingClientRect(); if (q.width && q.bottom > r.bottom - 160) left = Math.max(left, q.right + 12); }
     return left;
   }
+  // можно ли встать на блок el: { el, r, top, seat } или null
+  function platOf(el, fy = floorY()) {
+    if (mine(el)) return null;
+    const r = el.getBoundingClientRect(), seat = isSeat(el), top = seat ? r.bottom : r.top;
+    if (r.width < 150 || r.height < 50 || top < (seat ? 110 : 80) || top > fy - 60 || r.left < 0 || r.right > innerWidth) return null;
+    if (seat && r.right - seatLeft(r) < size.w + 20) return null; // рядом с аватаркой нет места
+    const hit = document.elementFromPoint(r.left + r.width / 2, seat ? top - 3 : top + 3);
+    return hit && (el === hit || el.contains(hit)) ? { el, r, top, seat } : null;
+  }
+  // все такие блоки; у вложенных с общим верхним краем остаётся внешний (первый по порядку)
   function platforms() {
     const fy = floorY(), out = [];
     for (const el of document.querySelectorAll(PLAT)) {
-      if (mine(el)) continue;
-      const r = el.getBoundingClientRect(), seat = isSeat(el), top = seat ? r.bottom : r.top;
-      if (r.width < 150 || r.height < 50 || top < (seat ? 110 : 80) || top > fy - 60 || r.left < 0 || r.right > innerWidth) continue;
-      if (seat && r.right - seatLeft(r) < size.w + 20) continue; // рядом с аватаркой нет места
-      const hit = document.elementFromPoint(r.left + r.width / 2, seat ? top - 3 : top + 3);
-      if (!hit || !(el === hit || el.contains(hit))) continue;
-      if (out.some((p) => Math.abs(p.top - top) < 6 && Math.abs(p.r.left - r.left) < 6)) continue;
-      out.push({ el, r, top, seat });
+      const p = platOf(el, fy);
+      if (!p || out.some((q) => Math.abs(q.top - p.top) < 6 && Math.abs(q.r.left - p.r.left) < 6)) continue;
+      out.push(p);
       if (out.length > 40) break;
     }
     return out;
@@ -700,7 +705,7 @@
   }
 
   // ---------- реплики над головой ----------
-  const TXT = { zz: 'Zzz…', bang: '!', achoo: 'Апчхи!', purr: 'мрр…' };
+  const TXT = { zz: 'Zzz…', bang: '!', achoo: 'Апчхи!', purr: 'мрр…', meow: 'мяу?' };
   function say(kind) {
     if (!cat) return;
     if (bubble) bubble.remove();
@@ -743,6 +748,8 @@
     if (air) thud();
     if (after === 'goEat') { after = null; mode = 'goEat'; target = bowlRight() - 6; }
     else if (after === 'caught') { after = null; mode = 'sit'; until = performance.now() + 3500; say('love'); }
+    // позвали в чате и он запрыгнул к чату: сел, сердечки
+    else if (after === 'called') { after = null; mode = 'sit'; until = performance.now() + 4500; hop(); hearts(3); say('love'); }
     else decide();
   }
   function loop(t) {
@@ -1043,6 +1050,43 @@
     hop(); hearts(2); say('love');
     if (['sit', 'loaf', 'look', 'walk'].includes(mode)) { mode = 'sit'; until = performance.now() + 3000; }
   });
+  // позвали в чате (в сообщении есть «васян», событие шлёт chat.js): ушки на макушке — подпрыгнул, «мяу?», посмотрел
+  // вверх, повернулся к чату и бежит к нему: запрыгивает на карточку чата, если её верх виден и на него можно встать,
+  // иначе подбегает по своей плитке (или полу) под чат. Чат не виден (другая вкладка страницы, прокручен) или
+  // «меньше движения» — только отзывается на месте. Ест — отзывается, но от миски не уходит. Не чаще раза в 5 с
+  let callT = 0, callTimer = 0;
+  function called(d) {
+    if (!alive || !cat) return;
+    const t = performance.now();
+    if (t - callT < 5000) { if (!BUSY.includes(mode)) hop(); return; }
+    callT = t;
+    clearTimeout(callTimer);
+    if (mode === 'drag') { say('meow'); return; } // в руках — только отзывается
+    // в прыжке, падает или вскарабкивается — отзовётся, когда встанет на лапы
+    if (BUSY.includes(mode) || mode === 'prep') { callTimer = setTimeout(() => { callT = 0; called(d); }, 700); return; }
+    hop(); say('meow');
+    if (mode === 'eat' || mode === 'goEat' || mode === 'scared') return;
+    stopPlay();
+    const el = d && d.el && d.el.isConnected ? d.el : null, r = el && el.getBoundingClientRect();
+    const seen = !!(r && r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight);
+    if (seen) { dir = r.left + r.width / 2 > x + size.w / 2 ? 1 : -1; faced = dir; }
+    mode = 'look'; lookT0 = t - 4 * 420; until = t + 900; // сразу «вверх»: ушки на макушке
+    if (calm || !seen) return;
+    callTimer = setTimeout(() => toChat(el), 650);
+  }
+  function toChat(el) {
+    if (!alive || !cat || !el.isConnected || BUSY.includes(mode) || mode === 'prep' || mode === 'eat' || mode === 'goEat') return;
+    const r = el.getBoundingClientRect(), tx = r.left + r.width / 2 - size.w / 2;
+    // карточку чата проверяем саму: в общем списке её может заменить внешний блок с тем же верхним краем.
+    // Уже стоит на этом краю (на ней или на таком блоке) — не прыгает, а идёт по нему
+    const onIt = surf === el || (surf && Math.abs(surfTop(surf) - r.top) < 6);
+    if (!onIt && platOf(el)) { after = 'called'; prepJump(el, tx, 300); return; }
+    const [a, b] = bounds(surf), goal = clamp(tx, a, b);
+    if (Math.abs(goal - x) < 6) { mode = 'sit'; until = performance.now() + 4500; hearts(3); say('love'); return; }
+    mode = 'run'; runMood = ''; target = goal; // добежит — сядет с сердечком (как всегда после бега)
+  }
+  document.addEventListener('casualhub:vasyan-call', (e) => called(e.detail));
+
   // прокрутка страницы: вниз — котик спрыгивает на плитку ниже (а с нижней — на пол), вверх — запрыгивает на ближайшую
   // плитку выше, не дальше REACH за прыжок (по плиточкам, а не сразу наверх). Домотали до самого верха — приходит
   // в профиль: садится на низ баннера рядом с аватаркой. Не чаще раза в ~0,6 с, не посреди прыжка и не когда его держат;
