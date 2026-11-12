@@ -54,3 +54,6 @@ addEventListener('pagereveal', function (e) {
   var was = (from && from.url) || document.referrer;
   e.viewTransition.types.add(was && rank(was) > rank(location.href) ? 'back' : 'forward');
 });
+
+// переходы между страницами: появление страницы (карточки, шапка) проигрывается только на первой за сеанс вкладки — дальше вид сразу на месте
+try { if (sessionStorage.getItem('casualhub.ui.seen')) document.documentElement.classList.add('ui-still'); else sessionStorage.setItem('casualhub.ui.seen', '1'); } catch (e) {}

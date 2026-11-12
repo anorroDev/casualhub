@@ -64,3 +64,9 @@ html[data-bg="stars"]::after {
 }
 @keyframes bg-twinkle { from { opacity: .15; } to { opacity: 1; } }
 @media (prefers-reduced-motion: reduce) { html[data-bg="stars"]::after { animation: none; opacity: .6; } }
+
+/* html.ui-still (ставят head-скрипты со второй страницы за сеанс): анимации появления страницы сразу доиграны,
+   поэтому при переходах вид не «въезжает» заново. Окна, которые открывает сам человек, анимируются как обычно */
+html.ui-still :is(.card, .app, .apps, .tile, .stat, .masthead, .title, .wordmark, .mark, .lede, .hero, .feed, .recs, .board, .stage, .layout > *, .user-bar > *, .hm-left > *, .tl-tile, .fd) {
+  animation-duration: 0s !important; animation-delay: 0s !important;
+}

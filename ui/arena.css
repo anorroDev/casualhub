@@ -155,3 +155,13 @@ html[data-ui="arena"]:root .howto-fab { border: 1px solid var(--ar-line); box-sh
 @keyframes ar-pop { from { opacity: 0; transform: translateX(-12px) skewX(-4deg) scale(.98); } }
 @keyframes ar-note { from { opacity: 0; translate: -6px 0; } }
 @keyframes ar-bar { from { box-shadow: inset 0 0 0 var(--accent, #3550E8); } }
+
+/* наведение на кнопки: в этом виде свой отклик (без него базовый :hover страниц перекрывался оформлением вида) */
+@media (hover: hover) {
+  html[data-ui="arena"]:root :is(.pill, .theme-btn, .lv-hbtn, .lv-shop, .btn:not(.primary), .seg button, .chip[data-go], .tc-btn, .kg-seg button, .ev-btn, .bg-btn:not(.main), .rd-open, .lp-opt, .qvol-btn, .hm-wrap > button):hover { border-color: var(--accent, #3550E8) !important; color: var(--ink, #f2f2f2) !important; box-shadow: inset 4px 0 0 var(--accent, #3550E8) !important; transition: border-color .1s, box-shadow .1s; }
+  html[data-ui="arena"]:root :is(.btn.primary, .bg-btn.main, .rd-form button):hover { filter: brightness(1.12); box-shadow: inset 8px 0 0 color-mix(in srgb, var(--ink, #fff) 35%, transparent) !important; }
+}
+html[data-ui="arena"]:root :is(.pill, .theme-btn, .lv-hbtn, .lv-shop, .btn:not(.primary), .seg button, .chip[data-go], .tc-btn, .kg-seg button, .ev-btn, .bg-btn:not(.main), .rd-open, .lp-opt, .qvol-btn, .hm-wrap > button, .btn.primary, .bg-btn.main, .rd-form button):focus-visible { outline: 2px solid var(--accent, #5B74FF) !important; outline-offset: 2px; }
+
+/* окно подсказки закрывается своей анимацией: появление вида не должно её перебивать (иначе окно «двоилось» на выходе) */
+html[data-ui="arena"]:root .howto-modal.out .howto { animation: howto-out .2s cubic-bezier(.5, 0, .75, 0) both !important; }
