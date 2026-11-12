@@ -2911,7 +2911,16 @@
 "Коричневый табби":"Brown tabby",
 // профиль: превью аватара (profile/app.js)
 "Поставить этот аватар?":"Set this avatar?",
-"Поставить":"Set"};
+"Поставить":"Set",
+// «Царь горы»: участники из своих оценок
+"Оценки":"Ratings",
+"Убрать":"Remove",
+"Здесь пусто.":"Nothing here.",
+"Здесь появятся твои оценки из «Мнения».":"Your ratings from Opinion will show up here.",
+// «Прогнозы»: админ видит, кто на что поставил
+"Ставили:":"Predicted by:",
+"На него никто не ставил.":"Nobody predicted it.",
+"Имена под лотами видишь только ты как админ: остальным до первой прокрутки видны лишь проценты.":"Only you see the names under the lots, as an admin: everyone else sees just the percentages until the first spin."};
   // слово после числа: 1 оценка, 5 оценок. [все русские формы, одна штука, несколько]
   const NOUNS = [
     [['рофлан', 'рофлана', 'рофланов', 'рофланы'], 'Soul', 'Souls'],

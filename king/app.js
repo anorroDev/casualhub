@@ -64,6 +64,27 @@ button.kg-side:not(:disabled):hover { border-color: color-mix(in srgb, var(--acc
 .kg-champ .kg-crown { width: 56px; height: 56px; }
 .kg-champ b { font-size: 24px; }
 @media (max-width: 520px) { .kg-bout { gap: 6px; } .kg-side { min-height: 150px; padding: 10px 6px; } .kg-vs { font-size: 15px; } .kg-side b { font-size: 14px; } }
+/* выбор участников из своих оценок «Мнения» */
+.kg-pk { display: grid; gap: 10px; margin-top: 8px; padding: 12px; border: 1px solid var(--line); border-radius: 14px; background: color-mix(in srgb, var(--ink) 3%, var(--panel)); }
+.kg-pk-top { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.kg-pk-top .inp { flex: 1 1 180px; min-width: 0; height: 36px; }
+.kg-pk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); gap: 8px; max-height: 360px; overflow-y: auto; padding: 2px; scrollbar-width: thin; }
+.kg-pk-it { position: relative; display: grid; gap: 6px; align-content: start; padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 700; text-align: left; cursor: pointer; transition: border-color .15s, background-color .15s; }
+.kg-pk-it[hidden] { display: none; }
+.kg-pk-it img, .kg-pk-it .kg-ini { width: 100%; aspect-ratio: 1; border-radius: 8px; object-fit: cover; background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.kg-pk-it .kg-ini { display: grid; place-items: center; font-size: 28px; font-weight: 800; background: color-mix(in srgb, var(--accent) 16%, var(--panel)); }
+.kg-pk-n { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.25; overflow-wrap: anywhere; }
+.kg-pk-it b { position: absolute; top: 10px; right: 10px; padding: 1px 6px; border-radius: 6px; background: rgb(0 0 0 / .66); color: #fff; font-size: 11.5px; font-variant-numeric: tabular-nums; }
+.kg-pk-it:hover { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.kg-pk-it[aria-pressed="true"] { border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); background: color-mix(in srgb, var(--accent) 12%, var(--panel)); }
+.kg-pk-it[aria-pressed="true"]::after { content: '✓'; position: absolute; top: 10px; left: 10px; width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%; background: var(--accent); color: #fff; font-size: 12px; font-weight: 800; }
+.kg-picked { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.kg-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 3px 3px 3px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); font-size: 12.5px; font-weight: 700; color: var(--ink); }
+.kg-chip > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.kg-chip img { flex: none; width: 22px; height: 22px; border-radius: 50%; object-fit: cover; }
+.kg-chip button { flex: none; width: 22px; height: 22px; border: 0; border-radius: 50%; background: transparent; color: var(--ink-2); font: inherit; font-size: 15px; line-height: 1; cursor: pointer; }
+.kg-chip button:hover { background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); }
+@media (prefers-reduced-motion: reduce) { .kg-pk-it { transition: none; } }
 @media (prefers-reduced-motion: reduce) { .kg .card { animation: none; } .kg-side, .kg-side .kg-bar, .kg-seg button { transition: none; } }
 html.unslop:not([data-ui]) .kg .card { animation: none; }
 `;
@@ -73,6 +94,91 @@ html.unslop:not([data-ui]) .kg .card { animation: none; }
 
   // ---------- создание и свои турниры ----------
   const F = { fmt: 'hill', size: 8, mode: 'host', timer: 30, seed: 'order' };
+  // ---------- участники из «Мнения»: свои оценки и «В планах», с обложками ----------
+  // выбранные копятся в picked ({ n, img — что уйдёт на сервер, src — превью }) и добавляются к строкам из поля
+  let picked = [];
+  const PK = { open: false, tab: 'rated', q: '', sel: new Set(), photos: {}, loaded: false };
+  const score = (t) => String(Math.round(t * 10) / 10).replace('.', ',');
+  function myRatings() {
+    const u = read('ocenshik.user.v1'), all = read('ocenshik.ratings.v2');
+    return (Array.isArray(all) ? all : []).filter((r) => r && r.id && r.name && !r.example && (!r.author || !u || r.author.id === u.id));
+  }
+  const planned = (r) => r.total == null || /план/i.test(r.status || '');
+  // обложка оценки: ссылка https, картинка в самой оценке или из хранилища фото «Мнения» (IndexedDB)
+  function srcOf(r) {
+    const p = r.photo;
+    if (!p) return '';
+    if (typeof p.data === 'string' && p.data.startsWith('data:image/')) return p.data;
+    if (typeof p.url === 'string' && /^https:\/\//.test(p.url)) return p.url;
+    if (typeof p.id === 'string' && /^(data:image\/|https:\/\/)/.test(p.id)) return p.id;
+    return (p.ref && PK.photos[p.ref]) || '';
+  }
+  async function loadPhotos() {
+    if (PK.loaded) return;
+    PK.loaded = true;
+    const refs = myRatings().map((r) => r.photo && r.photo.ref).filter(Boolean);
+    if (!refs.length) return;
+    if (!window.CasualPhotos) await new Promise((ok) => (U.script ? U.script('/photo-store.js', ok) : ok()));
+    try { Object.assign(PK.photos, await window.CasualPhotos.getMany(refs)); } catch (e) {}
+  }
+  // своя картинка уходит на сервер маленькой (120×120, до ~16 КБ): турнир хранит её у себя и показывает всем зрителям
+  const thumb = (src) => new Promise((done) => {
+    const im = new Image();
+    im.onload = () => {
+      try {
+        const S = 120, c = document.createElement('canvas');
+        c.width = c.height = S;
+        const k = Math.max(S / im.naturalWidth, S / im.naturalHeight), w = im.naturalWidth * k, h = im.naturalHeight * k;
+        c.getContext('2d').drawImage(im, (S - w) / 2, (S - h) / 2, w, h);
+        let q = 0.8, d = c.toDataURL('image/jpeg', q);
+        while (d.length > 15500 && q > 0.4) { q -= 0.1; d = c.toDataURL('image/jpeg', q); }
+        done(d.length <= 16000 ? d : '');
+      } catch (e) { done(''); }
+    };
+    im.onerror = () => done('');
+    im.src = src;
+  });
+  function pickerHTML() {
+    if (!PK.open) return `<button type="button" class="btn ghost small" data-k="pk-open">${T('Из моих оценок')}</button>`;
+    const all = myRatings();
+    const rated = all.filter((r) => !planned(r)).sort((a, b) => b.total - a.total);
+    const plans = all.filter(planned);
+    const list = PK.tab === 'plan' ? plans : rated;
+    const q = PK.q.trim().toLowerCase();
+    const items = list.map((r) => {
+      const s = srcOf(r);
+      return `<button type="button" class="kg-pk-it" data-pk="${esc(r.id)}" data-n="${esc(r.name.toLowerCase())}" aria-pressed="${PK.sel.has(r.id)}"${q && !r.name.toLowerCase().includes(q) ? ' hidden' : ''}>${s ? `<img src="${esc(s)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<span class="kg-ini" aria-hidden="true">${esc([...r.name][0] || '?')}</span>`}<span class="kg-pk-n">${esc(r.name)}</span>${r.total != null ? `<b>${score(r.total)}</b>` : ''}</button>`;
+    }).join('');
+    return `<div class="kg-pk">
+      <div class="kg-pk-top"><div class="kg-seg" role="group"><button type="button" data-pk-tab="rated" aria-pressed="${PK.tab !== 'plan'}">${T('Оценки')} ${rated.length}</button><button type="button" data-pk-tab="plan" aria-pressed="${PK.tab === 'plan'}">${T('В планах')} ${plans.length}</button></div>
+        <input class="inp" type="search" id="kgPkQ" placeholder="${esc(T('Найти'))}" value="${esc(PK.q)}" aria-label="${esc(T('Найти'))}"></div>
+      ${items ? `<div class="kg-pk-grid">${items}</div>` : `<p class="kg-note" style="text-align:left">${T(all.length ? 'Здесь пусто.' : 'Здесь появятся твои оценки из «Мнения».')}</p>`}
+      <div class="kg-acts"><button type="button" class="btn primary small" data-k="pk-add"${PK.sel.size ? '' : ' disabled'}>${T('Добавить')}${PK.sel.size ? ' · ' + PK.sel.size : ''}</button><button type="button" class="btn ghost small" data-k="pk-close">${T('Закрыть')}</button></div>
+    </div>`;
+  }
+  const pickedHTML = () => (picked.length ? `<div class="kg-picked">${picked.map((x, i) => `<span class="kg-chip">${x.src ? `<img src="${esc(x.src)}" alt="" referrerpolicy="no-referrer">` : ''}<span>${esc(x.n)}</span><button type="button" data-unpick="${i}" aria-label="${esc(T('Убрать'))} ${esc(x.n)}">×</button></span>`).join('')}</div>` : '');
+  function paintPk() {
+    const box = document.getElementById('kgPk');
+    if (box) box.innerHTML = pickerHTML() + pickedHTML();
+  }
+  async function addPicked() {
+    const byId = new Map(myRatings().map((r) => [r.id, r]));
+    const have = new Set(picked.map((x) => x.n.toLowerCase()));
+    for (const id of PK.sel) {
+      const r = byId.get(id);
+      if (!r) continue;
+      const n = String(r.name).trim().slice(0, 80);
+      if (!n || have.has(n.toLowerCase())) continue;
+      have.add(n.toLowerCase());
+      const s = srcOf(r);
+      const img = /^https:\/\//.test(s) ? (s.length <= 590 ? s : '') : s ? await thumb(s) : '';
+      picked.push({ n, img, src: img });
+    }
+    PK.sel.clear(); PK.open = false;
+    paintPk();
+  }
+  const withPicked = (p) => { const have = new Set(p.map((x) => x.n.toLowerCase())); return p.concat(picked.filter((x) => !have.has(x.n.toLowerCase())).map((x) => ({ n: x.n, img: x.img }))); };
+
   function seg(key, opts) {
     return `<div class="kg-seg" role="group">${opts.map(([v, t]) => `<button type="button" data-set="${key}" data-v="${v}" aria-pressed="${String(F[key]) === String(v)}">${esc(T(t))}</button>`).join('')}</div>`;
   }
@@ -94,6 +200,7 @@ html.unslop:not([data-ui]) .kg .card { animation: none; }
       ${F.mode === 'vote' ? `<div class="kg-f">${T('Таймер голосования')}${seg('timer', [[0, 'без таймера'], [15, '15 с'], [30, '30 с'], [60, '1 мин'], [120, '2 мин']])}</div>` : ''}
       <div class="kg-f">${T('Порядок')}${seg('seed', [['order', 'Как в списке'], ['random', 'Случайно']])}</div>
       <label class="kg-f">${T('Участники — по одному в строке. Картинку можно добавить через «|»: Hades | https://…')}<textarea class="inp" id="kgPeople" placeholder="Hades&#10;Celeste&#10;Doom&#10;Portal 2"></textarea></label>
+      <div class="kg-f" id="kgPk">${pickerHTML()}${pickedHTML()}</div>
       <div class="kg-acts"><button type="button" class="btn primary" data-k="create">${T('Начать турнир')}</button></div>
       <p class="kg-msg" id="kgMsg" role="status"></p>`
       : `<p class="lots-empty">${T('Войди в аккаунт, чтобы создавать турниры. Смотреть и голосовать по ссылке можно и так.')}</p>`;
@@ -105,9 +212,10 @@ html.unslop:not([data-ui]) .kg .card { animation: none; }
   }
   async function create() {
     const msg = document.getElementById('kgMsg');
-    const p = document.getElementById('kgPeople').value.split('\n').map((l) => { const [n, img] = l.split('|').map((x) => (x || '').trim()); return n ? { n, img: img || '' } : null; }).filter(Boolean);
+    const p = withPicked(document.getElementById('kgPeople').value.split('\n').map((l) => { const [n, img] = l.split('|').map((x) => (x || '').trim()); return n ? { n, img: img || '' } : null; }).filter(Boolean));
     try {
       const { d } = await api('POST', '/king', { title: document.getElementById('kgTitle').value, fmt: F.fmt, size: F.size, mode: F.mode, timer: F.mode === 'vote' ? F.timer : 0, seed: F.seed, p, start: true });
+      picked = [];
       location.href = '/king/?c=' + d.room.id;
     } catch (e) { msg.textContent = e.message; }
   }
@@ -120,7 +228,9 @@ html.unslop:not([data-ui]) .kg .card { animation: none; }
     R = d; off = (d.now || Date.now()) - Date.now();
     if (Array.isArray(d.state.p)) { people = new Map(d.state.p.map((x) => [x.id, x])); pv = String(d.state.pv); }
   }
-  const pic = (x) => (x.img ? `<img class="kg-img" src="${esc(x.img)}" alt="" referrerpolicy="no-referrer">` : `<span class="kg-ini" aria-hidden="true">${esc([...x.n][0] || '?')}</span>`);
+  // «@» — своя картинка участника (обложка из «Мнения»), её отдаёт сервер турнира
+  const imgUrl = (x) => (x.img === '@' ? `/api/king/img?c=${code}&p=${encodeURIComponent(x.id)}` : x.img);
+  const pic = (x) => (x.img ? `<img class="kg-img" src="${esc(imgUrl(x))}" alt="" referrerpolicy="no-referrer">` : `<span class="kg-ini" aria-hidden="true">${esc([...x.n][0] || '?')}</span>`);
   function boutHTML() {
     const st = R.state, bt = st.bout, own = R.room.own;
     if (!bt) return '';
@@ -176,7 +286,7 @@ html.unslop:not([data-ui]) .kg .card { animation: none; }
       if (c && !cheered) { cheered = true; try { if (window.CasualFx && window.CasualFx.confetti) window.CasualFx.confetti(); } catch (e) {} }
     }
     const add = own && st.status !== 'done' && (st.fmt === 'hill' || st.status === 'ready')
-      ? `<details class="kg-add"${addOpen ? ' open' : ''}><summary>${T('Добавить участников')}</summary><textarea class="inp" id="kgAdd" placeholder="${esc(T('По одному в строке'))}" style="width:100%;min-height:90px;margin-top:8px"></textarea><div class="kg-acts" style="margin-top:8px"><button type="button" class="btn ghost small" data-k="add">${T('Добавить')}</button></div></details>` : '';
+      ? `<details class="kg-add"${addOpen ? ' open' : ''}><summary>${T('Добавить участников')}</summary><textarea class="inp" id="kgAdd" placeholder="${esc(T('По одному в строке'))}" style="width:100%;min-height:90px;margin-top:8px"></textarea><div id="kgPk">${pickerHTML()}${pickedHTML()}</div><div class="kg-acts" style="margin-top:8px"><button type="button" class="btn ghost small" data-k="add">${T('Добавить')}</button></div></details>` : '';
     const log = (st.log || []).slice(-8).reverse().map((e) => `<li><span>${esc(P(e.w === 'a' ? e.a : e.b).n)} ${T('победил')} ${esc(P(e.w === 'a' ? e.b : e.a).n)}</span><span>${e.by === 'host' ? '' : `${e.va}:${e.vb}`}</span></li>`).join('');
     view.innerHTML = `<section class="card">${head}${main}${msg ? `<p class="kg-msg">${esc(msg)}</p>` : ''}</section>
       ${st.status !== 'ready' ? `<section class="card">${st.fmt === 'hill' ? hillHTML() : bracketHTML()}</section>` : ''}
@@ -201,7 +311,7 @@ html.unslop:not([data-ui]) .kg .card { animation: none; }
     if (!document.hidden || soon) {
       try {
         const r = await api('GET', `/king/room?c=${code}&pv=${encodeURIComponent(pv)}`, null, etag);
-        if (!r.same) { etag = r.etag; take(r.d); if (!busy && !(document.activeElement && document.activeElement.id === 'kgAdd')) paintRoom(); }
+        if (!r.same) { etag = r.etag; take(r.d); if (!busy && !PK.open && !(document.activeElement && ['kgAdd', 'kgPkQ'].includes(document.activeElement.id))) paintRoom(); }
       } catch (e) { if (!R) { view.innerHTML = `<section class="card"><p class="lots-empty">${esc(e.message)}</p><a class="btn primary" href="/king/">${T('К турнирам')}</a></section>`; return; } }
     }
     tick();
@@ -215,7 +325,47 @@ html.unslop:not([data-ui]) .kg .card { animation: none; }
     paintRoom(); tick();
   }
 
+  // картинка не загрузилась (ссылка умерла): вместо пустой рамки — первая буква названия
+  view.addEventListener('error', (e) => {
+    const im = e.target;
+    if (!(im instanceof HTMLImageElement) || !im.matches('.kg-img, .kg-pk-it img, .kg-chip img')) return;
+    if (im.matches('.kg-chip img')) { im.remove(); return; }
+    const box = im.closest('.kg-pk-it, .kg-side');
+    const name = (box && (box.querySelector('.kg-pk-n') || box.querySelector('b')) || {}).textContent || '?';
+    const sp = document.createElement('span');
+    sp.className = 'kg-ini';
+    sp.setAttribute('aria-hidden', 'true');
+    sp.textContent = [...name.trim()][0] || '?';
+    im.replaceWith(sp);
+  }, true);
+  // поиск в выборе из оценок: прячем лишние, не перерисовывая (фокус и выбор остаются)
+  view.addEventListener('input', (e) => {
+    if (e.target.id !== 'kgPkQ') return;
+    PK.q = e.target.value;
+    const q = PK.q.trim().toLowerCase();
+    view.querySelectorAll('.kg-pk-it').forEach((b) => { b.hidden = !!q && !b.dataset.n.includes(q); });
+  });
   view.addEventListener('click', async (e) => {
+    const it = e.target.closest('[data-pk]');
+    if (it) {
+      const id = it.dataset.pk;
+      if (PK.sel.has(id)) PK.sel.delete(id); else PK.sel.add(id);
+      it.setAttribute('aria-pressed', String(PK.sel.has(id)));
+      const go = view.querySelector('[data-k="pk-add"]');
+      if (go) { go.disabled = !PK.sel.size; go.textContent = T('Добавить') + (PK.sel.size ? ' · ' + PK.sel.size : ''); }
+      return;
+    }
+    const tab = e.target.closest('[data-pk-tab]');
+    if (tab) { PK.tab = tab.dataset.pkTab; paintPk(); return; }
+    const un = e.target.closest('[data-unpick]');
+    if (un) { picked.splice(+un.dataset.unpick, 1); paintPk(); return; }
+    const pk = e.target.closest('[data-k^="pk-"]');
+    if (pk) {
+      if (pk.dataset.k === 'pk-open') { PK.open = true; addOpen = true; paintPk(); await loadPhotos(); if (PK.open) paintPk(); const q = document.getElementById('kgPkQ'); if (q) q.focus({ preventScroll: true }); }
+      else if (pk.dataset.k === 'pk-close') { PK.open = false; PK.sel.clear(); paintPk(); }
+      else if (pk.dataset.k === 'pk-add') { pk.disabled = true; await addPicked(); }
+      return;
+    }
     const set = e.target.closest('[data-set]');
     if (set) { F[set.dataset.set] = /^\d+$/.test(set.dataset.v) ? +set.dataset.v : set.dataset.v; paintNew(); return; }
     const k = e.target.closest('[data-k], [data-win], [data-vote]');
@@ -230,8 +380,12 @@ html.unslop:not([data-ui]) .kg .card { animation: none; }
     if (k.dataset.win) return act({ act: 'pick', n: R.state.bout.n, w: k.dataset.win });
     if (k.dataset.k === 'close') return act({ act: 'close', n: R.state.bout.n });
     if (k.dataset.k === 'add') {
-      const p = document.getElementById('kgAdd').value.split('\n').map((l) => { const [n, img] = l.split('|').map((x) => (x || '').trim()); return n ? { n, img: img || '' } : null; }).filter(Boolean);
-      addOpen = true; pv = ''; return act({ act: 'add', p });
+      const p = withPicked(document.getElementById('kgAdd').value.split('\n').map((l) => { const [n, img] = l.split('|').map((x) => (x || '').trim()); return n ? { n, img: img || '' } : null; }).filter(Boolean));
+      addOpen = true; pv = '';
+      const keep = picked; picked = [];
+      await act({ act: 'add', p });
+      if (msg) { picked = keep; paintRoom(); } // не добавилось — выбранные из оценок остаются
+      return;
     }
     if (k.dataset.k === 'finish' && !confirm(T('Закончить турнир? Победителем станет нынешний царь горы.'))) return;
     if (['start', 'undo', 'finish'].includes(k.dataset.k)) return act({ act: k.dataset.k });

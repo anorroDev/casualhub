@@ -1,5 +1,6 @@
 // Казуал Хаб: «Прогнозы» — зрители угадывают победителя сбора лотов (страница /lots/<код>, блок lots/predict.js).
 // Один прогноз на человека и сбор, менять можно до первой прокрутки; потом прогнозы закрыты и видно, кто за кого.
+// Админ сайта видит, кто за кого, всё время — и пока прогнозы открыты (остальным в это время — только проценты).
 // Опыт за угаданный прогноз (правило predict_win) каждый получает сам, когда смотрит итог (GET), — так в одном запросе
 // нет начислений сотням зрителей. Ведущему за свой сбор и в сборе меньше чем от трёх участников опыт не даётся.
 // Только виртуальный опыт: никаких ставок, денег и рофланов за прогноз.
@@ -22,6 +23,8 @@ export function winnerLot(live, lots) {
   const left = (lots || []).filter((l) => !out.has(l.id) && l.name === live.winner.n);
   return left.length === 1 ? left[0].id : '';
 }
+// имена прогнозов: всем — когда прогнозы закрыты, админу — всегда
+export const namesVisible = (open, adm) => !open || !!adm;
 const parse = (s) => { try { const v = JSON.parse(s || 'null'); return v && typeof v === 'object' ? v : null; } catch (e) { return null; } };
 
 // лучшие прогнозисты сезона: угаданные прогнозы с начала сезона по журналу опыта (кэш на минуту)
@@ -70,10 +73,12 @@ export function makePredictRoutes(h) {
         try { await h.lvGive(env, request, me, me.id, [{ kind: 'predict_win', ref: `${code}:${+(live.winner && live.winner.at) || 0}`, peer: r.owner_id }]); } catch (e) { console.error('predict xp', e && e.message); }
       }
     }
-    // кто за кого — только когда прогнозы закрыты
+    // кто за кого: всем — когда прогнозы закрыты; админу — и пока открыты (проверка только тогда, когда она что-то меняет)
+    let adm = false;
+    if (open && me && h.isAdmin) { try { adm = await h.isAdmin(env, me); } catch (e) { adm = false; } }
     let names = null;
-    if (!open) { names = {}; for (const x of who.results || []) (names[x.lot_id] = names[x.lot_id] || []).push(x.name); }
-    return { open, mine: my, win, got, total, counts: c, who: names, top: await seasonTop(env, now), signed: !!me };
+    if (namesVisible(open, adm)) { names = {}; for (const x of who.results || []) (names[x.lot_id] = names[x.lot_id] || []).push(x.name); }
+    return { open, mine: my, win, got, total, counts: c, who: names, adm, top: await seasonTop(env, now), signed: !!me };
   }
   return {
     // прогнозы сбора: открыт ли, свой прогноз, сколько за какой лот, после закрытия — кто за кого; лучшие за сезон

@@ -3080,7 +3080,7 @@ Object.assign(routes, makeMailoutRoutes({
 }));
 
 // прогнозы на победителя сбора (/api/lots/:code/predict) — functions/_lib/lots-predict.js
-Object.assign(routes, makePredictRoutes({ json, fail, readBody, burst, currentUser, lvGive }));
+Object.assign(routes, makePredictRoutes({ json, fail, readBody, burst, currentUser, lvGive, isAdmin }));
 // загадка дня (/api/riddle…) — functions/_lib/riddle.js
 Object.assign(routes, makeRiddleRoutes({ json, fail, readBody, burst, lvGive }));
 // «Вечер с друзьями»: вето в сборе лотов (/api/lots/:code/veto, /evening) — functions/_lib/lots-evening.js
@@ -3092,7 +3092,7 @@ Object.assign(routes, makeKingRoutes({ json, fail, readBody, burst, clientIp, cu
 // «Тир-лист вместе» (/api/tiercoop…) — functions/_lib/tiercoop.js, страница tierlist/coop.js
 Object.assign(routes, makeTierCoopRoutes({ json, fail, readBody, burst, currentUser, lvGive }));
 
-const PUBLIC = new Set(['GET /tiercoop/room', 'GET /king/room', 'GET /lots/:code/predict', 'GET /lots/:code/veto', 'GET /lots/:code/bingo', 'GET /shop/look', 'GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid', 'GET /mail/unsub', 'POST /mail/unsub']);
+const PUBLIC = new Set(['GET /tiercoop/room', 'GET /king/room', 'GET /king/img', 'GET /lots/:code/predict', 'GET /lots/:code/veto', 'GET /lots/:code/bingo', 'GET /shop/look', 'GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid', 'GET /mail/unsub', 'POST /mail/unsub']);
 // код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности
 const SHARE_RE = /^[A-Za-z0-9]{12}$/;
 function shareId() {

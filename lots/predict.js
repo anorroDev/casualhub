@@ -38,6 +38,9 @@
 .lp-opt.win { border-color: #2EAD60; }
 .lp-opt.win .lp-bar { background: color-mix(in srgb, #2EAD60 18%, transparent); }
 .lp-who { margin: 2px 2px 0; font-size: 11.5px; color: var(--ink-3, #8a8f9c); }
+.lp-drop { margin: 0 0 10px; padding: 8px 10px; border: 1px solid color-mix(in srgb, var(--accent, #5B74FF) 45%, var(--line, #2b2e38)); border-radius: 10px; font-size: 13px; color: var(--ink-2, #b8bcc8); }
+.lp-drop b { color: var(--ink, #f2f2f2); }
+.lp-adm { margin: 0 0 10px; font-size: 12px; color: var(--ink-3, #8a8f9c); }
 .lp-msg { margin: 10px 0 0; font-size: 13px; font-weight: 600; }
 .lp-msg.ok { color: #2EAD60; }
 .lp-msg.err { color: #E5534B; }
@@ -83,8 +86,14 @@ html.unslop:not([data-ui]) .lp-box { animation: none; }
     }
     const cls = msg ? msgCls : d.win && d.mine && d.got ? 'ok' : '';
     const top = (d.top || []).length ? `<div class="lp-top"><h4>Лучшие прогнозисты сезона</h4><ol>${d.top.map((t) => `<li><span>${esc(t.name)}</span><b>${t.n}</b></li>`).join('')}</ol></div>` : '';
+    // выпавший лот (только что выпал на колесе): кто на него ставил — тем, кому видны имена (админу всегда, остальным после закрытия)
+    const dropId = live && live.pickL ? String(live.pickL) : '';
+    const dropLot = dropId && d.who ? lots.find((l) => l.id === dropId) : null;
+    const dropNames = dropLot ? d.who[dropId] || [] : [];
+    const drop = dropLot ? `<p class="lp-drop"><span>Выпал</span> <b>${esc(dropLot.name)}</b>. ${dropNames.length ? `<span>Ставили:</span> ${dropNames.slice(0, 20).map(esc).join(', ')}${dropNames.length > 20 ? ' …' : ''}` : '<span>На него никто не ставил.</span>'}</p>` : '';
+    const adm = d.adm && d.open && d.who ? '<p class="lp-adm">Имена под лотами видишь только ты как админ: остальным до первой прокрутки видны лишь проценты.</p>' : '';
     box.innerHTML = `<div class="lp-head"><h3>Прогноз</h3><span class="lp-st${d.open ? ' on' : ''}">${d.open ? 'открыт' : 'закрыт'}${total ? ` · ${total}` : ''}</span></div>
-      <p class="lp-lede">Угадай, какой лот победит: угадавшим — опыт на сайте.</p>
+      <p class="lp-lede">Угадай, какой лот победит: угадавшим — опыт на сайте.</p>${drop}${adm}
       <ul class="lp-list">${rows}</ul>${note ? `<p class="lp-msg ${cls}">${esc(note)}</p>` : ''}${top}`;
   }
   async function load() {
