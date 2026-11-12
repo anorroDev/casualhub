@@ -426,12 +426,14 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     resetT = setInterval(tick, 1000);
   }
   const FX_LAYER = ['stars', 'snow', 'embers']; // эффекты слоем в шапке профиля (конфетти — отдельно, при открытии)
-  // шрифты ника (награды за уровни; id — как NICK_FONTS в levels.js): Google Fonts, грузятся только буквы ника (&text=)
+  // шрифты ника (награды за уровни; id — как NICK_FONTS в levels.js): Google Fonts, грузятся только буквы ника (&text=).
+  // Выбранный шрифт одинаков во всех видах интерфейса: начертание, насыщенность, регистр и интервал вид не меняет (!important)
   const FONTS = { comfortaa: ['Comfortaa', 700], caveat: ['Caveat', 700], lobster: ['Lobster', 400], press: ['Press Start 2P', 400], pacifico: ['Pacifico', 400], russo: ['Russo One', 400], amatic: ['Amatic SC', 700], kelly: ['Kelly Slab', 400], aladin: ['Aladin', 400], yeseva: ['Yeseva One', 400], unbounded: ['Unbounded', 700], underdog: ['Underdog', 400], marck: ['Marck Script', 400], glitch: ['Rubik Glitch', 400], ruslan: ['Ruslan Display', 400], paint: ['Rubik Wet Paint', 400], beastly: ['Rubik Beastly', 400] };
-  { const st = document.createElement('style'); st.textContent = Object.entries(FONTS).map(([id, [f, w]]) => `:root .lv-font-${id} { font-family: '${f}', var(--font-display, system-ui), sans-serif !important; font-weight: ${w} !important; font-synthesis: none; letter-spacing: normal; }`).join('\n'); document.head.appendChild(st); }
+  { const st = document.createElement('style'); st.textContent = Object.entries(FONTS).map(([id, [f, w]]) => `:root .lv-font-${id} { font-family: '${f}', var(--font-display, system-ui), sans-serif !important; font-weight: ${w} !important; font-style: normal !important; font-synthesis: none; text-transform: none !important; letter-spacing: normal !important; font-variant: normal !important; font-feature-settings: normal !important; }`).join('\n'); document.head.appendChild(st); }
   const fontSeen = new Set();
   function needFonts(ids, text) {
-    const list = ids.filter((id) => FONTS[id]), chars = [...new Set(String(text || ''))].join('');
+    // буквы ника — и строчные, и заглавные: вид интерфейса может писать текст заглавными, а недостающая буква уходит в чужой шрифт
+    const t = String(text || ''), list = ids.filter((id) => FONTS[id]), chars = [...new Set(t + t.toUpperCase() + t.toLowerCase())].join('');
     if (!list.length || !chars || fontSeen.has(list.join() + '|' + chars)) return;
     fontSeen.add(list.join() + '|' + chars);
     const l = document.createElement('link');
