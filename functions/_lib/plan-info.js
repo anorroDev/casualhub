@@ -88,10 +88,15 @@ export function makePlanInfoRoutes(h) {
         try { d = JSON.parse(row.data); } catch (e) {}
         if (d && now - row.at < (d.desc || d.trailer || d.iv ? MONTH : MISS)) return json(d);
       }
-      const [ru, yt, iv] = await Promise.all([wiki('ru', name, year, kind).catch(() => null), kind === 'other' ? null : trailer(name, year, kind).catch(() => null), imdb ? imdbVideo(imdb).catch(() => null) : null]);
-      const w = ru || (await wiki('en', name, year, kind).catch(() => null));
+      let failed = false; // сбой источника (тайм-аут, 429) — не «не нашлось»: такой ответ не запоминаем
+      const safe = (p) => (p ? p.catch(() => { failed = true; return null; }) : null);
+      const [ru, yt, iv] = await Promise.all([safe(wiki('ru', name, year, kind)), kind === 'other' ? null : safe(trailer(name, year, kind)), imdb ? safe(imdbVideo(imdb)) : null]);
+      const w = ru || (await safe(wiki('en', name, year, kind)));
       const d = { desc: w ? w.desc : '', src: w ? w.src : '', lang: w ? w.lang : '', trailer: yt ? yt.id : '', ttitle: yt ? yt.title : '', iv: iv ? iv.id : '', ivt: iv ? iv.title : '' };
-      await env.DB.prepare('INSERT INTO plan_info (k, data, at) VALUES (?1, ?2, ?3) ON CONFLICT(k) DO UPDATE SET data = ?2, at = ?3').bind(k, JSON.stringify(d), now).run();
+      if (!failed && (d.desc || d.trailer || d.iv)) {
+        await env.DB.prepare('INSERT INTO plan_info (k, data, at) VALUES (?1, ?2, ?3) ON CONFLICT(k) DO UPDATE SET data = ?2, at = ?3').bind(k, JSON.stringify(d), now).run();
+        if (Math.random() < 0.02) await env.DB.prepare('DELETE FROM plan_info WHERE at < ?').bind(now - 2 * MONTH).run();
+      }
       return json(d);
     },
   };

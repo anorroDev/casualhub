@@ -604,7 +604,7 @@
     const opts = calm
       ? [['sit', 3], ['loaf', 2], ['sleep', 2], ['wash', 1.2], ['yawn', 0.6], ['look', 1]]
       : [['walk', 3.2], ['jump', 2.4], ['sit', 2], ['loaf', 1.3], ['sleep', 1], ['wash', 1], ['stretch', 0.7], ['scratch', 0.5],
-        ['roll', 0.6], ['yawn', 0.5], ['sneeze', 0.25], ['look', 1.1], ['spin', 0.35], ['play', surf ? 0.4 : 0.7], ['edge', surf ? 1.8 : 0]];
+        ['roll', 0.6], ['yawn', 0.5], ['sneeze', 0.25], ['look', 1.1], ['spin', 0.35], ['play', isSeat(surf) ? 0 : surf ? 0.4 : 0.7], ['edge', surf && !isSeat(surf) ? 1.8 : 0]];
     act(pick(opts), t);
   }
   function act(k, t = performance.now()) {
@@ -1048,7 +1048,7 @@
   // в профиль: садится на низ баннера рядом с аватаркой. Не чаще раза в ~0,6 с, не посреди прыжка и не когда его держат;
   // при «меньше движения» — как раньше
   const REACH = 320;
-  let scrollY0 = scrollY, scrollHop = 0;
+  let scrollY0 = scrollY, scrollHop = 0, scrollLook = 0;
   addEventListener('scroll', () => {
     const dy = scrollY - scrollY0;
     scrollY0 = scrollY;
@@ -1057,6 +1057,8 @@
     // очень резкая прокрутка (рывок колесом или «в начало») — иногда пугается: хвост трубой, «!»
     if (Math.abs(dy) > 900 && !BUSY.includes(mode) && mode !== 'scared' && Math.random() < 0.35) { stopPlay(); scrollHop = t; scare(t); return; }
     if (t - scrollHop < 600 || ['drag', 'jump', 'climb', 'fall', 'prep', 'eat', 'goEat', 'scared'].includes(mode)) return;
+    if ((dy > 0 && !surf) || t - scrollLook < 160) return; // на полу и листают вниз — прыгать некуда; площадки ищем не на каждое событие
+    scrollLook = t;
     const cx = x + size.w / 2, near = (p) => Math.abs((p.r.left + p.r.right) / 2 - cx);
     const ps = platforms().filter((p) => p.el !== surf && near(p) < 700);
     let next;

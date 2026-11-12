@@ -87,6 +87,7 @@
       pre = k;
     }
     put(pre);
+    if (next < 4096 && next >= 1 << size && size < 12) size++;
     put(eoi);
     if (bits > 0) buf.push(cur & 255);
     o.b(minSize);

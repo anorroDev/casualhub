@@ -1056,7 +1056,7 @@ input::placeholder, textarea::placeholder { color: var(--ink-3); font-weight: 40
 /* длинный рейтинг листается внутри карточки, а не растягивает страницу: до конца не надо крутить весь сайт (журнал — так же).
    Поля −8px/+8px — чтобы строки с отрицательными полями (подсветка открытой оценки) не обрезались краем */
 .board-list { list-style: none; margin: 12px -8px 0; padding: 0 8px; }
-.board-list, .log-days { max-height: max(380px, calc(100dvh - 170px)); overflow-y: auto; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--ink) 28%, transparent) transparent; }
+.board-list, #logList { max-height: max(380px, calc(100dvh - 170px)); overflow-y: auto; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--ink) 28%, transparent) transparent; }
 .entry + .entry { border-top: 1px solid var(--line); }
 .entry summary { display: block; list-style: none; margin: 0 -8px; padding: 12px 8px; border-radius: 12px; cursor: pointer; }
 .sum { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto auto 16px; align-items: center; gap: 12px; }

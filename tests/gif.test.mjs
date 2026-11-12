@@ -45,7 +45,8 @@ function lzwDecode(data, minSize) {
   let bits = 0, cur = 0, pos = 0, prev = null;
   const out = [];
   for (;;) {
-    while (bits < size) { if (pos >= data.length) return out; cur |= data[pos++] << bits; bits += 8; }
+    // строго: кадр обязан кончаться кодом конца (браузеры прощают его отсутствие, а строгие декодеры — нет)
+    while (bits < size) { if (pos >= data.length) throw new Error('нет кода конца кадра'); cur |= data[pos++] << bits; bits += 8; }
     const code = cur & ((1 << size) - 1);
     cur >>>= size; bits -= size;
     if (code === clear) { reset(); prev = null; continue; }
@@ -97,4 +98,16 @@ test('палитра: медианное сечение не даёт больш
   const pal = G.medianCut(px, 4);
   assert.ok(pal.length <= 4);
   for (const want of [[255, 0, 0], [0, 255, 0], [0, 0, 255]]) assert.ok(pal.some((p) => p.every((v, i) => Math.abs(v - want[i]) < 3)), JSON.stringify(want));
+});
+
+test('GIF: сотни случайных кадров разных размеров и палитр — разбираются строгим декодером один в один', () => {
+  let seed = 11;
+  const rnd = (n) => { seed = (seed * 1103515245 + 12345) % 2147483648; return Math.floor((seed / 2147483648) * n); };
+  for (let i = 0; i < 700; i++) {
+    const w = 1 + rnd(40), h = 1 + rnd(40), colors = 2 + rnd(255);
+    const pal = Array.from({ length: colors }, (_, k) => [k & 255, (k * 7) & 255, (k * 13) & 255]);
+    const ix = Uint8Array.from({ length: w * h }, () => (rnd(4) ? rnd(colors) : 0));
+    const g = readGif(G.encodeGif(w, h, pal, [{ ix, x: 0, y: 0, w, h, delay: 50, dispose: 1 }], false));
+    assert.deepEqual(g.frames[0].ix, [...ix], 'кадр ' + i);
+  }
 });
