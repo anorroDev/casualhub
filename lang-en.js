@@ -2475,7 +2475,7 @@
 "Сбросить сейчас":"Reset now",
 "Сбросить звания сейчас?":"Reset titles now?",
 "Сезон закончится прямо сейчас: итоги каждого сохранятся, все начнут следующий сезон с «Людишки», всем придёт письмо. Уровень и награды останутся. Отменить нельзя.":"The season ends right now: everyone’s results are saved, everyone starts the next season as a “Little human”, and everyone gets a letter. Levels and rewards stay. This can’t be undone.",
-"Время — по часам этого компьютера. По умолчанию сброс 1-го числа в 00:00 по Москве.":"Time is by this computer’s clock. By default the reset is on the 1st at 00:00 Moscow time.",
+"Время — по часам этого компьютера. По умолчанию сброс 1-го числа в 00:00 по Киеву.":"Time is by this computer’s clock. By default the reset is on the 1st at 00:00 Kyiv time.",
 "Прошлые сезоны ({})":"Past seasons ({})",
 "участников {}":"{} players",
 "Название сезона, например: Сезон 2 — зима":"Season name, e.g. Season 2 — winter",

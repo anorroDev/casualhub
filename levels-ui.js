@@ -676,9 +676,8 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
 
   // ---------- окно «Прогресс» ----------
   const TABS = [['home', 'Обзор'], ['mail', 'Почта'], ['ach', 'Достижения'], ['board', 'Рейтинг'], ['hist', 'История'], ['recap', 'Итоги 2026'], ['look', 'Оформление'], ['invite', 'Пригласить']];
-  const SOON_TABS = new Set(['look', 'invite']); // пока в разработке: серые, с подсказкой
-  // «Оформление» админу уже открыто: проверять награды до выхода (сервер отдаёт admin в /levels/me)
-  const soon = (k) => SOON_TABS.has(k) && !(k === 'look' && ME && ME.admin);
+  const SOON_TABS = new Set(['invite']); // пока в разработке: серые, с подсказкой
+  const soon = (k) => SOON_TABS.has(k);
   let ov = null, tab = 'home', lastFocus = null;
   function openProgress(which) {
     if (!ME) return;
@@ -824,12 +823,12 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       if (!s || !(s.ranks || []).length) return '<button type="button" class="lv-back" data-home>‹ Обзор</button><p class="lv-muted">Звания сезона пока не включены.</p>';
       const rs = s.ranks, i = Math.max(0, rs.findIndex((r) => r.id === s.rank)), cur = rs[i], next = rs[i + 1];
       const days = s.end ? Math.max(0, Math.ceil((s.end - Date.now()) / 864e5)) : null;
-      // сброс назначают по Москве (админка, объявление): дата и время — тоже по Москве, иначе у кого-то вышло бы «30 ноября»
+      // сброс назначают по Киеву (админка, объявление): дата и время — тоже по Киеву, иначе у кого-то вышло бы «30 ноября»
       // на английском строка собирается здесь же: месяц и «дней» внутри одной строки словарь lang-en не переведёт
       const en = window.CasualLang && window.CasualLang.lang === 'en', loc = en ? 'en-GB' : 'ru-RU';
       const T = (t) => (window.CasualLang && window.CasualLang.t ? window.CasualLang.t(t) : t);
-      const msk = { timeZone: 'Europe/Moscow' };
-      const when = s.end ? `${new Date(s.end).toLocaleDateString(loc, { ...msk, day: 'numeric', month: 'long' })}, ${new Date(s.end).toLocaleTimeString(loc, { ...msk, hour: '2-digit', minute: '2-digit' })} ${en ? 'MSK' : 'МСК'}` : '';
+      const kyiv = { timeZone: 'Europe/Kiev' };
+      const when = s.end ? `${new Date(s.end).toLocaleDateString(loc, { ...kyiv, day: 'numeric', month: 'long' })}, ${new Date(s.end).toLocaleTimeString(loc, { ...kyiv, hour: '2-digit', minute: '2-digit' })} ${en ? 'Kyiv time' : 'по Киеву'}` : '';
       const reset = days == null ? '' : en ? ` · resets in ${days} ${days === 1 ? 'day' : 'days'}, ${when}` : ` · до сброса ${days} ${plural(days, 'день', 'дня', 'дней')}, ${when}`;
       const part = next ? Math.max(0, Math.min(1, (s.xp - cur.xp) / Math.max(1, next.xp - cur.xp))) : 1;
       const lit = Math.min(5, Math.floor(part * 5));
@@ -908,7 +907,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
             <div class="lv-lk-who"><b class="lv-lk-name${p.nick ? ' lv-nick-' + p.nick : ''}"${p.color && m.colors[p.color] ? ` style="color:${m.colors[p.color]}"` : ''}>${esc(nm)}</b>${u.rankChip ? `<span class="lv-chip">${esc(m.rank)}</span>` : ''}${p.fx === 'confetti' ? '<span class="lv-muted">+ конфетти при открытии профиля</span>' : ''}</div>
           </div>
         </div>`;
-      return `${m.admin ? '<p class="lv-adm">Вкладка пока видна только админам. Тебе открыто всё оформление, чтобы проверить его до выхода; другие увидят твой выбор в профиле.</p>' : ''}
+      return `${m.admin ? '<p class="lv-adm">Админу открыто всё оформление, чтобы проверять награды; остальным — по уровням. Другие видят твой выбор в профиле.</p>' : ''}
         <div class="lv-box">${prev}</div>
         <div class="lv-box"><h3>Рамка аватара</h3><div class="lv-pick">${frames}</div></div>
         <div class="lv-box"><h3>Ник в профиле</h3><div class="lv-pick">${colors}</div><div class="lv-pick" style="margin-top:8px">${nicks}</div></div>

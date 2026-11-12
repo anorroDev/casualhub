@@ -43,44 +43,60 @@ export const rankOf = (level) => RANKS.reduce((r, x) => (level >= x.from ? x : r
 // ---------- сезоны: звание за три месяца, как на Faceit ----------
 // Уровень и опыт за всё время не сбрасываются: уровни открывают оформление, его не отнимают. Звание — сезонное:
 // по опыту, набранному с начала сезона (строки xp_log с at в сезоне и gone = 0). Сезон по умолчанию — три месяца
-// (SEASON_MONTHS), сброс 1-го числа в 00:00 по Москве; когда сбросить, может назначить админ. При сбросе итоги каждого
+// (SEASON_MONTHS), сброс 1-го числа в 00:00 по Киеву; когда сбросить, может назначить админ. При сбросе итоги каждого
 // (опыт, звание, место) уходят в season_results, и все снова «Людишка».
-// Пороги — по модели живых действий с нынешними RULES, заданиями и сериями, ×3 к месяцу: заходит 8 дней в месяц по оценке —
-// ~480 опыта за сезон; обычный (18 дней в месяц, 2 оценки, иногда отзыв, пара реакций) — ~4 200; активный (каждый день,
-// 4 оценки, отзыв, 5 реакций, тир-лист в неделю) — ~16 000; всё до дневных лимитов каждый день — ~33 000.
+// Пороги — по модели живых действий с нынешними RULES, заданиями и сериями, за сезон: заходит 8 дней в месяц по оценке —
+// ~480 опыта (Казуал); обычный (18 дней в месяц, 2 оценки, иногда отзыв, пара реакций) — ~4 200, к концу сезона «Хранитель
+// вкуса»; активный (каждый день, 4 оценки, отзыв, 5 реакций, тир-лист в неделю) — ~16 000, «Величайший» месяца за два
+// с половиной; всё до дневных лимитов каждый день — ~33 000, «Величайший» за месяц.
 // id — имена значков званий (art/), не менять.
 export const SEASON_MONTHS = 3;
 export const SEASON_RANKS = [
   { id: 'people', title: 'Людишка', xp: 0 },
-  { id: 'casual', title: 'Казуал', xp: 450 },
-  { id: 'couch', title: 'Диванный критик', xp: 1500 },
-  { id: 'whiner', title: 'Профессиональный нытик', xp: 3000 },
-  { id: 'champion', title: 'Чемпион', xp: 4500 },
-  { id: 'godlike', title: 'Рецензент от бога', xp: 7500 },
-  { id: 'taste', title: 'Хранитель вкуса', xp: 12000 },
-  { id: 'legend', title: 'Легенда', xp: 18000 },
-  { id: 'greatest', title: 'Величайший', xp: 27000 },
+  { id: 'casual', title: 'Казуал', xp: 300 },
+  { id: 'couch', title: 'Диванный критик', xp: 500 },
+  { id: 'whiner', title: 'Профессиональный нытик', xp: 900 },
+  { id: 'champion', title: 'Чемпион', xp: 1500 },
+  { id: 'godlike', title: 'Рецензент от бога', xp: 2500 },
+  { id: 'taste', title: 'Хранитель вкуса', xp: 4000 },
+  { id: 'legend', title: 'Легенда', xp: 7000 },
+  { id: 'greatest', title: 'Величайший', xp: 12000 },
 ];
 export const seasonRankOf = (xp) => SEASON_RANKS.reduce((r, x) => ((+xp || 0) >= x.xp ? x : r), SEASON_RANKS[0]);
 // следующее звание (null — уже самое высокое)
 export const nextSeasonRank = (xp) => SEASON_RANKS.find((x) => x.xp > (+xp || 0)) || null;
 // поля звания для ответов API: название и id значка
 export const rankFields = (xp) => { const r = seasonRankOf(xp); return { rank: r.title, rankId: r.id }; };
-const MSK = 3 * 3600e3; // Москва, без перехода на летнее время
-// начало месяца (1-е число, 00:00 по Москве), в котором момент t
-export function monthStartMsk(t) { const d = new Date(t + MSK); return Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1) - MSK; }
-// конец сезона по умолчанию: 1-е число через три месяца от месяца начала, 00:00 по Москве (1 ноября → 1 февраля).
+const KYIV = 'Europe/Kiev'; // Киев, с летним временем (это имя есть и в старых ICU)
+let kyivFmt = null;
+// сдвиг Киева от UTC в момент t, мс; без Intl — по правилу ЕС (лето — с апреля по октябрь)
+function kyivOffset(t) {
+  try {
+    kyivFmt = kyivFmt || new Intl.DateTimeFormat('en-US', { timeZone: KYIV, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' });
+    const p = {};
+    for (const x of kyivFmt.formatToParts(new Date(t))) p[x.type] = +x.value;
+    return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - Math.floor(t / 60000) * 60000;
+  } catch (e) {
+    const m = new Date(t).getUTCMonth();
+    return (m >= 3 && m <= 9 ? 3 : 2) * 3600e3;
+  }
+}
+// 00:00 по Киеву числа y-m-d (m с нуля; 12 и больше — следующий год)
+export function kyivMidnight(y, m, d) { const u = Date.UTC(y, m, d); return u - kyivOffset(u - 2 * 3600e3); }
+// начало месяца (1-е число, 00:00 по Киеву), в котором момент t
+export function monthStartKyiv(t) { const d = new Date(t + kyivOffset(t)); return kyivMidnight(d.getUTCFullYear(), d.getUTCMonth(), 1); }
+// конец сезона по умолчанию: 1-е число через три месяца от месяца начала, 00:00 по Киеву (1 ноября → 1 февраля).
 // Сезон, начатый посреди месяца, чуть короче, но не меньше двух месяцев
 export function defaultSeasonEnd(start) {
-  const d = new Date(start + MSK);
-  return Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + SEASON_MONTHS, 1) - MSK;
+  const d = new Date(start + kyivOffset(start));
+  return kyivMidnight(d.getUTCFullYear(), d.getUTCMonth() + SEASON_MONTHS, 1);
 }
-// «1 декабря в 00:00 по Москве» — для писем и объявления
-export function fmtMsk(t) {
+// «1 декабря в 00:00 по Киеву» — для писем и объявления
+export function fmtKyiv(t) {
   try {
-    const p = new Intl.DateTimeFormat('ru-RU', { timeZone: 'Europe/Moscow', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(t));
+    const p = new Intl.DateTimeFormat('ru-RU', { timeZone: KYIV, day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(t));
     const g = (k) => (p.find((x) => x.type === k) || {}).value || '';
-    return `${g('day')} ${g('month')} в ${g('hour')}:${g('minute')} по Москве`;
+    return `${g('day')} ${g('month')} в ${g('hour')}:${g('minute')} по Киеву`;
   } catch (e) {
     return new Date(t).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
   }
@@ -290,7 +306,7 @@ export async function ensureLevels(env) {
 let seasonCache = { at: 0, v: null, db: null };
 export const forgetSeason = () => { seasonCache = { at: 0, v: null, db: null }; };
 const rowSeason = (r) => ({ n: +r.n, title: r.title, start: +r.start_at, end: r.end_at == null ? null : +r.end_at });
-const OPEN_SQL = 'SELECT n, title, start_at, end_at FROM seasons WHERE closed_at IS NULL ORDER BY n DESC LIMIT 1';
+const OPEN_SQL = 'SELECT n, title, start_at, end_at, planned_by FROM seasons WHERE closed_at IS NULL ORDER BY n DESC LIMIT 1';
 // кому сообщить о закрытии сезона (API и комната лотов — всем открытым вкладкам: «загляни за новостями»)
 const seasonHooks = [];
 export const onSeasonClose = (fn) => { if (!seasonHooks.includes(fn)) seasonHooks.push(fn); };
@@ -302,6 +318,7 @@ export async function currentSeason(env, now = Date.now()) {
   if (!s) {
     await ensureLevels(env);
     const r = await env.DB.prepare(OPEN_SQL).first();
+    if (r) await toKyivEnd(env, r);
     s = r ? rowSeason(r) : await openSeason(env, now);
     seasonCache = { at: now, v: s, db: env.DB };
   }
@@ -311,13 +328,24 @@ export async function currentSeason(env, now = Date.now()) {
   }
   return s;
 }
+// конец «по умолчанию» раньше считался по Москве (1-е число, 00:00 МСК): такой конец переносится на 00:00 по Киеву.
+// Конец, который назначил админ (planned_by), не трогается. Срабатывает один раз: киевский конец уже не 00:00 МСК (а летом совпадает)
+async function toKyivEnd(env, r) {
+  if (r.planned_by != null || r.end_at == null) return;
+  const t = +r.end_at, d = new Date(t + 3 * 3600e3);
+  if (d.getUTCDate() !== 1 || d.getUTCHours() !== 0 || t % 60000) return;
+  const fix = kyivMidnight(d.getUTCFullYear(), d.getUTCMonth(), 1);
+  if (fix === t) return;
+  await env.DB.prepare('UPDATE seasons SET end_at = ? WHERE n = ? AND planned_by IS NULL AND end_at = ?').bind(fix, r.n, t).run();
+  r.end_at = fix;
+}
 // открытого сезона нет: первый — с начала этого месяца (опыт, набранный в нём до запуска сезонов, засчитывается),
 // а если прошлый почему-то закрыт без следующего — следующий с его конца
 async function openSeason(env, now) {
   const last = await env.DB.prepare('SELECT n, end_at, closed_at FROM seasons ORDER BY n DESC LIMIT 1').first();
   const n = last ? +last.n + 1 : 1;
-  const start = last ? +last.end_at || +last.closed_at || now : monthStartMsk(now);
-  await env.DB.prepare('INSERT OR IGNORE INTO seasons (n, title, start_at, end_at) VALUES (?, ?, ?, ?)').bind(n, `Сезон ${n}`, start, defaultSeasonEnd(Math.max(start, monthStartMsk(now)))).run();
+  const start = last ? +last.end_at || +last.closed_at || now : monthStartKyiv(now);
+  await env.DB.prepare('INSERT OR IGNORE INTO seasons (n, title, start_at, end_at) VALUES (?, ?, ?, ?)').bind(n, `Сезон ${n}`, start, defaultSeasonEnd(Math.max(start, monthStartKyiv(now)))).run();
   const r = await env.DB.prepare(OPEN_SQL).first();
   return r ? rowSeason(r) : null;
 }
@@ -328,7 +356,7 @@ async function openSeason(env, now) {
 // Плашка «Новый сезон» с личными итогами — тоже одним UPDATE по всем user_level.
 export async function closeSeason(env, s, now = Date.now()) {
   const n = s.n, next = n + 1, end = s.end != null ? Math.min(s.end, now) : now;
-  const nextEnd = defaultSeasonEnd(Math.max(end, monthStartMsk(now)));
+  const nextEnd = defaultSeasonEnd(Math.max(end, monthStartKyiv(now)));
   const token = [...crypto.getRandomValues(new Uint8Array(8))].map((b) => b.toString(16).padStart(2, '0')).join('');
   const mine = 'EXISTS (SELECT 1 FROM seasons WHERE n = ?1 AND closed_by = ?2)';
   const caseRank = 'CASE ' + [...SEASON_RANKS].reverse().map((r) => `WHEN s >= ${+r.xp} THEN '${r.id}'`).join(' ') + ' END';
@@ -356,15 +384,15 @@ export async function closeSeason(env, s, now = Date.now()) {
 function seasonEndLetter(n, next, nextEnd) {
   return {
     title: `Сезон ${n} закончился, начался сезон ${next}`,
-    body: `Звания сбросились: все снова начинают с «${SEASON_RANKS[0].title}», уровень и награды остались. Своё звание и место в прошлом сезоне — в окне «Прогресс». Следующий сброс — ${fmtMsk(nextEnd)}.`,
+    body: `Звания сбросились: все снова начинают с «${SEASON_RANKS[0].title}», уровень и награды остались. Своё звание и место в прошлом сезоне — в окне «Прогресс». Следующий сброс — ${fmtKyiv(nextEnd)}.`,
   };
 }
 // письмо всем о назначенном сбросе (id свой у каждого назначения; прежние письма этого сезона гаснут)
 export function seasonPlanLetter(n, end) {
   return {
     id: `season:${n}:plan:${end}`,
-    title: `Сброс званий ${fmtMsk(end)}`,
-    body: `Сезон ${n} закончится ${fmtMsk(end)}. Звания сбросятся, и начнётся сезон ${n + 1}: уровень, опыт за всё время и награды останутся, а своё звание и место в сезоне ${n} будут видны в окне «Прогресс».`,
+    title: `Сброс званий ${fmtKyiv(end)}`,
+    body: `Сезон ${n} закончится ${fmtKyiv(end)}. Звания сбросятся, и начнётся сезон ${n + 1}: уровень, опыт за всё время и награды останутся, а своё звание и место в сезоне ${n} будут видны в окне «Прогресс».`,
   };
 }
 // опыт человека за сезон (с его начала)

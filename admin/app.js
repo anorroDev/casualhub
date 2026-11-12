@@ -451,7 +451,7 @@
             <label><input type="checkbox" id="lvSeRemind"${cur.remind && !cur.remind.canceled && !cur.remind.doneAt ? ' checked' : ''}${seasons.mail ? '' : ' disabled'}> напомнить письмом за 3 дня до сброса</label></div>
           ${cur.remind && !cur.remind.canceled ? `<p class="muted">${cur.remind.doneAt ? `Напоминание ушло: ${cur.remind.sent} из ${cur.remind.total}.` : cur.remind.queuedAt ? `Напоминание уходит: ${cur.remind.sent} из ${cur.remind.total}.` : `Напоминание уйдёт ${esc(when(cur.remind.startAt))} (с ближайшей пачкой рассылки).`}</p>` : ''}
           <div class="adm-ann-row"><button type="button" class="btn primary" id="lvSePlan">Запланировать сброс</button><button type="button" class="btn ghost" id="lvSeNow">Сбросить сейчас</button></div>
-          <p class="muted">Время — по часам этого компьютера. По умолчанию сброс 1-го числа в 00:00 по Москве.</p>
+          <p class="muted">Время — по часам этого компьютера. По умолчанию сброс 1-го числа в 00:00 по Киеву.</p>
           ${seasons.history.length ? `<details class="adm-lv-hist"><summary>Прошлые сезоны (${seasons.history.length})</summary>${seasons.history.map((s) => `<div class="adm-lv-log" style="display:grid">
             <div><span>${esc(when(s.start))} — ${esc(when(s.closed))}</span><span><b>Сезон ${s.n}</b>${s.title && s.title !== 'Сезон ' + s.n ? ' · ' + esc(s.title) : ''} · участников ${s.players}</span><b></b></div>
             ${s.top.map((t) => `<div><span>${t.place}.</span><span>${esc(t.username)} · ${esc(t.rank)}</span><b>${t.xp}</b></div>`).join('')}</div>`).join('')}</details>` : ''}
