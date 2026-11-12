@@ -54,3 +54,6 @@ addEventListener('pagereveal', function (e) {
 
 // переходы между страницами: появление страницы (карточки, шапка) проигрывается только на первой за сеанс вкладки — дальше вид сразу на месте
 try { if (sessionStorage.getItem('casualhub.ui.seen')) document.documentElement.classList.add('ui-still'); else sessionStorage.setItem('casualhub.ui.seen', '1'); } catch (e) {}
+
+// шапка достраивается скриптами (разделы, меню ☰, уровень, магазин): показываем её разом, когда всё на месте, а не по кнопке со сдвигами
+try { document.documentElement.classList.add('hdr-wait'); setTimeout(function () { document.documentElement.classList.remove('hdr-wait'); }, 700); } catch (e) {}
