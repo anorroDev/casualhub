@@ -165,3 +165,14 @@ html[data-ui="arena"]:root :is(.pill, .theme-btn, .lv-hbtn, .lv-shop, .btn:not(.
 
 /* окно подсказки закрывается своей анимацией: появление вида не должно её перебивать (иначе окно «двоилось» на выходе) */
 html[data-ui="arena"]:root .howto-modal.out .howto { animation: howto-out .2s cubic-bezier(.5, 0, .75, 0) both !important; }
+
+/* «Оформление»: выбранный вариант — рамка акцентом, засечки по срезанным углам и полоса снизу */
+html[data-ui="arena"]:root .lv-pick button[aria-pressed="true"] {
+  border-color: var(--accent, #3550E8);
+  background:
+    linear-gradient(225deg, transparent calc(var(--ar-cut) * .7071 - .5px), var(--accent, #3550E8) 0 calc(var(--ar-cut) * .7071 + 2px), transparent 0),
+    linear-gradient(45deg, transparent calc(var(--ar-cut) * .7071 - .5px), var(--accent, #3550E8) 0 calc(var(--ar-cut) * .7071 + 2px), transparent 0),
+    var(--ar-tint);
+  background-origin: border-box;
+  box-shadow: inset 0 0 0 1px var(--accent, #3550E8), inset 0 -3px 0 var(--accent, #3550E8);
+}

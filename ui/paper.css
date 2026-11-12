@@ -24,7 +24,8 @@ html[data-ui="paper"] :where(button, input, select, textarea) { font-family: var
 /* чистая бумага: без звёзд и сетки точек; теней и размытия нет нигде */
 /* фон сайта (звёзды или купленный в магазине) остаётся и в этом виде — только тише, под спокойный стиль */
 html[data-ui="paper"]::after, html[data-ui="paper"] body::after { opacity: .35; }
-html[data-ui="paper"] *, html[data-ui="paper"] *::before, html[data-ui="paper"] *::after { box-shadow: none !important; text-shadow: none !important; }
+/* без теней — кроме рамок аватара: они нарисованы кольцами box-shadow и иначе пропадают совсем (и в профиле, и в «Оформлении») */
+html[data-ui="paper"] :not([class*="lv-frame-"]), html[data-ui="paper"] *::before, html[data-ui="paper"] *::after { box-shadow: none !important; text-shadow: none !important; }
 
 /* ---------- шапка: как у газеты, с двойной линейкой ---------- */
 html[data-ui="paper"] :is(header.top, .masthead) { padding-bottom: 14px; border-bottom: 4px double var(--v-rule); }
@@ -131,3 +132,9 @@ html[data-ui="paper"] :is(.pill, .theme-btn, .lv-hbtn, .lv-shop, .btn:not(.prima
 
 /* окно подсказки закрывается своей анимацией: появление вида не должно её перебивать (иначе окно «двоилось» на выходе) */
 html[data-ui="paper"]:root .howto-modal.out .howto { animation: howto-out .2s cubic-bezier(.5, 0, .75, 0) both !important; }
+
+/* «Оформление»: выбранный вариант — двойная линейка цвета темы, как рамка заметки */
+html[data-ui="paper"] .lv-pick button[aria-pressed="true"] {
+  border-color: var(--accent, #3550E8); color: var(--ink);
+  outline: 1px solid var(--accent, #3550E8); outline-offset: 2px; /* тени в газете выключены — вторая линия из outline */
+}

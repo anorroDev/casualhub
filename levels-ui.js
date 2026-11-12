@@ -307,7 +307,7 @@ html.lv-on .ava-wrap > .ava-ring { display: none !important; }
 .lv-seg button[aria-pressed="true"] { background: var(--accent, #3550E8); color: #fff; }
 .lv-pick { display: flex; flex-wrap: wrap; gap: 8px; }
 .lv-pick button { display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 12px; border: 1px solid var(--line, #2b2e38); background: transparent; color: var(--ink, #fff); font: 600 13px/1.2 inherit; font-family: inherit; cursor: pointer; }
-.lv-pick button[aria-pressed="true"] { border-color: var(--accent, #3550E8); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent, #3550E8) 35%, transparent); }
+.lv-pick button[aria-pressed="true"] { border-color: var(--accent, #3550E8); background: color-mix(in srgb, var(--accent, #3550E8) 12%, transparent); box-shadow: inset 0 0 0 1px var(--accent, #3550E8), 0 0 0 3px color-mix(in srgb, var(--accent, #3550E8) 22%, transparent); } /* выбранное — рамка цвета темы */
 .lv-pick button:disabled { opacity: .45; cursor: not-allowed; }
 .lv-pick .dot { width: 18px; height: 18px; border-radius: 50%; }
 .lv-pick .sw { width: 30px; height: 20px; border-radius: 6px; border: 1px solid var(--line, #2b2e38); }
