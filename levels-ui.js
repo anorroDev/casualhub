@@ -410,15 +410,18 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   let ME = null;
   // до новых заданий дня — полночь по местному времени (сервер меняет задания по часовому поясу человека). Таймер в «Обзоре»
   const untilMidnight = () => { const n = new Date(); return new Date(n.getFullYear(), n.getMonth(), n.getDate() + 1) - n; };
+  // до нового задания недели — до понедельника, 00:00 по местному времени (неделя на сервере — с понедельника)
+  const untilMonday = () => { const n = new Date(), d = (8 - n.getDay()) % 7 || 7; return new Date(n.getFullYear(), n.getMonth(), n.getDate() + d) - n; };
   const hms = (ms) => { const t = Math.max(0, Math.floor(ms / 1000)); return Math.floor(t / 3600) + ':' + String(Math.floor(t / 60) % 60).padStart(2, '0') + ':' + String(t % 60).padStart(2, '0'); };
+  const dhms = (ms) => { const d = Math.floor(ms / 864e5); return (d ? d + ' ' + plural(d, 'день', 'дня', 'дней') + ' ' : '') + hms(ms - d * 864e5); };
   let resetT = 0;
   function tickReset() {
     clearInterval(resetT);
     const tick = () => {
       const els = document.querySelectorAll('[data-lv-reset]');
       if (!els.length) { clearInterval(resetT); return; }
-      const ms = untilMidnight();
-      els.forEach((e) => { e.textContent = hms(ms); });
+      const ms = untilMidnight(), wk = untilMonday();
+      els.forEach((e) => { e.textContent = e.dataset.lvReset === 'week' ? dhms(wk) : hms(ms); });
       // полночь: задания уже новые — обновить «Обзор»
       if (ms < 1000) { clearInterval(resetT); setTimeout(() => refreshMe().then(() => { if (tab === 'home' && document.querySelector('[data-lv-reset]')) render(); }).catch(() => {}), 2500); }
     };
@@ -959,7 +962,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
         ${m.event ? `<div class="lv-box"><h3>${esc(m.event.title)}</h3><p class="lv-muted">×${m.event.mult} опыта до ${new Date(m.event.until).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}.</p></div>` : ''}
         <div class="lv-box"><div class="lv-streak"><span class="big">🔥 ${m.streak.days}</span><div><b>${m.streak.days ? `${plural(m.streak.days, 'день', 'дня', 'дней')} подряд` : 'Серии пока нет'}</b><p class="lv-muted">${m.streak.today ? 'Сегодня уже засчитан.' : 'Оцени что-нибудь или отреагируй другу, чтобы засчитать сегодня.'} Лучшая серия: ${m.streak.best}. «Заморозок»: ${m.streak.freezes} — спасают серию, если пропустишь день.</p></div></div></div>
         <div class="lv-box"><h3>Задания дня</h3>${daily || '<p class="lv-muted">Заданий пока нет.</p>'}<p class="lv-muted">За все три — ещё +${q.allXp}${q.allPaid ? ' (получено)' : ''}. Новые задания через <b class="lv-reset" data-lv-reset>${hms(untilMidnight())}</b>.</p></div>
-        ${w ? `<div class="lv-box"><h3>Задание недели</h3><div class="lv-q${w.done ? ' done' : ''}"><span>${esc(w.title)} · ${w.progress} из ${w.goal}</span><span class="xp">+${w.xp}</span>${bar(pct(w.progress, w.goal))}</div></div>` : ''}
+        ${w ? `<div class="lv-box"><h3>Задание недели</h3><div class="lv-q${w.done ? ' done' : ''}"><span>${esc(w.title)} · ${w.progress} из ${w.goal}</span><span class="xp">+${w.xp}</span>${bar(pct(w.progress, w.goal))}</div><p class="lv-muted">Новое задание через <b class="lv-reset" data-lv-reset="week">${dhms(untilMonday())}</b>.</p></div>` : ''}
         ${steps}
         <p class="lv-muted">Опыт дают оценки, отзывы, тир-листы, реакции и комментарии друзьям, лоты. У каждого действия дневной лимит; удалишь — опыт уйдёт.</p>`;
     },
