@@ -779,6 +779,56 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     box.className = 'lv-prof-ach';
     box.innerHTML = achData.length ? achList(achData, false) : '<p class="lv-muted">Пока нет полученных достижений.</p>';
     card.appendChild(box);
+    fitAch(card, box);
+  }
+  // свободное место в карточке «Ачивки» — под ачивки из «Ещё N»: неполный последний ряд дополняем всегда (высоты он
+  // почти не добавляет), дальше — по ряду, пока карточка не растёт (обычная высота блока) и ничего не уходит в прокрутку
+  // (высоту блока задали вручную). Поменялся размер карточки (ширина окна, высоту блока потянули) — заново от «полученные + 6»
+  let achRO = null;
+  function fitAch(card, box) {
+    if (achRO) { achRO.disconnect(); achRO = null; }
+    const main = box.querySelector(':scope > .lv-bdg'), more = box.querySelector(':scope > .lv-more');
+    const rest = more && more.querySelector('.lv-bdg'), sum = more && more.querySelector('summary');
+    if (!main || !rest || !sum) return;
+    const all = [...main.children, ...rest.children], base = main.children.length;
+    let cur = base, lastW = -1, lastH = -1;
+    // переносим только те карточки, что меняют место: страница профиля перерисовывается на каждую перемену в разметке
+    const put = (n) => {
+      if (n > cur) main.append(...all.slice(cur, n));
+      else if (n < cur) rest.prepend(...all.slice(n, cur));
+      cur = n;
+      const t = `Ещё ${all.length - n}`;
+      if (sum.textContent !== t) sum.textContent = t;
+      more.hidden = n >= all.length;
+    };
+    const cols = () => Math.max(1, getComputedStyle(main).gridTemplateColumns.split(' ').filter(Boolean).length);
+    const roomy = () => card.scrollHeight <= card.clientHeight + 1;
+    // всё синхронно, без кадра между «добавили» и «убрали»: раскладка профиля не видит промежуточной высоты
+    const fit = () => {
+      if (!card.isConnected || more.open || !card.getClientRects().length) return;
+      const c = cols();
+      let n = Math.min(all.length, Math.ceil(base / c) * c); // исходные и неполный ряд до конца
+      put(n);
+      if (!roomy()) { n = base; put(n); }
+      while (n < all.length) {
+        const h0 = card.getBoundingClientRect().height, next = Math.min(all.length, n + c);
+        put(next);
+        if (card.getBoundingClientRect().height > h0 + 0.5 || !roomy()) { put(n); break; }
+        n = next;
+      }
+      const r = card.getBoundingClientRect();
+      lastW = r.width; lastH = r.height;
+    };
+    fit();
+    more.addEventListener('toggle', () => { if (!more.open) fit(); });
+    if (!('ResizeObserver' in window)) return;
+    let raf = 0;
+    achRO = new ResizeObserver(() => {
+      const r = card.getBoundingClientRect();
+      if (Math.abs(r.width - lastW) < 0.5 && Math.abs(r.height - lastH) < 0.5) return; // это мы сами и подогнали
+      if (!raf) raf = requestAnimationFrame(() => { raf = 0; fit(); });
+    });
+    achRO.observe(card);
   }
 
   // ---------- окно «Прогресс» ----------
