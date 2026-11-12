@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=fallback');
 /* Казуал Хаб: вид «Минимал» — в духе Apple. Включён, когда у <html> класс unslop и data-ui="minimal" (выбирается
    в Настройках). Это не «Казуальный» (тот оставляет прежнюю вёрстку, только тише): здесь своя — много воздуха,
    крупные чистые заголовки, системный шрифт Apple на их устройствах и Inter у остальных, тонкие разделители,
