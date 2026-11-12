@@ -77,3 +77,6 @@ html.unslop:not([data-ui]) :is(.pill, .theme-btn, .lv-hbtn, .lv-shop, .btn:not(.
 
 /* окно подсказки закрывается своей анимацией: появление вида не должно её перебивать (иначе окно «двоилось» на выходе) */
 html.unslop:root .howto-modal.out .howto { animation: howto-out .2s cubic-bezier(.5, 0, .75, 0) both !important; }
+
+/* «Оформление»: выбранный вариант — чёткая рамка цвета темы, без ореола */
+html.unslop:not([data-ui]) .lv-pick button[aria-pressed="true"] { box-shadow: inset 0 0 0 1px var(--accent, #3550E8); }
