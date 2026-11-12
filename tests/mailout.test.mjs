@@ -261,13 +261,10 @@ test('админка: себе, всем (и во «внутреннюю» по�
     const s = await r['POST /admin/mailout']({ env, request: request({ content: CONTENT }), me });
     assert.equal(s.step.sentNow, 4);
     assert.equal(s.recent[0].subject, CONTENT.ru.subject);
-    // то же письмо — во «внутренней» почте уровней, всем
-    const g = q(env, "SELECT to_id, kind, title, body FROM gifts WHERE kind = 'news'");
-    assert.equal(g.length, 1);
-    assert.equal(g[0].to_id, null);
-    assert.equal(g[0].title, CONTENT.ru.subject);
-    assert.match(g[0].body, /• Сезоны званий — Звание теперь за месяц\./);
-    assert.equal(seen.pokeAll, 1);
+    // во «внутреннюю» почту уровней новости не попадают: она только для наград и подарков
+    const hasGifts = q(env, "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'gifts'").length > 0;
+    if (hasGifts) assert.equal(q(env, "SELECT 1 FROM gifts WHERE kind = 'news'").length, 0);
+    assert.ok(!seen.pokeAll);
     // новая рассылка, пока идёт прошлая, — нельзя; остановить — кто не получил, уже не получит
     for (let i = 4; i < 8; i++) user(env, 'u' + i);
     env.DB.raw.exec('UPDATE mailouts SET done_at = NULL');

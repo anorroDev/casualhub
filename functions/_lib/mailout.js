@@ -14,7 +14,6 @@
 // (с List-Unsubscribe-Post — «в одно нажатие» прямо в почте) ведут на /api/mail/unsub. Входить не нужно.
 // Язык письма — mail_prefs.lang: его запоминает /ping (кука casualhub_lang) и настройки.
 import { clip } from './shelf.js';
-import { levelsOn, ensureLevels } from './levels.js';
 
 export const mailOn = (env) => !!(env && env.MAIL_KEY && env.MAIL_FROM);
 const fromOf = (env) => String(env.MAIL_FROM || '').trim().replace(/^["'«](.*)["'»]$/s, '$1').trim();
@@ -136,10 +135,6 @@ export function composeNews(content, lang, { origin, unsub }) {
   return { subject: p.subject, html, text };
 }
 const unsubUrl = (origin, uid, token) => `${origin}/api/mail/unsub?u=${encodeURIComponent(uid)}&t=${encodeURIComponent(token)}`;
-// письмо в «Почту» уровней (то же, что ушло на почту): короткий текст без разметки
-function letterBody(p) {
-  return clip([p.teaser, ...p.items.map((it) => `• ${it.t}${it.d ? ' — ' + it.d : ''}`)].filter(Boolean).join('\n'), 1500);
-}
 
 // ---------- Resend ----------
 async function resendBatch(env, emails, key) {
@@ -442,14 +437,7 @@ export function makeMailoutRoutes(h) {
       if (busy) return fail(409, 'Прошлая рассылка ещё идёт: дождись её или останови.');
       const now = Date.now();
       const id = await createMailout(env, { kind: 'news', content: c.content, origin, by: me.id, now });
-      // то же письмо — во «внутреннюю» почту уровней (письмо всем, без кнопки)
-      if (levelsOn(env)) {
-        try {
-          await ensureLevels(env);
-          await env.DB.prepare("INSERT OR IGNORE INTO gifts (id, to_id, kind, title, body, xp, at, by_id) VALUES (?, NULL, 'news', ?, ?, 0, ?, ?)").bind(`news:${id}`, c.content.ru.subject, letterBody(c.content.ru), now, me.id).run();
-          await h.pokeAll(env);
-        } catch (e) { console.error('mailout letter', e && e.message); }
-      }
+      // во «внутреннюю» почту уровней новости больше не кладём: она только для наград и подарков, новости — в «Что нового»
       const step = await mailoutStep(env, { now });
       await h.adminLog(env, request, me, `mailout: «${c.content.ru.subject.slice(0, 60)}»`, true);
       return json(await status(env, { step }));

@@ -49,7 +49,9 @@ export const tzOf = (request) => cleanTz(request && request.cf && request.cf.tim
 // письма человеку: всем (to_id пустой) и лично ему, кроме просроченных; новые сверху
 const MAIL_SQL = `SELECT g.id, g.kind, g.title, g.body, g.xp, g.at, g.until, COALESCE(b.read, 0) AS read, COALESCE(b.claimed, 0) AS claimed
   FROM gifts g LEFT JOIN gift_box b ON b.gift_id = g.id AND b.user_id = ?1
-  WHERE (g.to_id IS NULL OR g.to_id = ?1) AND (g.until IS NULL OR g.until > ?2) ORDER BY g.at DESC LIMIT 60`;
+  WHERE (g.to_id IS NULL OR g.to_id = ?1) AND (g.until IS NULL OR g.until > ?2) AND g.kind != 'news' ORDER BY g.at DESC LIMIT 60`;
+// «Почта» — только для наград и подарков: новости (kind 'news', копии рассылок до 12 ноября) в ней не показываются,
+// их место — «Что нового». Строки в gifts остаются, но ни в списке, ни в счётчике непрочитанных их нет
 // «Первая десятка»: первые 10 аккаунтов сайта (по дате регистрации) получают достижение и личное письмо
 // с котиком Васяном (kind 'vasyan', id 'vasyan:<uid>'). Забрал письмо — Васян гуляет у него внизу экрана (vasyan.js)
 const FIRST_N = 10;
