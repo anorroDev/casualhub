@@ -2041,6 +2041,20 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     }
   };
 
+  // превью картинки перед тем, как поставить: «Поставить» — true, «Отмена», Esc или мимо окна — false
+  function confirmPic(src, title, ok) {
+    return new Promise((done) => {
+      const ov = document.createElement('div');
+      ov.className = 'pic-ok';
+      ov.innerHTML = `<div class="pic-ok-card" role="dialog" aria-modal="true" aria-label="${esc(title)}"><img src="${esc(src)}" alt=""><p>${esc(title)}</p><div class="pic-ok-acts"><button type="button" class="btn ghost" data-v="0">Отмена</button><button type="button" class="btn primary" data-v="1">${esc(ok)}</button></div></div>`;
+      const end = (v) => { ov.remove(); document.removeEventListener('keydown', key); done(v); };
+      const key = (e) => { if (e.key === 'Escape') end(false); };
+      ov.addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b) end(b.dataset.v === '1'); else if (e.target === ov) end(false); });
+      document.addEventListener('keydown', key);
+      document.body.appendChild(ov);
+      ov.querySelector('[data-v="1"]').focus();
+    });
+  }
   function wireAvatar(p) {
     const wrap = $('#avaWrap'), inp = $('#avaFile');
     if (!wrap || !inp) return;
@@ -2078,6 +2092,9 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         const still = fitImage(bmp, 160, 160, 'image/jpeg', 0.88); // первый кадр, квадратом
         if (bmp.close) bmp.close();
         const anim = animated ? await asDataUrl(f) : null;
+        wrap.classList.remove('busy');
+        if (!(await confirmPic(anim || still, 'Поставить этот аватар?', 'Поставить'))) return;
+        wrap.classList.add('busy');
         // статичная аватарка там же, где её хранит Мнение: в профиле, в списке профилей и в твоих оценках
         const cur = read('ocenshik.user.v1');
         if (!cur || cur.id !== user.id) throw new Error('user');
@@ -2215,9 +2232,10 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       // история: при каждом открытии меню свежая (новый баннер только что ушёл в неё)
       if (on && $('#banHist')) histInto($('#banHist'), 'banner', p, (d) => { open(false); apply(d); });
     };
-    // выбор видимой части: тянем картинку внутри баннера, «Готово» сохраняет положение
+    // выбор видимой части: тянем картинку внутри баннера, «Готово» сохраняет, «Отмена» возвращает как было.
+    // fresh = { prev } — новая картинка ещё не сохранена: отмена возвращает прежний баннер
     let posing = null;
-    const startPos = async () => {
+    const startPos = async (fresh) => {
       if (!p.banner || posing) return;
       open(false);
       const img = new Image();
@@ -2225,10 +2243,22 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       try { await new Promise((res, rej) => { img.onload = res; img.onerror = rej; img.src = bare(p.banner); if (img.complete && img.naturalWidth) res(); }); } catch (e) { return; }
       if (posing || !p.banner) return;
       const ps = posOf(p.banner);
-      posing = { x: ps.x, y: ps.y, iw: img.naturalWidth, ih: img.naturalHeight, drag: null };
+      posing = { x: ps.x, y: ps.y, iw: img.naturalWidth, ih: img.naturalHeight, drag: null, fresh: fresh || null };
       banner.classList.add('posing');
-      banner.insertAdjacentHTML('beforeend', '<div class="ban-pos" id="banPosBar"><span>Потяни картинку, чтобы выбрать, что видно</span><button type="button" class="btn small" id="banPosDone">Готово</button></div>');
+      banner.insertAdjacentHTML('beforeend', '<div class="ban-pos" id="banPosBar"><span>Потяни картинку, чтобы выбрать, что видно</span><button type="button" class="btn small ghost" id="banPosCancel">Отмена</button><button type="button" class="btn small" id="banPosDone">Готово</button></div>');
       $('#banPosDone').addEventListener('click', (e) => { e.stopPropagation(); finishPos(); });
+      $('#banPosCancel').addEventListener('click', (e) => { e.stopPropagation(); cancelPos(); });
+    };
+    // «Отмена»: новая картинка не ставится (возвращается прежний баннер), у старой — прежнее положение. Ничего не сохраняется
+    const cancelPos = () => {
+      if (!posing) return;
+      const fresh = posing.fresh;
+      posing = null;
+      banner.classList.remove('posing', 'grabbing');
+      const bar = $('#banPosBar'); if (bar) bar.remove();
+      if (fresh) p.banner = fresh.prev || null;
+      if (p.banner) showBanner(p.banner); else showBanner(null);
+      say('');
     };
     // выбор видимой части закончен: положение сохраняется вместе с картинкой
     const finishPos = () => {
@@ -2258,11 +2288,12 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     banner.addEventListener('pointerup', dragEnd);
     banner.addEventListener('pointercancel', dragEnd);
     const apply = (d, pose) => {
+      // новая картинка: сначала показать и дать подвинуть, сохранить — по «Готово» (или вернуть прежнюю по «Отмене»)
+      if (d && pose) { const prev = p.banner; p.banner = d; showBanner(d); startPos({ prev }); return; }
       p.banner = d;
       showBanner(d);
       const kept = keepBanner(d);
       if (!kept && token) say('Баннер большой, поэтому хранится только в аккаунте.');
-      if (d && pose) startPos(); // новую картинку сразу можно подвинуть, и без входа тоже
       if (!token) { say(kept ? (d ? 'Баннер стоит. Войди в аккаунт, чтобы его видели друзья.' : 'Баннер убран.') : 'Браузер не дал сохранить баннер: мало места.', !kept); return; }
       banner.classList.add('busy');
       (d ? send('PUT', '/photo/banner', { data: d }) : send('DELETE', '/photo/banner'))

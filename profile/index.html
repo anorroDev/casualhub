@@ -283,6 +283,16 @@ button, input { font: inherit; color: inherit; }
   font-size: 13px; font-weight: 600; white-space: nowrap;
 }
 .ban-pos span { overflow: hidden; text-overflow: ellipsis; }
+.ban-pos .btn.ghost { background: rgb(0 0 0 / .45); color: #fff; border: 1px solid rgb(255 255 255 / .5); }
+/* превью перед тем, как поставить аватар */
+.pic-ok { position: fixed; inset: 0; z-index: 130; display: grid; place-items: center; padding: 16px; background: rgb(0 0 0 / .55); animation: pic-fade .16s ease-out; }
+.pic-ok-card { display: grid; justify-items: center; gap: 14px; width: min(340px, 100%); padding: 22px; border: 1px solid var(--line); border-radius: 22px; background: var(--panel); animation: pic-in .22s cubic-bezier(.2, .8, .2, 1); }
+.pic-ok-card img { width: 160px; height: 160px; border-radius: 50%; object-fit: cover; }
+.pic-ok-card p { margin: 0; font-weight: 700; }
+.pic-ok-acts { display: flex; gap: 8px; }
+@keyframes pic-fade { from { opacity: 0; } }
+@keyframes pic-in { from { opacity: 0; transform: translateY(8px) scale(.98); } }
+@media (prefers-reduced-motion: reduce) { .pic-ok, .pic-ok-card { animation: none; } }
 .ban-pos .btn { height: 34px; padding: 0 14px; border-radius: 999px; background: #fff; color: #14161C; box-shadow: none; }
 .ban-view { position: absolute; inset: 0; z-index: 2; width: 100%; padding: 0; border: 0; background: none; cursor: zoom-in; }
 .ban-view[hidden], .banner.posing .ban-view { display: none; }
