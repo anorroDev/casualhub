@@ -1349,7 +1349,9 @@ button, label, summary, input, textarea, a { touch-action: manipulation; }
 /* Section tabs scale with their card instead of wrapping onto a second line */
 .card:has(> .views) { container-type: inline-size; }
 .views { flex-wrap: nowrap; gap: 2px clamp(10px, 4cqi, 22px); }
-.view-tab { font-size: clamp(24px, 10cqi, 46px); white-space: nowrap; }
+.view-tab { font-size: clamp(24px, 9cqi, 46px); white-space: nowrap; }
+/* узкая карточка (телефон): три вкладки не влезают в строку — переносятся, а не вылезают за экран */
+@container (max-width: 380px) { .views { flex-wrap: wrap; } .view-tab { font-size: 26px; } }
 
 /* ===== Polish: depth, light and motion. Same visual language as the hub page ===== */
 :root {

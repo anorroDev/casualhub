@@ -11,8 +11,8 @@ html[data-ui="paper"]:root {
   --v-text: "PT Serif", Georgia, "Times New Roman", serif;
   --v-rule: color-mix(in srgb, var(--ink) 72%, transparent);
   --v-frame: color-mix(in srgb, var(--ink) 26%, var(--line));
-  --v-ease: cubic-bezier(.2, .8, .2, 1);
-  --mo-in: .26s; --mo-ease: var(--v-ease); --mo-hop: -2px;
+  --v-ease: cubic-bezier(.25, .6, .3, 1);
+  --mo-in: .4s; --mo-ease: var(--v-ease); --mo-hop: -2px;
   --font-display: var(--v-head);
   --font-body: var(--v-text);
   --shadow: none;
@@ -22,7 +22,8 @@ html[data-ui="paper"]:root {
 html[data-ui="paper"] body { font-variant-numeric: lining-nums tabular-nums; }
 html[data-ui="paper"] :where(button, input, select, textarea) { font-family: var(--v-text); }
 /* чистая бумага: без звёзд и сетки точек; теней и размытия нет нигде */
-html[data-ui="paper"]::after, html[data-ui="paper"] body::after { content: none !important; }
+/* фон сайта (звёзды или купленный в магазине) остаётся и в этом виде — только тише, под спокойный стиль */
+html[data-ui="paper"]::after, html[data-ui="paper"] body::after { opacity: .35; }
 html[data-ui="paper"] *, html[data-ui="paper"] *::before, html[data-ui="paper"] *::after { box-shadow: none !important; text-shadow: none !important; }
 
 /* ---------- шапка: как у газеты, с двойной линейкой ---------- */
@@ -103,7 +104,7 @@ html[data-ui="paper"] :is(.rank, .pv-rank, .lv-hero .n) { font-family: var(--v-h
 html[data-ui="paper"] :is(.lv-bar, .meter i, .bc, .pv-bar b, .spark i, .cells i) { border-radius: 0; }
 
 /* ---------- движение: спокойное — проступает и чуть поднимается, без размытия и перелётов ---------- */
-@keyframes pa-ink { from { opacity: 0; transform: translateY(4px); } }
+@keyframes pa-ink { from { opacity: 0; transform: translateY(-10px) rotate(-.6deg); } }
 @keyframes pa-fade { from { opacity: 0; } }
 html[data-ui="paper"] :is(.title, .wordmark) { animation: pa-fade var(--mo-in) var(--v-ease) backwards; }
 html[data-ui="paper"] .wordmark .ch { animation: pa-ink var(--mo-in) var(--v-ease) backwards calc(min(var(--i, 0), 10) * 14ms); }

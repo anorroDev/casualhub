@@ -11,7 +11,7 @@ html[data-ui="pixel"]:root {
   --font-body: "Golos Text", "Onest", ui-sans-serif, system-ui, sans-serif;
   --px-font: "Tiny5", "Golos Text", "Onest", ui-sans-serif, system-ui, sans-serif;
   --px-text: "Golos Text", "Onest", ui-sans-serif, system-ui, sans-serif;
-  --mo-in: .18s; --mo-ease: cubic-bezier(.2, .8, .2, 1); --mo-hop: -4px;
+  --mo-in: .22s; --mo-ease: cubic-bezier(.2, .8, .2, 1); --mo-hop: -4px;
   --px-line: color-mix(in srgb, var(--ink, #888) 34%, var(--line, #2b2e38));
   --px-sh: color-mix(in srgb, var(--ink, #888) 26%, transparent);
   --px-shadow: 3px 3px 0 var(--px-sh);
@@ -134,8 +134,8 @@ html[data-ui="pixel"]:root .lv-hero .n { font-weight: 700; }
   /* наведение: брусок приподнимается на пиксель */
   html[data-ui="pixel"]:root :is(.btn, .pill, .chip-btn, .st-btn, .fp-btn, .howto-ok, .lv-tabs button):hover:not(:active):not(:disabled) { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 var(--px-sh); }
 }
-@keyframes px-pop { from { opacity: 0; transform: scale(.98); } }
-@keyframes px-drop { from { opacity: 0; transform: translateY(-6px); } }
-@keyframes px-rise { from { opacity: 0; transform: translateY(6px); } }
+@keyframes px-pop { from { clip-path: inset(0 0 100% 0); } to { clip-path: inset(0 0 0 0); } }
+@keyframes px-drop { from { opacity: 0; transform: translateY(-8px); } 60% { opacity: 1; transform: translateY(2px); } }
+@keyframes px-rise { from { clip-path: inset(0 0 100% 0); transform: translateY(4px); } to { clip-path: inset(0 0 0 0); transform: none; } }
 @keyframes px-step { from { opacity: 0; transform: translateX(-6px); } }
 @keyframes px-note { from { opacity: 0; translate: 0 -6px; } }
