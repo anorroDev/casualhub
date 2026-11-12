@@ -1224,10 +1224,28 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   const INTRO_KEY = 'casualhub.levels.intro.v1';
   const introDone = () => { try { if (localStorage.getItem(INTRO_KEY) === '1') return true; } catch (e) {} return !!(ME && ME.prefs && ME.prefs.intro); };
   let spot = null;
-  // всё размыто, видна только кнопка уровня: нажать её — единственный путь дальше
+  // знакомство пропустили (Esc, нажатие мимо кнопки): больше не показывать
+  const introSkip = () => {
+    try { localStorage.setItem(INTRO_KEY, '1'); } catch (e) {}
+    markSeen();
+    api('/levels/prefs', 'PUT', { intro: true }).then((r) => { if (ME && r && r.prefs) ME.prefs = r.prefs; }).catch(() => {});
+  };
+  // всё размыто, видна только кнопка уровня: нажать её — путь дальше (Esc и нажатие мимо — закрыть)
   function spotlight() {
     const real = document.querySelector('.lv-hbtn');
-    if (!real || spot) return;
+    if (!real || spot || tour) return;
+    // кнопка должна быть на экране: шапка у многих страниц (сбор лотов) уезжает при прокрутке, а прокрутку подсветка
+    // запирает — копия кнопки и подсказка встали бы за край, и на экране осталось бы одно затемнение
+    let r = real.getBoundingClientRect();
+    if (r.width && (r.top < 0 || r.bottom > innerHeight)) {
+      const y = scrollY + r.top, html = document.documentElement, was = html.style.scrollBehavior;
+      html.style.scrollBehavior = 'auto';
+      scrollTo(scrollX, y < innerHeight / 2 ? 0 : y - 12);
+      html.style.scrollBehavior = was;
+      r = real.getBoundingClientRect();
+    }
+    // кнопку так и не видно (спрятана в меню, шапка скрыта) — сразу знакомство: его окно по центру видно всегда
+    if (!r.width || !r.height || r.top < 0 || r.bottom > innerHeight) { openIntro(); return; }
     spot = { ov: document.createElement('div'), tip: document.createElement('div'), btn: real.cloneNode(true) };
     spot.ov.className = 'lv-spot';
     spot.btn.classList.add('lv-spot-btn');
@@ -1252,10 +1270,15 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     spot.place = place;
     addEventListener('resize', place);
     addEventListener('scroll', place, { passive: true });
+    // шапка может сдвинуться и позже (шрифты, объявление, меню): копия всё время стоит ровно на кнопке
+    spot.tick = setInterval(place, 300);
     spot.btn.addEventListener('click', () => { endSpot(); openIntro(); });
     spot.tip.addEventListener('click', () => { endSpot(); openIntro(); });
-    // только кнопка: клавиатура тоже не уходит под размытие
+    // только кнопка: клавиатура тоже не уходит под размытие. Но запереть человека нельзя: Esc и нажатие мимо — закрыть
     spot.ov.addEventListener('keydown', (e) => e.preventDefault());
+    spot.ov.addEventListener('click', () => { endSpot(); introSkip(); });
+    spot.key = (e) => { if (e.key === 'Escape') { e.preventDefault(); endSpot(); introSkip(); } };
+    addEventListener('keydown', spot.key);
     document.body.append(spot.ov, spot.btn, spot.tip);
     setTimeout(() => spot && spot.btn.focus(), 50);
   }
@@ -1263,6 +1286,8 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     if (!spot) return;
     removeEventListener('resize', spot.place);
     removeEventListener('scroll', spot.place);
+    removeEventListener('keydown', spot.key);
+    clearInterval(spot.tick);
     spot.ov.remove(); spot.btn.remove(); spot.tip.remove();
     spot = null;
     document.documentElement.style.overflow = '';
@@ -1324,6 +1349,8 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     tour.addEventListener('keydown', (e) => {
       if (e.key === 'ArrowRight' && i < list.length - 1) { i++; draw(); }
       if (e.key === 'ArrowLeft' && i > 0) { i--; draw(); }
+      // Esc — закрыть знакомство насовсем (без окна «Прогресс»)
+      if (e.key === 'Escape') { e.preventDefault(); tour.remove(); tour = null; document.documentElement.style.overflow = ''; introSkip(); }
     });
     document.body.appendChild(tour);
     document.documentElement.style.overflow = 'hidden';
