@@ -11,7 +11,8 @@
    Событие casualhub:shop на document — изменилось купленное, надетое или баланс.
    Что надето на себе, помнится в этом браузере (casualhub.shop.v1, по id аккаунта): .look.wheel.palette,
    .look.confetti, .look.tier — их читают Колесо и тир-листы, даже если этот файл на странице ещё не загрузился.
-   Фон «Пейзаж» включает util.js по ключу casualhub.bg.v1 до первой отрисовки, курсор — этот файл. */
+   Фон «Пейзаж» включает util.js по ключу casualhub.bg.v1 до первой отрисовки, курсор — тоже util.js (CasualUtil.cursor,
+   casualhub.cursor.v1), а этот файл говорит ему, какой надет. */
 (() => {
   if (window.CasualShop) return;
   const U = window.CasualUtil || {};
@@ -88,9 +89,12 @@
   // курсоры — пиксельные картинки (SVG): стрелка для всего, та же с заливкой акцентом — для того, что нажимается
   const ARROW = ['X.........', 'XX........', 'XWX.......', 'XWWX......', 'XWWWX.....', 'XWWWWX....', 'XWWWWWX...', 'XWWWWWWX..', 'XWWWWWWWX.', 'XWWWWWXXXX', 'XWWXWWX...', 'XWX.XWWX..', 'XX..XWWX..', 'X....XWWX.', '.....XWWX.', '......XX..'];
   const PAW = ['...XX.XX...', '..XPPXPPX..', '..XPPXPPX..', 'XX.XX.XX.XX', 'XPPX...XPPX', 'XPPX.X.XPPX', '.XX.XPX.XX.', '...XPPPX...', '..XPPPPPX..', '..XPPPPPX..', '...XXXXX...'];
+  // текстовый курсор (над полями ввода): пиксельная «I» с обводкой, чтобы и там не выскакивал курсор системы
+  const IBEAM = ['.WWW.WWW.', 'WXXXWXXXW', '.WWWXWWW.', '...WXW...', '...WXW...', '...WXW...', '...WXW...', '...WXW...', '...WXW...', '...WXW...', '...WXW...', '.WWWXWWW.', 'WXXXWXXXW', '.WWW.WWW.'];
+  // a — обычный, b — над тем, что нажимается, t — над полями ввода; at и tat — точки нажатия (в пикселях картинки)
   const CURSORS = {
-    pixel: { a: px(ARROW, { X: '#14121A', W: '#FFFFFF' }), b: px(ARROW, { X: '#14121A', W: '#FFD24A' }), at: [1, 1] },
-    paw: { a: px(PAW, { X: '#14121A', P: '#F59AC4' }), b: px(PAW, { X: '#14121A', P: '#FFD24A' }), at: [11, 2] },
+    pixel: { a: px(ARROW, { X: '#14121A', W: '#FFFFFF' }), b: px(ARROW, { X: '#14121A', W: '#FFD24A' }), t: px(IBEAM, { X: '#14121A', W: '#FFFFFF' }), at: [1, 1], tat: [9, 13] },
+    paw: { a: px(PAW, { X: '#14121A', P: '#F59AC4' }), b: px(PAW, { X: '#14121A', P: '#FFD24A' }), t: px(IBEAM, { X: '#14121A', W: '#F59AC4' }), at: [11, 2], tat: [9, 13] },
   };
 
   // ---------- память браузера: куплено, надето, баланс ----------
@@ -176,18 +180,14 @@
   }
 
   // ---------- курсор и фон ----------
-  const curUrl = (s) => `url("data:image/svg+xml,${encodeURIComponent(s.svg)}")`;
-  let curStyle = null;
+  // курсор ставит util.js (CasualUtil.cursor): он помнит надетый в этом браузере и включает его до первой отрисовки на любой
+  // странице, а правила cursor сайта повторяет со своими картинками — курсор системы нигде не выскакивает
+  const curData = (s) => `data:image/svg+xml,${encodeURIComponent(s.svg)}`;
   function applyCursor() {
+    const C = U.cursor || (window.CasualUtil && window.CasualUtil.cursor);
+    if (!C) return;
     const c = CURSORS[tail(worn('cursor'))];
-    if (!c) { if (curStyle) curStyle.textContent = ''; document.documentElement.classList.remove('sh-cur'); return; }
-    if (!curStyle) { curStyle = document.createElement('style'); curStyle.id = 'shCursor'; document.head.appendChild(curStyle); }
-    const [x, y] = c.at;
-    // поля ввода оставляем с обычным текстовым курсором, всё нажимаемое — со своим
-    curStyle.textContent = `html.sh-cur, html.sh-cur body { cursor: ${curUrl(c.a)} ${x} ${y}, auto; }
-html.sh-cur :is(a[href], button:not(:disabled), [role="button"], [role="tab"], summary, label, select, .pill, [data-tab]) { cursor: ${curUrl(c.b)} ${x} ${y}, pointer !important; }
-html.sh-cur :is(input:not([type="checkbox"], [type="radio"], [type="range"], [type="button"], [type="submit"]), textarea, [contenteditable="true"]) { cursor: text !important; }`;
-    document.documentElement.classList.add('sh-cur');
+    C.set(c ? { a: curData(c.a), b: curData(c.b), t: curData(c.t), x: c.at[0], y: c.at[1], tx: c.tat[0], ty: c.tat[1] } : null);
   }
   const bgNow = () => { try { return localStorage.getItem(BG_KEY) === 'horizon' ? 'horizon' : 'stars'; } catch (e) { return 'stars'; } };
   function applyBg() {
