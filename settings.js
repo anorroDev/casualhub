@@ -156,6 +156,7 @@ label.st-row { cursor: pointer; }
 .st-size { flex: none; }
 .st-size button { min-width: 40px; padding: 0 10px; font-variant-numeric: tabular-nums; }
 .st-size button[data-size-cur] { min-width: 68px; }
+.st-size button:not([data-size-cur]) { font-size: 19px; line-height: 1; }
 .st-empty { display: grid; gap: 12px; justify-items: start; padding: 18px; }
 .st-empty p { margin: 0; font-size: 14px; line-height: 1.45; color: var(--ink-2, #b9bdc8); }
 .st-toast { position: absolute; left: 50%; bottom: 16px; z-index: 2; width: max-content; max-width: calc(100% - 32px); padding: 10px 16px; border-radius: 12px; background: var(--ink, #f3f4f6); color: var(--panel, #1b1d24); font-size: 14px; font-weight: 600; text-align: center; transform: translate(-50%, 12px); opacity: 0; pointer-events: none; transition: opacity .2s, transform .25s; }
