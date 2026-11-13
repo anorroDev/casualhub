@@ -1108,7 +1108,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
           <div class="lv-lk-ban${p.bg ? ' lv-bg-' + p.bg : ''}">${FX_LAYER.includes(p.fx) ? `<i class="lv-fx-${p.fx}" aria-hidden="true"></i>` : ''}</div>
           <div class="lv-lk-row">
             <span class="lv-lk-ava${p.frame ? ' lv-frame-' + p.frame : ''}">${esc(nm.charAt(0).toUpperCase())}${crown}${p.pet ? '<i class="lv-pet" aria-hidden="true"></i>' : ''}</span>
-            <div class="lv-lk-who"><b class="lv-lk-name${p.nick ? ' lv-nick-' + p.nick : ''}${p.font ? ' lv-font-' + p.font : ''}"${p.color && m.colors[p.color] ? ` style="color:${m.colors[p.color]}"` : ''}>${esc(nm)}</b>${u.rankChip ? `<span class="lv-chip">${esc(m.rank)}</span>` : ''}${p.fx === 'confetti' ? '<span class="lv-muted">+ конфетти при открытии профиля</span>' : ''}</div>
+            <div class="lv-lk-who"><b class="lv-lk-name${p.nick ? ' lv-nick-' + p.nick : ''}${p.font ? ' lv-font-' + p.font : ''}"${p.color && m.colors[p.color] ? ` style="color:${m.colors[p.color]}"` : ''}>${esc(nm)}</b>${m.rank ? `<span class="lv-chip">${emblem(m.rankId, 16, 'sm')}${esc(m.rank)}</span>` : ''}${p.fx === 'confetti' ? '<span class="lv-muted">+ конфетти при открытии профиля</span>' : ''}</div>
           </div>
         </div>`;
       return `
