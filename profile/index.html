@@ -328,7 +328,7 @@ button, input { font: inherit; color: inherit; }
 @keyframes bell-ring { 0%, 100% { transform: rotate(0); } 15% { transform: rotate(18deg); } 30% { transform: rotate(-15deg); } 45% { transform: rotate(11deg); } 60% { transform: rotate(-7deg); } 75% { transform: rotate(3deg); } }
 @media (prefers-reduced-motion: reduce) { .bell.bell-swing svg { animation: none; } }
 /* история аватарок (меню у аватарки) и баннеров (в меню «Баннер») */
-.hist-menu { position: fixed; z-index: 80; width: min(300px, calc(100vw - 32px)); display: grid; gap: 10px; padding: 12px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 24px 48px -20px rgba(0, 0, 0, .5); cursor: default; animation: hist-in .4s var(--spring); }
+.hist-menu { position: fixed; z-index: 80; width: min(300px, calc(100 * var(--vw, 1vw) - 32px)); display: grid; gap: 10px; padding: 12px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); box-shadow: 0 24px 48px -20px rgba(0, 0, 0, .5); cursor: default; animation: hist-in .4s var(--spring); }
 @keyframes hist-in { from { transform: translateY(-8px) scale(.96); } }
 .hist-menu .label { margin: 0; }
 .hist-grid { display: grid; gap: 8px; }
@@ -366,7 +366,7 @@ button.nick-st:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .st-pick { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg) 70%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
 .st-pick[hidden] { display: none; }
 /* окна профиля (стикер, витрина, цифры, оценка) — внутри .st-pick: у окна «Настройки» (settings.js) те же классы .st-card, .st-head и .st-x, и без .st-pick эти правила резали его высоту на телефоне и добавляли отступы */
-.st-pick .st-card { width: min(560px, 100%); max-height: min(640px, calc(100dvh - 32px)); display: grid; grid-template-rows: auto auto 1fr auto; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 30px 60px -24px color-mix(in srgb, var(--ink) 60%, transparent); }
+.st-pick .st-card { width: min(560px, 100%); max-height: min(640px, calc(100 * var(--dvh, 1vh) - 32px)); display: grid; grid-template-rows: auto auto 1fr auto; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 30px 60px -24px color-mix(in srgb, var(--ink) 60%, transparent); }
 .st-pick .st-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .st-pick .st-head h2 { font-family: var(--font-display); font-size: 24px; line-height: 1; }
 .st-pick .st-x { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink); font-size: 18px; cursor: pointer; }
@@ -403,7 +403,7 @@ button.nick-st:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .ava-wrap.busy .ava { filter: brightness(.6); }
 .fr .av { background-size: cover; background-position: center; }
 .toast {
-  position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 14px); z-index: 70; width: max-content; max-width: min(92vw, 460px); padding: 11px 18px; border-radius: 14px;
+  position: fixed; left: 50%; top: calc(env(safe-area-inset-top, 0px) + 14px); z-index: 70; width: max-content; max-width: min(92 * var(--vw, 1vw), 460px); padding: 11px 18px; border-radius: 14px;
   background: var(--ink); color: var(--panel); font-size: 14px; font-weight: 600; text-align: center;
   opacity: 0; transform: translate(-50%, -18px) scale(.92); transition: opacity .2s, transform .45s var(--spring); pointer-events: none;
 }
@@ -602,7 +602,7 @@ button.stat:focus-visible, a.item:focus-visible, a.pod:focus-visible, button.cat
 /* окна (каталог цифр, витрина) — поверх панели редактирования */
 body.prof-edit .st-pick { z-index: 80; }
 /* каталог цифр */
-.st-card.sp-card { width: min(760px, 100%); grid-template-rows: auto minmax(0, 1fr); max-height: min(820px, calc(100dvh - 32px)); }
+.st-card.sp-card { width: min(760px, 100%); grid-template-rows: auto minmax(0, 1fr); max-height: min(820px, calc(100 * var(--dvh, 1vh) - 32px)); }
 .sp-body { overflow: auto; padding-right: 4px; }
 .sp-body .label { margin-top: 6px; }
 .sp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; margin: 8px 0 16px; }
@@ -649,7 +649,7 @@ body.wg-ew, body.wg-ew * { cursor: ew-resize !important; }
 body.wg-dragging, body.wg-dragging * { cursor: grabbing !important; user-select: none; }
 body.prof-edit #app { padding-bottom: 96px; }
 #layoutBtn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
-.ed-bar { position: fixed; z-index: 70; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); translate: -50% 0; width: min(640px, calc(100vw - 24px)); display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 16px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); border-radius: 18px; background: color-mix(in srgb, var(--panel) 90%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: 0 24px 50px -20px rgba(0, 0, 0, .6); }
+.ed-bar { position: fixed; z-index: 70; left: 50%; bottom: max(16px, env(safe-area-inset-bottom)); translate: -50% 0; width: min(640px, calc(100 * var(--vw, 1vw) - 24px)); display: flex; align-items: center; gap: 10px; padding: 10px 10px 10px 16px; border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); border-radius: 18px; background: color-mix(in srgb, var(--panel) 90%, transparent); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); box-shadow: 0 24px 50px -20px rgba(0, 0, 0, .6); }
 .ed-tx { flex: 1; min-width: 0; display: grid; gap: 2px; }
 .ed-tx b { font-size: 14.5px; }
 .ed-tx small { font-size: 12px; color: var(--ink-2); }
@@ -669,7 +669,7 @@ body.prof-edit #app { padding-bottom: 96px; }
 .title-add { height: 30px; padding: 0 12px; border: 1px dashed var(--accent); border-radius: 99px; background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); font: inherit; font-size: 13px; font-weight: 700; cursor: pointer; }
 .title-add[aria-expanded="true"] { background: var(--accent); color: #fff; border-style: solid; }
 .title-eye { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 1px solid var(--line); border-radius: 50%; background: var(--panel); color: var(--ink-2); cursor: pointer; }
-.t-pop { position: absolute; z-index: 40; top: calc(100% + 12px); left: -6px; width: min(400px, calc(100vw - 32px)); max-height: 380px; overflow: auto; display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); box-shadow: 0 24px 50px -20px rgba(0, 0, 0, .6); animation: menu-in .25s var(--spring); }
+.t-pop { position: absolute; z-index: 40; top: calc(100% + 12px); left: -6px; width: min(400px, calc(100 * var(--vw, 1vw) - 32px)); max-height: 380px; overflow: auto; display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line); border-radius: 16px; background: var(--panel); box-shadow: 0 24px 50px -20px rgba(0, 0, 0, .6); animation: menu-in .25s var(--spring); }
 .t-pop[hidden] { display: none; }
 .t-pop .label { margin: 4px 0 0; }
 .t-pop-h { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
@@ -682,7 +682,7 @@ body.prof-edit #app { padding-bottom: 96px; }
 .t-opt.off { opacity: .55; border-style: dashed; cursor: default; }
 .t-opt small { display: block; font-size: 11px; font-weight: 500; color: var(--ink-3); }
 /* Окно витрины: добавить или изменить */
-.st-card.ly-card { width: min(660px, 100%); grid-template-rows: auto minmax(0, 1fr); max-height: min(820px, calc(100dvh - 32px)); }
+.st-card.ly-card { width: min(660px, 100%); grid-template-rows: auto minmax(0, 1fr); max-height: min(820px, calc(100 * var(--dvh, 1vh) - 32px)); }
 .ly-body { overflow: auto; display: grid; gap: 10px; align-content: start; padding: 2px; }
 .ly-hint { margin: -4px 0 4px; font-size: 12.5px; color: var(--ink-2); }
 .ly-f { display: grid; gap: 6px; justify-items: start; }

@@ -22,7 +22,7 @@
 .hm-btn svg { flex: none; }
 .hm-dot { position: absolute; top: 4px; right: 4px; width: 9px; height: 9px; border-radius: 50%; background: var(--bad, #E4553F); box-shadow: 0 0 0 2px var(--panel, #1b1d24); pointer-events: none; }
 .hm-dot[hidden] { display: none; }
-.hm-panel { position: fixed; right: 12px; top: 64px; z-index: 95; max-height: calc(100dvh - 80px); overflow-x: hidden; overflow-y: auto; width: min(300px, calc(100vw - 24px)); display: grid; gap: 6px; padding: 10px; background: var(--panel, #1b1d24); color: var(--ink, #f3f4f6); border: 1px solid var(--line, #2b2e38); border-radius: 16px; box-shadow: 0 24px 50px -20px rgba(0, 0, 0, .55); animation: hm-in .22s cubic-bezier(.34, 1.56, .64, 1); transform-origin: 100% 0; }
+.hm-panel { position: fixed; right: 12px; top: 64px; z-index: 95; max-height: calc(100 * var(--dvh, 1vh) - 80px); overflow-x: hidden; overflow-y: auto; width: min(300px, calc(100 * var(--vw, 1vw) - 24px)); display: grid; gap: 6px; padding: 10px; background: var(--panel, #1b1d24); color: var(--ink, #f3f4f6); border: 1px solid var(--line, #2b2e38); border-radius: 16px; box-shadow: 0 24px 50px -20px rgba(0, 0, 0, .55); animation: hm-in .22s cubic-bezier(.34, 1.56, .64, 1); transform-origin: 100% 0; }
 @keyframes hm-in { from { transform: translateY(-6px) scale(.97); } }
 @media (prefers-reduced-motion: reduce) { .hm-panel { animation: none; } }
 .hm-panel[hidden] { display: none; }
@@ -297,6 +297,8 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
         const r = btn.getBoundingClientRect();
         panel.style.top = Math.round(r.bottom + 8) + 'px';
         panel.style.right = Math.max(8, Math.round(document.documentElement.clientWidth - r.right)) + 'px';
+        // шапка в две строки (узкое окно, крупный размер интерфейса) — кнопка ниже обычного: меню не выше места под ней, остальное прокручивается
+        panel.style.maxHeight = Math.max(160, Math.floor(innerHeight - r.bottom - 20)) + 'px';
         [...panel.children].forEach((c, i) => c.style.setProperty('--i', i));
       }
       panel.hidden = !on;

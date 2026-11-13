@@ -9,7 +9,7 @@
   background: color-mix(in srgb, var(--bg) 72%, transparent); -webkit-backdrop-filter: blur(14px) saturate(1.1); backdrop-filter: blur(14px) saturate(1.1); }
 .pv-fig { margin: 0; min-width: 0; display: grid; justify-items: center; gap: 10px; }
 .pv-img { display: block; max-width: 100%; border-radius: 14px; background: var(--panel-2); box-shadow: 0 30px 70px -24px rgba(0, 0, 0, .6); user-select: none; -webkit-user-select: none; -webkit-user-drag: none; }
-.pv-cap { max-width: min(92vw, 720px); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; font-size: 14px; font-weight: 700; line-height: 1.3; text-align: center; color: var(--ink); }
+.pv-cap { max-width: min(92 * var(--vw, 1vw), 720px); overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; font-size: 14px; font-weight: 700; line-height: 1.3; text-align: center; color: var(--ink); }
 .pv-cap:empty, .pv-act[hidden] { display: none; }
 .pv-act { cursor: pointer; }
 .pv-x { position: absolute; top: max(12px, env(safe-area-inset-top)); right: max(12px, env(safe-area-inset-right)); width: 40px; height: 40px; display: grid; place-items: center; border: 0; border-radius: 50%; background: var(--panel-2); color: var(--ink); font: inherit; font-size: 16px; cursor: pointer; }

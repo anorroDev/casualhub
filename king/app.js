@@ -50,7 +50,7 @@
 span.kg-pic { display: grid; place-items: center; overflow: hidden; background: color-mix(in srgb, var(--accent) 15%, var(--panel)); color: color-mix(in srgb, var(--accent) 62%, var(--ink)); font-family: var(--font-display); font-size: 17px; font-weight: 800; line-height: 1; user-select: none; }
 .kg-pic.xs { width: 24px; border-radius: 4px; font-size: 13px; }
 .kg-pic.lg { width: min(200px, 100%); border-radius: 14px; font-size: clamp(40px, 10vw, 76px); }
-.kg-pic.xl { width: min(220px, 58vw); border-radius: 16px; font-size: clamp(56px, 16vw, 96px); }
+.kg-pic.xl { width: min(220px, 58 * var(--vw, 1vw)); border-radius: 16px; font-size: clamp(56px, 16vw, 96px); }
 span.kg-pic.blank { background: transparent; box-shadow: inset 0 0 0 1px var(--line); }
 /* участники: счётчик, полоса заполнения сетки, список с крестиками */
 .kg-pf { display: grid; gap: 10px; margin: 0 0 14px; }

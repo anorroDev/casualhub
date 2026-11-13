@@ -54,7 +54,7 @@
 .ch-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; min-height: 24px; }
 .ch-head h2 { margin: 0; }
 .ch-box { position: relative; min-width: 0; }
-.ch-list { list-style: none; margin: 0; padding: 10px 10px 4px 2px; height: var(--ch-h, clamp(220px, 42vh, 380px)); overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; scrollbar-width: thin; }
+.ch-list { list-style: none; margin: 0; padding: 10px 10px 4px 2px; height: var(--ch-h, clamp(220px, 42 * var(--vh, 1vh), 380px)); overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; scrollbar-width: thin; }
 .ch-list > :first-child { margin-top: auto; }
 .ch-empty { padding: 18px 10px; text-align: center; font-size: 13.5px; line-height: 1.45; color: var(--ink-3, #8a8f9c); text-wrap: pretty; }
 .ch-m { display: grid; grid-template-columns: 30px minmax(0, 1fr); column-gap: 8px; align-items: start; margin-top: 10px; }

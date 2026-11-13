@@ -30,7 +30,7 @@
   const STYLE = `
 .st-sheet { position: fixed; inset: 0; z-index: 110; display: grid; place-items: center; padding: 16px; background: rgba(8, 10, 14, .6); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 .st-sheet[hidden] { display: none; }
-.st-card { position: relative; width: min(880px, 100%); height: min(640px, calc(100vh - 32px)); height: min(640px, calc(100dvh - 32px)); display: grid; grid-template-columns: 230px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); border: 1px solid var(--line, #2b2e38); border-radius: 20px; background: var(--panel, #1b1d24); color: var(--ink, #f3f4f6); box-shadow: 0 30px 70px -28px rgba(0, 0, 0, .7); overflow: hidden; animation: st-in .24s cubic-bezier(.22, 1, .36, 1); }
+.st-card { position: relative; width: min(880px, 100%); height: min(640px, calc(100 * var(--dvh, 1vh) - 32px)); display: grid; grid-template-columns: 230px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); border: 1px solid var(--line, #2b2e38); border-radius: 20px; background: var(--panel, #1b1d24); color: var(--ink, #f3f4f6); box-shadow: 0 30px 70px -28px rgba(0, 0, 0, .7); overflow: hidden; animation: st-in .24s cubic-bezier(.22, 1, .36, 1); }
 @keyframes st-in { from { transform: translateY(12px) scale(.98); opacity: 0; } }
 .st-nav { min-height: 0; display: grid; align-content: start; gap: 2px; padding: 18px 10px; border-right: 1px solid var(--line, #2b2e38); background: var(--panel-2, #23262f); overflow: auto; }
 .st-nav h2 { margin: 0 0 10px; padding: 0 10px; font-size: 19px; }
@@ -151,6 +151,12 @@ label.st-row { cursor: pointer; }
 .st-seg { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--line, #2b2e38); border-radius: 12px; }
 .st-seg button { min-height: 36px; padding: 0 14px; border: 0; border-radius: 9px; background: transparent; color: var(--ink-2, #b9bdc8); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
 .st-seg button[aria-pressed="true"] { background: var(--ink, #f3f4f6); color: var(--panel, #1b1d24); }
+.st-seg button:disabled { opacity: .4; cursor: default; }
+/* размер интерфейса: «−», сам размер (ширина постоянная, чтобы кнопки не прыгали под курсором) и «+» */
+.st-size { flex: none; }
+.st-size button { min-width: 40px; padding: 0 10px; font-variant-numeric: tabular-nums; }
+.st-size button[data-size-cur] { min-width: 68px; }
+.st-size button:not([data-size-cur]) { font-size: 19px; line-height: 1; }
 .st-empty { display: grid; gap: 12px; justify-items: start; padding: 18px; }
 .st-empty p { margin: 0; font-size: 14px; line-height: 1.45; color: var(--ink-2, #b9bdc8); }
 .st-toast { position: absolute; left: 50%; bottom: 16px; z-index: 2; width: max-content; max-width: calc(100% - 32px); padding: 10px 16px; border-radius: 12px; background: var(--ink, #f3f4f6); color: var(--panel, #1b1d24); font-size: 14px; font-weight: 600; text-align: center; transform: translate(-50%, 12px); opacity: 0; pointer-events: none; transition: opacity .2s, transform .25s; }
@@ -181,8 +187,8 @@ label.st-row { cursor: pointer; }
 html.unslop .st-card { box-shadow: 0 24px 60px -30px rgb(0 0 0 / .45); }
 html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
 /* большие экраны: на 2K (и 4K при масштабе 150%) и на 4K окно крупнее, а не узкое, как на телефоне */
-@media (min-width: 2200px) { .st-card { width: min(1100px, 100%); height: min(820px, calc(100dvh - 32px)); grid-template-columns: 270px minmax(0, 1fr); } }
-@media (min-width: 3000px) { .st-card { width: min(1380px, 100%); height: min(1040px, calc(100dvh - 32px)); grid-template-columns: 320px minmax(0, 1fr); font-size: 17px; } }`;
+@media (min-width: 2200px) { .st-card { width: min(1100px, 100%); height: min(820px, calc(100 * var(--dvh, 1vh) - 32px)); grid-template-columns: 270px minmax(0, 1fr); } }
+@media (min-width: 3000px) { .st-card { width: min(1380px, 100%); height: min(1040px, calc(100 * var(--dvh, 1vh) - 32px)); grid-template-columns: 320px minmax(0, 1fr); font-size: 17px; } }`;
 
   let box = null, card = null, cur = 'account', me = null, toastT = 0, mailOn = false;
   fetch(API + '/auth/options', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : {})).then((o) => { mailOn = !!(o && o.mail); }).catch(() => {});
@@ -393,6 +399,31 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
       + grp('Оценки и тир-листы', row({ name: 'Кто видит оценки', desc: 'У каждой оценки свой выбор в форме: все, друзья или только я. Всем сразу — кнопкой «Кто видит» в рейтинге Мнения', href: '/opinion/#rating' })
         + row({ name: 'Кто видит тир-листы', desc: 'Выбирается в редакторе тир-листа под кнопками', href: '/tierlist/' }));
   };
+  // размер интерфейса (/util.js, CasualUtil.size): «−», выбранный размер (нажатие возвращает 100 %) и «+».
+  // Крупный размер, с которым странице осталось бы меньше 320 px ширины, не ставится: «+» гаснет, под названием — почему
+  const sizeRow = () => {
+    const sz = window.CasualUtil.size;
+    if (!sz) return '';
+    if (!sz.ok()) return row({ name: 'Размер интерфейса', desc: 'В этом браузере размер сайта меняется масштабом самого браузера: Ctrl (на Mac — ⌘) и «+» или «−»', attr: 'data-size-row' });
+    const cur = sz.stored(), now = sz.get(), i = sz.list.indexOf(cur), smaller = sz.list[i - 1], bigger = sz.list[i + 1];
+    const room = !!bigger && sz.fits(bigger);
+    const desc = now !== cur ? `Выбрано ${cur}%, но на таком узком экране помещается только ${now}%`
+      : bigger && !room ? 'Крупнее на этом экране не поместится' : 'Весь сайт крупнее или мельче: текст, кнопки и окна. Запоминается в этом браузере';
+    return `<div class="st-row" data-size-row><span class="st-t"><b>Размер интерфейса</b><small>${esc(desc)}</small></span><span class="st-seg st-size" role="group" aria-label="Размер интерфейса"><button type="button" data-size="${smaller || ''}" aria-label="Мельче"${smaller ? '' : ' disabled'}>−</button><button type="button" data-size="100" data-size-cur title="Вернуть обычный размер" aria-pressed="${cur === 100}">${cur}%</button><button type="button" data-size="${bigger || ''}" aria-label="Крупнее"${room ? '' : ' disabled'}>+</button></span></div>`;
+  };
+  // перерисовать строку размера на месте (после нажатия, смены в другой вкладке или когда окно сузили); keep — какой кнопке вернуть фокус
+  function paintSize(keep) {
+    const old = box && box.querySelector('[data-size-row]');
+    if (!old) return;
+    old.insertAdjacentHTML('afterend', sizeRow());
+    const fresh = old.nextElementSibling;
+    old.remove();
+    if (keep == null || !fresh) return;
+    const bs = fresh.querySelectorAll('[data-size]');
+    const b = bs[keep] && !bs[keep].disabled ? bs[keep] : bs[1];
+    if (b) b.focus({ preventScroll: true });
+  }
+  document.addEventListener('casualhub:size', () => paintSize());
   R.look = () => {
     const curTheme = window.CasualThemes ? window.CasualThemes.current() : 'auto';
     const list = (window.CasualThemes && window.CasualThemes.list) || [];
@@ -403,6 +434,7 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
         return `<button type="button" class="st-th" data-st-theme="${esc(t.id)}" aria-pressed="${t.id === curTheme}"><i style="--pb:${bg};--pp:${t.id === 'auto' ? '#FFFFFF' : p.panel};--pa:${p.accent}"></i>${esc(t.name)}</button>`;
       }).join('')}</div>`)
       + (ui ? grp('Вид интерфейса', `<div class="st-uis">${ui.list.map((x) => `<button type="button" class="st-ui" data-st-ui="${esc(x.id)}" aria-pressed="${x.id === ui.current()}"><i class="st-pv" data-pv="${esc(x.id)}" aria-hidden="true"><b>Аа</b><s></s><u></u></i><span><b>${esc(x.name)}</b><small>${esc(x.desc)}</small></span></button>`).join('')}</div>`) : '')
+      + (window.CasualUtil.size ? grp('Размер', sizeRow()) : '')
       // выбор скинов Васяна рисует сам vasyan.js в [data-vasyan-skins]
       + (window.CasualVasyan && window.CasualVasyan.own() ? grp('Котик Васян', toggle({ name: 'Котик Васян на сайте', desc: 'Гуляет внизу экрана: его можно погладить и покормить из миски в левом углу', attr: 'data-vasyan', on: window.CasualVasyan.on() }) + '<div data-vasyan-skins></div>') : '')
       + grp('Язык', `<div class="st-row"><span class="st-t"><b>Язык сайта</b><small>Страница перезагрузится</small></span><span class="st-seg" role="group" aria-label="Язык сайта"><button type="button" data-lang="ru" aria-pressed="${!en}">Русский</button><button type="button" data-lang="en" aria-pressed="${en}">English</button></span></div>`);
@@ -495,6 +527,13 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
       if (uib) {
         if (window.CasualThemes && window.CasualThemes.ui) window.CasualThemes.ui.apply(uib.dataset.stUi, true);
         box.querySelectorAll('[data-st-ui]').forEach((b) => b.setAttribute('aria-pressed', String(b === uib)));
+        return;
+      }
+      // размер интерфейса ставится и запоминается в этом браузере (/util.js), без перезагрузки
+      const szb = e.target.closest('[data-size]');
+      if (szb) {
+        const v = +szb.dataset.size, at = [...szb.parentElement.children].indexOf(szb);
+        if (v && !szb.disabled) { window.CasualUtil.size.apply(v, true); paintSize(at); }
         return;
       }
       const lang = e.target.closest('[data-lang]');
