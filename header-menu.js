@@ -297,6 +297,8 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
         const r = btn.getBoundingClientRect();
         panel.style.top = Math.round(r.bottom + 8) + 'px';
         panel.style.right = Math.max(8, Math.round(document.documentElement.clientWidth - r.right)) + 'px';
+        // шапка в две строки (узкое окно, крупный размер интерфейса) — кнопка ниже обычного: меню не выше места под ней, остальное прокручивается
+        panel.style.maxHeight = Math.max(160, Math.floor(innerHeight - r.bottom - 20)) + 'px';
         [...panel.children].forEach((c, i) => c.style.setProperty('--i', i));
       }
       panel.hidden = !on;
