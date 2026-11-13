@@ -197,7 +197,6 @@ export const REWARDS = [
   { level: 2, kind: 'badge', id: 'badge', title: 'Кружок уровня у аватара' },
   { level: 3, kind: 'frame', id: 'frame1', title: 'Рамка «Казуал»' },
   { level: 5, kind: 'frame', id: 'frame5', title: 'Рамка «Пиксель»' },
-  { level: 7, kind: 'chip', id: 'rankchip', title: 'Звание рядом с ником в профиле' },
   { level: 10, kind: 'color', id: 'colors', title: 'Цвет ника на выбор' },
   { level: 12, kind: 'frame', id: 'frame2', title: 'Рамка «Неон»' },
   { level: 15, kind: 'bg', id: 'bgs', title: 'Пиксельный фон профиля на выбор' },
@@ -252,7 +251,6 @@ export function unlockedAt(level, all = false, bought = null) {
     fonts: Object.keys(NICK_FONTS).filter((f) => got.has('font:' + f)),
     fx: FXS.filter((f) => got.has(f)),
     pet: got.has('pet'),
-    rankChip: got.has('rankchip'),
     badge: got.has('badge'),
   };
 }
@@ -848,7 +846,8 @@ export const prefsOf = (row) => {
   return { intro: !!p.intro, hideLevel: !!p.hideLevel, hideBoard: !!p.hideBoard, notify: p.notify !== false, anim: p.anim !== false, showcase: Array.isArray(p.showcase) ? p.showcase.slice(0, 3) : [], frame: p.frame || '', color: p.color || '', bg: p.bg || '', font: p.font || '', nick: p.nick || '', fx: p.fx || '', pet: !!p.pet };
 };
 // оформление, которое видят другие: только то, что открыто уровнем.
-// rank — звание сезона рядом с ником (награда 7-го уровня), seasonXp — опыт человека за текущий сезон
+// rank — звание сезона рядом с ником: оно есть у всех, поэтому видно у всех (раньше — с 7-го уровня, и у одних в профиле
+// звание было, у других нет). seasonXp — опыт человека за текущий сезон
 export function lookOf(row, seasonXp = 0, bought = null) {
   const lv = levelView(+row.xp || 0, +row.level || 1).level;
   const p = prefsOf(row), u = unlockedAt(lv, false, bought), r = seasonRankOf(seasonXp);
@@ -861,8 +860,8 @@ export function lookOf(row, seasonXp = 0, bought = null) {
     font: u.fonts.includes(p.font) ? p.font : '',
     fx: u.fx.includes(p.fx) ? p.fx : '',
     pet: u.pet && p.pet,
-    rank: u.rankChip ? r.title : '',
-    rankId: u.rankChip ? r.id : '',
+    rank: r.title,
+    rankId: r.id,
   };
 }
 // уровни для списка людей (кружки у аватаров): скрывшие уровень не попадают. Опыт сезона — в том же запросе

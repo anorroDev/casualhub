@@ -236,7 +236,10 @@ export function makeLevelsRoutes(h) {
       if (!(await gate(env, me))) return off();
       await ensureLevels(env);
       const id = new URL(request.url).searchParams.get('id') || me.id;
-      const row = await userRow(env, id);
+      let row = await userRow(env, id);
+      // строки уровня ещё нет (опыта не было: давно не заходил) — у человека всё равно 1-й уровень и звание сезона,
+      // а не пустое место в профиле
+      if (!row && (await env.DB.prepare('SELECT 1 FROM users WHERE id = ?').bind(id).first())) row = { user_id: id, xp: 0, level: 1, prefs: null };
       if (!row || (id !== me.id && prefsOf(row).hideLevel)) return json({ on: true, hidden: true });
       const lv = levelView(+row.xp || 0, +row.level || 1);
       const show = prefsOf(row).showcase;
