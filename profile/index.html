@@ -365,10 +365,11 @@ button.nick-st:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .nick-st.empty:hover { color: var(--ink); border-color: var(--accent); transform: none; }
 .st-pick { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg) 70%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
 .st-pick[hidden] { display: none; }
-.st-card { width: min(560px, 100%); max-height: min(640px, calc(100dvh - 32px)); display: grid; grid-template-rows: auto auto 1fr auto; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 30px 60px -24px color-mix(in srgb, var(--ink) 60%, transparent); }
-.st-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
-.st-head h2 { font-family: var(--font-display); font-size: 24px; line-height: 1; }
-.st-x { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink); font-size: 18px; cursor: pointer; }
+/* окна профиля (стикер, витрина, цифры, оценка) — внутри .st-pick: у окна «Настройки» (settings.js) те же классы .st-card, .st-head и .st-x, и без .st-pick эти правила резали его высоту на телефоне и добавляли отступы */
+.st-pick .st-card { width: min(560px, 100%); max-height: min(640px, calc(100dvh - 32px)); display: grid; grid-template-rows: auto auto 1fr auto; grid-template-columns: minmax(0, 1fr); gap: 10px; padding: 16px; background: var(--panel); border: 1px solid var(--line); border-radius: 18px; box-shadow: 0 30px 60px -24px color-mix(in srgb, var(--ink) 60%, transparent); }
+.st-pick .st-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.st-pick .st-head h2 { font-family: var(--font-display); font-size: 24px; line-height: 1; }
+.st-pick .st-x { width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink); font-size: 18px; cursor: pointer; }
 .st-tabs { display: flex; flex-wrap: wrap; gap: 6px; } /* наборы переносятся строкой ниже, а не прячутся за край на телефоне */
 .st-tabs::-webkit-scrollbar { display: none; }
 .st-tabs button { flex: none; height: 34px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--panel-2); color: var(--ink-2); font: 600 13px var(--font-body); cursor: pointer; }
@@ -465,7 +466,7 @@ button.nick-st:focus-visible { outline: 2px solid var(--accent); outline-offset:
 .bdg-more summary::-webkit-details-marker { display: none; }
 .bdg-more[open] summary { margin-bottom: 6px; }
 .bdg-i { animation: rise .3s var(--spring) backwards; animation-delay: calc(min(var(--k, 0), 8) * 20ms + .04s); }
-.st-card { animation: menu-in .28s var(--spring) both; transform-origin: 50% 0; }
+.st-pick .st-card { animation: menu-in .28s var(--spring) both; transform-origin: 50% 0; }
 .nick-st.pop { animation: st-pop .55s var(--spring); }
 @keyframes st-pop { 0% { transform: scale(.4) rotate(-20deg); } 100% { transform: none; } }
 .bdg-i.next { border-color: color-mix(in srgb, var(--accent) 40%, var(--line)); }
@@ -988,7 +989,7 @@ body.prof-edit #app [data-photo] { cursor: inherit; }
 /* появление шапки, карточек, ачивок и окошек — мягкое (кадры u-* из /unslop.css), без больших въездов; задержки — прежние, короткие */
 html.unslop .top { animation-name: u-down; animation-duration: var(--mo-in); animation-timing-function: var(--mo-ease); }
 html.unslop :is(.rise, .bdg-i) { animation-name: u-in; animation-duration: var(--mo-in); animation-timing-function: var(--mo-ease); }
-html.unslop :is(.st-card, .ban-menu) { animation-name: u-pop; animation-duration: var(--mo-in); animation-timing-function: var(--mo-ease); }
+html.unslop :is(.st-pick .st-card, .ban-menu) { animation-name: u-pop; animation-duration: var(--mo-in); animation-timing-function: var(--mo-ease); }
 html.unslop :is(.hist .bar, .ach-sum .tr i, .bdg-i .pg .tr i, .cat .tr i) { animation-name: u-fade; animation-duration: var(--mo-in); animation-timing-function: var(--mo-ease); }
 /* у шрифтов видов хвосты букв длиннее, чем у Handjet */
 html.unslop[data-ui] .name { padding-bottom: .14em; }
@@ -1003,7 +1004,7 @@ html.unslop .bell:hover { transform: translateY(-1px); }
 html.unslop .bell.on { box-shadow: 0 8px 20px -10px rgb(0 0 0 / .28); }
 html.unslop .hist-pic:hover { transform: none; }
 html.unslop button.nick-st:hover { transform: none; }
-html.unslop .st-card { box-shadow: 0 20px 44px -22px rgb(0 0 0 / .45); }
+html.unslop .st-pick .st-card { box-shadow: 0 20px 44px -22px rgb(0 0 0 / .45); }
 html.unslop .ban-presets button:hover { transform: none; }
 html.unslop .ava-wrap.can:hover .ava-edit { transform: none; }
 html.unslop .ava-ring { background: conic-gradient(from 210deg, var(--good), var(--mid), var(--bad), var(--good)); will-change: auto; animation: none; }

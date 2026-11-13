@@ -430,9 +430,9 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     if (!box) {
       box = document.createElement('div');
       box.className = 'st-pick'; box.id = 'stPick'; box.hidden = true;
-      box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('aria-labelledby', 'stTitle');
+      box.setAttribute('role', 'dialog'); box.setAttribute('aria-modal', 'true'); box.setAttribute('aria-labelledby', 'stPickTitle');
       box.innerHTML = `<div class="st-card">
-        <div class="st-head"><h2 id="stTitle">Стикер возле ника</h2><button type="button" class="st-x" data-st="close" aria-label="Закрыть">✕</button></div>
+        <div class="st-head"><h2 id="stPickTitle">Стикер возле ника</h2><button type="button" class="st-x" data-st="close" aria-label="Закрыть">✕</button></div>
         <div class="st-tabs" role="group" aria-label="Набор стикеров"></div>
         <div class="st-grid"><p class="muted">Загружаю стикеры…</p></div>
         <div class="st-foot"><small>Его видят все, кто открывает твой профиль.</small><button type="button" class="btn ghost" data-st="none">Убрать стикер</button></div>
