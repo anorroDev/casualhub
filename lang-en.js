@@ -2488,6 +2488,16 @@
 "Сезон не найден, обнови страницу.":"Season not found, refresh the page.",
 // вид интерфейса (settings.js, themes.js) и звания сезона в окне «Прогресс» (levels-ui.js)
 "Вид интерфейса":"Interface style",
+// размер интерфейса (settings.js, util.js)
+"Размер":"Size",
+"Размер интерфейса":"Interface size",
+"Весь сайт крупнее или мельче: текст, кнопки и окна. Запоминается в этом браузере":"Makes the whole site bigger or smaller: text, buttons and windows. Remembered in this browser",
+"Крупнее на этом экране не поместится":"A bigger size won’t fit on this screen",
+"Выбрано {}%, но на таком узком экране помещается только {}%":"{}% is chosen, but only {}% fits on a screen this narrow",
+"В этом браузере размер сайта меняется масштабом самого браузера: Ctrl (на Mac — ⌘) и «+» или «−»":"In this browser, change the site’s size with the browser’s own zoom: Ctrl (⌘ on Mac) and “+” or “−”",
+"Мельче":"Smaller",
+"Крупнее":"Bigger",
+"Вернуть обычный размер":"Back to the normal size",
 "Казуальный":"Casual",
 "Минимал":"Minimal",
 "Пиксель":"Pixel",
