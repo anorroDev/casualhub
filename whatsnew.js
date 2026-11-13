@@ -88,7 +88,7 @@
 }
 @media (max-width: 560px) {
   .wn-sheet { place-items: end stretch; padding: 0; }
-  .wn-card { width: 100%; max-height: 90vh; max-height: 90dvh; border-bottom: 0; border-radius: 20px 20px 0 0; animation-name: wn-up; }
+  .wn-card { width: 100%; max-height: calc(90 * var(--dvh, 1vh)); border-bottom: 0; border-radius: 20px 20px 0 0; animation-name: wn-up; }
   @keyframes wn-up { from { transform: translateY(40%); } }
   .wn-head { padding: 16px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px)); }
   .wn-body { padding: 0 max(16px, env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); }

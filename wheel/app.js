@@ -2168,6 +2168,8 @@
     matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { readTheme(); draw(); });
     new MutationObserver(() => { readTheme(); draw(); }).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     new ResizeObserver(resize).observe(canvas);
+    // размер интерфейса сменили (Настройки): холст в пикселях страницы тот же, а точек экрана под ним стало больше или меньше
+    document.addEventListener('casualhub:size', resize);
     if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { fitCache.clear(); draw(); });
   }
 

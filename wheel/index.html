@@ -408,7 +408,7 @@ details[open] > summary .chev { transform: rotate(180deg); }
 @media (max-width: 520px) { .plans-filt { grid-template-columns: 1fr 1fr; } .plans-filt .pf:first-child { grid-column: 1 / -1; } }
 .plans-cats:empty { display: none; }
 .plans-cats b { font-weight: 600; opacity: .6; }
-.plans-list { list-style: none; margin: 10px 0 0; padding: 0; max-height: min(62vh, 640px); overflow-y: auto; overscroll-behavior: contain; }
+.plans-list { list-style: none; margin: 10px 0 0; padding: 0; max-height: min(62 * var(--vh, 1vh), 640px); overflow-y: auto; overscroll-behavior: contain; }
 .plrow { display: grid; grid-template-columns: 40px minmax(0, 1fr) 36px; align-items: center; gap: 12px; padding: 8px 0; }
 /* обложка: своё фото из Мнения, превью из аккаунта или постер с IMDb; пока нет — первая буква */
 .pl-pic { width: 40px; height: 54px; display: grid; place-items: center; overflow: hidden; border-radius: 7px; background: var(--panel-2); border: 1px solid var(--line); color: var(--ink-3); font-family: var(--font-display); font-weight: 800; font-size: 18px; font-style: normal; }
@@ -651,7 +651,7 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
   .user-bar, .scale { justify-content: flex-start; }
   .sheet { place-items: end stretch; padding: 0; }
   .sheet-card {
-    width: 100%; max-height: 92vh; max-height: 92dvh; border-bottom: 0; border-radius: 18px 18px 0 0;
+    width: 100%; max-height: calc(92 * var(--dvh, 1vh)); border-bottom: 0; border-radius: 18px 18px 0 0;
     padding: 18px max(16px, env(safe-area-inset-right, 0px)) calc(18px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
   }
   .sheet-actions .btn { flex: 1 1 100%; }
@@ -685,7 +685,8 @@ button, label, summary, input, textarea, select, a { touch-action: manipulation;
 }
 /* Section tabs scale with their card instead of wrapping onto a second line */
 .card:has(> .views) { container-type: inline-size; }
-.views { flex-wrap: nowrap; gap: 2px clamp(10px, 4cqi, 22px); }
+/* перенос — на крайний случай: в виде с широким шрифтом или при крупном размере интерфейса вкладки, не влезшие в строку, уходят на вторую, а не за край экрана */
+.views { flex-wrap: wrap; gap: 2px clamp(10px, 4cqi, 22px); }
 .view-tab { font-size: clamp(21px, 8.6cqi, 46px); white-space: nowrap; }
 
 /* ===== Polish: depth, light and motion, same language as the hub and Мнение. Everything that moves is transform or opacity ===== */
@@ -834,7 +835,7 @@ html.intro .masthead .scale { animation: card-rise .3s var(--out) .04s backwards
 @keyframes fx-close { from { clip-path: circle(150vmax at 50% 50%); } to { clip-path: circle(0 at 50% 50%); } }
 .fx-rays {
   /* лучи видны только до ~50vmax от центра — слой ровно такой (раньше 220vmax: на 4K вращался слой ~8400×8400 точек) */
-  --ray: min(104vmax, 2600px);
+  --ray: calc(min(104vmax, 2600px) / var(--uiz, 1));
   position: absolute; left: 50%; top: 50%; width: var(--ray); height: var(--ray); margin: calc(var(--ray) / -2) 0 0 calc(var(--ray) / -2); pointer-events: none;
   background: repeating-conic-gradient(color-mix(in srgb, var(--accent) 16%, transparent) 0 9deg, transparent 9deg 22.5deg);
   -webkit-mask: radial-gradient(closest-side, #000 17%, transparent 97%); mask: radial-gradient(closest-side, #000 17%, transparent 97%);
@@ -852,8 +853,8 @@ html.intro .masthead .scale { animation: card-rise .3s var(--out) .04s backwards
 .fx-eyebrow.in { animation: fx-unroll .5s cubic-bezier(.3, 1.4, .5, 1) forwards; }
 @keyframes fx-unroll { to { transform: none; } }
 .fx-name {
-  font-family: var(--font-display); font-weight: 800; line-height: .9; color: var(--ink); max-width: 94vw; text-wrap: balance;
-  font-size: clamp(40px, calc(150vw / max(var(--len, 6), 6)), 150px);
+  font-family: var(--font-display); font-weight: 800; line-height: .9; color: var(--ink); max-width: calc(94 * var(--vw, 1vw)); text-wrap: balance;
+  font-size: clamp(40px, calc(150 * var(--vw, 1vw) / max(var(--len, 6), 6)), 150px);
 }
 .fx-word { display: inline-block; white-space: nowrap; }
 /* слово длиннее экрана переносится по буквам, а не уходит за край */

@@ -70,7 +70,7 @@
 .howto-modal { position: fixed; inset: 0; z-index: 95; display: grid; place-items: center; padding: 16px; padding-bottom: max(16px, env(safe-area-inset-bottom, 0px));
   background: color-mix(in srgb, var(--bg) 45%, transparent); -webkit-backdrop-filter: blur(10px) saturate(1.1); backdrop-filter: blur(10px) saturate(1.1); overscroll-behavior: contain; }
 .howto-modal[hidden] { display: none; }
-.howto { position: relative; width: min(100%, 480px); max-height: calc(100dvh - 32px); overflow-y: auto; display: grid; gap: 14px; padding: 20px 18px 16px; border-radius: 22px;
+.howto { position: relative; width: min(100%, 480px); max-height: calc(100 * var(--dvh, 1vh) - 32px); overflow-y: auto; display: grid; gap: 14px; padding: 20px 18px 16px; border-radius: 22px;
   background: linear-gradient(160deg, var(--panel), color-mix(in srgb, var(--accent-soft) 70%, var(--panel))); border: 2px solid var(--accent);
   box-shadow: 0 30px 70px -24px rgba(0, 0, 0, .55), 0 14px 34px -18px color-mix(in srgb, var(--accent) 70%, transparent); text-align: left; }
 .howto-modal.in .howto { animation: howto-in .3s cubic-bezier(.34, 1.56, .64, 1) both; }

@@ -51,12 +51,12 @@ a.fr-who:hover b { text-decoration: underline; }
 .fr-who > span > b + i, .fr-sug > span > b + i { display: inline-block; margin-left: 0; }
 .fp-sheet { position: fixed; inset: 0; z-index: 90; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg, #0d0f14) 70%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); overscroll-behavior: contain; }
 .fp-sheet[hidden] { display: none; }
-.fp-card { width: min(560px, 100%); max-height: min(720px, calc(100dvh - 32px)); overflow: auto; overscroll-behavior: contain; display: grid; gap: 14px; padding: 18px; background: var(--panel, #1b1d24); color: var(--ink, #f3f4f6); border: 1px solid var(--line, #2b2e38); border-radius: 20px; box-shadow: 0 30px 70px -30px rgba(0, 0, 0, .6); animation: fp-pop .3s cubic-bezier(.34, 1.56, .64, 1); font-family: inherit; }
+.fp-card { width: min(560px, 100%); max-height: min(720px, calc(100 * var(--dvh, 1vh) - 32px)); overflow: auto; overscroll-behavior: contain; display: grid; gap: 14px; padding: 18px; background: var(--panel, #1b1d24); color: var(--ink, #f3f4f6); border: 1px solid var(--line, #2b2e38); border-radius: 20px; box-shadow: 0 30px 70px -30px rgba(0, 0, 0, .6); animation: fp-pop .3s cubic-bezier(.34, 1.56, .64, 1); font-family: inherit; }
 @keyframes fp-pop { from { transform: translateY(12px) scale(.97); } }
 @media (prefers-reduced-motion: reduce) { .fp-card { animation: none; } }
 /* большие экраны (2K, 4K): окно друзей шире и выше */
-@media (min-width: 2200px) { .fp-card { width: min(680px, 100%); max-height: min(900px, calc(100dvh - 32px)); padding: 22px; } }
-@media (min-width: 3000px) { .fp-card { width: min(820px, 100%); max-height: min(1100px, calc(100dvh - 32px)); font-size: 17px; } }
+@media (min-width: 2200px) { .fp-card { width: min(680px, 100%); max-height: min(900px, calc(100 * var(--dvh, 1vh) - 32px)); padding: 22px; } }
+@media (min-width: 3000px) { .fp-card { width: min(820px, 100%); max-height: min(1100px, calc(100 * var(--dvh, 1vh) - 32px)); font-size: 17px; } }
 .fp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
 .fp-head h3 { margin: 0; font-size: 20px; font-weight: 800; }
 .fp-head p { margin: 4px 0 0; font-size: 13px; color: var(--ink-2, #a3a7b3); }
