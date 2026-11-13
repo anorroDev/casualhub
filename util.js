@@ -216,7 +216,205 @@
   addEventListener('resize', () => { clearTimeout(sizeT); sizeT = setTimeout(sizeSync, 150); });
   addEventListener('storage', (e) => { if (e.key === SIZE_KEY) { sizeWant = sizeStored(); sizeSync(); } });
 
-  window.CasualUtil = Object.freeze({ esc, read, plural, script, emptyArt, loop, confetti, size });
+  // ---------- курсор из магазина ----------
+  // Надетый курсор помнится в этом браузере: casualhub.cursor.v1 = { uid, a, b, t, x, y, tx, ty } — картинки (data:-адреса SVG)
+  // обычного курсора (a), «можно нажать» (b) и текстового (t), точки нажатия. Ставит его shop.js (applyCursor →
+  // CasualUtil.cursor.set), а здесь он включается до первой отрисовки на любой странице, даже где магазин не загрузится;
+  // только своему аккаунту (uid — тот, кто вошёл).
+  // Чтобы нигде не выскакивал курсор системы, у каждого правила cursor в стилях сайта появляется двойник со своей картинкой:
+  // «рука», перетаскивание, лупа, «изменить размер» — b; стрелка, «нельзя», «ждите» — a; текстовый — t; inherit, none,
+  // url() и var() — как были. Двойник — тот же селектор в :is() под html.sh-cur, с той же !important: он на (0,1,1)
+  // специфичнее оригинала, поэтому правила сайта между собой решают то же, что и без курсора. Стили, которые скрипты
+  // добавят позже (окна, виды интерфейса), подхватываются сами (MutationObserver). Курсор в атрибуте style="" обходит
+  // двойников — пиши cursor в CSS.
+  const CUR_KEY = 'casualhub.cursor.v1';
+  const CUR_URL = /^data:image\/svg\+xml,[\w%!'()*.~-]+$/; // encodeURIComponent: ни кавычек, ни пробелов — безопасно в url("…")
+  const curUid = () => { const u = read('ocenshik.user.v1'); return u && u.id && (read('casualhub.tokens.v1') || {})[u.id] ? String(u.id) : ''; };
+  const curPt = (v) => Math.max(0, Math.min(64, Math.round(+v) || 0));
+  function curOf(c) {
+    if (!c || typeof c !== 'object' || !CUR_URL.test(c.a || '') || !CUR_URL.test(c.b || '')) return null;
+    return { uid: String(c.uid || ''), a: c.a, b: c.b, t: CUR_URL.test(c.t || '') ? c.t : '', x: curPt(c.x), y: curPt(c.y), tx: curPt(c.tx), ty: curPt(c.ty) };
+  }
+  const curStored = () => { const c = curOf(read(CUR_KEY)); return c && c.uid && c.uid === curUid() ? c : null; };
+  // без правил сайта курсор этим элементам ставит сам браузер: ссылкам — «руку», элементам форм — стрелку, полям ввода —
+  // текстовый. Заменяем на свои картинки тех же видов (у всех :where — правила сайта и их двойники главнее)
+  const CUR_NOT_TEXT = '[type="button" i], [type="submit" i], [type="reset" i], [type="checkbox" i], [type="radio" i], [type="range" i], [type="file" i], [type="color" i], [type="image" i]';
+  const CUR_TEXT = `textarea, input:not(${CUR_NOT_TEXT}, [type="hidden" i]), [contenteditable]:not([contenteditable="false" i])`;
+  const curBaseCss = (c) => `html.sh-cur { --sh-a: url("${c.a}") ${c.x} ${c.y}, default; --sh-b: url("${c.b}") ${c.x} ${c.y}, pointer; --sh-t: ${c.t ? `url("${c.t}") ${c.tx} ${c.ty}, text` : 'text'}; cursor: var(--sh-a); }
+html.sh-cur :where(a[href], area[href]) { cursor: var(--sh-b); }
+html.sh-cur :where(label, button, select, input, meter, progress) { cursor: var(--sh-a); }
+html.sh-cur :where(${CUR_TEXT}) { cursor: var(--sh-t); }
+html.sh-cur :where(textarea:disabled, input:disabled) { cursor: var(--sh-a); }
+html.sh-cur ::file-selector-button { cursor: var(--sh-a); }`;
+  // значение cursor → что ставить двойнику: 'a' | 'b' | 't' — свои картинки, иначе — само значение (inherit, none, url, var)
+  function curKind(v) {
+    v = String(v || '').trim();
+    if (!v) return '';
+    const low = v.toLowerCase();
+    // свои картинки и var() — как были; относительный адрес в другом файле стилей указал бы не туда — такое правило пропускаем
+    if (/url\(|var\(/.test(low)) return [...v.matchAll(/url\(\s*(["']?)(.*?)\1\s*\)/gi)].every((m) => /^(data:|https?:|\/)/i.test(m[2])) ? v : '';
+    if (low === 'inherit' || low === 'unset') return 'inherit';
+    if (low === 'none') return 'none';
+    const k = low.split(',').pop().trim().replace(/^-(webkit|moz)-/, '');
+    if (k === 'text' || k === 'vertical-text') return 't';
+    if (/^(pointer|grab|grabbing|zoom-in|zoom-out|move|all-scroll|copy|alias|[a-z-]*-resize)$/.test(k)) return 'b';
+    return 'a'; // default, auto, not-allowed, help, wait, progress, crosshair, cell, context-menu, no-drop, initial, revert
+  }
+  // список селекторов → по одному (запятые внутри скобок и строк — не разделители)
+  function curSplit(sel) {
+    const out = [];
+    let depth = 0, q = '', cur = '';
+    for (let i = 0; i < sel.length; i++) {
+      const ch = sel[i];
+      if (ch === '\\') { cur += ch + (sel[++i] || ''); continue; }
+      if (q) { cur += ch; if (ch === q) q = ''; continue; }
+      if (ch === '"' || ch === "'") { q = ch; cur += ch; continue; }
+      if (ch === '(' || ch === '[') depth++;
+      else if (ch === ')' || ch === ']') depth--;
+      if (ch === ',' && depth === 0) { if (cur.trim()) out.push(cur.trim()); cur = ''; continue; }
+      cur += ch;
+    }
+    if (cur.trim()) out.push(cur.trim());
+    return out;
+  }
+  // псевдоэлемент (::after, :before…) не может стоять внутри :is(): [селектор, псевдоэлемент с тем, что после него]
+  function curPseudo(s) {
+    let depth = 0, q = '';
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (ch === '\\') { i++; continue; }
+      if (q) { if (ch === q) q = ''; continue; }
+      if (ch === '"' || ch === "'") { q = ch; continue; }
+      if (ch === '(' || ch === '[') depth++;
+      else if (ch === ')' || ch === ']') depth--;
+      else if (ch === ':' && depth === 0 && (s[i + 1] === ':' || /^:(before|after|first-line|first-letter)(?![\w-])/i.test(s.slice(i)))) return [s.slice(0, i), s.slice(i)];
+    }
+    return [s, ''];
+  }
+  // двойники правил cursor из списка правил (CSSRuleList или похожего), с теми же @media, @supports, @container и @layer
+  function curRules(list, out) {
+    for (const r of list || []) {
+      if (!r) continue;
+      if (r.selectorText != null && r.style && r.style.getPropertyValue) {
+        const k = curKind(r.style.getPropertyValue('cursor'));
+        if (!k) continue;
+        const sels = [];
+        for (const s of curSplit(String(r.selectorText))) {
+          if (s.includes('&')) continue; // вложенный CSS: на сайте его нет
+          const [base, pe] = curPseudo(s);
+          if (!base.trim()) continue;
+          sels.push(`html.sh-cur :is(${base})${pe}`);
+          // правило может попасть и на сам <html> (html.dragging, .is-busy): только если в селекторе нет «потомков»
+          if (!/[\s>+~]/.test(base.trim().replace(/\([^()]*\)|\[[^\]]*\]/g, ''))) sels.push(`html.sh-cur:is(${base})${pe}`);
+        }
+        if (!sels.length) continue;
+        const imp = r.style.getPropertyPriority('cursor') ? ' !important' : '';
+        out.push(`${sels.join(', ')} { cursor: ${k.length === 1 ? `var(--sh-${k})` : k}${imp}; }`);
+        continue;
+      }
+      let kids = null;
+      try { kids = r.cssRules; } catch (e) { continue; }
+      let head = '';
+      if (r.media && r.media.mediaText != null && kids) head = '@media ' + r.media.mediaText;
+      else if ('containerName' in r && kids) head = '@container ' + (r.containerName ? r.containerName + ' ' : '') + (r.containerQuery || r.conditionText || '');
+      else if (r.conditionText != null && kids) head = '@supports ' + r.conditionText;
+      else if (typeof r.name === 'string' && r.name && kids && !r.selectorText && !('cssRules' in r && r.type === 7)) head = '@layer ' + r.name;
+      else if (r.styleSheet) { // @import
+        let rs = null;
+        try { rs = r.styleSheet.cssRules; } catch (e) {} // чужой домен (шрифты Google)
+        const inner = [];
+        curRules(rs, inner);
+        if (inner.length) out.push(r.media && r.media.mediaText ? `@media ${r.media.mediaText} {\n${inner.join('\n')}\n}` : inner.join('\n'));
+        continue;
+      }
+      if (!head) continue;
+      const inner = [];
+      curRules(kids, inner);
+      if (inner.length) out.push(`${head} {\n${inner.join('\n')}\n}`);
+    }
+    return out;
+  }
+  let curNow = null, curBase = null, curSite = null, curObs = null, curT = 0, curSig = '', curTick = 0, curHooked = false;
+  // все стили страницы (кроме своих и чужого домена) → двойники; пишутся, только если стили поменялись
+  function curPaint() {
+    curT = 0;
+    if (!curNow) return;
+    const out = [];
+    for (const sh of document.styleSheets || []) {
+      const n = sh.ownerNode;
+      if (sh.disabled || (n && (n === curBase || n === curSite))) continue;
+      let rs = null;
+      try { rs = sh.cssRules; } catch (e) { continue; }
+      curRules(rs, out);
+    }
+    const css = out.join('\n');
+    if (css === curSig && curSite && curSite.isConnected) return;
+    curSig = css;
+    if (!curSite) { curSite = document.createElement('style'); curSite.id = 'shCurSite'; }
+    curSite.textContent = css;
+    if (!curSite.isConnected) (document.head || document.documentElement).appendChild(curSite);
+  }
+  const curLater = () => { if (!curT) curT = setTimeout(curPaint, 60); };
+  // новые или изменённые стили (окна, виды интерфейса, стили скриптов) — переписать двойников; свои стили не в счёт
+  function curWatch(on) {
+    if (on && !curObs && typeof MutationObserver !== 'undefined') {
+      curObs = new MutationObserver((list) => {
+        for (const m of list) {
+          const t = m.target;
+          if (t === curSite || t === curBase) continue;
+          if (t && t.nodeName === 'STYLE') { curLater(); return; }
+          for (const n of m.addedNodes) {
+            if (n === curSite || n === curBase) continue;
+            if (n.nodeName === 'STYLE') { curLater(); return; }
+            if (n.nodeName === 'LINK' && /stylesheet/i.test(n.rel || '')) { n.addEventListener('load', curLater, { once: true }); curLater(); return; }
+          }
+          for (const n of m.removedNodes) if (n !== curSite && n !== curBase && (n.nodeName === 'STYLE' || n.nodeName === 'LINK')) { curLater(); return; }
+        }
+      });
+      curObs.observe(document.documentElement, { childList: true, subtree: true });
+      // вышли из аккаунта или сменили его в этой вкладке — курсор снимается (в других вкладках — по событию storage)
+      curTick = setInterval(() => { if (!curStored()) curApply(null); }, 5000);
+    } else if (!on && curObs) { curObs.disconnect(); curObs = null; clearInterval(curTick); }
+  }
+  function curApply(c) {
+    if (JSON.stringify(c) === JSON.stringify(curNow)) return;
+    curNow = c;
+    const root = document.documentElement;
+    if (!c) {
+      root.classList.remove('sh-cur');
+      if (curBase) curBase.textContent = '';
+      if (curSite) curSite.textContent = '';
+      curSig = '';
+      curWatch(false);
+      return;
+    }
+    if (!curBase) { curBase = document.createElement('style'); curBase.id = 'shCurBase'; (document.head || root).appendChild(curBase); }
+    curBase.textContent = curBaseCss(c);
+    root.classList.add('sh-cur');
+    curWatch(true);
+    if (!curHooked) {
+      curHooked = true;
+      // страница дочиталась и догрузила файлы стилей — двойники по всем правилам
+      if (document.readyState === 'loading' && document.addEventListener) document.addEventListener('DOMContentLoaded', curLater);
+      addEventListener('load', curLater);
+    }
+    curLater();
+  }
+  const cursor = Object.freeze({
+    // c — { a, b, t, x, y, tx, ty } или null — снять. Запоминается в этом браузере за тем, кто вошёл (без входа — не ставится)
+    set(c) {
+      const v = c ? curOf({ ...c, uid: curUid() }) : null;
+      try { if (v && v.uid) localStorage.setItem(CUR_KEY, JSON.stringify(v)); else localStorage.removeItem(CUR_KEY); } catch (e) {}
+      curApply(v && v.uid ? v : null);
+    },
+    get: () => curNow,
+    // двойники для списка правил — для проверки (tests/cursor.test.mjs)
+    rewrite: (rules) => curRules(rules, []).join('\n'),
+  });
+  curApply(curStored());
+  addEventListener('storage', (e) => { if (e.key === null || e.key === CUR_KEY || e.key === 'ocenshik.user.v1' || e.key === 'casualhub.tokens.v1') curApply(curStored()); });
+
+  window.CasualUtil = Object.freeze({ esc, read, plural, script, emptyArt, loop, confetti, size, cursor });
   // котик Васян внизу экрана (vasyan.js сам проверяет, не выключен ли он в Настройках; в админке и на /r/ его нет)
   if (!/^\/(admin|r)\//.test(location.pathname)) script('/vasyan.js', () => !!window.CasualVasyan).catch(() => {});
 })();

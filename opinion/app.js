@@ -778,7 +778,7 @@ function renderAuthModal() {
         <h4 class="backup-title">Резервная копия данных</h4>
         <div class="backup-actions">
           <button type="button" class="btn ghost small" id="btnExportBackup"><span class="u-old">💾 </span>Скачать копию (JSON)</button>
-          <label class="btn ghost small" for="fileImportBackup" style="cursor:pointer;"><span class="u-old">📥 </span>Восстановить из файла</label>
+          <label class="btn ghost small" for="fileImportBackup"><span class="u-old">📥 </span>Восстановить из файла</label>
           <input type="file" id="fileImportBackup" accept=".json" class="vh">
           <button type="button" class="btn ghost small" data-lb-open><span class="u-old">🎬 </span>Импорт из Letterboxd</button>
         </div>
@@ -945,7 +945,7 @@ function renderAuthModal() {
       <h4 class="backup-title">Резервная копия базы</h4>
       <div class="backup-actions">
         <button type="button" class="btn ghost small" id="btnExportBackup"><span class="u-old">💾 </span>Скачать базу (JSON)</button>
-        <label class="btn ghost small" for="fileImportBackup" style="cursor:pointer;"><span class="u-old">📥 </span>Загрузить базу</label>
+        <label class="btn ghost small" for="fileImportBackup"><span class="u-old">📥 </span>Загрузить базу</label>
         <input type="file" id="fileImportBackup" accept=".json" class="vh">
         <button type="button" class="btn ghost small" data-lb-open><span class="u-old">🎬 </span>Импорт из Letterboxd</button>
       </div>
