@@ -2493,7 +2493,7 @@
 "Размер интерфейса":"Interface size",
 "Весь сайт крупнее или мельче: текст, кнопки и окна. Запоминается в этом браузере":"Makes the whole site bigger or smaller: text, buttons and windows. Remembered in this browser",
 "Крупнее на этом экране не поместится":"A bigger size won’t fit on this screen",
-"Выбрано {}%, но на таком узком экране помещается только {}%":"{}% is chosen, but only {}% fits on a screen this narrow",
+"Выбрано {}%, но на таком узком экране помещается только {}":"{}% is chosen, but a screen this narrow only fits {}",
 "В этом браузере размер сайта меняется масштабом самого браузера: Ctrl (на Mac — ⌘) и «+» или «−»":"In this browser, change the site’s size with the browser’s own zoom: Ctrl (⌘ on Mac) and “+” or “−”",
 "Мельче":"Smaller",
 "Крупнее":"Bigger",
