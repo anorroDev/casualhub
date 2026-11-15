@@ -74,7 +74,7 @@ test('флаг и награды по уровням', () => {
   assert.equal(unlockedAt(1, true).fonts.length, 17);
   assert.ok(!unlockedAt(24).pet && unlockedAt(25).pet);
   assert.ok(!unlockedAt(49).bgs.includes('legend') && unlockedAt(50).bgs.includes('legend'));
-  assert.equal(unlockedAt(1, true).frames.length, 6); // админу открыто всё
+  assert.equal(unlockedAt(1, true).frames.length, 7); // админу открыто всё (и рамка за приглашения)
   assert.ok(!unlockedAt(29).colors.includes('gold'));
   assert.ok(unlockedAt(30).colors.includes('gold'));
 });
@@ -522,4 +522,56 @@ test('оформление, купленное в магазине раньше 
   assert.ok(L.unlockedAt(3, false, new Set(['font:lobster'])).fonts.includes('lobster'));
   assert.ok(L.unlockedAt(3, false, new Set(['frame6'])).frames.includes('frame6'));
   assert.ok(L.unlockedAt(13).fx.includes('snow') && !L.unlockedAt(32).fx.includes('embers'));
+});
+
+test('приглашения: 3-й уровень — опыт обоим, 10-й — «Наставник», награды за друзей, «Вербовщик» только у позвавшего', async () => {
+  const { acceptInvite } = await import('../functions/_lib/levels-api.js');
+  const env = envOf();
+  env.DB.raw.exec(`INSERT INTO users (id, username, uname, created_at, email_ok) VALUES ('host', 'Хозяин', 'host', 1, 0), ('n1', 'Новичок', 'n1', 2, 0)`);
+  const { routes } = await levelRoutes();
+  const inv = await routes['GET /levels/invite']({ env, request: { url: 'https://x/api/levels/invite' }, me: { id: 'host' } });
+  assert.match(inv.url, /\/\?invite=[a-z0-9]{8}$/);
+  assert.deepEqual(await routes['GET /levels/invite/who']({ env, request: { url: 'https://x/api/levels/invite/who?code=' + inv.code } }), { username: 'Хозяин', xp: 100 });
+  assert.deepEqual(await routes['GET /levels/invite/who']({ env, request: { url: 'https://x/api/levels/invite/who?code=zzzzzzzz' } }), {});
+  assert.equal(await acceptInvite(env, 'n1', inv.code), 'host');
+  assert.equal(await acceptInvite(env, 'host', inv.code), null); // себя не пригласить
+  // новичок пришёл: в списке, заявка ждёт хозяина, ничего ещё не засчитано
+  let d = await routes['GET /levels/invite']({ env, request: { url: 'https://x/api/levels/invite' }, me: { id: 'host' } });
+  assert.deepEqual(d.people.map((p) => [p.id, p.stage, p.rel, p.level]), [['n1', 0, 'incoming', 1]]);
+  assert.equal(d.counted, 0);
+  assert.ok(d.rewards.every((r) => !r.got));
+  // новичок дошёл до 3-го уровня живым действием: +100 обоим, у хозяина — мятный ник и «Вербовщик», у новичка — «По приглашению»
+  await awardMany(env, 'n1', [{ kind: 'gift', ref: 'g', xp: 270 }], { now: NOON, ...bare });
+  await award(env, 'n1', 'visit', 'd1', { now: NOON + 1000 });
+  assert.equal((await readLevel(env, 'host')).xp, 100);
+  d = await routes['GET /levels/invite']({ env, request: { url: 'https://x/api/levels/invite' }, me: { id: 'host' } });
+  assert.equal(d.counted, 1);
+  assert.deepEqual(d.rewards.filter((r) => r.got).map((r) => r.id), ['mint']);
+  const me = await routes['GET /levels/me']({ env, request: { cf: {} }, me: { id: 'host' } });
+  assert.equal(me.invites, 1);
+  assert.ok(me.unlocked.colors.includes('mint') && !me.unlocked.frames.includes('frame7'));
+  assert.ok(me.xpRules.invite.xp === 100 && me.xpRules.rate.day === 8 && !me.xpRules.gift);
+  const put = await routes['PUT /levels/prefs']({ env, request: { body: { color: 'mint' } }, me: { id: 'host' } });
+  assert.equal(put.look.color, 'mint');
+  assert.equal((await levelsOf(env, ['host'])).host.color, 'mint');
+  const achOf = async (u) => Object.fromEntries((await achievementsOf(env, u)).map((a) => [a.code, a]));
+  let ah = await achOf('host'), an = await achOf('n1');
+  assert.ok(ah.recruiter.got && !ah.invited.got);
+  assert.ok(an.invited.got && !an.recruiter.got); // своя строка новичка — не вербовка
+  assert.ok((await takeNews(env, 'host')).some((n) => n.t === 'invite_rw' && n.title === 'Мятный цвет ника'));
+  // до 10-го уровня: хозяину ещё +150 и «Наставник»; повтор ничего не даёт
+  await awardMany(env, 'n1', [{ kind: 'gift', ref: 'g2', xp: 2000 }], { now: NOON + 2000, ...bare });
+  await award(env, 'n1', 'visit', 'd2', { now: NOON + DAY });
+  await award(env, 'n1', 'visit', 'd3', { now: NOON + 2 * DAY });
+  assert.equal((await readLevel(env, 'host')).xp, 250);
+  ah = await achOf('host');
+  assert.ok(ah.mentor.got);
+  d = await routes['GET /levels/invite']({ env, request: { url: 'https://x/api/levels/invite' }, me: { id: 'host' } });
+  assert.deepEqual([d.people[0].stage, d.mentors], [2, 1]);
+  // новичок видит, кто его позвал
+  const dn = await routes['GET /levels/invite']({ env, request: { url: 'https://x/api/levels/invite' }, me: { id: 'n1' } });
+  assert.deepEqual([dn.by.username, dn.by.stage], ['Хозяин', 2]);
+  // фон «Горизонт» и прочее — только когда засчитано достаточно друзей
+  assert.ok(!unlockedAt(50, false, null, 9).bgs.includes('horizon') && unlockedAt(1, false, null, 10).bgs.includes('horizon'));
+  assert.ok(!unlockedAt(50).colors.includes('mint') && unlockedAt(1, false, null, 5).fx.includes('hearts'));
 });

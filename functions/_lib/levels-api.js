@@ -5,7 +5,7 @@
 import {
   levelsMode, levelsOn, ensureLevels, readLevel, levelView, prefsOf, lookOf, unlockedAt, levelsOf, achievementsOf, questState,
   firstSteps, takeNews, dayKey, weekStart, shiftDay, cleanTz, backfillUser, grantSpecial, currentEvent, forgetEvent, RULES, awardMany,
-  ACHIEVEMENTS, REWARDS, NAME_COLORS, PROFILE_BGS, isScored, textLen, award,
+  ACHIEVEMENTS, REWARDS, NAME_COLORS, PROFILE_BGS, isScored, textLen, award, INVITE_REWARDS, INV_SQL, invitesOf, STREAK_BONUS, FIRST_STEPS,
   SEASON_RANKS, seasonRankOf, rankFields, currentSeason, closeSeason, forgetSeason, seasonXpOf, seasonXpMany, seasonPlanLetter, fmtKyiv,
 } from './levels.js';
 import { FOODS, boughtLooks } from './shop.js';
@@ -20,8 +20,10 @@ export const KIND_LABEL = {
   got_react: 'Реакция на твою оценку', got_comment: 'Комментарий тебе', friend: 'Новый друг', lots_host: 'Сбор лотов до победителя',
   lot_add: 'Лот в чужой сбор', lot_win: 'Твой лот победил', visit: 'Заход на сайт', invite: 'Приглашение', quest: 'Задание дня',
   quest_all: 'Все задания дня', quest_week: 'Задание недели', streak: 'Серия дней', first: 'Первые шаги', past: 'Опыт за прошлое',
-  admin: 'От администрации', event: 'Тематическая неделя', gift: 'Подарок из почты',
+  admin: 'От администрации', event: 'Тематическая неделя', gift: 'Подарок из почты', mentor: 'Друг по твоей ссылке дошёл до 10-го уровня',
 };
+// таблица «За что сколько опыта» в «Прогрессе»: цифры — прямо из RULES, подписи — в levels-ui.js (XP_TABLE)
+const xpRules = () => Object.fromEntries(Object.entries(RULES).filter(([, r]) => !r.given).map(([k, r]) => [k, { xp: r.xp, day: r.day, tail: r.tail, pair: r.pair, ever: r.ever }]));
 const INVITE_RE = /^[a-z0-9]{8}$/;
 const FOUNDERS_BEFORE = Date.UTC(2026, 10, 12); // кто зарегистрировался до запуска уровней — «Основатель хаба»
 const parse = (s, d) => { try { const v = s ? JSON.parse(s) : null; return v == null ? d : v; } catch (e) { return d; } };
@@ -100,7 +102,8 @@ export function makeLevelsRoutes(h) {
   const { json, fail } = h;
   const off = () => json({ on: false });
   const gate = async (env, me) => levelsOn(env) && (await levelsVisible(env, me, h));
-  const userRow = (env, uid) => env.DB.prepare('SELECT * FROM user_level WHERE user_id = ?').bind(uid).first();
+  // строка уровня и сколько друзей по ссылке дошли до 3-го уровня (inv — для наград за приглашения в lookOf)
+  const userRow = (env, uid) => env.DB.prepare(`SELECT ul.*, ${INV_SQL} FROM user_level ul WHERE ul.user_id = ?`).bind(uid).first();
 
   return {
     // всё про мой прогресс одним запросом: уровень, серия, задания, первые шаги, оформление
@@ -121,11 +124,12 @@ export function makeLevelsRoutes(h) {
       const [quests, steps, ev] = await Promise.all([questState(env, me.id, { now, today, row }), firstSteps(env, me.id), currentEvent(env, now)]);
       const alive = row.streak_day === today || row.streak_day === shiftDay(today, -1) || (row.streak_day === shiftDay(today, -2) && +row.freezes > 0);
       return json({
-        on: true, mode: levelsMode(env), ...lv, ...rankFields(season.xp), season, prefs, look: lookOf(row, season.xp, bought), unlocked: unlockedAt(lv.level, false, bought), admin,
+        on: true, mode: levelsMode(env), ...lv, ...rankFields(season.xp), season, prefs, look: lookOf(row, season.xp, bought), unlocked: unlockedAt(lv.level, false, bought, invitesOf(row)), admin,
         streak: { days: alive ? +row.streak || 0 : 0, best: +row.best_streak || 0, freezes: row.freezes == null ? 1 : +row.freezes, today: row.streak_day === today },
         quests, steps: steps.every((s) => s.paid) ? null : steps,
         event: ev ? { title: ev.title, kinds: ev.kinds, mult: ev.mult, until: ev.until } : null,
-        rewards: REWARDS, foods: FOOD_GIFTS, colors: NAME_COLORS, bgs: Object.keys(PROFILE_BGS),
+        rewards: REWARDS, foods: FOOD_GIFTS, colors: NAME_COLORS, bgs: Object.keys(PROFILE_BGS), invRewards: INVITE_REWARDS, invites: invitesOf(row),
+        xpRules: xpRules(), streakBonus: STREAK_BONUS, firstXp: FIRST_STEPS.map((f) => f.xp),
         recap: recapOpen(now) ? 2026 : null,
         mail: await mailUnread(env, me.id),
         vasyan: await vasyanOwned(env, me.id),
@@ -206,7 +210,7 @@ export function makeLevelsRoutes(h) {
       const row = (await userRow(env, me.id)) || {};
       const cur = prefsOf(row);
       const bought = (await boughtLooks(env, [me.id])).get(me.id) || null;
-      const lv = levelView(+row.xp || 0, +row.level || 1).level, u = unlockedAt(lv, false, bought);
+      const lv = levelView(+row.xp || 0, +row.level || 1).level, u = unlockedAt(lv, false, bought, invitesOf(row));
       const next = { ...cur }; // оформление — по уровню у всех, у админа тоже
       for (const k of ['intro', 'hideLevel', 'hideBoard', 'notify', 'anim']) if (typeof b[k] === 'boolean') next[k] = b[k];
       if (Array.isArray(b.showcase)) {
@@ -283,7 +287,8 @@ export function makeLevelsRoutes(h) {
       const withRank = (x) => (x.level != null ? { ...x, ...rankFields(sx[x.id] || 0) } : x);
       return json({ scope, week: wk, top: top.map(withRank), best: grown ? withRank(grown) : null });
     },
-    // личная ссылка-приглашение
+    // личная ссылка-приглашение и всё про приглашения: кто пришёл (уровень, заявка в друзья, что засчитано),
+    // награды за друзей, кто позвал меня самого
     async 'GET /levels/invite'({ env, request, me }) {
       if (!(await gate(env, me))) return off();
       await ensureLevels(env);
@@ -296,8 +301,38 @@ export function makeLevelsRoutes(h) {
         }
       }
       if (!r) return fail(500, 'Не получилось создать ссылку, попробуй ещё раз.');
-      const { results } = await env.DB.prepare('SELECT i.user_id, i.rewarded, u.username FROM invited i JOIN users u ON u.id = i.user_id WHERE i.by_id = ? ORDER BY i.at DESC LIMIT 20').bind(me.id).all();
-      return json({ code: r.code, url: new URL(request.url).origin + '/?invite=' + r.code, people: (results || []).map((x) => ({ username: x.username, done: !!x.rewarded })), xp: RULES.invite.xp });
+      const [ppl, by] = await env.DB.batch([
+        env.DB.prepare(`SELECT i.user_id, i.rewarded, i.at, u.username, u.uname, ul.xp, ul.level, f.status, f.requested_by
+          FROM invited i JOIN users u ON u.id = i.user_id
+          LEFT JOIN user_level ul ON ul.user_id = i.user_id
+          LEFT JOIN friendships f ON f.a = MIN(i.user_id, ?1) AND f.b = MAX(i.user_id, ?1)
+          WHERE i.by_id = ?1 ORDER BY i.at DESC LIMIT 60`).bind(me.id),
+        env.DB.prepare('SELECT i.rewarded, u.id, u.username, u.uname FROM invited i JOIN users u ON u.id = i.by_id WHERE i.user_id = ?').bind(me.id),
+      ]);
+      const list = ppl.results || [];
+      const counted = list.filter((x) => +x.rewarded > 0).length;
+      const b = (by.results || [])[0];
+      return json({
+        code: r.code, url: new URL(request.url).origin + '/?invite=' + r.code, xp: RULES.invite.xp, mentorXp: RULES.mentor.xp,
+        people: list.map((x) => ({
+          id: x.user_id, username: x.username, handle: x.uname, at: +x.at || 0,
+          level: levelView(+x.xp || 0, +x.level || 1).level, stage: +x.rewarded || 0,
+          // дружба: friend — уже друзья, incoming — новичок ждёт, когда примешь его заявку, '' — заявки нет (отклонил)
+          rel: x.status === 'accepted' ? 'friend' : x.status === 'pending' ? (x.requested_by === me.id ? 'sent' : 'incoming') : '',
+        })),
+        counted, mentors: list.filter((x) => +x.rewarded > 1).length,
+        rewards: INVITE_REWARDS.map((w) => ({ ...w, got: counted >= w.n })),
+        by: b ? { id: b.id, username: b.username, handle: b.uname, stage: +b.rewarded || 0 } : null,
+      });
+    },
+    // кто зовёт по ссылке: ник для приветствия новичку (без входа). Только при уровнях для всех
+    async 'GET /levels/invite/who'({ env, request }) {
+      if (levelsMode(env) !== 'all') return json({});
+      const code = String(new URL(request.url).searchParams.get('code') || '');
+      if (!INVITE_RE.test(code)) return json({});
+      await ensureLevels(env);
+      const r = await env.DB.prepare('SELECT u.username FROM invites i JOIN users u ON u.id = i.user_id WHERE i.code = ?').bind(code).first();
+      return json(r ? { username: r.username, xp: RULES.invite.xp } : {});
     },
     // итоги года: что было за год, одной карточкой
     async 'GET /levels/recap'({ env, request, me }) {

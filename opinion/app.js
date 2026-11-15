@@ -542,6 +542,16 @@ function saveAuthDraft(part, data) { try { const d = authDraft(); d[part] = Obje
 function clearAuthDraft(part) { try { const d = authDraft(); delete d[part]; localStorage.setItem(AUTH_DRAFT_KEY, JSON.stringify(d)); } catch (_) {} }
 // в форме что-то введено — клик мимо окна его не закрывает (туда же попадает клик по подсказке браузера)
 function authHasInput() { return [...el.authBody.querySelectorAll('input:not([type="file"]):not([type="checkbox"])')].some(i => i.value.trim()); }
+// пришёл по ссылке-приглашению: кто позвал (ник запомнил header-menu.js) и что будет после регистрации
+function inviteNote() {
+  try {
+    const code = localStorage.getItem('casualhub.invite.v1');
+    if (!code) return '';
+    const by = JSON.parse(localStorage.getItem('casualhub.inviteBy.v1') || 'null');
+    const who = by && by.code === code && by.name ? `Тебя пригласил <b>${esc(by.name)}</b>` : 'Ты пришёл по приглашению';
+    return `<p class="auth-invite">${who}: после регистрации вы станете друзьями${by && by.xp ? `, а на 3-м уровне оба получите +${by.xp} опыта` : ''}.</p>`;
+  } catch (_) { return ''; }
+}
 function openAuthModal(tab) {
   // настройки открываются с текущими аватаром и цветом профиля
   if (tab === 'edit' && state.user) { editSelectedAvatar = state.user.avatar || ''; editSelectedColor = state.user.color || '#3550E8'; }
@@ -885,6 +895,7 @@ function renderAuthModal() {
       ` : ''}
     ` : `
       <form class="auth-form" id="formReg">
+        ${inviteNote()}
         <div class="avatar-upload-box">
           <div class="avatar-upload-trigger" id="regAvatarTrigger" role="button" tabindex="0" title="Нажмите на камеру, чтобы выбрать фото">
             <div class="avatar-preview-circle" id="regAvatarCircle" style="${regIsImg ? `background-image:url('${esc(regSelectedAvatar)}');` : `background-color:${esc(regSelectedColor)};`}">

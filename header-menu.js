@@ -18,6 +18,16 @@
   const css = document.createElement('style');
   css.textContent = `
 .hm-wrap { position: relative; display: inline-flex; flex: none; }
+/* «<ник> зовёт тебя»: пришёл по ссылке-приглашению и ещё без аккаунта */
+.hm-inv { position: fixed; left: 50%; bottom: 16px; z-index: 90; transform: translateX(-50%); width: min(440px, calc(100 * var(--vw, 1vw) - 32px)); box-sizing: border-box; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 2px 14px; align-items: center; padding: 14px 16px; border-radius: 18px; border: 1px solid color-mix(in srgb, var(--accent, #3550E8) 45%, var(--line, #2b2e38)); background: var(--panel, #17181c); color: var(--ink, #f2f2f2); box-shadow: 0 18px 40px -14px rgb(0 0 0 / .6); animation: hm-inv-in .3s cubic-bezier(.22, 1, .36, 1) both; }
+@keyframes hm-inv-in { from { opacity: 0; transform: translate(-50%, 12px); } }
+.hm-inv img { grid-row: span 3; width: 72px; height: auto; image-rendering: pixelated; }
+.hm-inv-t { font-size: 15px; line-height: 1.3; }
+.hm-inv-s { grid-column: 2 / -1; font-size: 13px; line-height: 1.4; color: var(--ink-2, #b5b5b5); }
+.hm-inv-go { grid-column: 2 / -1; justify-self: start; margin-top: 6px; padding: 8px 14px; border-radius: 10px; background: var(--accent, #3550E8); color: #fff !important; font: 700 13.5px/1.2 inherit; font-family: inherit; text-decoration: none; }
+.hm-inv-x { grid-column: 3; grid-row: 1; align-self: start; width: 28px; height: 28px; border: 0; border-radius: 8px; background: transparent; color: var(--ink-3, #8a8f9e); font-size: 14px; cursor: pointer; }
+@media (max-width: 420px) { .hm-inv { grid-template-columns: minmax(0, 1fr) auto; } .hm-inv img { display: none; } .hm-inv-s, .hm-inv-go { grid-column: 1 / -1; } .hm-inv-x { grid-column: 2; } }
+@media (prefers-reduced-motion: reduce) { .hm-inv { animation: none; } }
 .hm-btn { position: relative; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 40px; cursor: pointer; }
 .hm-btn svg { flex: none; }
 .hm-dot { position: absolute; top: 4px; right: 4px; width: 9px; height: 9px; border-radius: 50%; background: var(--bad, #E4553F); box-shadow: 0 0 0 2px var(--panel, #1b1d24); pointer-events: none; }
@@ -114,7 +124,8 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
     e.preventDefault();
     window.scrollTo({ top: 0, behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   });
-  // ссылка-приглашение (?invite=код): запоминаем до регистрации (friends.js отправит её с регистрацией) и убираем из адреса
+  // ссылка-приглашение (?invite=код): запоминаем до регистрации (friends.js отправит её с регистрацией) и убираем из адреса.
+  // Без входа — карточка «<ник> зовёт тебя»: ник пригласившего запоминается и для формы регистрации (casualhub.inviteBy.v1)
   try {
     const inv = new URLSearchParams(location.search).get('invite');
     if (inv && /^[a-z0-9]{8}$/.test(inv)) {
@@ -122,6 +133,22 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
       const url = new URL(location.href);
       url.searchParams.delete('invite');
       history.replaceState(null, '', url.pathname + url.search + url.hash);
+      const lu = JSON.parse(localStorage.getItem('ocenshik.user.v1') || 'null');
+      const inAcc = lu && (JSON.parse(localStorage.getItem('casualhub.tokens.v1') || 'null') || {})[lu.id];
+      if (!inAcc) fetch('/api/levels/invite/who?code=' + inv).then((r) => (r.ok ? r.json() : {})).then((d) => {
+        if (!d || !d.username) return;
+        localStorage.setItem('casualhub.inviteBy.v1', JSON.stringify({ code: inv, name: d.username, xp: d.xp || 0 }));
+        const show = () => {
+          const esc = (t) => String(t).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+          const box = document.createElement('div');
+          box.className = 'hm-inv';
+          box.setAttribute('role', 'status');
+          box.innerHTML = `<img src="/art/empty-friends.webp" width="72" height="54" alt="" decoding="async"><span class="hm-inv-t"><b>${esc(d.username)}</b> зовёт тебя в Казуал Хаб</span><span class="hm-inv-s">Зарегистрируйся — и вы сразу станете друзьями.${d.xp ? ` На 3-м уровне оба получите +${d.xp} опыта.` : ''}</span><a class="hm-inv-go" href="/opinion/#reg">Зарегистрироваться</a><button type="button" class="hm-inv-x" aria-label="Закрыть">✕</button>`;
+          box.querySelector('.hm-inv-x').addEventListener('click', () => box.remove());
+          document.body.appendChild(box);
+        };
+        if (document.body) show(); else addEventListener('DOMContentLoaded', show);
+      }).catch(() => {});
     }
   } catch (e) {}
   const MENU_ICON ='<svg viewBox="0 0 16 16" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><path d="M2.5 4h11M2.5 8h11M2.5 12h11"/></svg>';

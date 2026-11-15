@@ -117,7 +117,8 @@ export const RULES = {
   tier_coop: { xp: 5, day: 5 }, // разложил тир-лист вместе с компанией (хотя бы половину элементов)
   tier_coop_host: { xp: 25, day: 2 }, // закрыл «Тир-лист вместе», где голосовали хотя бы трое // голос в бою чужого турнира (не больше 5 в день у одного ведущего) // собрал линию в бинго стрима одним из первых трёх (lots/bingo.js) // угадал победителя сбора лотов (прогноз; не в своём сборе, от трёх участников)
   visit: { xp: 5, day: 1 }, // зашёл на сайт сегодня
-  invite: { xp: 100 }, // друг пришёл по ссылке и дошёл до 3-го уровня (обоим)
+  invite: { xp: 100 }, // друг пришёл по ссылке и дошёл до 3-го уровня (обоим; у новичка ref 'joined')
+  mentor: { xp: 150 }, // друг, пришедший по твоей ссылке, дошёл до 10-го уровня (пригласившему)
   quest: { xp: 15 }, // задание дня
   quest_all: { xp: 20 }, // все три задания дня
   quest_week: { xp: 100 }, // задание недели
@@ -149,7 +150,9 @@ export const ACHIEVEMENTS = [
   { code: 'chatter', title: 'Болтун', desc: 'Комментарии', metric: 'comment', tiers: [10, 100, 500] },
   { code: 'fan', title: 'Ценитель чужого', desc: 'Реакции друзьям', metric: 'react', tiers: [25, 250, 1000] },
   { code: 'popular', title: 'Популярный', desc: 'Реакции на твои оценки', metric: 'got_react', tiers: [25, 250, 1000] },
-  { code: 'recruiter', title: 'Вербовщик', desc: 'Друзья, пришедшие по твоей ссылке', metric: 'invite', tiers: [1, 3, 10] },
+  { code: 'recruiter', title: 'Вербовщик', desc: 'Друзья по твоей ссылке, дошедшие до 3-го уровня', metric: 'invite', tiers: [1, 3, 10] },
+  { code: 'mentor', title: 'Наставник', desc: 'Друзья по твоей ссылке, дошедшие до 10-го уровня', metric: 'mentor', tiers: [1, 3, 5] },
+  { code: 'invited', title: 'По приглашению', desc: 'Пришёл по ссылке друга и дошёл до 3-го уровня', metric: 'invited', tiers: [1] },
   { code: 'auctioneer', title: 'Аукционист', desc: 'Сборы лотов до победителя', metric: 'lots_host', tiers: [1, 10, 50] },
   { code: 'lucky', title: 'Счастливчик', desc: 'Твой лот победил', metric: 'lot_win', tiers: [1, 5, 20] },
   { code: 'rhythm', title: 'В ритме', desc: 'Серия дней подряд', metric: '@streak', tiers: [7, 30, 100] },
@@ -232,24 +235,36 @@ export const REWARDS = [
   { level: 32, kind: 'font', id: 'font:paint', title: 'Шрифт ника «Rubik Wet Paint»' },
   { level: 38, kind: 'font', id: 'font:beastly', title: 'Шрифт ника «Rubik Beastly»' },
 ].sort((a, b) => a.level - b.level);
-export const NAME_COLORS = { blue: '#5B74FF', pink: '#E85FA5', green: '#2EAD60', orange: '#F08A24', violet: '#9B6BFF', teal: '#14A3A8', gold: '#E2A925' };
-export const PROFILE_BGS = { dawn: 1, night: 1, city: 1, forest: 1, ember: 1, legend: 1 };
+// ---------- награды за приглашения (только внешний вид, уровнем не открываются) ----------
+// n — сколько друзей по твоей ссылке дошли до 3-го уровня (invited.rewarded > 0)
+export const INVITE_REWARDS = [
+  { n: 1, kind: 'color', id: 'mint', title: 'Мятный цвет ника' },
+  { n: 3, kind: 'frame', id: 'frame7', title: 'Рамка «Компания»' },
+  { n: 5, kind: 'fx', id: 'hearts', title: 'Сердечки в шапке профиля' },
+  { n: 10, kind: 'bg', id: 'horizon', title: 'Фон профиля «Горизонт»' },
+];
+const INVITE_ONLY = new Set(INVITE_REWARDS.map((r) => r.id));
+export const NAME_COLORS = { blue: '#5B74FF', pink: '#E85FA5', green: '#2EAD60', orange: '#F08A24', violet: '#9B6BFF', teal: '#14A3A8', gold: '#E2A925', mint: '#3DD6A3' };
+export const PROFILE_BGS = { dawn: 1, night: 1, city: 1, forest: 1, ember: 1, legend: 1, horizon: 1 };
 const FRAMES = ['frame1', 'frame5', 'frame2', 'frame3', 'frame4', 'frame6']; // по уровню
 const NICKS = ['outline', 'shadow', 'arcade', 'rainbow'];
 // шрифты ника (Google Fonts, сами шрифты подключает levels-ui.js): id → название
 export const NICK_FONTS = { comfortaa: 'Comfortaa', caveat: 'Caveat', lobster: 'Lobster', press: 'Press Start 2P', pacifico: 'Pacifico', russo: 'Russo One', amatic: 'Amatic SC', kelly: 'Kelly Slab', aladin: 'Aladin', yeseva: 'Yeseva One', unbounded: 'Unbounded', underdog: 'Underdog', marck: 'Marck Script', glitch: 'Rubik Glitch', ruslan: 'Ruslan Display', paint: 'Rubik Wet Paint', beastly: 'Rubik Beastly' };
 const FXS = ['stars', 'snow', 'embers', 'confetti'];
 // что из оформления доступно на уровне; all — админу открыто всё (проверять награды до выхода);
-// bought — id наград, купленных в магазине раньше уровня (раздел «Оформление», shop.js → boughtLooks)
-export function unlockedAt(level, all = false, bought = null) {
+// bought — id наград, купленных в магазине раньше уровня (раздел «Оформление», shop.js → boughtLooks);
+// inv — сколько друзей по ссылке дошли до 3-го уровня (награды за приглашения, INVITE_REWARDS)
+export function unlockedAt(level, all = false, bought = null, inv = 0) {
   const got = new Set(REWARDS.filter((r) => all || level >= r.level || (bought && bought.has(r.id))).map((r) => r.id));
+  const iv = new Set(INVITE_REWARDS.filter((r) => all || (+inv || 0) >= r.n).map((r) => r.id));
+  const plus = (kind) => INVITE_REWARDS.filter((r) => r.kind === kind && iv.has(r.id)).map((r) => r.id);
   return {
-    frames: FRAMES.filter((f) => got.has(f)),
-    colors: got.has('colors') ? Object.keys(NAME_COLORS).filter((c) => c !== 'gold' || got.has('gold')) : [],
-    bgs: got.has('bgs') ? Object.keys(PROFILE_BGS).filter((b) => b !== 'legend' || got.has('frame6')) : [],
+    frames: [...FRAMES.filter((f) => got.has(f)), ...plus('frame')],
+    colors: [...(got.has('colors') ? Object.keys(NAME_COLORS).filter((c) => !INVITE_ONLY.has(c) && (c !== 'gold' || got.has('gold'))) : []), ...plus('color')],
+    bgs: [...(got.has('bgs') ? Object.keys(PROFILE_BGS).filter((b) => !INVITE_ONLY.has(b) && (b !== 'legend' || got.has('frame6'))) : []), ...plus('bg')],
     nicks: NICKS.filter((n) => got.has(n)),
     fonts: Object.keys(NICK_FONTS).filter((f) => got.has('font:' + f)),
-    fx: FXS.filter((f) => got.has(f)),
+    fx: [...FXS.filter((f) => got.has(f)), ...plus('fx')],
     pet: got.has('pet'),
     badge: got.has('badge'),
   };
@@ -302,7 +317,9 @@ export async function ensureLevels(env) {
     env.DB.prepare('CREATE TABLE IF NOT EXISTS achievements (user_id TEXT NOT NULL, code TEXT NOT NULL, tier INTEGER NOT NULL DEFAULT 1, at INTEGER NOT NULL, PRIMARY KEY (user_id, code))'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS achievements_code ON achievements(code, tier)'),
     env.DB.prepare('CREATE TABLE IF NOT EXISTS invites (code TEXT PRIMARY KEY, user_id TEXT NOT NULL UNIQUE, at INTEGER NOT NULL)'),
+    // rewarded: 0 — пришёл по ссылке, 1 — дошёл до 3-го уровня (опыт обоим), 2 — до 10-го (опыт пригласившему)
     env.DB.prepare('CREATE TABLE IF NOT EXISTS invited (user_id TEXT PRIMARY KEY, by_id TEXT NOT NULL, at INTEGER NOT NULL, rewarded INTEGER NOT NULL DEFAULT 0)'),
+    env.DB.prepare('CREATE INDEX IF NOT EXISTS invited_by ON invited(by_id, rewarded)'),
     // почта: письма всем (to_id пустой) или одному человеку; в gift_box — прочитано ли и забран ли подарок
     env.DB.prepare('CREATE TABLE IF NOT EXISTS gifts (id TEXT PRIMARY KEY, to_id TEXT, kind TEXT NOT NULL DEFAULT \'gift\', title TEXT NOT NULL, body TEXT, xp INTEGER NOT NULL DEFAULT 0, at INTEGER NOT NULL, until INTEGER, by_id TEXT)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS gifts_to ON gifts(to_id, at)'),
@@ -653,7 +670,7 @@ async function extras(env, uid, c) {
       if (r.rankUp) news.push(r.rankUp);
     }
   }
-  // приглашённый дошёл до 3-го уровня — опыт обоим
+  // приглашённый дошёл до 3-го уровня — опыт обоим; до 10-го — ещё опыт пригласившему («Наставник»)
   const lvNow = Math.max(c.level, res.level || 0);
   if (lvNow >= 3) {
     const inv = await env.DB.prepare('UPDATE invited SET rewarded = 1 WHERE user_id = ? AND rewarded = 0 RETURNING by_id').bind(uid).first().catch(() => null);
@@ -661,7 +678,17 @@ async function extras(env, uid, c) {
       const me = await doAward(env, uid, [{ kind: 'invite', ref: 'joined' }], { now, noExtras: true, silent: true });
       if (me) { res.gained += me.gained; news.push({ t: 'invite_me', xp: RULES.invite.xp }); }
       await awardMany(env, inv.by_id, [{ kind: 'invite', ref: uid }], { now, metrics: {}, noExtras: false });
-      await pushNews(env, inv.by_id, [{ t: 'invite', xp: RULES.invite.xp }], now);
+      // засчитанных стало ровно столько, сколько нужно для награды, — плашка «Открыта награда за друзей»
+      const n = await env.DB.prepare('SELECT COUNT(*) AS n FROM invited WHERE by_id = ? AND rewarded > 0').bind(inv.by_id).first().catch(() => null);
+      const rw = INVITE_REWARDS.find((r) => r.n === +(n && n.n));
+      await pushNews(env, inv.by_id, [{ t: 'invite', xp: RULES.invite.xp }, ...(rw ? [{ t: 'invite_rw', title: rw.title, n: rw.n }] : [])], now);
+    }
+  }
+  if (lvNow >= 10) {
+    const inv = await env.DB.prepare('UPDATE invited SET rewarded = 2 WHERE user_id = ? AND rewarded = 1 RETURNING by_id').bind(uid).first().catch(() => null);
+    if (inv && inv.by_id) {
+      await awardMany(env, inv.by_id, [{ kind: 'mentor', ref: uid }], { now, metrics: {}, noExtras: false });
+      await pushNews(env, inv.by_id, [{ t: 'mentor', xp: RULES.mentor.xp }], now);
     }
   }
   await checkAchievements(env, uid, { now, metrics: c.metrics, news, row: state });
@@ -748,10 +775,13 @@ async function firstStepsDue(env, uid) {
 }
 
 // ---------- достижения ----------
+// сколько строк журнала каждого вида — для достижений. Своя строка новичка за приглашение (invite, ref 'joined')
+// считается отдельно, как 'invited': иначе пришедший по ссылке получал бы «Вербовщика», никого не позвав
+const KIND_COUNT_SQL = "SELECT CASE WHEN kind = 'invite' AND ref = 'joined' THEN 'invited' ELSE kind END AS kind, COUNT(*) AS n FROM xp_log WHERE user_id = ? AND gone = 0 GROUP BY 1";
 // мерки: строки журнала по видам, лучшая серия и особые мерки, которые передаёт вызывающий
 export async function checkAchievements(env, uid, { now, metrics, news, row, quiet }) {
   const [cnt, have, lv] = await env.DB.batch([
-    env.DB.prepare('SELECT kind, COUNT(*) AS n FROM xp_log WHERE user_id = ? AND gone = 0 GROUP BY kind').bind(uid),
+    env.DB.prepare(KIND_COUNT_SQL).bind(uid),
     env.DB.prepare('SELECT code, tier FROM achievements WHERE user_id = ?').bind(uid),
     env.DB.prepare('SELECT best_streak, streak_day, metrics FROM user_level WHERE user_id = ?').bind(uid),
   ]);
@@ -841,6 +871,10 @@ export async function readLevel(env, uid) {
   const r = await env.DB.prepare('SELECT xp, level FROM user_level WHERE user_id = ?').bind(uid).first();
   return levelView(r ? +r.xp || 0 : 0, r ? +r.level || 1 : 1);
 }
+// засчитанные приглашения для строки user_level: подзапрос к invited (индекс invited_by), а не счётчик —
+// так награды за друзей видны сразу и одинаково везде, где строится lookOf
+export const INV_SQL = '(SELECT COUNT(*) FROM invited iv WHERE iv.by_id = ul.user_id AND iv.rewarded > 0) AS inv';
+export const invitesOf = (row) => Math.max(0, +(row && row.inv) || 0);
 export const prefsOf = (row) => {
   const p = parse(row && row.prefs, {});
   return { intro: !!p.intro, hideLevel: !!p.hideLevel, hideBoard: !!p.hideBoard, notify: p.notify !== false, anim: p.anim !== false, showcase: Array.isArray(p.showcase) ? p.showcase.slice(0, 3) : [], frame: p.frame || '', color: p.color || '', bg: p.bg || '', font: p.font || '', nick: p.nick || '', fx: p.fx || '', pet: !!p.pet };
@@ -848,9 +882,10 @@ export const prefsOf = (row) => {
 // оформление, которое видят другие: только то, что открыто уровнем.
 // rank — звание сезона рядом с ником: оно есть у всех, поэтому видно у всех (раньше — с 7-го уровня, и у одних в профиле
 // звание было, у других нет). seasonXp — опыт человека за текущий сезон
+// row.inv — сколько друзей по ссылке дошли до 3-го уровня (INV_SQL в запросе строки): награды за приглашения
 export function lookOf(row, seasonXp = 0, bought = null) {
   const lv = levelView(+row.xp || 0, +row.level || 1).level;
-  const p = prefsOf(row), u = unlockedAt(lv, false, bought), r = seasonRankOf(seasonXp);
+  const p = prefsOf(row), u = unlockedAt(lv, false, bought, invitesOf(row)), r = seasonRankOf(seasonXp);
   return {
     level: lv,
     frame: u.frames.includes(p.frame) ? p.frame : '',
@@ -873,7 +908,7 @@ export async function levelsOf(env, ids, boughtMap = null) {
   const out = {};
   for (let i = 0; i < ids.length; i += 90) {
     const part = ids.slice(i, i + 90);
-    const { results } = await env.DB.prepare(`SELECT ul.user_id, ul.xp, ul.level, ul.prefs, (SELECT COALESCE(SUM(l.xp), 0) FROM xp_log l WHERE l.user_id = ul.user_id AND l.gone = 0 AND l.at >= ?1) AS season
+    const { results } = await env.DB.prepare(`SELECT ul.user_id, ul.xp, ul.level, ul.prefs, (SELECT COALESCE(SUM(l.xp), 0) FROM xp_log l WHERE l.user_id = ul.user_id AND l.gone = 0 AND l.at >= ?1) AS season, ${INV_SQL}
       FROM user_level ul WHERE ul.user_id IN (${part.map((_, k) => '?' + (k + 2)).join(', ')})`).bind(s ? s.start : Date.now() + 1, ...part).all();
     for (const r of results || []) if (!prefsOf(r).hideLevel) out[r.user_id] = lookOf(r, +r.season || 0, boughtMap && boughtMap.get(r.user_id));
   }
@@ -884,7 +919,7 @@ export async function achievementsOf(env, uid) {
     env.DB.prepare('SELECT code, tier, at FROM achievements WHERE user_id = ?').bind(uid),
     env.DB.prepare('SELECT code, COUNT(*) AS n FROM achievements GROUP BY code'),
     env.DB.prepare('SELECT COUNT(*) AS n FROM users'),
-    env.DB.prepare('SELECT kind, COUNT(*) AS n FROM xp_log WHERE user_id = ? AND gone = 0 GROUP BY kind').bind(uid),
+    env.DB.prepare(KIND_COUNT_SQL).bind(uid),
     env.DB.prepare('SELECT best_streak, metrics FROM user_level WHERE user_id = ?').bind(uid),
   ]);
   const own = Object.fromEntries((mine.results || []).map((x) => [x.code, x]));

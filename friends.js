@@ -16,7 +16,7 @@
   // код приглашения (header-menu.js кладёт его из ?invite=): уходит с регистрацией один раз, иначе следующий аккаунт
   // из этого же браузера тоже отправил бы заявку пригласившему
   const INVITE_KEY = 'casualhub.invite.v1';
-  const dropInvite = () => lsSet(INVITE_KEY, null);
+  const dropInvite = () => { lsSet(INVITE_KEY, null); lsSet('casualhub.inviteBy.v1', null); }; // и ник пригласившего для формы
   function setTokenFor(localId, token) {
     const t = readTokens();
     if (token) t[localId] = token; else delete t[localId];

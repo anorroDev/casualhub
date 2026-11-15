@@ -88,6 +88,7 @@ html.unslop .lv-hbtn.lv-pulse { animation-duration: 2.6s; }
 .lv-frame-frame1 { --fr: url(/art/frame/frame1.svg); } .lv-frame-frame5 { --fr: url(/art/frame/frame5.svg); }
 .lv-frame-frame2 { --fr: url(/art/frame/frame2.svg); } .lv-frame-frame3 { --fr: url(/art/frame/frame3.svg); }
 .lv-frame-frame4 { --fr: url(/art/frame/frame4.svg); } .lv-frame-frame6 { --fr: url(/art/frame/frame6.svg); }
+.lv-frame-frame7 { --fr: url(/art/frame/frame7.svg); } /* «Компания» — за трёх друзей по ссылке */
 .lv-frame-frame4::after { inset: -23.34%; }
 .lv-frame-frame6::after { inset: -36.67%; }
 .lv-frame-frame2::after, .lv-frame-frame6::after { background-size: 200% 100%; animation: lv-fr 1.4s steps(2, jump-none) infinite; }
@@ -114,8 +115,10 @@ html.unslop .lv-hbtn.lv-pulse { animation-duration: 2.6s; }
 @keyframes lv-hue { to { filter: hue-rotate(360deg); } }
 /* эффекты профиля: звездопад (22-й), пиксельный снег (13-й) и искры костра (33-й) в шапке, конфетти при открытии (45-й).
    Снег и искры — пиксельные плитки /art/fx/*.svg: снег падает, искры поднимаются, ступеньками */
-.lv-fx-snow, .lv-fx-embers { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: url(/art/fx/snow.svg) 0 0 / 128px 128px repeat; image-rendering: pixelated; animation: lv-snow 9s steps(64) infinite; }
+.lv-fx-snow, .lv-fx-embers, .lv-fx-hearts { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: url(/art/fx/snow.svg) 0 0 / 128px 128px repeat; image-rendering: pixelated; animation: lv-snow 9s steps(64) infinite; }
 .lv-fx-embers { background-image: url(/art/fx/embers.svg); animation: lv-embers 6s steps(48) infinite; }
+.lv-fx-hearts { background: url(/art/fx/hearts.svg) 0 0 / 256px 256px repeat; animation: lv-hearts 14s steps(128) infinite; } /* за пятерых друзей по ссылке */
+@keyframes lv-hearts { to { background-position: 0 -256px; } }
 @keyframes lv-snow { to { background-position: 0 128px; } }
 @keyframes lv-embers { to { background-position: 0 -128px; } }
 .lv-fx-stars { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: #fff; opacity: .85; -webkit-mask: url(/art/site/stars.webp) 0 0 / 260px 260px repeat; mask: url(/art/site/stars.webp) 0 0 / 260px 260px repeat; animation: lv-fall 10s steps(52) infinite; }
@@ -123,7 +126,7 @@ html.unslop .lv-hbtn.lv-pulse { animation-duration: 2.6s; }
 .lv-conf { position: absolute; inset: 0; overflow: hidden; pointer-events: none; z-index: 6; border-radius: inherit; }
 .lv-conf i { position: absolute; top: -14px; width: 10px; height: 10px; animation: lv-cf 1.9s steps(16) var(--d, 0s) forwards; }
 @keyframes lv-cf { to { transform: translate(var(--x, 0), 520px) rotate(180deg); opacity: 0; } }
-@media (prefers-reduced-motion: reduce) { .lv-pet, .lv-nick-rainbow, .lv-fx-stars, .lv-fx-snow, .lv-fx-embers { animation: none !important; } }
+@media (prefers-reduced-motion: reduce) { .lv-pet, .lv-nick-rainbow, .lv-fx-stars, .lv-fx-snow, .lv-fx-embers, .lv-fx-hearts { animation: none !important; } }
 /* вкладка «Оформление»: предпросмотр профиля, замки, заметка для админа */
 .lv-lk { position: relative; border-radius: 14px; overflow: hidden; background: var(--panel-2, #1d2129); }
 .lv-lk-ban { position: relative; height: 112px; overflow: hidden; background: linear-gradient(135deg, color-mix(in srgb, var(--accent, #5B74FF) 35%, transparent), color-mix(in srgb, var(--good, #43C97A) 22%, transparent)); background-size: cover; background-position: center 70%; }
@@ -146,6 +149,7 @@ html.unslop .lv-hbtn.lv-pulse { animation-duration: 2.6s; }
 .banner.lv-bg-forest, .lv-lk-ban.lv-bg-forest, .lv-pick .sw.lv-bg-forest { background-image: url(/art/bg/forest.webp) !important; }
 .banner.lv-bg-ember, .lv-lk-ban.lv-bg-ember, .lv-pick .sw.lv-bg-ember { background-image: url(/art/bg/ember.webp) !important; }
 .banner.lv-bg-legend, .lv-lk-ban.lv-bg-legend, .lv-pick .sw.lv-bg-legend { background-image: url(/art/bg/legend.webp) !important; }
+.banner.lv-bg-horizon, .lv-lk-ban.lv-bg-horizon, .lv-pick .sw.lv-bg-horizon { background-image: url(/art/bg/horizon.webp) !important; }
 .lv-pick .sw[class*="lv-bg-"] { background-image: none; background-size: cover !important; background-position: center !important; }
 .lv-pick .sw.lv-bg-dawn { background-image: url(/art/bg/dawn-s.webp) !important; }
 .lv-pick .sw.lv-bg-night { background-image: url(/art/bg/night-s.webp) !important; }
@@ -153,13 +157,15 @@ html.unslop .lv-hbtn.lv-pulse { animation-duration: 2.6s; }
 .lv-pick .sw.lv-bg-forest { background-image: url(/art/bg/forest-s.webp) !important; }
 .lv-pick .sw.lv-bg-ember { background-image: url(/art/bg/ember-s.webp) !important; }
 .lv-pick .sw.lv-bg-legend { background-image: url(/art/bg/legend-s.webp) !important; }
+.lv-pick .sw.lv-bg-horizon { background-image: url(/art/bg/horizon-s.webp) !important; }
 .banner[class*="lv-bg-"], .lv-lk-ban[class*="lv-bg-"] { background-size: cover !important; background-position: center 70% !important; }
 .banner.lv-bg-legend, .lv-lk-ban.lv-bg-legend { background-position: center 15% !important; } /* сияние — вверху картинки */
-/* эмблемы достижений: пиксельные картинки из листа /art/ach.webp (6×4, порядок как в ACH_ART).
+.banner.lv-bg-horizon, .lv-lk-ban.lv-bg-horizon { background-position: center 35% !important; } /* луна — вверху справа */
+/* эмблемы достижений: пиксельные картинки из листа /art/ach.webp (6×5, порядок — ACH_SHEET в скрипте).
    Одни и те же в обычном и казуальном виде (html.unslop); линейный SVG остаётся только у скрытых «?» */
 .lv-px { display: none; }
 html .px > svg { display: none; }
-html .px > .lv-px { display: block; width: 100%; height: 100%; background: url(/art/ach.webp) calc(var(--ax) * 20%) calc(var(--ay) * 100% / 3) / 600% 400% no-repeat; }
+html .px > .lv-px { display: block; width: 100%; height: 100%; background: url(/art/ach.webp) calc(var(--ax) * 20%) calc(var(--ay) * 25%) / 600% 500% no-repeat; }
 html .lv-bi .ic.px { padding: 3px; background: color-mix(in srgb, var(--c1) 14%, var(--panel, #1b1d24)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c2) 45%, transparent); }
 html .lv-sic.px { width: 22px; height: 22px; background: none; }
 html .px > .lv-px.vasyan { background: url(/art/pet-vasyan.webp) 0 50% / 600% auto no-repeat; image-rendering: pixelated; }
@@ -351,6 +357,60 @@ html.lv-on .ava-wrap > .ava-ring { display: none !important; }
 .lv-recap .wide { grid-column: 1 / -1; }
 .lv-recap .wide b { font-size: 18px; }
 .lv-err { color: #E4553F; font-size: 13px; margin: 0; }
+/* «Пригласить»: ссылка, шаги, награды за друзей, кто пришёл */
+.lv-inv-hero { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 18px; align-items: center; }
+.lv-inv-hero .empty-art { width: 116px; height: auto; grid-row: span 2; }
+.lv-inv-hero h3 { margin: 0; font: 800 20px/1.2 var(--font-display, system-ui); }
+.lv-inv-hero p { margin: 0; }
+.lv-inv-hero .lv-link { grid-column: 1 / -1; margin-top: 6px; }
+@media (max-width: 520px) { .lv-inv-hero { grid-template-columns: minmax(0, 1fr); } .lv-inv-hero .empty-art { grid-row: auto; justify-self: center; width: 104px; } }
+.lv-steps { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr)); gap: 8px; }
+.lv-steps li { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 2px 10px; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--ink, #fff) 4%, transparent); font-size: 13.5px; line-height: 1.35; }
+.lv-steps .n { grid-row: span 2; width: 26px; height: 26px; display: grid; place-items: center; border-radius: 8px; background: var(--accent, #5B74FF); color: #fff; font: 800 13px/1 var(--font-display, system-ui); }
+.lv-steps small { color: var(--ink-3, #8a8f9e); font-size: 12.5px; }
+.lv-ir { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 130px), 1fr)); gap: 8px; }
+.lv-ir > div { position: relative; display: grid; justify-items: center; gap: 6px; padding: 14px 10px 12px; border-radius: 14px; border: 1px solid var(--line, #2b2e38); text-align: center; font-size: 13px; line-height: 1.3; }
+.lv-ir > div.got { border-color: color-mix(in srgb, var(--good, #2EAD60) 55%, var(--line, #2b2e38)); }
+.lv-ir > div.next { border-color: var(--accent, #5B74FF); background: color-mix(in srgb, var(--accent, #5B74FF) 8%, transparent); }
+.lv-ir .pv { height: 46px; display: grid; place-items: center; }
+.lv-ir .pv .fr { position: relative; width: 32px; height: 32px; border-radius: 50%; background: var(--accent, #5B74FF); }
+.lv-ir .pv .dot { width: 22px; height: 22px; box-shadow: inset 2px 2px 0 rgb(255 255 255 / .38), inset -2px -2px 0 rgb(0 0 0 / .32); outline: 2px solid #120e16; }
+.lv-ir .pv .sw { position: relative; overflow: hidden; width: 80px; height: 40px; border-radius: 8px; border: 1px solid var(--line, #2b2e38); background: #1b1424 center 80% / cover; }
+.lv-ir .pv .sw.lv-bg-horizon { background-image: url(/art/bg/horizon-s.webp); }
+.lv-ir .pv .sw > i { background-size: 128px 128px; }
+.lv-ir .n { font-size: 12px; color: var(--ink-3, #8a8f9e); }
+.lv-ir .got .n { color: var(--good, #2EAD60); font-weight: 700; }
+.lv-ir.off > div:not(.got) .pv { opacity: .55; }
+.lv-ppl { display: grid; gap: 6px; }
+.lv-ppl > div { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 4px 12px; align-items: center; padding: 10px 12px; border-radius: 12px; background: color-mix(in srgb, var(--ink, #fff) 4%, transparent); font-size: 14px; }
+.lv-ppl .av { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; background: var(--accent, #5B74FF); color: #fff; font: 800 15px/1 var(--font-display, system-ui); }
+.lv-ppl a { color: var(--ink, #fff); font-weight: 700; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lv-ppl a:hover { text-decoration: underline; }
+.lv-ppl .st { display: block; font-size: 12.5px; color: var(--ink-3, #8a8f9e); }
+.lv-ppl .st b { color: #D99A1E; font-variant-numeric: tabular-nums; }
+.lv-ppl .lv-bar { grid-column: 2 / -1; height: 5px; }
+.lv-ppl .lv-btn { padding: 7px 12px; font-size: 12.5px; }
+.lv-ppl .tag { font-size: 12px; font-weight: 700; color: var(--good, #2EAD60); white-space: nowrap; }
+@media (max-width: 520px) { .lv-ppl .lv-btn { grid-column: 2 / -1; justify-self: start; } } /* на телефоне кнопка под ником, а не рядом */
+/* таблица «За что сколько опыта» в «Обзоре» */
+.lv-xpt > summary { list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; }
+.lv-xpt > summary::-webkit-details-marker { display: none; }
+.lv-xpt > summary h3 { margin: 0; }
+.lv-xpt > summary i { font-style: normal; color: var(--ink-3, #8a8f9e); transition: transform .2s; }
+.lv-xpt[open] > summary i { transform: rotate(90deg); }
+.lv-xpt table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.lv-xpt th, .lv-xpt td { text-align: left; padding: 7px 8px; border-top: 1px solid var(--line, #2b2e38); vertical-align: top; }
+.lv-xpt thead th { border-top: 0; font-size: 12px; font-weight: 700; color: var(--ink-3, #8a8f9e); }
+.lv-xpt .g th { padding-top: 16px; border-top: 0; font-size: 14px; font-weight: 800; color: var(--ink, #fff); }
+.lv-xpt td.xp { font-weight: 800; color: #D99A1E; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.lv-xpt td.lim { color: var(--ink-3, #8a8f9e); font-size: 12.5px; }
+@media (max-width: 520px) {
+  .lv-xpt thead { display: none; }
+  .lv-xpt tbody tr:not(.g) { display: grid; grid-template-columns: minmax(0, 1fr) auto; border-top: 1px solid var(--line, #2b2e38); padding: 6px 0; }
+  .lv-xpt tbody tr:not(.g) td { border: 0; padding: 2px 4px; }
+  .lv-xpt td.lim { grid-column: 1 / -1; }
+}
+@media (prefers-reduced-motion: reduce) { .lv-xpt > summary i { transition: none; } }
 /* знакомство: всё размыто, кроме кнопки уровня (её копия лежит поверх размытия ровно на месте настоящей) */
 .lv-spot { position: fixed; inset: 0; z-index: 130; background: rgb(8 10 16 / .55); -webkit-backdrop-filter: blur(9px) saturate(.8); backdrop-filter: blur(9px) saturate(.8); animation: lv-fade .25s ease both; }
 @keyframes lv-fade { from { opacity: 0; } }
@@ -428,7 +488,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     tick();
     resetT = setInterval(tick, 1000);
   }
-  const FX_LAYER = ['stars', 'snow', 'embers']; // эффекты слоем в шапке профиля (конфетти — отдельно, при открытии)
+  const FX_LAYER = ['stars', 'snow', 'embers', 'hearts']; // эффекты слоем в шапке профиля (конфетти — отдельно, при открытии)
   // шрифты ника (награды за уровни; id — как NICK_FONTS в levels.js): Google Fonts, грузятся только буквы ника (&text=).
   // Выбранный шрифт одинаков во всех видах интерфейса: начертание, насыщенность, регистр и интервал вид не меняет (!important)
   const FONTS = { comfortaa: ['Comfortaa', 700], caveat: ['Caveat', 700], lobster: ['Lobster', 400], press: ['Press Start 2P', 400], pacifico: ['Pacifico', 400], russo: ['Russo One', 400], amatic: ['Amatic SC', 700], kelly: ['Kelly Slab', 400], aladin: ['Aladin', 400], yeseva: ['Yeseva One', 400], unbounded: ['Unbounded', 700], underdog: ['Underdog', 400], marck: ['Marck Script', 400], glitch: ['Rubik Glitch', 400], ruslan: ['Ruslan Display', 400], paint: ['Rubik Wet Paint', 400], beastly: ['Rubik Beastly', 400] };
@@ -447,7 +507,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   // значок звания сезона: /art/rank/<id>.svg (id из ответа сервера, только латиница). В окнах без lazy — нужен сразу
   const emblem = (id, size, cls) => (/^[a-z]{2,12}$/.test(String(id || '')) ? `<img class="lv-emb${cls ? ' ' + cls : ''}" src="/art/rank/${id}.svg" width="${size}" height="${size}" alt="" decoding="async">` : '');
   const rankTitle = (id) => { const r = ME && ME.season && (ME.season.ranks || []).find((x) => x.id === id); return r ? r.title : ''; };
-  const NEWS_ICON = { level: '★', ach: '🏅', quest: '✓', quest_all: '✓', quest_week: '✓', streak: '🔥', first: '→', invite: '+', invite_me: '+', freeze: '❄', rank: '★', season: '★' };
+  const NEWS_ICON = { level: '★', ach: '🏅', quest: '✓', quest_all: '✓', quest_week: '✓', streak: '🔥', first: '→', invite: '+', invite_me: '+', mentor: '★', invite_rw: '♥', freeze: '❄', rank: '★', season: '★' };
   function newsLine(n) {
     if (n.t === 'rank') return `Новое звание: ${n.title}`;
     if (n.t === 'season') return `Начался ${n.title || 'новый сезон'}` + (n.prev && n.prev.rank ? `. Прошлый: ${rankTitle(n.prev.rank) || n.prev.rank}${n.prev.place ? `, ${n.prev.place}-е место` : ''}` : '');
@@ -461,6 +521,8 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     if (n.t === 'first') return `Первые шаги: ${n.title}\u00a0·\u00a0+${n.xp}`;
     if (n.t === 'invite') return `Друг по твоей ссылке дошёл до 3-го уровня\u00a0·\u00a0+${n.xp}`;
     if (n.t === 'invite_me') return `Приглашение друга засчитано\u00a0·\u00a0+${n.xp}`;
+    if (n.t === 'mentor') return `Друг по твоей ссылке дошёл до 10-го уровня\u00a0·\u00a0+${n.xp}`;
+    if (n.t === 'invite_rw') return `Награда за друзей: ${n.title}`;
     if (n.t === 'gift') return `Подарок из почты ·\u00a0+${n.xp}\u00a0опыта`;
     return '';
   }
@@ -745,7 +807,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       if (d.look.pet) ava.insertAdjacentHTML('beforeend', '<i class="lv-pet" aria-hidden="true"></i>');
     }
     const anyBan = hero.querySelector('.banner');
-    if (anyBan) { anyBan.querySelectorAll(':scope > .lv-fx-stars, :scope > .lv-fx-snow, :scope > .lv-fx-embers').forEach((x) => x.remove()); if (FX_LAYER.includes(d.look.fx)) anyBan.insertAdjacentHTML('beforeend', `<i class="lv-fx-${d.look.fx}" aria-hidden="true"></i>`); }
+    if (anyBan) { anyBan.querySelectorAll(':scope > i[class^="lv-fx-"]').forEach((x) => x.remove()); if (FX_LAYER.includes(d.look.fx)) anyBan.insertAdjacentHTML('beforeend', `<i class="lv-fx-${d.look.fx}" aria-hidden="true"></i>`); }
     if (d.look.fx === 'confetti' && confFor !== id) { confFor = id; burst(hero); }
     const banner = hero.querySelector('.banner.def');
     [...hero.classList].filter((c) => c.startsWith('lv-bg-')).forEach((c) => hero.classList.remove(c));
@@ -832,7 +894,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
 
   // ---------- окно «Прогресс» ----------
   const TABS = [['home', 'Обзор'], ['mail', 'Почта'], ['ach', 'Достижения'], ['board', 'Рейтинг'], ['hist', 'История'], ['recap', 'Итоги 2026'], ['look', 'Оформление'], ['invite', 'Пригласить']];
-  const SOON_TABS = new Set(['invite']); // пока в разработке: серые, с подсказкой
+  const SOON_TABS = new Set(); // вкладки «в разработке»: серые, с подсказкой (сейчас таких нет)
   const soon = (k) => SOON_TABS.has(k);
   let ov = null, tab = 'home', lastFocus = null;
   function openProgress(which) {
@@ -960,6 +1022,8 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     fan: ['#F9A8D4', '#DB2777', '<path d="M12 20s-7.5-4.6-7.5-10.2A4.2 4.2 0 0 1 12 7.2a4.2 4.2 0 0 1 7.5 2.6C19.5 15.4 12 20 12 20z"/>'],
     popular: ['#FDBA74', '#EA580C', '<path d="M12 21c-3.9 0-6.5-2.6-6.5-6 0-3.6 3-5.6 3.6-9.2 2.6 1.5 4.4 4 4.4 6.6 1-.8 1.5-2 1.6-3.1 1.8 1.6 3.4 3.7 3.4 5.7 0 3.4-2.6 6-6.5 6z"/>'],
     recruiter: ['#A5B4FC', '#4338CA', '<circle cx="10" cy="8" r="3.4"/><path d="M3.5 20a6.5 6.5 0 0 1 13 0"/><path d="M18.5 7.5v6M15.5 10.5h6"/>'],
+    mentor: ['#93C5FD', '#1D4ED8', '<path d="M12 4.5L22 9l-10 4.5L2 9z"/><path d="M6 11v4.5c0 1.6 2.7 3 6 3s6-1.4 6-3V11M20 10v5.5"/>'],
+    invited: ['#F9A8D4', '#DB2777', '<rect x="3" y="5.5" width="18" height="13" rx="2"/><path d="M3.5 6.5L12 13l8.5-6.5"/><path d="M12 17.2s-2.6-1.5-2.6-3.3a1.4 1.4 0 0 1 2.6-.7 1.4 1.4 0 0 1 2.6.7c0 1.8-2.6 3.3-2.6 3.3z" fill="currentColor" stroke="none"/>'],
     auctioneer: ['#FCD34D', '#B45309', '<circle cx="12" cy="12" r="8.2"/><path d="M12 12V3.8M12 12l7.2 4M12 12l-7.2 4"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/>'],
     lucky: ['#86EFAC', '#15803D', '<circle cx="9" cy="9" r="3.2"/><circle cx="15" cy="9" r="3.2"/><circle cx="9" cy="15" r="3.2"/><circle cx="15" cy="15" r="3.2"/><path d="M12 12l5 8"/>'],
     rhythm: ['#FDBA74', '#C2410C', '<path d="M12 21c-3.9 0-6.5-2.6-6.5-6 0-3.6 3-5.6 3.6-9.2 2.6 1.5 4.4 4 4.4 6.6 1-.8 1.5-2 1.6-3.1 1.8 1.6 3.4 3.7 3.4 5.7 0 3.4-2.6 6-6.5 6z"/><path d="M12 18a2.4 2.4 0 0 1-2.4-2.4c0-1.4 1.2-2.2 1.5-3.6 1.4.9 3.3 2 3.3 3.6A2.4 2.4 0 0 1 12 18z"/>'],
@@ -971,11 +1035,13 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     event: ['#F0ABFC', '#A21CAF', '<rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 9.5h16M8.5 3.5v3M15.5 3.5v3"/><path d="M12 12l1 2 2.2.3-1.6 1.5.4 2.2-2-1-2 1 .4-2.2-1.6-1.5 2.2-.3z"/>'],
     recap2026: ['#FDE68A', '#CA8A04', '<rect x="4" y="9" width="16" height="11" rx="2"/><path d="M3 9h18v-3H3zM12 6v14M12 6c-1-2.5-4.5-2.5-4.5-.5S10 6 12 6zm0 0c1-2.5 4.5-2.5 4.5-.5S14 6 12 6z"/>'],
   };
-  // пиксельная эмблема: клетка листа /art/ach.webp по порядку ключей ACH_ART (незнакомый код — как у «Критика»)
-  const ACH_KEYS = Object.keys(ACH_ART);
+  // пиксельная эмблема: клетка листа /art/ach.webp (6×5) — порядок клеток свой, не порядок ACH_ART: новые достижения
+  // дописываются в конец листа и сюда же (незнакомый код — как у «Критика»)
+  const ACH_SHEET = ['founder', 'first_steps', 'critic', 'reviewer', 'omnivore', 'finisher', 'moved', 'tiermaker', 'masterpiece', 'soul', 'chatter', 'fan',
+    'popular', 'recruiter', 'auctioneer', 'lucky', 'rhythm', 'questor', 'night', 'strict', 'nope', 'comeback', 'event', 'recap2026', 'riddler', 'mentor', 'invited'];
   function achPx(code) {
     if (code === 'first10') return '<i class="lv-px vasyan"></i>'; // эмблема — сам Васян
-    const i = ACH_KEYS.indexOf(code), k = i < 0 ? ACH_KEYS.indexOf('critic') : i;
+    const i = ACH_SHEET.indexOf(code), k = i < 0 ? ACH_SHEET.indexOf('critic') : i;
     return `<i class="lv-px" style="--ax:${k % 6};--ay:${Math.floor(k / 6)}"></i>`;
   }
   const TIER = ['', 'бронза', 'серебро', 'золото'];
@@ -998,6 +1064,54 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     return `<div class="lv-bdg">${got.concat(first).map((a) => achCard(a, pin, show)).join('')}</div>`
       + (more.length ? `<details class="lv-more"><summary>Ещё ${more.length}</summary><div class="lv-bdg">${more.map((a) => achCard(a, pin, show)).join('')}</div></details>` : '');
   }
+  // таблица «За что сколько опыта»: подписи здесь, цифры и лимиты — из правил сервера (ME.xpRules), чтобы не разойтись
+  const XP_TABLE = [
+    ['Оценки', [['rate', 'Новая оценка с баллами'], ['review', 'Отзыв от 100 символов'], ['rate_full', 'Оценка целиком: баллы по 2+ критериям и обложка'], ['plan_done', 'Оценил то, что было «В планах»'], ['import', 'Оценка из импорта Letterboxd']]],
+    ['Друзья', [['friend', 'Новый друг'], ['react', 'Реакция на оценку или тир-лист друга'], ['comment', 'Комментарий или запись на стене'], ['got_react', 'Твою оценку отметили реакцией'], ['got_comment', 'Тебе написали комментарий']]],
+    ['Тир-листы', [['tier', 'Новый тир-лист от 8 элементов'], ['tier_share', 'Поделился тир-листом'], ['tier_coop', '«Тир-лист вместе»: разложил хотя бы половину'], ['tier_coop_host', 'Провёл «Тир-лист вместе», где голосовали трое']]],
+    ['Лоты и игры', [['lots_host', 'Провёл сбор лотов до победителя (от 3 участников)'], ['lot_add', 'Лот в чужой сбор'], ['lot_win', 'Твой лот победил'], ['predict_win', 'Угадал победителя сбора'], ['bingo_win', 'Линия в бинго одним из первых трёх'], ['king_host', 'Довёл «Царя Горы» до конца'], ['king_vote', 'Голос в бою чужого турнира'], ['riddle', 'Отгадал загадку дня']]],
+    ['Каждый день', [['visit', 'Зашёл на сайт'], ['quest', 'Задание дня', '3 в день'], ['quest_all', 'Все три задания дня', 'раз в день'], ['quest_week', 'Задание недели', 'раз в неделю'], ['@streak', 'Серия дней подряд: 7, 30, 100', 'за каждую отметку'], ['@first', 'Первые шаги', 'каждый один раз']]],
+    ['Приглашения', [['invite', 'Друг по твоей ссылке дошёл до 3-го уровня — вам обоим', 'за каждого друга'], ['mentor', 'Друг по твоей ссылке дошёл до 10-го уровня', 'за каждого друга']]],
+  ];
+  function xpLim(r) {
+    const out = [];
+    if (r.day != null) out.push(r.day === 1 ? 'раз в день' : `${r.day} в день`);
+    if (r.tail) out.push(`потом по +${r.tail.xp}, ещё ${r.tail.day}`);
+    if (r.pair != null) out.push(`с одним человеком — ${r.pair}`);
+    if (r.ever != null) out.push(`до ${r.ever} за всё время`);
+    return out.length ? out.join(', ') : 'без лимита';
+  }
+  let xptOpen = false; // раскрыта ли таблица: перерисовка «Обзора» её не сворачивает
+  function xpTable(m) {
+    const R = m.xpRules || {};
+    const rows = XP_TABLE.map(([g, list]) => {
+      const tr = list.map(([k, what, lim]) => {
+        let xp = '', l = lim;
+        if (k === '@streak') xp = Object.values(m.streakBonus || {}).map((v) => '+' + v).join(' / ');
+        else if (k === '@first') { const f = m.firstXp || []; xp = f.length ? `+${Math.min(...f)}…${Math.max(...f)}` : ''; }
+        else if (R[k]) { xp = '+' + R[k].xp; if (!l) l = xpLim(R[k]); }
+        return xp ? `<tr><td>${esc(what)}</td><td class="xp">${xp}</td><td class="lim">${esc(l || '')}</td></tr>` : '';
+      }).join('');
+      return tr ? `<tr class="g"><th colspan="3">${esc(g)}</th></tr>${tr}` : '';
+    }).join('');
+    if (!rows) return '<p class="lv-muted">Опыт дают оценки, отзывы, тир-листы, реакции и комментарии друзьям, лоты. У каждого действия дневной лимит; удалишь — опыт уйдёт.</p>';
+    return `<details class="lv-box lv-xpt"${xptOpen ? ' open' : ''}><summary><h3>За что сколько опыта</h3><i aria-hidden="true">›</i></summary>
+      <table><thead><tr><th>Действие</th><th>Опыт</th><th>Лимит</th></tr></thead><tbody>${rows}</tbody></table>
+      <p class="lv-muted">Сверх лимита действие засчитывается, но без опыта. Удалишь оценку, отзыв или комментарий — опыт за них уйдёт. День считается по твоему часовому поясу${m.event ? `; сейчас идёт «${esc(m.event.title)}» — ×${m.event.mult} за отмеченные действия` : ''}.</p></details>`;
+  }
+  // награды за друзей по ссылке: превью, подпись и сколько нужно друзей
+  const FRIENDS = (n) => `${n} ${plural(n, 'друг', 'друга', 'друзей')}`;
+  function invPreview(r, colors) {
+    if (r.kind === 'color') return `<span class="dot" style="background:${(colors || {})[r.id] || '#3DD6A3'}"></span>`;
+    if (r.kind === 'frame') return `<span class="fr lv-frame-${esc(r.id)}"></span>`;
+    if (r.kind === 'fx') return `<span class="sw"><i class="lv-fx-${esc(r.id)}" aria-hidden="true"></i></span>`;
+    if (r.kind === 'bg') return `<span class="sw lv-bg-${esc(r.id)}"></span>`;
+    return '';
+  }
+  function invRewards(list, counted, colors) {
+    const next = list.find((r) => counted < r.n);
+    return `<div class="lv-ir">${list.map((r) => { const got = counted >= r.n; return `<div class="${got ? 'got' : r === next ? 'next' : ''}"><span class="pv" aria-hidden="true">${invPreview(r, colors)}</span><b>${esc(r.title)}</b><span class="n">${got ? 'Открыто ✓' : `${FRIENDS(r.n)} · ${Math.min(counted, r.n)} из ${r.n}`}</span></div>`; }).join('')}</div>`;
+  }
   const medal = (a) => `<i class="lv-medal ${a.got ? 'lv-t' + (a.tiers > 1 ? a.tier : 0) : 'lv-tx'}">${a.got || !a.hidden ? esc(a.title.charAt(0)) : '?'}</i>`;
   const VIEWS = {
     async home() {
@@ -1014,7 +1128,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
         <div class="lv-box"><h3>Задания дня</h3>${daily || '<p class="lv-muted">Заданий пока нет.</p>'}<p class="lv-muted">За все три — ещё +${q.allXp}${q.allPaid ? ' (получено)' : ''}. Новые задания через <b class="lv-reset" data-lv-reset>${hms(untilMidnight())}</b>.</p></div>
         ${w ? `<div class="lv-box"><h3>Задание недели</h3><div class="lv-q${w.done ? ' done' : ''}"><span>${esc(w.title)} · ${w.progress} из ${w.goal}</span><span class="xp">+${w.xp}</span>${bar(pct(w.progress, w.goal))}</div><p class="lv-muted">Новое задание через <b class="lv-reset" data-lv-reset="week">${dhms(untilMonday())}</b>.</p></div>` : ''}
         ${steps}
-        <p class="lv-muted">Опыт дают оценки, отзывы, тир-листы, реакции и комментарии друзьям, лоты. У каждого действия дневной лимит; удалишь — опыт уйдёт.</p>`;
+        ${xpTable(m)}`;
     },
     // звания сезона: моё крупно со звёздами до следующего, лестница от «Величайшего» вниз, уровень и прошлые сезоны
     async ranks() {
@@ -1080,22 +1194,25 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       const m = ME, u = m.unlocked, p = m.prefs;
       // уровень, на котором открывается награда (для подписи на закрытой кнопке)
       const at = (id) => (m.rewards.find((r) => r.id === id) || {}).level || '';
-      const lock = (id) => `<small class="lv-lock">${at(id)} ур.</small>`;
-      const opt = (attr, val, cur, open, need, inner) => `<button type="button" data-${attr}="${val}" aria-pressed="${cur === val}"${val && !open ? ` disabled title="Откроется на ${at(need)}-м уровне"` : ''}>${inner}${val && !open ? lock(need) : ''}</button>`;
-      const FR = { '': 'Без рамки', frame1: 'Казуал', frame5: 'Пиксель', frame2: 'Неон', frame3: 'Переливы', frame4: 'Мастер', frame6: 'Легенда' };
-      const BG = { '': 'Без фона', dawn: 'Закат', night: 'Ночь', city: 'Город', forest: 'Лес', ember: 'Уют', legend: 'Легенда' };
+      // награды за друзей по ссылке открываются не уровнем: на замке — сколько друзей нужно
+      const byInv = (id) => (m.invRewards || []).find((r) => r.id === id);
+      const lock = (id) => `<small class="lv-lock">${byInv(id) ? FRIENDS(byInv(id).n) : at(id) + ' ур.'}</small>`;
+      const why = (id) => (byInv(id) ? `Откроется, когда ${FRIENDS(byInv(id).n)} по твоей ссылке дойдут до 3-го уровня` : `Откроется на ${at(id)}-м уровне`);
+      const opt = (attr, val, cur, open, need, inner) => `<button type="button" data-${attr}="${val}" aria-pressed="${cur === val}"${val && !open ? ` disabled title="${why(need)}"` : ''}>${inner}${val && !open ? lock(need) : ''}</button>`;
+      const FR = { '': 'Без рамки', frame1: 'Казуал', frame5: 'Пиксель', frame2: 'Неон', frame3: 'Переливы', frame4: 'Мастер', frame6: 'Легенда', frame7: 'Компания' };
+      const BG = { '': 'Без фона', dawn: 'Закат', night: 'Ночь', city: 'Город', forest: 'Лес', ember: 'Уют', legend: 'Легенда', horizon: 'Горизонт' };
       const NK = { '': 'Обычный', outline: 'Контур', shadow: 'С тенью', arcade: 'Аркада', rainbow: 'Радужный' };
       const nmOf = () => { const a = read('ocenshik.user.v1') || {}; return a.username || a.name || 'Ты'; };
-      const FX = { '': 'Без эффекта', snow: 'Снег', stars: 'Звездопад', embers: 'Искры', confetti: 'Конфетти' };
+      const FX = { '': 'Без эффекта', snow: 'Снег', stars: 'Звездопад', embers: 'Искры', confetti: 'Конфетти', hearts: 'Сердечки' };
       const frames = Object.keys(FR).map((f) => opt('frame', f, p.frame, u.frames.includes(f), f, `${f ? `<span class="fr fr-ava lv-frame-${f}"></span>` : ''}${FR[f]}`)).join('');
-      const colors = ['', ...Object.keys(m.colors)].map((c) => opt('color', c, p.color, u.colors.includes(c), c === 'gold' ? 'gold' : 'colors', c ? `<span class="dot" style="background:${m.colors[c]}" aria-label="${c}"></span>` : 'Обычный')).join('');
+      const colors = ['', ...Object.keys(m.colors)].map((c) => opt('color', c, p.color, u.colors.includes(c), c === 'gold' || byInv(c) ? c : 'colors', c ? `<span class="dot" style="background:${m.colors[c]}" aria-label="${c}"></span>` : 'Обычный')).join('');
       const nicks = Object.keys(NK).map((n) => opt('nick', n, p.nick, u.nicks.includes(n), n, n ? `<span class="lv-nick-${n}">${NK[n]}</span>` : NK[n])).join('');
       // шрифты: твой ник каждым шрифтом (закрытые тоже видно — чтобы было, ради чего расти)
       const fontIds = Object.keys(FONTS);
       const fonts = opt('font', '', p.font, true, '', '<span class="fnt">' + esc(nmOf()) + '</span><small class="fnt-n">Обычный</small>')
         + fontIds.map((f) => opt('font', f, p.font, (u.fonts || []).includes(f), 'font:' + f, `<span class="fnt lv-font-${f}">${esc(nmOf())}</span><small class="fnt-n">${esc(FONTS[f][0])}</small>`)).join('');
       needFonts(fontIds, nmOf());
-      const bgs = ['', ...m.bgs].map((g) => opt('bg', g, p.bg, u.bgs.includes(g), g === 'legend' ? 'frame6' : 'bgs', `${g ? `<span class="sw lv-bg-${g}"></span>` : ''}${BG[g]}`)).join('');
+      const bgs = ['', ...m.bgs].map((g) => opt('bg', g, p.bg, u.bgs.includes(g), g === 'legend' ? 'frame6' : byInv(g) ? g : 'bgs', `${g ? `<span class="sw lv-bg-${g}"></span>` : ''}${BG[g]}`)).join('');
       const fxs = Object.keys(FX).map((f) => opt('fx', f, p.fx, u.fx.includes(f), f, FX[f])).join('');
       const pet = [['', 'Не показывать'], ['1', 'Показывать']].map(([v, t]) => opt('pet', v, p.pet ? '1' : '', u.pet, 'pet', t)).join('');
       const rw = m.rewards.map((r) => { const got = m.level >= r.level; return `<div class="${got ? 'got' : ''}"><span class="l">${r.level}</span><span class="${got ? '' : 'no'}">${esc(r.title)}</span>${got ? '<span class="ok" aria-label="Открыто">✓</span>' : ''}</div>`; }).join('');
@@ -1119,6 +1236,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
         <div class="lv-box"><h3>Фон профиля</h3><div class="lv-pick">${bgs}</div></div>
         <div class="lv-box"><h3>Эффект и котик</h3><div class="lv-pick">${fxs}</div><p class="lv-muted" style="margin:10px 0 6px">Котик Васян рядом с аватаром</p><div class="lv-pick">${pet}</div></div>
         <div class="lv-box"><h3>Награды за уровни</h3><div class="lv-rw">${rw}</div></div>
+        ${(m.invRewards || []).length ? `<div class="lv-box"><h3>Награды за друзей</h3><p class="lv-muted">Их не открыть уровнем: только когда друзья по твоей ссылке дойдут до 3-го уровня.</p>${invRewards(m.invRewards, +m.invites || 0, m.colors)}<button type="button" class="lv-btn ghost" data-go-invite style="justify-self:start">Пригласить друга</button></div>` : ''}
         <div class="lv-box"><h3>Видимость и уведомления</h3>${tg('hideLevel', 'Скрыть мой уровень от других', p.hideLevel)}${tg('hideBoard', 'Не показывать меня в рейтинге недели', p.hideBoard)}${tg('notify', 'Плашки о наградах', p.notify)}</div>
         <p class="lv-err" id="lvLookMsg" role="status"></p>`;
     },
@@ -1128,11 +1246,36 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       return `<div class="lv-box"><h3>Последние начисления</h3><div class="lv-hist">${rows || '<p class="lv-muted">Пока пусто.</p>'}</div></div>`;
     },
     async invite() {
-      const d = await api('/levels/invite');
-      return `<div class="lv-box"><h3>Пригласи друга</h3><p class="lv-muted">Друг откроет ссылку и зарегистрируется — вы сразу станете друзьями. Когда он дойдёт до 3-го уровня, вы оба получите +${d.xp} опыта.</p>
-        <div class="lv-link"><input id="lvInv" readonly value="${esc(d.url)}" aria-label="Ссылка-приглашение"><button type="button" class="lv-btn" id="lvCopy">Скопировать</button></div>
-        <p class="lv-muted" id="lvCopyMsg" role="status"></p></div>
-        <div class="lv-box"><h3>Пришли по твоей ссылке</h3>${d.people.length ? d.people.map((p) => `<div class="lv-q${p.done ? ' done' : ''}"><span>${esc(p.username)}</span><span class="xp">${p.done ? '+' + d.xp : 'ещё не 3-й уровень'}</span></div>`).join('') : '<p class="lv-muted">Пока никого.</p>'}</div>`;
+      const [d, ach] = await Promise.all([api('/levels/invite'), api('/levels/achievements').catch(() => null)]);
+      VIEWS.invData = d;
+      const art = window.CasualUtil && window.CasualUtil.emptyArt ? window.CasualUtil.emptyArt('friends').replace(' loading="lazy"', '') : '';
+      const share = navigator.share ? '<button type="button" class="lv-btn ghost" id="lvShare">Поделиться</button>' : '';
+      const hero = `<div class="lv-box lv-inv-hero">${art}<h3>Зови друзей — вместе веселее</h3><p class="lv-muted">Оценивайте игры и кино, собирайте тир-листы и крутите колесо компанией. За друзей, которые прижились на сайте, — опыт и оформление, которого нет за уровни.</p>
+        <div class="lv-link"><input id="lvInv" readonly value="${esc(d.url)}" aria-label="Ссылка-приглашение"><button type="button" class="lv-btn" id="lvCopy">Скопировать</button>${share}</div>
+        <p class="lv-muted" id="lvCopyMsg" role="status"></p></div>`;
+      const how = `<div class="lv-box"><h3>Как это работает</h3><ol class="lv-steps">
+        <li><span class="n">1</span><b>Отправь ссылку</b><small>в чат, в личку — куда удобно</small></li>
+        <li><span class="n">2</span><b>Друг регистрируется</b><small>и сразу присылает тебе заявку в друзья</small></li>
+        <li><span class="n">3</span><b>3-й уровень: +${d.xp} обоим</b><small>и шаг к наградам за друзей</small></li>
+        <li><span class="n">4</span><b>10-й уровень: тебе +${d.mentorXp}</b><small>и достижение «Наставник»</small></li></ol></div>`;
+      const next = d.rewards.find((r) => !r.got);
+      const rw = `<div class="lv-box"><h3>Награды за друзей</h3><p class="lv-muted">${next ? `Засчитано друзей: ${d.counted}. До награды «${esc(next.title)}» — ещё ${FRIENDS(next.n - d.counted)}.` : 'Все награды за друзей открыты — спасибо, что зовёшь людей!'}</p>${invRewards(d.rewards, d.counted, ME && ME.colors)}${d.counted ? '<button type="button" class="lv-btn ghost" data-go-look style="justify-self:start">Надеть в «Оформлении»</button>' : ''}</div>`;
+      const row = (p) => {
+        const href = /^[a-z0-9_][a-z0-9_.]{1,18}[a-z0-9_]$/.test(p.handle || '') ? '/profile/' + p.handle : '/profile/?id=' + encodeURIComponent(p.id);
+        let st, prog = '';
+        if (p.stage >= 2) st = `Наставник · <b>+${d.xp + d.mentorXp}</b>`;
+        else if (p.stage === 1) { st = `Засчитано · <b>+${d.xp}</b> · до 10-го уровня: ${p.level} из 10`; prog = bar(pct(p.level, 10)); }
+        else { st = `Уровень ${p.level} из 3 — засчитается на 3-м`; prog = bar(pct(p.level - 1, 2)); }
+        const act = p.rel === 'incoming' ? `<button type="button" class="lv-btn" data-accept="${esc(p.id)}">Принять в друзья</button>` : p.rel === 'friend' ? '<span class="tag">В друзьях</span>' : '';
+        return `<div><span class="av" aria-hidden="true">${esc((p.username || '?').charAt(0).toUpperCase())}</span><span><a href="${esc(href)}">${esc(p.username)}</a><span class="st">${st}</span></span>${act}${prog}</div>`;
+      };
+      const ppl = `<div class="lv-box"><h3>Пришли по твоей ссылке${d.people.length ? ` · ${d.people.length}` : ''}</h3>${d.people.length ? `<div class="lv-ppl">${d.people.map(row).join('')}</div>` : '<p class="lv-muted">Пока никого. Первый друг, дошедший до 3-го уровня, откроет мятный цвет ника.</p>'}</div>`;
+      const by = d.by ? `<div class="lv-box"><h3>Тебя позвал ${esc(d.by.username)}</h3><p class="lv-muted">${d.by.stage ? `Засчитано: вы оба получили +${d.xp} опыта.` : `Дойди до 3-го уровня — и вы оба получите +${d.xp} опыта. Сейчас у тебя ${ME ? ME.level : 1}-й.`}</p></div>` : '';
+      const codes = d.by ? ['recruiter', 'mentor', 'invited'] : ['recruiter', 'mentor'];
+      const items = ach && ach.items ? codes.map((c) => ach.items.find((a) => a.code === c)).filter(Boolean) : [];
+      const show = new Set((ME && ME.prefs && ME.prefs.showcase) || []);
+      const achBox = items.length ? `<div class="lv-box"><h3>Достижения</h3><div class="lv-bdg">${items.map((a) => achCard(a, false, show)).join('')}</div></div>` : '';
+      return `${hero}${by}${how}${rw}${ppl}${achBox}<p class="lv-muted">Засчитывается, только когда друг сам дойдёт до 3-го уровня — поэтому второй аккаунт ничего не даст. Награды за друзей — только оформление профиля.</p>`;
     },
     async recap() {
       const d = await api('/levels/recap');
@@ -1156,7 +1299,11 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   };
   const BIND = {
     // шапка «Обзора» → звания сезона и обратно (вкладка «Обзор» остаётся выбранной)
-    home(b) { tickReset(); const go = b.querySelector('[data-ranks]'); if (go) go.addEventListener('click', () => { tab = 'ranks'; renderTabs(); render(); }); },
+    home(b) {
+      tickReset();
+      const go = b.querySelector('[data-ranks]'); if (go) go.addEventListener('click', () => { tab = 'ranks'; renderTabs(); render(); });
+      const xt = b.querySelector('.lv-xpt'); if (xt) xt.addEventListener('toggle', () => { xptOpen = xt.open; });
+    },
     ranks(b) { const back = b.querySelector('[data-home]'); if (back) { back.addEventListener('click', () => { tab = 'home'; renderTabs(); render(); }); back.focus({ preventScroll: true }); } },
     mail(b) {
       // открыл почту — всё прочитано
@@ -1203,13 +1350,25 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       b.querySelectorAll('[data-fx]').forEach((x) => x.addEventListener('click', () => save({ fx: x.dataset.fx })));
       b.querySelectorAll('[data-pet]').forEach((x) => x.addEventListener('click', () => save({ pet: x.dataset.pet === '1' })));
       b.querySelectorAll('[data-tg]').forEach((x) => x.addEventListener('change', () => save({ [x.dataset.tg]: x.checked })));
+      const inv = b.querySelector('[data-go-invite]');
+      if (inv) inv.addEventListener('click', () => { tab = 'invite'; renderTabs(); render(); });
     },
     invite(b) {
       const inp = b.querySelector('#lvInv'), msg = b.querySelector('#lvCopyMsg');
       b.querySelector('#lvCopy').addEventListener('click', async () => {
-        try { await navigator.clipboard.writeText(inp.value); msg.textContent = 'Скопировано.'; }
+        try { await navigator.clipboard.writeText(inp.value); msg.textContent = 'Скопировано — отправь другу.'; }
         catch (e) { inp.select(); msg.textContent = 'Выделил ссылку — скопируй её.'; }
       });
+      const T = (t) => (window.CasualLang && window.CasualLang.t ? window.CasualLang.t(t) : t); // текст для системного окна «Поделиться» — не в разметке, словарь сам его не увидит
+      const sh = b.querySelector('#lvShare');
+      if (sh) sh.addEventListener('click', () => { navigator.share({ title: T('Казуал Хаб'), text: T('Залетай ко мне в Казуал Хаб: оцениваем игры и кино, собираем тир-листы и крутим колесо'), url: inp.value }).catch(() => {}); });
+      const look = b.querySelector('[data-go-look]');
+      if (look) look.addEventListener('click', () => { tab = 'look'; renderTabs(); render(); });
+      b.querySelectorAll('[data-accept]').forEach((btn) => btn.addEventListener('click', async () => {
+        btn.disabled = true;
+        try { await api('/friends/accept', 'POST', { userId: btn.dataset.accept }); btn.replaceWith(Object.assign(document.createElement('span'), { className: 'tag', textContent: 'В друзьях' })); }
+        catch (e) { btn.disabled = false; msg.textContent = e.message || 'Не получилось принять заявку'; }
+      }));
     },
     recap(b) {
       b.querySelector('#lvRecapImg').addEventListener('click', () => saveRecap(VIEWS.recapData, b.querySelector('#lvRecapMsg')));
