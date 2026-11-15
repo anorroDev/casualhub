@@ -231,6 +231,16 @@
   }
   function setView(v) { if (v !== F.view) F.animated = null; F.view = v; lsSet(VIEW_KEY, v); }
 
+  // вход, выход и смена профиля без перезагрузки (окно входа здесь, в Мнении): кто вошёл — для других скриптов страницы
+  // (levels-ui.js и header-menu.js: кнопки уровня и магазина, окно «Прогресс»). Сигнал — только когда вход поменялся
+  let authKey = null;
+  function authSignal(uid) {
+    const k = (uid || '') + ':' + (F.token ? 1 : 0);
+    if (k === authKey) return;
+    authKey = k;
+    document.dispatchEvent(new CustomEvent('casualhub:auth', { detail: { on: !!F.token } }));
+  }
+
   // подтянуть онлайн-сессию текущего профиля сайта
   async function syncSession() {
     const uid = state.user ? state.user.id : null;
@@ -243,6 +253,7 @@
       if (F.sessionUser !== undefined && F.view !== 'all') setView('all');
     }
     F.token = uid ? readTokens()[uid] || null : null;
+    authSignal(uid);
     F.me = null;
     // старый профиль без онлайн-сессии подключается к аккаунту при входе (loginUser ниже): пароля в браузере больше нет
     if (F.online && F.token) {

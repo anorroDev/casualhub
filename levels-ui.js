@@ -1304,6 +1304,8 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     spot.tip.setAttribute('aria-label', 'Новое на сайте: уровни');
     spot.tip.innerHTML = '<b>Новое: уровни</b><span>Получай опыт за оценки и общение с друзьями. Нажми, чтобы узнать, как это работает.</span>';
     const place = () => {
+      // кадр, заказанный до закрытия подсветки (в фоновой вкладке кадры ждут, пока её откроют), уже не нужен
+      if (!spot) return;
       const r = real.getBoundingClientRect();
       Object.assign(spot.btn.style, { left: r.left + 'px', top: r.top + 'px', width: r.width + 'px', height: r.height + 'px' });
       const tw = Math.min(300, innerWidth - 32);
@@ -1415,10 +1417,43 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     pullNews();
   }
 
+  // вход, выход или другой профиль без перезагрузки (окно входа в Мнении — сигнал casualhub:auth из friends.js,
+  // соседняя вкладка — storage): прошлый аккаунт не должен остаться ни в шапке, ни в меню, ни в окне «Прогресс»
+  const who = () => { const u = read('ocenshik.user.v1'); return token() && u && u.id ? String(u.id) : ''; };
+  let authFor = who();
+  function auth() {
+    const now = who();
+    if (now === authFor) return;
+    authFor = now;
+    ME = null; meLoad = null;
+    looks.clear(); pend = new Set(); tabCache.clear(); profFor = ''; profData = null; shown = '';
+    closeProgress(); ov = null;
+    endSpot();
+    if (tour) { tour.remove(); tour = null; document.documentElement.style.overflow = ''; }
+    dropHead();
+    document.querySelectorAll('#hmPanel .lv-row, #hmPanel .lv-mailrow, #hmPanel .lv-shoprow, #lvToast, .lv-prof').forEach((x) => x.remove());
+    document.querySelectorAll('[data-lv]').forEach((el) => {
+      delete el.dataset.lv;
+      el.classList.remove('lv-has');
+      [...el.classList].filter((c) => c.startsWith('lv-frame-')).forEach((c) => el.classList.remove(c));
+      el.querySelectorAll(':scope > .lv-num').forEach((x) => x.remove());
+    });
+    document.documentElement.classList.remove('lv-on');
+    vasyanOwn(false);
+    if (now) (meLoad = refreshMe()).then(welcome);
+  }
+  // первый ответ /levels/me (при загрузке страницы и после входа): новичку — подсветка кнопки уровня, остальным — плашки наград
+  function welcome() {
+    if (ME && !introDone()) { setTimeout(spotlight, 400); return; }
+    if (ME) { pullNews(); if (/^#progress$/.test(location.hash)) { history.replaceState(null, '', location.pathname + location.search); openProgress('home'); } }
+  }
+  document.addEventListener('casualhub:auth', auth);
+  addEventListener('storage', (e) => { if (e.key === 'ocenshik.user.v1' || e.key === 'casualhub.tokens.v1') auth(); });
+
   // fonts — подгрузить шрифты ника (магазин показывает ими превью)
   window.CasualLevels = { open: openProgress, refresh: refreshMe, news: pullNews, intro: openIntro, fonts: needFonts };
   if (!token()) return;
   { const u = read('ocenshik.user.v1'), c = read(HEAD_KEY); if (token() && u && c && c.id === u.id) paintHeader(c); }
   document.documentElement.classList.remove('hdr-wait'); // шапка собрана — показать разом (header-menu.js ждал значок уровня)
-  (meLoad = refreshMe()).then(() => { if (ME && !introDone()) { setTimeout(spotlight, 400); return; } if (ME) { pullNews(); if (/^#progress$/.test(location.hash)) { history.replaceState(null, '', location.pathname + location.search); openProgress('home'); } } });
+  (meLoad = refreshMe()).then(welcome);
 })();

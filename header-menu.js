@@ -318,12 +318,22 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
 
     // уровни: строка в меню, кружок у аватара, плашки наград и окно «Прогресс» — /levels-ui.js, только у вошедших
     // (сам решает, показывать ли: сервер отвечает on: false, пока уровни выключены)
+    const signedIn = () => {
+      try {
+        const lu = JSON.parse(localStorage.getItem('ocenshik.user.v1') || 'null');
+        return lu && (JSON.parse(localStorage.getItem('casualhub.tokens.v1') || 'null') || {})[lu.id] ? lu : null;
+      } catch (e) { return null; }
+    };
+    const loadLevels = () => { if (signedIn() && !window.CasualLevels && !document.querySelector('script[src="/levels-ui.js"]')) { const sc = document.createElement('script'); sc.src = '/levels-ui.js'; document.head.appendChild(sc); } };
+    loadLevels();
+    // вошли без перезагрузки (окно входа в Мнении, сигнал из friends.js) или в соседней вкладке — уровни подключаются сразу;
+    // дальше вход и выход отслеживает сам levels-ui.js
+    document.addEventListener('casualhub:auth', loadLevels);
+    addEventListener('storage', (e) => { if (e.key === 'ocenshik.user.v1' || e.key === 'casualhub.tokens.v1') loadLevels(); });
+    // шапка собрана: показать её разом. Значок уровня из прошлого ответа рисует levels-ui — тогда ждём его (не дольше 0,7 с из head-скрипта)
     try {
-      const lu = JSON.parse(localStorage.getItem('ocenshik.user.v1') || 'null');
-      const lt = lu && (JSON.parse(localStorage.getItem('casualhub.tokens.v1') || 'null') || {})[lu.id];
-      if (lt && !window.CasualLevels && !document.querySelector('script[src="/levels-ui.js"]')) { const sc = document.createElement('script'); sc.src = '/levels-ui.js'; document.head.appendChild(sc); }
-      // шапка собрана: показать её разом. Значок уровня из прошлого ответа рисует levels-ui — тогда ждём его (не дольше 0,7 с из head-скрипта)
-      const head = lt && JSON.parse(localStorage.getItem('casualhub.lv.head.v1') || 'null');
+      const lu = signedIn();
+      const head = lu && JSON.parse(localStorage.getItem('casualhub.lv.head.v1') || 'null');
       if (!(head && head.id === lu.id)) document.documentElement.classList.remove('hdr-wait');
     } catch (e) { document.documentElement.classList.remove('hdr-wait'); }
 
