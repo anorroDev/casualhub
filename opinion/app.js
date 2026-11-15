@@ -101,7 +101,8 @@ const MAX_CRIT = 15;
 const DRAFT_KEY = 'ocenshik.draft.v2';
 const PREFS_KEY = 'ocenshik.prefs.v1';
 const FB = 'Onest, ui-sans-serif, system-ui, sans-serif';
-const FD = 'Handjet, Onest, ui-sans-serif, system-ui, sans-serif';
+// цифры в картинках — тем же шрифтом, что на сайте: «Casual Digits» (Jersey 10, только цифры, base.css), буквы — Handjet
+const FD = '"Casual Digits", Handjet, Onest, ui-sans-serif, system-ui, sans-serif';
 
 const svg = (inner, size = 16, sw = 1.8) => `<svg viewBox="0 0 24 24" width="${size}" height="${size}" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${inner}</svg>`;
 const ICON = {
@@ -3571,7 +3572,7 @@ function paintCard(ctx, d, pal, draw, bmp) {
 async function ensureFonts() {
   if (!document.fonts || !document.fonts.load) return;
   const sample = 'Оценка Ёё Abc 0123456789,—…';
-  const jobs = ['700 58px Onest', '600 28px Onest', '400 28px Onest', '500 24px Onest', '800 128px Handjet', '700 56px Handjet']
+  const jobs = ['700 58px Onest', '600 28px Onest', '400 28px Onest', '500 24px Onest', '800 128px Handjet', '700 56px Handjet', '800 128px "Casual Digits"', '700 56px "Casual Digits"']
     .map(f => document.fonts.load(f, sample).catch(() => null));
   await Promise.race([Promise.all(jobs), sleep(2500)]);
 }
@@ -5185,7 +5186,7 @@ async function tierPng(custom) {
   const list = custom ? custom.buckets.flatMap(b => b.items) : tierPool();
   if (!list.length) { toast('В тир-листе пока пусто'); return null; }
   const mode = state.tierOpts.mode;
-  try { await document.fonts.load('800 40px Handjet'); await document.fonts.load('600 16px Onest'); } catch (_) {}
+  try { await document.fonts.load('800 40px Handjet'); await document.fonts.load('800 40px "Casual Digits"', '0123456789'); await document.fonts.load('600 16px Onest'); } catch (_) {}
   const W = 1200, PAD = 32, HEAD = 112, TILE = 96, GAP = 10, CAP = mode === 'names' ? 38 : 0;
   const perRow = Math.floor((W - PAD * 2 - HEAD - GAP * 2) / (TILE + GAP));
   const buckets = custom ? custom.buckets : tierBuckets(list);
@@ -5202,7 +5203,7 @@ async function tierPng(custom) {
   ctx.scale(k, k);
   ctx.fillStyle = '#0D0F14'; ctx.fillRect(0, 0, W, H);
   const rr = (x, y, w, h, r, fill) => { ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); ctx.fillStyle = fill; ctx.fill(); };
-  ctx.fillStyle = '#E8EAF0'; ctx.font = '800 46px Handjet, sans-serif'; ctx.textBaseline = 'top';
+  ctx.fillStyle = '#E8EAF0'; ctx.font = '800 46px "Casual Digits", Handjet, sans-serif'; ctx.textBaseline = 'top';
   ctx.fillText('Мой тир-лист', PAD, PAD);
   const cats = state.tierOpts.cats;
   const sub = (custom ? custom.sub : cats ? groups().filter(g => cats.includes(g.id)).map(g => g.name).join(', ') : 'Все категории') + ` · ${list.length} ${plural(list.length, 'оценка', 'оценки', 'оценок')}`;
@@ -5214,7 +5215,7 @@ async function tierPng(custom) {
     rr(PAD, y, W - PAD * 2, h, 16, '#161920');
     rr(PAD, y, HEAD, h, 16, b.t.col);
     ctx.fillStyle = '#0D0F14'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-    ctx.font = '800 56px Handjet, sans-serif'; ctx.fillText(b.t.id, PAD + HEAD / 2, y + h / 2 - 8);
+    ctx.font = '800 56px "Casual Digits", Handjet, sans-serif'; ctx.fillText(b.t.id, PAD + HEAD / 2, y + h / 2 - 8);
     ctx.font = '600 13px Onest, sans-serif'; ctx.fillText(b.t.range, PAD + HEAD / 2, y + h / 2 + 30);
     b.items.forEach((r, j) => {
       const cx = PAD + HEAD + GAP * 2 + (j % perRow) * (TILE + GAP), cy = y + GAP + Math.floor(j / perRow) * (TILE + CAP + GAP);
@@ -5223,11 +5224,11 @@ async function tierPng(custom) {
       ctx.beginPath(); ctx.roundRect ? ctx.roundRect(cx, cy, TILE, TILE, 12) : ctx.rect(cx, cy, TILE, TILE); ctx.clip();
       const bmp = bmps.get(r.id);
       if (bmp) { const s2 = Math.max(TILE / bmp.width, TILE / bmp.height); ctx.drawImage(bmp, cx + (TILE - bmp.width * s2) / 2, cy + (TILE - bmp.height * s2) / 2, bmp.width * s2, bmp.height * s2); }
-      else { ctx.fillStyle = '#1D2129'; ctx.fillRect(cx, cy, TILE, TILE); ctx.fillStyle = col; ctx.font = '800 50px Handjet, sans-serif'; ctx.fillText([...String(r.name).trim()][0] || '?', cx + TILE / 2, cy + TILE / 2); }
+      else { ctx.fillStyle = '#1D2129'; ctx.fillRect(cx, cy, TILE, TILE); ctx.fillStyle = col; ctx.font = '800 50px "Casual Digits", Handjet, sans-serif'; ctx.fillText([...String(r.name).trim()][0] || '?', cx + TILE / 2, cy + TILE / 2); }
       ctx.restore();
       if (mode === 'scores' && r.total != null) {
         const t = fmt(r.total);
-        ctx.font = '800 22px Handjet, sans-serif';
+        ctx.font = '800 22px "Casual Digits", Handjet, sans-serif';
         const bw = ctx.measureText(t).width + 14;
         rr(cx + TILE - bw - 4, cy + TILE - 30, bw, 26, 7, col);
         ctx.fillStyle = '#0D0F14'; ctx.fillText(t, cx + TILE - bw / 2 - 4, cy + TILE - 17);

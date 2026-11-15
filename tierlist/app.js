@@ -868,7 +868,7 @@
     return lines;
   }
   async function drawPicture(l) {
-    try { await Promise.all([document.fonts.load('800 60px Handjet'), document.fonts.load('600 15px Onest')]); } catch (e) {}
+    try { await Promise.all([document.fonts.load('800 60px Handjet'), document.fonts.load('800 60px "Casual Digits"', '0123456789'), document.fonts.load('600 15px Onest')]); } catch (e) {}
     const W = 1280, PAD = 24, LAB = 132, T = 112, GAP = 6, CAP = l.captions ? 34 : 0, H_T = T + CAP;
     const perRow = Math.max(1, Math.floor((W - PAD * 2 - LAB - GAP * 2 + GAP) / (T + GAP)));
     const hasTitle = !!l.title;
@@ -880,7 +880,7 @@
     g.fillStyle = EXPORT_BG; g.fillRect(0, 0, W, H);
     let y = PAD;
     if (hasTitle) {
-      g.fillStyle = EXPORT_INK; g.font = '800 60px Handjet, Onest, sans-serif'; g.textBaseline = 'middle'; g.textAlign = 'left';
+      g.fillStyle = EXPORT_INK; g.font = '800 60px "Casual Digits", Handjet, Onest, sans-serif'; g.textBaseline = 'middle'; g.textAlign = 'left';
       let t = l.title;
       while (g.measureText(t).width > W - PAD * 2 && t.length > 2) t = t.slice(0, -2);
       g.fillText(t === l.title ? t : t + '…', PAD, y + 26);
@@ -899,9 +899,9 @@
       g.fillStyle = r.color; g.fillRect(PAD, y, LAB, h);
       g.fillStyle = inkOn(r.color); g.textAlign = 'center'; g.textBaseline = 'middle';
       let fs = 54;
-      g.font = `800 ${fs}px Handjet, Onest, sans-serif`;
+      g.font = `800 ${fs}px "Casual Digits", Handjet, Onest, sans-serif`;
       let lines = wrap(g, r.label, LAB - 16, 3);
-      while (fs > 18 && (lines.some((s) => g.measureText(s).width > LAB - 16) || lines.length * fs > h - 8)) { fs -= 4; g.font = `800 ${fs}px Handjet, Onest, sans-serif`; lines = wrap(g, r.label, LAB - 16, 3); }
+      while (fs > 18 && (lines.some((s) => g.measureText(s).width > LAB - 16) || lines.length * fs > h - 8)) { fs -= 4; g.font = `800 ${fs}px "Casual Digits", Handjet, Onest, sans-serif`; lines = wrap(g, r.label, LAB - 16, 3); }
       lines.forEach((s, i) => g.fillText(s, PAD + LAB / 2, y + h / 2 + (i - (lines.length - 1) / 2) * fs * 1.02));
       r.items.forEach((id, i) => {
         const x0 = PAD + LAB + GAP + (i % perRow) * (T + GAP), y0 = y + GAP + Math.floor(i / perRow) * (H_T + GAP);

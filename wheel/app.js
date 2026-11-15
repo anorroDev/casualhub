@@ -1212,8 +1212,9 @@
     const cs = getComputedStyle(document.documentElement);
     const v = (n, fb) => cs.getPropertyValue(n).trim() || fb;
     const C = { bg: v('--bg', '#101114'), panel: v('--panel', '#17181c'), ink: v('--ink', '#f2f2f2'), ink2: v('--ink-2', '#b5b5b5'), ink3: v('--ink-3', '#7a7a7a'), line: v('--line', '#2a2b30'), accent: v('--accent', '#3550E8') };
-    const disp = (v('--font-display', 'Handjet') || 'Handjet').split(',')[0].replace(/["']/g, '').trim();
-    try { await document.fonts.load(`800 80px "${disp}"`); await document.fonts.load('600 30px Onest'); } catch (e) {}
+    // весь стек шрифта сайта: первым идёт «Casual Digits» (только цифры), буквы — из следующего (Handjet)
+    const disp = v('--font-display', 'Handjet') || 'Handjet';
+    try { await document.fonts.load(`800 80px ${disp}`, 'Аа Zz 0123456789'); await document.fonts.load('600 30px Onest'); } catch (e) {}
     const W = 1080, rows = Math.min(d.outs.length, 14);
     const H = Math.max(1080, 720 + (rows ? 110 + rows * 52 : 0) + (d.outs.length > rows ? 52 : 0));
     const cv = document.createElement('canvas');
@@ -1230,18 +1231,18 @@
     g.restore();
     const fit = (text, font, size, max) => { let sz = size; do { g.font = font.replace('$', sz); sz -= 4; } while (g.measureText(text).width > max && sz > 20); };
     g.textAlign = 'center'; g.textBaseline = 'alphabetic';
-    g.fillStyle = C.ink3; g.font = `700 34px "${disp}", ${FONT}`;
+    g.fillStyle = C.ink3; g.font = `700 34px ${disp}, ${FONT}`;
     g.fillText('КОЛЕСО КАЗУАЛА', W / 2, 90);
-    g.fillStyle = C.accent; g.font = `700 40px "${disp}", ${FONT}`;
+    g.fillStyle = C.accent; g.font = `700 40px ${disp}, ${FONT}`;
     g.fillText('П О Б Е Д И Т Е Л Ь', W / 2, 230);
-    g.fillStyle = C.ink; fit(d.name, `800 $px "${disp}", ${FONT}`, 190, W - 120);
+    g.fillStyle = C.ink; fit(d.name, `800 $px ${disp}, ${FONT}`, 190, W - 120);
     g.fillText(d.name, W / 2, 400);
     let y = 500;
     g.fillStyle = C.ink2; g.font = `600 32px ${FONT}`;
     g.fillText(S.pick === 'one' ? `выпал из ${d.total}` : `последний из ${d.total}`, W / 2, y + 20);
     y += 100;
     if (rows) {
-      g.textAlign = 'left'; g.fillStyle = C.ink3; g.font = `700 30px "${disp}", ${FONT}`;
+      g.textAlign = 'left'; g.fillStyle = C.ink3; g.font = `700 30px ${disp}, ${FONT}`;
       g.fillText('ПОРЯДОК ВЫЛЕТА', 120, y); y += 24;
       g.fillStyle = C.panel; g.strokeStyle = C.line; g.lineWidth = 2;
       const boxH = rows * 52 + (d.outs.length > rows ? 52 : 0) + 24;
