@@ -179,7 +179,7 @@
     const when = +new Date(r.createdAt || r.updatedAt || 0) || 0;
     return `<article class="rc-card" data-tier="${tierT(total)}">
       <button type="button" class="rc-x" data-rc="close" aria-label="Закрыть">✕</button>
-      ${r.photo ? `<div class="rc-pic" id="rcPic"><span class="rc-ltr">${esc([...String(r.name).trim()][0] || '?')}</span>${lb ? LB_MARK : ''}</div>` : ''}
+      ${r.photo ? `<div class="rc-pic" id="rcPic"${window.CasualUtil.nsfw.attr(window.CasualUtil.nsfw.is(r))}><span class="rc-ltr">${esc([...String(r.name).trim()][0] || '?')}</span>${lb ? LB_MARK : ''}</div>` : ''}
       <div class="rc-top">
         <div class="rc-name"><span class="rc-label">${esc(cat)}</span><h2 id="rcTitle">${esc(r.name)}</h2>
           <p>${esc([word, n ? `${n} ${plural(n, 'критерий', 'критерия', 'критериев')}` : '', r.status, r.meta].filter(Boolean).join(' · '))}${lb ? ' · из Letterboxd' : ''}</p></div>

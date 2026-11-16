@@ -24,7 +24,7 @@
     { id: 'privacy', name: 'Приватность', desc: 'Кто что видит', icon: I('<path d="M2.5 12s3.5-6.5 9.5-6.5 9.5 6.5 9.5 6.5-3.5 6.5-9.5 6.5S2.5 12 2.5 12z"/><circle cx="12" cy="12" r="2.8"/>') },
     { id: 'look', name: 'Внешний вид', desc: 'Тема, вид, язык', icon: I('<circle cx="12" cy="12" r="8.5"/><path d="M12 3.5a8.5 8.5 0 0 0 0 17z" fill="currentColor"/>') },
     { id: 'data', name: 'Данные', desc: 'Импорт, обложки, копия', icon: I('<ellipse cx="12" cy="6" rx="7.5" ry="2.8"/><path d="M4.5 6v6c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8V6M4.5 12v6c0 1.5 3.4 2.8 7.5 2.8s7.5-1.3 7.5-2.8v-6"/>') },
-    { id: 'general', name: 'Общее', desc: 'Примеры и подсказки', icon: I('<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>') },
+    { id: 'general', name: 'Общее', desc: 'Примеры, 18+, подсказки', icon: I('<circle cx="12" cy="12" r="3"/><path d="M12 2.5v3M12 18.5v3M2.5 12h3M18.5 12h3M5.3 5.3l2.1 2.1M16.6 16.6l2.1 2.1M5.3 18.7l2.1-2.1M16.6 7.4l2.1-2.1"/>') },
   ];
 
   const STYLE = `
@@ -445,7 +445,9 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
         <div class="st-row"><span class="st-t"><b>Восстановить из копии</b><small>Каких оценок нет — добавит, более старые обновит, остальные не тронет. Подходит и копия из профиля в Мнении</small></span><label class="st-btn">Выбрать файл<input type="file" accept=".json,application/json" data-restore hidden></label></div>`);
   R.general = () => {
     const ex = (() => { try { return localStorage.getItem('casualhub.examples.v1') !== '0'; } catch (e) { return true; } })();
-    return grp('Примеры', toggle({ name: 'Показывать примеры', desc: 'Пример топа на главной и участники в пустом Колесе. Выключишь — они уберутся и больше не появятся', attr: 'data-examples', on: ex }))
+    const nsfw = window.CasualUtil.nsfw;
+    return grp('Контент 18+', toggle({ name: 'Показывать обложки 18+', desc: 'Обложки из категории «Хентай» — без размытия. Выключено — они размыты, а подсказка при наведении объясняет почему. Только в этом браузере', attr: 'data-nsfw-set', on: nsfw.on() }))
+      + grp('Примеры', toggle({ name: 'Показывать примеры', desc: 'Пример топа на главной и участники в пустом Колесе. Выключишь — они уберутся и больше не появятся', attr: 'data-examples', on: ex }))
       // письма об обновлениях (functions/_lib/mailout.js): состояние приходит с сервера — loadMailPrefs() после отрисовки
       + (user() && token() ? grp('Письма', toggle({ name: 'Письма об обновлениях', desc: 'Когда на сайте выходит что-то новое — короткое письмо на подтверждённую почту. Отписаться можно и из самого письма', attr: 'data-mailnews disabled', on: false })) : '')
       + grp('Подсказки', `<div class="st-row"><span class="st-t"><b>Показать подсказки снова</b><small>Окно «Впервые тут?» снова откроется на каждой странице при следующем заходе</small></span><button type="button" class="st-btn" data-do="howto">Показать</button></div>`);
@@ -629,6 +631,13 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
           // Мнение перечитает оценки и отправит их в аккаунт
           setTimeout(() => { if (/^\/opinion\/?$/.test(location.pathname)) { location.hash = 'rating'; location.reload(); } else location.href = '/opinion/#rating'; }, 1200);
         } catch (er) { toast(er.message); }
+        return;
+      }
+      // 18+: включить можно только подтвердив возраст; выключается без вопросов
+      if (t.matches('[data-nsfw-set]')) {
+        const T = (x) => (window.CasualLang && window.CasualLang.t ? window.CasualLang.t(x) : x);
+        if (t.checked && !confirm(T('Обложки 18+ будут видны без размытия. Тебе есть 18 лет?'))) { t.checked = false; return; }
+        window.CasualUtil.nsfw.set(t.checked);
         return;
       }
       if (t.matches('[data-examples]')) {

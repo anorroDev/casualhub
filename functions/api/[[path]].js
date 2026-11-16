@@ -1468,7 +1468,7 @@ const routes = {
     if (q.length < 2 || !Object.prototype.hasOwnProperty.call(COVER_FIND, kind)) return json({ items: [] });
     try {
       // по-русски Steam и сайты аниме ничего не находят: для кириллицы сразу ищем по английскому названию
-      const ru = (kind === 'game' || kind === 'anime') && CYR.test(q);
+      const ru = (kind === 'game' || kind === 'anime' || kind === 'hentai') && CYR.test(q);
       let items = ru ? [] : await COVER_FIND[kind](q).catch(() => []);
       // Steam и AniList не знают русских названий: сначала ищем английское (Wikidata, русская Википедия)
       if (ru) {
@@ -2875,8 +2875,9 @@ async function latinTitles(q, kind) {
 }
 // таблица TR (кириллица → латиница) объявлена в начале файла
 const translit = (s) => String(s).replace(/[а-яё]/gi, (c) => { const t = TR[c.toLowerCase()] || ''; return c === c.toLowerCase() ? t : t.charAt(0).toUpperCase() + t.slice(1); });
-async function aniList(q) {
-  const body = JSON.stringify({ query: 'query($s:String){Page(perPage:10){media(search:$s,sort:SEARCH_MATCH,isAdult:false){type format title{romaji english}startDate{year}genres coverImage{extraLarge large}}}}', variables: { s: q } });
+// adult — только взрослое (категория «Хентай»): обычный поиск аниме 18+ не показывает никогда
+async function aniList(q, adult = false) {
+  const body = JSON.stringify({ query: `query($s:String){Page(perPage:10){media(search:$s,sort:SEARCH_MATCH,isAdult:${adult ? 'true' : 'false'}){type format title{romaji english}startDate{year}genres coverImage{extraLarge large}}}}`, variables: { s: q } });
   const d = await cachedJson('https://graphql.anilist.co', { method: 'POST', body, headers: { 'content-type': 'application/json' } }, 86400);
   const list = (d && d.data && d.data.Page && d.data.Page.media) || [];
   // сначала аниме, потом манга: категория обычно про аниме
@@ -2894,8 +2895,9 @@ async function kitsu(q) {
     art: a.posterImage.large || a.posterImage.original, thumb: a.posterImage.medium || a.posterImage.large, tall: true,
   }));
 }
-async function jikan(q) {
-  const d = await cachedJson('https://api.jikan.moe/v4/anime?limit=8&sfw=true&q=' + encodeURIComponent(q), null, 86400);
+async function jikan(q, adult = false) {
+  // взрослое — жанр Hentai (12) на MyAnimeList, обычное — с фильтром sfw
+  const d = await cachedJson('https://api.jikan.moe/v4/anime?limit=8&' + (adult ? 'genres=12' : 'sfw=true') + '&q=' + encodeURIComponent(q), null, 86400);
   return (d.data || []).filter((a) => a && a.images && a.images.jpg && a.images.jpg.large_image_url).map((a) => ({
     title: String(a.title_english || a.title || '').slice(0, 140), sub: a.type === 'Movie' ? 'Аниме-фильм' : 'Аниме', year: a.year ? String(a.year) : '',
     art: a.images.jpg.large_image_url, thumb: a.images.jpg.image_url || a.images.jpg.large_image_url, tall: true,
@@ -2998,6 +3000,14 @@ const COVER_FIND = {
   // аниме: AniList, если он не ответил (с адресов Cloudflare бывает 403/429) — Kitsu, потом Jikan (MyAnimeList)
   async anime(q) {
     for (const find of [aniList, kitsu, jikan]) {
+      try { const r = await find(q); if (r.length) return r; } catch (e) {}
+    }
+    return [];
+  },
+  // категория «Хентай» (18+): AniList со взрослыми тайтлами, не ответил — MyAnimeList (Jikan) по жанру Hentai.
+  // Kitsu взрослое без входа не отдаёт. На страницах эти обложки размыты, пока не включён «Контент 18+»
+  async hentai(q) {
+    for (const find of [(s) => aniList(s, true), (s) => jikan(s, true)]) {
       try { const r = await find(q); if (r.length) return r; } catch (e) {}
     }
     return [];

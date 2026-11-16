@@ -73,6 +73,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
 
   // ---------- фото: свои лежат прямо в оценке или в аккаунте, у друзей берём с сервера ----------
   const photoCache = new Map();
+  // обложка из категории 18+ («Хентай»): рамка с data-nsfw, картинка в ней размыта, пока не включён «Контент 18+» (util.js)
+  const adultAttr = (r) => window.CasualUtil.nsfw.attr(!!r.photo && window.CasualUtil.nsfw.cat(r.cat));
   // своё фото из IndexedDB (photo-store.js): в оценке лежит только ссылка ph_…
   const idbPhoto = (r) => (r.photo && window.CasualPhotos && window.CasualPhotos.isKey(r.photo.ref) ? window.CasualPhotos.get(r.photo.ref).then((d) => (typeof d === 'string' ? d : null)) : null);
   const photoOf = (p, r) => {
@@ -545,7 +547,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     return `<section class="card rise show" style="--d:${d}">
         <div class="head"><h2 class="h2">${esc(sc.title || autoTitle(p, sc))}</h2><span class="label">${esc(sc.cat ? catTitle(p, sc.cat) : 'все темы')} · ${sc.mode === 'pick' ? 'мой выбор' : 'лучшие по баллу'}</span></div>
         ${items.length ? `<div class="sc-row ${sc.style === 'list' ? 'as-list' : 'as-posters'}">${items.map((r, k) => `<a class="sc-it" href="${rateLink(p, r)}" title="${esc(r.name)}" data-tier="${tierT(r.total)}">
-          <div class="pic" data-photo="${r.photo ? esc(r.id) : ''}"><span class="place">${k + 1}</span><span class="ltr">${letter(r.name)}</span>${lbm(r)}</div>
+          <div class="pic" data-photo="${r.photo ? esc(r.id) : ''}"${adultAttr(r)}><span class="place">${k + 1}</span><span class="ltr">${letter(r.name)}</span>${lbm(r)}</div>
           <strong>${esc(r.name)}</strong>${badge(r.total)}</a>`).join('')}</div>`
           : '<p class="muted">Пока пусто: в этой теме нет подходящих оценок. Витрину можно изменить в режиме редактирования профиля (кнопка с квадратиками).</p>'}
       </section>`;
@@ -633,7 +635,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const pool = (p.allRatings || p.ratings).filter((r) => (!sc.cat || keyOf(r.cat) === sc.cat) && (!q || keyOf(r.name).includes(q)))
       .sort((a, b) => (b.total ?? -1) - (a.total ?? -1) || a.name.localeCompare(b.name, 'ru')).slice(0, 80);
     return pool.length ? pool.map((r) => { const i = sc.ids.indexOf(r.id); return `<button type="button" class="ly-it" data-pick="${esc(r.id)}" aria-pressed="${i >= 0}" data-tier="${tierT(r.total)}" title="${esc(r.name)}">
-        <span class="pic" data-photo="${r.photo ? esc(r.id) : ''}"><span class="ltr">${letter(r.name)}</span>${lbm(r)}</span><i class="ly-n">${i >= 0 ? i + 1 : ''}</i>${badge(r.total)}<span class="nm">${esc(r.name)}</span></button>`; }).join('')
+        <span class="pic" data-photo="${r.photo ? esc(r.id) : ''}"${adultAttr(r)}><span class="ltr">${letter(r.name)}</span>${lbm(r)}</span><i class="ly-n">${i >= 0 ? i + 1 : ''}</i>${badge(r.total)}<span class="nm">${esc(r.name)}</span></button>`; }).join('')
       : '<p class="ly-hint">В этой теме ничего не нашлось.</p>';
   }
   // превью витрины прямо в окне: обложки по порядку, свободные места пунктиром; в «Выберу сам» нажатие на обложку убирает её
@@ -641,7 +643,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const all = p.allRatings || p.ratings;
     const items = sc.mode === 'pick' ? sc.ids.map((id) => all.find((r) => r.id === id)).filter(Boolean) : scItems(p, sc);
     const slot = (r, k) => (r
-      ? `<${sc.mode === 'pick' ? `button type="button" data-pick="${esc(r.id)}" title="Убрать «${esc(r.name)}» из витрины"` : 'span'} class="sc-slot" data-tier="${tierT(r.total)}"><span class="pic" data-photo="${r.photo ? esc(r.id) : ''}"><span class="place">${k + 1}</span><span class="ltr">${letter(r.name)}</span>${sc.mode === 'pick' ? '<em aria-hidden="true">✕</em>' : ''}</span><small>${esc(r.name)}</small></${sc.mode === 'pick' ? 'button' : 'span'}>`
+      ? `<${sc.mode === 'pick' ? `button type="button" data-pick="${esc(r.id)}" title="Убрать «${esc(r.name)}» из витрины"` : 'span'} class="sc-slot" data-tier="${tierT(r.total)}"><span class="pic" data-photo="${r.photo ? esc(r.id) : ''}"${adultAttr(r)}><span class="place">${k + 1}</span><span class="ltr">${letter(r.name)}</span>${sc.mode === 'pick' ? '<em aria-hidden="true">✕</em>' : ''}</span><small>${esc(r.name)}</small></${sc.mode === 'pick' ? 'button' : 'span'}>`
       : `<span class="sc-slot free"><span class="pic"><span class="place">${k + 1}</span><span class="plus">＋</span></span><small>${sc.mode === 'pick' ? 'выбери ниже' : 'пусто'}</small></span>`);
     return `<div class="sc-prev" id="scPrev"><div class="sc-prev-h"><b>${esc((sc.title || '').trim() || autoTitle(p, sc))}</b><small>${esc(sc.cat ? catTitle(p, sc.cat) : 'все темы')} · ${sc.mode === 'pick' ? 'мой выбор' : 'лучшие по баллу'} · ${items.length} из ${sc.n}</small></div>
       <div class="sc-prev-row n${sc.n}">${Array.from({ length: sc.n }, (_, k) => slot(items[k], k)).join('')}</div></div>`;
@@ -1302,7 +1304,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const more = $('#allMore');
     more.hidden = true;
     if (!list.length) { body.innerHTML = `<p class="muted">${rs.length ? 'Ничего не нашлось.' : 'Оценок пока нет.'}</p>`; return; }
-    const pic = (r, cls) => `<div class="${cls || 'pic'}" data-photo="${r.photo ? esc(r.id) : ''}"><span class="ltr">${letter(r.name)}</span>${lbm(r)}</div>`;
+    const pic = (r, cls) => `<div class="${cls || 'pic'}" data-photo="${r.photo ? esc(r.id) : ''}"${adultAttr(r)}><span class="ltr">${letter(r.name)}</span>${lbm(r)}</div>`;
     if (AST.view === 'tier') {
       const rated = list.filter((r) => r.total != null).sort((a, b) => b.total - a.total || b.at - a.at);
       const rows = TIERS.map(([t, min, range], i) => {
@@ -1318,7 +1320,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       more.hidden = list.length <= AST.limit;
       if (AST.view === 'list') {
         body.innerHTML = `<div class="list">${shown.map((r) => `<a class="item" href="${rateLink(p, r)}" title="Открыть оценку «${esc(r.name)}»" data-tier="${tierT(r.total)}">
-          <span class="th" data-photo="${r.photo ? esc(r.id) : ''}">${letter(r.name)}${lbm(r)}</span>
+          <span class="th" data-photo="${r.photo ? esc(r.id) : ''}"${adultAttr(r)}>${letter(r.name)}${lbm(r)}</span>
           <span class="nm">${r.fav ? `<span class="fav">${ICON.star}</span> ` : ''}${esc(r.name)}</span>${badge(r.total)}
           <span class="meta">${cells(r.total)}<span>${esc(r.cat)}${r.status ? ' · ' + esc(r.status) : ''}</span></span></a>`).join('')}</div>`;
       } else if (AST.view === 'grid') {
@@ -1328,7 +1330,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         body.innerHTML = `<div class="full">${shown.map((r) => {
           const pros = lines(r.pros), cons = lines(r.cons);
           return `<article class="fr-card" data-tier="${tierT(r.total)}">
-            <header><div class="th" data-photo="${r.photo ? esc(r.id) : ''}">${letter(r.name)}${lbm(r)}</div>
+            <header><div class="th" data-photo="${r.photo ? esc(r.id) : ''}"${adultAttr(r)}>${letter(r.name)}${lbm(r)}</div>
               <div class="fr-t"><a href="${rateLink(p, r)}">${r.fav ? `<span class="fav">${ICON.star}</span> ` : ''}${esc(r.name)}</a><small>${esc([r.cat, r.status, r.meta].filter(Boolean).join(' · '))}</small></div>${badge(r.total)}</header>
             ${r.scores.length ? `<ul class="crit">${r.scores.map((s) => `<li><span>${esc(s.name)}${s.w && s.w !== 1 ? ` <small>×${String(s.w).replace('.', ',')}</small>` : ''}</span>${cellsV(+s.v || 0)}<b>${+s.v || '—'}</b>${s.note ? `<em>${esc(s.note)}</em>` : ''}</li>`).join('')}</ul>` : ''}
             ${pros.length || cons.length ? `<div class="fr-pc">${pros.length ? `<div><span class="label">Плюсы</span><ul>${pros.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}${cons.length ? `<div><span class="label">Минусы</span><ul>${cons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}</div>` : ''}
@@ -1654,7 +1656,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     if (pod.length || (isMe && (EDIT || (p.layout && p.layout.podium)))) W.podium = `<section class="card rise" style="--d:${d++}">
             <div class="head"><h2 class="h2">${esc(pcfg.title || 'Любимое')}</h2><span class="label">${pcfg.cat ? esc(catTitle(p, pcfg.cat)) + ' · ' : ''}${pcfg.mode === 'pick' ? 'мой выбор' : 'топ по баллу'}</span></div>
             ${pod.length ? `<div class="podium n${pod.length}">${pod.map((r, k) => `<a class="pod p${k + 1}" href="${rateLink(p, r)}" title="Открыть оценку «${esc(r.name)}»" data-tier="${tierT(r.total)}">
-              <div class="pic" data-photo="${r.photo ? esc(r.id) : ''}"><span class="place">${k + 1}</span><span class="ltr">${letter(r.name)}</span>${lbm(r)}</div>
+              <div class="pic" data-photo="${r.photo ? esc(r.id) : ''}"${adultAttr(r)}><span class="place">${k + 1}</span><span class="ltr">${letter(r.name)}</span>${lbm(r)}</div>
               <strong>${esc(r.name)}</strong>
               <div class="row"><small>${esc(r.cat)}</small>${badge(r.total)}</div></a>`).join('')}</div>` : '<p class="muted">Пока пусто: нет подходящих оценок. «Любимое» можно изменить в режиме редактирования профиля (кнопка с квадратиками).</p>'}
           </section>`;
@@ -1853,7 +1855,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       $('#listStat').textContent = `${list.length} ${plural(list.length, 'оценка', 'оценки', 'оценок')}`;
       const shown = list.slice(0, ST.limit);
       $('#list').innerHTML = shown.length ? shown.map((r) => `<a class="item" href="${rateLink(p, r)}" title="Открыть оценку «${esc(r.name)}»" data-tier="${tierT(r.total)}">
-          <span class="th" data-photo="${r.photo ? esc(r.id) : ''}">${letter(r.name)}${lbm(r)}</span>
+          <span class="th" data-photo="${r.photo ? esc(r.id) : ''}"${adultAttr(r)}>${letter(r.name)}${lbm(r)}</span>
           <span class="nm" title="${esc(r.name)}">${r.fav ? `<span class="fav">${ICON.star}</span> ` : ''}${esc(r.name)}</span>
           ${badge(r.total)}
           <span class="meta">${cells(r.total)}<span>${esc(r.cat)}${r.status ? ' · ' + esc(r.status) : ''}</span></span>

@@ -33,10 +33,11 @@
       : `похоже на «${esc(x.why)}»`;
     const meta = [x.year || '', KIND[x.kind] || ''].filter(Boolean).join(' · ');
     const pic = x.art ? `<img src="${esc(x.art)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<span>${esc([...String(x.title)][0] || '?')}</span>`;
+    const adult = window.CasualUtil.nsfw.attr(window.CasualUtil.nsfw.cat(x.cat)); // совет из категории 18+ — обложка размыта (util.js)
     const url = friend ? '' : infoUrl(x);
     const pc = friend
-      ? `<button type="button" class="rt-pic" data-rec-open title="Открыть оценку друга"${x.remote && !x.art ? ` data-ph="${esc(x.by[0].id + '|' + x.by[0].rid)}"` : ''}>${pic}</button>`
-      : url ? `<a class="rt-pic" href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="Подробнее">${pic}</a>` : `<span class="rt-pic">${pic}</span>`;
+      ? `<button type="button" class="rt-pic"${adult} data-rec-open title="Открыть оценку друга"${x.remote && !x.art ? ` data-ph="${esc(x.by[0].id + '|' + x.by[0].rid)}"` : ''}>${pic}</button>`
+      : url ? `<a class="rt-pic"${adult} href="${esc(url)}" target="_blank" rel="noopener noreferrer" title="Подробнее">${pic}</a>` : `<span class="rt-pic"${adult}>${pic}</span>`;
     return `<article class="rt" data-key="${esc(x.key)}">
       ${pc}<button type="button" class="rt-x" data-rec-hide title="Не интересно" aria-label="Не интересно: ${esc(x.title)}">✕</button>
       <b class="rt-t" title="${esc(x.title)}${x.orig ? ' / ' + esc(x.orig) : ''}">${esc(x.title)}</b>

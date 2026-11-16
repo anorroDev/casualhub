@@ -661,9 +661,10 @@
     const cls = kind === 'thumb' ? 'e-thumb' : 'e-photo';
     const size = kind === 'body' && p.w && p.h ? ` width="${+p.w}" height="${+p.h}"` : '';
     const alt = kind === 'body' ? `Фото: ${esc(r.name)}` : '';
-    if (photoLink(p)) return `<img class="${cls}" src="${esc(photoLink(p))}" alt="${alt}" loading="lazy" decoding="async" referrerpolicy="no-referrer"${size}>`;
+    const adult = window.CasualUtil.nsfw.attr(window.CasualUtil.nsfw.is(r)); // категория 18+ у друга — размыта (util.js → nsfw)
+    if (photoLink(p)) return `<img class="${cls}"${adult} src="${esc(photoLink(p))}" alt="${alt}" loading="lazy" decoding="async" referrerpolicy="no-referrer"${size}>`;
     if (!p.remote || !uid) return '';
-    return `<img loading="lazy" class="${cls} f-photo" data-fphoto="${esc(uid + '|' + r.id + (kind === 'thumb' ? '|t' : ''))}" alt="${alt}" decoding="async"${size}>`;
+    return `<img loading="lazy" class="${cls} f-photo"${adult} data-fphoto="${esc(uid + '|' + r.id + (kind === 'thumb' ? '|t' : ''))}" alt="${alt}" decoding="async"${size}>`;
   }
   const photoCache = new Map(); // "uid|rid" -> Promise<data URL | ''>
   let photoObs = null;

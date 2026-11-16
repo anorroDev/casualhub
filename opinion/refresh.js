@@ -3,7 +3,7 @@
    Ищет через наш сервер (нужен вход): фильмы и сериалы — IMDb и Wikidata, игры — Steam, аниме — AniList, книги — Open Library.
    Своё загруженное фото не заменяется: обложка ставится, только если фото нет или это ссылка на постер. */
 (() => {
-  const KINDS = { movie: 1, game: 1, anime: 1, book: 1 };
+  const KINDS = { movie: 1, game: 1, anime: 1, book: 1, hentai: 1 }; // hentai — обложки 18+ (размыты без «Контента 18+»)
   const CYR = /[а-яё]/i;
   const S = { cat: '', sel: new Set(), opt: { cover: true, name: false, meta: true }, busy: false, res: {} };
   let sheet = null;
@@ -100,7 +100,7 @@
   const body = () => sheet.querySelector('#rfBody');
   function thumb(r) {
     const u = r.photo && typeof resolvePhotoUrl === 'function' ? resolvePhotoUrl(r.photo) : '';
-    return `<span class="rf-th">${u ? `<img src="${esc(u)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : esc([...r.name.trim()][0] || '?')}</span>`;
+    return `<span class="rf-th">${u ? `<img${typeof adultAttr === 'function' ? adultAttr(r) : ''} src="${esc(u)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : esc([...r.name.trim()][0] || '?')}</span>`;
   }
   function draw() {
     const api = window.casualApi;

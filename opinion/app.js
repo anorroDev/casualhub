@@ -65,6 +65,15 @@ const CAT_TEMPLATES = [
     { name: 'Эмоции', desc: 'Насколько сильно цепляет', w: 1 },
     { name: 'Концовка', desc: 'Насколько удался финал', w: 1 }
   ]},
+  // 18+: обложки ищутся среди взрослого аниме (catKind → 'hentai'), а у тех, кто не включил «Контент 18+», размыты
+  { name: 'Хентай', criteria: [
+    { name: 'Сюжет и сценарий', desc: 'Есть ли история, ради которой смотришь', w: 1 },
+    { name: 'Рисовка и анимация', desc: 'Дизайн, качество кадра, плавность', w: 1 },
+    { name: 'Персонажи и дизайн', desc: 'Внешность и характер героев', w: 1 },
+    { name: 'Озвучка и звук', desc: 'Сейю, музыка, звуковое сопровождение', w: 1 },
+    { name: 'Попадание во вкус', desc: 'Насколько это именно твоё', w: 1 },
+    { name: 'Пересматриваемость', desc: 'Захочется ли вернуться', w: 1 }
+  ]},
   { name: 'Мультики', criteria: [
     { name: 'Юмор', desc: 'Насколько смешно', w: 1 },
     { name: 'Персонажи', desc: 'Харизма и узнаваемость героев', w: 1 },
@@ -1180,6 +1189,8 @@ function verdict(t) {
   return VERDICTS[Math.max(1, Math.min(10, Math.round(t))) - 1];
 }
 // постоянные id для категорий из шаблонов: один шаблон на телефоне и на ПК даёт одну и ту же категорию
+// обложка оценки из категории 18+ («Хентай»): размыта, пока не включён «Контент 18+» (util.js → nsfw)
+function adultAttr(r) { const n = window.CasualUtil.nsfw; return n.attr(n.is(r, catNameOf(r))); }
 function tplId(name) { let h = 5381; for (const ch of keyOf(name)) h = ((h * 33) ^ ch.codePointAt(0)) >>> 0; return 't' + h.toString(36); }
 function keyOf(s) { return String(s || '').trim().toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' '); }
 let idSeq = 0;
@@ -1845,13 +1856,14 @@ function closeArtistEdit() {
 // музыка — iTunes прямо из браузера; игры — Steam, фильмы и сериалы — IMDb, книги — Open Library, аниме — AniList
 // через наш сервер (нужен вход). Выбранная обложка скачивается и становится обычным фото оценки
 let coverTimer = null, coverCtl = null, coverKey = '', coverItems = [], coverFrom = '';
-const COVER_SRC = { music: 'Apple Music и Deezer', game: 'Steam', movie: 'IMDb', book: 'Open Library', anime: 'AniList' };
+const COVER_SRC = { music: 'Apple Music и Deezer', game: 'Steam', movie: 'IMDb', book: 'Open Library', anime: 'AniList', hentai: 'AniList' };
 function coverKind() { return catKind(currentCat()); }
 // какие обложки подходят категории: по её названию
 function catKind(c) {
   if (!c) return '';
   if (isMusicCat(c)) return 'music';
   const k = `${keyOf(c.name)} ${c.id}`;
+  if (window.CasualUtil.nsfw.cat(c.name)) return 'hentai'; // взрослое аниме — раньше «аниме», чтобы «Хентай-аниме» не искалось как обычное
   if (/игр|game/.test(k)) return 'game';
   if (/фильм|сериал|кино|мульт|film|movie|series|cartoon|animat/.test(k)) return 'movie';
   if (/книг|литератур|book/.test(k)) return 'book';
@@ -1937,7 +1949,7 @@ function renderCovers() {
   const show = coverItems.length > 0 && !!coverQuery() && !musicItems.length;
   box.hidden = !show;
   if (!show) { box.replaceChildren(); return; }
-  box.innerHTML = `<span class="label">Обложки из ${esc(COVER_SRC[coverFrom] || 'интернета')}</span><div class="cover-list">${coverItems.map((c, i) => `<button type="button" class="cover-opt${c.tall ? ' tall' : ''}" data-cover="${i}" title="${esc([c.artist, c.title].filter(Boolean).join(' — '))}"><img src="${esc(c.thumb || c.art)}"${c.alt ? ` data-alt="${esc(c.alt)}"` : ''} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"><span>${esc(c.title)}</span><small>${esc([c.kind, c.year].filter(Boolean).join(' · '))}</small></button>`).join('')}</div>`;
+  box.innerHTML = `<span class="label">Обложки из ${esc(COVER_SRC[coverFrom] || 'интернета')}</span><div class="cover-list">${coverItems.map((c, i) => `<button type="button" class="cover-opt${c.tall ? ' tall' : ''}" data-cover="${i}" title="${esc([c.artist, c.title].filter(Boolean).join(' — '))}"><img${window.CasualUtil.nsfw.attr(coverFrom === 'hentai')} src="${esc(c.thumb || c.art)}"${c.alt ? ` data-alt="${esc(c.alt)}"` : ''} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"><span>${esc(c.title)}</span><small>${esc([c.kind, c.year].filter(Boolean).join(' · '))}</small></button>`).join('')}</div>`;
 }
 // у старых игр Steam нет вертикальной обложки: показываем шапку магазина
 document.addEventListener('error', e => {
@@ -2304,13 +2316,13 @@ function entryHTML(r, rank, showCat) {
 <details${state.open.has(r.id) ? ' open' : ''}>
 <summary><span class="sum">
 <span class="rank">${rank == null ? '—' : rank}</span>
-<span class="e-main">${pUrl ? `<img class="e-thumb" data-photo="thumb" src="${esc(pUrl)}" alt="" loading="lazy" decoding="async">` : aUrl ? `<img class="e-thumb ava" src="${esc(aUrl)}" alt="" loading="lazy" decoding="async">` : ''}<span class="e-text"><span class="e-name">${r.fav ? '<span class="fav-star-inline" title="В избранном">★</span>' : ''}${esc(r.name)}</span><span class="e-sub"><span>${esc(meta)}</span>${imdbSlot(r)}${showCat ? `<span class="tag">${esc(catNameOf(r))}</span>` : ''}${r.status ? `<span class="tag status-tag">${esc(r.status)}</span>` : ''}${r.meta ? `<span class="tag meta-tag">${esc(r.meta)}</span>` : ''}${r.author && r.author.name ? `<span class="tag author-tag" title="Автор: ${esc(r.author.name)}">${renderAuthorMini(r.author)} ${esc(r.author.name)}</span>` : ''}${r.example ? '<span class="tag ex">пример</span>' : ''}${notes ? `<span class="has-note" title="Есть заметки">${ICON.noteSm}<span class="vh">есть заметки</span></span>` : ''}</span></span></span>
+<span class="e-main">${pUrl ? `<img class="e-thumb" data-photo="thumb"${adultAttr(r)} src="${esc(pUrl)}" alt="" loading="lazy" decoding="async">` : aUrl ? `<img class="e-thumb ava" src="${esc(aUrl)}" alt="" loading="lazy" decoding="async">` : ''}<span class="e-text"><span class="e-name">${r.fav ? '<span class="fav-star-inline" title="В избранном">★</span>' : ''}${esc(r.name)}</span><span class="e-sub"><span>${esc(meta)}</span>${imdbSlot(r)}${showCat ? `<span class="tag">${esc(catNameOf(r))}</span>` : ''}${r.status ? `<span class="tag status-tag">${esc(r.status)}</span>` : ''}${r.meta ? `<span class="tag meta-tag">${esc(r.meta)}</span>` : ''}${r.author && r.author.name ? `<span class="tag author-tag" title="Автор: ${esc(r.author.name)}">${renderAuthorMini(r.author)} ${esc(r.author.name)}</span>` : ''}${r.example ? '<span class="tag ex">пример</span>' : ''}${notes ? `<span class="has-note" title="Есть заметки">${ICON.noteSm}<span class="vh">есть заметки</span></span>` : ''}</span></span></span>
 <span class="spark" aria-hidden="true">${spark}</span>
 <span class="badge" data-tier="${tierT(t)}">${t != null ? fmt(t) : '—'}</span>
 ${ICON.chev}
 </span></summary>
 <div class="e-body">
-${pUrl ? `<img class="e-photo" data-photo="body" src="${esc(pUrl)}" alt="Фото: ${esc(r.name)}" loading="lazy" decoding="async"${r.photo.w && r.photo.h ? ` width="${r.photo.w}" height="${r.photo.h}"` : ''}>` : ''}
+${pUrl ? `<img class="e-photo" data-photo="body"${adultAttr(r)} src="${esc(pUrl)}" alt="Фото: ${esc(r.name)}" loading="lazy" decoding="async"${r.photo.w && r.photo.h ? ` width="${r.photo.w}" height="${r.photo.h}"` : ''}>` : ''}
 <ul class="bd">${bd}</ul>
 ${listenHTML(r)}
 ${pcHTML}
@@ -2342,7 +2354,7 @@ function renderTierBoard(list) {
       ? items.map(r => {
           const pUrl = resolvePhotoUrl(r.photo) || artistAvaUrl(r);
           return `<button type="button" class="tier-item" data-tier-goto="${esc(r.id)}" title="${esc(r.name)} (${r.total != null ? fmt(r.total) : '—'})">
-            ${pUrl ? `<img src="${esc(pUrl)}" alt="" loading="lazy" decoding="async">` : ''}
+            ${pUrl ? `<img${adultAttr(r)} src="${esc(pUrl)}" alt="" loading="lazy" decoding="async">` : ''}
             <span>${r.fav ? '★ ' : ''}${esc(r.name)}</span>
             <b>${r.total != null ? fmt(r.total) : '—'}</b>
           </button>`;
@@ -4224,7 +4236,7 @@ function renderPhoto() {
   } else if (p) {
     const src = p.kind === 'new' ? p.url : resolvePhotoUrl(p);
     const croppable = can && !(p.kind === 'saved' && /^https?:/.test(p.data || p.id || ''));
-    el.photoBox.innerHTML = `<div class="photo-has"><img class="photo-img" data-photo="form" src="${esc(src)}" alt="Фото к оценке">`
+    el.photoBox.innerHTML = `<div class="photo-has"><img class="photo-img" data-photo="form"${window.CasualUtil.nsfw.attr(coverKind() === 'hentai')} src="${esc(src)}" alt="Фото к оценке">`
       + tools(croppable ? `<button type="button" class="btn small ghost" data-act="photo-crop">Кадрировать</button>` : '')
       + '</div>';
   } else {
@@ -5159,7 +5171,7 @@ function renderTierView() {
     const aUrl = pUrl ? '' : artistAvaUrl(r);
     const letter = esc([...String(r.name).trim()][0] || '?');
     return `<button type="button" class="tl-item" data-tier-goto="${esc(r.id)}" data-tier="${tierT(r.total)}" title="${esc(r.name)} · ${fmt(r.total)}">
-      <span class="tl-pic">${pUrl ? `<img src="${esc(pUrl)}" alt="" loading="lazy" decoding="async" data-photo="thumb">` : aUrl ? `<img class="ava" src="${esc(aUrl)}" alt="" loading="lazy" decoding="async">` : `<span>${letter}</span>`}${mode === 'scores' ? `<b>${fmt(r.total)}</b>` : ''}</span>
+      <span class="tl-pic">${pUrl ? `<img${adultAttr(r)} src="${esc(pUrl)}" alt="" loading="lazy" decoding="async" data-photo="thumb">` : aUrl ? `<img class="ava" src="${esc(aUrl)}" alt="" loading="lazy" decoding="async">` : `<span>${letter}</span>`}${mode === 'scores' ? `<b>${fmt(r.total)}</b>` : ''}</span>
       ${mode === 'names' ? `<span class="tl-name">${esc(r.name)}</span>` : ''}
     </button>`;
   };

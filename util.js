@@ -414,7 +414,41 @@ html.sh-cur ::file-selector-button { cursor: var(--sh-a); }`;
   curApply(curStored());
   addEventListener('storage', (e) => { if (e.key === null || e.key === CUR_KEY || e.key === 'ocenshik.user.v1' || e.key === 'casualhub.tokens.v1') curApply(curStored()); });
 
-  window.CasualUtil = Object.freeze({ esc, read, plural, script, emptyArt, loop, confetti, size, cursor });
+  // ---------- 18+ ----------
+  // Обложки оценок из категории «Хентай» (и любой с «hentai», «18+», «nsfw» в названии) размыты, пока человек сам не включит
+  // показ в Настройках → «Общее» → «Контент 18+». Выбор — в этом браузере (casualhub.nsfw.v1), класс nsfw-on на <html> ставится
+  // до первой отрисовки. Размывает правило в base.css по атрибуту data-nsfw — на самой картинке или на её рамке
+  // (картинку туда вставят позже); подсказка при наведении — title. Разметка обложки: nsfw.attr(nsfw.is(r)) или nsfw.attr(nsfw.cat(имя))
+  const NSFW_KEY = 'casualhub.nsfw.v1';
+  const NSFW_RE = /хентай|hentai|18\s*\+|nsfw/i;
+  const NSFW_TIP = 'Обложка 18+ размыта. Показать без размытия: Настройки → Общее → «Контент 18+»';
+  const nsfwOn = () => { try { return localStorage.getItem(NSFW_KEY) === '1'; } catch (e) { return false; } };
+  const nsfwClass = (on) => { const cl = document.documentElement && document.documentElement.classList; if (cl && cl.toggle) cl.toggle('nsfw-on', on); };
+  const nsfwPaint = () => {
+    const on = nsfwOn();
+    nsfwClass(on);
+    if (!document.querySelectorAll) return;
+    // подсказка «размыта» нужна, только пока размыто
+    document.querySelectorAll('[data-nsfw]').forEach((el) => { if (on) { if (el.title === tr(NSFW_TIP)) el.removeAttribute('title'); } else if (!el.title) el.title = tr(NSFW_TIP); });
+  };
+  const tr = (t) => (window.CasualLang && window.CasualLang.t ? window.CasualLang.t(t) : t);
+  const nsfw = Object.freeze({
+    on: nsfwOn,
+    set(v) {
+      try { if (v) localStorage.setItem(NSFW_KEY, '1'); else localStorage.removeItem(NSFW_KEY); } catch (e) {}
+      nsfwPaint();
+      dispatchEvent(new CustomEvent('casualhub:nsfw', { detail: !!v }));
+    },
+    cat: (name) => NSFW_RE.test(String(name || '')),
+    // оценка своя или друга: у своих — имя категории передаёт страница, у друзей оно в catLabel / catName
+    is: (r, catName) => !!r && (r.adult === true || NSFW_RE.test(String(catName || r.catLabel || r.catName || ''))),
+    attr: (adult) => (adult ? ` data-nsfw${nsfwOn() ? '' : ` title="${esc(NSFW_TIP)}"`}` : ''),
+    tip: NSFW_TIP,
+  });
+  nsfwClass(nsfwOn());
+  addEventListener('storage', (e) => { if (e.key === null || e.key === NSFW_KEY) nsfwPaint(); });
+
+  window.CasualUtil = Object.freeze({ esc, read, plural, script, emptyArt, loop, confetti, size, cursor, nsfw });
   // котик Васян внизу экрана (vasyan.js сам проверяет, не выключен ли он в Настройках; в админке и на /r/ его нет)
   if (!/^\/(admin|r)\//.test(location.pathname)) script('/vasyan.js', () => !!window.CasualVasyan).catch(() => {});
 })();

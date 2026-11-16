@@ -27,6 +27,9 @@ input, textarea, [contenteditable="true"] { caret-color: var(--accent, #3550E8);
 :focus-visible:not(input, textarea, select) { outline: 2px solid var(--accent, #3550E8); outline-offset: 2px; }
 /* Пустые состояния: пиксельный котик Васян из /art/empty-*.webp (CasualUtil.emptyArt) над подписью; пиксели без размытия */
 .empty-art { display: block; max-width: 100%; height: auto; margin: 0 auto 10px; image-rendering: pixelated; }
+/* 18+: обложки категории «Хентай» размыты, пока в Настройках не включён «Контент 18+» (класс nsfw-on на <html>, util.js → nsfw).
+   data-nsfw — на картинке или на её рамке; clip-path не даёт размытию вылезти за края */
+html:not(.nsfw-on) img[data-nsfw], html:not(.nsfw-on) [data-nsfw] img { filter: blur(20px) saturate(.7); clip-path: inset(0 round 8px); cursor: help; }
 .no-match:has(> .empty-art), .feed-empty:has(> .empty-art) { text-align: center; }
 /* значок раздела над заголовком страницы (пиксельный логотип из /art/logo) */
 .title-logo { display: block; width: clamp(44px, 6vw, 56px); height: auto; margin-bottom: 14px; }
