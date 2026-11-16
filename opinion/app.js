@@ -1307,10 +1307,12 @@ function paintVis() {
   const hint = document.getElementById('visHint');
   if (hint) hint.textContent = VIS_HINT[v] || VIS_HINT.friends;
 }
+const DEFAULT_STATUS = 'Завершено'; // новая оценка — сразу «Завершено» / «Просмотрено», поменять можно
 function blankForm(cat) {
   return {
     editingId: null, cat: cat || (state.cats[0] ? state.cats[0].id : 'games'),
-    name: '', artist: '', link: '', fav: false, status: '', meta: '', pros: '', cons: '',
+    // статус по умолчанию — «Завершено» (у фильмов и 18+ — «Просмотрено», у музыки свой выбор): renderStatusSet подгоняет под категорию
+    name: '', artist: '', link: '', fav: false, status: DEFAULT_STATUS, meta: '', pros: '', cons: '',
     note: '', scores: {}, notes: {}, openNotes: {}, weights: {}, extra: [], extraCatName: '', photo: null, ownOnly: false, vis: defaultVis()
   };
 }
@@ -1604,6 +1606,8 @@ function renderStatusSet() {
     box.dataset.set = sig;
     box.innerHTML = set.map(([v, t]) => `<button type="button" class="status-chip" data-status="${v}" aria-pressed="false">${t}</button>`).join('');
   }
+  // статус по умолчанию под категорию: «Завершено» у фильма — «Просмотрено», у музыки — пусто (там «Сингл / Альбом»)
+  if (!form.editingId && form.status) form.status = fitStatus(form.status);
   box.querySelectorAll('button[data-status]').forEach(b => b.setAttribute('aria-pressed', String(!!form.status && b.dataset.status === form.status.trim())));
 }
 
@@ -2012,7 +2016,8 @@ async function fillFromCover(c) {
   const kind = coverFrom;
   if (kind === 'music') { fillMusicFromCover(c); return; }
   let info = { ru: '', genres: c.genres && c.genres.length ? c.genres : c.genre ? [c.genre] : [] };
-  if (c.id && (kind === 'movie' || kind === 'game') && window.casualApi && window.casualApi.online()) {
+  // у обложки 18+ с MyAnimeList жанров нет — их подтягивает сервер (теги AniList по id MyAnimeList)
+  if (c.id && (kind === 'movie' || kind === 'game' || (kind === 'hentai' && !info.genres.length)) && window.casualApi && window.casualApi.online()) {
     try { info = Object.assign(info, await window.casualApi.get(`/covers/info?kind=${kind}&id=${encodeURIComponent(c.id)}`)); } catch (_) {}
   }
   const typed = form.name.trim();
@@ -3283,7 +3288,7 @@ let draftTimer = null;
 function scheduleDraft() { clearTimeout(draftTimer); draftTimer = setTimeout(saveDraft, 300); }
 function saveDraft() {
   try {
-    const empty = !form.editingId && !form.name.trim() && !form.note.trim() && !form.fav && !form.status
+    const empty = !form.editingId && !form.name.trim() && !form.note.trim() && !form.fav && (!form.status || form.status === fitStatus(DEFAULT_STATUS))
       && !(form.meta || '').trim() && !(form.pros || '').trim() && !(form.cons || '').trim() && !form.link
       && !Object.keys(form.scores).length && !Object.values(form.notes).some(n => n && n.trim()) && !form.photo;
     if (empty) localStorage.setItem(DRAFT_KEY, JSON.stringify({ v: 2, form: { cat: form.cat } }));
@@ -3326,7 +3331,7 @@ function loadDraft() {
       editingId: typeof f.editingId === 'string' ? f.editingId : null,
       cat: typeof f.cat === 'string' ? f.cat : blankForm().cat,
       name: str(f.name).slice(0, 140), artist: str(f.artist).slice(0, 80), note: str(f.note).slice(0, 4000), scores, notes,
-      fav: f.fav === true, status: str(f.status).slice(0, 40), meta: str(f.meta).slice(0, 80), link: musicLinkOk(f.link), pros: str(f.pros).slice(0, 1000), cons: str(f.cons).slice(0, 1000),
+      fav: f.fav === true, status: 'status' in f ? str(f.status).slice(0, 40) : DEFAULT_STATUS, meta: str(f.meta).slice(0, 80), link: musicLinkOk(f.link), pros: str(f.pros).slice(0, 1000), cons: str(f.cons).slice(0, 1000),
       extra: Array.isArray(f.extra) ? f.extra.filter(x => x && typeof x.id === 'string' && typeof x.name === 'string').map(x => ({ id: x.id, name: x.name, desc: str(x.desc).slice(0, 120) })) : [],
       extraCatName: str(f.extraCatName),
       vis: f.vis === 'public' || f.vis === 'private' || f.vis === 'friends' ? f.vis : defaultVis(),

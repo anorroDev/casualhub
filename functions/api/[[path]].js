@@ -1495,6 +1495,7 @@ const routes = {
     try {
       if (kind === 'movie' && /^tt\d{5,10}$/.test(id)) return json(await filmInfo(id));
       if (kind === 'game' && /^\d{1,9}$/.test(id)) return json(await gameInfo(id));
+      if (kind === 'hentai' && /^\d{1,9}$/.test(id)) return json(await hentaiInfo(id)); // id с MyAnimeList
     } catch (e) {
       return fail(502, 'Подробности сейчас не отвечают');
     }
@@ -2875,17 +2876,41 @@ async function latinTitles(q, kind) {
 }
 // таблица TR (кириллица → латиница) объявлена в начале файла
 const translit = (s) => String(s).replace(/[а-яё]/gi, (c) => { const t = TR[c.toLowerCase()] || ''; return c === c.toLowerCase() ? t : t.charAt(0).toUpperCase() + t.slice(1); });
-// adult — только взрослое (категория «Хентай»): обычный поиск аниме 18+ не показывает никогда
+// adult — только взрослое (категория «Хентай»): обычный поиск аниме 18+ не показывает никогда.
+// У взрослого кроме жанров берутся и теги AniList (hentaiGenres): у хентая жанр почти всегда один — «Hentai»
 async function aniList(q, adult = false) {
-  const body = JSON.stringify({ query: `query($s:String){Page(perPage:10){media(search:$s,sort:SEARCH_MATCH,isAdult:${adult ? 'true' : 'false'}){type format title{romaji english}startDate{year}genres coverImage{extraLarge large}}}}`, variables: { s: q } });
+  const body = JSON.stringify({ query: `query($s:String){Page(perPage:10){media(search:$s,sort:SEARCH_MATCH,isAdult:${adult ? 'true' : 'false'}){type format title{romaji english}startDate{year}genres${adult ? ' tags{name rank isMediaSpoiler}' : ''} coverImage{extraLarge large}}}}`, variables: { s: q } });
   const d = await cachedJson('https://graphql.anilist.co', { method: 'POST', body, headers: { 'content-type': 'application/json' } }, 86400);
   const list = (d && d.data && d.data.Page && d.data.Page.media) || [];
   // сначала аниме, потом манга: категория обычно про аниме
   return list.filter((m) => m && m.coverImage && (m.coverImage.extraLarge || m.coverImage.large)).sort((x, y) => (x.type === 'MANGA') - (y.type === 'MANGA')).map((m) => ({
     title: String((m.title && (m.title.english || m.title.romaji)) || '').slice(0, 140), sub: ANI_KIND[m.format] || (m.type === 'MANGA' ? 'Манга' : 'Аниме'),
     year: m.startDate && m.startDate.year ? String(m.startDate.year) : '', art: m.coverImage.extraLarge || m.coverImage.large, thumb: m.coverImage.large || m.coverImage.extraLarge, tall: true,
-    genres: genresRu(m.genres),
+    genres: adult ? hentaiGenres(m.genres, m.tags) : genresRu(m.genres),
   }));
+}
+// теги AniList для категории 18+ — по-русски и только из этого списка (остальные, в том числе про возраст персонажей, не берём)
+const HTAG_RU = {
+  Vanilla: 'ванилла', Netorare: 'NTR', Netori: 'нетори', Cheating: 'измена', 'Female Harem': 'гарем', 'Male Harem': 'обратный гарем',
+  Yuri: 'юри', "Boys' Love": 'яой', Tentacles: 'тентакли', 'Monster Girl': 'монстродевушки', Elf: 'эльфы', Demons: 'демоны',
+  Succubus: 'суккубы', Vampire: 'вампиры', Maids: 'горничные', Nurse: 'медсёстры', Teacher: 'учителя', 'Office Lady': 'офис', MILF: 'милфы',
+  'Large Breasts': 'большая грудь', Futanari: 'футанари', Exhibitionism: 'эксгибиционизм', Bondage: 'бондаж', BDSM: 'BDSM', Femdom: 'фемдом',
+  'Mind Control': 'контроль разума', Defloration: 'первый раз', Pregnant: 'беременность', Tsundere: 'цундэрэ', Isekai: 'исекай', Cosplay: 'косплей',
+};
+function hentaiGenres(genres, tags) {
+  const out = genresRu((genres || []).filter((g) => g !== 'Hentai'));
+  for (const t of (tags || []).filter((x) => x && !x.isMediaSpoiler && (+x.rank || 0) >= 60).sort((a, b) => b.rank - a.rank)) {
+    const ru = HTAG_RU[t.name];
+    if (ru && !out.includes(ru)) out.push(ru);
+  }
+  return out.slice(0, 6);
+}
+// жанры и теги тайтла с MyAnimeList (обложка пришла оттуда): AniList знает его по idMal
+async function hentaiInfo(idMal) {
+  const body = JSON.stringify({ query: 'query($id:Int){Media(idMal:$id,type:ANIME){genres tags{name rank isMediaSpoiler}}}', variables: { id: +idMal } });
+  const d = await cachedJson('https://graphql.anilist.co', { method: 'POST', body, headers: { 'content-type': 'application/json' } }, 7 * 86400);
+  const m = (d && d.data && d.data.Media) || {};
+  return { ru: '', genres: hentaiGenres(m.genres, m.tags) };
 }
 const KITSU_KIND = { TV: 'Аниме', movie: 'Аниме-фильм', OVA: 'OVA', ONA: 'ONA', special: 'Спецвыпуск', music: 'Клип' };
 async function kitsu(q) {
@@ -2914,7 +2939,7 @@ async function malSearch(q) {
   return items.filter((a) => a && /^https:\/\/cdn\.myanimelist\.net\//.test(a.image_url || '') && !/questionmark/.test(a.image_url)).map((a) => {
     const thumb = a.image_url, art = thumb.replace(/\/r\/\d+x\d+\//, '/').replace(/\?.*$/, '').replace(/(\.\w+)$/, 'l$1');
     const p = a.payload || {};
-    return { title: String(a.name || '').slice(0, 140), sub: MAL_KIND[p.media_type] || 'Аниме', year: p.start_year ? String(p.start_year) : '', art, thumb, tall: true };
+    return { id: Number.isInteger(a.id) ? String(a.id) : '', title: String(a.name || '').slice(0, 140), sub: MAL_KIND[p.media_type] || 'Аниме', year: p.start_year ? String(p.start_year) : '', art, thumb, tall: true };
   });
 }
 // жанры по-русски, только основные: из меток Wikidata («научно-фантастический фильм», «фильм-триллер»)
