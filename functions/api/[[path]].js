@@ -2904,6 +2904,19 @@ async function jikan(q, adult = false) {
     genres: genresRu((a.genres || []).map((g) => g && g.name)),
   }));
 }
+// MyAnimeList: быстрый поиск сайта (без ключа), в нём есть и взрослые тайтлы — для категории 18+, когда AniList не ответил
+// (с адресов Cloudflare он бывает недоступен). Картинка в выдаче уменьшенная (/r/116x180/…): полная — тот же путь без /r/…
+// и с «l» перед расширением
+const MAL_KIND = { TV: 'Аниме', Movie: 'Аниме-фильм', OVA: 'OVA', ONA: 'ONA', Special: 'Спецвыпуск', 'TV Special': 'Спецвыпуск', Music: 'Клип' };
+async function malSearch(q) {
+  const d = await cachedJson('https://myanimelist.net/search/prefix.json?type=anime&v=1&keyword=' + encodeURIComponent(q), null, 86400);
+  const items = ((d && d.categories) || []).flatMap((c) => (c && c.items) || []);
+  return items.filter((a) => a && /^https:\/\/cdn\.myanimelist\.net\//.test(a.image_url || '') && !/questionmark/.test(a.image_url)).map((a) => {
+    const thumb = a.image_url, art = thumb.replace(/\/r\/\d+x\d+\//, '/').replace(/\?.*$/, '').replace(/(\.\w+)$/, 'l$1');
+    const p = a.payload || {};
+    return { title: String(a.name || '').slice(0, 140), sub: MAL_KIND[p.media_type] || 'Аниме', year: p.start_year ? String(p.start_year) : '', art, thumb, tall: true };
+  });
+}
 // жанры по-русски, только основные: из меток Wikidata («научно-фантастический фильм», «фильм-триллер»)
 // и английских названий AniList / MyAnimeList (Sci-Fi, Slice of Life). Порядок — от самых определяющих
 const GENRE_RULES = [
@@ -3004,10 +3017,10 @@ const COVER_FIND = {
     }
     return [];
   },
-  // категория «Хентай» (18+): AniList со взрослыми тайтлами, не ответил — MyAnimeList (Jikan) по жанру Hentai.
+  // категория «Хентай» (18+): AniList со взрослыми тайтлами, не ответил — быстрый поиск MyAnimeList, потом Jikan по жанру Hentai.
   // Kitsu взрослое без входа не отдаёт. На страницах эти обложки размыты, пока не включён «Контент 18+»
   async hentai(q) {
-    for (const find of [(s) => aniList(s, true), (s) => jikan(s, true)]) {
+    for (const find of [(s) => aniList(s, true), malSearch, (s) => jikan(s, true)]) {
       try { const r = await find(q); if (r.length) return r; } catch (e) {}
     }
     return [];
