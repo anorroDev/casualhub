@@ -67,12 +67,13 @@ const CAT_TEMPLATES = [
   ]},
   // 18+: обложки ищутся среди взрослого аниме (catKind → 'hentai'), а у тех, кто не включил «Контент 18+», размыты
   { name: 'Хентай', criteria: [
-    { name: 'Сюжет и сценарий', desc: 'Есть ли история, ради которой смотришь', w: 1 },
-    { name: 'Рисовка и анимация', desc: 'Дизайн, качество кадра, плавность', w: 1 },
-    { name: 'Персонажи и дизайн', desc: 'Внешность и характер героев', w: 1 },
-    { name: 'Озвучка и звук', desc: 'Сейю, музыка, звуковое сопровождение', w: 1 },
-    { name: 'Попадание во вкус', desc: 'Насколько это именно твоё', w: 1 },
-    { name: 'Пересматриваемость', desc: 'Захочется ли вернуться', w: 1 }
+    { name: 'Визуальное качество', desc: 'Рисунок и анатомия, цвет и свет, фоны, стиль не «плывёт», плавность анимации', w: 1 },
+    { name: 'Персонажи', desc: 'Дизайн, эмоции и лица, разные типажи, живые, а не набор клише', w: 1 },
+    { name: 'Сюжет и структура', desc: 'Есть ли сюжет, логика и мотивация, темп, сцены не только ради сцен, подача тропов', w: 1 },
+    { name: 'Сексуальный контент', desc: 'Позы, динамика и детализация, разнообразие, атмосфера, заявленные фетиши и темы', w: 1 },
+    { name: 'Техническое исполнение', desc: 'Анимация и озвучка, у манги — страницы, скан и перевод, у 3D — модели и свет; без артефактов', w: 1 },
+    { name: 'Атмосфера и тон', desc: 'Выдержан ли вайб: романтика, жёсткость, комедия, тьма; эмоции и послевкусие', w: 1 },
+    { name: 'Личное впечатление', desc: 'Насколько заходит тебе, оправдывает ли жанр и теги, свежесть, пересматриваемость', w: 1 }
   ]},
   { name: 'Мультики', criteria: [
     { name: 'Юмор', desc: 'Насколько смешно', w: 1 },
@@ -155,8 +156,22 @@ const MIG_KEY = 'ocenshik.mig.v1';
 function migrateCats(items) {
   let done = {};
   try { done = JSON.parse(localStorage.getItem(MIG_KEY) || '{}') || {}; } catch (_) {}
-  if (done.ending) return false;
   let changed = false;
+  // категория «Хентай» из первого шаблона (6 критериев) — новые 7 критериев шаблона, если оценок в ней ещё нет
+  if (!done.hentai7) {
+    const OLD = ['Сюжет и сценарий', 'Рисовка и анимация', 'Персонажи и дизайн', 'Озвучка и звук', 'Попадание во вкус', 'Пересматриваемость'].map(keyOf).join('|');
+    const tpl = CAT_TEMPLATES.find(t => t.name === 'Хентай');
+    let rated = [];
+    try { rated = JSON.parse(localStorage.getItem(STORAGE_KEYS.RATINGS) || '[]') || []; } catch (_) {}
+    for (const c of items) {
+      if (!tpl || c.id !== tplCatId(tpl) || c.criteria.map(k => keyOf(k.name)).join('|') !== OLD) continue;
+      if (rated.some(r => r && r.cat === c.id)) continue;
+      c.criteria = tplCriteria(tpl, c.id);
+      changed = true;
+    }
+    done.hentai7 = true;
+  }
+  if (done.ending) { try { localStorage.setItem(MIG_KEY, JSON.stringify(done)); } catch (_) {} return changed; }
   const animeId = tplId('Аниме и манга');
   for (const c of items) {
     const anime = c.id === animeId || keyOf(c.name) === keyOf('Аниме и манга');
@@ -1558,7 +1573,9 @@ const STATUS_SETS = {
 };
 const NO_SCORE_OK = ['В планах', 'В процессе'];
 const noScoreOk = (st) => NO_SCORE_OK.includes(String(st || '').trim());
-function statusSet() { return formMusic() ? STATUS_SETS.music : catKind(currentCat()) === 'movie' ? STATUS_SETS.movie : STATUS_SETS.base; }
+// «Просмотрено» — у фильмов и сериалов и у категории 18+ (catKind 'hentai')
+const WATCHED = new Set(['movie', 'hentai']);
+function statusSet() { return formMusic() ? STATUS_SETS.music : WATCHED.has(catKind(currentCat())) ? STATUS_SETS.movie : STATUS_SETS.base; }
 // статус под текущую категорию: «Завершено» у фильма становится «Просмотрено» и наоборот, чужой статус сбрасывается
 function fitStatus(v) {
   const t = String(v || '').trim();
@@ -1572,7 +1589,7 @@ function migrateWatched() {
   let n = 0;
   for (const r of state.ratings) {
     if (r.example || !/Завершено/.test(r.status || '')) continue;
-    if (catKind(state.cats.find(c => c.id === r.cat) || { id: r.cat, name: r.catName || '' }) !== 'movie') continue;
+    if (!WATCHED.has(catKind(state.cats.find(c => c.id === r.cat) || { id: r.cat, name: r.catName || '' }))) continue;
     r.status = r.status.replace('Завершено', 'Просмотрено');
     n++;
   }
