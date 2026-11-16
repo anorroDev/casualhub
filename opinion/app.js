@@ -1917,8 +1917,8 @@ async function findCovers() {
       const r = await window.casualApi.get(`/covers?kind=${kind}&q=${encodeURIComponent(q)}`);
       if (ctl !== coverCtl) return;
       coverItems = ((r && r.items) || []).filter(c => c && /^https:\/\//.test(c.art)).map(c => ({
-        id: String(c.id || ''), genres: Array.isArray(c.genres) ? c.genres.map(String).slice(0, 3) : [],
-        title: String(c.title || ''), artist: '', kind: String(c.sub || ''), year: String(c.year || ''), genre: '',
+        id: String(c.id || ''), genres: Array.isArray(c.genres) ? c.genres.map(String).slice(0, 6) : [], // у 18+ — жанры и теги
+        title: String(c.title || ''), ru: String(c.ru || '').slice(0, 140), artist: '', kind: String(c.sub || ''), year: String(c.year || ''), genre: '',
         art: c.art, alt: /^https:\/\//.test(c.alt || '') ? c.alt : '', thumb: /^https:\/\//.test(c.thumb || '') ? c.thumb : c.art, tall: !!c.tall, via: 'server'
       }));
     } catch (_) {
@@ -1970,7 +1970,7 @@ function renderCovers() {
   const show = coverItems.length > 0 && !!coverQuery() && !musicItems.length;
   box.hidden = !show;
   if (!show) { box.replaceChildren(); return; }
-  box.innerHTML = `<span class="label">Обложки из ${esc(COVER_SRC[coverFrom] || 'интернета')}</span><div class="cover-list">${coverItems.map((c, i) => `<button type="button" class="cover-opt${c.tall ? ' tall' : ''}" data-cover="${i}" title="${esc([c.artist, c.title].filter(Boolean).join(' — '))}"><img${window.CasualUtil.nsfw.attr(coverFrom === 'hentai')} src="${esc(c.thumb || c.art)}"${c.alt ? ` data-alt="${esc(c.alt)}"` : ''} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"><span>${esc(c.title)}</span><small>${esc([c.kind, c.year].filter(Boolean).join(' · '))}</small></button>`).join('')}</div>`;
+  box.innerHTML = `<span class="label">Обложки из ${esc(COVER_SRC[coverFrom] || 'интернета')}</span><div class="cover-list">${coverItems.map((c, i) => `<button type="button" class="cover-opt${c.tall ? ' tall' : ''}" data-cover="${i}" title="${esc([c.artist, c.title].filter(Boolean).join(' — '))}"><img${window.CasualUtil.nsfw.attr(coverFrom === 'hentai')} src="${esc(c.thumb || c.art)}"${c.alt ? ` data-alt="${esc(c.alt)}"` : ''} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"><span>${esc(c.title)}</span>${c.ru && c.ru !== c.title ? `<em class="cover-ru">${esc(c.ru)}</em>` : ''}<small>${esc([c.kind, c.year].filter(Boolean).join(' · '))}</small></button>`).join('')}</div>`;
 }
 // у старых игр Steam нет вертикальной обложки: показываем шапку магазина
 document.addEventListener('error', e => {
@@ -2021,7 +2021,10 @@ async function fillFromCover(c) {
     try { info = Object.assign(info, await window.casualApi.get(`/covers/info?kind=${kind}&id=${encodeURIComponent(c.id)}`)); } catch (_) {}
   }
   const typed = form.name.trim();
-  const name = /[а-яё]/i.test(typed) ? String(info.ru || '').trim() : c.title.trim();
+  // русское название (у 18+ — с Shikimori): писал по-русски — оно и становится названием, иначе — подзаголовком в описании
+  const ruName = String(c.ru || info.ru || '').trim();
+  const name = /[а-яё]/i.test(typed) ? ruName : c.title.trim();
+  const ruSub = ruName && name !== ruName && kind === 'hentai' ? ruName : '';
   if (name && name !== typed) {
     form.name = name.slice(0, 140);
     el.name.value = form.name;
@@ -2030,7 +2033,9 @@ async function fillFromCover(c) {
   const meta = (form.meta || '').trim();
   // описание заполняем, только если там пусто или один год — своё не затираем
   if (!meta || /^(18|19|20)\d{2}$/.test(meta)) {
-    form.meta = [c.year || meta, ...(info.genres || []).map(g => String(g).toLowerCase())].filter(Boolean).join(', ').slice(0, 80);
+    // до 80 знаков целыми словами: лишние теги отбрасываются, а не обрезаются посередине
+    form.meta = [ruSub, c.year || meta, ...(info.genres || []).map(g => String(g).toLowerCase())].filter(Boolean)
+      .reduce((acc, x) => (acc ? (acc.length + 2 + x.length <= 80 ? acc + ', ' + x : acc) : x.slice(0, 80)), '');
     if (el.meta) el.meta.value = form.meta;
   }
 }

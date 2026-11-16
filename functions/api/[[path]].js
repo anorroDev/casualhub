@@ -1468,7 +1468,8 @@ const routes = {
     if (q.length < 2 || !Object.prototype.hasOwnProperty.call(COVER_FIND, kind)) return json({ items: [] });
     try {
       // по-русски Steam и сайты аниме ничего не находят: для кириллицы сразу ищем по английскому названию
-      const ru = (kind === 'game' || kind === 'anime' || kind === 'hentai') && CYR.test(q);
+      // у 18+ русское название понимает сам поиск (Shikimori), перевод через Wikidata не нужен
+      const ru = (kind === 'game' || kind === 'anime') && CYR.test(q);
       let items = ru ? [] : await COVER_FIND[kind](q).catch(() => []);
       // Steam и AniList не знают русских названий: сначала ищем английское (Wikidata, русская Википедия)
       if (ru) {
@@ -2879,7 +2880,7 @@ const translit = (s) => String(s).replace(/[а-яё]/gi, (c) => { const t = TR[c
 // adult — только взрослое (категория «Хентай»): обычный поиск аниме 18+ не показывает никогда.
 // У взрослого кроме жанров берутся и теги AniList (hentaiGenres): у хентая жанр почти всегда один — «Hentai»
 async function aniList(q, adult = false) {
-  const body = JSON.stringify({ query: `query($s:String){Page(perPage:10){media(search:$s,sort:SEARCH_MATCH,isAdult:${adult ? 'true' : 'false'}){type format title{romaji english}startDate{year}genres${adult ? ' tags{name rank isMediaSpoiler}' : ''} coverImage{extraLarge large}}}}`, variables: { s: q } });
+  const body = JSON.stringify({ query: `query($s:String){Page(perPage:10){media(search:$s,sort:SEARCH_MATCH,isAdult:${adult ? 'true' : 'false'}){type format title{romaji english}startDate{year}genres${adult ? ' idMal tags{name rank isMediaSpoiler}' : ''} coverImage{extraLarge large}}}}`, variables: { s: q } });
   const d = await cachedJson('https://graphql.anilist.co', { method: 'POST', body, headers: { 'content-type': 'application/json' } }, 86400);
   const list = (d && d.data && d.data.Page && d.data.Page.media) || [];
   // сначала аниме, потом манга: категория обычно про аниме
@@ -2887,6 +2888,7 @@ async function aniList(q, adult = false) {
     title: String((m.title && (m.title.english || m.title.romaji)) || '').slice(0, 140), sub: ANI_KIND[m.format] || (m.type === 'MANGA' ? 'Манга' : 'Аниме'),
     year: m.startDate && m.startDate.year ? String(m.startDate.year) : '', art: m.coverImage.extraLarge || m.coverImage.large, thumb: m.coverImage.large || m.coverImage.extraLarge, tall: true,
     genres: adult ? hentaiGenres(m.genres, m.tags) : genresRu(m.genres),
+    ...(adult && Number.isInteger(m.idMal) ? { id: String(m.idMal) } : {}), // по нему — русское название (Shikimori) и теги
   }));
 }
 // теги AniList для категории 18+ — по-русски и только из этого списка (остальные, в том числе про возраст персонажей, не берём)
@@ -2941,6 +2943,17 @@ async function malSearch(q) {
     const p = a.payload || {};
     return { id: Number.isInteger(a.id) ? String(a.id) : '', title: String(a.name || '').slice(0, 140), sub: MAL_KIND[p.media_type] || 'Аниме', year: p.start_year ? String(p.start_year) : '', art, thumb, tall: true };
   });
+}
+// Shikimori: русские названия аниме, в том числе 18+ (censored=false). shikimori.one переехал на shikimori.io
+const SHIKI = 'https://shikimori.io';
+const SHIKI_KIND = { tv: 'Аниме', movie: 'Аниме-фильм', ova: 'OVA', ona: 'ONA', special: 'Спецвыпуск', tv_special: 'Спецвыпуск', music: 'Клип' };
+async function shikiSearch(q) {
+  const d = await cachedJson(`${SHIKI}/api/animes?limit=10&censored=false&search=` + encodeURIComponent(q), null, 86400);
+  return (Array.isArray(d) ? d : []).filter((a) => a && Number.isInteger(a.id)).map((a) => {
+    const img = a.image && typeof a.image.original === 'string' && /^\/system\//.test(a.image.original) && !/missing/.test(a.image.original) ? SHIKI + a.image.original : '';
+    return { id: String(a.id), title: String(a.name || '').slice(0, 140), ru: String(a.russian || '').slice(0, 140), sub: SHIKI_KIND[a.kind] || 'Аниме',
+      year: /^\d{4}/.test(a.aired_on || '') ? a.aired_on.slice(0, 4) : '', art: img, thumb: img && a.image.preview ? SHIKI + a.image.preview : img, tall: true, adult: a.rating === 'rx' || !a.rating };
+  }).filter((a) => a.art || a.ru);
 }
 // жанры по-русски, только основные: из меток Wikidata («научно-фантастический фильм», «фильм-триллер»)
 // и английских названий AniList / MyAnimeList (Sci-Fi, Slice of Life). Порядок — от самых определяющих
@@ -3044,11 +3057,21 @@ const COVER_FIND = {
   },
   // категория «Хентай» (18+): AniList со взрослыми тайтлами, не ответил — быстрый поиск MyAnimeList, потом Jikan по жанру Hentai.
   // Kitsu взрослое без входа не отдаёт. На страницах эти обложки размыты, пока не включён «Контент 18+»
+  // Русские названия — с Shikimori (исключение из правила «без российских сервисов», только для 18+, по просьбе владельца
+  // сайта): его id совпадают с MyAnimeList, поэтому русское название приклеивается к любой найденной обложке (поле ru).
+  // Запрос по-русски Shikimori переводит в оригинальное название; ничего не нашлось нигде — его же обложки
   async hentai(q) {
-    for (const find of [(s) => aniList(s, true), malSearch, (s) => jikan(s, true)]) {
-      try { const r = await find(q); if (r.length) return r; } catch (e) {}
+    const shiki = await shikiSearch(q).catch(() => []);
+    const ruOf = new Map(shiki.map((a) => [a.id, a.ru]));
+    const queries = CYR.test(q) ? [...new Set(shiki.slice(0, 2).map((a) => a.title))] : [q];
+    let out = [];
+    for (const s of queries) {
+      for (const find of [(x) => aniList(x, true), malSearch, (x) => jikan(x, true)]) {
+        try { const r = await find(s); if (r.length) { out.push(...r); break; } } catch (e) {}
+      }
     }
-    return [];
+    if (!out.length) out = shiki.filter((a) => a.adult);
+    return out.map((c) => (c.id && ruOf.get(c.id) && !c.ru ? { ...c, ru: ruOf.get(c.id) } : c));
   },
 };
 // тип картинки по первым байтам (заголовкам чужих сайтов верить нельзя)
