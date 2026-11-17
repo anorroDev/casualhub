@@ -6,7 +6,7 @@ import {
   levelsMode, levelsOn, ensureLevels, readLevel, levelView, prefsOf, lookOf, unlockedAt, levelsOf, achievementsOf, questState,
   firstSteps, takeNews, dayKey, weekStart, shiftDay, cleanTz, backfillUser, grantSpecial, currentEvent, forgetEvent, RULES, awardMany,
   ACHIEVEMENTS, REWARDS, NAME_COLORS, PROFILE_BGS, isScored, textLen, award, INVITE_REWARDS, INV_SQL, invitesOf, STREAK_BONUS, FIRST_STEPS,
-  achBackLetter, ACH_TIER_XP, ACH_ONE_XP,
+  achBackLetter, ACH_TIER_XP, ACH_ONE_XP, swapQuest,
   SEASON_RANKS, seasonRankOf, rankFields, currentSeason, closeSeason, forgetSeason, seasonXpOf, seasonXpMany, seasonPlanLetter, fmtKyiv,
 } from './levels.js';
 import { FOODS, boughtLooks } from './shop.js';
@@ -173,6 +173,16 @@ export function makeLevelsRoutes(h) {
       const r = await awardMany(env, me.id, [{ kind: 'gift', ref: g.id, xp: +g.xp }], { now, tz: tzOf(request) });
       h.markNews(request, r);
       return json({ ok: true, gained: r ? r.gained : 0, level: r ? r.level : null, unread: await mailUnread(env, me.id) });
+    },
+    // бесплатная замена задания дня (одна в день): { code } — какое заменить
+    async 'POST /levels/quest/swap'({ env, request, me }) {
+      if (!(await gate(env, me))) return off();
+      await ensureLevels(env);
+      const { code } = await h.readBody(request);
+      const now = Date.now();
+      const row = (await userRow(env, me.id)) || {};
+      const r = await swapQuest(env, me.id, String(code || ''), { now, today: dayKey(now, tzOf(request) || row.tz || 'UTC') });
+      return r.ok ? json(r) : fail(r.status || 400, r.error);
     },
     // новые награды (плашки): отдаются один раз
     async 'GET /levels/news'({ env, me }) {

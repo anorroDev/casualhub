@@ -607,3 +607,30 @@ test('достижения дают опыт: за каждую ступень �
   const items = await achievementsOf(env, 'u1');
   assert.equal(items.find((a) => a.code === 'critic').xp, 400); // дальше — золото
 });
+
+test('задания дня: одна бесплатная замена в день, только невыполненного, завтра — снова', async () => {
+  const env = envOf();
+  env.DB.raw.exec("INSERT INTO users (id, username, uname, created_at, email_ok) VALUES ('u1', 'Аня', 'anya', 1, 0), ('u2', 'Боб', 'bob', 2, 0)");
+  env.DB.raw.exec("INSERT INTO friendships (a, b, status, requested_by, created_at) VALUES ('u1', 'u2', 'accepted', 'u1', 1)");
+  await award(env, 'u1', 'visit', 'd0', { now: NOON, ...bare });
+  const today = dayKey(NOON, 'UTC');
+  const q1 = await questState(env, 'u1', { now: NOON, today });
+  assert.equal(q1.swap, true);
+  const target = q1.daily[0].code;
+  const r = await L.swapQuest(env, 'u1', target, { now: NOON, today });
+  assert.ok(r.ok && r.code !== target && !q1.daily.some((d) => d.code === r.code));
+  const q2 = await questState(env, 'u1', { now: NOON, today });
+  assert.equal(q2.swap, false);
+  assert.deepEqual(q2.daily.map((d) => d.code), [r.code, ...q1.daily.slice(1).map((d) => d.code)]);
+  assert.equal((await L.swapQuest(env, 'u1', q2.daily[1].code, { now: NOON, today })).status, 409); // вторая — нельзя
+  // завтра: новые задания и снова одна замена
+  const tomorrow = shiftDay(today, 1);
+  assert.equal((await questState(env, 'u1', { now: NOON + DAY, today: tomorrow })).swap, true);
+  // выполненное заменить нельзя
+  const q3 = await questState(env, 'u1', { now: NOON + DAY, today: tomorrow });
+  const rate = q3.daily.find((d) => d.code === 'rate2');
+  if (rate) {
+    await awardMany(env, 'u1', [{ kind: 'rate', ref: 'x1' }, { kind: 'rate', ref: 'x2' }], { now: NOON + DAY, ...bare });
+    assert.equal((await L.swapQuest(env, 'u1', 'rate2', { now: NOON + DAY, today: tomorrow })).status, 409);
+  }
+});

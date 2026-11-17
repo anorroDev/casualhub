@@ -716,21 +716,28 @@ export function streakStep(st, today) {
 }
 
 // задания: выбрать на сегодня (если ещё не выбраны) и посчитать прогресс
+// какие задания можно выдать: «с друзьями» — только если друзья есть, «из планов» — только если есть планы
+async function questOk(env, uid) {
+  const [fr, sh] = await env.DB.batch([
+    env.DB.prepare("SELECT COUNT(*) AS n FROM friendships WHERE (a = ?1 OR b = ?1) AND status = 'accepted'").bind(uid),
+    env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(uid),
+  ]);
+  const friends = n0(fr) > 0;
+  let plans = false;
+  try { const d = JSON.parse(((sh.results || [])[0] || {}).data || '{}'); plans = (Array.isArray(d) ? d : d.ratings || []).some((r) => r && r.status === 'В планах'); } catch (e) {}
+  return (x) => !x.need || (x.need === 'friends' && friends) || (x.need === 'plans' && plans);
+}
+// задания дня в user_level.quests: раньше — просто список кодов, теперь { l: коды, s: 1 — бесплатная замена на сегодня потрачена }
+const questsOf = (raw) => { const v = parse(raw, []); return Array.isArray(v) ? { l: v, s: 0 } : { l: Array.isArray(v.l) ? v.l : [], s: v.s ? 1 : 0 }; };
 export async function questState(env, uid, { now, today, row }) {
   row = row || (await env.DB.prepare('SELECT * FROM user_level WHERE user_id = ?').bind(uid).first()) || {};
   const week = weekStart(today);
-  let daily = row.quest_day === today ? parse(row.quests, []) : null;
+  const stored = row.quest_day === today ? questsOf(row.quests) : null;
+  let daily = stored ? stored.l : null;
+  const swapped = stored ? stored.s : 0;
   let wq = row.quest_week === week ? row.wquest : null;
   if (!daily || !wq) {
-    // что можно выдать: задания «с друзьями» — только если друзья есть, «из планов» — только если есть планы
-    const [fr, sh] = await env.DB.batch([
-      env.DB.prepare("SELECT COUNT(*) AS n FROM friendships WHERE (a = ?1 OR b = ?1) AND status = 'accepted'").bind(uid),
-      env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(uid),
-    ]);
-    const friends = n0(fr) > 0;
-    let plans = false;
-    try { const d = JSON.parse(((sh.results || [])[0] || {}).data || '{}'); plans = (Array.isArray(d) ? d : d.ratings || []).some((r) => r && r.status === 'В планах'); } catch (e) {}
-    const ok = (x) => !x.need || (x.need === 'friends' && friends) || (x.need === 'plans' && plans);
+    const ok = await questOk(env, uid);
     if (!daily) {
       const rnd = seeded(uid + ':' + today), pool = DAILY.filter(ok);
       daily = [];
@@ -738,7 +745,7 @@ export async function questState(env, uid, { now, today, row }) {
     }
     if (!wq) { const pool = WEEKLY.filter(ok); wq = pool[Math.floor(seeded(uid + ':' + week)() * pool.length)].code; }
     await env.DB.prepare('INSERT INTO user_level (user_id, updated_at, quest_day, quests, quest_week, wquest) VALUES (?1, ?2, ?3, ?4, ?5, ?6) ON CONFLICT(user_id) DO UPDATE SET quest_day = ?3, quests = ?4, quest_week = ?5, wquest = ?6')
-      .bind(uid, now, today, JSON.stringify(daily), week, wq).run();
+      .bind(uid, now, today, JSON.stringify({ l: daily, s: swapped }), week, wq).run();
   }
   const [td, wk, paid] = await env.DB.batch([
     env.DB.prepare('SELECT kind, COUNT(*) AS n FROM xp_log WHERE user_id = ? AND day = ? AND gone = 0 GROUP BY kind').bind(uid, today),
@@ -755,7 +762,28 @@ export async function questState(env, uid, { now, today, row }) {
   });
   const wd = WEEKLY.find((d) => d.code === wq);
   const weekly = wd ? (() => { const p = prog(wd, w); return { code: wd.code, title: wd.title, goal: wd.goal, progress: p, done: p >= wd.goal, paid: paidSet.has(`quest_week:${week}:${wd.code}`), xp: RULES.quest_week.xp }; })() : null;
-  return { day: today, week, daily: dl, allPaid: paidSet.has(`quest_all:${today}`), allXp: RULES.quest_all.xp, weekly };
+  return { day: today, week, daily: dl, allPaid: paidSet.has(`quest_all:${today}`), allXp: RULES.quest_all.xp, weekly, swap: !swapped };
+}
+// бесплатная замена задания дня: одна в день, только невыполненного и ещё не оплаченного; на сегодня, на завтра не копится.
+// Новое — из тех, что можно выдать, кроме уже выданных сегодня. Ответ — { ok } или { error, status }
+export async function swapQuest(env, uid, code, { now = Date.now(), today }) {
+  const row = (await env.DB.prepare('SELECT * FROM user_level WHERE user_id = ?').bind(uid).first()) || {};
+  const q = await questState(env, uid, { now, today, row });
+  if (!q.swap) return { status: 409, error: 'Замену на сегодня ты уже потратил. Новая будет завтра.' };
+  const cur = q.daily.find((d) => d.code === code);
+  if (!cur) return { status: 404, error: 'Такого задания сегодня нет.' };
+  if (cur.done || cur.paid) return { status: 409, error: 'Это задание уже выполнено.' };
+  const ok = await questOk(env, uid);
+  const have = new Set(q.daily.map((d) => d.code));
+  const pool = DAILY.filter((d) => ok(d) && !have.has(d.code));
+  if (!pool.length) return { status: 409, error: 'Сегодня заменить не на что.' };
+  const next = pool[Math.floor(seeded(uid + ':' + today + ':swap')() * pool.length)].code;
+  const list = q.daily.map((d) => (d.code === code ? next : d.code));
+  // замена проходит, только если за это время её не потратили в другой вкладке
+  const w = await env.DB.prepare("UPDATE user_level SET quests = ?1 WHERE user_id = ?2 AND quest_day = ?3 AND (quests IS NULL OR quests NOT LIKE '%\"s\":1%')")
+    .bind(JSON.stringify({ l: list, s: 1 }), uid, today).run();
+  if (!(w.meta && w.meta.changes)) return { status: 409, error: 'Замену на сегодня ты уже потратил. Новая будет завтра.' };
+  return { ok: true, code: next };
 }
 
 // первые шаги, которые выполнены, но ещё не оплачены
