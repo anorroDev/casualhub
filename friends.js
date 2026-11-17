@@ -84,7 +84,21 @@
 .fr-msg { font-size: 13px; color: var(--ink-2); }
 .fr-toggle { display: flex; align-items: center; gap: 8px; font-size: 14px; font-weight: 600; cursor: pointer; }
 .fr-toggle input { width: 18px; height: 18px; accent-color: var(--accent); }
-.friend-bar .sub-chip .on-dot { margin-right: 2px; }
+/* друзья в полосе над их оценками: аватарка (или буква), ник и точка «в сети» на аватарке */
+.friend-bar:not([hidden]) { display: flex; flex-wrap: wrap; gap: 6px; }
+.friend-bar .sub-chip { height: 34px; padding: 0 12px; gap: 7px; border-radius: 999px; font-size: 13px; }
+.friend-bar .sub-chip.fb:not(.solo) { padding-left: 4px; }
+.friend-bar .sub-chip.fb[aria-pressed="true"] { box-shadow: inset 0 0 0 1px var(--accent); }
+.fb-ava { position: relative; flex: none; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: var(--c, var(--accent)); color: #fff; font-size: 12px; font-weight: 800; }
+.fb-ava img { position: absolute; inset: 0; width: 100%; height: 100%; border-radius: 50%; object-fit: cover; }
+.fb-ava .on-dot { position: absolute; right: -2px; bottom: -2px; width: 9px; height: 9px; margin: 0; box-shadow: 0 0 0 2px var(--panel-2) !important; }
+.sub-chip.fb[aria-pressed="true"] .fb-ava .on-dot { box-shadow: 0 0 0 2px var(--accent-soft) !important; }
+/* «Все друзья» — стопка из первых аватарок */
+.fb-stack { display: inline-flex; }
+.fb-stack .fb-ava { width: 22px; height: 22px; font-size: 10px; box-shadow: 0 0 0 2px var(--panel-2); }
+.fb-stack .fb-ava + .fb-ava { margin-left: -8px; }
+.sub-chip.fb[aria-pressed="true"] .fb-stack .fb-ava { box-shadow: 0 0 0 2px var(--accent-soft); }
+.fb-stack .fb-ava .on-dot { display: none !important; }
 .fr-msg.err { color: var(--bad-ink); font-weight: 600; }
 .fr-muted { font-size: 13px; color: var(--ink-2); text-wrap: pretty; }
 .fol-dot { position: absolute; top: 4px; right: -12px; width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent); pointer-events: none; }
@@ -640,8 +654,10 @@
 
   // ---------- полоса «Я / друзья» и чужой рейтинг ----------
   function renderBar() {
-    const chips = [`<button type="button" class="sub-chip" data-fview="all" aria-pressed="${F.view === 'all'}">Все друзья</button>`]
-      .concat(F.friends.map((f) => `<button type="button" class="sub-chip" data-fview="${esc(f.id)}" aria-pressed="${F.view === f.id}" title="${esc(atOf(f))}"><i class="on-dot" data-on="${esc(f.id)}" data-last="${+f.lastSeen || ''}"></i> ${esc(f.username)}</button>`));
+    const ava = (f, dot) => `<span class="fb-ava" style="--c:${randomAvatarColor(f.username || f.id)}" data-fava="${esc(f.id)}">${esc([...String(f.username || '?')][0].toUpperCase())}${dot ? `<i class="on-dot" data-on="${esc(f.id)}" data-last="${+f.lastSeen || ''}"></i>` : ''}</span>`;
+    const stack = F.friends.length > 1 ? `<span class="fb-stack" aria-hidden="true">${F.friends.slice(0, 3).map((f) => ava(f, false)).join('')}</span>` : '';
+    const chips = [`<button type="button" class="sub-chip fb${stack ? '' : ' solo'}" data-fview="all" aria-pressed="${F.view === 'all'}">${stack}Все друзья</button>`]
+      .concat(F.friends.map((f) => `<button type="button" class="sub-chip fb" data-fview="${esc(f.id)}" aria-pressed="${F.view === f.id}" title="${esc(atOf(f))}">${ava(f, true)}${esc(f.username)}</button>`));
     const n = F.incoming.length;
     const needLink = F.online && state.user && !F.me;
     // окно друзей открывает кнопка «Друзья» в шапке (там же видны заявки), вторая кнопка здесь не нужна;
@@ -650,6 +666,23 @@
     else if (n) chips.push(`<button type="button" class="sub-chip" data-fopen="1">Заявки <b>+${n}</b></button>`);
     bar.innerHTML = chips.join('');
     if (window.CasualOnline) window.CasualOnline.paint(bar);
+    paintFriendAvas(bar);
+  }
+  // аватарки друзей: превью с сервера (/photo/<id>/avatar?thumb=1), до конца вкладки — из памяти и sessionStorage, без мигания
+  const FAVA_KEY = 'casualhub.fava.v1';
+  const favaStore = (() => { try { return JSON.parse(sessionStorage.getItem(FAVA_KEY) || '{}') || {}; } catch (e) { return {}; } })();
+  function paintFriendAvas(root) {
+    if (!F.token) return;
+    root.querySelectorAll('[data-fava]').forEach((el) => {
+      const id = el.dataset.fava;
+      const put = (d) => { if (!d || !el.isConnected || el.querySelector('img')) return; const im = new Image(); im.alt = ''; im.decoding = 'async'; im.onload = () => el.prepend(im); im.src = d; };
+      if (id in favaStore) { put(favaStore[id]); return; }
+      loadFriendPhoto(id + '|avatar|t').then((d) => {
+        favaStore[id] = /^data:image\//.test(d || '') ? d : '';
+        try { sessionStorage.setItem(FAVA_KEY, JSON.stringify(favaStore)); } catch (e) {}
+        put(favaStore[id]);
+      });
+    });
   }
 
   // фото друга: ссылка показывается сразу, загруженное фото подтягивается с сервера, когда карточка на экране
