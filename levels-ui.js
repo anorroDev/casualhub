@@ -306,6 +306,7 @@ html.lv-on .ava-wrap > .ava-ring { display: none !important; }
 .lv-ach b { display: block; font-size: 14px; }
 .lv-ach span, .lv-ach small { display: block; font-size: 12px; color: var(--ink-3, #8a8f9e); }
 .lv-ach.off { opacity: .55; }
+.lv-bi .axp { display: inline-block; margin-top: 4px; font-style: normal; font-size: 11.5px; font-weight: 800; color: #D99A1E; font-variant-numeric: tabular-nums; } /* опыт за достижение / следующую ступень */
 .lv-ach .pin { margin-top: 8px; padding: 4px 10px; white-space: nowrap; border-radius: 999px; border: 1px solid var(--line, #2b2e38); background: transparent; color: var(--ink-2, #b5b5b5); font: 600 11.5px/1.2 inherit; font-family: inherit; cursor: pointer; justify-self: start; }
 .lv-ach .pin[aria-pressed="true"] { background: var(--accent, #3550E8); color: #fff; border-color: transparent; }
 .lv-board { display: grid; gap: 6px; }
@@ -507,12 +508,13 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   // значок звания сезона: /art/rank/<id>.svg (id из ответа сервера, только латиница). В окнах без lazy — нужен сразу
   const emblem = (id, size, cls) => (/^[a-z]{2,12}$/.test(String(id || '')) ? `<img class="lv-emb${cls ? ' ' + cls : ''}" src="/art/rank/${id}.svg" width="${size}" height="${size}" alt="" decoding="async">` : '');
   const rankTitle = (id) => { const r = ME && ME.season && (ME.season.ranks || []).find((x) => x.id === id); return r ? r.title : ''; };
-  const NEWS_ICON = { level: '★', ach: '🏅', quest: '✓', quest_all: '✓', quest_week: '✓', streak: '🔥', first: '→', invite: '+', invite_me: '+', mentor: '★', invite_rw: '♥', freeze: '❄', rank: '★', season: '★' };
+  const NEWS_ICON = { level: '★', ach: '🏅', quest: '✓', quest_all: '✓', quest_week: '✓', streak: '🔥', first: '→', invite: '+', invite_me: '+', mentor: '★', invite_rw: '♥', ach_xp: '🏅', freeze: '❄', rank: '★', season: '★' };
   function newsLine(n) {
     if (n.t === 'rank') return `Новое звание: ${n.title}`;
     if (n.t === 'season') return `Начался ${n.title || 'новый сезон'}` + (n.prev && n.prev.rank ? `. Прошлый: ${rankTitle(n.prev.rank) || n.prev.rank}${n.prev.place ? `, ${n.prev.place}-е место` : ''}` : '');
     if (n.t === 'level') return `Новый уровень: ${n.to} · ${n.rank}`;
-    if (n.t === 'ach') return `Достижение «${n.title}»${n.tier ? ' · ' + ['', 'бронза', 'серебро', 'золото'][n.tier] : ''}`;
+    if (n.t === 'ach') return `Достижение «${n.title}»${n.tier ? ' · ' + ['', 'бронза', 'серебро', 'золото'][n.tier] : ''}${n.xp ? ` · +${n.xp}` : ''}`;
+    if (n.t === 'ach_xp') return `Опыт за полученные достижения · +${n.xp}`;
     if (n.t === 'quest') return `Задание выполнено: ${n.title}\u00a0·\u00a0+${n.xp}`;
     if (n.t === 'quest_all') return `Все задания дня\u00a0·\u00a0+${n.xp}`;
     if (n.t === 'quest_week') return `Задание недели: ${n.title}\u00a0·\u00a0+${n.xp}`;
@@ -1051,7 +1053,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     const p = a.next && a.have != null ? pct(a.have, a.next) : null;
     return `<div class="lv-bi ${a.got ? 'got' : 'off'}" style="--c1:${art[0]};--c2:${art[1]}" title="${esc(a.title)}: ${esc(a.desc)}">`
       + `<span class="ic${a.got || !a.hidden ? ' px' : ''}" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${a.got || !a.hidden ? art[2] : '<path d="M9.2 9a2.9 2.9 0 1 1 4.1 2.6c-.8.4-1.3 1.1-1.3 2v.6M12 17.5h.01"/>'}</svg>${a.got || !a.hidden ? achPx(a.code) : ''}</span>`
-      + `<span><b>${esc(a.title)}${a.got && a.tiers > 1 ? ' · ' + TIER[a.tier] : ''}</b><small>${esc(sub)} · есть у ${a.rarity}%</small>${p != null && (!a.got || a.next) ? bar(p) : ''}`
+      + `<span><b>${esc(a.title)}${a.got && a.tiers > 1 ? ' · ' + TIER[a.tier] : ''}</b><small>${esc(sub)} · есть у ${a.rarity}%</small>${a.xp && (!a.got || a.next) ? `<em class="axp" title="Опыт за ${a.got ? 'следующую ступень' : 'это достижение'}">+${a.xp} опыта</em>` : ''}${p != null && (!a.got || a.next) ? bar(p) : ''}`
       + `${pin && a.got ? `<button type="button" class="pin" data-pin="${esc(a.code)}" aria-pressed="${show.has(a.code)}">${show.has(a.code) ? 'В профиле ✓' : 'В профиль'}</button>` : ''}</span>`
       + `${a.got ? '<span class="ok" aria-label="Получено">✓</span>' : ''}</div>`;
   }
@@ -1071,6 +1073,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     ['Тир-листы', [['tier', 'Новый тир-лист от 8 элементов'], ['tier_share', 'Поделился тир-листом'], ['tier_coop', '«Тир-лист вместе»: разложил хотя бы половину'], ['tier_coop_host', 'Провёл «Тир-лист вместе», где голосовали трое']]],
     ['Лоты и игры', [['lots_host', 'Провёл сбор лотов до победителя (от 3 участников)'], ['lot_add', 'Лот в чужой сбор'], ['lot_win', 'Твой лот победил'], ['predict_win', 'Угадал победителя сбора'], ['bingo_win', 'Линия в бинго одним из первых трёх'], ['king_host', 'Довёл «Царя Горы» до конца'], ['king_vote', 'Голос в бою чужого турнира'], ['riddle', 'Отгадал загадку дня']]],
     ['Каждый день', [['visit', 'Зашёл на сайт'], ['quest', 'Задание дня', '3 в день'], ['quest_all', 'Все три задания дня', 'раз в день'], ['quest_week', 'Задание недели', 'раз в неделю'], ['@streak', 'Серия дней подряд: 7, 30, 100', 'за каждую отметку'], ['@first', 'Первые шаги', 'каждый один раз']]],
+    ['Достижения', [['@achT', 'Ступень достижения: бронза, серебро, золото', 'один раз за каждую'], ['@achOne', 'Достижение с одной ступенью и особые', 'один раз']]],
     ['Приглашения', [['invite', 'Друг по твоей ссылке дошёл до 3-го уровня — вам обоим', 'за каждого друга'], ['mentor', 'Друг по твоей ссылке дошёл до 10-го уровня', 'за каждого друга']]],
   ];
   function xpLim(r) {
@@ -1089,6 +1092,8 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
         let xp = '', l = lim;
         if (k === '@streak') xp = Object.values(m.streakBonus || {}).map((v) => '+' + v).join(' / ');
         else if (k === '@first') { const f = m.firstXp || []; xp = f.length ? `+${Math.min(...f)}…${Math.max(...f)}` : ''; }
+        else if (k === '@achT') xp = ((m.achXp && m.achXp.tiers) || []).map((v) => '+' + v).join(' / ');
+        else if (k === '@achOne') xp = m.achXp && m.achXp.one ? '+' + m.achXp.one : '';
         else if (R[k]) { xp = '+' + R[k].xp; if (!l) l = xpLim(R[k]); }
         return xp ? `<tr><td>${esc(what)}</td><td class="xp">${xp}</td><td class="lim">${esc(l || '')}</td></tr>` : '';
       }).join('');

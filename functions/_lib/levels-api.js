@@ -6,6 +6,7 @@ import {
   levelsMode, levelsOn, ensureLevels, readLevel, levelView, prefsOf, lookOf, unlockedAt, levelsOf, achievementsOf, questState,
   firstSteps, takeNews, dayKey, weekStart, shiftDay, cleanTz, backfillUser, grantSpecial, currentEvent, forgetEvent, RULES, awardMany,
   ACHIEVEMENTS, REWARDS, NAME_COLORS, PROFILE_BGS, isScored, textLen, award, INVITE_REWARDS, INV_SQL, invitesOf, STREAK_BONUS, FIRST_STEPS,
+  achBackLetter, ACH_TIER_XP, ACH_ONE_XP,
   SEASON_RANKS, seasonRankOf, rankFields, currentSeason, closeSeason, forgetSeason, seasonXpOf, seasonXpMany, seasonPlanLetter, fmtKyiv,
 } from './levels.js';
 import { FOODS, boughtLooks } from './shop.js';
@@ -20,7 +21,7 @@ export const KIND_LABEL = {
   got_react: 'Реакция на твою оценку', got_comment: 'Комментарий тебе', friend: 'Новый друг', lots_host: 'Сбор лотов до победителя',
   lot_add: 'Лот в чужой сбор', lot_win: 'Твой лот победил', visit: 'Заход на сайт', invite: 'Приглашение', quest: 'Задание дня',
   quest_all: 'Все задания дня', quest_week: 'Задание недели', streak: 'Серия дней', first: 'Первые шаги', past: 'Опыт за прошлое',
-  admin: 'От администрации', event: 'Тематическая неделя', gift: 'Подарок из почты', mentor: 'Друг по твоей ссылке дошёл до 10-го уровня',
+  admin: 'От администрации', event: 'Тематическая неделя', gift: 'Подарок из почты', ach: 'Достижение', mentor: 'Друг по твоей ссылке дошёл до 10-го уровня',
 };
 // таблица «За что сколько опыта» в «Прогрессе»: цифры — прямо из RULES, подписи — в levels-ui.js (XP_TABLE)
 const xpRules = () => Object.fromEntries(Object.entries(RULES).filter(([, r]) => !r.given).map(([k, r]) => [k, { xp: r.xp, day: r.day, tail: r.tail, pair: r.pair, ever: r.ever }]));
@@ -111,6 +112,8 @@ export function makeLevelsRoutes(h) {
       if (!(await gate(env, me))) return off();
       await ensurePast(env, me.id);
       const now = Date.now();
+      // опыт за достижения, полученные до того, как за них стали его давать, — письмом в «Почту», забирается кнопкой
+      try { await achBackLetter(env, me.id, now); } catch (e) { console.error('levels ach letter', e && e.message); }
       const row = (await userRow(env, me.id)) || {};
       const tz = tzOf(request) || row.tz || 'UTC';
       const today = dayKey(now, tz);
@@ -129,7 +132,7 @@ export function makeLevelsRoutes(h) {
         quests, steps: steps.every((s) => s.paid) ? null : steps,
         event: ev ? { title: ev.title, kinds: ev.kinds, mult: ev.mult, until: ev.until } : null,
         rewards: REWARDS, foods: FOOD_GIFTS, colors: NAME_COLORS, bgs: Object.keys(PROFILE_BGS), invRewards: INVITE_REWARDS, invites: invitesOf(row),
-        xpRules: xpRules(), streakBonus: STREAK_BONUS, firstXp: FIRST_STEPS.map((f) => f.xp),
+        xpRules: xpRules(), streakBonus: STREAK_BONUS, firstXp: FIRST_STEPS.map((f) => f.xp), achXp: { tiers: ACH_TIER_XP, one: ACH_ONE_XP },
         recap: recapOpen(now) ? 2026 : null,
         mail: await mailUnread(env, me.id),
         vasyan: await vasyanOwned(env, me.id),

@@ -126,6 +126,7 @@ export const RULES = {
   first: { given: true }, // первые шаги
   past: { given: true }, // опыт за прошлое одной строкой (если понадобится)
   gift: { given: true }, // подарок из почты (опыт, который прислала администрация)
+  ach: { given: true }, // ступень достижения (achXp), ref — «код:ступень»
 };
 // что считается «сделал что-то за день» для серии: всё, кроме простого захода и наград
 const ACTIVE = new Set(['rate', 'review', 'rate_full', 'plan_done', 'import', 'tier', 'tier_share', 'react', 'comment', 'friend', 'lots_host', 'lot_add']);
@@ -165,6 +166,10 @@ export const ACHIEVEMENTS = [
   { code: 'recap2026', title: 'Итоги 2026', desc: 'Посмотрел свои итоги 2026 года', special: true },
 ];
 const ACH = Object.fromEntries(ACHIEVEMENTS.map((a) => [a.code, a]));
+// опыт за ступень достижения: бронза, серебро, золото; одна ступень и особые — одинаково
+export const ACH_TIER_XP = [50, 150, 400];
+export const ACH_ONE_XP = 100;
+export const achXp = (a, tier) => (!a ? 0 : a.special || (a.tiers || []).length <= 1 ? ACH_ONE_XP : ACH_TIER_XP[Math.min(tier, 3) - 1] || 0);
 // какая ступень достигнута при значении v (0 — никакая)
 export const tierFor = (a, v) => (a.tiers || []).reduce((t, need, i) => (v >= need ? i + 1 : t), 0);
 
@@ -616,7 +621,7 @@ async function settle(env, uid, now, batchFirst, season = null) {
 }
 
 // дописать уведомления человеку (их заберёт страница: по сокету или при следующем /ping)
-async function pushNews(env, uid, news, now) {
+export async function pushNews(env, uid, news, now) {
   const r = await env.DB.prepare('SELECT news FROM user_level WHERE user_id = ?').bind(uid).first();
   const all = [...parse(r && r.news, []), ...news.map((n) => ({ ...n, at: now }))].slice(-20);
   await env.DB.prepare('UPDATE user_level SET news = ? WHERE user_id = ?').bind(JSON.stringify(all), uid).run();
@@ -796,15 +801,80 @@ export async function checkAchievements(env, uid, { now, metrics, news, row, qui
   const value = (a) => (typeof a.metric === 'string' && a.metric[0] === '@' ? +m[a.metric.slice(1)] || 0
     : (Array.isArray(a.metric) ? a.metric : [a.metric]).reduce((s, k) => s + (c[k] || 0), 0));
   const writes = [env.DB.prepare('UPDATE user_level SET metrics = ? WHERE user_id = ?').bind(JSON.stringify(m), uid)];
+  const fresh = []; // новые ступени — их опыт начисляется сразу (старые, до 17 ноября, — письмом: achBackLetter)
   for (const a of ACHIEVEMENTS) {
     if (a.special) continue;
     const t = tierFor(a, value(a));
     if (t > (owned[a.code] || 0)) {
+      for (let k = (owned[a.code] || 0) + 1; k <= t; k++) fresh.push(`${a.code}:${k}`);
       writes.push(env.DB.prepare('INSERT INTO achievements (user_id, code, tier, at) VALUES (?1, ?2, ?3, ?4) ON CONFLICT(user_id, code) DO UPDATE SET tier = ?3, at = ?4 WHERE tier < ?3').bind(uid, a.code, t, now));
-      if (!quiet) news.push({ t: 'ach', code: a.code, title: a.title, tier: (a.tiers || []).length > 1 ? t : 0 });
+      if (!quiet) news.push({ t: 'ach', code: a.code, title: a.title, tier: (a.tiers || []).length > 1 ? t : 0, xp: achXpUpTo(a, owned[a.code] || 0, t) });
     }
   }
   await env.DB.batch(writes);
+  if (fresh.length) await payAchievements(env, uid, { now, news, only: fresh });
+}
+// опыт за достижения, полученные до того, как за них стали его давать (12–17 ноября 2026): не сразу, а письмом в «Почту»
+// с кнопкой «Забрать». Ступени отмечаются в журнале с 0 опыта (больше их не оплатить), опыт — в письме (gifts, id
+// «achback:<uid>»), забирается как любой подарок (kind gift). Одной пачкой; письмо одно на человека. true — письмо создано
+export async function achBackLetter(env, uid, now = Date.now()) {
+  const [have, paid] = await env.DB.batch([
+    env.DB.prepare('SELECT code, tier FROM achievements WHERE user_id = ?').bind(uid),
+    env.DB.prepare("SELECT ref FROM xp_log WHERE user_id = ? AND kind = 'ach'").bind(uid),
+  ]);
+  const done = new Set((paid.results || []).map((x) => x.ref));
+  const refs = [], lines = [];
+  let xp = 0;
+  for (const x of have.results || []) {
+    const a = ACH[x.code];
+    if (!a) continue;
+    let sum = 0;
+    for (let t = 1; t <= (+x.tier || 1); t++) {
+      const ref = `${a.code}:${t}`;
+      if (done.has(ref)) continue;
+      refs.push(ref);
+      sum += achXp(a, t);
+    }
+    if (sum) { xp += sum; lines.push(`${a.title}${(a.tiers || []).length > 1 ? ' · ' + ['', 'бронза', 'серебро', 'золото'][+x.tier || 1] : ''} — +${sum}`); }
+  }
+  if (!refs.length || !xp) return false;
+  const day = dayKey(now, 'UTC');
+  const writes = [];
+  for (let i = 0; i < refs.length; i += CHUNK) {
+    const part = refs.slice(i, i + CHUNK);
+    writes.push(env.DB.prepare(`INSERT OR IGNORE INTO xp_log (user_id, kind, ref, xp, day, peer, at) VALUES ${part.map(() => "(?, 'ach', ?, 0, ?, NULL, ?)").join(', ')}`).bind(...part.flatMap((r) => [uid, r, day, now])));
+  }
+  const body = `Теперь за каждое достижение дают опыт: бронза +${ACH_TIER_XP[0]}, серебро +${ACH_TIER_XP[1]}, золото +${ACH_TIER_XP[2]}, остальные +${ACH_ONE_XP}. За то, что ты получил раньше:\n${lines.join('\n')}`;
+  writes.push(env.DB.prepare("INSERT OR IGNORE INTO gifts (id, to_id, kind, title, body, xp, at) VALUES (?, ?, 'gift', ?, ?, ?, ?)").bind('achback:' + uid, uid, 'Награда за прошлые достижения', body.slice(0, 2000), xp, now));
+  await env.DB.batch(writes);
+  return true;
+}
+// опыт за ступени from+1..to (перескочил сразу через ступень — за обе)
+const achXpUpTo = (a, from, to) => { let x = 0; for (let t = from + 1; t <= to; t++) x += achXp(a, t); return x; };
+// опыт за полученные ступени, за которые его ещё не давали (строки ach «код:ступень» в журнале): и за новые, и за полученные
+// до того, как за достижения стали давать опыт. Одной пачкой; news — куда дописать «новый уровень», если он случился.
+// Возвращает, сколько начислено
+// only — оплатить только эти ступени («код:ступень»), без него — все неоплаченные
+export async function payAchievements(env, uid, { now = Date.now(), news = null, only = null } = {}) {
+  const want = only ? new Set(only) : null;
+  const [have, paid] = await env.DB.batch([
+    env.DB.prepare('SELECT code, tier FROM achievements WHERE user_id = ?').bind(uid),
+    env.DB.prepare("SELECT ref FROM xp_log WHERE user_id = ? AND kind = 'ach'").bind(uid),
+  ]);
+  const done = new Set((paid.results || []).map((x) => x.ref));
+  const items = [];
+  for (const x of have.results || []) {
+    const a = ACH[x.code];
+    if (!a) continue;
+    for (let t = 1; t <= (+x.tier || 1); t++) {
+      const ref = `${a.code}:${t}`;
+      if (!done.has(ref) && (!want || want.has(ref))) items.push({ kind: 'ach', ref, xp: achXp(a, t) });
+    }
+  }
+  if (!items.length) return 0;
+  const r = await doAward(env, uid, items, { now, noExtras: true, silent: true });
+  if (r && news) news.push(...(r.news || []));
+  return r ? r.gained : 0;
 }
 // выдать особое достижение (основатель, первые шаги, итоги года)
 export async function grantSpecial(env, uid, code, { now = Date.now(), quiet } = {}) {
@@ -812,7 +882,11 @@ export async function grantSpecial(env, uid, code, { now = Date.now(), quiet } =
   await ensureLevels(env);
   const r = await env.DB.prepare('INSERT OR IGNORE INTO achievements (user_id, code, tier, at) VALUES (?, ?, 1, ?)').bind(uid, code, now).run();
   const fresh = !!(r.meta && r.meta.changes);
-  if (fresh && !quiet) await pushNews(env, uid, [{ t: 'ach', code, title: ACH[code].title, tier: 0 }], now);
+  if (fresh) {
+    const news = quiet ? null : [{ t: 'ach', code, title: ACH[code].title, tier: 0, xp: achXp(ACH[code], 1) }];
+    await payAchievements(env, uid, { now, news, only: [code + ':1'] });
+    if (news) await pushNews(env, uid, news, now);
+  }
   return fresh;
 }
 
@@ -940,6 +1014,7 @@ export async function achievementsOf(env, uid) {
     return {
       code: a.code, got: !!o, tier: o ? +o.tier : 0, tiers: (a.tiers || []).length, at: o ? o.at : null,
       title: show ? a.title : '???', desc: show ? a.desc : 'Скрытое достижение', next,
+      xp: show ? achXp(a, Math.min((o ? +o.tier : 0) + 1, Math.max(1, (a.tiers || []).length))) : 0, // опыт за следующую ступень (или за единственную)
       have: show && next ? Math.min(value(a), next) : null,
       hidden: !!a.hidden, special: !!a.special, rarity: Math.round(((cnt[a.code] || 0) / people) * 100),
     };

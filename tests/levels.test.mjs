@@ -240,8 +240,8 @@ test('опыт за прошлое: строки как у живых дейст
   env.DB.raw.prepare('INSERT INTO shelves (user_id, data, updated_at) VALUES (?, ?, ?)').run('u1', JSON.stringify({ ratings }), NOON);
   env.DB.raw.exec("INSERT INTO friendships (a, b, status, requested_by, created_at) VALUES ('u1', 'u2', 'accepted', 'u1', 5000)");
   const lv = await backfillUser(env, 'u1', { now: NOON, founderBefore: NOON });
-  // 50 × 10 + 10 × 3 + 3 отзыва × 5 + друг 15 + первые шаги (оценка 20, друг 30)
-  assert.equal(lv.xp, 500 + 30 + 15 + 15 + 50);
+  // 50 × 10 + 10 × 3 + 3 отзыва × 5 + друг 15 + первые шаги (оценка 20, друг 30) + достижения («Основатель» 100, «Критик» бронза 50)
+  assert.equal(lv.xp, 500 + 30 + 15 + 15 + 50 + 100 + 50);
   const again = await backfillUser(env, 'u1', { now: NOON, founderBefore: NOON });
   assert.equal(again.xp, lv.xp);
   const a = await achievementsOf(env, 'u1');
@@ -312,10 +312,10 @@ test('опыт за прошлое сам при первом заходе (ensu
   env.DB.raw.prepare('INSERT INTO shelves (user_id, data, updated_at) VALUES (?, ?, ?)').run('u1', JSON.stringify({ ratings: [{ id: 'a', status: 'Просмотрено', scores: [{ v: 8 }], total: 8, createdAt: new Date(NOON - DAY).toISOString() }] }), NOON);
   await ensurePast(env, 'u1');
   const lv = await readLevel(env, 'u1');
-  assert.equal(lv.xp, 10 + 20); // оценка и первый шаг «Первая оценка»
+  assert.equal(lv.xp, 10 + 20 + 100); // оценка, первый шаг «Первая оценка» и «Основатель хаба»
   await award(env, 'u1', 'visit', 'd1', { now: NOON, ...bare });
   await ensurePast(env, 'u1');
-  assert.equal((await readLevel(env, 'u1')).xp, 35);
+  assert.equal((await readLevel(env, 'u1')).xp, 135);
   assert.ok((await achievementsOf(env, 'u1')).find((a) => a.code === 'founder').got);
 });
 
@@ -451,7 +451,7 @@ test('сезон: поле season в /levels/me и звание в профил�
   await awardMany(env, 'u1', rates('s', 8), { now: NOON + DAY, ...bare }); // +80 → 200
   await awardMany(env, 'u1', [{ kind: 'gift', ref: 'g1', xp: 300 }], { now: NOON + DAY, ...bare }); // +300 → 500
   const m = await atTime(NOON + DAY, () => routes['GET /levels/me']({ env, request: { cf: { timezone: 'Europe/Moscow' } }, me: { id: 'u1' } }));
-  assert.deepEqual({ n: m.season.n, start: m.season.start, end: m.season.end, xp: m.season.xp, rank: m.season.rank }, { n: 1, start: NOV1, end: FEB1, xp: 500, rank: 'couch' });
+  assert.deepEqual({ n: m.season.n, start: m.season.start, end: m.season.end, xp: m.season.xp, rank: m.season.rank }, { n: 1, start: NOV1, end: FEB1, xp: 600, rank: 'couch' }); // +100 за «Первую десятку» при первом /levels/me
   assert.deepEqual(m.season.ranks.map((r) => r.id), L.SEASON_RANKS.map((r) => r.id));
   assert.deepEqual(m.season.history, []);
   assert.equal(m.rank, 'Диванный критик');
@@ -461,7 +461,7 @@ test('сезон: поле season в /levels/me и звание в профил�
   assert.equal(after.season.n, 2);
   assert.equal(after.season.xp, 0);
   assert.equal(after.rank, 'Людишка');
-  assert.deepEqual(after.season.history, [{ n: 1, title: 'Сезон 1', rank: 'couch', xp: 500, place: 1 }]);
+  assert.deepEqual(after.season.history, [{ n: 1, title: 'Сезон 1', rank: 'couch', xp: 600, place: 1 }]);
   const p = await atTime(FEB1 + 2000, () => routes['GET /levels/profile']({ env, request: { url: 'https://x/api/levels/profile?id=u1' }, me: { id: 'u1' } }));
   assert.equal(p.rank, 'Людишка');
 });
@@ -543,7 +543,7 @@ test('приглашения: 3-й уровень — опыт обоим, 10-й
   // новичок дошёл до 3-го уровня живым действием: +100 обоим, у хозяина — мятный ник и «Вербовщик», у новичка — «По приглашению»
   await awardMany(env, 'n1', [{ kind: 'gift', ref: 'g', xp: 270 }], { now: NOON, ...bare });
   await award(env, 'n1', 'visit', 'd1', { now: NOON + 1000 });
-  assert.equal((await readLevel(env, 'host')).xp, 100);
+  assert.equal((await readLevel(env, 'host')).xp, 100 + 50); // и «Вербовщик» бронза
   d = await routes['GET /levels/invite']({ env, request: { url: 'https://x/api/levels/invite' }, me: { id: 'host' } });
   assert.equal(d.counted, 1);
   assert.deepEqual(d.rewards.filter((r) => r.got).map((r) => r.id), ['mint']);
@@ -560,10 +560,11 @@ test('приглашения: 3-й уровень — опыт обоим, 10-й
   assert.ok(an.invited.got && !an.recruiter.got); // своя строка новичка — не вербовка
   assert.ok((await takeNews(env, 'host')).some((n) => n.t === 'invite_rw' && n.title === 'Мятный цвет ника'));
   // до 10-го уровня: хозяину ещё +150 и «Наставник»; повтор ничего не даёт
+  const mid = (await readLevel(env, 'host')).xp;
   await awardMany(env, 'n1', [{ kind: 'gift', ref: 'g2', xp: 2000 }], { now: NOON + 2000, ...bare });
   await award(env, 'n1', 'visit', 'd2', { now: NOON + DAY });
   await award(env, 'n1', 'visit', 'd3', { now: NOON + 2 * DAY });
-  assert.equal((await readLevel(env, 'host')).xp, 250);
+  assert.equal((await readLevel(env, 'host')).xp, mid + 150 + 50); // «Наставник» +150 и его бронза
   ah = await achOf('host');
   assert.ok(ah.mentor.got);
   d = await routes['GET /levels/invite']({ env, request: { url: 'https://x/api/levels/invite' }, me: { id: 'host' } });
@@ -574,4 +575,35 @@ test('приглашения: 3-й уровень — опыт обоим, 10-й
   // фон «Горизонт» и прочее — только когда засчитано достаточно друзей
   assert.ok(!unlockedAt(50, false, null, 9).bgs.includes('horizon') && unlockedAt(1, false, null, 10).bgs.includes('horizon'));
   assert.ok(!unlockedAt(50).colors.includes('mint') && unlockedAt(1, false, null, 5).fx.includes('hearts'));
+});
+
+test('достижения дают опыт: за каждую ступень один раз, за полученные раньше — при заходе', async () => {
+  const env = envOf();
+  env.DB.raw.exec("INSERT INTO users (id, username, uname, created_at, email_ok) VALUES ('u1', 'Аня', 'anya', 1, 0)");
+  // «Критик» сразу серебро (100 оценок): бронза 50 + серебро 150
+  await awardMany(env, 'u1', rates('r', 99), { now: NOON, ...bare });
+  await award(env, 'u1', 'rate', 'last', { now: NOON + DAY });
+  const log = q(env, "SELECT ref, xp FROM xp_log WHERE user_id = 'u1' AND kind = 'ach' ORDER BY ref");
+  assert.deepEqual(log.map((x) => [x.ref, x.xp]), [['critic:1', 50], ['critic:2', 150]]);
+  assert.ok((await takeNews(env, 'u1')).some((n) => n.t === 'ach' && n.code === 'critic' && n.xp === 200));
+  // достижение, записанное без опыта (как до этого обновления): при заходе — письмо в почту, опыт — только по кнопке, один раз
+  env.DB.raw.exec("INSERT INTO achievements (user_id, code, tier, at) VALUES ('u1', 'night', 1, 1)");
+  const { routes } = await levelRoutes();
+  await award(env, 'u1', 'rate', 'one-more', { now: NOON + 2 * DAY }); // новое действие старое достижение не оплачивает
+  assert.equal(q(env, "SELECT COUNT(*) AS n FROM xp_log WHERE user_id = 'u1' AND ref = 'night:1'")[0].n, 0);
+  const before = (await readLevel(env, 'u1')).xp;
+  await routes['GET /levels/me']({ env, request: { cf: {} }, me: { id: 'u1' } });
+  await routes['GET /levels/me']({ env, request: { cf: {} }, me: { id: 'u1' } });
+  const first10 = (await achievementsOf(env, 'u1')).find((a) => a.code === 'first10').got; // список первых десяти кэшируется между тестами
+  assert.equal((await readLevel(env, 'u1')).xp, before + (first10 ? 100 : 0)); // «Ночной критик» — ещё нет
+  const mail = await routes['GET /levels/mail']({ env, request: { url: 'https://x/api/levels/mail' }, me: { id: 'u1' } });
+  const letter = (mail.items || []).find((g) => g.id === 'achback:u1');
+  assert.ok(letter && letter.xp === 100 && /Ночной критик/.test(letter.body));
+  const got = await routes['POST /levels/mail/claim']({ env, request: { body: { id: 'achback:u1' } }, me: { id: 'u1' } });
+  assert.equal(got.gained, 100);
+  assert.equal((await routes['POST /levels/mail/claim']({ env, request: { body: { id: 'achback:u1' } }, me: { id: 'u1' } })).status, 409);
+  await routes['GET /levels/me']({ env, request: { cf: {} }, me: { id: 'u1' } });
+  assert.equal(q(env, "SELECT COUNT(*) AS n FROM gifts WHERE id LIKE 'achback:%'")[0].n, 1); // второе письмо не появляется
+  const items = await achievementsOf(env, 'u1');
+  assert.equal(items.find((a) => a.code === 'critic').xp, 400); // дальше — золото
 });
