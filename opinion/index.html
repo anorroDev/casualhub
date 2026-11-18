@@ -206,7 +206,7 @@ a.theme-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2p
 /* Подсказки: обложки из Apple Music и фото исполнителя с Genius */
 .cover-sugg { margin-top: 10px; }
 .cover-sugg .label { display: block; margin-bottom: 6px; }
-.cover-list { display: grid; grid-auto-flow: column; grid-auto-columns: 104px; gap: 8px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; scroll-snap-type: x proximity; }
+.cover-list { display: grid; grid-auto-flow: column; grid-auto-columns: 104px; gap: 8px; overflow-x: auto; padding-bottom: 4px; scroll-snap-type: x proximity; }
 .cover-opt {
   display: grid; gap: 4px; padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); color: var(--ink);
   text-align: left; cursor: pointer; scroll-snap-align: start; transition: transform .25s cubic-bezier(.34, 1.56, .64, 1), border-color .15s;
@@ -1070,7 +1070,7 @@ input::placeholder, textarea::placeholder { color: var(--ink-3); font-weight: 40
 /* длинный рейтинг листается внутри карточки, а не растягивает страницу: до конца не надо крутить весь сайт (журнал — так же).
    Поля −8px/+8px — чтобы строки с отрицательными полями (подсветка открытой оценки) не обрезались краем */
 .board-list { list-style: none; margin: 12px -8px 0; padding: 0 8px; }
-.board-list, #logList { max-height: max(380px, calc(100 * var(--dvh, 1vh) - 170px)); overflow-y: auto; scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--ink) 28%, transparent) transparent; }
+.board-list, #logList { max-height: max(380px, calc(100 * var(--dvh, 1vh) - 170px)); overflow-y: auto; }
 .entry + .entry { border-top: 1px solid var(--line); }
 .entry summary { display: block; list-style: none; margin: 0 -8px; padding: 12px 8px; border-radius: 12px; cursor: pointer; }
 .sum { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto auto 16px; align-items: center; gap: 12px; }

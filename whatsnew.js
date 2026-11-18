@@ -47,7 +47,7 @@
 .wn-x { flex: none; width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); color: var(--ink); font-size: 18px; cursor: pointer; }
 .wn-x:hover { border-color: var(--accent); }
 .wn-x:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.wn-body { min-height: 0; overflow: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; scrollbar-width: thin; scrollbar-color: var(--line) transparent; padding: 0 20px 20px; }
+.wn-body { min-height: 0; overflow: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 0 20px 20px; }
 .wn-body .log-days { display: grid; gap: 24px; margin-top: 16px; }
 .wn-body .log-date { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 0; padding-bottom: 8px; border-bottom: 1px solid var(--line); font-size: 14px; font-weight: 700; }
 .wn-body .log-date span { flex: none; font-size: 12.5px; font-weight: 500; color: var(--ink-2); font-variant-numeric: tabular-nums; }

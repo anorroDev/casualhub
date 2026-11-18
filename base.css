@@ -9,6 +9,8 @@
 ::-webkit-scrollbar-thumb:hover { background-color: color-mix(in srgb, var(--ink, #888) 50%, transparent); }
 ::-webkit-scrollbar-thumb:active { background-color: color-mix(in srgb, var(--ink, #888) 60%, transparent); }
 /* Firefox не знает ::-webkit-scrollbar: там тонкая полоска его средствами. Где полоса скрыта (scrollbar-width: none), так и остаётся */
+/* У отдельных блоков scrollbar-width: thin и scrollbar-color не пиши: в Chrome они отключают полосу выше,
+   и он рисует свою серую со стрелками. Тонкую полосу в Firefox блок получит отсюда же */
 @supports not selector(::-webkit-scrollbar) {
   * { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--ink, #888) 28%, transparent) transparent; }
 }
