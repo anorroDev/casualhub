@@ -304,10 +304,28 @@
     return `<svg viewBox="0 0 80 64" width="80" height="64" aria-hidden="true"><rect width="80" height="64" rx="6" fill="${bg}"/>${rows.map((c, i) => `<rect x="5" y="${5 + i * 11}" width="14" height="9" rx="2" fill="${c}"/><rect x="22" y="${5 + i * 11}" width="${50 - i * 7}" height="9" rx="2" fill="${ink}" opacity=".18"/>`).join('')}</svg>`;
   }
   const me = () => { const u = user(); return { name: (u && (u.username || u.handle)) || 'Ты', letter: String((u && (u.username || u.handle)) || 'Т').trim().charAt(0).toUpperCase() || 'Т' }; };
+  // своя аватарка в превью рамок: картинка (анимированная, если она есть в этом браузере) или буква на своём цвете.
+  // Сама картинка — переменная --sh-ava на окне магазина, чтобы большая data:-ссылка не повторялась в каждой карточке
+  const avaSrc = () => {
+    const u = user();
+    if (!u) return '';
+    let a = u.avatar;
+    try { if (window.CasualAvatar) a = window.CasualAvatar.shown(u) || a; } catch (e) {}
+    return typeof a === 'string' && /^(data:image\/|https:\/\/)/.test(a) ? a : '';
+  };
+  function paintAva() {
+    if (!ov) return;
+    const src = avaSrc(), u = user();
+    ov.classList.toggle('sh-has-ava', !!src);
+    if (src) ov.style.setProperty('--sh-ava', `url("${src.replace(/["\\\s]/g, (c) => encodeURIComponent(c))}")`); else ov.style.removeProperty('--sh-ava');
+    const col = u && typeof u.color === 'string' && /^#[0-9a-f]{3,8}$/i.test(u.color) ? u.color : '';
+    if (col) ov.style.setProperty('--sh-ava-c', col); else ov.style.removeProperty('--sh-ava-c');
+  }
+  const avaHTML = (frame) => `<span class="sh-ava${FRAMES[frame] ? ' sh-fr-' + frame : ''}"><i>${esc(me().letter)}</i></span>`;
   function picOf(it) {
     const name = tail(it.id);
     if (it.sec === 'vasyan') return vyPreview(it.id);
-    if (it.kind === 'frame') return `<span class="sh-ava${FRAMES[name] ? ' sh-fr-' + name : ''}">${esc(me().letter)}</span>`;
+    if (it.kind === 'frame') return avaHTML(name);
     if (it.kind === 'badge') return `<span class="sh-nmp">${esc(me().name)}${badgeHTML(it.id, it.title)}</span>`;
     if (it.kind === 'nick') return `<span class="sh-nmp${NICKS[name] ? ' sh-nk-' + name : ''}">${esc(me().name)}</span>`;
     if (it.kind === 'wheel') return wheelSvg(WHEELS[name] || WHEEL_DEF);
@@ -384,7 +402,10 @@
 .sh-it b { font-size: 14px; line-height: 1.25; overflow-wrap: anywhere; }
 .sh-it small { font-size: 12px; color: var(--ink-3, #8a8f9e); line-height: 1.3; }
 .sh-it .sh-tag { position: absolute; top: 8px; right: 8px; z-index: 1; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; background: var(--accent, #3550E8); color: #fff; }
-.sh-ava { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--accent, #3550E8); color: #fff; font-weight: 800; font-size: 18px; }
+.sh-ava { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 50%; background: var(--sh-ava-c, var(--accent, #3550E8)); color: #fff; font-weight: 800; font-size: 18px; }
+.sh-ava i { font-style: normal; }
+.sh-has-ava .sh-ava { background: var(--sh-ava) center / cover no-repeat, var(--panel-2, #1f2128); }
+.sh-has-ava .sh-ava i { display: none; }
 .sh-nmp { display: inline-flex; align-items: center; max-width: 100%; padding: 0 6px; font-weight: 700; font-size: 16px; color: var(--ink, #f2f2f2); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .sh-cf { position: relative; display: block; width: 64px; height: 64px; }
 .sh-cf img { position: absolute; width: 13px; height: 13px; border-radius: 50%; }
@@ -448,6 +469,7 @@ html.unslop .sh-it.on { box-shadow: none; }`;
     }
     document.body.appendChild(ov);
     document.documentElement.style.overflow = 'hidden';
+    paintAva();
     say('');
     render();
     requestAnimationFrame(() => { const b = ov.querySelector('.sh-tabs [aria-selected="true"]') || ov.querySelector('.sh-card'); if (b) b.focus(); });
@@ -474,7 +496,7 @@ html.unslop .sh-it.on { box-shadow: none; }`;
   // как тебя видят другие: аватар с рамкой, ник со стилем и значком
   function meHTML() {
     const w = { ...DEF, ...(D.wear || {}) }, f = tail(w.frame), n = tail(w.nick);
-    return `<div class="sh-me"><span class="sh-ava${FRAMES[f] ? ' sh-fr-' + f : ''}">${esc(me().letter)}</span><div><span class="sh-nmp${NICKS[n] ? ' sh-nk-' + n : ''}">${esc(me().name)}${badgeHTML(w.badge, titleOf(w.badge))}</span><small>Так тебя видят в профиле и в списках друзей</small></div></div>`;
+    return `<div class="sh-me">${avaHTML(f)}<div><span class="sh-nmp${NICKS[n] ? ' sh-nk-' + n : ''}">${esc(me().name)}${badgeHTML(w.badge, titleOf(w.badge))}</span><small>Так тебя видят в профиле и в списках друзей</small></div></div>`;
   }
   const NOTES = {
     profile: 'Рамку и значок видят все, кто открывает твой профиль или видит тебя в списке друзей.',
