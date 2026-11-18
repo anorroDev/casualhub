@@ -215,6 +215,10 @@ html.unslop:not([data-ui]) :is(.kg-pp.in, .kg-pp.pop) { animation: none; }
 .kg-pk-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); gap: 8px; max-height: 390px; overflow-y: auto; padding: 2px; }
 .kg-pk-it { position: relative; display: grid; gap: 6px; align-content: start; padding: 6px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel); color: var(--ink); font: inherit; font-size: 12.5px; font-weight: 700; text-align: left; cursor: pointer; transition: border-color .15s, background-color .15s; }
 .kg-pk-it[hidden] { display: none; }
+.kg-pk-bulk { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.kg-pk-bulk > span { font-size: 13px; font-weight: 700; color: var(--ink-2); margin-right: 2px; }
+.kg-pk-bulk .kg-seg button { height: 32px; min-width: 40px; padding: 0 10px; }
+.kg-pk-bulk .kg-pk-all { margin-left: auto; }
 .kg-pk-it .kg-pic { width: 100%; border-radius: 8px; font-size: 30px; }
 .kg-pk-n { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; line-height: 1.25; overflow-wrap: anywhere; }
 .kg-pk-it b { position: absolute; top: 10px; right: 10px; padding: 1px 6px; border-radius: 6px; background: rgb(0 0 0 / .66); color: #fff; font-size: 11.5px; font-variant-numeric: tabular-nums; }
@@ -364,6 +368,9 @@ html.unslop:not([data-ui]) :is(.kg-pp.in, .kg-pp.pop) { animation: none; }
 
   // ---------- участники из «Мнения»: свои оценки и «В планах», с обложками ----------
   const PK = { open: false, tab: 'rated', q: '', sel: new Set(), photos: {}, loaded: false };
+  const PK_RAND = [4, 8, 16, 32];
+  // сколько ещё участников влезает: в черновик — до HILL_MAX, в турнир — столько же
+  const freeSlots = () => Math.max(0, HILL_MAX - (code ? people.size : L.length));
   const score = (t) => String(Math.round(t * 10) / 10).replace('.', ',');
   function myRatings() {
     const u = read('ocenshik.user.v1'), all = read('ocenshik.ratings.v2');
@@ -421,6 +428,9 @@ html.unslop:not([data-ui]) :is(.kg-pp.in, .kg-pp.pop) { animation: none; }
     const plans = all.filter(planned);
     const list = PK.tab === 'plan' ? plans : rated;
     const q = PK.q.trim().toLowerCase(), have = inList();
+    const free = pkFree(list, q, have), allOn = free.length > 0 && free.slice(0, freeSlots()).every((r) => PK.sel.has(r.id));
+    const bulk = free.length > 1 ? `<div class="kg-pk-bulk"><span>${T('Наугад:')}</span><div class="kg-seg" role="group" aria-label="${esc(T('Выбрать наугад'))}">${PK_RAND.filter((n, i) => i === 0 || free.length > PK_RAND[i - 1]).map((n) => `<button type="button" data-pk-rand="${n}" title="${esc(T('Отметить случайные оценки'))}">${n}</button>`).join('')}</div>
+        <button type="button" class="btn ghost small kg-pk-all" data-k="pk-all">${T(allOn ? 'Снять все' : 'Все')} · ${Math.min(free.length, freeSlots())}</button></div>` : '';
     const items = list.map((r) => {
       const s = srcOf(r), on = have.has(cleanName(r.name).toLowerCase());
       const art = s ? `<img class="kg-pic" src="${esc(s)}" alt="" data-ini="${esc(letter(r.name))}" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<span class="kg-pic" aria-hidden="true">${esc(letter(r.name))}</span>`;
@@ -429,11 +439,35 @@ html.unslop:not([data-ui]) :is(.kg-pp.in, .kg-pp.pop) { animation: none; }
     return `<div class="kg-pk">
       <div class="kg-pk-top"><div class="kg-seg" role="group"><button type="button" data-pk-tab="rated" aria-pressed="${PK.tab !== 'plan'}">${T('Оценки')} ${rated.length}</button><button type="button" data-pk-tab="plan" aria-pressed="${PK.tab === 'plan'}">${T('В планах')} ${plans.length}</button></div>
         <input class="inp" type="search" id="kgPkQ" placeholder="${esc(T('Найти'))}" value="${esc(PK.q)}" aria-label="${esc(T('Найти'))}"></div>
+      ${bulk}
       ${items ? `<div class="kg-pk-grid">${items}</div>` : `<p class="kg-hint">${T(all.length ? 'Здесь пусто.' : 'Здесь появятся твои оценки из «Мнения».')}</p>`}
       <div class="kg-acts"><button type="button" class="btn primary small" data-k="pk-add"${PK.sel.size ? '' : ' disabled'}>${T('Добавить')}${PK.sel.size ? ' · ' + PK.sel.size : ''}</button><button type="button" class="btn ghost small" data-k="pk-close">${T('Закрыть')}</button></div>
     </div>`;
   }
   const paintPk = () => put(document.getElementById('kgPk'), pickerHTML());
+  // кого можно отметить разом: видимые по поиску и ещё не в списке
+  const pkFree = (list, q, have) => list.filter((r) => (!q || r.name.toLowerCase().includes(q)) && !have.has(cleanName(r.name).toLowerCase()));
+  function pkList() {
+    const all = myRatings();
+    return PK.tab === 'plan' ? all.filter(planned) : all.filter((r) => !planned(r)).sort((a, b) => b.total - a.total);
+  }
+  // «Наугад N»: выбор заменяется случайными N (каждое нажатие — новые); «Все»: отмечает всех, кто влезает, или снимает выбор
+  function pkBulk(n) {
+    const free = pkFree(pkList(), PK.q.trim().toLowerCase(), inList()), cap = Math.min(freeSlots(), free.length);
+    if (!cap) return;
+    if (n === 'all') {
+      const take = free.slice(0, cap);
+      const on = take.every((r) => PK.sel.has(r.id));
+      PK.sel.clear();
+      if (!on) take.forEach((r) => PK.sel.add(r.id));
+    } else {
+      const pool = free.slice();
+      for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+      PK.sel.clear();
+      pool.slice(0, Math.min(n, cap)).forEach((r) => PK.sel.add(r.id));
+    }
+    paintPk();
+  }
   async function addPicked() {
     const byId = new Map(myRatings().map((r) => [r.id, r]));
     const items = [];
@@ -1054,6 +1088,8 @@ html.unslop:not([data-ui]) :is(.kg-pp.in, .kg-pp.pop) { animation: none; }
     }
     const tab = t.closest('[data-pk-tab]');
     if (tab) { PK.tab = tab.dataset.pkTab; paintPk(); return; }
+    const rnd = t.closest('[data-pk-rand]');
+    if (rnd) { pkBulk(+rnd.dataset.pkRand); return; }
     const pk = t.closest('[data-k^="pk-"]');
     if (pk) {
       if (pk.dataset.k === 'pk-open') {
@@ -1064,6 +1100,7 @@ html.unslop:not([data-ui]) :is(.kg-pp.in, .kg-pp.pop) { animation: none; }
         if (q) q.focus({ preventScroll: true });
       } else if (pk.dataset.k === 'pk-close') { PK.open = false; PK.sel.clear(); paintPk(); }
       else if (pk.dataset.k === 'pk-add') { pk.disabled = true; await addPicked(); }
+      else if (pk.dataset.k === 'pk-all') pkBulk('all');
       return;
     }
     // новый турнир
