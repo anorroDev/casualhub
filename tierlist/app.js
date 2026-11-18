@@ -751,20 +751,64 @@
       dialog('Из моих оценок', '<p class="tl-empty">Пока нет оценок.</p><div class="tl-foot"><a class="btn small primary" href="/opinion/">Открыть Мнение</a></div>');
       return;
     }
+    // окно делится на разделы: категории, статус, балл, жанры и теги, годы. Пусто в разделе — подходят все;
+    // в жанрах и годах достаточно совпасть с одним из отмеченных. Внизу — сколько оценок подойдёт
+    const tags = (r) => String(r.meta || '').split(/\s*[,;]\s*/).map((x) => x.trim()).filter(Boolean);
+    const genresOf = (r) => [...new Set(tags(r).filter((x) => x.length <= 24 && !/^\d{4}$/.test(x)).map((x) => x.toLowerCase()))];
+    const decadeOf = (r) => { const y = tags(r).find((x) => /^(19|20)\d\d$/.test(x)); return y ? y.slice(0, 3) + '0' : ''; };
+    const statusOf = (r) => String(r.status || '').trim() || 'Без статуса';
+    const SCORE = [['', 'Любой'], ['9', '9+'], ['8', '8+'], ['7', '7+'], ['5', '5+'], ['low', 'Ниже 5'], ['none', 'Без балла']];
+    const scoreOk = (r, k) => { const t = typeof r.total === 'number' ? r.total : null; return !k || (k === 'none' ? t == null : k === 'low' ? t != null && t < 5 : t != null && t >= +k); };
     const cats = [...new Set(rs.map(catOf))];
-    const picked = new Set(cats);
-    const d = dialog('Из моих оценок', `<p class="label">Какие категории добавить</p><div class="tl-chips" id="tlCats">${cats.map((c) => `<button type="button" class="tl-chip" data-cat="${esc(c)}" aria-pressed="true">${esc(c)} <small>${rs.filter((r) => catOf(r) === c).length}</small></button>`).join('')}</div>
-      <div class="tl-foot"><button type="button" class="btn small primary" data-add>Добавить</button></div>`);
-    d.querySelector('#tlCats').addEventListener('click', (e) => {
-      const b = e.target.closest('[data-cat]');
-      if (!b) return;
-      if (picked.has(b.dataset.cat)) picked.delete(b.dataset.cat); else picked.add(b.dataset.cat);
-      b.setAttribute('aria-pressed', String(picked.has(b.dataset.cat)));
+    const F = { cats: new Set(cats), st: new Set(), score: '', genres: new Set(), dec: new Set(), allG: false };
+    const okBy = (r, skip) => (skip === 'cats' || F.cats.has(catOf(r)))
+      && (skip === 'st' || !F.st.size || F.st.has(statusOf(r)))
+      && (skip === 'score' || scoreOk(r, F.score))
+      && (skip === 'genres' || !F.genres.size || genresOf(r).some((g) => F.genres.has(g)))
+      && (skip === 'dec' || !F.dec.size || F.dec.has(decadeOf(r)));
+    // число у кнопки — сколько подойдёт, если нажать её (остальные разделы уже учтены)
+    const counted = (skip, key) => { const m = new Map(); rs.forEach((r) => { if (!okBy(r, skip)) return; [].concat(key(r)).forEach((k) => { if (k) m.set(k, (m.get(k) || 0) + 1); }); }); return m; };
+    const chip = (attr, v, label, on, n) => `<button type="button" class="tl-chip" ${attr}="${esc(v)}" aria-pressed="${on}">${esc(label)}${n != null ? ` <small>${n}</small>` : ''}</button>`;
+    const d = dialog('Из моих оценок', '<div class="tl-rf" id="tlRf"></div>', true);
+    const box = d.querySelector('#tlRf');
+    const paint = () => {
+      const cN = counted('cats', catOf), sN = counted('st', statusOf), gN = counted('genres', genresOf), yN = counted('dec', decadeOf);
+      const sts = [...new Set(rs.filter((r) => F.cats.has(catOf(r))).map(statusOf))].concat([...F.st]).filter((x, i, a) => a.indexOf(x) === i);
+      const gs = [...new Set([...gN.keys(), ...F.genres])].sort((a, b) => (gN.get(b) || 0) - (gN.get(a) || 0) || a.localeCompare(b, 'ru'));
+      const gShow = F.allG ? gs : gs.slice(0, 18).concat(gs.slice(18).filter((g) => F.genres.has(g)));
+      const decs = [...new Set([...yN.keys(), ...F.dec])].sort((a, b) => b - a);
+      const base = rs.filter((r) => okBy(r, 'score'));
+      const pick = rs.filter((r) => okBy(r)), fresh = pick.filter((r) => !has(l.items, ratingItemId(r)));
+      box.innerHTML = `<section><p class="label">Категории</p><div class="tl-chips">${cats.map((c) => chip('data-cat', c, c, F.cats.has(c), cN.get(c) || 0)).join('')}</div></section>
+        ${sts.length > 1 ? `<section><p class="label">Статус</p><div class="tl-chips">${chip('data-st', '*', 'Любой', !F.st.size)}${sts.map((x) => chip('data-st', x, x, F.st.has(x), sN.get(x) || 0)).join('')}</div></section>` : ''}
+        <section><p class="label">Балл</p><div class="tl-chips">${SCORE.map(([k, t]) => chip('data-sc', k, t, F.score === k, base.filter((r) => scoreOk(r, k)).length)).join('')}</div></section>
+        ${gs.length ? `<section><p class="label">Жанры и теги</p><div class="tl-chips">${chip('data-g', '*', 'Любые', !F.genres.size)}${gShow.map((g) => chip('data-g', g, g, F.genres.has(g), gN.get(g) || 0)).join('')}${gs.length > gShow.length ? `<button type="button" class="tl-chip tl-more" data-gall>Ещё ${gs.length - gShow.length}</button>` : ''}</div>${F.genres.size > 1 ? '<p class="tl-hint">Подойдёт оценка хотя бы с одним из отмеченных.</p>' : ''}</section>` : ''}
+        ${decs.length > 1 ? `<section><p class="label">Годы</p><div class="tl-chips">${chip('data-y', '*', 'Любые', !F.dec.size)}${decs.map((y) => chip('data-y', y, y + '-е', F.dec.has(y), yN.get(y) || 0)).join('')}</div></section>` : ''}
+        <div class="tl-foot tl-spread"><span class="tl-hint">${pick.length ? `Подходит: ${pick.length}${pick.length > fresh.length ? ` · уже в тир-листе: ${pick.length - fresh.length}` : ''}` : 'Ничего не подходит: сними часть фильтров.'}</span>
+          <button type="button" class="btn small primary" data-add${fresh.length ? '' : ' disabled'}>Добавить${fresh.length ? ' · ' + fresh.length : ''}</button></div>`;
+    };
+    paint();
+    const flip = (set, v) => { if (set.has(v)) set.delete(v); else set.add(v); };
+    box.addEventListener('click', async (e) => {
+      const b = e.target.closest('button');
+      if (!b || b.disabled) return;
+      if (b.dataset.cat != null) flip(F.cats, b.dataset.cat);
+      else if (b.dataset.st != null) { if (b.dataset.st === '*') F.st.clear(); else flip(F.st, b.dataset.st); }
+      else if (b.dataset.sc != null) F.score = b.dataset.sc;
+      else if (b.dataset.g != null) { if (b.dataset.g === '*') F.genres.clear(); else flip(F.genres, b.dataset.g); }
+      else if (b.dataset.y != null) { if (b.dataset.y === '*') F.dec.clear(); else flip(F.dec, b.dataset.y); }
+      else if (b.hasAttribute('data-gall')) F.allG = true;
+      else if (b.hasAttribute('data-add')) return addChosen(b);
+      else return;
+      // фокус остаётся на той же кнопке после перерисовки
+      const sel = ['data-cat', 'data-st', 'data-sc', 'data-g', 'data-y'].map((a) => b.hasAttribute(a) && `[${a}="${CSS.escape(b.getAttribute(a))}"]`).find(Boolean);
+      paint();
+      const nb = sel && box.querySelector(sel);
+      if (nb) nb.focus({ preventScroll: true });
     });
-    d.querySelector('[data-add]').addEventListener('click', async (e) => {
-      const btn = e.currentTarget;
+    const addChosen = async (btn) => {
       btn.disabled = true;
-      const chosen = rs.filter((r) => picked.has(catOf(r)) && !has(l.items, ratingItemId(r)));
+      const chosen = rs.filter((r) => okBy(r) && !has(l.items, ratingItemId(r)));
       const refs = chosen.map((r) => r.photo && r.photo.ref).filter(Boolean);
       let stored = {};
       if (refs.length && window.CasualPhotos) { try { stored = await window.CasualPhotos.getMany(refs); } catch (x) {} }
@@ -779,7 +823,7 @@
       closeDialog();
       renderEditor();
       toast(n ? `Добавлено: ${cards(n)}.` : 'Эти оценки уже в тир-листе.');
-    });
+    };
   }
   let stickers = null;
   async function addStickersDialog() {
