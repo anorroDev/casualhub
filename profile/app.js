@@ -533,22 +533,41 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   const hid = (p, k) => (secOn(p, k) ? '' : ' hidden');
   const catTitle = (p, key) => { const r = (p.allRatings || p.ratings).find((x) => keyOf(x.cat) === key); return r ? r.cat : key; };
   const autoTitle = (p, sc) => (sc.podium ? 'Любимое' : `Топ-${sc.n}: ${sc.cat ? catTitle(p, sc.cat) : 'всё подряд'}`);
-  function scItems(p, sc) {
+  // all — весь подходящий список по баллу (им витрина с высотой вручную добирает места), без него — топ-n
+  function scItems(p, sc, all) {
     const pool = p.ratings.filter((r) => !sc.cat || keyOf(r.cat) === sc.cat);
     if (sc.mode === 'pick') { const byId = new Map(pool.map((r) => [r.id, r])); return (sc.ids || []).map((id) => byId.get(id)).filter(Boolean).slice(0, sc.n); }
-    return pool.filter((r) => r.total != null).sort((a, b) => b.total - a.total || b.at - a.at).slice(0, sc.n);
+    const top = pool.filter((r) => r.total != null).sort((a, b) => b.total - a.total || b.at - a.at);
+    return all ? top : top.slice(0, sc.n);
   }
   // «Любимое» настраивается как витрина: по баллу или свой выбор, можно по одной теме; мест всегда три
   const podiumCfg = (p) => ({ title: '', cat: '', mode: 'auto', ids: [], ...((p.layout && p.layout.podium) || {}) });
   const podiumItems = (p) => scItems(p, { ...podiumCfg(p), n: 3 });
+  const scItemHTML = (p, r, k) => `<a class="sc-it" href="${rateLink(p, r)}" title="${esc(r.name)}" data-tier="${tierT(r.total)}">
+          <div class="pic" data-photo="${r.photo ? esc(r.id) : ''}"${adultAttr(r)}><span class="place">${k + 1}</span><span class="ltr">${letter(r.name)}</span>${lbm(r)}</div>
+          <strong>${esc(r.name)}</strong>${badge(r.total)}</a>`;
   function showcaseHTML(p, sc, d) {
     const items = scItems(p, sc);
     if (!items.length && p.kind !== 'me') return '';
+    const k = 'sc:' + sc.id;
+    // высота вручную: «лучшие по баллу» добирают места дальше по списку, заголовок «Топ-N» — по тому, сколько видно
+    if (items.length && sc.mode !== 'pick') {
+      const all = scItems(p, sc, true);
+      FILL.set(k, { base: items.length, total: all.length, n: items.length,
+        grid: () => $(`.wg[data-wg="${k}"] .sc-row`),
+        set(n) {
+          const row = this.grid();
+          if (!row) return;
+          this.n = n;
+          row.innerHTML = all.slice(0, n).map((r, i) => scItemHTML(p, r, i)).join('');
+          const h = row.closest('.card').querySelector('.h2');
+          if (h && !sc.title) h.textContent = autoTitle(p, { ...sc, n });
+          hydratePhotos(p, row);
+        } });
+    }
     return `<section class="card rise show" style="--d:${d}">
         <div class="head"><h2 class="h2">${esc(sc.title || autoTitle(p, sc))}</h2><span class="label">${esc(sc.cat ? catTitle(p, sc.cat) : 'все темы')} · ${sc.mode === 'pick' ? 'мой выбор' : 'лучшие по баллу'}</span></div>
-        ${items.length ? `<div class="sc-row ${sc.style === 'list' ? 'as-list' : 'as-posters'}">${items.map((r, k) => `<a class="sc-it" href="${rateLink(p, r)}" title="${esc(r.name)}" data-tier="${tierT(r.total)}">
-          <div class="pic" data-photo="${r.photo ? esc(r.id) : ''}"${adultAttr(r)}><span class="place">${k + 1}</span><span class="ltr">${letter(r.name)}</span>${lbm(r)}</div>
-          <strong>${esc(r.name)}</strong>${badge(r.total)}</a>`).join('')}</div>`
+        ${items.length ? `<div class="sc-row ${sc.style === 'list' ? 'as-list' : 'as-posters'}">${items.map((r, i) => scItemHTML(p, r, i)).join('')}</div>`
           : '<p class="muted">Пока пусто: в этой теме нет подходящих оценок. Витрину можно изменить в режиме редактирования профиля (кнопка с квадратиками).</p>'}
       </section>`;
   }
@@ -832,13 +851,42 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       const placed = compact(its.filter((it) => !it.fresh), lead);
       its.filter((it) => it.fresh).sort((a, b) => a.i - b.i).forEach((it) => { Object.assign(it, firstFit(placed, it), { fresh: false }); placed.push(it); });
       its.forEach((it) => { it.el.style.gridColumn = `${it.x + 1} / span ${it.w}`; it.el.style.gridRow = `${it.y + 1} / span ${it.h}`; });
+      its.forEach(fillBox);
     } else {
       // узко: порядок — сверху вниз и слева направо, широкие блоки (от 7 колонок) — на обе колонки
       seqOf(its).forEach((it, n) => { it.el.style.order = n; it.el.style.gridColumn = mqTwo.matches && it.w >= 7 ? 'span 2' : ''; it.el.style.gridRow = ''; it.el.style.height = ''; it.el.removeAttribute('data-fh'); });
+      its.forEach(fillBox); // на узком экране — обратно как было
       const hs = its.map((it) => it.el.offsetHeight);
       its.forEach((it, n) => { it.el.style.gridRow = 'span ' + Math.max(1, Math.ceil(hs[n] / ROW)); });
     }
     flip(its, before);
+  }
+  // блок с высотой вручную: список в нём добирает элементы до низа, чтобы под ним не оставалось пустого места.
+  // FILL: ключ блока → { grid(), more(), base, total, n, set(n) }; base — сколько показано без заполнения.
+  // Заполняет только на широком экране: высоту задают там, на узком блок по содержимому
+  const FILL = new Map();
+  function fillBox(it) {
+    const f = FILL.get(it.k), card = it.el.querySelector(':scope > .card'); // в режиме правки первыми идут кнопки блока
+    if (!f || !card || !it.el.isConnected) return;
+    const want = it.fh && mqWide.matches && !it.el.hidden ? fitCount(card, f) : f.base;
+    if (want !== f.n) f.set(want);
+  }
+  function fitCount(card, f) {
+    const grid = f.grid(), items = grid ? [...grid.children] : [];
+    if (!items.length) return f.base;
+    const cs = getComputedStyle(grid), gap = parseFloat(cs.rowGap) || 0;
+    const cols = Math.max(1, cs.gridTemplateColumns.split(' ').filter(Boolean).length);
+    const rowH = Math.max(...items.map((x) => x.offsetHeight)) + gap; // по самой высокой карточке: последний ряд не вылезает
+    if (rowH <= gap) return f.base;
+    const H = card.clientHeight;
+    card.style.height = 'auto';
+    const nat = card.clientHeight; // высота по содержимому
+    card.style.height = '';
+    const btn = f.more && f.more(), btnH = btn && !btn.hidden ? btn.offsetHeight + (parseFloat(getComputedStyle(btn).marginTop) || 0) : 0;
+    const room = H - (nat - grid.offsetHeight - btnH); // место под список, если кнопки «Показать ещё» нет
+    const fit = (r) => Math.max(f.base, Math.min(f.total, Math.floor((r + gap) / rowH) * cols));
+    const n = fit(room);
+    return btn && n < f.total ? fit(room - 56) : n; // не всё поместилось — под кнопку тоже место
   }
   // места блоков до начала перетаскивания (или забыть их)
   const base = (on) => BL.items.forEach((q) => { q.bx = on ? q.x : null; q.by = on ? q.y : null; });
@@ -1628,6 +1676,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   function render(p) {
     curP = p;
     if (ALL) return renderAll(p);
+    FILL.clear();
     const rs = p.ratings;
     const rated = rs.filter((r) => r.total != null);
     const cats = new Map(); rs.forEach((r) => { const c = cats.get(r.cat) || { n: 0, sum: 0, k: 0 }; c.n++; if (r.total != null) { c.sum += r.total; c.k++; } cats.set(r.cat, c); });
@@ -1682,11 +1731,15 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
             : `<div class="empty"><p class="muted"><strong>${isMe ? 'Тут появятся твои оценки.' : 'У друга пока нет оценок.'}</strong> ${isMe ? 'Оцени игру, фильм или любимую кофейню в Мнении Казуала, и профиль оживёт.' : 'Как только он что-нибудь оценит, оценки появятся здесь.'}</p>${isMe ? '<a class="btn primary" href="/opinion/">Оценить первое</a>' : ''}</div>`}
           </section>`;
     if (p.badges) {
-      const got = p.badges.filter((b) => b.got).length, pc = Math.round((got / Math.max(1, p.badges.length)) * 100), shown = got + 4;
+      const got = p.badges.filter((b) => b.got).length, pc = Math.round((got / Math.max(1, p.badges.length)) * 100), shown = Math.min(p.badges.length, got + 4);
+      const bdgBody = (n) => `${badgesHTML(p.badges.slice(0, n))}${p.badges.length > n ? `<details class="bdg-more"><summary>Все ачивки · ещё ${p.badges.length - n}</summary>${badgesHTML(p.badges.slice(n))}</details>` : ''}`;
+      if (shown < p.badges.length) FILL.set('badges', { base: shown, total: p.badges.length, n: shown,
+        grid: () => $('#bdgBox > .bdg'), more: () => $('#bdgBox > .bdg-more'),
+        set(n) { const box = $('#bdgBox'); if (!box) return; this.n = n; box.innerHTML = bdgBody(n); } });
       W.badges = `<section class="card rise" id="badgesSec" style="--d:${d++}">
             <div class="head"><h2 class="h2">Ачивки</h2><span class="label">${got} из ${p.badges.length}</span></div>
             <div class="ach-sum" role="img" aria-label="Открыто ${pc}% ачивок"><span class="tr"><i style="width:${pc}%"></i></span><b>${pc}%</b></div>
-            ${badgesHTML(p.badges.slice(0, shown))}${p.badges.length > shown ? `<details class="bdg-more"><summary>Все ачивки · ещё ${p.badges.length - shown}</summary>${badgesHTML(p.badges.slice(shown))}</details>` : ''}
+            <div id="bdgBox">${bdgBody(shown)}</div>
           </section>`;
     }
     if (p.common) W.taste = `<section class="card rise" id="taste" style="--d:${d++}">
@@ -1839,7 +1892,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const rs = p.ratings;
     const cats = [...new Set(rs.map((r) => r.cat))];
     const chips = $('#catChips');
-    const draw = () => {
+    const draw = (quiet) => {
       // темы и цифры у них — только то, что подходит под выбранный статус
       const byStatus = rs.filter((r) => statusOk(r, ST.status));
       const shownCats = cats.filter((c) => ST.cat === c || byStatus.some((r) => r.cat === c));
@@ -1853,15 +1906,21 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       let list = inCat.filter((r) => statusOk(r, ST.status) && hasGenres(r, ST.genres) && (!q || keyOf(r.name + ' ' + r.meta).includes(q)));
       list.sort(ST.sort === 'date' ? (a, b) => b.at - a.at : ST.sort === 'name' ? (a, b) => a.name.localeCompare(b.name, 'ru') : (a, b) => (b.total ?? -1) - (a.total ?? -1) || b.at - a.at);
       $('#listStat').textContent = `${list.length} ${plural(list.length, 'оценка', 'оценки', 'оценок')}`;
-      const shown = list.slice(0, ST.limit);
+      const lim = Math.max(ST.limit, ST.fit || 0); // fit — сколько добрал блок с высотой вручную
+      const shown = list.slice(0, lim);
       $('#list').innerHTML = shown.length ? shown.map((r) => `<a class="item" href="${rateLink(p, r)}" title="Открыть оценку «${esc(r.name)}»" data-tier="${tierT(r.total)}">
           <span class="th" data-photo="${r.photo ? esc(r.id) : ''}"${adultAttr(r)}>${letter(r.name)}${lbm(r)}</span>
           <span class="nm" title="${esc(r.name)}">${r.fav ? `<span class="fav">${ICON.star}</span> ` : ''}${esc(r.name)}</span>
           ${badge(r.total)}
           <span class="meta">${cells(r.total)}<span>${esc(r.cat)}${r.status ? ' · ' + esc(r.status) : ''}</span></span>
         </a>`).join('') : '<p class="muted">Ничего не нашлось.</p>';
-      $('#more').hidden = list.length <= ST.limit;
+      $('#more').hidden = list.length <= lim;
       hydratePhotos(p, $('#list'));
+      FILL.set('all', { base: ST.limit, total: list.length, n: Math.max(ST.limit, Math.min(lim, list.length)), grid: () => $('#list'), more: () => $('#more'),
+        set(n) { ST.fit = n > ST.limit ? n : 0; draw(true); } });
+      // список поменялся (тема, поиск, сортировка) — блок с высотой вручную добирает заново
+      const it = !quiet && BL && BL.items.find((q) => q.k === 'all');
+      if (it) fillBox(it);
     };
     // профиль перерисовывается и сам (пришли друзья, оценка с сервера): написанный поиск остаётся в поле, раз он всё ещё фильтрует список
     $('#q').value = ST.q;
@@ -1875,7 +1934,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       moving(['#catChips', '#stSeg', '#genreChips', '#list'], draw);
     });
     $('#q').addEventListener('input', (e) => { ST.q = e.target.value; ST.limit = 24; draw(); });
-    $('#more').addEventListener('click', () => { ST.limit += 24; draw(); });
+    $('#more').addEventListener('click', () => { ST.limit = Math.max(ST.limit, ST.fit || 0) + 24; ST.fit = 0; draw(); });
     wireGenres($('#genreBtn'), $('#genreChips'), ST, () => moving(['#catChips', '#stSeg', '#genreChips', '#list'], draw));
     draw();
   }
