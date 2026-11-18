@@ -1072,7 +1072,8 @@ input::placeholder, textarea::placeholder { color: var(--ink-3); font-weight: 40
 .board-list { list-style: none; margin: 12px -8px 0; padding: 0 8px; }
 .board-list, #logList { max-height: max(380px, calc(100 * var(--dvh, 1vh) - 170px)); overflow-y: auto; }
 .entry + .entry { border-top: 1px solid var(--line); }
-.entry summary { display: block; list-style: none; margin: 0 -8px; padding: 12px 8px; border-radius: 12px; cursor: pointer; }
+/* справа место побольше: сразу за строкой — полоса прокрутки списка (по ней нажатие строку не сворачивает), стрелка от неё подальше */
+.entry summary { display: block; list-style: none; margin: 0 -8px; padding: 12px 18px 12px 8px; border-radius: 12px; cursor: pointer; }
 .sum { display: grid; grid-template-columns: 30px minmax(0, 1fr) auto auto 16px; align-items: center; gap: 12px; }
 .entry summary::-webkit-details-marker { display: none; }
 .entry details[open] > summary { background: var(--panel-2); }
