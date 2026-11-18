@@ -734,7 +734,8 @@
   async function ratingCover(r, stored) {
     const p = r.photo || {};
     let src = stored[p.ref] || (typeof p.data === 'string' && p.data) || (typeof p.id === 'string' && /^data:image\//.test(p.id) ? p.id : '');
-    if (!src && me && p.remote) { try { src = (await api(`/photo/${encodeURIComponent(me)}/${encodeURIComponent(r.id)}`)).data || ''; } catch (e) {} }
+    // в браузере фото нет (оценку ставили на другом устройстве или хранилище очистилось) — берём копию из аккаунта
+    if (!src && me && (p.remote || p.ref)) { try { src = (await api(`/photo/${encodeURIComponent(me)}/${encodeURIComponent(r.id)}`)).data || ''; } catch (e) {} }
     if (!src && typeof p.url === 'string' && /^https:\/\//.test(p.url) && me) { try { src = (await api('/fetch-img?u=' + encodeURIComponent(p.url))).data || ''; } catch (e) {} }
     src = String(src).split('#')[0];
     if (!/^data:image\//.test(src)) return '';
@@ -747,6 +748,8 @@
       try { rs = ((await api('/shelf/' + encodeURIComponent(me))).ratings || []).filter((r) => r && r.id && r.name); } catch (e) {}
     }
     if (S.list !== l) return;
+    // карточка этой оценки уже есть, но текстом, без обложки
+    const bareCard = (r) => { const it = l.items[ratingItemId(r)]; return !!it && it.kind === 'text'; };
     if (!rs.length) {
       dialog('Из моих оценок', '<p class="tl-empty">Пока нет оценок.</p><div class="tl-foot"><a class="btn small primary" href="/opinion/">Открыть Мнение</a></div>');
       return;
@@ -778,14 +781,14 @@
       const gShow = F.allG ? gs : gs.slice(0, 18).concat(gs.slice(18).filter((g) => F.genres.has(g)));
       const decs = [...new Set([...yN.keys(), ...F.dec])].sort((a, b) => b - a);
       const base = rs.filter((r) => okBy(r, 'score'));
-      const pick = rs.filter((r) => okBy(r)), fresh = pick.filter((r) => !has(l.items, ratingItemId(r)));
+      const pick = rs.filter((r) => okBy(r)), fresh = pick.filter((r) => !has(l.items, ratingItemId(r))), bare = pick.filter(bareCard);
       box.innerHTML = `<section><p class="label">Категории</p><div class="tl-chips">${cats.map((c) => chip('data-cat', c, c, F.cats.has(c), cN.get(c) || 0)).join('')}</div></section>
         ${sts.length > 1 ? `<section><p class="label">Статус</p><div class="tl-chips">${chip('data-st', '*', 'Любой', !F.st.size)}${sts.map((x) => chip('data-st', x, x, F.st.has(x), sN.get(x) || 0)).join('')}</div></section>` : ''}
         <section><p class="label">Балл</p><div class="tl-chips">${SCORE.map(([k, t]) => chip('data-sc', k, t, F.score === k, base.filter((r) => scoreOk(r, k)).length)).join('')}</div></section>
         ${gs.length ? `<section><p class="label">Жанры и теги</p><div class="tl-chips">${chip('data-g', '*', 'Любые', !F.genres.size)}${gShow.map((g) => chip('data-g', g, g, F.genres.has(g), gN.get(g) || 0)).join('')}${gs.length > gShow.length ? `<button type="button" class="tl-chip tl-more" data-gall>Ещё ${gs.length - gShow.length}</button>` : ''}</div>${F.genres.size > 1 ? '<p class="tl-hint">Подойдёт оценка хотя бы с одним из отмеченных.</p>' : ''}</section>` : ''}
         ${decs.length > 1 ? `<section><p class="label">Годы</p><div class="tl-chips">${chip('data-y', '*', 'Любые', !F.dec.size)}${decs.map((y) => chip('data-y', y, y + '-е', F.dec.has(y), yN.get(y) || 0)).join('')}</div></section>` : ''}
         <div class="tl-foot tl-spread"><span class="tl-hint">${pick.length ? `Подходит: ${pick.length}${pick.length > fresh.length ? ` · уже в тир-листе: ${pick.length - fresh.length}` : ''}` : 'Ничего не подходит: сними часть фильтров.'}</span>
-          <button type="button" class="btn small primary" data-add${fresh.length ? '' : ' disabled'}>Добавить${fresh.length ? ' · ' + fresh.length : ''}</button></div>`;
+          <button type="button" class="btn small primary" data-add${fresh.length || bare.length ? '' : ' disabled'}>${fresh.length ? 'Добавить · ' + fresh.length : bare.length ? 'Найти обложки · ' + bare.length : 'Добавить'}</button></div>`;
     };
     paint();
     const flip = (set, v) => { if (set.has(v)) set.delete(v); else set.add(v); };
@@ -809,20 +812,29 @@
     const addChosen = async (btn) => {
       btn.disabled = true;
       const chosen = rs.filter((r) => okBy(r) && !has(l.items, ratingItemId(r)));
-      const refs = chosen.map((r) => r.photo && r.photo.ref).filter(Boolean);
+      const bare = rs.filter((r) => okBy(r) && bareCard(r));
+      const refs = chosen.concat(bare).map((r) => r.photo && r.photo.ref).filter(Boolean);
       let stored = {};
       if (refs.length && window.CasualPhotos) { try { stored = await window.CasualPhotos.getMany(refs); } catch (x) {} }
-      let n = 0;
+      let n = 0, got = 0;
       for (const r of chosen) {
         const id = ratingItemId(r);
         let key = '';
         try { key = await ratingCover(r, stored); } catch (x) {}
         if (addItem(l, key ? { id, kind: 'img', img: key, name: str(r.name, LIMIT.name) } : { id, kind: 'text', name: str(r.name, LIMIT.name) })) n += 1;
       }
+      // карточки, добавленные раньше без обложки: если она нашлась теперь — ставим, место в рядах не меняется
+      for (const r of bare) {
+        let key = '';
+        try { key = await ratingCover(r, stored); } catch (x) {}
+        const it = l.items[ratingItemId(r)];
+        if (key && it && it.kind === 'text') { it.kind = 'img'; it.img = key; got += 1; }
+      }
       touchList(l);
       closeDialog();
       renderEditor();
-      toast(n ? `Добавлено: ${cards(n)}.` : 'Эти оценки уже в тир-листе.');
+      toast([n && `Добавлено: ${cards(n)}.`, got && `Обложки нашлись: ${got}.`].filter(Boolean).join(' ')
+        || (bare.length ? 'Обложек для этих оценок не нашлось.' : 'Эти оценки уже в тир-листе.'));
     };
   }
   let stickers = null;
