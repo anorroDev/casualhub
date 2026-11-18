@@ -733,13 +733,20 @@
   // обложка оценки: в этом браузере, в аккаунте или по ссылке (чужой сайт — через наш сервер, браузеру нельзя)
   async function ratingCover(r, stored) {
     const p = r.photo || {};
-    let src = stored[p.ref] || (typeof p.data === 'string' && p.data) || (typeof p.id === 'string' && /^data:image\//.test(p.id) ? p.id : '');
+    // обложка из поиска (фильмы и т.п.) лежит в оценке ссылкой https — в data, id или url
+    const vals = [p.data, p.id, p.url].filter((x) => typeof x === 'string').map((x) => x.split('#')[0]);
+    let src = stored[p.ref] || vals.find((x) => /^data:image\//.test(x)) || '';
     // в браузере фото нет (оценку ставили на другом устройстве или хранилище очистилось) — берём копию из аккаунта
     if (!src && me && (p.remote || p.ref)) { try { src = (await api(`/photo/${encodeURIComponent(me)}/${encodeURIComponent(r.id)}`)).data || ''; } catch (e) {} }
-    if (!src && typeof p.url === 'string' && /^https:\/\//.test(p.url) && me) { try { src = (await api('/fetch-img?u=' + encodeURIComponent(p.url))).data || ''; } catch (e) {} }
     src = String(src).split('#')[0];
-    if (!/^data:image\//.test(src)) return '';
-    return putImg(await squareBlob(await loadImage(src)));
+    if (/^data:image\//.test(src)) return putImg(await squareBlob(await loadImage(src)));
+    // ссылка: сначала прямо с сайта картинки (если он разрешает CORS), иначе через наш сервер
+    const link = vals.find((x) => /^https:\/\//.test(x));
+    if (!link) return '';
+    try { return await putImg(await squareBlob(await loadImage(link, true))); } catch (e) {}
+    if (!me) return '';
+    try { src = (await api('/fetch-img?u=' + encodeURIComponent(link))).data || ''; } catch (e) { return ''; }
+    return /^data:image\//.test(src) ? putImg(await squareBlob(await loadImage(src))) : '';
   }
   async function addRatingsDialog() {
     const l = S.list;
