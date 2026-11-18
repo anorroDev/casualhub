@@ -54,10 +54,10 @@
 .wn-body .rel { display: grid; grid-template-columns: 70px minmax(0, 1fr); gap: 10px; padding: 12px 0; }
 .wn-body .rel + .rel { border-top: 1px solid var(--line); }
 .wn-body .rel-v { padding-top: 1px; font-family: var(--font-display); font-weight: 700; font-size: 22px; line-height: 1; color: var(--ink-3); white-space: nowrap; }
-.wn-body .rel-n { display: inline-flex; align-items: baseline; gap: 2px; margin-top: 8px; font-family: inherit; font-size: 11px; font-weight: 600; line-height: 1.1; letter-spacing: 0; color: var(--ink-3); white-space: nowrap; }
+.wn-body .rel-n { display: flex; align-items: baseline; gap: 2px; margin-top: 8px; font-family: inherit; font-size: 11px; font-weight: 600; line-height: 1.1; letter-spacing: 0; color: var(--ink-3); white-space: nowrap; }
 .wn-body .rel-n b { font-family: var(--font-display); font-size: 17px; font-weight: 800; color: var(--ink-2); }
 .wn-body .rel h4 { margin: 0; font-size: 15px; font-weight: 700; line-height: 1.3; }
-.wn-body .rel p { max-width: 62ch; margin: 3px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); text-wrap: pretty; }
+.wn-body .rel p { max-width: 62ch; margin: 3px 0 0; font-size: 13.5px; line-height: 1.5; color: var(--ink-2); text-wrap: pretty; overflow-wrap: break-word; }
 /* в патче дня каждое изменение начинается со своего жирного названия на отдельной строке */
 .wn-body .rel p > b:first-child { display: flex; align-items: center; gap: 8px; margin: 16px 0 4px; color: var(--ink); font-size: 14.5px; line-height: 1.3; }
 .wn-emo { flex: none; width: 30px; height: 30px; object-fit: contain; }
