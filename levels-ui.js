@@ -284,8 +284,13 @@ html.lv-on .ava-wrap > .ava-ring { display: none !important; }
 .lv-swap-note { margin: 0; }
 .lv-q .lv-bar { grid-column: 1 / -1; height: 6px; }
 /* подсказка под заданием: где это делается и что засчитывается (hint с сервера); у выполненного не нужна */
-.lv-q .lv-qh { grid-column: 1 / -1; margin-top: -2px; color: var(--ink-2, #b5b5b5); font-size: 12.5px; line-height: 1.45; }
-.lv-q.done .lv-qh { display: none; }
+.lv-q { position: relative; }
+.lv-qi { display: inline-grid; place-items: center; width: 18px; height: 18px; margin-left: 6px; padding: 0; border: 1px solid var(--line, #2b2e38); border-radius: 50%; background: transparent; color: var(--ink-2, #b5b5b5); font: italic 700 11px/1 Georgia, 'Times New Roman', serif; vertical-align: 1px; cursor: help; }
+.lv-qi:hover, .lv-qi:focus-visible, .lv-qi[aria-expanded="true"] { color: var(--ink, #fff); border-color: var(--accent, #5B74FF); }
+/* подсказка задания: под строкой, поверх соседних заданий */
+.lv-q .lv-qh { display: none; position: absolute; z-index: 5; top: calc(100% - 4px); left: 0; width: min(360px, 100%); padding: 9px 12px; border: 1px solid var(--line, #2b2e38); border-radius: 12px; background: var(--panel, #17181c); color: var(--ink-2, #b5b5b5); font-size: 12.5px; font-weight: 500; line-height: 1.45; text-decoration: none; box-shadow: 0 14px 30px -14px rgb(0 0 0 / .6); }
+@media (hover: hover) { .lv-qi:hover + .lv-qh { display: block; } }
+.lv-qi:focus-visible + .lv-qh, .lv-qi[aria-expanded="true"] + .lv-qh { display: block; }
 .lv-q.done > span:first-child { color: var(--ink-3, #8a8f9e); text-decoration: line-through; }
 .lv-q.done .lv-bar { background: var(--good, #2EAD60); }
 .lv-streak { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -1132,10 +1137,12 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       const m = ME, q = m.quests;
       // бесплатная замена: одна в день, у невыполненного задания
       const swapBtn = (x) => (q.swap && !x.done && !x.paid ? `<button type="button" class="lv-swap" data-swap="${esc(x.code)}" title="Заменить на другое задание — одна бесплатная замена в день">Заменить</button>` : '');
-      // под названием — подсказка, где это делается и что засчитывается; где нужно больше одного раза — «1 из 3»
-      const qHint = (x) => (x.hint ? `<span class="lv-qh">${esc(x.hint)}</span>` : '');
+      // подсказка (где это делается и что засчитывается) — за значком «i» рядом с названием: видна при наведении
+      // или по нажатию; где нужно больше одного раза — «1 из 3»
+      let qn = 0;
+      const qHint = (x) => (x.hint && !x.done ? `<button type="button" class="lv-qi" data-qi aria-expanded="false" aria-describedby="lvQh${++qn}" aria-label="Подробнее">i</button><span class="lv-qh" id="lvQh${qn}" role="tooltip">${esc(x.hint)}</span>` : '');
       const qOf = (x) => ` · ${x.progress} из ${x.goal}`; // «· 1 из 3» не разрывается на узком экране
-      const daily = q.daily.map((x) => `<div class="lv-q${x.done ? ' done' : ''}"><span>${esc(x.title)}${x.goal > 1 ? qOf(x) : ''}${swapBtn(x)}</span><span class="xp">+${x.xp}</span>${qHint(x)}${bar(pct(x.progress, x.goal))}</div>`).join('');
+      const daily = q.daily.map((x) => `<div class="lv-q${x.done ? ' done' : ''}"><span>${esc(x.title)}${x.goal > 1 ? qOf(x) : ''}${qHint(x)}${swapBtn(x)}</span><span class="xp">+${x.xp}</span>${bar(pct(x.progress, x.goal))}</div>`).join('');
       const w = q.weekly;
       const steps = m.steps ? `<div class="lv-box"><h3>Первые шаги</h3>${m.steps.map((s) => `<div class="lv-q${s.done ? ' done' : ''}"><span>${esc(s.title)}</span><span class="xp">+${s.xp}</span></div>`).join('')}</div>` : '';
       // шапка: значок звания сезона, уровень и опыт за всё время; нажатие открывает звания сезона и всю лестницу
@@ -1144,7 +1151,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
         ${m.event ? `<div class="lv-box"><h3>${esc(m.event.title)}</h3><p class="lv-muted">×${m.event.mult} опыта до ${new Date(m.event.until).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}.</p></div>` : ''}
         <div class="lv-box"><div class="lv-streak"><span class="big">🔥 ${m.streak.days}</span><div><b>${m.streak.days ? `${plural(m.streak.days, 'день', 'дня', 'дней')} подряд` : 'Серии пока нет'}</b><p class="lv-muted">${m.streak.today ? 'Сегодня уже засчитан.' : 'Оцени что-нибудь или отреагируй другу, чтобы засчитать сегодня.'} Лучшая серия: ${m.streak.best}. «Заморозок»: ${m.streak.freezes} — спасают серию, если пропустишь день.</p></div></div></div>
         <div class="lv-box"><h3>Задания дня</h3>${daily || '<p class="lv-muted">Заданий пока нет.</p>'}<p class="lv-muted">За все три — ещё +${q.allXp}${q.allPaid ? ' (получено)' : ''}. Новые задания через <b class="lv-reset" data-lv-reset>${hms(untilMidnight())}</b>.</p><p class="lv-muted lv-swap-note">${q.swap ? 'Не нравится задание — одно в день можно заменить бесплатно.' : 'Замена задания на сегодня потрачена — завтра будет новая.'}</p><p class="lv-err" id="lvSwapMsg" role="status"></p></div>
-        ${w ? `<div class="lv-box"><h3>Задание недели</h3><div class="lv-q${w.done ? ' done' : ''}"><span>${esc(w.title)}${qOf(w)}</span><span class="xp">+${w.xp}</span>${qHint(w)}${bar(pct(w.progress, w.goal))}</div><p class="lv-muted">Новое задание через <b class="lv-reset" data-lv-reset="week">${dhms(untilMonday())}</b>.</p></div>` : ''}
+        ${w ? `<div class="lv-box"><h3>Задание недели</h3><div class="lv-q${w.done ? ' done' : ''}"><span>${esc(w.title)}${qOf(w)}${qHint(w)}</span><span class="xp">+${w.xp}</span>${bar(pct(w.progress, w.goal))}</div><p class="lv-muted">Новое задание через <b class="lv-reset" data-lv-reset="week">${dhms(untilMonday())}</b>.</p></div>` : ''}
         ${steps}
         ${xpTable(m)}`;
     },
@@ -1321,6 +1328,13 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       tickReset();
       const go = b.querySelector('[data-ranks]'); if (go) go.addEventListener('click', () => { tab = 'ranks'; renderTabs(); render(); });
       const xt = b.querySelector('.lv-xpt'); if (xt) xt.addEventListener('toggle', () => { xptOpen = xt.open; });
+      // «i» у задания: нажатие открывает и закрывает подсказку (на телефоне наведения нет), открыта одна
+      b.querySelectorAll('[data-qi]').forEach((btn) => btn.addEventListener('click', () => {
+        const on = btn.getAttribute('aria-expanded') !== 'true';
+        b.querySelectorAll('[data-qi][aria-expanded="true"]').forEach((x) => x.setAttribute('aria-expanded', 'false'));
+        btn.setAttribute('aria-expanded', String(on));
+      }));
+      if (!b.lvQiOut) { b.lvQiOut = true; b.addEventListener('click', (e) => { if (!e.target.closest('[data-qi]')) b.querySelectorAll('[data-qi][aria-expanded="true"]').forEach((x) => x.setAttribute('aria-expanded', 'false')); }); }
       b.querySelectorAll('[data-swap]').forEach((btn) => btn.addEventListener('click', async () => {
         btn.disabled = true;
         const msg = b.querySelector('#lvSwapMsg');
