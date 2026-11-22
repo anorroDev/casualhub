@@ -95,11 +95,11 @@ export function fmtKyiv(t) {
 // Действие сверх лимитов всё равно пишется в журнал с 0 опыта: так оно не даст опыта и потом, при повторе.
 export const RULES = {
   rate: { xp: 10, day: 8, tail: { xp: 2, day: 20 } }, // новая оценка с баллами
-  review: { xp: 5, day: 5 }, // отзыв от 100 символов
+  review: { xp: 5, day: 5 }, // отзыв: плюсы, минусы и заметки оценки вместе от 100 знаков (textLen)
   rate_full: { xp: 3, day: 8 }, // оценка заполнена целиком: баллы по 2+ критериям и обложка
   plan_done: { xp: 5, day: 5 }, // оценил то, что было «В планах»
   import: { xp: 1, ever: 100 }, // оценка из импорта (Letterboxd)
-  tier: { xp: 25, day: 2 }, // новый тир-лист от 8 элементов
+  tier: { xp: 25, day: 2 }, // в тир-листе впервые набралось 8 элементов (tierDone)
   tier_share: { xp: 5, day: 1 }, // поделился тир-листом
   react: { xp: 3, day: 10, pair: 3 }, // реакция на оценку или тир-лист друга
   comment: { xp: 6, day: 6, pair: 2 }, // комментарий или запись на стене
@@ -140,7 +140,7 @@ export const ACHIEVEMENTS = [
   { code: 'first10', title: 'Первая десятка', desc: 'Один из первых 10 аккаунтов на сайте. Награда — котик Васян', special: true },
   { code: 'first_steps', title: 'Первые шаги', desc: 'Прошёл все первые шаги', special: true },
   { code: 'critic', title: 'Критик', desc: 'Оценки', metric: ['rate', 'import'], tiers: [10, 100, 500] },
-  { code: 'reviewer', title: 'Рецензент', desc: 'Отзывы от 100 символов', metric: 'review', tiers: [5, 25, 100] },
+  { code: 'reviewer', title: 'Рецензент', desc: 'Отзывы к оценкам: плюсы, минусы и заметки вместе от 100 знаков', metric: 'review', tiers: [5, 25, 100] },
   { code: 'riddler', title: 'Отгадчик', desc: 'Отгаданные загадки дня', metric: 'riddle', tiers: [5, 25, 100] },
   { code: 'omnivore', title: 'Всеядный', desc: 'Оценки в разных категориях', metric: '@cats', tiers: [3, 5, 8] },
   { code: 'finisher', title: 'Довёл до конца', desc: 'Оценил то, что было «В планах»', metric: 'plan_done', tiers: [5, 25, 100] },
@@ -174,20 +174,24 @@ export const achXp = (a, tier) => (!a ? 0 : a.special || (a.tiers || []).length 
 export const tierFor = (a, v) => (a.tiers || []).reduce((t, need, i) => (v >= need ? i + 1 : t), 0);
 
 // ---------- задания ----------
-// kinds — какие строки журнала засчитываются; goal — сколько; need — когда задание можно выдать
+// kinds — какие строки журнала засчитываются; goal — сколько; need — когда задание можно выдать.
+// title — коротко, что сделать (он же в уведомлении «Задание выполнено»); hint — строка под ним в «Прогрессе»: где это
+// делается и что именно засчитывается. Пороги в hint — те же, что в shelfDiff, isFull, textLen и в API (комментарий
+// от 10 знаков, тир-лист от 8 карточек, сбор от трёх человек): поменял правило — поправь и подсказку.
+// Новые title и hint — в словарь lang-en.js (это проверяет тест).
 export const DAILY = [
-  { code: 'rate2', title: 'Поставь 2 оценки', kinds: ['rate', 'import'], goal: 2 },
-  { code: 'review1', title: 'Напиши отзыв от 100 символов', kinds: ['review'], goal: 1 },
-  { code: 'full1', title: 'Заполни оценку целиком: все критерии и обложка', kinds: ['rate_full'], goal: 1 },
-  { code: 'react3', title: 'Отреагируй на 3 оценки друзей', kinds: ['react'], goal: 3, need: 'friends' },
-  { code: 'comment1', title: 'Прокомментируй оценку друга', kinds: ['comment'], goal: 1, need: 'friends' },
-  { code: 'plan1', title: 'Оцени что-нибудь из «В планах»', kinds: ['plan_done'], goal: 1, need: 'plans' },
+  { code: 'rate2', title: 'Поставь 2 новые оценки', hint: 'В Мнении поставь баллы чему-то новому и нажми «Сохранить». Правка уже оценённого не считается', kinds: ['rate', 'import'], goal: 2 },
+  { code: 'review1', title: 'Напиши отзыв к оценке', hint: 'Отзыв — это «Плюсы», «Минусы» и «Заметки» в форме оценки: вместе от 100 знаков, примерно пара предложений. Можно дописать к старой оценке', kinds: ['review'], goal: 1 },
+  { code: 'full1', title: 'Сделай оценку с обложкой', hint: 'Баллы хотя бы по двум критериям и обложка или фото — блок «Фото» в форме оценки. Можно дополнить старую оценку', kinds: ['rate_full'], goal: 1 },
+  { code: 'react3', title: 'Отреагируй на 3 оценки друзей', hint: 'Мнение → «Друзья»: открой оценку друга и выбери реакцию под ней. Реакции на тир-листы друзей тоже считаются', kinds: ['react'], goal: 3, need: 'friends' },
+  { code: 'comment1', title: 'Прокомментируй оценку друга', hint: 'Под оценкой друга (Мнение → «Друзья») или под его тир-листом. Нужно от 10 знаков — короткое «ок» не засчитается', kinds: ['comment'], goal: 1, need: 'friends' },
+  { code: 'plan1', title: 'Оцени что-нибудь из «В планах»', hint: 'Найди в рейтинге Мнения то, что отложено «В планах», нажми «Оценить», поставь баллы и сохрани', kinds: ['plan_done'], goal: 1, need: 'plans' },
 ];
 export const WEEKLY = [
-  { code: 'tier1', title: 'Собери тир-лист', kinds: ['tier'], goal: 1 },
-  { code: 'rate10', title: '10 оценок за неделю', kinds: ['rate', 'import'], goal: 10 },
-  { code: 'social10', title: '10 реакций и комментариев друзьям', kinds: ['react', 'comment'], goal: 10, need: 'friends' },
-  { code: 'host1', title: 'Проведи сбор лотов с друзьями', kinds: ['lots_host'], goal: 1, need: 'friends' },
+  { code: 'tier1', title: 'Собери тир-лист', hint: 'В Тир-листах: засчитается, как только в тир-листе наберётся 8 карточек', kinds: ['tier'], goal: 1 },
+  { code: 'rate10', title: '10 новых оценок за неделю', hint: 'В Мнении поставь баллы новому с понедельника по воскресенье. Правка уже оценённого не считается', kinds: ['rate', 'import'], goal: 10 },
+  { code: 'social10', title: '10 реакций и комментариев друзьям', hint: 'Под оценками и тир-листами друзей, в любом сочетании. Комментарий — от 10 знаков', kinds: ['react', 'comment'], goal: 10, need: 'friends' },
+  { code: 'host1', title: 'Проведи сбор лотов до победителя', hint: 'Колесо → «Лоты по ссылке»: открой сбор и дай друзьям ссылку. Лоты должны добавить хотя бы три человека, а колесо — докрутиться до победителя', kinds: ['lots_host'], goal: 1, need: 'friends' },
 ];
 // первые шаги: kind — что засчитывается (строка журнала), check — особая проверка
 export const FIRST_STEPS = [
@@ -758,10 +762,10 @@ export async function questState(env, uid, { now, today, row }) {
   const prog = (def, c) => Math.min(def.goal, def.kinds.reduce((a, k) => a + (c[k] || 0), 0));
   const dl = daily.map((code) => DAILY.find((d) => d.code === code)).filter(Boolean).map((d) => {
     const p = prog(d, t);
-    return { code: d.code, title: d.title, goal: d.goal, progress: p, done: p >= d.goal, paid: paidSet.has(`quest:${today}:${d.code}`), xp: RULES.quest.xp };
+    return { code: d.code, title: d.title, hint: d.hint, goal: d.goal, progress: p, done: p >= d.goal, paid: paidSet.has(`quest:${today}:${d.code}`), xp: RULES.quest.xp };
   });
   const wd = WEEKLY.find((d) => d.code === wq);
-  const weekly = wd ? (() => { const p = prog(wd, w); return { code: wd.code, title: wd.title, goal: wd.goal, progress: p, done: p >= wd.goal, paid: paidSet.has(`quest_week:${week}:${wd.code}`), xp: RULES.quest_week.xp }; })() : null;
+  const weekly = wd ? (() => { const p = prog(wd, w); return { code: wd.code, title: wd.title, hint: wd.hint, goal: wd.goal, progress: p, done: p >= wd.goal, paid: paidSet.has(`quest_week:${week}:${wd.code}`), xp: RULES.quest_week.xp }; })() : null;
   return { day: today, week, daily: dl, allPaid: paidSet.has(`quest_all:${today}`), allXp: RULES.quest_all.xp, weekly, swap: !swapped };
 }
 // бесплатная замена задания дня: одна в день, только невыполненного и ещё не оплаченного; на сегодня, на завтра не копится.
@@ -1111,7 +1115,7 @@ export async function backfillUser(env, uid, { now = Date.now(), founderBefore }
   for (const t of tl.results || []) {
     let n = 0;
     try { n = Object.keys((JSON.parse(t.data) || {}).items || {}).length; } catch (e) {}
-    if (n >= 8) items.push({ kind: 'tier', ref: t.id, xp: PAST.tier, day: dayOf(t.at), at: +t.at || now });
+    if (n >= TIER_MIN) items.push({ kind: 'tier', ref: t.id, xp: PAST.tier, day: dayOf(t.at), at: +t.at || now });
   }
   for (const f of fr.results || []) items.push({ kind: 'friend', ref: f.id, xp: PAST.friend, day: dayOf(f.created_at), at: +f.created_at || now });
   for (const r of rc.results || []) items.push({ kind: 'react', ref: `${r.owner_id}:${r.rid}`, peer: r.owner_id, xp: PAST.react, day: dayOf(r.at), at: +r.at || now });
@@ -1171,5 +1175,14 @@ export function shelfDiff(oldList, newList) {
   const metrics = { cats: new Set(scored.map((r) => r.cat || r.catName).filter(Boolean)).size, strict: scored.filter((r) => +r.total <= 2).length };
   return { give, take, metrics };
 }
+// ---------- тир-листы: когда тир-лист засчитан ----------
+// Тир-лист засчитывается (опыт tier, задание недели, первый шаг, «Тир-лист-мейкер»), когда в нём впервые набралось
+// TIER_MIN карточек, а не только при первом сохранении: страница отправляет тир-лист в аккаунт через полторы секунды
+// после названия или первой карточки, и собранный вручную иначе не засчитывался никогда. Дважды за один тир-лист опыт
+// не дают (ref — его id, удалённое тоже остаётся в журнале), поэтому убрать карточки и добавить снова ничего не даст.
+// before — версия на сервере до сохранения (null — её не было), after — новая.
+export const TIER_MIN = 8;
+const tierSize = (l) => (l && l.items && typeof l.items === 'object' ? Object.keys(l.items).length : 0);
+export const tierDone = (before, after) => tierSize(after) >= TIER_MIN && tierSize(before) < TIER_MIN;
 // оценка поставлена ночью (2–5 часов по времени человека) — для скрытой ачивки
 export const nightNow = (now, tz) => { if (!tz) return false; const h = hourIn(now, tz); return h >= 2 && h < 5; }; // без часового пояса не гадаем

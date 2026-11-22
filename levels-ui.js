@@ -283,6 +283,9 @@ html.lv-on .ava-wrap > .ava-ring { display: none !important; }
 .lv-swap:disabled { opacity: .5; cursor: default; }
 .lv-swap-note { margin: 0; }
 .lv-q .lv-bar { grid-column: 1 / -1; height: 6px; }
+/* подсказка под заданием: где это делается и что засчитывается (hint с сервера); у выполненного не нужна */
+.lv-q .lv-qh { grid-column: 1 / -1; margin-top: -2px; color: var(--ink-2, #b5b5b5); font-size: 12.5px; line-height: 1.45; }
+.lv-q.done .lv-qh { display: none; }
 .lv-q.done > span:first-child { color: var(--ink-3, #8a8f9e); text-decoration: line-through; }
 .lv-q.done .lv-bar { background: var(--good, #2EAD60); }
 .lv-streak { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -1073,7 +1076,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   }
   // таблица «За что сколько опыта»: подписи здесь, цифры и лимиты — из правил сервера (ME.xpRules), чтобы не разойтись
   const XP_TABLE = [
-    ['Оценки', [['rate', 'Новая оценка с баллами'], ['review', 'Отзыв от 100 символов'], ['rate_full', 'Оценка целиком: баллы по 2+ критериям и обложка'], ['plan_done', 'Оценил то, что было «В планах»'], ['import', 'Оценка из импорта Letterboxd']]],
+    ['Оценки', [['rate', 'Новая оценка с баллами'], ['review', 'Отзыв к оценке: плюсы, минусы и заметки вместе от 100 знаков'], ['rate_full', 'Оценка целиком: баллы по 2+ критериям и обложка'], ['plan_done', 'Оценил то, что было «В планах»'], ['import', 'Оценка из импорта Letterboxd']]],
     ['Друзья', [['friend', 'Новый друг'], ['react', 'Реакция на оценку или тир-лист друга'], ['comment', 'Комментарий или запись на стене'], ['got_react', 'Твою оценку отметили реакцией'], ['got_comment', 'Тебе написали комментарий']]],
     ['Тир-листы', [['tier', 'Новый тир-лист от 8 элементов'], ['tier_share', 'Поделился тир-листом'], ['tier_coop', '«Тир-лист вместе»: разложил хотя бы половину'], ['tier_coop_host', 'Провёл «Тир-лист вместе», где голосовали трое']]],
     ['Лоты и игры', [['lots_host', 'Провёл сбор лотов до победителя (от 3 участников)'], ['lot_add', 'Лот в чужой сбор'], ['lot_win', 'Твой лот победил'], ['predict_win', 'Угадал победителя сбора'], ['bingo_win', 'Линия в бинго одним из первых трёх'], ['king_host', 'Довёл «Царя Горы» до конца'], ['king_vote', 'Голос в бою чужого турнира'], ['riddle', 'Отгадал загадку дня']]],
@@ -1129,7 +1132,10 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       const m = ME, q = m.quests;
       // бесплатная замена: одна в день, у невыполненного задания
       const swapBtn = (x) => (q.swap && !x.done && !x.paid ? `<button type="button" class="lv-swap" data-swap="${esc(x.code)}" title="Заменить на другое задание — одна бесплатная замена в день">Заменить</button>` : '');
-      const daily = q.daily.map((x) => `<div class="lv-q${x.done ? ' done' : ''}"><span>${esc(x.title)}${swapBtn(x)}</span><span class="xp">+${x.xp}</span>${bar(pct(x.progress, x.goal))}</div>`).join('');
+      // под названием — подсказка, где это делается и что засчитывается; где нужно больше одного раза — «1 из 3»
+      const qHint = (x) => (x.hint ? `<span class="lv-qh">${esc(x.hint)}</span>` : '');
+      const qOf = (x) => ` · ${x.progress} из ${x.goal}`; // «· 1 из 3» не разрывается на узком экране
+      const daily = q.daily.map((x) => `<div class="lv-q${x.done ? ' done' : ''}"><span>${esc(x.title)}${x.goal > 1 ? qOf(x) : ''}${swapBtn(x)}</span><span class="xp">+${x.xp}</span>${qHint(x)}${bar(pct(x.progress, x.goal))}</div>`).join('');
       const w = q.weekly;
       const steps = m.steps ? `<div class="lv-box"><h3>Первые шаги</h3>${m.steps.map((s) => `<div class="lv-q${s.done ? ' done' : ''}"><span>${esc(s.title)}</span><span class="xp">+${s.xp}</span></div>`).join('')}</div>` : '';
       // шапка: значок звания сезона, уровень и опыт за всё время; нажатие открывает звания сезона и всю лестницу
@@ -1138,7 +1144,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
         ${m.event ? `<div class="lv-box"><h3>${esc(m.event.title)}</h3><p class="lv-muted">×${m.event.mult} опыта до ${new Date(m.event.until).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}.</p></div>` : ''}
         <div class="lv-box"><div class="lv-streak"><span class="big">🔥 ${m.streak.days}</span><div><b>${m.streak.days ? `${plural(m.streak.days, 'день', 'дня', 'дней')} подряд` : 'Серии пока нет'}</b><p class="lv-muted">${m.streak.today ? 'Сегодня уже засчитан.' : 'Оцени что-нибудь или отреагируй другу, чтобы засчитать сегодня.'} Лучшая серия: ${m.streak.best}. «Заморозок»: ${m.streak.freezes} — спасают серию, если пропустишь день.</p></div></div></div>
         <div class="lv-box"><h3>Задания дня</h3>${daily || '<p class="lv-muted">Заданий пока нет.</p>'}<p class="lv-muted">За все три — ещё +${q.allXp}${q.allPaid ? ' (получено)' : ''}. Новые задания через <b class="lv-reset" data-lv-reset>${hms(untilMidnight())}</b>.</p><p class="lv-muted lv-swap-note">${q.swap ? 'Не нравится задание — одно в день можно заменить бесплатно.' : 'Замена задания на сегодня потрачена — завтра будет новая.'}</p><p class="lv-err" id="lvSwapMsg" role="status"></p></div>
-        ${w ? `<div class="lv-box"><h3>Задание недели</h3><div class="lv-q${w.done ? ' done' : ''}"><span>${esc(w.title)} · ${w.progress} из ${w.goal}</span><span class="xp">+${w.xp}</span>${bar(pct(w.progress, w.goal))}</div><p class="lv-muted">Новое задание через <b class="lv-reset" data-lv-reset="week">${dhms(untilMonday())}</b>.</p></div>` : ''}
+        ${w ? `<div class="lv-box"><h3>Задание недели</h3><div class="lv-q${w.done ? ' done' : ''}"><span>${esc(w.title)}${qOf(w)}</span><span class="xp">+${w.xp}</span>${qHint(w)}${bar(pct(w.progress, w.goal))}</div><p class="lv-muted">Новое задание через <b class="lv-reset" data-lv-reset="week">${dhms(untilMonday())}</b>.</p></div>` : ''}
         ${steps}
         ${xpTable(m)}`;
     },
@@ -1538,7 +1544,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
         t: 'Больше всего — за общение с друзьями. У каждого действия есть дневной лимит, а удалённое списывается.',
       },
       {
-        pic: '<div class="lv-tq"><div class="ok"><i></i>Поставь 2 оценки<em>+15</em></div><div class="ok"><i></i>Отреагируй на 3 оценки<em>+15</em></div><div><i></i>Напиши отзыв<em>+15</em></div></div>',
+        pic: '<div class="lv-tq"><div class="ok"><i></i>Поставь 2 новые оценки<em>+15</em></div><div class="ok"><i></i>Отреагируй на 3 оценки<em>+15</em></div><div><i></i>Напиши отзыв к оценке<em>+15</em></div></div>',
         h: 'Задания и серия',
         t: 'Каждый день три задания. Заходи подряд — растёт серия, а «заморозка» спасёт, если пропустишь день.',
       },

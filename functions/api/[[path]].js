@@ -7,7 +7,7 @@ import { imdbLookup } from '../_lib/imdb.js';
 import { NOTES } from '../_lib/admin-changes.js';
 import { LOT_NAME, MAX_LOTS, STICKER_RE, cleanLive, LIVE_OWNER, liveBusy, liveLots, spinLive, resetLive, stopAuto, settledLive, liveTx, liveView } from '../_lib/lots-live.js';
 import { ONLINE_MS, GUEST_RE, onlineCount, friendsAndIncoming, touchUsers, touchGuests } from '../_lib/presence.js';
-import { awardMany as lvAwardMany, revokeMany as lvRevokeMany, visit as lvVisit, shelfDiff, nightNow, levelsOn, onSeasonClose } from '../_lib/levels.js';
+import { awardMany as lvAwardMany, revokeMany as lvRevokeMany, visit as lvVisit, shelfDiff, tierDone, nightNow, levelsOn, onSeasonClose } from '../_lib/levels.js';
 import { makeLevelsRoutes, acceptInvite, tzOf, ensurePast } from '../_lib/levels-api.js';
 import { makeShopRoutes } from '../_lib/shop-api.js';
 import { makeMailoutRoutes, rememberLang } from '../_lib/mailout.js';
@@ -1608,16 +1608,19 @@ const routes = {
       const c = await env.DB.prepare('SELECT COUNT(*) AS n FROM tierlists WHERE user_id = ? AND data IS NOT NULL').bind(me.id).first();
       if (c && c.n >= MAX_TIERS) return fail(413, `Слишком много тир-листов в аккаунте (больше ${MAX_TIERS}). Удали старые.`);
     }
+    // прежняя версия: какие картинки из неё ушли и было ли в ней уже 8 карточек
+    let prev = null;
+    try { prev = old && old.data ? JSON.parse(old.data) : null; } catch (e) {}
     // картинки, которых в тир-листе больше нет, стираем сразу: на другом устройстве они уже не понадобятся
     const keep = new Set(tierImgs(list));
-    const dropped = old && old.data ? tierImgs(JSON.parse(old.data)).filter((k) => !keep.has(k)).slice(0, 200) : [];
+    const dropped = prev ? tierImgs(prev).filter((k) => !keep.has(k)).slice(0, 200) : [];
     await env.DB.batch([
       env.DB.prepare('INSERT INTO tierlists (user_id, id, data, meta, private, at, pub) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(user_id, id) DO UPDATE SET data = excluded.data, meta = excluded.meta, private = excluded.private, pub = excluded.pub, at = excluded.at')
         .bind(me.id, arg, data, JSON.stringify(tierMeta(list)), list.private ? 1 : 0, at, list.vis === 'public' ? 1 : 0),
       ...dropped.map((k) => env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(`${me.id}:${k}`)),
     ]);
-    // новый тир-лист от 8 элементов — опыт (правки уже готового — нет)
-    if ((!old || old.data == null) && Object.keys(list.items || {}).length >= 8) await lvGive(env, request, me, me.id, [{ kind: 'tier', ref: arg }]);
+    // опыт — когда в тир-листе впервые набралось 8 карточек, хоть при первом сохранении, хоть позже (tierDone в levels.js)
+    if (tierDone(prev, list)) await lvGive(env, request, me, me.id, [{ kind: 'tier', ref: arg }]);
     return json({ ok: true, at });
   },
   async 'DELETE /tierlist/:id'({ env, request, me, arg }) {

@@ -3,6 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { DatabaseSync } from 'node:sqlite';
+import { readFileSync } from 'node:fs';
 import * as L from '../functions/_lib/levels.js';
 
 const { needFor, totalFor, levelOf, dayKey, shiftDay, weekStart, award, awardMany, revoke, readLevel, levelsMode, RULES, ACHIEVEMENTS, streakStep, shelfDiff, takeNews, questState, firstSteps, backfillUser, lotsWon, visit, achievementsOf, levelsOf, unlockedAt } = L;
@@ -177,13 +178,23 @@ test('задания дня: выбираются по возможностям,
   assert.equal(st.daily.length, 3);
   for (const d of st.daily) assert.ok(['rate2', 'review1', 'full1'].includes(d.code));
   assert.ok(['tier1', 'rate10'].includes(st.weekly.code));
+  // у каждого задания — подсказка, где это делается и что засчитывается
+  for (const d of [...st.daily, st.weekly]) assert.ok(d.hint && d.hint.length > 20, `подсказка у ${d.code}`);
   // выполнить «оцени 2»: опыт за задание приходит с последним действием
   await award(env, 'u1', 'rate', 'a', { now: NOON });
   const r = await award(env, 'u1', 'rate', 'b', { now: NOON });
-  assert.ok(r.news.some((n) => n.t === 'quest' && n.title === 'Поставь 2 оценки'));
+  assert.ok(r.news.some((n) => n.t === 'quest' && n.title === 'Поставь 2 новые оценки'));
   const again = await award(env, 'u1', 'rate', 'c', { now: NOON });
-  assert.ok(!again.news.some((n) => n.t === 'quest' && n.title === 'Поставь 2 оценки'));
+  assert.ok(!again.news.some((n) => n.t === 'quest' && n.title === 'Поставь 2 новые оценки'));
   assert.equal(q(env, "SELECT COUNT(*) AS n FROM xp_log WHERE kind = 'quest'")[0].n >= 1, true);
+});
+
+test('задания: у всех есть подсказка, и название с подсказкой переведены в lang-en.js', () => {
+  const en = readFileSync(new URL('../lang-en.js', import.meta.url), 'utf8');
+  for (const d of [...L.DAILY, ...L.WEEKLY]) {
+    assert.ok(d.hint && d.hint.length > 20, `подсказка у ${d.code}`);
+    for (const s of [d.title, d.hint]) assert.ok(en.includes(JSON.stringify(s) + ':'), `нет перевода: ${s}`);
+  }
 });
 
 test('первые шаги и уведомления', async () => {
@@ -231,6 +242,42 @@ test('полка: что начислить и что списать', () => {
   assert.equal(d.metrics.cats, 0);
   // правка уже оценённого — ничего нового
   assert.deepEqual(shelfDiff([review], [{ ...review, total: 9 }]).give, []);
+});
+
+test('тир-лист засчитывается, когда в нём впервые 8 карточек, а не только при первом сохранении', async () => {
+  const { tierDone, TIER_MIN } = L;
+  const t = (n) => ({ items: Object.fromEntries(Array.from({ length: n }, (_, i) => ['i' + i, { id: 'i' + i, name: 'К' + i }])) });
+  assert.equal(TIER_MIN, 8);
+  assert.equal(tierDone(null, t(8)), true); // сразу 8 — как раньше
+  assert.equal(tierDone(null, t(1)), false); // страница отправила тир-лист с первой карточкой
+  assert.equal(tierDone(t(3), t(10)), true); // …и потом он вырос — теперь засчитывается
+  assert.equal(tierDone(t(7), t(8)), true);
+  assert.equal(tierDone(t(8), t(12)), false); // правка уже засчитанного — нет
+  assert.equal(tierDone(t(10), t(5)), false);
+  // один тир-лист — один раз: убрал карточки и добавил снова — опыта больше нет, даже после удаления
+  const env = envOf();
+  const a = await award(env, 'u1', 'tier', 'tl1', { now: NOON });
+  assert.ok(a.gained >= RULES.tier.xp); // вместе с ним может прийти и первый шаг «Первый тир-лист»
+  assert.equal(await award(env, 'u1', 'tier', 'tl1', { now: NOON + 60e3 }), null);
+  await revoke(env, 'u1', 'tier', 'tl1');
+  assert.equal(await award(env, 'u1', 'tier', 'tl1', { now: NOON + 120e3 }), null);
+});
+
+// то, что обещают подсказки заданий в «Прогрессе» (DAILY.hint): поменялось правило — поправь подсказку
+test('полка: правила из подсказок заданий', () => {
+  const kinds = (o, n) => shelfDiff(o, n).give.map((x) => x.kind).sort();
+  const old = { id: 'o', status: 'Пройдено', scores: [{ v: 7 }, { v: 8 }], total: 7.5 };
+  // отзыв: «Плюсы», «Минусы» и «Заметки» вместе от 100 знаков, можно дописать к старой оценке
+  assert.deepEqual(kinds([old], [{ ...old, pros: 'п'.repeat(40), cons: 'м'.repeat(30), note: 'з'.repeat(30) }]), ['review']);
+  assert.deepEqual(kinds([old], [{ ...old, pros: 'п'.repeat(40), cons: 'м'.repeat(30), note: 'з'.repeat(29) }]), []);
+  // оценка с обложкой: баллы хотя бы по двум критериям и фото, можно дополнить старую
+  assert.deepEqual(kinds([old], [{ ...old, photo: { url: 'https://a/b.jpg' } }]), ['rate_full']);
+  const one = { id: 'one', status: 'Пройдено', scores: [{ v: 7 }], total: 7, photo: { url: 'https://a/b.jpg' } };
+  assert.deepEqual(kinds([], [one]), ['rate']);
+  // «В планах» без баллов — ещё не оценка, оценили его — и новая оценка, и «из планов»
+  const plan = { id: 'pl', status: 'В планах', scores: [], total: null };
+  assert.deepEqual(kinds([], [plan]), []);
+  assert.deepEqual(kinds([plan], [{ ...plan, status: 'Пройдено', scores: [{ v: 9 }], total: 9 }]), ['plan_done', 'rate']);
 });
 
 test('опыт за прошлое: строки как у живых действий, повтор ничего не удваивает', async () => {
