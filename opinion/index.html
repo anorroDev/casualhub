@@ -1127,6 +1127,11 @@ details[open] .chev { transform: rotate(180deg); }
 .btn.ib.fav.on path { fill: currentColor; }
 .confirm-q { flex: 1 1 100%; font-size: 13.5px; font-weight: 600; overflow-wrap: anywhere; }
 .no-match { margin-top: 16px; color: var(--ink-2); font-size: 14px; }
+/* «Недавние» ничего не оставили (свой список и у друзей): котик, когда была последняя оценка, «за месяц» и «все» */
+.re-text { display: grid; gap: 4px; text-wrap: pretty; }
+.re-text strong { color: var(--ink); font-size: 15px; }
+.re-text span { overflow-wrap: anywhere; }
+.re-acts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; margin-top: 14px; }
 @media (max-width: 440px) {
   .spark { display: none; }
   .sum { grid-template-columns: 26px minmax(0, 1fr) auto 16px; gap: 10px; }
@@ -1739,6 +1744,13 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
                 </div>
               </div>
               <div>
+                <span class="label" id="recentLabel">Недавние</span>
+                <div class="lvl-chips" id="recentChips" role="group" aria-labelledby="recentLabel">
+                  <button type="button" class="sub-chip" data-recent="7" aria-pressed="false" title="Оценки, поставленные или изменённые за последние 7 дней">За неделю</button>
+                  <button type="button" class="sub-chip" data-recent="30" aria-pressed="false" title="Оценки, поставленные или изменённые за последние 30 дней">За месяц</button>
+                </div>
+              </div>
+              <div>
                 <span class="label">Только с баллом</span>
                 <div class="lvl-chips">
                   <button type="button" class="sub-chip" data-sfilter="master" aria-pressed="false">8.5+ шедевры</button>
@@ -1780,6 +1792,7 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
         <ol class="board-list" id="board" hidden></ol>
         <div class="tier-board" id="tierBoard" hidden></div>
         <p class="no-match" id="noMatch" hidden>Ничего не нашлось.</p>
+        <div class="no-match" id="recentEmpty" hidden></div>
         <div class="empty" id="empty">
           <img class="empty-art" src="/art/empty-rate.webp" width="140" height="70" alt="" loading="lazy" decoding="async">
           <div class="ghost-rows" aria-hidden="true">

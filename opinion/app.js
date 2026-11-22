@@ -1272,7 +1272,7 @@ const el = {
   favBtn: $('favBtn'), statusChips: $('statusChips'), meta: $('itemMeta'),
   pros: $('itemPros'), cons: $('itemCons'),
   tabStats: $('tabStats'), panelStats: $('panelStats'), statsContent: $('statsContent'),
-  layoutGroup: $('layoutGroup'), subFilters: $('subFilters'), randomBtn: $('randomBtn'),
+  layoutGroup: $('layoutGroup'), subFilters: $('subFilters'), randomBtn: $('randomBtn'), recentEmpty: $('recentEmpty'),
   tierBoard: $('tierBoard'),
   optPc: $('optPc'), optPcWrap: $('optPcWrap'),
   compareModal: $('compareModal'), cmpClose: $('cmpClose'), cmpClearBtn: $('cmpClearBtn'), cmpBody: $('cmpBody')
@@ -1289,6 +1289,7 @@ const state = {
   cats: clone(STARTERS),
   editCat: false, catDelConfirm: false, catAsk: null,
   sort: 'score', filter: 'all', sfilter: 'all', bmode: 'list', query: '',
+  recent: 0, // «Недавние»: только оценки, поставленные или изменённые за столько дней (0 — все)
   cmpIds: [],
   open: new Set(), confirmDel: null, flashId: null, saving: false,
   exportOpts: { desc: true, pc: true, notes: true, photo: true },
@@ -1323,7 +1324,7 @@ let drag = null;
 let pendingFocus = null;
 // рейтинг рисуется порциями: сотни оценок разом подвешивают телефон при каждой сортировке и поиске
 const BOARD_PAGE = 60;
-let boardLimit = BOARD_PAGE, boardSel = '';
+let boardLimit = BOARD_PAGE, boardSel = '', recentHTML = '';
 let ready = Promise.resolve();
 
 function currentCat() { return state.cats.find(c => c.id === form.cat) || null; }
@@ -2257,6 +2258,32 @@ function groups() {
   });
 }
 const stamp = r => String(r.updatedAt || r.createdAt || '');
+// «Недавние»: оценка поставлена или изменена за последние state.recent дней. «В избранное» и «Кто видит» сдвигают дату
+// всего на секунду — недавней оценку не делают. Те же проверки берёт friends.js для оценок друзей
+const RECENT = { 7: 'За неделю', 30: 'За месяц' };
+const recentDays = v => (v === 7 || v === 30 ? v : 0);
+const stampTime = r => +new Date(stamp(r)) || 0;
+const isRecent = (r, days) => { const t = stampTime(r); return t > 0 && Date.now() - t <= days * 864e5; };
+const recentOk = r => !state.recent || isRecent(r, state.recent);
+function setRecent(days) {
+  state.recent = recentDays(days);
+  state.pinId = null;
+  savePrefs(); renderBoard();
+}
+// пусто из-за «Недавних», а без них оценки есть (base): какая была последней и что показать вместо.
+// Только строчные элементы — friends.js ставит это же в <p> под оценками друзей
+function recentEmptyHTML(base) {
+  let last = null;
+  for (const r of base) if (stampTime(r) && (!last || stampTime(r) > stampTime(last))) last = r;
+  const d = last ? new Date(stampTime(last)) : null;
+  const when = d ? d.toLocaleDateString('ru-RU', d.getFullYear() === new Date().getFullYear() ? { day: 'numeric', month: 'long' } : { day: 'numeric', month: 'long', year: 'numeric' }).replace(/\s*г\.$/, '') : '';
+  const month = state.recent < 30 && base.some(r => isRecent(r, 30));
+  return window.CasualUtil.emptyArt('rate')
+    + `<span class="re-text"><strong>${RECENT[state.recent] || RECENT[7]} нет новых или изменённых оценок</strong>`
+    + (last ? `<span>Последняя — «${esc(String(last.name || ''))}», ${esc(when)}</span>` : '') + '</span>'
+    + '<span class="re-acts">' + (month ? '<button type="button" class="btn small ghost" data-recent="30">Показать за месяц</button>' : '')
+    + '<button type="button" class="btn small primary" data-recent="0">Показать все</button></span>';
+}
 function byScore(a, b) { return (b.total == null ? -1 : b.total) - (a.total == null ? -1 : a.total) || stamp(b).localeCompare(stamp(a)); }
 function sortList(list) {
   const a = [...list];
@@ -2489,34 +2516,37 @@ function renderBoard() {
     const parts = [
       { date: 'новые', name: 'А–Я' }[state.sort],
       { master: '8.5+', good: '7.5+', mid: '5–7.4', bad: 'до 5', done: 'завершено', plan: 'в планах', doing: 'в процессе', drop: 'брошено' }[state.sfilter],
+      // коротко: на телефоне «Фильтры · за неделю» уже не влезала в строку рядом с «Кто видит»
+      state.recent ? `${state.recent} ${plural(state.recent, 'день', 'дня', 'дней')}` : '',
       state.genres.length ? (state.genres.length === 1 ? state.genres[0] : 'жанров: ' + state.genres.length) : '',
     ].filter(Boolean);
     moreHint.textContent = parts.length ? ' · ' + parts.join(' · ') : '';
   }
+  const recentBox = document.getElementById('recentChips');
+  if (recentBox) recentBox.querySelectorAll('[data-recent]').forEach(b => b.setAttribute('aria-pressed', String(+b.dataset.recent === state.recent)));
   const catPool = state.filter === 'all' ? state.ratings : state.ratings.filter(r => catKey(r) === state.filter);
   const subPool = applySubFilter(catPool);
+  // «Недавние» — до жанров: в окне «Фильтры» у жанров счёт среди недавних
+  const recPool = state.recent ? subPool.filter(recentOk) : subPool;
   // жанры — раздел в окне «Фильтры»
   const gSec = document.getElementById('genreSec'), gBox = document.getElementById('genreChips');
   if (gSec && gBox) {
-    const g = genreChipsHTML(subPool);
+    const g = genreChipsHTML(recPool);
     gSec.hidden = !g.any;
     gBox.innerHTML = g.html;
   }
-  const pool = subPool.filter(hasGenres);
+  const pool = recPool.filter(hasGenres);
   const rated = pool.filter(r => r.total != null);
   const avg = rated.length ? round1(rated.reduce((a, r) => a + r.total, 0) / rated.length) : null;
   el.boardStat.textContent = !state.loaded ? 'Загружаю рейтинг…'
     : !state.ratings.length ? 'Пока ни одной оценки'
-    : `${pool.length} ${plural(pool.length, 'оценка', 'оценки', 'оценок')}` + (avg != null ? ` · средний балл ${fmt(avg)}` : '');
+    : (RECENT[state.recent] ? RECENT[state.recent] + ': ' : '') + `${pool.length} ${plural(pool.length, 'оценка', 'оценки', 'оценок')}` + (avg != null ? ` · средний балл ${fmt(avg)}` : '');
   el.searchWrap.hidden = state.ratings.length < 2;
   if (el.searchWrap.hidden && state.query) { state.query = ''; el.search.value = ''; }
   const q = keyOf(state.query);
+  const found = r => !q || [r.nameKey, keyOf(r.meta), keyOf(r.status), keyOf(r.note), keyOf(r.pros), keyOf(r.cons), keyOf(r.author && r.author.name)].join(' ').includes(q);
   const ranks = computeRanks(pool);
-  const list = sortList(pool).filter(r => {
-    if (!q) return true;
-    const hay = [r.nameKey, keyOf(r.meta), keyOf(r.status), keyOf(r.note), keyOf(r.pros), keyOf(r.cons), keyOf(r.author && r.author.name)].join(' ');
-    return hay.includes(q);
-  });
+  const list = sortList(pool).filter(found);
   if (state.pinId) { const i = list.findIndex(r => r.id === state.pinId); if (i > 0) list.unshift(...list.splice(i, 1)); }
   const showCat = state.filter === 'all' && showFilters;
   const isTiers = state.bmode === 'tiers';
@@ -2528,7 +2558,7 @@ function renderBoard() {
   } else {
     if (el.tierBoard) el.tierBoard.hidden = true;
     // другой отбор или порядок — снова первая порция
-    const sel = [state.filter, state.sfilter, state.sort, q, state.genres.join('\n'), state.bmode].join('|');
+    const sel = [state.filter, state.sfilter, state.recent, state.sort, q, state.genres.join('\n'), state.bmode].join('|');
     const newSel = sel !== boardSel;
     if (newSel) { boardSel = sel; boardLimit = BOARD_PAGE; }
     let lim = boardLimit;
@@ -2544,7 +2574,14 @@ function renderBoard() {
     el.board.hidden = !list.length;
     if (newSel) el.board.scrollTop = 0; // другой отбор — список снова с начала (он листается внутри карточки)
   }
-  el.noMatch.hidden = !((catPool.length > 0) && !list.length);
+  // пусто только из-за «Недавних» — говорим, когда была последняя оценка, и даём показать остальные, а не «Ничего не нашлось»
+  const recentGone = !!state.recent && !list.length && subPool.some(r => hasGenres(r) && found(r));
+  if (el.recentEmpty) {
+    const html = recentGone ? recentEmptyHTML(subPool.filter(r => hasGenres(r) && found(r))) : '';
+    if (html !== recentHTML) { el.recentEmpty.innerHTML = html; recentHTML = html; } // без перемен не перерисовываем: фокус на кнопке не теряется
+    el.recentEmpty.hidden = !recentGone;
+  }
+  el.noMatch.hidden = recentGone || !((catPool.length > 0) && !list.length);
   el.empty.hidden = state.ratings.length > 0;
   el.exampleBar.hidden = !(state.canWrite && state.ratings.some(r => r.example));
   el.mnavCount.textContent = state.ratings.length ? String(state.ratings.length) : '';
@@ -3357,6 +3394,7 @@ function loadPrefs() {
       if (Array.isArray(p.tierOpts.cats)) state.tierOpts.cats = p.tierOpts.cats.filter(x => typeof x === 'string').slice(0, 40);
     }
     if (p && typeof p.filter === 'string') state.filter = p.filter;
+    if (p) state.recent = recentDays(p.recent);
     if (p && p.exportOpts && typeof p.exportOpts === 'object') {
       for (const k of ['desc', 'pc', 'notes', 'photo']) if (typeof p.exportOpts[k] === 'boolean') state.exportOpts[k] = p.exportOpts[k];
     }
@@ -3369,7 +3407,7 @@ function savePrefs() {
   try {
     // настройки пишутся целиком, поэтому и тема: та, что сейчас на странице (ставит её /themes.js)
     localStorage.setItem(PREFS_KEY, JSON.stringify({
-      sort: state.sort, bmode: state.bmode, theme: window.CasualThemes.current(), filter: state.filter, exportOpts: state.exportOpts,
+      sort: state.sort, bmode: state.bmode, theme: window.CasualThemes.current(), filter: state.filter, recent: state.recent, exportOpts: state.exportOpts,
       statsView: state.statsView, tierOpts: state.tierOpts,
       view: state.view, logTab: state.logTab, section: state.section
     }));
@@ -5051,6 +5089,7 @@ function goToRating(id, quiet, noPin) {
   // оценка могла быть скрыта фильтром: «Друзья» вообще прячут свой рейтинг, а уровень и жанр — часть оценок
   if (!applySubFilter([r]).length || state.sfilter === 'mine') state.sfilter = 'all';
   if (!hasGenres(r)) state.genres = [];
+  if (!recentOk(r)) { state.recent = 0; savePrefs(); }
   state.open.add(id);
   state.flashId = id;
   if (!noPin) state.pinId = id; // открытая по ссылке оценка стоит первой в списке, пока не сменят сортировку
@@ -5748,6 +5787,16 @@ if (el.subFilters) {
     // повторное нажатие на уровень снимает фильтр
     state.sfilter = (state.sfilter === b.dataset.sfilter && b.closest('.lvl-chips')) ? 'all' : b.dataset.sfilter;
     renderBoard();
+  });
+  // «Недавние»: чипы в окне «Фильтры» (повторное нажатие снимает) и кнопки под пустым списком — своим и друзей
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('button[data-recent]');
+    if (!b) return;
+    const d = +b.dataset.recent, chip = !!b.closest('#recentChips');
+    setRecent(chip && d === state.recent ? 0 : d);
+    // кнопка пустого списка пропала вместе с ним: фокус — на первую оценку, чтобы с клавиатуры не терять место
+    const first = !chip && document.querySelector('#board:not([hidden]) .entry summary, #friendBoard:not([hidden]) .entry summary');
+    if (first) first.focus({ preventScroll: true });
   });
   // меню «Вид и фильтры» закрывается кликом мимо, по Esc и после случайной оценки
   const boardMore = document.getElementById('boardMore');

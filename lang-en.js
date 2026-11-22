@@ -3455,7 +3455,15 @@
 "На выбывание или один победитель с одной прокрутки, шансы у всех равные. Своя музыка, стикеры в центре и лоты по ссылке: друзья предлагают, колесо выбирает":"Elimination or a single winner from one spin, equal odds for everyone. Your own music, stickers in the center and lots by link: friends suggest, the wheel decides",
 // сбор лотов: пустой список и подсказка «Настройки лотов»
 "Друзья предлагают игры или фильмы, а колесо выбирает одно. Открой сбор по ссылке ведущего или собери свой":"Friends suggest games or films, and the wheel picks one. Open a collection from the host’s link or start your own",
-"Нажми на лот: «Остаётся» — продержится до последнего, «Вылетает» — выпадет раньше других. Видят только админы":"Tap a lot: “Stays” — it lasts until the end, “Out” — it drops out before the others. Only admins see this"};
+"Нажми на лот: «Остаётся» — продержится до последнего, «Вылетает» — выпадет раньше других. Видят только админы":"Tap a lot: “Stays” — it lasts until the end, “Out” — it drops out before the others. Only admins see this",
+// Мнение: «Недавние» в окне «Фильтры» и пустой список под ними («За неделю», «За месяц» — выше, у Колеса)
+"Недавние":"Recent",
+"Оценки, поставленные или изменённые за последние {} дней":"Ratings added or edited in the last {} days",
+"За неделю нет новых или изменённых оценок":"No new or edited ratings in the past week",
+"За месяц нет новых или изменённых оценок":"No new or edited ratings in the past month",
+"Последняя — «{}», {}":"Latest: “{}”, {}",
+"Показать за месяц":"Show the past month",
+"Показать все":"Show all"};
   // слово после числа: 1 оценка, 5 оценок. [все русские формы, одна штука, несколько]
   const NOUNS = [
     [['рофлан', 'рофлана', 'рофланов', 'рофланы'], 'Soul', 'Souls'],

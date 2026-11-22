@@ -853,6 +853,7 @@ ${ICON.chev}
     el.board.hidden = true;
     if (el.tierBoard) el.tierBoard.hidden = true;
     el.noMatch.hidden = true;
+    if (el.recentEmpty) el.recentEmpty.hidden = true; // у друзей пустые «Недавние» — в fnote
     el.empty.hidden = true;
     el.exampleBar.hidden = true;
     if (!F.me) {
@@ -879,14 +880,14 @@ ${ICON.chev}
       return;
     }
     const q = keyOf(state.query || '');
-    const list = shelf.ratings
-      .filter((r) => !q || keyOf([r.name, r.meta, r.note, r.catLabel].join(' ')).includes(q))
+    const found = shelf.ratings.filter((r) => !q || keyOf([r.name, r.meta, r.note, r.catLabel].join(' ')).includes(q));
+    const list = found.filter(recentOk) // «Недавние» из окна «Фильтры» действуют и на оценки друзей
       .sort((a, b) => state.sort === 'name' ? String(a.name).localeCompare(String(b.name), 'ru')
         : state.sort === 'date' ? (stampSafe(b) - stampSafe(a))
         : ((b.total ?? -1) - (a.total ?? -1)));
     const rated = shelf.ratings.filter((r) => r.total != null);
     const avg = rated.length ? Math.round(rated.reduce((s, r) => s + r.total, 0) / rated.length * 10) / 10 : null;
-    el.boardStat.textContent = `${shelf.user.username}${shelf.user.handle ? ' @' + shelf.user.handle : ''}: ${shelf.ratings.length} ${plural(shelf.ratings.length, 'оценка', 'оценки', 'оценок')}` + (avg != null ? ` · средний балл ${fmt(avg)}` : '');
+    el.boardStat.textContent = `${shelf.user.username}${shelf.user.handle ? ' @' + shelf.user.handle : ''}: ${shelf.ratings.length} ${plural(shelf.ratings.length, 'оценка', 'оценки', 'оценок')}` + (avg != null ? ` · средний балл ${fmt(avg)}` : '') + recentStat(shelf.ratings);
     fboard.classList.toggle('grid-mode', state.bmode === 'grid');
     fboard.innerHTML = list.map((r, i) => friendEntryHTML(r, i + 1, F.view)).join('');
     // въезжают только при первом открытии доски этого друга, а не при каждом символе в поиске
@@ -895,7 +896,12 @@ ${ICON.chev}
     hydratePhotos(fboard);
     fboard.hidden = !list.length;
     fnote.hidden = !!list.length;
-    fnote.textContent = shelf.ratings.length ? 'Ничего не нашлось.' : `${shelf.user.username} пока ничего не оценил.`;
+    if (!list.length && state.recent && found.length) fnote.innerHTML = recentEmptyHTML(found);
+    else fnote.textContent = shelf.ratings.length ? 'Ничего не нашлось.' : `${shelf.user.username} пока ничего не оценил.`;
+  }
+  // «Недавние» включены: сколько из этих оценок за неделю (за месяц)
+  function recentStat(rs) {
+    return RECENT[state.recent] ? ` · ${RECENT[state.recent].toLowerCase()}: ${rs.filter(recentOk).length}` : '';
   }
 
   // все друзья сразу: общая лента, у каждой оценки видно, чья она
@@ -917,13 +923,14 @@ ${ICON.chev}
     const q = keyOf(state.query || '');
     const all = [];
     ready.forEach((f) => (F.shelves.get(f.id).ratings || []).forEach((r) => all.push({ r, uid: f.id, who: f.username })));
-    const list = all.filter(({ r }) => !q || keyOf([r.name, r.meta, r.note, r.catLabel].join(' ')).includes(q))
+    const found = all.filter(({ r }) => !q || keyOf([r.name, r.meta, r.note, r.catLabel].join(' ')).includes(q));
+    const list = found.filter(({ r }) => recentOk(r))
       .sort((a, b) => state.sort === 'name' ? String(a.r.name).localeCompare(String(b.r.name), 'ru')
         : state.sort === 'date' ? (stampSafe(b.r) - stampSafe(a.r))
         : ((b.r.total ?? -1) - (a.r.total ?? -1)));
     const rated = all.filter(({ r }) => r.total != null);
     const avg = rated.length ? Math.round(rated.reduce((s, x) => s + x.r.total, 0) / rated.length * 10) / 10 : null;
-    el.boardStat.textContent = `Друзья: ${all.length} ${plural(all.length, 'оценка', 'оценки', 'оценок')}` + (avg != null ? ` · средний балл ${fmt(avg)}` : '');
+    el.boardStat.textContent = `Друзья: ${all.length} ${plural(all.length, 'оценка', 'оценки', 'оценок')}` + (avg != null ? ` · средний балл ${fmt(avg)}` : '') + recentStat(all.map((x) => x.r));
     fboard.classList.toggle('grid-mode', state.bmode === 'grid');
     fboard.innerHTML = list.map((x, i) => friendEntryHTML(x.r, i + 1, x.uid, x.who)).join('');
     if (F.animated === 'all') fboard.querySelectorAll('.fr-in').forEach((li) => li.classList.remove('fr-in'));
@@ -931,7 +938,8 @@ ${ICON.chev}
     hydratePhotos(fboard);
     fboard.hidden = !list.length;
     fnote.hidden = !!list.length;
-    fnote.textContent = all.length ? 'Ничего не нашлось.' : 'Друзья пока ничего не оценили.';
+    if (!list.length && state.recent && found.length) fnote.innerHTML = recentEmptyHTML(found.map((x) => x.r));
+    else fnote.textContent = all.length ? 'Ничего не нашлось.' : 'Друзья пока ничего не оценили.';
   }
 
   // ветка комментариев под оценкой (comments.js): место под неё есть у каждой оценки — своей и друга,
