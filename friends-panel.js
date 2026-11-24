@@ -24,7 +24,7 @@
 
   const css = document.createElement('style');
   css.textContent = `
-.fp-ava { position: relative; flex: none; width: 44px; height: 44px; padding: 2px; border-radius: 50%; background: conic-gradient(from 210deg, var(--good, #2EAD60), var(--mid, #EAA92C), var(--bad, #E4553F), var(--accent, #3550E8), var(--good, #2EAD60)); }
+.fp-ava { --s: 44px; position: relative; flex: none; width: var(--s); height: var(--s); padding: 2px; border-radius: 50%; background: conic-gradient(from 210deg, var(--good, #2EAD60), var(--mid, #EAA92C), var(--bad, #E4553F), var(--accent, #3550E8), var(--good, #2EAD60)); }
 .fp-ava > span { display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%; border: 2px solid var(--panel-2, var(--panel, #1b1d24)); background-position: center; background-size: cover; color: #fff; font-weight: 800; font-size: 16px; line-height: 1; }
 .fp-ava > span.img { color: transparent; }
 .fp-ava .on-dot { position: absolute; right: 0; bottom: 1px; width: 11px; height: 11px; box-shadow: 0 0 0 2px var(--panel-2, var(--panel, #1b1d24)); }
@@ -37,8 +37,16 @@
 .fr-sug { display: flex; align-items: center; gap: 10px; width: 100%; padding: 6px 10px 6px 6px; border: 1px solid var(--line, #2b2e38); border-radius: 12px; background: var(--panel-2, var(--panel, #23262f)); color: var(--ink, #f3f4f6); font: inherit; text-align: left; cursor: pointer; transition: border-color .15s; }
 .fr-sug:hover:not(:disabled) { border-color: var(--accent, #3550E8); }
 .fr-sug:disabled { cursor: default; opacity: .7; }
-.fr-sug .fp-ava { width: 36px; height: 36px; }
+.fr-sug .fp-ava { --s: 36px; }
+/* у кого рамка — уровня (пиксельная, levels-ui.js: ::after шире аватара на 17–37%) или из магазина (кольца тенью до 8px) —
+   своё цветное кольцо не рисуем, а фото чуть меньше: рамка целиком помещается в место обычной аватарки и не лезет на края строки */
+.fp-ava[class*="sh-fr-"], .fp-ava[class*="lv-frame-"] { width: calc(var(--s) * .82); height: calc(var(--s) * .82); margin: calc(var(--s) * .09); padding: 0; background: none; }
+.fp-ava[class*="lv-frame-"] { width: calc(var(--s) * .76); height: calc(var(--s) * .76); margin: calc(var(--s) * .12); }
+.fp-ava.lv-frame-frame4 { width: calc(var(--s) * .7); height: calc(var(--s) * .7); margin: calc(var(--s) * .15); }
+.fp-ava.lv-frame-frame6 { width: calc(var(--s) * .6); height: calc(var(--s) * .6); margin: calc(var(--s) * .2); }
+.fp-ava[class*="sh-fr-"] > span, .fp-ava[class*="lv-frame-"] > span { border: 0; }
 .fr-sug > span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.fr-sug > .fp-ava { flex: none; min-width: 0; } /* аватарка — тоже span: без этого она растягивалась в овал на всю строку */
 .fr-sug b { font-weight: 700; }
 .fr-sug i { font-style: normal; font-weight: 600; color: var(--ink-3, #8b8f9c); margin-left: 6px; }
 .fr-sug em { flex: none; font-style: normal; font-size: 12.5px; font-weight: 700; color: var(--accent, #3550E8); }
