@@ -1469,8 +1469,42 @@
   addEventListener('focus', () => { if (me && Date.now() - lastPull > 30e3) runSync(true); });
 
   // ---------- адрес ----------
+  // «Тир-лист треков» из карточки альбома в Мнении: треки сразу по рядам по баллу (S от 9, A от 8, B от 7, C от 5, ниже — D)
+  async function albumList(albumId) {
+    let rs = readRatings();
+    if (!rs.some((r) => r.albumOf === albumId) && me) {
+      try { rs = ((await api('/shelf/' + encodeURIComponent(me))).ratings || []).filter((r) => r && r.id && r.name); } catch (e) {}
+    }
+    const album = rs.find((r) => r.id === albumId);
+    const tracks = rs.filter((r) => r.albumOf === albumId && typeof r.total === 'number').sort((a, b) => a.trackNo - b.trackNo);
+    history.replaceState(null, '', location.pathname);
+    if (!album || !tracks.length) { toast('У этого альбома пока нет оценённых треков.'); return route(); }
+    const title = str((album.title || album.name) + ' — треки', LIMIT.title);
+    // уже собирали: открываем тот же тир-лист и докладываем новые треки
+    const l = lists.find((x) => x.title === title) || newList(title);
+    const refs = tracks.map((r) => r.photo && r.photo.ref).filter(Boolean);
+    let stored = {};
+    if (refs.length && window.CasualPhotos) { try { stored = await window.CasualPhotos.getMany(refs); } catch (x) {} }
+    const at = (v) => (v >= 9 ? 0 : v >= 8 ? 1 : v >= 7 ? 2 : v >= 5 ? 3 : 4);
+    for (const r of tracks) {
+      const id = ratingItemId(r);
+      if (has(l.items, id)) continue;
+      let key = '';
+      try { key = await ratingCover(r, stored); } catch (x) {}
+      const name = str(r.title || r.name, LIMIT.name);
+      if (!addItem(l, key ? { id, kind: 'img', img: key, name } : { id, kind: 'text', name })) break;
+      const row = l.rows[Math.min(at(r.total), l.rows.length - 1)];
+      if (row) { l.pool = l.pool.filter((x) => x !== id); row.items.push(id); }
+    }
+    l.captions = true; // у треков одна обложка на всех: без подписей их не различить
+    touchList(l);
+    history.replaceState(null, '', '#' + ownHash(l.id));
+    return route();
+  }
   async function route() {
     const h = location.hash.slice(1);
+    const am = /^album=([\w.-]{1,80})$/.exec(h);
+    if (am) { await albumList(am[1]); return; }
     const fm = /^f=([^.]+)\.(\w+)$/.exec(h);
     if (fm && fm[1] !== me) {
       closeDialog();

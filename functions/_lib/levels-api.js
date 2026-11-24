@@ -16,7 +16,7 @@ import { planSeasonReminder, cancelSeasonReminder, seasonReminderOf, mailOn } fr
 
 // подписи для истории опыта
 export const KIND_LABEL = {
-  rate: 'Оценка', review: 'Отзыв', rate_full: 'Оценка целиком', plan_done: 'Оценено из «В планах»', import: 'Импорт из Letterboxd',
+  rate: 'Оценка', review: 'Отзыв', rate_full: 'Оценка целиком', plan_done: 'Оценено из «В планах»', album_full: 'Альбом по трекам', import: 'Импорт из Letterboxd',
   tier: 'Тир-лист', tier_share: 'Ссылка на тир-лист', react: 'Реакция другу', comment: 'Комментарий',
   got_react: 'Реакция на твою оценку', got_comment: 'Комментарий тебе', friend: 'Новый друг', lots_host: 'Сбор лотов до победителя',
   lot_add: 'Лот в чужой сбор', lot_win: 'Твой лот победил', visit: 'Заход на сайт', invite: 'Приглашение', quest: 'Задание дня',
@@ -210,7 +210,7 @@ export function makeLevelsRoutes(h) {
       const names = new Map();
       try { const d = JSON.parse((sh && sh.data) || '{}'); for (const r of (Array.isArray(d) ? d : d.ratings || [])) if (r && r.id) names.set(r.id, String(r.name || '').slice(0, 80)); } catch (e) {}
       const items = (results || []).map((r) => ({
-        what: KIND_LABEL[r.kind] || r.kind, name: ['rate', 'review', 'rate_full', 'plan_done', 'import'].includes(r.kind) ? names.get(r.ref) || '' : '',
+        what: KIND_LABEL[r.kind] || r.kind, name: ['rate', 'review', 'rate_full', 'plan_done', 'album_full', 'import'].includes(r.kind) ? names.get(r.ref) || '' : '',
         xp: +r.xp || 0, at: +r.at || 0, gone: !!r.gone,
       }));
       return json({ items });

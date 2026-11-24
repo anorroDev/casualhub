@@ -681,3 +681,17 @@ test('задания дня: одна бесплатная замена в де�
     assert.equal((await L.swapQuest(env, 'u1', 'rate2', { now: NOON + DAY, today: tomorrow })).status, 409);
   }
 });
+
+test('разбор альбома: засчитан, когда каждый трек оценён или пропущен и оценена половина; удаление альбома списывает', () => {
+  const sc = (v) => [{ id: 'trk-score', name: 'Оценка трека', v }];
+  const album = { id: 'rA', name: 'X — Y', status: 'Альбом', trackCount: 4, skip: [4], scores: [], total: null };
+  const t = (n, v) => ({ id: 'rt' + n, name: 'X — t' + n, status: 'Трек', albumOf: 'rA', trackNo: n, scores: sc(v), total: v });
+  const two = [album, t(1, 8), t(2, 6)];
+  assert.equal(L.shelfDiff([], two).give.filter((g) => g.kind === 'album_full').length, 0, 'два из четырёх и один пропуск — ещё не целиком');
+  const three = [...two, t(3, 9)];
+  assert.deepEqual(L.shelfDiff(two, three).give.filter((g) => g.kind === 'album_full'), [{ kind: 'album_full', ref: 'rA' }]);
+  assert.equal(L.shelfDiff(three, three).give.filter((g) => g.kind === 'album_full').length, 0, 'повторное сохранение не даёт ещё раз');
+  const halfSkip = [{ ...album, skip: [2, 3, 4] }, t(1, 7)];
+  assert.equal(L.albumsFull(halfSkip).size, 0, 'пропустить почти всё нельзя: оценить нужно хотя бы половину');
+  assert.ok(L.shelfDiff(three, three.filter((r) => r.id !== 'rA')).take.some((x) => x.kind === 'album_full' && x.ref === 'rA'));
+});

@@ -1,0 +1,115 @@
+/* «Разбор альбома» (opinion/album.js): кнопка в форме, карточка альбома в рейтинге и окно прослушки */
+.alb-go { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin: 8px 0 4px; }
+.alb-go span { font-size: 12.5px; color: var(--ink-3); line-height: 1.4; flex: 1 1 220px; }
+
+/* ---------- карточка альбома ---------- */
+.alb-card { margin: 0 0 14px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2, var(--panel)); }
+.alb-empty { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; }
+.alb-empty p { margin: 0; flex: 1 1 220px; font-size: 13.5px; color: var(--ink-2); }
+.alb-head { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.alb-head b { font-family: var(--font-display); font-size: 19px; letter-spacing: .01em; }
+.alb-head span { font-size: 12.5px; color: var(--ink-3); }
+.alb-curve { display: block; width: 100%; height: auto; margin: 6px 0 2px; overflow: visible; }
+.alb-curve.big { max-height: 210px; }
+.alb-grid { stroke: var(--line); stroke-width: .6; }
+.alb-avg { stroke: var(--ink-3); stroke-width: .8; stroke-dasharray: 3 3; }
+.alb-line { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }
+.alb-fl { fill: none; stroke: var(--c); stroke-width: 1.5; stroke-dasharray: 4 3; stroke-linejoin: round; opacity: .9; }
+.alb-dot { fill: var(--tier); stroke: var(--panel); stroke-width: 1.2; }
+.alb-tk { fill: var(--ink-3); font-size: 8.5px; text-anchor: middle; font-family: var(--font-display); }
+.alb-lab { fill: var(--ink-2); font-size: 8.5px; text-anchor: middle; }
+.alb-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 2px 0 6px; font-size: 12px; color: var(--ink-3); }
+.alb-legend span::before { content: ''; display: inline-block; width: 12px; height: 2px; margin-right: 5px; vertical-align: middle; background: var(--c); }
+.alb-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; }
+.alb-chip { font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); color: var(--ink-2); }
+.alb-chip[data-k="good"] { border-color: color-mix(in srgb, var(--good) 55%, transparent); color: var(--good); }
+.alb-chip[data-k="mid"] { border-color: color-mix(in srgb, var(--mid) 55%, transparent); color: var(--mid); }
+.alb-chip[data-k="bad"] { border-color: color-mix(in srgb, var(--bad) 55%, transparent); color: var(--bad-ink, var(--bad)); }
+.alb-chip[data-k="friend"] { border-color: color-mix(in srgb, var(--c) 60%, transparent); }
+.alb-acts { display: flex; flex-wrap: wrap; gap: 6px; }
+.alb-acts a { text-decoration: none; }
+.alb-list { margin-top: 8px; }
+.alb-list summary { cursor: pointer; font-size: 13px; color: var(--ink-2); width: max-content; }
+.alb-list ol { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
+.alb-list li button { width: 100%; display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 6px 8px; border: 0; border-radius: 8px; background: none; color: var(--ink); font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; }
+.alb-list li button:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.alb-list li button:disabled { cursor: default; }
+.alb-n { color: var(--ink-3); font-family: var(--font-display); font-size: 16px; text-align: right; }
+.alb-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.alb-t small { font-size: 11px; color: var(--ink-3); margin-left: 4px; }
+.alb-list .badge { min-width: 34px; }
+.alb-from { margin: 0 0 10px; font-size: 13px; color: var(--ink-3); }
+.linkish { border: 0; background: none; padding: 0; font: inherit; color: var(--accent); cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+
+/* ---------- окно прослушки ---------- */
+.alb-ov { position: fixed; inset: 0; z-index: 900; display: grid; place-items: center; padding: 16px; background: rgba(5, 7, 12, .72); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px); }
+.alb-box { width: min(620px, 100%); max-height: calc(var(--dvh, 1vh) * 100 - 32px); overflow: auto; overscroll-behavior: contain; padding: 18px 20px 16px; border: 1px solid var(--line); border-radius: 18px; background: var(--panel); color: var(--ink); transition: opacity .2s, transform .2s; }
+.alb-box.flip { opacity: .35; transform: translateX(-10px); }
+.alb-load { display: grid; justify-items: center; gap: 14px; padding: 30px 10px; text-align: center; color: var(--ink-2); }
+.alb-load p { margin: 0; max-width: 40ch; }
+.alb-top { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.alb-at { flex: 1; min-width: 0; display: grid; }
+.alb-at b { font-family: var(--font-display); font-size: 22px; line-height: 1.05; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.alb-at small { font-size: 12.5px; color: var(--ink-3); }
+.alb-x { flex: none; width: 36px; height: 36px; border-radius: 50%; border: 1px solid var(--line); background: none; color: var(--ink); font-size: 15px; cursor: pointer; }
+.alb-stage { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 18px; align-items: center; }
+/* пластинка: обложка в центре, крутится, пока играет отрывок */
+.alb-vinyl { position: relative; width: 150px; aspect-ratio: 1; border-radius: 50%; }
+.alb-disc { position: absolute; inset: 0; border-radius: 50%; background: repeating-radial-gradient(circle at 50% 50%, #0b0c10 0 2px, #17191f 2px 4px); box-shadow: inset 0 0 0 2px #24262e; }
+.alb-load .alb-disc { position: relative; display: block; width: 72px; height: 72px; }
+.alb-vinyl img { position: absolute; inset: 27%; width: 46%; height: 46%; border-radius: 50%; object-fit: cover; }
+.alb-hole { position: absolute; inset: 47%; border-radius: 50%; background: var(--panel); }
+.alb-vinyl.on, .alb-disc.spin { animation: alb-spin 3.2s linear infinite; }
+@keyframes alb-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .alb-vinyl.on, .alb-disc.spin { animation: none; } .alb-box { transition: none; } }
+.alb-now { display: grid; gap: 4px; min-width: 0; }
+.alb-now > small { font-size: 12.5px; color: var(--ink-3); }
+.alb-title { font-family: var(--font-display); font-size: 30px; line-height: 1.02; overflow-wrap: anywhere; }
+.alb-feat { font-size: 13px; color: var(--ink-2); }
+.alb-play { display: flex; align-items: center; gap: 10px; margin-top: 8px; font-size: 12.5px; color: var(--ink-3); }
+.alb-pp { flex: none; width: 40px; height: 40px; border-radius: 50%; border: 0; background: var(--accent); color: var(--on-accent, #fff); font-size: 14px; cursor: pointer; }
+.alb-time { flex: 1; height: 4px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.alb-time i { display: block; height: 100%; background: var(--ink-2); }
+.alb-noprev { flex: 1; }
+/* шкала 1–10 — те же цвета, что у оценок */
+.alb-scale { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 4px; margin: 18px 0 10px; }
+.alb-scale button, .alb-mini button { height: 44px; border: 0; border-radius: 8px; background: color-mix(in srgb, var(--tier) 28%, var(--panel)); color: var(--ink); font-family: var(--font-display); font-size: 21px; cursor: pointer; transition: background .12s, transform .12s; }
+.alb-scale button:hover, .alb-mini button:hover { background: color-mix(in srgb, var(--tier) 55%, var(--panel)); }
+.alb-scale button[aria-pressed="true"], .alb-mini button[aria-pressed="true"] { background: var(--tier); color: var(--on-tier, #0D0F14); }
+.alb-scale button:active { transform: scale(.94); }
+.alb-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.alb-tags button { padding: 5px 11px; border-radius: 999px; border: 1px solid var(--line); background: none; color: var(--ink-2); font: inherit; font-size: 12.5px; cursor: pointer; }
+.alb-tags button[aria-pressed="true"] { border-color: var(--accent); color: var(--ink); background: color-mix(in srgb, var(--accent) 16%, transparent); }
+.alb-crit { display: grid; gap: 8px; margin-top: 12px; padding: 10px; border: 1px solid var(--line); border-radius: 12px; }
+.alb-cr { display: grid; gap: 4px; font-size: 12.5px; color: var(--ink-2); }
+.alb-mini { display: grid; grid-template-columns: repeat(10, minmax(0, 1fr)); gap: 3px; }
+.alb-mini button { height: 30px; font-size: 16px; }
+.alb-crit .btn { justify-self: start; }
+.alb-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
+.alb-row a { text-decoration: none; }
+/* полоса треков: столбик растёт с баллом — кардиограмма собирается на глазах */
+.alb-strip { display: flex; gap: 3px; height: 54px; margin-top: 14px; align-items: stretch; }
+.alb-bar { flex: 1 1 0; min-width: 6px; display: flex; align-items: flex-end; padding: 0; border: 0; border-radius: 4px; background: color-mix(in srgb, var(--ink) 6%, transparent); cursor: pointer; }
+.alb-bar i { display: block; width: 100%; height: var(--h); border-radius: 4px; background: var(--tier); transition: height .25s; }
+.alb-bar[data-tier="none"] i { background: color-mix(in srgb, var(--ink) 14%, transparent); }
+.alb-bar.sk i { background: repeating-linear-gradient(135deg, var(--line) 0 3px, transparent 3px 6px); height: 100%; }
+.alb-bar.cur { outline: 2px solid var(--accent); outline-offset: 1px; }
+.alb-keys { margin: 10px 0 0; font-size: 11.5px; color: var(--ink-3); }
+@media (pointer: coarse) { .alb-keys { display: none; } }
+.alb-sum { display: flex; gap: 16px; align-items: center; margin-bottom: 6px; }
+.alb-sumart { width: 110px; height: 110px; border-radius: 10px; object-fit: cover; flex: none; }
+.alb-big { margin: 0; font-family: var(--font-display); font-size: 64px; line-height: .9; display: grid; }
+.alb-big small { font-family: inherit; font-size: 14px; color: var(--ink-3); }
+.alb-best { margin: 6px 0 0; font-size: 13.5px; color: var(--ink-2); }
+@media (max-width: 480px) {
+  .alb-ov { padding: 0; align-items: end; }
+  .alb-box { border-radius: 18px 18px 0 0; max-height: calc(var(--dvh, 1vh) * 100); padding: 14px 14px 18px; }
+  .alb-stage { grid-template-columns: 96px minmax(0, 1fr); gap: 12px; }
+  .alb-vinyl { width: 96px; }
+  .alb-title { font-size: 24px; }
+  .alb-scale { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .alb-scale button { height: 46px; }
+  .alb-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .alb-row .btn { justify-content: center; }
+  .alb-sumart { width: 80px; height: 80px; }
+}

@@ -98,6 +98,7 @@ export const RULES = {
   review: { xp: 5, day: 5 }, // отзыв: плюсы, минусы и заметки оценки вместе от 100 знаков (textLen)
   rate_full: { xp: 3, day: 8 }, // оценка заполнена целиком: баллы по 2+ критериям и обложка
   plan_done: { xp: 5, day: 5 }, // оценил то, что было «В планах»
+  album_full: { xp: 20, day: 3 }, // разобрал альбом по трекам целиком (albumsFull); сами треки — обычные оценки rate
   import: { xp: 1, ever: 100 }, // оценка из импорта (Letterboxd)
   tier: { xp: 25, day: 2 }, // в тир-листе впервые набралось 8 элементов (tierDone)
   tier_share: { xp: 5, day: 1 }, // поделился тир-листом
@@ -129,7 +130,7 @@ export const RULES = {
   ach: { given: true }, // ступень достижения (achXp), ref — «код:ступень»
 };
 // что считается «сделал что-то за день» для серии: всё, кроме простого захода и наград
-const ACTIVE = new Set(['rate', 'review', 'rate_full', 'plan_done', 'import', 'tier', 'tier_share', 'react', 'comment', 'friend', 'lots_host', 'lot_add']);
+const ACTIVE = new Set(['rate', 'review', 'rate_full', 'plan_done', 'album_full', 'import', 'tier', 'tier_share', 'react', 'comment', 'friend', 'lots_host', 'lot_add']);
 export const STREAK_BONUS = { 7: 30, 30: 150, 100: 500 };
 
 // ---------- достижения ----------
@@ -143,6 +144,7 @@ export const ACHIEVEMENTS = [
   { code: 'reviewer', title: 'Рецензент', desc: 'Отзывы к оценкам: плюсы, минусы и заметки вместе от 100 знаков', metric: 'review', tiers: [5, 25, 100] },
   { code: 'riddler', title: 'Отгадчик', desc: 'Отгаданные загадки дня', metric: 'riddle', tiers: [5, 25, 100] },
   { code: 'omnivore', title: 'Всеядный', desc: 'Оценки в разных категориях', metric: '@cats', tiers: [3, 5, 8] },
+  { code: 'fullalbum', title: 'Полное прослушивание', desc: 'Альбомы, разобранные по трекам целиком', metric: 'album_full', tiers: [1, 10, 50] },
   { code: 'finisher', title: 'Довёл до конца', desc: 'Оценил то, что было «В планах»', metric: 'plan_done', tiers: [5, 25, 100] },
   { code: 'moved', title: 'Переезд', desc: 'Перенёс оценки из Letterboxd', metric: 'import', tiers: [1] },
   { code: 'tiermaker', title: 'Тир-лист-мейкер', desc: 'Тир-листы', metric: 'tier', tiers: [1, 10, 30] },
@@ -189,6 +191,7 @@ export const DAILY = [
 ];
 export const WEEKLY = [
   { code: 'tier1', title: 'Собери тир-лист', hint: 'В Тир-листах: засчитается, как только в тир-листе наберётся 8 карточек', kinds: ['tier'], goal: 1 },
+  { code: 'album1', title: 'Разбери альбом по трекам', hint: 'В Мнении выбери альбом и нажми «Разобрать по трекам». Каждый трек нужно оценить или пропустить, оценить — хотя бы половину', kinds: ['album_full'], goal: 1 },
   { code: 'rate10', title: '10 новых оценок за неделю', hint: 'В Мнении поставь баллы новому с понедельника по воскресенье. Правка уже оценённого не считается', kinds: ['rate', 'import'], goal: 10 },
   { code: 'social10', title: '10 реакций и комментариев друзьям', hint: 'Под оценками и тир-листами друзей, в любом сочетании. Комментарий — от 10 знаков', kinds: ['react', 'comment'], goal: 10, need: 'friends' },
   { code: 'host1', title: 'Проведи сбор лотов до победителя', hint: 'Колесо → «Лоты по ссылке»: открой сбор и дай друзьям ссылку. Лоты должны добавить хотя бы три человека, а колесо — докрутиться до победителя', kinds: ['lots_host'], goal: 1, need: 'friends' },
@@ -1153,6 +1156,26 @@ export const isScored = (r) => !!r && r.total != null && Number.isFinite(+r.tota
 export const textLen = (r) => [r.note, r.pros, r.cons].map((x) => String(x || '').trim().length).reduce((a, b) => a + b, 0);
 const isFull = (r) => isScored(r) && r.scores.length >= 2 && r.scores.every((s) => +s.v > 0) && !!r.photo;
 const stamp = (r) => +new Date(r.createdAt || r.updatedAt || 0) || 0;
+// «Разбор альбома»: у оценки альбома trackCount — сколько треков, skip — номера пропущенных; треки — оценки с albumOf и trackNo.
+// Альбом разобран целиком, когда каждый трек оценён или пропущен и оценена хотя бы половина (подсказка задания album1)
+export const ALBUM_MIN = 3;
+export function albumsFull(list) {
+  const rated = new Map();
+  for (const r of list) {
+    if (!r || typeof r.albumOf !== 'string' || !isScored(r) || !Number.isInteger(+r.trackNo)) continue;
+    if (!rated.has(r.albumOf)) rated.set(r.albumOf, new Set());
+    rated.get(r.albumOf).add(+r.trackNo);
+  }
+  const full = new Set();
+  for (const r of list) {
+    const n = Math.round(+(r && r.trackCount) || 0);
+    if (!r || r.example || typeof r.id !== 'string' || n < ALBUM_MIN || n > 60) continue;
+    const got = [...(rated.get(r.id) || [])].filter((x) => x >= 1 && x <= n);
+    const skipped = new Set((Array.isArray(r.skip) ? r.skip : []).map(Number).filter((x) => Number.isInteger(x) && x >= 1 && x <= n && !got.includes(x)));
+    if (got.length + skipped.size >= n && got.length >= Math.ceil(n / 2)) full.add(r.id);
+  }
+  return full;
+}
 // сравнить полку «было / стало»: что начислить и что списать. oldList и newList — списки оценок.
 export function shelfDiff(oldList, newList) {
   const before = new Map((oldList || []).filter((r) => r && typeof r.id === 'string').map((r) => [r.id, r]));
@@ -1170,7 +1193,9 @@ export function shelfDiff(oldList, newList) {
       if (isFull(r) && !(o && isFull(o))) give.push({ kind: 'rate_full', ref: id });
     }
   }
-  for (const [id] of before) if (!after.has(id)) for (const kind of ['rate', 'import', 'review', 'rate_full', 'plan_done']) take.push({ kind, ref: id });
+  const fullBefore = albumsFull([...before.values()]);
+  for (const id of albumsFull([...after.values()])) if (!fullBefore.has(id)) give.push({ kind: 'album_full', ref: id });
+  for (const [id] of before) if (!after.has(id)) for (const kind of ['rate', 'import', 'review', 'rate_full', 'plan_done', 'album_full']) take.push({ kind, ref: id });
   const scored = [...after.values()].filter((r) => !r.example && isScored(r));
   const metrics = { cats: new Set(scored.map((r) => r.cat || r.catName).filter(Boolean)).size, strict: scored.filter((r) => +r.total <= 2).length };
   return { give, take, metrics };

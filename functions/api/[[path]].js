@@ -4,6 +4,7 @@
 import { clip, numOrNull, SAFE_URL, cleanRating, readShelf, stampOf, RID_RE, SPOOF_RE, MUSIC_LINK_RE } from '../_lib/shelf.js';
 import { computeRecs, seedSig, titleKey } from '../_lib/recs.js';
 import { imdbLookup } from '../_lib/imdb.js';
+import { albumTracks, friendsAlbum } from '../_lib/album.js';
 import { NOTES } from '../_lib/admin-changes.js';
 import { LOT_NAME, MAX_LOTS, STICKER_RE, cleanLive, LIVE_OWNER, liveBusy, liveLots, spinLive, resetLive, stopAuto, settledLive, liveTx, liveView } from '../_lib/lots-live.js';
 import { ONLINE_MS, GUEST_RE, onlineCount, friendsAndIncoming, touchUsers, touchGuests } from '../_lib/presence.js';
@@ -2013,6 +2014,19 @@ const routes = {
     const q = (sp.get('q') || '').trim().slice(0, 100);
     if (q.length < 2) return json({ items: [] });
     return json({ items: await musicSearch(env, q, sp.get('kind') === 'album') });
+  },
+  // «Разбор альбома»: треклист с отрывками (functions/_lib/album.js)
+  async 'GET /music/album'({ request, me }) {
+    if (burst('malbum:' + me.id, 30, 60e3)) return tooMany(1);
+    const sp = new URL(request.url).searchParams;
+    const a = await albumTracks({ src: sp.get('src'), link: sp.get('link'), artist: sp.get('artist'), title: sp.get('title') }).catch(() => null);
+    return json({ album: a });
+  },
+  // тот же альбом, разобранный друзьями: их баллы по номерам треков
+  async 'GET /music/album-friends'({ env, request, me }) {
+    if (burst('malbumf:' + me.id, 30, 60e3)) return tooMany(1);
+    const name = String(new URL(request.url).searchParams.get('name') || '').slice(0, 160);
+    return json({ items: await friendsAlbum(env, me, name) });
   },
   // ---------- реакции: друг ставит 🔥 / 💀 / «не согласен» и может оставить короткий комментарий ----------
   async 'PUT /react/:uid/:rid'({ env, request, me, arg }) {

@@ -105,6 +105,11 @@ const CAT_TEMPLATES = [
 const MAX_CATS = 24;
 // оценка из Letterboxd, ещё не переоценённая по критериям: один балл «Оценка с Letterboxd»
 const LB_SCORE = 'lb-score';
+// «Разбор альбома» (opinion/album.js): трек оценивают одним баллом — он хранится как критерий «Оценка трека»
+const TRK_SCORE = 'trk-score';
+const trkOnly = (r) => !!r && Array.isArray(r.scores) && r.scores.length > 0 && r.scores.every(s => s.id === TRK_SCORE);
+// поля разбора: у трека — albumOf и trackNo, у альбома — trackCount, skip (пропущенные номера) и albumSrc (откуда треклист)
+const ALBUM_KEYS = ['albumOf', 'trackNo', 'trackCount', 'skip', 'albumSrc'];
 const lbOnly = (r) => !!r && Array.isArray(r.scores) && r.scores.length > 0 && r.scores.every(s => s.id === LB_SCORE);
 const fromLb = (r) => !!r && (r.src === 'letterboxd' || (Array.isArray(r.scores) && r.scores.some(s => s.id === LB_SCORE)));
 const MAX_CRIT = 15;
@@ -1584,6 +1589,7 @@ function fitStatus(v) {
   const t = String(v || '').trim();
   if (!t) return '';
   const set = statusSet();
+  if (t === 'Трек' && set === STATUS_SETS.music) return t;
   const swap = set === STATUS_SETS.movie ? t.replace('Завершено', 'Просмотрено') : t.replace('Просмотрено', 'Завершено');
   return set.some(([k]) => swap.includes(k)) ? swap : '';
 }
@@ -1610,6 +1616,7 @@ function renderStatusSet() {
   // статус по умолчанию под категорию: «Завершено» у фильма — «Просмотрено», у музыки — пусто (там «Сингл / Альбом»)
   if (!form.editingId && form.status) form.status = fitStatus(form.status);
   box.querySelectorAll('button[data-status]').forEach(b => b.setAttribute('aria-pressed', String(!!form.status && b.dataset.status === form.status.trim())));
+  if (window.CasualAlbum) window.CasualAlbum.formHint(); // «Разобрать по трекам» — у альбома
 }
 
 /* ---------- Исполнители (музыка) ---------- */
@@ -2355,7 +2362,7 @@ function entryHTML(r, rank, showCat) {
   const ib = (act, icon, label, on, cls) => `<button type="button" class="btn small ghost ib${cls ? ' ' + cls : ''}${on ? ' on' : ''}" data-act="${act}" title="${label}" aria-label="${label}"${on != null ? ` aria-pressed="${!!on}"` : ''}>${icon}</button>`;
   const actions = confirming
     ? `<span class="confirm-q">Удалить «${esc(r.name)}» из рейтинга?</span><button type="button" class="btn small danger-solid" data-act="del-yes">Удалить</button><button type="button" class="btn small ghost" data-act="del-no">Отмена</button>`
-    : (state.canWrite ? `<span class="e-main-acts">${/В планах/.test(r.status || '') && r.total == null ? `<button type="button" class="btn small primary act-edit" data-act="rate">${ICON.star}Оценить</button>` : `<button type="button" class="btn small primary act-edit" data-act="edit">${ICON.edit}Изменить</button>`}<button type="button" class="btn small act-del" data-act="del">${ICON.trash}Удалить</button></span>` : '')
+    : (state.canWrite ? `<span class="e-main-acts">${(/В планах/.test(r.status || '') || r.trackCount) && r.total == null ? `<button type="button" class="btn small primary act-edit" data-act="rate">${ICON.star}Оценить</button>` : `<button type="button" class="btn small primary act-edit" data-act="edit">${ICON.edit}Изменить</button>`}<button type="button" class="btn small act-del" data-act="del">${ICON.trash}Удалить</button></span>` : '')
       + '<span class="e-icons">'
       + (state.canWrite ? ib('fav-card', ICON.star, r.fav ? 'Убрать из избранного' : 'В избранное', r.fav, 'fav') : '')
       + ib('cmp', ICON.scale, inCmp ? 'Выбрано для сравнения' : 'Сравнить', inCmp)
@@ -2376,6 +2383,7 @@ function entryHTML(r, rank, showCat) {
 ${ICON.chev}
 </span></summary>
 <div class="e-body">
+${window.CasualAlbum ? window.CasualAlbum.cardHTML(r) : ''}
 ${pUrl ? `<img class="e-photo" data-photo="body"${adultAttr(r)} src="${esc(pUrl)}" alt="Фото: ${esc(r.name)}" loading="lazy" decoding="async"${r.photo.w && r.photo.h ? ` width="${r.photo.w}" height="${r.photo.h}"` : ''}>` : ''}
 <ul class="bd">${bd}</ul>
 ${listenHTML(r)}
@@ -2468,7 +2476,9 @@ function unifyCats() {
     let c = byName.get(k);
     if (!c) {
       if (state.cats.length >= MAX_CATS) continue;
-      const crit = r.scores.slice(0, MAX_CRIT).map(x => ({ id: x.id, name: x.name, desc: x.desc || '' }));
+      // трек из «Разбора альбома» пришёл раньше своей категории: её критерии — из шаблона, а не одна «Оценка трека»
+      const tpl = trkOnly(r) ? allTemplates().find(t => keyOf(t.name) === k) : null;
+      const crit = tpl ? tplCriteria(tpl, r.cat) : trkOnly(r) ? [] : r.scores.slice(0, MAX_CRIT).map(x => ({ id: x.id, name: x.name, desc: x.desc || '' }));
       c = { id: r.cat, name: String(r.catName).slice(0, 40), criteria: crit.length ? crit : NEW_CAT_CRITERIA.map(x => ({ id: newId('c'), name: x.name, desc: x.desc })) };
       state.cats.push(c); byId.set(c.id, c); byName.set(k, c);
       cats = true;
@@ -2545,8 +2555,10 @@ function renderBoard() {
   if (el.searchWrap.hidden && state.query) { state.query = ''; el.search.value = ''; }
   const q = keyOf(state.query);
   const found = r => !q || [r.nameKey, keyOf(r.meta), keyOf(r.status), keyOf(r.note), keyOf(r.pros), keyOf(r.cons), keyOf(r.author && r.author.name)].join(' ').includes(q);
-  const ranks = computeRanks(pool);
-  const list = sortList(pool).filter(found);
+  const folded = window.CasualAlbum && !q ? window.CasualAlbum.folded(pool) : null;
+  const shown = folded ? pool.filter(r => !folded.has(r.id)) : pool;
+  const ranks = computeRanks(shown);
+  const list = sortList(shown).filter(found);
   if (state.pinId) { const i = list.findIndex(r => r.id === state.pinId); if (i > 0) list.unshift(...list.splice(i, 1)); }
   const showCat = state.filter === 'all' && showFilters;
   const isTiers = state.bmode === 'tiers';
@@ -2672,7 +2684,7 @@ function loadIntoForm(r, opts) {
     if (s.w && s.w !== 1) form.weights[s.id] = s.w;
     if (!ids.has(s.id)) form.extra.push({ id: s.id, name: s.name, desc: s.desc || '' });
   }
-  form.ownOnly = !!cat && r.scores.length > 0 && !r.scores.some(s => ids.has(s.id)) && !lbOnly(r);
+  form.ownOnly = !!cat && r.scores.length > 0 && !r.scores.some(s => ids.has(s.id)) && !lbOnly(r) && !trkOnly(r);
   state.editCat = false;
   state.catDelConfirm = false;
   renderForm();
@@ -2708,7 +2720,8 @@ function repairOverwrittenCats() {
   if (healed) { saveLocalCats(); saveLocalRatings(); }
   const byId = new Map(state.cats.map(c => [c.id, c]));
   const broken = state.ratings.filter(r => {
-    if (r.example || !r.scores || !r.scores.length || lbOnly(r)) return false;
+    // балл Letterboxd и балл трека из «Разбора альбома» — свои отдельные критерии, а не следы перезаписанной категории
+    if (r.example || !r.scores || !r.scores.length || lbOnly(r) || trkOnly(r)) return false;
     const cat = byId.get(r.cat);
     if (!cat) return false;
     const ids = new Set(cat.criteria.map(k => k.id));
@@ -2896,7 +2909,8 @@ async function deleteCategory(id) {
   toast(n ? `Категория «${gone ? gone.name : ''}» удалена вместе с ${n} ${plural(n, 'оценкой', 'оценками', 'оценками')}` : `Категория «${gone ? gone.name : ''}» удалена`);
 }
 
-async function save() {
+async function save(opts) {
+  const breakdown = !!(opts && opts.breakdown);
   if (state.saving) return;
   if (!state.canWrite) { toast('Сохранять оценки здесь может только владелец страницы'); return; }
   if (state.editCat) toggleEditCat();
@@ -2909,8 +2923,10 @@ async function save() {
   let scores = collectScores(rows);
   // переоценили фильм из Letterboxd по критериям: его общий балл больше не нужен
   if (scores.some(s => s.id !== LB_SCORE)) scores = scores.filter(s => s.id !== LB_SCORE);
+  // так же балл трека из разбора: оценил трек по критериям — он больше не нужен
+  if (scores.some(s => s.id !== TRK_SCORE)) scores = scores.filter(s => s.id !== TRK_SCORE);
   const t = totalOf(scores);
-  if (t == null && !noScoreOk(form.status)) {
+  if (t == null && !noScoreOk(form.status) && !breakdown) {
     el.total.classList.remove('nudge'); void el.total.offsetWidth; el.total.classList.add('nudge');
     toast('Оцени хотя бы один критерий или отметь «В планах»');
     return;
@@ -2939,6 +2955,7 @@ async function save() {
   };
   if (fromLb(target)) doc.src = 'letterboxd'; // значок Letterboxd остаётся и после переоценки
   if (target && target.lbName) doc.lbName = target.lbName;
+  if (target) for (const k of ALBUM_KEYS) if (target[k] != null) doc[k] = target[k];
   if (artist) {
     doc.artist = artist;
     doc.title = title;
@@ -2969,6 +2986,7 @@ async function save() {
     const oldId = target && target.photo ? target.photo.id : null;
     if (oldId && (!photo || photo.id !== oldId)) dropAsset(oldId);
     resetForm(form.cat);
+    if (breakdown && window.CasualAlbum) { window.CasualAlbum.open(id); return; }
     toast(`${target ? 'Оценка обновлена' : 'Сохранено'}: ${name}${t != null ? ', ' + fmt(t) : ''}`);
     if (isNarrow()) showSaved(id);
     setTimeout(() => { if (state.flashId === id) state.flashId = null; }, 2000);
@@ -3140,6 +3158,12 @@ function normalizeRating(id, d) {
     ...(d.src === 'letterboxd' ? { src: 'letterboxd' } : {}),
     ...(str(d.lbName).trim() ? { lbName: str(d.lbName).slice(0, 140) } : {}), // название в Letterboxd, если оценку переименовали
     ...(str(d.artist).trim() ? { artist: str(d.artist).slice(0, 80), title: str(d.title).slice(0, 140), artistAva: str(d.artistAva).slice(0, 40) } : {}),
+    ...(/^[\w.-]{1,80}$/.test(str(d.albumOf)) && +d.trackNo >= 1 ? { albumOf: d.albumOf, trackNo: clampInt(d.trackNo, 1, 99) } : {}),
+    ...(+d.trackCount >= 2 ? {
+      trackCount: clampInt(d.trackCount, 2, 60),
+      skip: [...new Set((Array.isArray(d.skip) ? d.skip : []).map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= 60))],
+      ...(/^(dz|it):\d{1,15}$/.test(str(d.albumSrc)) ? { albumSrc: d.albumSrc } : {})
+    } : {}),
     createdAt: str(d.createdAt), updatedAt: str(d.updatedAt)
   };
 }
