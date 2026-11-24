@@ -693,14 +693,19 @@
         <div class="adm-ann-row"><button type="button" class="btn primary" id="admMailTest"${d.on ? '' : ' disabled'}>Отправить тестовое письмо себе${d.to ? ' (' + esc(d.to) + ')' : ''}</button></div>
         <p class="adm-err" id="admMailMsg" role="status"></p>
         <div class="adm-lv-ev"><h3 class="h3">Рассылка «Что нового»</h3>
-          <p class="muted">Письмо всем с подтверждённой почтой, кроме заблокированных и отписавшихся: сейчас это ${mo.eligible} ${plural(mo.eligible, 'человек', 'человека', 'человек')}. Уходит пачками, не больше ${mo.cap} писем за сутки (у бесплатного Resend 100 в день на все письма, остальное оставляем кодам входа); за последние сутки ушло ${mo.sent24}. В каждом письме — ссылка «Отписаться». То же письмо появится во «внутренней» почте уровней.</p>
+          <p class="muted">Письмо всем с подтверждённой почтой, кроме заблокированных и отписавшихся: сейчас это ${mo.eligible} ${plural(mo.eligible, 'человек', 'человека', 'человек')}${mo.langs ? ` (письма по-украински — у ${mo.langs.uk}, по-английски — у ${mo.langs.en}; нет их версии — им уйдёт русская)` : ''}. Уходит пачками, не больше ${mo.cap} писем за сутки (у бесплатного Resend 100 в день на все письма, остальное оставляем кодам входа); за последние сутки ушло ${mo.sent24}. В каждом письме — ссылка «Отписаться». То же письмо появится во «внутренней» почте уровней.</p>
           ${curBox}
           ${(mo.planned || []).length ? `<p class="muted">Запланировано: ${mo.planned.map((p) => `«${esc(p.subject)}» — ${esc(when(p.startAt))}`).join(', ')}.</p>` : ''}
           <div class="adm-ann-row"><button type="button" class="btn ghost" id="moFill">Подставить из «Что нового»</button></div>
           <input id="moSubject" maxlength="120" placeholder="Тема письма" aria-label="Тема письма" value="${esc(dr.subject || '')}">
           <textarea id="moTeaser" maxlength="500" rows="2" placeholder="Пара слов, чтобы захотелось зайти" aria-label="Текст под заголовком">${esc(dr.teaser || '')}</textarea>
           <textarea id="moItems" rows="6" placeholder="Что нового — 3–6 пунктов, по одному в строке: Заголовок — короткий текст" aria-label="Пункты">${esc(dr.items || '')}</textarea>
-          <details class="adm-lv-hist"><summary>Английская версия — для тех, у кого сайт на английском</summary>
+          <details class="adm-lv-hist"><summary>Украинская версия — для тех, у кого письма на украинском</summary>
+            <input id="moSubjectUk" maxlength="120" placeholder="Тема листа" aria-label="Тема письма по-украински" value="${esc(dr.subjectUk || '')}">
+            <textarea id="moTeaserUk" maxlength="500" rows="2" placeholder="Кілька слів, щоб захотілося зайти" aria-label="Текст под заголовком по-украински">${esc(dr.teaserUk || '')}</textarea>
+            <textarea id="moItemsUk" rows="6" placeholder="3–6 пунктів, по одному в рядку: Заголовок — короткий текст" aria-label="Пункты по-украински">${esc(dr.itemsUk || '')}</textarea>
+          </details>
+          <details class="adm-lv-hist"><summary>Английская версия — для тех, у кого письма на английском</summary>
             <input id="moSubjectEn" maxlength="120" placeholder="Subject" aria-label="Subject" value="${esc(dr.subjectEn || '')}">
             <textarea id="moTeaserEn" maxlength="500" rows="2" placeholder="A couple of words to make people curious" aria-label="Teaser">${esc(dr.teaserEn || '')}</textarea>
             <textarea id="moItemsEn" rows="6" placeholder="3–6 items, one per line: Title — short text" aria-label="Items">${esc(dr.itemsEn || '')}</textarea>
@@ -723,13 +728,15 @@
       const moMsg = $('#moMsg');
       const val = (id) => $('#' + id).value.trim();
       const saveDraft = () => {
-        try { localStorage.setItem(MO_DRAFT, JSON.stringify({ subject: val('moSubject'), teaser: val('moTeaser'), items: $('#moItems').value, subjectEn: val('moSubjectEn'), teaserEn: val('moTeaserEn'), itemsEn: $('#moItemsEn').value, link: val('moLink') })); } catch (e) {}
+        try {
+          localStorage.setItem(MO_DRAFT, JSON.stringify({ subject: val('moSubject'), teaser: val('moTeaser'), items: $('#moItems').value, subjectUk: val('moSubjectUk'), teaserUk: val('moTeaserUk'), itemsUk: $('#moItemsUk').value,
+            subjectEn: val('moSubjectEn'), teaserEn: val('moTeaserEn'), itemsEn: $('#moItemsEn').value, link: val('moLink') }));
+        } catch (e) {}
       };
-      sec().querySelectorAll('#moSubject, #moTeaser, #moItems, #moSubjectEn, #moTeaserEn, #moItemsEn, #moLink').forEach((n) => n.addEventListener('input', saveDraft));
-      const content = () => {
-        const en = val('moSubjectEn') && moItems($('#moItemsEn').value).length ? { subject: val('moSubjectEn'), teaser: val('moTeaserEn'), items: moItems($('#moItemsEn').value) } : null;
-        return { ru: { subject: val('moSubject'), teaser: val('moTeaser'), items: moItems($('#moItems').value) }, en, link: val('moLink') };
-      };
+      sec().querySelectorAll('#moSubject, #moTeaser, #moItems, #moSubjectUk, #moTeaserUk, #moItemsUk, #moSubjectEn, #moTeaserEn, #moItemsEn, #moLink').forEach((n) => n.addEventListener('input', saveDraft));
+      // украинская и английская версии — только если у них есть тема и пункты; иначе этим людям уйдёт русская
+      const part = (sfx) => (val('moSubject' + sfx) && moItems($('#moItems' + sfx).value).length ? { subject: val('moSubject' + sfx), teaser: val('moTeaser' + sfx), items: moItems($('#moItems' + sfx).value) } : null);
+      const content = () => ({ ru: { subject: val('moSubject'), teaser: val('moTeaser'), items: moItems($('#moItems').value) }, uk: part('Uk'), en: part('En'), link: val('moLink') });
       const ready = (c) => {
         if (!c.ru.subject) return 'Нужна тема письма.';
         if (c.ru.items.length < 3) return 'Нужно хотя бы 3 пункта, что нового (по одному в строке).';
@@ -739,10 +746,15 @@
         const b = e.currentTarget;
         b.disabled = true; moMsg.textContent = 'Беру из «Что нового»…';
         try {
-          const [ru, en] = await Promise.all([moFromLog('whatsnew'), moFromLog('whatsnew-en').catch(() => null)]);
+          const [ru, uk, en] = await Promise.all([moFromLog('whatsnew'), moFromLog('whatsnew-uk').catch(() => null), moFromLog('whatsnew-en').catch(() => null)]);
           $('#moSubject').value = ru.subject;
           if (!val('moTeaser')) $('#moTeaser').value = 'Мы обновили Казуал Хаб — вот главное:';
           $('#moItems').value = moLines(ru.items);
+          if (uk) {
+            $('#moSubjectUk').value = uk.subject;
+            if (!val('moTeaserUk')) $('#moTeaserUk').value = 'Ми оновили Казуал Хаб — ось головне:';
+            $('#moItemsUk').value = moLines(uk.items);
+          }
           if (en) {
             $('#moSubjectEn').value = en.subject;
             if (!val('moTeaserEn')) $('#moTeaserEn').value = 'We’ve updated Casual Hub — here are the highlights:';
@@ -759,15 +771,18 @@
         b.disabled = true; moMsg.textContent = 'Отправляю себе…';
         try {
           const r = await call('POST', '/admin/mailout/test', { content: c });
-          moMsg.textContent = `Ушло на ${r.to}${r.n > 1 ? ' (русское и английское)' : ''}. Проверь, как выглядит, в том числе в тёмной теме почты.`;
+          const names = (r.langs || ['ru']).map((l) => ({ ru: 'русское', uk: 'украинское', en: 'английское' })[l]);
+          moMsg.textContent = `Ушло на ${r.to}${names.length > 1 ? ` (${names.slice(0, -1).join(', ')} и ${names[names.length - 1]})` : ''}. Проверь, как выглядит, в том числе в тёмной теме почты.`;
         } catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else moMsg.textContent = x.message; }
         b.disabled = false;
       });
       $('#moSend').addEventListener('click', async () => {
         const c = content(), bad = ready(c);
         if (bad) { moMsg.textContent = bad; return; }
+        const L = mo.langs || {};
+        const miss = [L.uk && !c.uk ? `${L.uk} с письмами по-украински` : '', L.en && !c.en ? `${L.en} с письмами по-английски` : ''].filter(Boolean);
         const ok = await dialog({ icon: '✉', title: 'Разослать письмо всем?', who: c.ru.subject,
-          text: `Получат ${mo.eligible} ${plural(mo.eligible, 'человек', 'человека', 'человек')}. За сутки уйдёт не больше ${mo.cap} писем, остальные — в следующие дни. Отменить отправленное нельзя.`,
+          text: `Получат ${mo.eligible} ${plural(mo.eligible, 'человек', 'человека', 'человек')}.${miss.length ? ` Своей версии нет — русское письмо получат ${miss.join(' и ')}.` : ''} За сутки уйдёт не больше ${mo.cap} писем, остальные — в следующие дни. Отменить отправленное нельзя.`,
           button: 'Разослать', submit: () => call('POST', '/admin/mailout', { content: c }) });
         if (ok) { try { localStorage.removeItem(MO_DRAFT); } catch (e) {} mail(); }
       });

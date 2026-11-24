@@ -203,6 +203,7 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
   let box = null, card = null, cur = 'account', me = null, toastT = 0, mailOn = false;
   fetch(API + '/auth/options', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : {})).then((o) => { mailOn = !!(o && o.mail); }).catch(() => {});
   const $ = (s) => box.querySelector(s);
+  const $$ = (s) => [...box.querySelectorAll(s)];
   const narrow = () => matchMedia('(max-width: 719px)').matches;
   function toast(t) {
     const n = $('.st-toast');
@@ -334,6 +335,10 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
   }
 
   // ---------- разделы ----------
+  // языки — для «Язык сайта» и «Язык писем»: флаг перед названием, название — на самом языке (не переводится)
+  const LANGS = [['ru', 'Русский'], ['uk', 'Українська'], ['en', 'English']];
+  const langBtns = (attr, cur, off) => LANGS.map(([id, name]) => `<button type="button" ${attr}="${id}" lang="${id}" aria-pressed="${cur === id}"${off ? ' disabled' : ''}><img class="st-flag" src="/art/flag/${id}.svg" width="18" height="12" alt="" decoding="async">${name}</button>`).join('');
+  const MAIL_LANG_AUTO = 'Как язык сайта, пока не выберешь другой', MAIL_LANG_PICKED = 'Письма придут на этом языке, даже если сменить язык сайта';
   const R = {};
   R.account = () => {
     const u = user();
@@ -447,7 +452,7 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
       + (window.CasualUtil.size ? grp('Размер', sizeRow()) : '')
       // выбор скинов Васяна рисует сам vasyan.js в [data-vasyan-skins]
       + (window.CasualVasyan && window.CasualVasyan.own() ? grp('Котик Васян', toggle({ name: 'Котик Васян на сайте', desc: 'Гуляет внизу экрана: его можно погладить и покормить из миски в левом углу', attr: 'data-vasyan', on: window.CasualVasyan.on() }) + '<div data-vasyan-skins></div>') : '')
-      + grp('Язык', `<div class="st-row st-langrow"><span class="st-t"><b>Язык сайта</b><small>Страница перезагрузится</small></span><span class="st-seg st-lang" role="group" aria-label="Язык сайта">${[['ru', 'Русский'], ['uk', 'Українська'], ['en', 'English']].map(([id, name]) => `<button type="button" data-lang="${id}" lang="${id}" aria-pressed="${lang === id}"><img class="st-flag" src="/art/flag/${id}.svg" width="18" height="12" alt="" decoding="async">${name}</button>`).join('')}</span></div>`);
+      + grp('Язык', `<div class="st-row st-langrow"><span class="st-t"><b>Язык сайта</b><small>Страница перезагрузится</small></span><span class="st-seg st-lang" role="group" aria-label="Язык сайта">${langBtns('data-lang', lang)}</span></div>`);
   };
   R.data = () => grp('Импорт', row({ name: 'Импорт из Letterboxd', desc: 'Перенести оценки фильмов из архива Letterboxd', href: '/opinion/#letterboxd', attr: 'data-lb-open data-close' }))
     + grp('Обложки и названия', row({ name: 'Обновить обложки и названия', desc: 'Подтянуть к сохранённым оценкам обложки, русские названия, год и жанры', href: '/opinion/#refresh', attr: 'data-refresh-open data-close' }))
@@ -459,7 +464,9 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
     return grp('Контент 18+', toggle({ name: 'Показывать обложки 18+', desc: 'Обложки из категории «Хентай» — без размытия. Выключено — они размыты, а подсказка при наведении объясняет почему. Только в этом браузере', attr: 'data-nsfw-set', on: nsfw.on() }))
       + grp('Примеры', toggle({ name: 'Показывать примеры', desc: 'Пример топа на главной и участники в пустом Колесе. Выключишь — они уберутся и больше не появятся', attr: 'data-examples', on: ex }))
       // письма об обновлениях (functions/_lib/mailout.js): состояние приходит с сервера — loadMailPrefs() после отрисовки
-      + (user() && token() ? grp('Письма', toggle({ name: 'Письма об обновлениях', desc: 'Когда на сайте выходит что-то новое — короткое письмо на подтверждённую почту. Отписаться можно и из самого письма', attr: 'data-mailnews disabled', on: false })) : '')
+      + (user() && token() ? grp('Письма', toggle({ name: 'Письма об обновлениях', desc: 'Когда на сайте выходит что-то новое — короткое письмо на подтверждённую почту. Отписаться можно и из самого письма', attr: 'data-mailnews disabled', on: false })
+        // язык писем (mail_prefs.lang_pick): пока не выбран — как язык сайта; кнопки оживит loadMailPrefs()
+        + `<div class="st-row st-langrow"><span class="st-t"><b>Язык писем</b><small data-maillang-note>${MAIL_LANG_AUTO}</small></span><span class="st-seg st-lang" role="group" aria-label="Язык писем">${langBtns('data-maillang', '', true)}</span></div>`) : '')
       + grp('Подсказки', `<div class="st-row"><span class="st-t"><b>Показать подсказки снова</b><small>Окно «Впервые тут?» снова откроется на каждой странице при следующем заходе</small></span><button type="button" class="st-btn" data-do="howto">Показать</button></div>`);
   };
 
@@ -505,7 +512,14 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
       t.checked = !!p.news;
       t.disabled = !p.verified;
       if (!p.verified) { const d = t.closest('.st-row') && t.closest('.st-row').querySelector('small'); if (d) d.textContent = 'Письма приходят только на подтверждённую почту. Подтверди её в разделе «Безопасность».'; }
+      paintMailLang(p);
     } catch (e) { /* сервер без рассылки или нет связи: переключатель так и остаётся выключенным */ }
+  }
+  // «Язык писем»: на каком языке письма придут (lang) и выбран ли он здесь (pick) или взят с языка сайта
+  function paintMailLang(p) {
+    $$('[data-maillang]').forEach((b) => { b.setAttribute('aria-pressed', String(b.dataset.maillang === p.lang)); b.disabled = !p.verified; });
+    const n = $('[data-maillang-note]');
+    if (n) n.textContent = p.pick ? MAIL_LANG_PICKED : MAIL_LANG_AUTO;
   }
 
   function build() {
@@ -550,6 +564,18 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
       }
       const lang = e.target.closest('[data-lang]');
       if (lang && window.CasualLang && lang.getAttribute('aria-pressed') !== 'true') { window.CasualLang.set(lang.dataset.lang); return; }
+      // язык писем: нажатие закрепляет его, даже если он уже совпадал с языком сайта
+      const ml = e.target.closest('[data-maillang]');
+      if (ml && !ml.disabled) {
+        const btns = $$('[data-maillang]');
+        btns.forEach((b) => { b.disabled = true; });
+        try {
+          const r = await api('/mail/prefs', 'PUT', { lang: ml.dataset.maillang });
+          paintMailLang(r);
+          toast({ ru: 'Письма об обновлениях будут приходить по-русски', uk: 'Письма об обновлениях будут приходить по-украински', en: 'Письма об обновлениях будут приходить по-английски' }[r.lang]);
+        } catch (er) { btns.forEach((b) => { b.disabled = false; }); toast(er.message); }
+        return;
+      }
       const end = e.target.closest('[data-end]');
       if (end) {
         end.disabled = true;

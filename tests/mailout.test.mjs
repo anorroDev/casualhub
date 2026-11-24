@@ -41,6 +41,7 @@ const CONTENT = {
   en: { subject: 'Vasyan the cat and title seasons', teaser: 'We’ve updated Casual Hub:', items: [{ t: 'Title seasons', d: 'Titles are monthly now.' }, { t: 'Vasyan the cat', d: '' }, { t: 'Newsletter', d: '' }] },
   link: ORIGIN + '/#whatsnew',
 };
+const UK = { subject: 'Котик Васян і сезони звань', teaser: 'Ми оновили Казуал Хаб — ось головне:', items: [{ t: 'Сезони звань', d: 'Звання тепер за місяць.' }, { t: 'Котик Васян', d: '' }, { t: 'Розсилка', d: '' }] };
 // подменённый Resend: что отправили и что ответить
 function fakeResend(answer = () => ({ status: 200 })) {
   const calls = [];
@@ -218,7 +219,8 @@ test('отписка: ссылка с токеном, страница, «в о�
   assert.equal(q(env, "SELECT news FROM mail_prefs WHERE user_id = 'a'")[0].news, 0);
   assert.equal(await M.eligibleCount(env), 1);
   // переключатель в настройках
-  assert.deepEqual(await r['PUT /mail/prefs']({ env, request: { body: { news: true } }, me }), { ok: true, news: true });
+  const put = await r['PUT /mail/prefs']({ env, request: { body: { news: true } }, me });
+  assert.deepEqual({ ok: put.ok, news: put.news }, { ok: true, news: true });
   assert.equal((await r['GET /mail/prefs']({ env, request: {}, me })).news, true);
   assert.equal((await r['PUT /mail/prefs']({ env, request: { body: { news: 'да' } }, me })).status, 400);
 });
@@ -246,6 +248,71 @@ test('письмо: HTML и текст, кнопка, отписка, англи
   assert.equal(M.cleanContent({ ru: { ...CONTENT.ru, items: Array.from({ length: 9 }, (_, i) => ({ t: 'п' + i })) } }, ORIGIN).content.ru.items.length, 6);
 });
 
+test('язык писем: как язык сайта, пока не выбран в Настройках; выбор важнее; нет украинского текста — русский', async () => {
+  const env = envOf();
+  user(env, 'ua'); user(env, 'en'); user(env, 'pick'); user(env, 'ru');
+  await M.rememberLang(env, 'ua', 'uk');
+  await M.rememberLang(env, 'en', 'en');
+  await M.rememberLang(env, 'pick', 'en');
+  const { r } = routes();
+  const me = { id: 'pick', email: 'pick@mail.test', email_ok: 1 };
+  // сайт по-украински (кука casualhub_lang=uk) и язык писем не выбран — письма по-украински
+  const { r: rUk } = routes({ langOf: () => 'uk' });
+  assert.deepEqual((({ lang, pick }) => ({ lang, pick }))(await rUk['GET /mail/prefs']({ env, request: {}, me: { ...me, id: 'ua' } })), { lang: 'uk', pick: null });
+  // выбрал украинский — язык сайта больше не решает, даже когда /ping запишет другой
+  let p = await r['PUT /mail/prefs']({ env, request: { body: { lang: 'uk' } }, me });
+  assert.deepEqual({ ok: p.ok, lang: p.lang, pick: p.pick, news: p.news }, { ok: true, lang: 'uk', pick: 'uk', news: true });
+  await M.rememberLang(env, 'pick', 'ru');
+  p = await r['GET /mail/prefs']({ env, request: {}, me });
+  assert.deepEqual({ lang: p.lang, pick: p.pick }, { lang: 'uk', pick: 'uk' });
+  assert.equal((await r['PUT /mail/prefs']({ env, request: { body: { lang: 'de' } }, me })).status, 400);
+  assert.equal((await r['PUT /mail/prefs']({ env, request: { body: {} }, me })).status, 400);
+  // в админке видно, сколько получателей на каком языке
+  const st = await r['GET /admin/mailout']({ env, request: {}, me });
+  assert.deepEqual(st.langs, { ru: 1, uk: 2, en: 1 });
+  assert.equal(st.eligible, 4);
+  const fr = fakeResend();
+  try {
+    await M.createMailout(env, { content: M.cleanContent({ ...CONTENT, uk: UK }, ORIGIN).content, origin: ORIGIN, now: T0 });
+    await M.mailoutStep(env, { now: T0 });
+    let mails = Object.fromEntries(fr.calls[0].body.map((m) => [m.to[0], m]));
+    assert.equal(mails['ua@mail.test'].subject, UK.subject);
+    assert.equal(mails['pick@mail.test'].subject, UK.subject);
+    assert.ok(mails['ua@mail.test'].html.includes('lang="uk"') && mails['ua@mail.test'].html.includes('Подивитися, що нового'));
+    assert.ok(mails['ua@mail.test'].text.includes('Відписатися від листів про оновлення: ' + ORIGIN + '/api/mail/unsub?u=ua&t='));
+    assert.equal(mails['en@mail.test'].subject, CONTENT.en.subject);
+    assert.equal(mails['ru@mail.test'].subject, CONTENT.ru.subject);
+    // украинского текста нет — тем, у кого письма на украинском, русский
+    fr.calls.length = 0;
+    await M.createMailout(env, { content: CONTENT, origin: ORIGIN, now: T0 + DAY });
+    await M.mailoutStep(env, { now: T0 + DAY });
+    mails = Object.fromEntries(fr.calls[0].body.map((m) => [m.to[0], m]));
+    assert.equal(mails['ua@mail.test'].subject, CONTENT.ru.subject);
+    assert.ok(mails['ua@mail.test'].html.includes('lang="ru"'));
+  } finally { fr.restore(); }
+  // страница «Отписаться» — на языке писем
+  const tok = q(env, "SELECT token FROM mail_prefs WHERE user_id = 'ua'")[0].token;
+  const page = await (await r['GET /mail/unsub']({ env, request: new Request(`${ORIGIN}/api/mail/unsub?u=ua&t=${tok}`) })).text();
+  assert.ok(page.includes('<html lang="uk">') && page.includes('Відписатися від листів про оновлення?'));
+  // «как на сайте» снова
+  p = await r['PUT /mail/prefs']({ env, request: { body: { lang: null } }, me });
+  assert.deepEqual({ lang: p.lang, pick: p.pick }, { lang: 'ru', pick: null });
+});
+
+test('таблица mail_prefs без lang_pick (до выбора языка писем): колонка добавляется сама', async () => {
+  const env = envOf();
+  user(env, 'a');
+  env.DB.raw.exec("CREATE TABLE mail_prefs (user_id TEXT PRIMARY KEY, news INTEGER NOT NULL DEFAULT 1, token TEXT NOT NULL DEFAULT '', lang TEXT, at INTEGER); INSERT INTO mail_prefs VALUES ('a', 1, 'tok', 'uk', 1);");
+  await M.ensureMailout(env);
+  assert.ok(q(env, 'PRAGMA table_info(mail_prefs)').some((c) => c.name === 'lang_pick'));
+  const fr = fakeResend();
+  try {
+    await M.createMailout(env, { content: { ...CONTENT, uk: UK }, origin: ORIGIN, now: T0 });
+    await M.mailoutStep(env, { now: T0 });
+    assert.equal(fr.calls[0].body[0].subject, UK.subject);
+  } finally { fr.restore(); }
+});
+
 test('админка: себе, всем (и во «внутреннюю» почту), вторая рассылка не начнётся, остановить', async () => {
   const env = envOf();
   for (let i = 0; i < 4; i++) user(env, 'u' + i);
@@ -257,6 +324,11 @@ test('админка: себе, всем (и во «внутреннюю» по�
     const t = await r['POST /admin/mailout/test']({ env, request: request({ content: CONTENT }), me });
     assert.deepEqual({ ok: t.ok, n: t.n }, { ok: true, n: 2 });
     assert.deepEqual(fr.calls[0].body.map((m) => m.to[0]), ['admin@mail.test', 'admin@mail.test']);
+    // заполнен и украинский — себе уходят все три
+    const t3 = await r['POST /admin/mailout/test']({ env, request: request({ content: { ...CONTENT, uk: UK } }), me });
+    assert.deepEqual(t3.langs, ['ru', 'uk', 'en']);
+    assert.deepEqual(fr.calls[1].body.map((m) => m.subject), [CONTENT.ru.subject, UK.subject, CONTENT.en.subject]);
+    fr.calls.length = 1;
     assert.equal((await r['POST /admin/mailout/test']({ env, request: request({ content: { ru: { subject: 'x', items: [] } } }), me })).status, 400);
     const s = await r['POST /admin/mailout']({ env, request: request({ content: CONTENT }), me });
     assert.equal(s.step.sentNow, 4);
@@ -293,6 +365,11 @@ test('напоминание о сбросе званий: за 3 дня до с
     assert.equal(s.sentNow, 1);
     assert.equal(fr.calls[0].body[0].subject, 'Через 3 дня сброс званий');
     assert.match(fr.calls[0].body[0].text, /Сезон 1 закончится 23 ноября в 12:00 по Москве\./);
+    // украинское и английское напоминания — со своей датой (по Киеву), а не с русской строкой
+    const c = M.seasonReminderContent(1, '23 ноября в 12:00 по Киеву', ORIGIN, Date.UTC(2026, 10, 23, 10));
+    assert.match(c.uk.teaser, /^Сезон 1 закінчиться 23 листопада о 12:00 за Києвом\./);
+    assert.match(c.en.teaser, /^Season 1 ends 23 November at 12:00 Kyiv time\./);
+    assert.equal(c.uk.subject, 'Через 3 дні скидання звань');
     // без галочки — снять (если ещё не начато)
     await M.planSeasonReminder(env, { n: 2, end: end + 30 * DAY, whenText: '…', origin: ORIGIN, remind: true, now: T0 });
     await M.planSeasonReminder(env, { n: 2, end: end + 30 * DAY, whenText: '…', origin: ORIGIN, remind: false, now: T0 });

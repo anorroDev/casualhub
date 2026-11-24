@@ -3720,7 +3720,16 @@ window.CasualLangPack = {
 "Провёл «Царя Горы":"Hosted “King of the Hill",
 "Голос в «Царе Горы":"Vote in “King of the Hill",
 "Провёл «Тир-лист вместе":"Hosted “Tier list together",
-"«Тир-лист вместе":"“Tier list together"},
+"«Тир-лист вместе":"“Tier list together",
+// язык писем об обновлениях: Настройки → «Общее» → «Письма» (settings.js, functions/_lib/mailout.js)
+"Язык писем":"Email language",
+"Как язык сайта, пока не выберешь другой":"Same as the site until you pick another",
+"Письма придут на этом языке, даже если сменить язык сайта":"Emails will come in this language even if you change the site language",
+"Письма об обновлениях будут приходить по-русски":"Update emails will come in Russian",
+"Письма об обновлениях будут приходить по-украински":"Update emails will come in Ukrainian",
+"Письма об обновлениях будут приходить по-английски":"Update emails will come in English",
+"Язык писем — ru, uk или en":"Email language must be ru, uk or en",
+"Нужно news или lang":"Need news or lang"},
   // слово после числа: 1 оценка, 5 оценок. [все русские формы, одна штука, несколько]
   nouns: [
     [['рофлан', 'рофлана', 'рофланов', 'рофланы'], 'Soul', 'Souls'],

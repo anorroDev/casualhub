@@ -12,7 +12,8 @@
 //
 // Отписка: у каждого свой случайный токен (mail_prefs.token); ссылка в письме и заголовок List-Unsubscribe
 // (с List-Unsubscribe-Post — «в одно нажатие» прямо в почте) ведут на /api/mail/unsub. Входить не нужно.
-// Язык письма — mail_prefs.lang: его запоминает /ping (кука casualhub_lang) и настройки.
+// Язык письма — ru, uk или en: тот, что человек выбрал в Настройках («Язык писем», mail_prefs.lang_pick), а пока не выбрал —
+// язык сайта (mail_prefs.lang, его запоминает /ping по куке casualhub_lang). Нет текста на этом языке — уходит русский.
 import { clip } from './shelf.js';
 
 export const mailOn = (env) => !!(env && env.MAIL_KEY && env.MAIL_FROM);
@@ -38,9 +39,10 @@ const sameToken = (a, b) => {
 const ready = new WeakSet();
 export async function ensureMailout(env) {
   if (ready.has(env.DB)) return;
-  await env.DB.batch([
-    // настройки писем у человека: news — письма об обновлениях (по умолчанию да), token — для ссылки «Отписаться», lang — язык писем
-    env.DB.prepare("CREATE TABLE IF NOT EXISTS mail_prefs (user_id TEXT PRIMARY KEY, news INTEGER NOT NULL DEFAULT 1, token TEXT NOT NULL DEFAULT '', lang TEXT, at INTEGER)"),
+  const out = await env.DB.batch([
+    // настройки писем у человека: news — письма об обновлениях (по умолчанию да), token — для ссылки «Отписаться»,
+    // lang — язык сайта (пишет /ping), lang_pick — язык писем, выбранный в Настройках (NULL — как на сайте)
+    env.DB.prepare("CREATE TABLE IF NOT EXISTS mail_prefs (user_id TEXT PRIMARY KEY, news INTEGER NOT NULL DEFAULT 1, token TEXT NOT NULL DEFAULT '', lang TEXT, lang_pick TEXT, at INTEGER)"),
     // рассылки: content — тексты по языкам; start_at — не раньше (напоминание о сбросе званий); queued_at — список снят
     env.DB.prepare('CREATE TABLE IF NOT EXISTS mailouts (id INTEGER PRIMARY KEY, kind TEXT NOT NULL, ref TEXT, content TEXT NOT NULL, origin TEXT NOT NULL, start_at INTEGER, queued_at INTEGER, '
       + 'total INTEGER NOT NULL DEFAULT 0, sent INTEGER NOT NULL DEFAULT 0, paused_until INTEGER, pause_kind TEXT, last_error TEXT, done_at INTEGER, canceled INTEGER NOT NULL DEFAULT 0, by_id TEXT, created_at INTEGER NOT NULL)'),
@@ -49,7 +51,12 @@ export async function ensureMailout(env) {
     env.DB.prepare('CREATE INDEX IF NOT EXISTS mailout_queue_wait ON mailout_queue(mailout, status)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS mailout_queue_claim ON mailout_queue(claim)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS mailout_queue_sent ON mailout_queue(status, sent_at)'),
+    env.DB.prepare('PRAGMA table_info(mail_prefs)'),
   ]);
+  // таблица из времён, когда языка писем в Настройках не было: колонка добавляется один раз
+  if (!((out[out.length - 1] || {}).results || []).some((c) => c.name === 'lang_pick')) {
+    try { await env.DB.prepare('ALTER TABLE mail_prefs ADD COLUMN lang_pick TEXT').run(); } catch (e) { /* соседний Worker успел раньше */ }
+  }
   ready.add(env.DB);
 }
 
@@ -62,10 +69,14 @@ export async function eligibleCount(env) {
 }
 
 // ---------- язык и настройки человека ----------
+export const LANGS = ['ru', 'uk', 'en'];
+const langOk = (l) => (LANGS.includes(l) ? l : 'ru');
+// язык письма в запросе к users u LEFT JOIN mail_prefs p: выбранный в Настройках, иначе язык сайта
+const LANG_SQL = "CASE COALESCE(p.lang_pick, p.lang) WHEN 'en' THEN 'en' WHEN 'uk' THEN 'uk' ELSE 'ru' END";
 const langSeen = new Map(); // в этом Worker'е уже записано: id → язык (чтобы /ping не писал каждый раз)
 export async function rememberLang(env, uid, lang) {
   if (!uid) return;
-  const l = lang === 'en' ? 'en' : 'ru';
+  const l = langOk(lang);
   if (langSeen.get(uid) === l) return;
   try {
     await ensureMailout(env);
@@ -79,11 +90,13 @@ async function prefsRow(env, uid) {
   await ensureMailout(env);
   await env.DB.prepare("INSERT INTO mail_prefs (user_id, news, token, at) VALUES (?1, 1, lower(hex(randomblob(12))), ?2) ON CONFLICT(user_id) DO UPDATE SET token = lower(hex(randomblob(12))) WHERE mail_prefs.token = ''")
     .bind(uid, Date.now()).run();
-  return env.DB.prepare('SELECT news, token, lang FROM mail_prefs WHERE user_id = ?').bind(uid).first();
+  return env.DB.prepare('SELECT news, token, lang, lang_pick FROM mail_prefs WHERE user_id = ?').bind(uid).first();
 }
+const langOfRow = (row) => langOk(row && (row.lang_pick || row.lang));
 
 // ---------- содержание ----------
-// content: { ru: { subject, teaser, items: [{ t, d }], cta }, en?: { … }, link }. Английского может не быть — тогда всем русский
+// content: { ru: { subject, teaser, items: [{ t, d }], cta }, uk?: { … }, en?: { … }, link }. Украинского или английского
+// может не быть — тогда тем, у кого письма на этом языке, уходит русский
 export function cleanContent(c, origin) {
   const part = (x) => {
     if (!x || typeof x !== 'object') return null;
@@ -95,23 +108,26 @@ export function cleanContent(c, origin) {
   if (!ru) return { error: 'Нужны тема и хотя бы один пункт.' };
   const link = String((c && c.link) || '').trim();
   if (link && !/^https:\/\/[^\s"'<>\\]{3,500}$/.test(link) && !(origin && link.startsWith(origin + '/'))) return { error: 'Ссылка кнопки должна начинаться с https://' };
-  return { content: { ru, en: part(c && c.en), link: link || (origin ? origin + '/#whatsnew' : '') } };
+  return { content: { ru, uk: part(c && c.uk), en: part(c && c.en), link: link || (origin ? origin + '/#whatsnew' : '') } };
 }
 const T = {
   ru: { brand: 'Казуал Хаб', kicker: 'Что нового', cta: 'Посмотреть, что нового', why: 'Это письмо пришло, потому что у тебя аккаунт на Казуал Хабе с подтверждённой почтой.', unsub: 'Отписаться от писем об обновлениях', unsubText: 'Не хочешь таких писем — отписаться в одно нажатие' },
+  uk: { brand: 'Казуал Хаб', kicker: 'Що нового', cta: 'Подивитися, що нового', why: 'Цей лист прийшов, бо в тебе акаунт на Казуал Хабі з підтвердженою поштою.', unsub: 'Відписатися від листів про оновлення', unsubText: 'Не хочеш таких листів — відписатися одним натисканням' },
   en: { brand: 'Casual Hub', kicker: 'What’s new', cta: 'See what’s new', why: 'You’re getting this because you have a Casual Hub account with a confirmed email.', unsub: 'Unsubscribe from update emails', unsubText: 'Don’t want these emails? Unsubscribe in one click' },
 };
+// на каком языке письмо выйдет на самом деле: нет текста на языке человека — русский
+export const langFor = (content, lang) => (lang !== 'ru' && LANGS.includes(lang) && content && content[lang] ? lang : 'ru');
 // письмо одному человеку: { subject, html, text } на его языке; unsub — его ссылка «Отписаться»
 export function composeNews(content, lang, { origin, unsub }) {
-  const en = lang === 'en' && content.en;
-  const p = en ? content.en : content.ru, t = T[en ? 'en' : 'ru'];
+  const l = langFor(content, lang);
+  const p = content[l], t = T[l];
   const cta = p.cta || t.cta, link = content.link || origin + '/';
   const logo = origin + '/icon-192.png';
   const items = p.items.map((it) => `<tr><td class="item" style="padding:12px 0;border-top:1px solid #e6e8ef;">`
     + `<div class="ink" style="font-size:15px;line-height:1.4;font-weight:700;color:#14161c;">${esc(it.t)}</div>`
     + (it.d ? `<div class="soft" style="margin-top:3px;font-size:14px;line-height:1.5;color:#4a4f5c;">${esc(it.d)}</div>` : '') + '</td></tr>').join('');
   const font = "font-family:system-ui,-apple-system,'Segoe UI',Roboto,Arial,sans-serif;";
-  const html = `<!doctype html><html lang="${en ? 'en' : 'ru'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">`
+  const html = `<!doctype html><html lang="${l}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">`
     + `<meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark"><title>${esc(p.subject)}</title>`
     + '<style>@media (prefers-color-scheme: dark){.bg{background:#0f1116!important}.card{background:#17191f!important;border-color:#2a2d36!important}'
     + '.ink{color:#f1f2f6!important}.soft{color:#c3c7d2!important}.muted{color:#9aa0b2!important}.item{border-color:#2a2d36!important}.muted a{color:#9aa0b2!important}}'
@@ -179,7 +195,7 @@ async function snapshot(env, m, now) {
   await env.DB.batch([
     env.DB.prepare(`INSERT INTO mail_prefs (user_id, news, token, at) SELECT u.id, 1, lower(hex(randomblob(12))), ?1 FROM users u LEFT JOIN mail_prefs p ON p.user_id = u.id WHERE ${ELIGIBLE} AND (p.token IS NULL OR p.token = '')
       ON CONFLICT(user_id) DO UPDATE SET token = lower(hex(randomblob(12))) WHERE mail_prefs.token = ''`).bind(now),
-    env.DB.prepare(`INSERT OR IGNORE INTO mailout_queue (mailout, user_id, email, lang, status) SELECT ?1, u.id, u.email, CASE WHEN p.lang = 'en' THEN 'en' ELSE 'ru' END, 'wait'
+    env.DB.prepare(`INSERT OR IGNORE INTO mailout_queue (mailout, user_id, email, lang, status) SELECT ?1, u.id, u.email, ${LANG_SQL}, 'wait'
       FROM users u LEFT JOIN mail_prefs p ON p.user_id = u.id WHERE ${ELIGIBLE}`).bind(m.id),
     env.DB.prepare('UPDATE mailouts SET queued_at = ?2, total = (SELECT COUNT(*) FROM mailout_queue WHERE mailout = ?1) WHERE id = ?1').bind(m.id, now),
   ]);
@@ -269,15 +285,33 @@ export async function cancelMailout(env, id) {
 // ---------- напоминание о сбросе званий (сезоны, functions/_lib/levels-api.js) ----------
 // за 3 дня до сброса (если до сброса меньше — сразу) уходит письмо всем, кто получает письма об обновлениях
 export const REMIND_BEFORE = 3 * DAY;
-export function seasonReminderContent(n, whenText, origin) {
+const KYIV = 'Europe/Kiev'; // как в levels.js: это имя есть и в старых ICU
+// дата сброса на языке письма: «23 листопада о 12:00 за Києвом», «23 November at 12:00 Kyiv time»
+function whenIn(lang, t) {
+  try {
+    const p = new Intl.DateTimeFormat(lang === 'uk' ? 'uk-UA' : 'en-GB', { timeZone: KYIV, day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(t));
+    const g = (k) => (p.find((x) => x.type === k) || {}).value || '';
+    return lang === 'uk' ? `${g('day')} ${g('month')} о ${g('hour')}:${g('minute')} за Києвом` : `${g('day')} ${g('month')} at ${g('hour')}:${g('minute')} Kyiv time`;
+  } catch (e) {
+    return new Date(t).toISOString().slice(0, 16).replace('T', ' ') + ' UTC';
+  }
+}
+// whenText — русская дата («1 декабря в 00:00 по Киеву»); end — когда сброс: из него дата для украинского и английского
+export function seasonReminderContent(n, whenText, origin, end) {
+  const w = (l) => (end ? whenIn(l, end) : whenText);
   return {
     ru: {
       subject: `Через 3 дня сброс званий`, teaser: `Сезон ${n} закончится ${whenText}. Есть время поднять звание напоследок — итоги сезона останутся в «Прогрессе».`,
       items: [{ t: 'Звание сбросится', d: 'В новом сезоне все снова начнут с «Людишки».' }, { t: 'Уровень и награды останутся', d: 'Сбрасывается только звание сезона, опыт за всё время на месте.' }, { t: 'Итоги сезона сохранятся', d: 'Звание и место в сезоне будут видны в окне «Прогресс».' }],
       cta: 'Посмотреть своё звание',
     },
+    uk: {
+      subject: 'Через 3 дні скидання звань', teaser: `Сезон ${n} закінчиться ${w('uk')}. Є час підняти звання наостанок — підсумки сезону залишаться в «Прогресі».`,
+      items: [{ t: 'Звання скинеться', d: 'У новому сезоні всі знову почнуть із «Людинки».' }, { t: 'Рівень і нагороди залишаться', d: 'Скидається лише звання сезону, досвід за весь час на місці.' }, { t: 'Підсумки сезону збережуться', d: 'Звання й місце в сезоні буде видно у вікні «Прогрес».' }],
+      cta: 'Подивитися своє звання',
+    },
     en: {
-      subject: 'Title reset in 3 days', teaser: `Season ${n} ends ${whenText}. There’s still time to climb — your season results will stay in “Progress”.`,
+      subject: 'Title reset in 3 days', teaser: `Season ${n} ends ${w('en')}. There’s still time to climb — your season results will stay in “Progress”.`,
       items: [{ t: 'Your title resets', d: 'Everyone starts the new season as a “Little human”.' }, { t: 'Levels and rewards stay', d: 'Only the season title resets; your all-time XP stays.' }, { t: 'Season results are kept', d: 'Your title and place will be shown in the “Progress” window.' }],
       cta: 'See my title',
     },
@@ -292,7 +326,7 @@ export async function planSeasonReminder(env, { n, end, whenText, origin, by, re
   await env.DB.prepare("UPDATE mailouts SET canceled = 1 WHERE kind = 'season' AND ref = ? AND queued_at IS NULL AND done_at IS NULL AND canceled = 0").bind(ref).run();
   if (!remind) return null;
   const startAt = Math.max(now, end - REMIND_BEFORE);
-  const id = await createMailout(env, { kind: 'season', ref, content: seasonReminderContent(n, whenText, origin), origin, startAt, by, now });
+  const id = await createMailout(env, { kind: 'season', ref, content: seasonReminderContent(n, whenText, origin, end), origin, startAt, by, now });
   return { id, at: startAt };
 }
 export async function seasonReminderOf(env, n) {
@@ -312,6 +346,11 @@ const PAGE = {
     ask: 'Отписаться', doneH: 'Готово, писем об обновлениях больше не будет', doneP: 'Передумаешь — их можно вернуть здесь или в Настройках на сайте.', back: 'Вернуть письма',
     backH: 'Письма вернулись', backP: 'Будем иногда писать о том, что нового на сайте.', badH: 'Ссылка не подходит', badP: 'Отписаться можно на сайте: Настройки → «Письма об обновлениях».', site: 'На Казуал Хаб',
   },
+  uk: {
+    title: 'Листи Казуал Хабу', askH: 'Відписатися від листів про оновлення?', askP: 'Більше не надсилатимемо листи про те, що нового на Казуал Хабі. Листи для входу й відновлення пароля залишаться.',
+    ask: 'Відписатися', doneH: 'Готово, листів про оновлення більше не буде', doneP: 'Передумаєш — їх можна повернути тут або в Налаштуваннях на сайті.', back: 'Повернути листи',
+    backH: 'Листи повернулися', backP: 'Іноді писатимемо про те, що нового на сайті.', badH: 'Посилання не підходить', badP: 'Відписатися можна на сайті: Налаштування → «Листи про оновлення».', site: 'На Казуал Хаб',
+  },
   en: {
     title: 'Casual Hub emails', askH: 'Unsubscribe from update emails?', askP: 'We’ll stop sending emails about what’s new on Casual Hub. Sign-in and password emails will still arrive.',
     ask: 'Unsubscribe', doneH: 'Done, no more update emails', doneP: 'Changed your mind? Turn them back on here or in Settings on the site.', back: 'Turn emails back on',
@@ -319,11 +358,12 @@ const PAGE = {
   },
 };
 function page(lang, state, action) {
-  const t = PAGE[lang === 'en' ? 'en' : 'ru'];
+  lang = langOk(lang);
+  const t = PAGE[lang];
   const [h, p] = { ask: [t.askH, t.askP], done: [t.doneH, t.doneP], back: [t.backH, t.backP], bad: [t.badH, t.badP] }[state];
   const form = (news, label, auto, ghost) => `<form method="post" action="${esc(action)}"${auto ? ' data-auto' : ''}><input type="hidden" name="news" value="${news}"><button${ghost ? ' class="ghost"' : ''}>${esc(label)}</button></form>`;
   const act = state === 'ask' ? form(0, t.ask, true) : state === 'done' ? form(1, t.back, false, true) : '';
-  return `<!doctype html><html lang="${lang === 'en' ? 'en' : 'ru'}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">`
+  return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex">`
     + `<meta name="color-scheme" content="light dark"><title>${esc(t.title)}</title><link rel="icon" href="/favicon.ico">`
     + '<style>:root{--bg:#f2f3f7;--card:#fff;--ink:#14161c;--muted:#5d6272;--line:#e3e5ec;--accent:#3550E8}'
     + '@media (prefers-color-scheme:dark){:root{--bg:#0f1116;--card:#17191f;--ink:#f1f2f6;--muted:#a3a9b8;--line:#2a2d36;--accent:#5b6ff0}}'
@@ -340,7 +380,7 @@ const htmlRes = (body, status = 200) => new Response(body, { status, headers: { 
 async function checkLink(env, uid, t) {
   if (!/^[0-9a-f]{24}$/.test(String(uid || '')) && !/^[\w-]{1,64}$/.test(String(uid || ''))) return null;
   await ensureMailout(env);
-  const row = await env.DB.prepare('SELECT news, token, lang FROM mail_prefs WHERE user_id = ?').bind(String(uid)).first();
+  const row = await env.DB.prepare('SELECT news, token, lang, lang_pick FROM mail_prefs WHERE user_id = ?').bind(String(uid)).first();
   return row && sameToken(row.token, t) ? row : null;
 }
 
@@ -349,30 +389,44 @@ async function checkLink(env, uid, t) {
 export function makeMailoutRoutes(h) {
   const { json, fail } = h;
   const status = async (env, extra = {}) => {
-    const [cur, recent, win] = await env.DB.batch([
+    const [cur, recent, win, byLang] = await env.DB.batch([
       env.DB.prepare('SELECT * FROM mailouts WHERE done_at IS NULL AND canceled = 0 AND queued_at IS NOT NULL ORDER BY id LIMIT 1'),
       env.DB.prepare("SELECT * FROM mailouts WHERE kind = 'news' ORDER BY id DESC LIMIT 5"),
       env.DB.prepare("SELECT COUNT(*) AS n FROM mailout_queue WHERE status = 'sent' AND sent_at > ?").bind(Date.now() - DAY),
+      // сколько получателей на каком языке: админ видит, стоит ли писать украинскую и английскую версии
+      env.DB.prepare(`SELECT ${LANG_SQL} AS l, COUNT(*) AS n FROM users u LEFT JOIN mail_prefs p ON p.user_id = u.id WHERE ${ELIGIBLE} GROUP BY l`),
     ]);
     const planned = (await env.DB.prepare('SELECT * FROM mailouts WHERE done_at IS NULL AND canceled = 0 AND queued_at IS NULL ORDER BY start_at LIMIT 5').all()).results || [];
+    const langs = { ru: 0, uk: 0, en: 0 };
+    for (const r of byLang.results || []) langs[langOk(r.l)] += +r.n || 0;
     return {
-      on: mailOn(env), cap: dailyCap(env), sent24: +one(win).n || 0, eligible: await eligibleCount(env),
+      on: mailOn(env), cap: dailyCap(env), sent24: +one(win).n || 0, eligible: langs.ru + langs.uk + langs.en, langs,
       current: view(one(cur).id ? one(cur) : null), recent: (recent.results || []).map(view), planned: planned.map(view), ...extra,
     };
   };
+  const prefsOut = (me, p) => ({ news: +p.news !== 0, email: h.maskMail(me.email), verified: !!me.email_ok, lang: langOfRow(p), pick: p.lang_pick ? langOk(p.lang_pick) : null });
   return {
-    // настройки писем у человека: переключатель «Письма об обновлениях» (settings.js)
+    // настройки писем у человека: «Письма об обновлениях» и «Язык писем» (settings.js). lang — на каком языке письма
+    // придут, pick — выбран ли он в Настройках (null — как язык сайта)
     async 'GET /mail/prefs'({ env, request, me }) {
       await rememberLang(env, me.id, h.langOf(request));
-      const p = await prefsRow(env, me.id);
-      return json({ news: +p.news !== 0, email: h.maskMail(me.email), verified: !!me.email_ok, lang: p.lang || 'ru' });
+      return json(prefsOut(me, await prefsRow(env, me.id)));
     },
+    // { news: да/нет } и/или { lang: 'ru' | 'uk' | 'en' | null } (null — снова как язык сайта)
     async 'PUT /mail/prefs'({ env, request, me }) {
       const b = await h.readBody(request);
-      if (typeof b.news !== 'boolean') return fail(400, 'Нужно news: да или нет.');
+      const hasNews = 'news' in b, hasLang = 'lang' in b;
+      if (!hasNews && !hasLang) return fail(400, 'Нужно news или lang.');
+      if (hasNews && typeof b.news !== 'boolean') return fail(400, 'Нужно news: да или нет.');
+      if (hasLang && b.lang !== null && !LANGS.includes(b.lang)) return fail(400, 'Язык писем — ru, uk или en.');
       await prefsRow(env, me.id);
-      await env.DB.prepare('UPDATE mail_prefs SET news = ?, at = ? WHERE user_id = ?').bind(b.news ? 1 : 0, Date.now(), me.id).run();
-      return json({ ok: true, news: b.news });
+      const now = Date.now();
+      await env.DB.batch([
+        ...(hasNews ? [env.DB.prepare('UPDATE mail_prefs SET news = ?, at = ? WHERE user_id = ?').bind(b.news ? 1 : 0, now, me.id)] : []),
+        ...(hasLang ? [env.DB.prepare('UPDATE mail_prefs SET lang_pick = ?, at = ? WHERE user_id = ?').bind(b.lang, now, me.id)] : []),
+      ]);
+      const p = await env.DB.prepare('SELECT news, token, lang, lang_pick FROM mail_prefs WHERE user_id = ?').bind(me.id).first();
+      return json({ ok: true, ...prefsOut(me, p) });
     },
     // «Отписаться» из письма: страница, которая сама нажимает кнопку (/mail-unsub.js). Сканеры ссылок в почте
     // скриптов не запускают, поэтому случайно никого не отпишут; без скрипта — одна кнопка
@@ -380,7 +434,7 @@ export function makeMailoutRoutes(h) {
       if (h.burst('unsub:' + h.clientIp(request), 30, 60e3)) return htmlRes('Too many requests', 429);
       const q = new URL(request.url).searchParams, uid = q.get('u') || '', t = q.get('t') || '';
       const row = await checkLink(env, uid, t);
-      const lang = row ? row.lang : h.langOf(request);
+      const lang = row ? langOfRow(row) : h.langOf(request);
       if (!row) return htmlRes(page(lang, 'bad', ''), 403);
       return htmlRes(page(lang, +row.news === 0 ? 'done' : 'ask', `/api/mail/unsub?u=${encodeURIComponent(uid)}&t=${encodeURIComponent(t)}`));
     },
@@ -399,7 +453,7 @@ export function makeMailoutRoutes(h) {
       if (!row) return htmlRes(page(h.langOf(request), 'bad', ''), 403);
       const news = String(body.news) === '1' ? 1 : 0;
       await env.DB.prepare('UPDATE mail_prefs SET news = ?, at = ? WHERE user_id = ?').bind(news, Date.now(), uid).run();
-      return htmlRes(page(row.lang, news ? 'back' : 'done', `/api/mail/unsub?u=${encodeURIComponent(uid)}&t=${encodeURIComponent(t)}`));
+      return htmlRes(page(langOfRow(row), news ? 'back' : 'done', `/api/mail/unsub?u=${encodeURIComponent(uid)}&t=${encodeURIComponent(t)}`));
     },
 
     // ---------- админка: рассылка «Что нового» ----------
@@ -408,7 +462,7 @@ export function makeMailoutRoutes(h) {
       await ensureMailout(env);
       return json(await status(env));
     },
-    // проверка: письмо себе (русское и, если заполнено, английское) — одной пачкой
+    // проверка: письмо себе — русское и те из украинского и английского, что заполнены, — одной пачкой
     async 'POST /admin/mailout/test'({ env, request, me }) {
       if (!(await h.adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
       if (h.burst('mailouttest:' + me.id, 6, 60e3)) return fail(429, 'Подожди минуту.');
@@ -419,11 +473,11 @@ export function makeMailoutRoutes(h) {
       if (c.error) return fail(400, c.error);
       const p = await prefsRow(env, me.id);
       const unsub = unsubUrl(origin, me.id, p.token);
-      const langs = c.content.en ? ['ru', 'en'] : ['ru'];
+      const langs = LANGS.filter((l) => l === 'ru' || c.content[l]);
       const res = await resendBatch(env, langs.map((l) => email(env, me.email, composeNews(c.content, l, { origin, unsub }), { 'List-Unsubscribe': `<${unsub}>`, 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' })), null);
       if (!res.ok) return fail(502, `Resend не принял письмо (${res.status || 'сеть'}): ${res.msg || res.name}`);
       await h.adminLog(env, request, me, 'mailout: test', true);
-      return json({ ok: true, to: h.maskMail(me.email), n: langs.length });
+      return json({ ok: true, to: h.maskMail(me.email), n: langs.length, langs });
     },
     // разослать всем: снимок получателей, письмо во «внутреннюю» почту уровней, первая пачка сразу
     async 'POST /admin/mailout'({ env, request, me }) {
