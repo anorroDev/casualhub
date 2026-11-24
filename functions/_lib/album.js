@@ -117,8 +117,11 @@ export async function friendsAlbum(env, me, name) {
     try { list = readShelf(sh).ratings; } catch (e) { continue; }
     const album = list.find((r) => r && r.vis !== 'private' && !r.albumOf && keyOf(r.name) === want);
     if (!album) continue;
-    const tracks = list.filter((r) => r && r.albumOf === album.id && r.vis !== 'private' && typeof r.total === 'number' && Number.isFinite(+r.trackNo))
-      .map((r) => ({ n: +r.trackNo, v: Math.max(0, Math.min(10, +r.total)), t: clip(r.title || r.name, 140) }));
+    // баллы треков: записи внутри альбома (tracks) и отдельные оценки треков по 4+ критериям — они главнее
+    const byN = new Map();
+    for (const e of Array.isArray(album.tracks) ? album.tracks : []) if (e && +e.v > 0 && Number.isInteger(+e.n)) byN.set(+e.n, { n: +e.n, v: Math.min(10, +e.v), t: clip(e.t, 140) });
+    for (const r of list) if (r && r.albumOf === album.id && r.vis !== 'private' && typeof r.total === 'number' && Number.isFinite(+r.trackNo)) byN.set(+r.trackNo, { n: +r.trackNo, v: Math.max(0, Math.min(10, +r.total)), t: clip(r.title || r.name, 140) });
+    const tracks = [...byN.values()].sort((a, b) => a.n - b.n);
     if (tracks.length < 2) continue;
     out.push({ user: people.get(sh.user_id), total: typeof album.total === 'number' ? album.total : null, tracks: tracks.slice(0, 60) });
   }

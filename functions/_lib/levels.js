@@ -98,6 +98,7 @@ export const RULES = {
   review: { xp: 5, day: 5 }, // отзыв: плюсы, минусы и заметки оценки вместе от 100 знаков (textLen)
   rate_full: { xp: 3, day: 8 }, // оценка заполнена целиком: баллы по 2+ критериям и обложка
   plan_done: { xp: 5, day: 5 }, // оценил то, что было «В планах»
+  album_track: { xp: 4, day: 40 }, // трек, оценённый внутри альбома (album.tracks) — опыт растёт с числом треков; ref «альбом:номер»
   album_full: { xp: 20, day: 3 }, // разобрал альбом по трекам целиком (albumsFull); сами треки — обычные оценки rate
   import: { xp: 1, ever: 100 }, // оценка из импорта (Letterboxd)
   tier: { xp: 25, day: 2 }, // в тир-листе впервые набралось 8 элементов (tierDone)
@@ -130,7 +131,7 @@ export const RULES = {
   ach: { given: true }, // ступень достижения (achXp), ref — «код:ступень»
 };
 // что считается «сделал что-то за день» для серии: всё, кроме простого захода и наград
-const ACTIVE = new Set(['rate', 'review', 'rate_full', 'plan_done', 'album_full', 'import', 'tier', 'tier_share', 'react', 'comment', 'friend', 'lots_host', 'lot_add']);
+const ACTIVE = new Set(['rate', 'review', 'rate_full', 'plan_done', 'album_track', 'album_full', 'import', 'tier', 'tier_share', 'react', 'comment', 'friend', 'lots_host', 'lot_add']);
 export const STREAK_BONUS = { 7: 30, 30: 150, 100: 500 };
 
 // ---------- достижения ----------
@@ -1156,7 +1157,8 @@ export const isScored = (r) => !!r && r.total != null && Number.isFinite(+r.tota
 export const textLen = (r) => [r.note, r.pros, r.cons].map((x) => String(x || '').trim().length).reduce((a, b) => a + b, 0);
 const isFull = (r) => isScored(r) && r.scores.length >= 2 && r.scores.every((s) => +s.v > 0) && !!r.photo;
 const stamp = (r) => +new Date(r.createdAt || r.updatedAt || 0) || 0;
-// «Разбор альбома»: у оценки альбома trackCount — сколько треков, skip — номера пропущенных; треки — оценки с albumOf и trackNo.
+// «Разбор альбома»: у оценки альбома trackCount — сколько треков, skip — номера пропущенных, tracks — баллы треков внутри
+// альбома ({ n, v }); трек по 4+ критериям — ещё и отдельная оценка с albumOf и trackNo (её опыт — обычный rate).
 // Альбом разобран целиком, когда каждый трек оценён или пропущен и оценена хотя бы половина (подсказка задания album1)
 export const ALBUM_MIN = 3;
 export function albumsFull(list) {
@@ -1165,6 +1167,14 @@ export function albumsFull(list) {
     if (!r || typeof r.albumOf !== 'string' || !isScored(r) || !Number.isInteger(+r.trackNo)) continue;
     if (!rated.has(r.albumOf)) rated.set(r.albumOf, new Set());
     rated.get(r.albumOf).add(+r.trackNo);
+  }
+  for (const r of list) {
+    if (!r || typeof r.id !== 'string' || !Array.isArray(r.tracks)) continue;
+    for (const e of r.tracks) {
+      if (!e || !(+e.v > 0) || !Number.isInteger(+e.n)) continue;
+      if (!rated.has(r.id)) rated.set(r.id, new Set());
+      rated.get(r.id).add(+e.n);
+    }
   }
   const full = new Set();
   for (const r of list) {
@@ -1193,6 +1203,13 @@ export function shelfDiff(oldList, newList) {
       if (isFull(r) && !(o && isFull(o))) give.push({ kind: 'rate_full', ref: id });
     }
   }
+  // треки внутри альбома: за каждый новый оценённый — album_track (трек по 4+ критериям — отдельная оценка, ему rate, а не это)
+  const trackRefs = (r) => (r && !r.example && Array.isArray(r.tracks) ? r.tracks.filter((e) => e && +e.v > 0 && Number.isInteger(+e.n) && !e.rid).map((e) => `${r.id}:${+e.n}`) : []);
+  for (const [id, r] of after) {
+    const had = new Set(trackRefs(before.get(id)));
+    for (const ref of trackRefs(r)) if (!had.has(ref)) give.push({ kind: 'album_track', ref });
+  }
+  for (const [id, r] of before) if (!after.has(id)) for (const ref of trackRefs(r)) take.push({ kind: 'album_track', ref });
   const fullBefore = albumsFull([...before.values()]);
   for (const id of albumsFull([...after.values()])) if (!fullBefore.has(id)) give.push({ kind: 'album_full', ref: id });
   for (const [id] of before) if (!after.has(id)) for (const kind of ['rate', 'import', 'review', 'rate_full', 'plan_done', 'album_full']) take.push({ kind, ref: id });

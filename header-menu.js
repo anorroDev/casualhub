@@ -106,7 +106,8 @@ header.top > .hm-left { margin-left: 4px; }
 .oc-mini .oc-t { display: none !important; }
 header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
 @media (max-width: 480px) { .oc-mini { padding: 0 9px !important; margin-left: 0 !important; } .top .sp { display: none; } .top .oc-mini { margin-right: auto; } }
-.wn-corner { position: absolute; top: 14px; right: 16px; z-index: 60; display: flex; align-items: center; gap: 8px; }
+/* угол: по высоте — на середине шапки (top ставит placeWn), чтобы на широких экранах не висел выше её кнопок */
+.wn-corner { position: absolute; top: 14px; right: 16px; z-index: 60; display: flex; align-items: center; gap: 8px; transform: translateY(-50%); }
 .hm-admin { border-color: color-mix(in srgb, #E4553F 55%, var(--line, #2b2e38)) !important; color: var(--ink, #f3f4f6) !important; }
 .hm-admin svg { color: #E4553F; flex: none; }
 .wn-corner [data-whatsnew] { box-shadow: 0 10px 24px -14px rgba(0, 0, 0, .6); }
@@ -311,6 +312,9 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
       }
       if (wn) { if (wnFits) { if (wn.parentElement !== corner) corner.appendChild(wn); } else if (wn.parentElement !== panel) panel.appendChild(wn); }
       if (adm) panel.appendChild(adm);
+      // середина шапки по высоте: кнопки в углу стоят на одной линии с её кнопками
+      const hr = header.getBoundingClientRect();
+      corner.style.top = Math.round(hr.top + scrollY + hr.height / 2) + 'px';
     };
     placeWn();
     // /…#settings открывает настройки, #settings-security — сразу нужный раздел

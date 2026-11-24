@@ -1476,7 +1476,12 @@
       try { rs = ((await api('/shelf/' + encodeURIComponent(me))).ratings || []).filter((r) => r && r.id && r.name); } catch (e) {}
     }
     const album = rs.find((r) => r.id === albumId);
-    const tracks = rs.filter((r) => r.albumOf === albumId && typeof r.total === 'number').sort((a, b) => a.trackNo - b.trackNo);
+    // треки: записи внутри альбома (tracks) и отдельные оценки треков по 4+ критериям; обложка — альбома
+    const byN = new Map();
+    const cover = album && (album.art ? { id: album.art } : album.photo) || null;
+    for (const e of (album && Array.isArray(album.tracks) ? album.tracks : [])) if (e && +e.v > 0) byN.set(+e.n, { id: albumId + '.' + e.n, title: e.t, total: +e.v, trackNo: +e.n, photo: cover });
+    for (const r of rs) if (r.albumOf === albumId && typeof r.total === 'number') byN.set(+r.trackNo, r);
+    const tracks = [...byN.values()].sort((a, b) => a.trackNo - b.trackNo);
     history.replaceState(null, '', location.pathname);
     if (!album || !tracks.length) { toast('У этого альбома пока нет оценённых треков.'); return route(); }
     const title = str((album.title || album.name) + ' — треки', LIMIT.title);

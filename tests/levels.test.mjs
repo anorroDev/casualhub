@@ -719,3 +719,23 @@ test('топ недели: топ-5 сайта от 50 опыта получае
   assert.equal(g.length, 5);
   assert.equal(g[0].id, 'top:2026-11-16:a');
 });
+
+test('разбор альбома: треки внутри альбома — опыт за каждый трек, полный разбор, удаление альбома списывает всё', () => {
+  const avg = [{ id: 'alb-avg', name: 'Среднее по трекам', v: 7.5 }];
+  const a0 = { id: 'rB', name: 'X — Z', status: 'Альбом', trackCount: 4, skip: [], scores: [], total: null, tracks: [] };
+  const a1 = { ...a0, scores: avg, total: 7.5, tracks: [{ n: 1, v: 8 }, { n: 2, v: 7 }] };
+  const d1 = L.shelfDiff([a0], [a1]);
+  assert.deepEqual(d1.give.filter((g) => g.kind === 'album_track').map((g) => g.ref), ['rB:1', 'rB:2']);
+  assert.ok(d1.give.some((g) => g.kind === 'rate' && g.ref === 'rB'), 'у альбома появился балл — это одна оценка');
+  const a2 = { ...a1, skip: [4], tracks: [...a1.tracks, { n: 3, v: 9 }] };
+  const d2 = L.shelfDiff([a1], [a2]);
+  assert.deepEqual(d2.give.filter((g) => g.kind === 'album_track').map((g) => g.ref), ['rB:3'], 'только новый трек');
+  assert.ok(d2.give.some((g) => g.kind === 'album_full' && g.ref === 'rB'));
+  const full = { id: 'rt5', name: 'X — t', status: 'Трек', albumOf: 'rB', trackNo: 4, scores: [1, 2, 3, 4].map((i) => ({ id: 'c' + i, name: 'c', v: 8 })), total: 8 };
+  const a3 = { ...a2, skip: [], tracks: [...a2.tracks, { n: 4, v: 8, rid: 'rt5' }] };
+  const d3 = L.shelfDiff([a2], [a3, full]);
+  assert.equal(d3.give.filter((g) => g.kind === 'album_track').length, 0, 'трек по 4+ критериям — отдельная оценка, ему rate');
+  assert.ok(d3.give.some((g) => g.kind === 'rate' && g.ref === 'rt5'));
+  const d4 = L.shelfDiff([a3, full], [full]);
+  assert.deepEqual(d4.take.filter((x) => x.kind === 'album_track').map((x) => x.ref).sort(), ['rB:1', 'rB:2', 'rB:3']);
+});

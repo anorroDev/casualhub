@@ -1088,7 +1088,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
   }
   // таблица «За что сколько опыта»: подписи здесь, цифры и лимиты — из правил сервера (ME.xpRules), чтобы не разойтись
   const XP_TABLE = [
-    ['Оценки', [['rate', 'Новая оценка с баллами'], ['review', 'Отзыв к оценке: плюсы, минусы и заметки вместе от 100 знаков'], ['rate_full', 'Оценка целиком: баллы по 2+ критериям и обложка'], ['plan_done', 'Оценил то, что было «В планах»'], ['album_full', 'Разобрал альбом по трекам целиком'], ['import', 'Оценка из импорта Letterboxd']]],
+    ['Оценки', [['rate', 'Новая оценка с баллами'], ['review', 'Отзыв к оценке: плюсы, минусы и заметки вместе от 100 знаков'], ['rate_full', 'Оценка целиком: баллы по 2+ критериям и обложка'], ['plan_done', 'Оценил то, что было «В планах»'], ['album_track', 'Трек, оценённый в разборе альбома'], ['album_full', 'Разобрал альбом по трекам целиком'], ['import', 'Оценка из импорта Letterboxd']]],
     ['Друзья', [['friend', 'Новый друг'], ['react', 'Реакция на оценку или тир-лист друга'], ['comment', 'Комментарий или запись на стене'], ['got_react', 'Твою оценку отметили реакцией'], ['got_comment', 'Тебе написали комментарий']]],
     ['Тир-листы', [['tier', 'Новый тир-лист от 8 элементов'], ['tier_share', 'Поделился тир-листом'], ['tier_coop', '«Тир-лист вместе»: разложил хотя бы половину'], ['tier_coop_host', 'Провёл «Тир-лист вместе», где голосовали трое']]],
     ['Лоты и игры', [['lots_host', 'Провёл сбор лотов до победителя (от 3 участников)'], ['lot_add', 'Лот в чужой сбор'], ['lot_win', 'Твой лот победил'], ['predict_win', 'Угадал победителя сбора'], ['bingo_win', 'Линия в бинго одним из первых трёх'], ['king_host', 'Довёл «Царя Горы» до конца'], ['king_vote', 'Голос в бою чужого турнира'], ['riddle', 'Отгадал загадку дня']]],
@@ -1347,7 +1347,14 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     home(b) {
       tickReset();
       const go = b.querySelector('[data-ranks]'); if (go) go.addEventListener('click', () => { tab = 'ranks'; renderTabs(); render(); });
-      const xt = b.querySelector('.lv-xpt'); if (xt) xt.addEventListener('toggle', () => { xptOpen = xt.open; });
+      // «За что сколько опыта»: открываем и закрываем сами (по тексту, значку и с клавиатуры), а не полагаемся на details:
+      // перерисовка «Обзора» сразу после нажатия иначе возвращала таблицу свёрнутой
+      const xt = b.querySelector('.lv-xpt');
+      if (xt) {
+        const sum = xt.querySelector('summary');
+        sum.setAttribute('aria-expanded', String(xt.open));
+        sum.addEventListener('click', (e) => { e.preventDefault(); xptOpen = !xt.open; xt.open = xptOpen; sum.setAttribute('aria-expanded', String(xptOpen)); });
+      }
       // «i» у задания: нажатие открывает и закрывает подсказку (на телефоне наведения нет), открыта одна
       b.querySelectorAll('[data-qi]').forEach((btn) => btn.addEventListener('click', () => {
         const on = btn.getAttribute('aria-expanded') !== 'true';

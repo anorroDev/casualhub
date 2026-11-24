@@ -107,9 +107,14 @@ const MAX_CATS = 24;
 const LB_SCORE = 'lb-score';
 // «Разбор альбома» (opinion/album.js): трек оценивают одним баллом — он хранится как критерий «Оценка трека»
 const TRK_SCORE = 'trk-score';
-const trkOnly = (r) => !!r && Array.isArray(r.scores) && r.scores.length > 0 && r.scores.every(s => s.id === TRK_SCORE);
-// поля разбора: у трека — albumOf и trackNo, у альбома — trackCount, skip (пропущенные номера) и albumSrc (откуда треклист)
-const ALBUM_KEYS = ['albumOf', 'trackNo', 'trackCount', 'skip', 'albumSrc'];
+const trkOnly = (r) => !!r && Array.isArray(r.scores) && r.scores.length > 0 && r.scores.every(s => s.id === TRK_SCORE || s.id === 'alb-avg');
+// балл альбома, разобранного по трекам, пока его не оценили по критериям: среднее по трекам (с десятыми)
+const ALB_AVG = 'alb-avg';
+// трек отдельной оценкой становится от стольких критериев; с меньшим числом он живёт внутри альбома (поле tracks)
+const TRACK_FULL = 4;
+// поля разбора: у трека — albumOf и trackNo, у альбома — trackCount, skip (пропущенные номера), albumSrc (откуда треклист),
+// tracks (баллы треков внутри альбома) и art (обложка из каталога)
+const ALBUM_KEYS = ['albumOf', 'trackNo', 'trackCount', 'skip', 'albumSrc', 'tracks', 'art'];
 const lbOnly = (r) => !!r && Array.isArray(r.scores) && r.scores.length > 0 && r.scores.every(s => s.id === LB_SCORE);
 const fromLb = (r) => !!r && (r.src === 'letterboxd' || (Array.isArray(r.scores) && r.scores.some(s => s.id === LB_SCORE)));
 const MAX_CRIT = 15;
@@ -2477,7 +2482,7 @@ function unifyCats() {
     if (!c) {
       if (state.cats.length >= MAX_CATS) continue;
       // трек из «Разбора альбома» пришёл раньше своей категории: её критерии — из шаблона, а не одна «Оценка трека»
-      const tpl = trkOnly(r) ? allTemplates().find(t => keyOf(t.name) === k) : null;
+      const tpl = trkOnly(r) || !r.scores.length ? allTemplates().find(t => keyOf(t.name) === k) : null;
       const crit = tpl ? tplCriteria(tpl, r.cat) : trkOnly(r) ? [] : r.scores.slice(0, MAX_CRIT).map(x => ({ id: x.id, name: x.name, desc: x.desc || '' }));
       c = { id: r.cat, name: String(r.catName).slice(0, 40), criteria: crit.length ? crit : NEW_CAT_CRITERIA.map(x => ({ id: newId('c'), name: x.name, desc: x.desc })) };
       state.cats.push(c); byId.set(c.id, c); byName.set(k, c);
@@ -2690,6 +2695,7 @@ function loadIntoForm(r, opts) {
   // ref: фото лежит только на сервере, в этом браузере его сейчас нет. Без этой ссылки сохранение правки выбросило бы фото из оценки
   form.photo = r.photo ? { kind: 'saved', id: r.photo.id, data: r.photo.data || '', w: r.photo.w, h: r.photo.h, ...(r.photo.ref ? { ref: r.photo.ref } : {}) } : null;
   for (const s of r.scores) {
+    if (s.id === ALB_AVG) continue; // среднее по трекам не правится руками: оценил по критериям — оно уходит само
     if (s.v > 0) form.scores[s.id] = s.v;
     if (s.note) form.notes[s.id] = s.note;
     if (s.w && s.w !== 1) form.weights[s.id] = s.w;
@@ -2936,6 +2942,12 @@ async function save(opts) {
   if (scores.some(s => s.id !== LB_SCORE)) scores = scores.filter(s => s.id !== LB_SCORE);
   // так же балл трека из разбора: оценил трек по критериям — он больше не нужен
   if (scores.some(s => s.id !== TRK_SCORE)) scores = scores.filter(s => s.id !== TRK_SCORE);
+  // и среднее по трекам у альбома: оценил альбом по критериям — дальше его балл свой; снял все критерии — снова среднее
+  if (scores.some(s => s.id !== ALB_AVG)) scores = scores.filter(s => s.id !== ALB_AVG);
+  if (!scores.length && form.editingId && window.CasualAlbum) {
+    const tg = state.ratings.find(r => r.id === form.editingId);
+    if (tg && tg.trackCount) scores = window.CasualAlbum.avgScores(tg);
+  }
   const t = totalOf(scores);
   if (t == null && !noScoreOk(form.status) && !breakdown) {
     el.total.classList.remove('nudge'); void el.total.offsetWidth; el.total.classList.add('nudge');
@@ -3151,7 +3163,7 @@ function normalizeRating(id, d) {
     .map(s => ({
       id: s.id, name: s.name.slice(0, 60), desc: str(s.desc).slice(0, 120),
       w: (typeof s.w === 'number' && [0.5, 1, 2].includes(s.w)) ? s.w : 1,
-      v: clampInt(s.v, 0, 10), note: str(s.note).slice(0, 200)
+      v: s.id === ALB_AVG ? Math.round(Math.max(0, Math.min(10, +s.v || 0)) * 10) / 10 : clampInt(s.v, 0, 10), note: str(s.note).slice(0, 200)
     }));
   return {
     id, cat: str(d.cat), catName: str(d.catName).slice(0, 60),
@@ -3175,7 +3187,16 @@ function normalizeRating(id, d) {
       skip: [...new Set((Array.isArray(d.skip) ? d.skip : []).map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= 60))],
       ...(/^(dz|it):\d{1,15}$/.test(str(d.albumSrc)) ? { albumSrc: d.albumSrc } : {}),
       // оценка альбома поставлена до разбора: просим обновить. Сохранил альбом в форме — пометка пропадает (её нет в ALBUM_KEYS)
-      ...(d.rescore === true ? { rescore: true } : {})
+      ...(d.rescore === true ? { rescore: true } : {}),
+      ...(Array.isArray(d.tracks) ? { tracks: d.tracks.filter(t => t && typeof t === 'object' && +t.n >= 1).slice(0, 60).map(t => ({
+        n: clampInt(t.n, 1, 99), t: str(t.t).slice(0, 140),
+        v: Number.isFinite(+t.v) && +t.v > 0 ? Math.round(Math.min(10, +t.v) * 10) / 10 : null,
+        g: (Array.isArray(t.g) ? t.g : []).filter(x => typeof x === 'string').slice(0, 6).map(x => x.slice(0, 30)),
+        ...(t.s && typeof t.s === 'object' ? { s: Object.fromEntries(Object.entries(t.s).slice(0, 12).filter(([k, v]) => /^[\w.-]{1,80}$/.test(k) && +v > 0).map(([k, v]) => [k, clampInt(v, 1, 10)])) } : {}),
+        ...(/^[\w.-]{1,80}$/.test(str(t.rid)) ? { rid: t.rid } : {}),
+        ...(musicLinkOk(t.l) ? { l: t.l } : {})
+      })) } : {}),
+      ...(/^https:\/\/[^\s"'<>]{1,1500}$/.test(str(d.art)) ? { art: d.art } : {})
     } : {}),
     createdAt: str(d.createdAt), updatedAt: str(d.updatedAt)
   };

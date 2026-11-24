@@ -17,7 +17,7 @@ import { planSeasonReminder, cancelSeasonReminder, seasonReminderOf, mailOn } fr
 
 // подписи для истории опыта
 export const KIND_LABEL = {
-  rate: 'Оценка', review: 'Отзыв', rate_full: 'Оценка целиком', plan_done: 'Оценено из «В планах»', album_full: 'Альбом по трекам', import: 'Импорт из Letterboxd',
+  rate: 'Оценка', review: 'Отзыв', rate_full: 'Оценка целиком', plan_done: 'Оценено из «В планах»', album_full: 'Альбом по трекам', album_track: 'Трек в разборе альбома', import: 'Импорт из Letterboxd',
   tier: 'Тир-лист', tier_share: 'Ссылка на тир-лист', react: 'Реакция другу', comment: 'Комментарий',
   got_react: 'Реакция на твою оценку', got_comment: 'Комментарий тебе', friend: 'Новый друг', lots_host: 'Сбор лотов до победителя',
   lot_add: 'Лот в чужой сбор', lot_win: 'Твой лот победил', visit: 'Заход на сайт', invite: 'Приглашение', quest: 'Задание дня',

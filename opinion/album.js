@@ -1,8 +1,10 @@
-/* «Разбор альбома»: оценить каждый трек альбома отдельной оценкой под 30-секундные отрывки.
-   Трек — обычная оценка в той же категории: status «Трек», albumOf — id оценки альбома, trackNo — номер, балл — критерий
-   «Оценка трека» (TRK_SCORE) или критерии категории. У альбома: trackCount, skip (пропущенные номера), albumSrc (откуда треклист).
-   Карточка альбома в рейтинге рисует кардиограмму (баллы треков по порядку), вердикты и треки; треки в общем списке свёрнуты.
-   Опыт: каждый трек — оценка rate по обычным правилам, весь альбом целиком — album_full (functions/_lib/levels.js → albumsFull).
+/* «Разбор альбома»: оценить каждый трек альбома под 30-секундные отрывки.
+   Балл трека живёт внутри оценки альбома: поле tracks — { n, t, v, g (метки), s (критерии, если их меньше TRACK_FULL), rid, l }.
+   Отдельной оценкой (status «Трек», albumOf — id альбома, trackNo — номер) трек становится, только если его оценили
+   по TRACK_FULL и больше критериям: тогда он есть в рейтинге, профиле, статистике и опыте, а в tracks у него rid.
+   Пока альбом не оценён по критериям, его балл — среднее по трекам (критерий ALB_AVG). У альбома ещё trackCount,
+   skip (пропущенные номера), albumSrc (откуда треклист), art (обложка из каталога), rescore (оценка поставлена до разбора).
+   Опыт: альбом — одна оценка rate, разобранный целиком — album_full (functions/_lib/levels.js → albumsFull).
    Треклист: /api/music/album (Deezer, Apple), без аккаунта — Apple прямо из браузера. Работает поверх opinion/app.js (его функции общие). */
 (() => {
   const VOL_KEY = 'casualhub.albvol.v1';
@@ -14,8 +16,21 @@
   const reduce = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
   const catOf = (r) => state.cats.find((c) => c.id === r.cat) || { id: r.cat, name: r.catName || '' };
   const isAlbum = (r) => !!r && !r.albumOf && !r.example && (r.trackCount > 0 || (r.status === 'Альбом' && isMusicCat(catOf(r))));
-  const tracksOf = (id) => state.ratings.filter((x) => x.albumOf === id).sort((a, b) => a.trackNo - b.trackNo);
   const scoreOf = (t) => (typeof t.total === 'number' ? t.total : null);
+  const critN = (scores) => (scores || []).filter((x) => x && x.v > 0 && x.id !== TRK_SCORE && x.id !== ALB_AVG).length;
+  const albumOf = (id) => state.ratings.find((x) => x.id === id) || null;
+  // все оценённые треки альбома по номерам: { n, v, t, g, s, rid, l }. Отдельная оценка трека (4+ критерия) главнее записи в tracks
+  function entriesOf(al) {
+    const m = new Map();
+    for (const e of (al && al.tracks) || []) m.set(e.n, { ...e, g: e.g || [] });
+    for (const r of state.ratings) {
+      if (r.albumOf !== (al && al.id) || !(r.trackNo >= 1)) continue;
+      const e = m.get(r.trackNo) || { n: r.trackNo, t: titleOf(r), g: [] };
+      m.set(r.trackNo, { ...e, t: e.t || titleOf(r), v: scoreOf(r), g: tagsOf(r).length ? tagsOf(r) : e.g, rid: r.id });
+    }
+    return [...m.values()].sort((a, b) => a.n - b.n);
+  }
+  const tracksOf = (id) => entriesOf(albumOf(id)).filter((e) => e.v != null);
   const fmtS = (v) => (v == null ? '—' : Number.isInteger(v) ? String(v) : fmt(v));
   const tagsOf = (r) => String(r.meta || '').split(/\s*,\s*/).filter((x) => TAGS.includes(x));
   const yearOf = (s) => (String(s || '').match(/\b(19|20)\d{2}\b/) || [''])[0];
@@ -79,7 +94,10 @@
       ${ticks}
     </svg>`;
   }
-  const rowsOf = (tracks) => tracks.filter((t) => scoreOf(t) != null).map((t) => ({ n: t.trackNo, v: scoreOf(t), t: titleOf(t) }));
+  const rowsOf = (tracks) => tracks.filter((e) => e.v != null).map((e) => ({ n: e.n, v: e.v, t: e.t }));
+  const avgOf = (rows) => (rows.length ? Math.round((rows.reduce((a, x) => a + x.v, 0) / rows.length) * 10) / 10 : null);
+  // у альбома свой балл, если его оценили по критериям; иначе — среднее по трекам
+  const ownScored = (al) => critN(al.scores) > 0;
 
   // ---------- карточка в рейтинге ----------
   function cardHTML(r) {
@@ -96,7 +114,7 @@
     const rows = rowsOf(tracks);
     const N = r.trackCount || tracks.length;
     const done = rows.length + (r.skip || []).filter((n) => !rows.some((x) => x.n === n)).length;
-    const avg = rows.length ? Math.round((rows.reduce((a, x) => a + x.v, 0) / rows.length) * 10) / 10 : null;
+    const avg = avgOf(rows);
     const fr = friendsCache.get(keyOf(r.name)) || null;
     const chips = verdicts(rows).map((v) => `<span class="alb-chip" data-k="${v.k}">${esc(v.t)}</span>`);
     if (fr && fr.length) fr.forEach((f, i) => {
@@ -105,10 +123,7 @@
       chips.push(`<span class="alb-chip" style="--c:${COLORS[i % COLORS.length]}" data-k="friend">${esc(f.user.username)}: сошлись в ${a.agree} из ${a.of}</span>`);
       if (a.fight) chips.push(`<span class="alb-chip" data-k="bad">Главный спор: трек ${a.fight.n} — ты ${fmtS(a.fight.mine)}, ${esc(f.user.username)} ${fmtS(a.fight.v)}</span>`);
     });
-    const list = tracks.map((t) => {
-      const v = scoreOf(t);
-      return `<li><button type="button" data-alb="track" data-id="${esc(r.id)}" data-n="${t.trackNo}"${own ? '' : ' disabled'}><span class="alb-n">${t.trackNo}</span><span class="alb-t">${esc(titleOf(t))}${tagsOf(t).map((g) => ` <small>${esc(g)}</small>`).join('')}</span><b class="badge" data-tier="${tierT(v)}">${fmtS(v)}</b></button></li>`;
-    }).join('');
+    const list = tracks.map((e) => `<li><button type="button" data-alb="track" data-id="${esc(r.id)}" data-n="${e.n}"${own ? '' : ' disabled'}><span class="alb-n">${e.n}</span><span class="alb-t">${esc(e.t || '')}${(e.g || []).map((g) => ` <small>${esc(g)}</small>`).join('')}${e.rid ? ' <small class="alb-own" title="Оценён по критериям — есть в рейтинге отдельной оценкой">отдельная оценка</small>' : ''}</span><b class="badge" data-tier="${tierT(e.v)}">${fmtS(e.v)}</b></button></li>`).join('');
     return `<div class="alb-card">
       <div class="alb-head"><b>Кардиограмма альбома</b><span>${avg != null ? 'среднее по трекам ' + fmt(avg) : ''}${done < N ? ` · разобрано ${done} из ${N}` : ''}</span></div>
       ${curveSVG(rows, N, fr)}
@@ -126,7 +141,7 @@
   }
   // старая оценка альбома (поставлена до разбора): показать разницу со средним по трекам и попросить обновить
   function rescoreHTML(r, avg, own) {
-    if (!r.rescore || r.total == null || avg == null) return '';
+    if (!r.rescore || !ownScored(r) || r.total == null || avg == null) return '';
     const d = Math.round((avg - r.total) * 10) / 10;
     return `<div class="alb-old"><p><b>Оценка альбома старая</b> — она поставлена до разбора по трекам: у альбома ${fmt(r.total)}, а в среднем по трекам ${fmt(avg)}${Math.abs(d) >= 0.5 ? ` (${d > 0 ? 'на ' + fmt(d) + ' выше' : 'на ' + fmt(-d) + ' ниже'})` : ''}. Обнови её с учётом треков.</p>${own ? `<button type="button" class="btn small primary" data-alb="rescore" data-id="${esc(r.id)}">Изменить оценку альбома</button>` : ''}</div>`;
   }
@@ -176,13 +191,44 @@
     audio.addEventListener('ended', () => { if (solo && solo.audio === audio) stopSolo(); });
     audio.play().catch(() => stopSolo());
   }
-  // треки, свёрнутые в карточку альбома (альбом есть в рейтинге); тот, к которому ведут ссылкой, остаётся в списке
-  function folded(pool) {
-    const albums = new Set(state.ratings.filter((x) => x.trackCount > 0).map((x) => x.id));
-    if (!albums.size) return null;
-    const keep = new Set([state.pinId, state.flashId, state.confirmDel].filter(Boolean));
-    const out = new Set(pool.filter((r) => r.albumOf && albums.has(r.albumOf) && !keep.has(r.id)).map((r) => r.id));
-    return out.size ? out : null;
+  // треки, оценённые раньше отдельными оценками с одним баллом (до 1.19c), переезжают внутрь своих альбомов: отдельной оценкой
+  // остаётся только трек с TRACK_FULL и больше критериями. Удаление уходит в аккаунт и на другие устройства как обычно
+  let migrating = false;
+  async function migrate() {
+    if (migrating || !state.loaded || !state.canWrite) return;
+    const inner = state.ratings.filter((r) => r.albumOf && critN(r.scores) < TRACK_FULL && albumOf(r.albumOf));
+    if (!inner.length) return;
+    migrating = true;
+    try {
+      const by = new Map();
+      inner.forEach((r) => { if (!by.has(r.albumOf)) by.set(r.albumOf, []); by.get(r.albumOf).push(r); });
+      for (const [aid, list] of by) {
+        const al = albumOf(aid);
+        const m = new Map(((al && al.tracks) || []).map((e) => [e.n, e]));
+        for (const r of list) {
+          const cs = Object.fromEntries(r.scores.filter((x) => x.v > 0 && x.id !== TRK_SCORE).map((x) => [x.id, x.v]));
+          m.set(r.trackNo, { n: r.trackNo, t: titleOf(r), v: scoreOf(r), g: tagsOf(r), ...(Object.keys(cs).length ? { s: cs } : {}), ...(musicLinkOk(r.link) ? { l: r.link } : {}) });
+        }
+        await putAlbum(al, { tracks: [...m.values()].sort((a, b) => a.n - b.n) });
+        for (const r of list) await removeRating(r.id);
+      }
+    } finally { migrating = false; }
+  }
+  // раньше сворачивал треки в карточку альбома; теперь отдельной оценкой бывает только трек по 4+ критериям — его видно в списке
+  function folded() {
+    if (!migrating && state.loaded && state.ratings.some((r) => r.albumOf && critN(r.scores) < TRACK_FULL)) setTimeout(migrate, 0);
+    return null;
+  }
+  // сохранить альбом: записи tracks и, пока альбом не оценён по критериям, его балл — среднее по трекам
+  async function putAlbum(al, patch) {
+    const next = { ...al, ...patch, updatedAt: new Date().toISOString() };
+    if (!ownScored(next)) {
+      const avg = avgOf(rowsOf(entriesOf(next)));
+      next.scores = avg != null ? [{ id: ALB_AVG, name: 'Среднее по трекам', desc: '', w: 1, v: avg }] : [];
+      next.total = totalOf(next.scores);
+    }
+    await putRating(al.id, next);
+    return albumOf(al.id) || next;
   }
 
   // ---------- кнопка в форме: «Разобрать по трекам» у альбома ----------
@@ -255,6 +301,14 @@
       e.target.setAttribute('aria-valuetext', Math.round(v * 100) + '%');
       try { localStorage.setItem(VOL_KEY, String(v)); } catch (x) {}
     });
+    // перемотка: тянешь ползунок — отрывок идёт с этого места (и на телефоне)
+    ov.addEventListener('input', (e) => {
+      if (!ses || !e.target.matches('.alb-seek')) return;
+      const a = ses.audio, d = a.duration || 30;
+      const tt = Math.max(0, Math.min(d, +e.target.value || 0));
+      try { a.currentTime = tt; } catch (x) {}
+      e.target.style.setProperty('--p', (tt / d) * 100 + '%');
+    });
     ov.addEventListener('click', onClick);
     ov.addEventListener('keydown', onKey);
     ses.audio.addEventListener('timeupdate', paintTime);
@@ -267,17 +321,18 @@
       return;
     }
     ses.data = data;
-    // уже оценённые раньше синглы с тем же названием цепляются к альбому, а не дублируются
+    // ses.have: номер → запись трека { n, t, v, g, s, rid }. Уже оценённые раньше синглы с тем же названием цепляются к альбому
+    // ссылкой rid (их собственная оценка остаётся как была), а не дублируются
     const loose = new Map(state.ratings.filter((x) => !x.albumOf && x.id !== al.id && isMusicCat(catOf(x))).map((x) => [x.nameKey, x]));
-    ses.have = new Map();
+    ses.have = new Map(entriesOf(al).filter((e) => e.v != null).map((e) => [e.n, e]));
     for (const t of data.tracks) {
-      const mine = state.ratings.find((x) => x.albumOf === al.id && x.trackNo === t.n) || loose.get(keyOf(composeName(t.artist || al.artist || '', t.title)));
-      if (mine) ses.have.set(t.n, mine);
+      const single = !ses.have.has(t.n) && loose.get(keyOf(composeName(t.artist || al.artist || '', t.title)));
+      if (single && scoreOf(single) != null) ses.have.set(t.n, { n: t.n, t: t.title, v: scoreOf(single), g: tagsOf(single), rid: single.id, single: true });
     }
     ses.skip = new Set(al.skip || []);
-    // альбом запоминает, откуда треклист и сколько в нём треков
-    const old = al.total != null && !tracksOf(al.id).length && !al.trackCount;
-    if (al.trackCount !== data.tracks.length || al.albumSrc !== data.src || old) await saveAlbum({ trackCount: data.tracks.length, albumSrc: data.src, ...(old ? { rescore: true } : {}) });
+    // альбом запоминает, откуда треклист, сколько в нём треков и обложку; старая оценка по критериям — пометка rescore
+    const old = ownScored(al) && !tracksOf(al.id).length && !al.trackCount;
+    if (al.trackCount !== data.tracks.length || al.albumSrc !== data.src || old || (data.art && al.art !== data.art)) await saveAlbum({ trackCount: data.tracks.length, albumSrc: data.src, ...(/^https:\/\//.test(data.art || '') ? { art: data.art } : {}), ...(old ? { rescore: true } : {}) });
     const first = startN ? data.tracks.findIndex((t) => t.n === startN) : data.tracks.findIndex((t) => !ses.have.has(t.n) && !ses.skip.has(t.n));
     ses.i = first >= 0 ? first : 0;
     if (!startN && first < 0) ses.summary = true;
@@ -296,10 +351,8 @@
     if (f && f.isConnected) f.focus({ preventScroll: true });
   }
   async function saveAlbum(patch) {
-    const al = state.ratings.find((x) => x.id === ses.al.id) || ses.al;
-    const doc = { ...al, ...patch, updatedAt: new Date().toISOString() };
-    await putRating(al.id, doc);
-    ses.al = state.ratings.find((x) => x.id === al.id) || doc;
+    const al = albumOf(ses.al.id) || ses.al;
+    ses.al = await putAlbum(al, patch);
   }
   const cur = () => ses.data.tracks[ses.i];
   function critRows() {
@@ -313,13 +366,15 @@
     if (ses.summary) { paintSummary(box, art); return; }
     const t = cur();
     const prev = ses.have.get(t.n);
-    const v = prev ? scoreOf(prev) : null;
-    ses.tags = new Set(prev ? tagsOf(prev) : []);
+    const v = prev ? prev.v : null;
+    ses.tags = new Set(prev ? prev.g || [] : []);
     ses.cs = {};
-    if (prev) prev.scores.forEach((s) => { if (s.id !== TRK_SCORE && s.v) ses.cs[s.id] = s.v; });
+    const full = prev && prev.rid && !prev.single ? albumOf(prev.rid) : null;
+    if (full) full.scores.forEach((s) => { if (s.id !== TRK_SCORE && s.v) ses.cs[s.id] = s.v; });
+    else if (prev && prev.s) Object.assign(ses.cs, prev.s);
     const crit = critRows();
     const strip = data.tracks.map((x, i) => {
-      const h = ses.have.get(x.n), sv = h ? scoreOf(h) : null;
+      const h = ses.have.get(x.n), sv = h ? h.v : null;
       return `<button type="button" class="alb-bar${i === ses.i ? ' cur' : ''}${ses.skip.has(x.n) && sv == null ? ' sk' : ''}" data-alb-i="${i}" data-tier="${sv != null ? tierV(sv) : 'none'}" style="--h:${sv != null ? Math.max(8, sv * 10) : 8}%" title="${esc(x.n + '. ' + x.title + (sv != null ? ' — ' + fmtS(sv) : ses.skip.has(x.n) ? ' — пропущен' : ''))}" aria-label="${esc('Трек ' + x.n + ': ' + x.title)}"><i></i></button>`;
     }).join('');
     box.innerHTML = `
@@ -331,7 +386,7 @@
           <small>Трек ${t.n} из ${data.tracks.length}</small>
           <b class="alb-title">${esc(t.title)}</b>
           ${t.artist && keyOf(t.artist) !== keyOf(al.artist) ? `<span class="alb-feat">${esc(t.artist)}</span>` : ''}
-          <div class="alb-play">${t.preview ? `<button type="button" class="alb-pp" data-alb-x="play" aria-label="${ses.playing ? 'Пауза' : 'Слушать отрывок'}">${ses.playing ? '❚❚' : '▶'}</button><span class="alb-time"><i style="width:0%"></i></span><small class="alb-sec">0:30</small><label class="alb-volw" title="Громкость"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 6h2.5l3.5-3v10L5 10H2.5z"/><path d="M11 5.5a3.5 3.5 0 0 1 0 5M13 3.5a6.3 6.3 0 0 1 0 9"/></svg><input type="range" class="alb-vol" min="0" max="1" step="0.05" value="${ses.audio.volume}" style="--v:${ses.audio.volume * 100}%" aria-label="Громкость" aria-valuetext="${Math.round(ses.audio.volume * 100)}%"></label>` : `<span class="alb-noprev">Отрывка нет.</span>`}${t.link ? `<a class="linkish" href="${esc(t.link)}" target="_blank" rel="noopener">Целиком</a>` : ''}</div>
+          <div class="alb-play">${t.preview ? `<button type="button" class="alb-pp" data-alb-x="play" aria-label="${ses.playing ? 'Пауза' : 'Слушать отрывок'}">${ses.playing ? '❚❚' : '▶'}</button><input type="range" class="alb-seek" min="0" max="30" step="0.1" value="0" style="--p:0%" aria-label="Перемотка отрывка" aria-valuetext="0:00"><small class="alb-sec">0:30</small><label class="alb-volw" title="Громкость"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 6h2.5l3.5-3v10L5 10H2.5z"/><path d="M11 5.5a3.5 3.5 0 0 1 0 5M13 3.5a6.3 6.3 0 0 1 0 9"/></svg><input type="range" class="alb-vol" min="0" max="1" step="0.05" value="${ses.audio.volume}" style="--v:${ses.audio.volume * 100}%" aria-label="Громкость" aria-valuetext="${Math.round(ses.audio.volume * 100)}%"></label>` : `<span class="alb-noprev">Отрывка нет.</span>`}${t.link ? `<a class="linkish" href="${esc(t.link)}" target="_blank" rel="noopener">Целиком</a>` : ''}</div>
         </div>
       </div>
       <div class="alb-scale" role="group" aria-label="Балл трека от 1 до 10">${Array.from({ length: 10 }, (_, k) => k + 1).map((n) => `<button type="button" data-alb-v="${n}" data-tier="${tierV(n)}" aria-pressed="${v != null && Math.round(v) === n}">${n}</button>`).join('')}</div>
@@ -361,17 +416,20 @@
     const vin = ses.ov.querySelector('.alb-vinyl');
     if (vin) vin.classList.toggle('on', ses.playing);
   }
+  const mmss = (t) => Math.floor(t / 60) + ':' + String(Math.floor(t % 60)).padStart(2, '0');
   function paintTime() {
     if (!ses) return;
-    const a = ses.audio, i = ses.ov.querySelector('.alb-time i'), s = ses.ov.querySelector('.alb-sec');
-    if (i && a.duration) i.style.width = (a.currentTime / a.duration) * 100 + '%';
-    if (s && a.duration) s.textContent = '0:' + String(Math.max(0, Math.ceil(a.duration - a.currentTime))).padStart(2, '0');
+    const a = ses.audio, r = ses.ov.querySelector('.alb-seek'), s = ses.ov.querySelector('.alb-sec');
+    if (!a.duration) return;
+    if (r && document.activeElement !== r) { r.max = String(a.duration); r.value = String(a.currentTime); }
+    if (r) { r.style.setProperty('--p', (a.currentTime / a.duration) * 100 + '%'); r.setAttribute('aria-valuetext', mmss(a.currentTime)); }
+    if (s) s.textContent = mmss(Math.max(0, a.duration - a.currentTime));
   }
   function paintSummary(box, art) {
     const { al, data } = ses;
     const tracks = tracksOf(al.id);
     const rows = rowsOf(tracks);
-    const avg = rows.length ? Math.round((rows.reduce((a, x) => a + x.v, 0) / rows.length) * 10) / 10 : null;
+    const avg = avgOf(rows);
     const best = rows.slice().sort((a, b) => b.v - a.v)[0];
     const left = data.tracks.filter((t) => !ses.have.has(t.n) && !ses.skip.has(t.n)).length;
     box.innerHTML = `
@@ -383,50 +441,78 @@
         ${best ? `<p class="alb-best">Лучший трек: <b>${esc(best.t)}</b> · ${fmtS(best.v)}</p>` : ''}
         ${left ? `<p class="alb-best">Осталось разобрать: ${left}</p>` : ''}</div>
       </div>
-      ${al.rescore && al.total != null && avg != null ? `<p class="alb-old-s"><b>Оценка альбома старая:</b> ${fmt(al.total)} — она поставлена до разбора. Обнови её с учётом треков.</p>` : ''}
+      ${!ownScored(al) && avg != null ? `<p class="alb-old-s">Балл альбома — среднее по трекам: <b>${fmt(avg)}</b>. Оцени альбом по критериям, если хочешь свой балл.</p>` : ''}
+      ${al.rescore && ownScored(al) && al.total != null && avg != null ? `<p class="alb-old-s"><b>Оценка альбома старая:</b> ${fmt(al.total)} — она поставлена до разбора. Обнови её с учётом треков.</p>` : ''}
       ${curveSVG(rows, data.tracks.length, null, { big: true })}
       <div class="alb-chips">${verdicts(rows).map((v) => `<span class="alb-chip" data-k="${v.k}">${esc(v.t)}</span>`).join('')}</div>
       <div class="alb-row">
         ${left ? '<button type="button" class="btn small primary" data-alb-x="resume">Продолжить</button>' : ''}
-        ${al.total == null || al.rescore ? `<button type="button" class="btn small${left ? ' ghost' : ' primary'}" data-alb-x="rate-album">${al.rescore ? 'Изменить оценку альбома' : 'Оценить альбом целиком'}</button>` : ''}
+        <button type="button" class="btn small${left ? ' ghost' : ' primary'}" data-alb-x="rate-album">${al.rescore && ownScored(al) ? 'Изменить оценку альбома' : 'Оценить альбом по критериям'}</button>
         <a class="btn small ghost" href="/tierlist/#album=${encodeURIComponent(al.id)}">Тир-лист треков</a>
         ${rows.length >= 2 ? '<button type="button" class="btn small ghost" data-alb-x="png">Картинка</button>' : ''}
         <button type="button" class="btn small ghost" data-alb-x="close">Готово</button>
       </div>`;
     (box.querySelector('.alb-row .primary') || box.querySelector('.alb-x')).focus({ preventScroll: true });
   }
-  // сохранить балл текущего трека отдельной оценкой и перейти к следующему неразобранному
+  // сохранить балл текущего трека и перейти к следующему неразобранному: до TRACK_FULL критериев — запись внутри альбома,
+  // от TRACK_FULL — отдельная оценка трека (и ссылка на неё в записи)
   async function rate(scores) {
-    const { al, data } = ses;
+    const { data } = ses;
+    const al = albumOf(ses.al.id) || ses.al;
     const t = cur();
     const prev = ses.have.get(t.n);
+    const total = totalOf(scores);
+    const cs = Object.fromEntries(scores.filter((x) => x.id !== TRK_SCORE && x.v > 0).map((x) => [x.id, x.v]));
+    const tags = TAGS.filter((g) => ses.tags.has(g));
+    const entry = { n: t.n, t: t.title.slice(0, 140), v: total, g: tags, ...(musicLinkOk(t.link) ? { l: t.link } : {}) };
+    const ownRid = prev && prev.rid && !prev.single ? prev.rid : '';
+    if (critN(scores) < TRACK_FULL) {
+      // внутри альбома; была отдельная оценка трека — она больше не нужна
+      if (Object.keys(cs).length) entry.s = cs;
+      if (prev && prev.single) entry.rid = prev.rid;
+      const list = ((al.tracks) || []).filter((e) => e.n !== t.n).concat([entry]).sort((a, b) => a.n - b.n);
+      try {
+        ses.skip.delete(t.n);
+        ses.al = await putAlbum(al, { tracks: list, skip: [...ses.skip] });
+        if (ownRid && albumOf(ownRid)) await removeRating(ownRid);
+      } catch (e) { handleWriteError(e); return; }
+      ses.have.set(t.n, entry);
+      ses.crit = false;
+      advance();
+      return;
+    }
+    const prevFull = ownRid ? albumOf(ownRid) : (prev && prev.single ? albumOf(prev.rid) : null);
     const now = new Date().toISOString();
     const artist = (t.artist || al.artist || data.artist || '').slice(0, 80);
     const name = composeName(artist, t.title).slice(0, 140);
     const year = yearOf(al.meta) || data.year || '';
-    const keepMeta = prev ? String(prev.meta || '').split(/\s*,\s*/).filter((x) => x && !TAGS.includes(x) && x !== year) : [];
+    const pv = prevFull;
+    const keepMeta = pv ? String(pv.meta || '').split(/\s*,\s*/).filter((x) => x && !TAGS.includes(x) && x !== year) : [];
     const art = data.art || '';
-    const id = prev ? prev.id : newId('r');
+    const id = pv ? pv.id : newId('r');
     const doc = {
-      cat: al.cat, catName: al.catName, name, nameKey: keyOf(name), scores, total: totalOf(scores),
-      fav: !!(prev && prev.fav), status: 'Трек', ...(al.vis ? { vis: al.vis } : {}),
-      meta: [year, ...keepMeta, ...TAGS.filter((g) => ses.tags.has(g))].filter(Boolean).join(', ').slice(0, 80),
-      ...(musicLinkOk(t.link) ? { link: t.link } : prev && prev.link ? { link: prev.link } : {}),
-      pros: prev ? prev.pros : '', cons: prev ? prev.cons : '', note: prev ? prev.note : '', example: false,
-      createdAt: prev ? prev.createdAt || now : now, updatedAt: now,
+      cat: al.cat, catName: al.catName, name, nameKey: keyOf(name), scores, total,
+      fav: !!(pv && pv.fav), status: 'Трек', ...(al.vis ? { vis: al.vis } : {}),
+      meta: [year, ...keepMeta, ...tags].filter(Boolean).join(', ').slice(0, 80),
+      ...(musicLinkOk(t.link) ? { link: t.link } : pv && pv.link ? { link: pv.link } : {}),
+      pros: pv ? pv.pros : '', cons: pv ? pv.cons : '', note: pv ? pv.note : '', example: false,
+      createdAt: pv ? pv.createdAt || now : now, updatedAt: now,
       artist, title: t.title.slice(0, 140), ...(artistFpOf(artist) ? { artistAva: artistFpOf(artist) } : {}),
       albumOf: al.id, trackNo: t.n,
     };
-    if (prev && prev.photo) doc.photo = prev.photo;
+    if (pv && pv.photo) doc.photo = pv.photo;
     else if (/^https:\/\//.test(art)) doc.photo = { id: art, data: '', w: 600, h: 600 };
     try {
       await putRating(id, doc);
-      logRatingSave(prev || null, id, doc, scores.length);
+      logRatingSave(pv || null, id, doc, scores.length);
+      entry.rid = id;
+      ses.skip.delete(t.n);
+      const list = ((albumOf(al.id) || al).tracks || []).filter((e) => e.n !== t.n).concat([entry]).sort((a, b) => a.n - b.n);
+      ses.al = await putAlbum(albumOf(al.id) || al, { tracks: list, skip: [...ses.skip] });
     } catch (e) { handleWriteError(e); return; }
-    const saved = state.ratings.find((x) => x.id === id) || doc;
-    ses.have.set(t.n, saved);
-    if (ses.skip.has(t.n)) { ses.skip.delete(t.n); await saveAlbum({ skip: [...ses.skip] }); }
+    ses.have.set(t.n, entry);
     ses.crit = false;
+    toast(`«${t.title}» оценён по ${critN(scores)} критериям — теперь это отдельная оценка в рейтинге`);
     advance();
   }
   function advance() {
@@ -471,7 +557,7 @@
         break;
       }
       case 'resume': ses.summary = false; advance(); break;
-      case 'rate-album': { const al = state.ratings.find((x) => x.id === ses.al.id); const avg = rowsOf(tracksOf(al.id)); close(); loadIntoForm(al, { rate: true }); if (avg.length) setTimeout(() => toast(`Среднее по трекам: ${fmt(Math.round((avg.reduce((a, x) => a + x.v, 0) / avg.length) * 10) / 10)}. Теперь оцени альбом целиком`), 2900); break; }
+      case 'rate-album': { const al = albumOf(ses.al.id); const avg = avgOf(rowsOf(tracksOf(al.id))); close(); loadIntoForm(al, { rate: true }); if (avg != null) setTimeout(() => toast(`Среднее по трекам: ${fmt(avg)}. Поставь баллы по критериям — это станет оценкой альбома`), 2900); break; }
       case 'png': sharePNG(ses.al.id); break;
     }
   }
@@ -479,11 +565,20 @@
   async function retag() {
     const t = cur(), prev = ses.have.get(t.n);
     if (!prev) return;
-    const year = yearOf(ses.al.meta) || ses.data.year || '';
-    const rest = String(prev.meta || '').split(/\s*,\s*/).filter((x) => x && !TAGS.includes(x) && x !== year);
-    const doc = { ...prev, meta: [year, ...rest, ...TAGS.filter((g) => ses.tags.has(g))].filter(Boolean).join(', ').slice(0, 80), updatedAt: new Date().toISOString() };
-    await putRating(prev.id, doc);
-    ses.have.set(t.n, state.ratings.find((x) => x.id === prev.id) || doc);
+    const tags = TAGS.filter((g) => ses.tags.has(g));
+    const al = albumOf(ses.al.id) || ses.al;
+    const entry = { ...prev, g: tags };
+    delete entry.single;
+    if (prev.single) { /* у сингла свои метки — в альбоме только запись */ }
+    const full = prev.rid && !prev.single ? albumOf(prev.rid) : null;
+    if (full) {
+      const year = yearOf(al.meta) || ses.data.year || '';
+      const rest = String(full.meta || '').split(/\s*,\s*/).filter((x) => x && !TAGS.includes(x) && x !== year);
+      await putRating(full.id, { ...full, meta: [year, ...rest, ...tags].filter(Boolean).join(', ').slice(0, 80), updatedAt: new Date().toISOString() });
+    }
+    const list = (al.tracks || []).filter((e) => e.n !== t.n).concat([entry]).sort((a, b) => a.n - b.n);
+    ses.al = await putAlbum(al, { tracks: list });
+    ses.have.set(t.n, prev.single ? { ...entry, single: true } : entry);
   }
   function repaintCrit() {
     const crit = critRows();
@@ -507,8 +602,8 @@
     if (/^[0-9]$/.test(e.key) && !ses.crit) { e.preventDefault(); rate([{ id: TRK_SCORE, name: 'Оценка трека', desc: '', w: 1, v: e.key === '0' ? 10 : +e.key }]); return; }
     if (e.key === ' ' && !e.target.closest('button, a')) { e.preventDefault(); if (cur().preview) play(); return; }
     if (e.key === 's' || e.key === 'S' || e.key === 'ы' || e.key === 'Ы') { e.preventDefault(); toggleSkip(); return; }
-    if (e.key === 'ArrowRight' && !e.target.closest('.alb-scale, .alb-mini')) { if (ses.i < ses.data.tracks.length - 1) { ses.i++; paint(); } }
-    if (e.key === 'ArrowLeft' && !e.target.closest('.alb-scale, .alb-mini')) { if (ses.i > 0) { ses.i--; paint(); } }
+    if (e.key === 'ArrowRight' && !e.target.closest('.alb-scale, .alb-mini, .alb-seek, .alb-vol')) { if (ses.i < ses.data.tracks.length - 1) { ses.i++; paint(); } }
+    if (e.key === 'ArrowLeft' && !e.target.closest('.alb-scale, .alb-mini, .alb-seek, .alb-vol')) { if (ses.i > 0) { ses.i--; paint(); } }
   }
 
   // ---------- картинка для друзей: обложка, кардиограмма, лучший трек ----------
@@ -525,7 +620,7 @@
     cv.width = W; cv.height = H;
     const g = cv.getContext('2d');
     g.fillStyle = C.bg; g.fillRect(0, 0, W, H);
-    const art = (ses && ses.al.id === al.id && ses.data && ses.data.art) || (/^https:/.test((tracksOf(al.id)[0] || {}).photo?.id || '') ? tracksOf(al.id)[0].photo.id : '') || resolvePhotoUrl(al.photo);
+    const art = (ses && ses.al.id === al.id && ses.data && ses.data.art) || al.art || resolvePhotoUrl(al.photo);
     const im = art ? await loadImg(art) : null;
     const disp = cs.getPropertyValue('--font-display').trim() || 'Handjet, sans-serif';
     if (im) { try { g.drawImage(im, 80, 80, 360, 360); g.getImageData(0, 0, 1, 1); } catch (e) { g.fillStyle = C.bg; g.fillRect(80, 80, 360, 360); } }
@@ -613,5 +708,7 @@
   // кнопка «Слушать отрывок» в форме появляется, как только набрано название трека
   document.addEventListener('input', (e) => { if (e.target && (e.target.id === 'itemName' || e.target.id === 'itemArtist')) formHint(); });
 
-  window.CasualAlbum = { cardHTML, folded, formHint, open, verdicts, agreement };
+  // балл альбома без своих критериев — среднее по трекам (save() в app.js, если в форме критерии сняли)
+  const avgScores = (al) => { const avg = avgOf(rowsOf(entriesOf(al))); return avg != null ? [{ id: ALB_AVG, name: 'Среднее по трекам', desc: '', w: 1, v: avg }] : []; };
+  window.CasualAlbum = { cardHTML, folded, formHint, open, verdicts, agreement, avgScores };
 })();

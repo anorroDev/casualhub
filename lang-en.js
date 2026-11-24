@@ -3430,6 +3430,8 @@
 "Альбомы, разобранные по трекам целиком":"Albums broken down track by track",
 "Разобрал альбом по трекам целиком":"Broke an album down track by track",
 "Альбом по трекам":"Album by tracks",
+"Трек в разборе альбома":"Track in an album breakdown",
+"Трек, оценённый в разборе альбома":"A track rated in an album breakdown",
 "10 новых оценок за неделю":"10 new ratings this week",
 "10 реакций и комментариев друзьям":"10 reactions and comments to friends",
 "Проведи сбор лотов до победителя":"Run a lot collection to the winner",
