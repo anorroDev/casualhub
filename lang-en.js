@@ -3791,7 +3791,24 @@ window.CasualLangPack = {
 "Снег выключен":"Snow is off",
 "Новогодняя неделя":"New Year week",
 // новогодний календарь в «Почте», рамка «Новый год» и снег (levels-ui.js → adventBox, advent.js, settings.js)
-"{} — уже в магазине. Рамка «Новый год» — твоя: надень её в «Оформлении":"{} — already in the shop. The “New Year” frame is yours: put it on in “Look"
+"{} — уже в магазине. Рамка «Новый год» — твоя: надень её в «Оформлении":"{} — already in the shop. The “New Year” frame is yours: put it on in “Look",
+// «Угадай оценку друга» (opinion/guess.js, functions/_lib/guess.js), задание дня и опыт за неё
+"Угадай оценку друга":"Guess a friend’s rating",
+"Здесь угадывают, как друзья оценили игры, фильмы и музыку. Добавь друзей — кнопка «Друзья» в шапке":"Here you guess how friends rated games, films and music. Add friends — the “Friends” button in the header",
+"Друзья пока не оценили ничего, что тебе видно. Загляни позже":"Your friends haven’t rated anything you can see yet. Check back later",
+"Балл друга":"Friend’s score",
+"Неделя с друзьями":"This week with friends",
+"Очки: {} из {}":"Points: {} of {}",
+"Завтра — новые оценки друзей":"New friends’ ratings tomorrow",
+"Вот как друзья оценили на самом деле":"Here’s how your friends actually rated it",
+"Как друзья это оценили? Ближе к их баллу — больше очков: в точку — 3, рядом — 2, почти — 1":"How did your friends rate these? The closer to their score, the more points: spot on — 3, close — 2, almost — 1",
+"Сегодня угадывать нечего: у друзей нет оценок, которые тебе видны":"Nothing to guess today: your friends have no ratings you can see",
+"Сегодня ты уже угадывал. Завтра — новые оценки":"You’ve already guessed today. New ratings tomorrow",
+"Сыграл в «Угадай оценку друга":"Played “Guess a friend’s rating",
+"Сыграй в «Угадай оценку друга»":"Play “Guess a friend’s rating”",
+"Проверить":"Check",
+"Ты":"You",
+"В Мнении — кнопка «Угадай оценку друга» в шапке: угадай баллы друзей ползунком и нажми «Проверить». Нужны друзья с оценками":"In Opinion — the “Guess a friend’s rating” button in the header: guess your friends’ scores with the slider and press “Check”. You need friends with ratings"
 },
   // слово после числа: 1 оценка, 5 оценок. [все русские формы, одна штука, несколько]
   nouns: [
@@ -3838,5 +3855,6 @@ window.CasualLangPack = {
     [['прогноз сбылся', 'прогноза сбылись', 'прогнозов сбылось'], 'prediction came true', 'predictions came true'],
     [['победа в бинго', 'победы в бинго', 'побед в бинго'], 'bingo win', 'bingo wins'],
     [['задание выполнено', 'задания выполнены', 'заданий выполнено'], 'quest completed', 'quests completed'],
+    [['день в «Угадай оценку друга', 'дня в «Угадай оценку друга', 'дней в «Угадай оценку друга'], 'day of “Guess a friend’s rating', 'days of “Guess a friend’s rating'],
   ],
 };

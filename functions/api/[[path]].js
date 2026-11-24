@@ -14,6 +14,7 @@ import { makeShopRoutes } from '../_lib/shop-api.js';
 import { makeMailoutRoutes, rememberLang } from '../_lib/mailout.js';
 import { makePredictRoutes } from '../_lib/lots-predict.js';
 import { makeRiddleRoutes } from '../_lib/riddle.js';
+import { makeGuessRoutes } from '../_lib/guess.js';
 import { makeEveningRoutes } from '../_lib/lots-evening.js';
 import { makeBingoRoutes } from '../_lib/bingo.js';
 import { makeKingRoutes } from '../_lib/king.js';
@@ -3232,6 +3233,8 @@ Object.assign(routes, makeMailoutRoutes({
 Object.assign(routes, makePredictRoutes({ json, fail, readBody, burst, currentUser, lvGive, isAdmin }));
 // загадка дня (/api/riddle…) — functions/_lib/riddle.js
 Object.assign(routes, makeRiddleRoutes({ json, fail, readBody, burst, lvGive }));
+// «Угадай оценку друга» (/api/guess) — functions/_lib/guess.js
+Object.assign(routes, makeGuessRoutes({ json, fail, readBody, burst, lvGive }));
 // «Вечер с друзьями»: вето в сборе лотов (/api/lots/:code/veto, /evening) — functions/_lib/lots-evening.js
 Object.assign(routes, makeEveningRoutes({ json, fail, readBody, burst, currentUser, pokeRoom }));
 // бинго для стрима в сборе лотов (/api/lots/:code/bingo) — functions/_lib/bingo.js

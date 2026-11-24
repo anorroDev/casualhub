@@ -438,7 +438,7 @@
     ['Музыка: разбор альбома', ['album_track', 'album_full']],
     ['Тир-листы', ['tier', 'tier_share', 'tier_coop', 'tier_coop_host']],
     ['Друзья', ['react', 'comment', 'got_react', 'got_comment', 'friend']],
-    ['Лоты и игры', ['lots_host', 'lot_add', 'lot_win', 'predict_win', 'bingo_win', 'king_host', 'king_vote', 'riddle']],
+    ['Лоты и игры', ['lots_host', 'lot_add', 'lot_win', 'predict_win', 'bingo_win', 'king_host', 'king_vote', 'riddle', 'guess']],
   ];
   const EV_RATE = new Set(['rate', 'review', 'rate_full', 'plan_done', 'import']);
   const EV_PRESETS = [

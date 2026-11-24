@@ -907,7 +907,7 @@ test('итоги года: музыка, режимы, рофланы и сам�
   let y = await recap(env, 'u1', 2026);
   assert.equal(y.ratings, 3);
   assert.deepEqual(y.music, { albums: 1, tracks: 3, top: { name: 'Blonde', total: 8.6 }, track: { name: 'Ivy', album: 'Blonde', v: 9.5 } });
-  assert.deepEqual(y.modes, { riddles: 3, lotsWon: 2, lotsHosted: 1, kingHosted: 1, kingVotes: 1, predictWins: 1, bingoWins: 0, tierCoop: 0, quests: 4 });
+  assert.deepEqual(y.modes, { riddles: 3, lotsWon: 2, lotsHosted: 1, kingHosted: 1, kingVotes: 1, predictWins: 1, bingoWins: 0, tierCoop: 0, quests: 4, guesses: 0 });
   assert.deepEqual(y.hot, { name: 'Hades', mine: 9, theirs: 4, n: 1 });
   assert.equal(y.roflans, 0, 'таблицы магазина ещё нет — итоги не падают');
   env.DB.raw.exec('CREATE TABLE shop_log (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, item TEXT, delta INTEGER NOT NULL, reason TEXT NOT NULL, note TEXT, by_id TEXT, at INTEGER NOT NULL)');

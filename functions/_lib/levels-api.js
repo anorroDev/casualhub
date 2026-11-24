@@ -25,7 +25,7 @@ export const KIND_LABEL = {
   lot_add: 'Лот в чужой сбор', lot_win: 'Твой лот победил', visit: 'Заход на сайт', invite: 'Приглашение', quest: 'Задание дня',
   quest_all: 'Все задания дня', quest_week: 'Задание недели', streak: 'Серия дней', first: 'Первые шаги', past: 'Опыт за прошлое',
   admin: 'От администрации', event: 'Тематическая неделя', gift: 'Подарок из почты', ach: 'Достижение', mentor: 'Друг по твоей ссылке дошёл до 10-го уровня',
-  riddle: 'Загадка дня', predict_win: 'Угадал победителя сбора', bingo_win: 'Линия в бинго', king_host: 'Провёл «Царя Горы»', king_vote: 'Голос в «Царе Горы»',
+  riddle: 'Загадка дня', guess: 'Угадай оценку друга', predict_win: 'Угадал победителя сбора', bingo_win: 'Линия в бинго', king_host: 'Провёл «Царя Горы»', king_vote: 'Голос в «Царе Горы»',
   tier_coop: '«Тир-лист вместе»', tier_coop_host: 'Провёл «Тир-лист вместе»',
 };
 // таблица «За что сколько опыта» в «Прогрессе»: цифры — прямо из RULES, подписи — в levels-ui.js (XP_TABLE)
@@ -785,7 +785,7 @@ export async function recap(env, uid, year) {
   const kn = Object.fromEntries((kinds.results || []).map((x) => [x.kind, +x.n || 0]));
   const modes = {
     riddles: kn.riddle || 0, lotsWon: kn.lot_win || 0, lotsHosted: kn.lots_host || 0, kingHosted: kn.king_host || 0, kingVotes: kn.king_vote || 0,
-    predictWins: kn.predict_win || 0, bingoWins: kn.bingo_win || 0, tierCoop: (kn.tier_coop || 0) + (kn.tier_coop_host || 0), quests: kn.quest || 0,
+    predictWins: kn.predict_win || 0, bingoWins: kn.bingo_win || 0, tierCoop: (kn.tier_coop || 0) + (kn.tier_coop_host || 0), quests: kn.quest || 0, guesses: kn.guess || 0,
   };
   return {
     year, username: ((me.results || [])[0] || {}).username || '',
