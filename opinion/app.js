@@ -114,7 +114,7 @@ const ALB_AVG = 'alb-avg';
 const TRACK_FULL = 4;
 // поля разбора: у трека — albumOf и trackNo, у альбома — trackCount, skip (пропущенные номера), albumSrc (откуда треклист),
 // tracks (баллы треков внутри альбома) и art (обложка из каталога)
-const ALBUM_KEYS = ['albumOf', 'trackNo', 'trackCount', 'skip', 'albumSrc', 'tracks', 'art'];
+const ALBUM_KEYS = ['albumOf', 'trackNo', 'trackCount', 'skip', 'albumSrc', 'tracks', 'art', 'amode'];
 const lbOnly = (r) => !!r && Array.isArray(r.scores) && r.scores.length > 0 && r.scores.every(s => s.id === LB_SCORE);
 const fromLb = (r) => !!r && (r.src === 'letterboxd' || (Array.isArray(r.scores) && r.scores.some(s => s.id === LB_SCORE)));
 const MAX_CRIT = 15;
@@ -1230,6 +1230,26 @@ function totalOf(scores) {
     wSum += w;
   }
   return wSum ? round1(sum / wSum) : null;
+}
+// балл альбома с разбором по трекам. В scores у него свои критерии и ALB_AVG — среднее по трекам; что из этого балл, решает amode:
+// 'tracks' — среднее по трекам, 'crit' — свои критерии, 'mix' — пополам: критерии весят столько же, сколько все треки вместе
+// (иначе у альбома на 20 треков оценка по критериям потерялась бы). Без amode — критерии, если они есть, иначе треки
+const AMODES = ['tracks', 'crit', 'mix'];
+function albumParts(scores) {
+  const a = scores.find(s => s.id === ALB_AVG && s.v > 0);
+  return { avg: a ? a.v : null, crit: totalOf(scores.filter(s => s.id !== ALB_AVG)) };
+}
+function albumMode(r) {
+  if (AMODES.includes(r && r.amode)) return r.amode;
+  return albumParts((r && r.scores) || []).crit != null ? 'crit' : 'tracks';
+}
+function scoreTotal(scores, amode) {
+  const { avg, crit } = albumParts(scores);
+  if (avg == null) return totalOf(scores);
+  const mode = AMODES.includes(amode) ? amode : crit != null ? 'crit' : 'tracks';
+  if (crit == null || mode === 'tracks') return avg;
+  if (mode === 'crit') return crit;
+  return round1((crit + avg) / 2);
 }
 function critWord(n) { return plural(n, 'критерий', 'критерия', 'критериев'); }
 function coverage(n, N) {
@@ -2495,7 +2515,7 @@ function unifyCats() {
       if (state.cats.length >= MAX_CATS) continue;
       // трек из «Разбора альбома» пришёл раньше своей категории: её критерии — из шаблона, а не одна «Оценка трека»
       const tpl = trkOnly(r) || !r.scores.length ? allTemplates().find(t => keyOf(t.name) === k) : null;
-      const crit = tpl ? tplCriteria(tpl, r.cat) : trkOnly(r) ? [] : r.scores.slice(0, MAX_CRIT).map(x => ({ id: x.id, name: x.name, desc: x.desc || '' }));
+      const crit = tpl ? tplCriteria(tpl, r.cat) : trkOnly(r) ? [] : r.scores.filter(x => x.id !== ALB_AVG).slice(0, MAX_CRIT).map(x => ({ id: x.id, name: x.name, desc: x.desc || '' }));
       c = { id: r.cat, name: String(r.catName).slice(0, 40), criteria: crit.length ? crit : NEW_CAT_CRITERIA.map(x => ({ id: newId('c'), name: x.name, desc: x.desc })) };
       state.cats.push(c); byId.set(c.id, c); byName.set(k, c);
       cats = true;
@@ -2754,7 +2774,7 @@ function repairOverwrittenCats() {
     const cat = byId.get(r.cat);
     if (!cat) return false;
     const ids = new Set(cat.criteria.map(k => k.id));
-    return !r.scores.some(s => ids.has(s.id));
+    return !r.scores.some(s => ids.has(s.id) || s.id === ALB_AVG);
   });
   if (!broken.length) return;
   // оценки с общими критериями — одна прежняя категория
@@ -2954,13 +2974,11 @@ async function save(opts) {
   if (scores.some(s => s.id !== LB_SCORE)) scores = scores.filter(s => s.id !== LB_SCORE);
   // так же балл трека из разбора: оценил трек по критериям — он больше не нужен
   if (scores.some(s => s.id !== TRK_SCORE)) scores = scores.filter(s => s.id !== TRK_SCORE);
-  // и среднее по трекам у альбома: оценил альбом по критериям — дальше его балл свой; снял все критерии — снова среднее
-  if (scores.some(s => s.id !== ALB_AVG)) scores = scores.filter(s => s.id !== ALB_AVG);
-  if (!scores.length && form.editingId && window.CasualAlbum) {
-    const tg = state.ratings.find(r => r.id === form.editingId);
-    if (tg && tg.trackCount) scores = window.CasualAlbum.avgScores(tg);
-  }
-  const t = totalOf(scores);
+  // у альбома с разбором рядом с критериями всегда свежее среднее по трекам; какое из них балл — режим альбома (amode)
+  scores = scores.filter(s => s.id !== ALB_AVG);
+  const albT = form.editingId && window.CasualAlbum ? state.ratings.find(r => r.id === form.editingId) : null;
+  if (albT && albT.trackCount) scores = scores.concat(window.CasualAlbum.avgScores(albT));
+  const t = scoreTotal(scores, albT && albT.amode);
   if (t == null && !noScoreOk(form.status) && !breakdown) {
     el.total.classList.remove('nudge'); void el.total.offsetWidth; el.total.classList.add('nudge');
     toast('Оцени хотя бы один критерий или отметь «В планах»');
@@ -3179,7 +3197,7 @@ function normalizeRating(id, d) {
     }));
   return {
     id, cat: str(d.cat), catName: str(d.catName).slice(0, 60),
-    name: d.name.slice(0, 140), nameKey: keyOf(d.name), scores, total: totalOf(scores),
+    name: d.name.slice(0, 140), nameKey: keyOf(d.name), scores, total: scoreTotal(scores, d.amode),
     fav: d.fav === true,
     status: str(d.status).slice(0, 40),
     ...(d.vis === 'public' || d.vis === 'private' ? { vis: d.vis } : {}), // кто видит: без поля — друзья
@@ -3200,6 +3218,7 @@ function normalizeRating(id, d) {
       ...(/^(dz|it):\d{1,15}$/.test(str(d.albumSrc)) ? { albumSrc: d.albumSrc } : {}),
       // оценка альбома поставлена до разбора: просим обновить. Сохранил альбом в форме — пометка пропадает (её нет в ALBUM_KEYS)
       ...(d.rescore === true ? { rescore: true } : {}),
+      ...(AMODES.includes(d.amode) ? { amode: d.amode } : {}), // чем считать балл альбома: треки, критерии или пополам
       ...(Array.isArray(d.tracks) ? { tracks: d.tracks.filter(t => t && typeof t === 'object' && +t.n >= 1).slice(0, 60).map(t => ({
         n: clampInt(t.n, 1, 99), t: str(t.t).slice(0, 140),
         v: Number.isFinite(+t.v) && +t.v > 0 ? Math.round(Math.min(10, +t.v) * 10) / 10 : null,

@@ -130,6 +130,7 @@
     });
     return `<div class="alb-card">
       <div class="alb-head"><b>Кардиограмма альбома</b><span>${avg != null ? 'среднее по трекам ' + fmt(avg) : ''}${done < N ? ` · разобрано ${done} из ${N}` : ''}</span></div>
+      ${modeHTML(r, own)}
       ${curveSVG(rows, N, fr, { id: r.id })}
       <p class="alb-hint">Нажми на точку — заиграет отрывок</p>
       ${fr && fr.length ? `<p class="alb-legend"><span style="--c:var(--accent)">ты</span>${fr.map((f, i) => `<span style="--c:${COLORS[i % COLORS.length]}">${esc(f.user.username)}</span>`).join('')}</p>` : fr ? '<p class="alb-legend">Никто из друзей ещё не разбирал этот альбом.</p>' : ''}
@@ -145,7 +146,7 @@
   }
   // старая оценка альбома (поставлена до разбора): показать разницу со средним по трекам и попросить обновить
   function rescoreHTML(r, avg, own) {
-    if (!r.rescore || !ownScored(r) || r.total == null || avg == null) return '';
+    if (!r.rescore || !ownScored(r) || r.total == null || avg == null || albumMode(r) === 'tracks') return '';
     const d = Math.round((avg - r.total) * 10) / 10;
     return `<div class="alb-old"><p><b>Оценка альбома старая</b> — она поставлена до разбора по трекам: у альбома ${fmt(r.total)}, а в среднем по трекам ${fmt(avg)}${Math.abs(d) >= 0.5 ? ` (${d > 0 ? 'на ' + fmt(d) + ' выше' : 'на ' + fmt(-d) + ' ниже'})` : ''}. Обнови её с учётом треков.</p>${own ? `<button type="button" class="btn small primary" data-alb="rescore" data-id="${esc(r.id)}">Изменить оценку альбома</button>` : ''}</div>`;
   }
@@ -267,16 +268,40 @@
   function migrateSoon() {
     if (!migrating && state.loaded && state.canWrite && state.ratings.some(oldTrack)) setTimeout(migrate, 0);
   }
-  // сохранить альбом: записи tracks и, пока альбом не оценён по критериям, его балл — среднее по трекам
+  // сохранить альбом: записи tracks, свежее среднее по трекам рядом с критериями альбома и балл по режиму (scoreTotal в app.js)
   async function putAlbum(al, patch) {
     const next = { ...al, ...patch, updatedAt: new Date().toISOString() };
-    if (!ownScored(next)) {
-      const avg = avgOf(rowsOf(entriesOf(next)));
-      next.scores = avg != null ? [{ id: ALB_AVG, name: 'Среднее по трекам', desc: '', w: 1, v: avg }] : [];
-      next.total = totalOf(next.scores);
-    }
+    const avg = avgOf(rowsOf(entriesOf(next)));
+    next.scores = (next.scores || []).filter((s) => s.id !== ALB_AVG).concat(avg != null ? [{ id: ALB_AVG, name: 'Среднее по трекам', desc: '', w: 1, v: avg }] : []);
+    next.total = scoreTotal(next.scores, next.amode);
     await putRating(al.id, next);
     return albumOf(al.id) || next;
+  }
+  // переключатель «чем считать балл альбома»: у каждого варианта — какой балл получится
+  // в карточке рейтинга кнопки ловит data-alb, в окне разбора — data-alb-x (ov)
+  function modeHTML(al, own, ov) {
+    const parts = albumParts(al.scores || []);
+    if (parts.avg == null) return '';
+    const mode = albumMode(al);
+    const mix = parts.crit != null ? Math.round(((parts.crit + parts.avg) / 2) * 10) / 10 : null;
+    const opt = (m, label, v, hint) => `<button type="button" class="alb-mode-b" data-alb${ov ? '-x' : ''}="mode" data-id="${esc(al.id)}" data-m="${m}" aria-pressed="${mode === m}" title="${hint}"${own ? '' : ' disabled'}><span>${label}</span><b>${v != null ? fmt(v) : '—'}</b></button>`;
+    return `<div class="alb-mode" role="group" aria-label="Чем считать балл альбома"><small>Балл альбома</small><div class="alb-mode-row">
+      ${opt('tracks', 'По трекам', parts.avg, 'Среднее по всем оценённым трекам')}
+      ${opt('crit', 'По критериям', parts.crit, parts.crit != null ? 'Твоя оценка альбома по критериям' : 'Альбом ещё не оценён по критериям — откроется форма')}
+      ${opt('mix', 'Среднее', mix, 'Пополам: критерии весят столько же, сколько все треки вместе')}
+    </div></div>`;
+  }
+  async function setMode(id, mode) {
+    const al = albumOf(id);
+    if (!al || !AMODES.includes(mode)) return;
+    const next = await putAlbum(al, { amode: mode });
+    if (mode !== 'tracks' && albumParts(next.scores).crit == null) {
+      if (ses) close();
+      loadIntoForm(next, { rate: true });
+      setTimeout(() => toast(mode === 'mix' ? 'Оцени альбом по критериям — балл станет средним между ними и треками' : 'Оцени альбом по критериям — это станет его баллом'), 2900);
+      return;
+    }
+    if (ses && ses.summary) paint();
   }
 
   // ---------- кнопка в форме: «Разобрать по трекам» у альбома ----------
@@ -503,6 +528,7 @@
       </div>
       ${!ownScored(al) && avg != null ? `<p class="alb-old-s">Балл альбома — среднее по трекам: <b>${fmt(avg)}</b>. Оцени альбом по критериям, если хочешь свой балл.</p>` : ''}
       ${al.rescore && ownScored(al) && al.total != null && avg != null ? `<p class="alb-old-s"><b>Оценка альбома старая:</b> ${fmt(al.total)} — она поставлена до разбора. Обнови её с учётом треков.</p>` : ''}
+      ${modeHTML(albumOf(al.id) || al, true, true)}
       ${curveSVG(rows, data.tracks.length, null, { big: true, id: al.id })}
       ${rows.length ? '<p class="alb-hint">Нажми на точку — заиграет отрывок</p>' : ''}
       <div class="alb-chips">${verdicts(rows).map((v) => `<span class="alb-chip" data-k="${v.k}">${esc(v.t)}</span>`).join('')}</div>
@@ -633,6 +659,7 @@
       case 'edit': ses.summary = false; ses.crit = false; ses.edit = true; ses.i = 0; paint(); break;
       case 'rate-album': { const al = albumOf(ses.al.id); const avg = avgOf(rowsOf(tracksOf(al.id))); close(); loadIntoForm(al, { rate: true }); if (avg != null) setTimeout(() => toast(`Среднее по трекам: ${fmt(avg)}. Поставь баллы по критериям — это станет оценкой альбома`), 2900); break; }
       case 'png': sharePNG(ses.al.id); break;
+      case 'mode': setMode(ses.al.id, b.dataset.m); break;
     }
   }
   // метки меняются и у уже оценённого трека — без перехода к следующему
@@ -765,6 +792,7 @@
     switch (b.dataset.alb) {
       case 'open': open(id); break;
       case 'track': open(id, +b.dataset.n); break;
+      case 'mode': setMode(id, b.dataset.m); break;
       case 'goto': goToRating(id); break;
       case 'rescore': { const al = state.ratings.find((x) => x.id === id); if (al) loadIntoForm(al); break; }
       case 'png': sharePNG(id); break;
