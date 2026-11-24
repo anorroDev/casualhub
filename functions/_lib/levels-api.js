@@ -279,6 +279,33 @@ export function makeLevelsRoutes(h) {
         const { results } = await env.DB.prepare("SELECT CASE WHEN a = ?1 THEN b ELSE a END AS id FROM friendships WHERE (a = ?1 OR b = ?1) AND status = 'accepted'").bind(me.id).all();
         ids = [me.id, ...(results || []).map((x) => x.id)].slice(0, 90);
       }
+      // за всё время: весь набранный опыт (user_level.xp), топ-50 и своё место, если в топ не попал
+      if (new URL(request.url).searchParams.get('period') === 'all') {
+        const inIds = ids ? `AND ul.user_id IN (${ids.map(() => '?').join(', ')})` : '';
+        const { results: all } = await env.DB.prepare(
+          `SELECT ul.user_id, ul.xp, ul.level, ul.prefs, u.username, u.uname FROM user_level ul JOIN users u ON u.id = ul.user_id
+           WHERE ul.xp > 0 ${inIds} ORDER BY ul.xp DESC, ul.user_id LIMIT 120`
+        ).bind(...(ids || [])).all();
+        const seen = (all || []).filter((r) => r.user_id === me.id || !prefsOf(r).hideBoard).map((r) => ({
+          id: r.user_id, username: r.username, handle: r.uname, xp: +r.xp || 0,
+          level: prefsOf(r).hideLevel && r.user_id !== me.id ? null : levelView(+r.xp || 0, +r.level || 1).level, me: r.user_id === me.id,
+        }));
+        const top = seen.slice(0, 50).map((x, i) => ({ ...x, place: i + 1 }));
+        let mine = null;
+        if (!top.some((x) => x.me)) {
+          const my = (await env.DB.prepare('SELECT xp, level FROM user_level WHERE user_id = ?').bind(me.id).first()) || { xp: 0, level: 1 };
+          if (+my.xp > 0) {
+            // место без учёта скрывших себя из рейтинга: на «Весь сайт» хватает одного счётчика
+            const above = ids ? seen.filter((x) => x.xp > +my.xp).length
+              : +((await env.DB.prepare('SELECT COUNT(*) AS n FROM user_level WHERE xp > ?').bind(+my.xp).first()) || {}).n || 0;
+            mine = { id: me.id, username: me.username, handle: me.uname || me.handle, xp: +my.xp, level: levelView(+my.xp, +my.level || 1).level, me: true, place: above + 1 };
+          }
+        }
+        const shownAll = [...top, ...(mine ? [mine] : [])].filter((x) => x.level != null);
+        const sxa = await seasonXpMany(env, [...new Set(shownAll.map((x) => x.id))], await currentSeason(env));
+        const rk = (x) => (x.level != null ? { ...x, ...rankFields(sxa[x.id] || 0) } : x);
+        return json({ scope, period: 'all', top: top.map(rk), mine: mine ? rk(mine) : null });
+      }
       const where = ids ? `AND l.user_id IN (${ids.map(() => '?').join(', ')})` : '';
       const { results } = await env.DB.prepare(
         `SELECT l.user_id, SUM(CASE WHEN l.day >= ?1 THEN l.xp ELSE 0 END) AS week, SUM(CASE WHEN l.day < ?1 THEN l.xp ELSE 0 END) AS prev,

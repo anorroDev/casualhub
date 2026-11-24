@@ -328,6 +328,8 @@ html.lv-on .ava-wrap > .ava-ring { display: none !important; }
 .lv-board em { font-style: normal; font-weight: 800; color: var(--ink-3, #8a8f9e); text-align: center; }
 .lv-board b { font-variant-numeric: tabular-nums; }
 .lv-seg { display: inline-flex; gap: 4px; padding: 3px; border-radius: 999px; border: 1px solid var(--line, #2b2e38); justify-self: start; }
+.lv-segs { display: flex; flex-wrap: wrap; gap: 8px; }
+.lv-gap { margin: 0; text-align: center; color: var(--ink-3, #8a90a0); line-height: 1; padding: 2px 0; }
 .lv-seg button { padding: 5px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--ink-2, #b5b5b5); font: 600 13px/1.2 inherit; font-family: inherit; cursor: pointer; }
 .lv-seg button[aria-pressed="true"] { background: var(--accent, #3550E8); color: #fff; }
 .lv-pick { display: flex; flex-wrap: wrap; gap: 8px; }
@@ -1203,14 +1205,24 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       return `<p class="lv-muted">${got ? `Получено ${got} из ${d.items.length}. Три любимых можно показать в профиле.` : `Пока ни одного из ${d.items.length} — первое уже близко: ниже видно, сколько осталось.`}</p>${achList(d.items, true)}`;
     },
     async board() {
-      const scope = VIEWS.scope || 'friends';
-      const d = await api('/levels/board?scope=' + scope);
+      const scope = VIEWS.scope || 'friends', period = VIEWS.period || 'week';
+      const d = await api('/levels/board?scope=' + scope + (period === 'all' ? '&period=all' : ''));
+      // два переключателя: чей рейтинг и за какое время
+      const segs = `<div class="lv-segs"><div class="lv-seg" role="group" aria-label="Чей рейтинг"><button type="button" data-scope="friends" aria-pressed="${scope === 'friends'}">Друзья</button><button type="button" data-scope="all" aria-pressed="${scope === 'all'}">Весь сайт</button></div>
+        <div class="lv-seg" role="group" aria-label="За какое время"><button type="button" data-period="week" aria-pressed="${period === 'week'}">За неделю</button><button type="button" data-period="all" aria-pressed="${period === 'all'}">За всё время</button></div></div>`;
       if (scope === 'friends' && d.top.filter((x) => !x.me).length === 0) {
-        return `<div class="lv-seg" role="group" aria-label="Чей рейтинг"><button type="button" data-scope="friends" aria-pressed="true">Друзья</button><button type="button" data-scope="all" aria-pressed="false">Весь сайт</button></div>
-          <div class="lv-box"><h3>Пока соревноваться не с кем</h3><p class="lv-muted">Добавь друзей через кнопку «Друзья» в шапке — тут появится, кто из вас набрал больше опыта за неделю. А пока загляни во «Весь сайт».</p></div>`;
+        return `${segs}
+          <div class="lv-box"><h3>Пока соревноваться не с кем</h3><p class="lv-muted">Добавь друзей через кнопку «Друзья» в шапке — тут появится, кто из вас набрал больше опыта. А пока загляни во «Весь сайт».</p></div>`;
       }
-      const rows = d.top.map((x) => `<div class="${x.me ? 'me' : ''}"><em>${x.place}</em><span>${emblem(x.rankId, 18, 'sm')}<span class="lv-bn" data-uid="${esc(x.id)}">${esc(x.username)}</span>${x.level ? ` · ур. ${x.level}` : ''}</span><b>${nf(x.week)}</b></div>`).join('');
-      return `<div class="lv-seg" role="group" aria-label="Чей рейтинг"><button type="button" data-scope="friends" aria-pressed="${scope === 'friends'}">Друзья</button><button type="button" data-scope="all" aria-pressed="${scope === 'all'}">Весь сайт</button></div>
+      const row = (x, val) => `<div class="${x.me ? 'me' : ''}"><em>${x.place}</em><span>${emblem(x.rankId, 18, 'sm')}<span class="lv-bn" data-uid="${esc(x.id)}">${esc(x.username)}</span>${x.level ? ` · ур. ${x.level}` : ''}</span><b>${nf(val)}</b></div>`;
+      if (period === 'all') {
+        const rows = d.top.map((x) => row(x, x.xp)).join('');
+        return `${segs}
+        <div class="lv-box"><h3>Опыт за всё время</h3><div class="lv-board">${rows || '<p class="lv-muted">Пока никто не набрал опыта.</p>'}${d.mine ? `<p class="lv-gap" aria-hidden="true">…</p>${row(d.mine, d.mine.xp)}` : ''}</div>
+        <p class="lv-muted">Весь опыт с первого дня — он не сбрасывается. Звания считаются отдельно, по сезону.</p></div>`;
+      }
+      const rows = d.top.map((x) => row(x, x.week)).join('');
+      return `${segs}
         <div class="lv-box"><h3>Опыт за неделю</h3><div class="lv-board">${rows || '<p class="lv-muted">На этой неделе пока никто не набрал опыта.</p>'}</div>
         ${d.best ? `<p class="lv-muted">Лучший прогресс: ${esc(d.best.username)}${d.best.growth != null ? ` — +${d.best.growth}% к прошлой неделе` : ' — новичок недели'}.</p>` : ''}
         <p class="lv-muted">Рейтинг обнуляется в понедельник.</p></div>`;
@@ -1371,6 +1383,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     },
     board(b) {
       b.querySelectorAll('[data-scope]').forEach((btn) => btn.addEventListener('click', () => { VIEWS.scope = btn.dataset.scope; render(); }));
+      b.querySelectorAll('[data-period]').forEach((btn) => btn.addEventListener('click', () => { VIEWS.period = btn.dataset.period; render(); }));
       // ники из магазина (эффект и значок) — как у людей в профиле
       const names = [...b.querySelectorAll('.lv-bn[data-uid]')];
       if (names.length) loadShop().then((s) => s.look(names.map((n) => n.dataset.uid))).then((m) => names.forEach((n) => { if (n.isConnected) window.CasualShop.dress({ name: n }, m[n.dataset.uid]); })).catch(() => {});
