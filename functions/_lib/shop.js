@@ -22,7 +22,23 @@ export const ACH_SPECIAL = 30; // особое: «Основатель хаба�
 // за итоговое звание сезона (id званий — как у сезонов в levels.js)
 // за звание в конце сезона (сезон — три месяца, поэтому втрое больше, чем было за месячный)
 export const SEASON_PAY = { people: 0, casual: 30, couch: 75, whiner: 150, champion: 240, godlike: 360, taste: 510, legend: 690, greatest: 900 };
-export const FREEZE_MAX = 2; // «заморозок» серии больше двух не бывает и без магазина (levels.js, streakStep)
+export const FREEZE_MAX = 2;
+// ---------- скидка (админка → «Магазин»): meta.shop_sale = { id, pct, sec, until, title } ----------
+// pct — сколько процентов долой (5–90), sec — раздел магазина ('' — весь), until — до когда. Цена со скидкой считается
+// здесь же, при покупке, поэтому подменить её со страницы нельзя. Бесплатное остаётся бесплатным, дешевле 1 рофлана не бывает
+export const SALE_SECS = { profile: 'Профиль', nick: 'Ник', wheel: 'Колесо', tier: 'Тир-листы', site: 'Сайт', perks: 'Бонусы', vasyan: 'Васян' };
+let saleCache = { at: 0, v: null, db: null };
+export async function readSale(env, now = Date.now()) {
+  if (saleCache.db !== env.DB || saleCache.at < now - 15e3) {
+    let v = null;
+    try { const r = await env.DB.prepare("SELECT v FROM meta WHERE k = 'shop_sale'").first(); v = r ? JSON.parse(r.v) : null; } catch (e) {}
+    saleCache = { at: now, v, db: env.DB };
+  }
+  const s = saleCache.v;
+  return s && +s.pct > 0 && +s.until > now ? s : null;
+}
+export const forgetSale = () => { saleCache = { at: 0, v: null, db: null }; };
+export const salePrice = (it, sale) => (sale && it && it.price > 0 && (!sale.sec || sale.sec === it.sec) ? Math.max(1, Math.round((it.price * (100 - sale.pct)) / 100)) : it ? it.price : 0); // «заморозок» серии больше двух не бывает и без магазина (levels.js, streakStep)
 
 // ---------- каталог ----------
 // sec — раздел окна; kind — что это; price 0 — есть у всех; consumable — расходуется (можно купить снова).
@@ -189,7 +205,9 @@ export async function shopState(env, uid) {
   const sums = (log.results || [])[0] || {};
   const earned = earnedFrom(row ? row.xp : 0, ach.results || [], await seasonRanksOf(env, uid));
   const level = row ? +row.level || 1 : 1;
+  const sale = await readSale(env);
   return {
+    sale,
     earned,
     spent: +sums.spent || 0,
     gifts: +sums.gifts || 0,
@@ -230,7 +248,8 @@ export function shopView(st) {
     freezeMax: FREEZE_MAX,
     wear: { ...DEFAULT, ...(st.wear || {}) },
     // unlock — с какого уровня еда своя без покупки; byLevel — своя именно за уровень (не куплена)
-    items: ITEMS.map((x) => ({ id: x.id, sec: x.sec, kind: x.kind, slot: x.slot || null, pub: !!x.pub, title: x.title, price: x.price, consumable: !!x.consumable,
+    sale: st.sale ? { pct: st.sale.pct, sec: st.sale.sec || '', until: st.sale.until, title: st.sale.title || '' } : null,
+    items: ITEMS.map((x) => ({ id: x.id, sec: x.sec, kind: x.kind, slot: x.slot || null, pub: !!x.pub, title: x.title, price: salePrice(x, st.sale), ...(salePrice(x, st.sale) !== x.price ? { was: x.price } : {}), consumable: !!x.consumable,
       owned: ownedBy(x, st), unlock: x.unlock || 0, byLevel: !!x.unlock && st.level >= x.unlock && !st.owned.has(x.id) })),
   };
 }
@@ -300,10 +319,11 @@ export async function buy(env, uid, itemId, { rid = '', now = Date.now() } = {})
     if (!st.hasLevel) return { err: [409, 'Серии ещё нет: заморозка пригодится, когда начнёшь серию.'] };
     if (st.freezes >= FREEZE_MAX) return { err: [409, `Заморозок уже ${FREEZE_MAX} — больше не помещается.`] };
   }
-  if (st.balance < it.price) return { err: [409, `Не хватает рофланов: нужно ещё ${it.price - Math.max(0, st.balance)}.`], need: it.price - Math.max(0, st.balance) };
+  const price = salePrice(it, st.sale);
+  if (st.balance < price) return { err: [409, `Не хватает рофланов: нужно ещё ${price - Math.max(0, st.balance)}.`], need: price - Math.max(0, st.balance) };
   const id = it.consumable ? `buy:${uid}:${it.id}:${RID_RE.test(rid) ? rid : now}` : `own:${uid}:${it.id}`;
   const log = (extra) => env.DB.prepare(`INSERT OR IGNORE INTO shop_log (id, user_id, item, delta, reason, note, by_id, at) SELECT ?1, ?2, ?3, -?4, 'buy', NULL, NULL, ?5 WHERE ${ENOUGH} AND ${extra}`)
-    .bind(id, uid, it.id, it.price, now, st.earned.total);
+    .bind(id, uid, it.id, price, now, st.earned.total);
   const writes = it.kind === 'freeze'
     ? [
       log(`EXISTS (SELECT 1 FROM user_level WHERE user_id = ?2 AND COALESCE(freezes, 1) < ${FREEZE_MAX})`),
@@ -313,7 +333,7 @@ export async function buy(env, uid, itemId, { rid = '', now = Date.now() } = {})
     ]
     : [
       log('NOT EXISTS (SELECT 1 FROM shop_owned WHERE user_id = ?2 AND item = ?3)'),
-      env.DB.prepare('INSERT OR IGNORE INTO shop_owned (user_id, item, price, at) SELECT ?1, ?2, ?3, ?4 WHERE EXISTS (SELECT 1 FROM shop_log WHERE id = ?5)').bind(uid, it.id, it.price, now, id),
+      env.DB.prepare('INSERT OR IGNORE INTO shop_owned (user_id, item, price, at) SELECT ?1, ?2, ?3, ?4 WHERE EXISTS (SELECT 1 FROM shop_log WHERE id = ?5)').bind(uid, it.id, price, now, id),
       // купленное сразу надевается — только если покупку записала эта пачка (changes() — строка shop_owned выше)
       ...(it.slot ? [env.DB.prepare('INSERT INTO shop_wear (user_id, slot, item, at) SELECT ?1, ?2, ?3, ?4 WHERE changes() > 0 '
         + 'ON CONFLICT(user_id, slot) DO UPDATE SET item = excluded.item, at = excluded.at').bind(uid, it.slot, it.id, now)] : []),
@@ -326,7 +346,7 @@ export async function buy(env, uid, itemId, { rid = '', now = Date.now() } = {})
   if (!it.consumable && after.owned.has(it.id)) return { ok: true, already: true, st: after };
   if (it.consumable && (await env.DB.prepare('SELECT 1 FROM shop_log WHERE id = ?').bind(id).first())) return { ok: true, already: true, st: after };
   if (it.kind === 'freeze' && after.freezes >= FREEZE_MAX) return { err: [409, `Заморозок уже ${FREEZE_MAX} — больше не помещается.`] };
-  return { err: [409, 'Не хватает рофланов.'], need: Math.max(1, it.price - Math.max(0, after.balance)) };
+  return { err: [409, 'Не хватает рофланов.'], need: Math.max(1, price - Math.max(0, after.balance)) };
 }
 
 // ---------- админка ----------

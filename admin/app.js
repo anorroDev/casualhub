@@ -431,6 +431,105 @@
   }
   // почта сайта (Resend): подключена ли, последняя отправка и её ответ, тестовое письмо себе
   // уровни: опыт и уровень каждого, журнал начислений, поправки, опыт за прошлое, тематическая неделя
+  // ---------- тематическая неделя: панель с заготовками, группами действий и категориями оценок ----------
+  // Состояние формы живёт в EVF, чтобы перерисовка вкладки «Уровни» (журнал, подарки) не сбрасывала выбор
+  const EV_GROUPS = [
+    ['Оценки', ['rate', 'review', 'rate_full', 'plan_done', 'import']],
+    ['Музыка: разбор альбома', ['album_track', 'album_full']],
+    ['Тир-листы', ['tier', 'tier_share', 'tier_coop', 'tier_coop_host']],
+    ['Друзья', ['react', 'comment', 'got_react', 'got_comment', 'friend']],
+    ['Лоты и игры', ['lots_host', 'lot_add', 'lot_win', 'predict_win', 'bingo_win', 'king_host', 'king_vote', 'riddle']],
+  ];
+  const EV_RATE = new Set(['rate', 'review', 'rate_full', 'plan_done', 'import']);
+  const EV_PRESETS = [
+    { id: 'music', t: 'Неделя музыки', kinds: ['rate', 'review', 'rate_full', 'album_track', 'album_full'], cats: ['music'], note: 'Оценивай альбомы и треки — опыта больше' },
+    { id: 'rate', t: 'Неделя оценок', kinds: ['rate', 'review', 'rate_full', 'plan_done'], cats: [] },
+    { id: 'tier', t: 'Неделя тир-листов', kinds: ['tier', 'tier_share', 'tier_coop', 'tier_coop_host'], cats: [] },
+    { id: 'friends', t: 'Неделя друзей', kinds: ['react', 'comment', 'friend', 'got_react', 'got_comment'], cats: [] },
+    { id: 'games', t: 'Неделя игр', kinds: ['lots_host', 'lot_add', 'predict_win', 'bingo_win', 'king_host', 'king_vote', 'riddle'], cats: [] },
+  ];
+  const EVF = { title: '', mult: 2, n: 7, unit: 'day', kinds: new Set(), cats: new Set(), note: '', ann: true, preset: '' };
+  const UNIT_W = { min: ['минуту', 'минуты', 'минут'], hour: ['час', 'часа', 'часов'], day: ['день', 'дня', 'дней'], week: ['неделю', 'недели', 'недель'] };
+  const plw = (n, w) => { const a = Math.abs(n) % 100, b = a % 10; return a > 10 && a < 20 ? w[2] : b > 1 && b < 5 ? w[1] : b === 1 ? w[0] : w[2]; };
+  function evLabel(d, k) { const x = d.kinds.find((y) => y.k === k); return x ? x.label : k; }
+  function evSummary(d) {
+    const ks = [...EVF.kinds];
+    if (!ks.length) return '<span class="muted">Выбери заготовку или действия ниже — тут появится, что получится.</span>';
+    const cats = [...EVF.cats].map((c) => (d.cats.find((x) => x.k === c) || {}).label || c);
+    const rateOnly = cats.length && ks.some((k) => EV_RATE.has(k)) ? ` <span class="ev-only">оценки — только: ${esc(cats.join(', '))}</span>` : '';
+    return `<b>${esc(EVF.title || 'Без названия')}</b> · ×${String(EVF.mult).replace('.', ',')} на ${EVF.n} ${plw(EVF.n, UNIT_W[EVF.unit])}<br><span class="muted">за: ${esc(ks.map((k) => evLabel(d, k)).join(', '))}</span>${rateOnly}`;
+  }
+  function evFormHTML(d) {
+    const known = new Set(EV_GROUPS.flatMap((g) => g[1]));
+    const groups = EV_GROUPS.map(([g, ks]) => [g, ks.filter((k) => d.kinds.some((x) => x.k === k))]).concat([['Прочее', d.kinds.map((x) => x.k).filter((k) => !known.has(k))]]).filter(([, ks]) => ks.length);
+    const chip = (k) => `<button type="button" class="ev-chip-k" data-evk="${esc(k)}" aria-pressed="${EVF.kinds.has(k)}">${esc(evLabel(d, k))}</button>`;
+    const hasRate = [...EVF.kinds].some((k) => EV_RATE.has(k));
+    return `<div class="ev-form" id="evForm">
+      <div class="ev-step"><span class="ev-n">1</span><div><b>Заготовка</b><small>Заполнит название и действия — дальше можно поправить</small>
+        <div class="ev-presets">${EV_PRESETS.map((p) => `<button type="button" class="ev-preset" data-evp="${p.id}" aria-pressed="${EVF.preset === p.id}">${esc(p.t)}</button>`).join('')}</div></div></div>
+      <div class="ev-step"><span class="ev-n">2</span><div><b>Название, множитель и срок</b>
+        <div class="ev-row"><input id="evTitle" class="adm-in" maxlength="80" placeholder="Например: Неделя музыки" value="${esc(EVF.title)}">
+          <span class="ev-seg" role="group" aria-label="Множитель">${[1.5, 2, 3].map((m) => `<button type="button" data-evm="${m}" aria-pressed="${EVF.mult === m}">×${String(m).replace('.', ',')}</button>`).join('')}</span>
+          <span class="adm-span"><input class="adm-in" type="number" id="evN" min="1" max="999" value="${EVF.n}" aria-label="Сколько"><select class="adm-in" id="evUnit" aria-label="Чего">${['min', 'hour', 'day', 'week'].map((u) => `<option value="${u}"${EVF.unit === u ? ' selected' : ''}>${UNIT_W[u][2]}</option>`).join('')}</select></span></div></div></div>
+      <div class="ev-step"><span class="ev-n">3</span><div><b>За что больше опыта</b><small>Нажми на действие, чтобы включить; «все» — вся группа</small>
+        <div class="ev-groups">${groups.map(([g, ks]) => { const on = ks.filter((k) => EVF.kinds.has(k)).length; return `<div class="ev-group${on ? ' on' : ''}"><div class="ev-gh"><b>${esc(g)}</b><span class="muted">${on ? on + ' из ' + ks.length : ''}</span><button type="button" class="ev-all" data-evg="${esc(ks.join(','))}">${on === ks.length ? 'снять' : 'все'}</button></div><div class="ev-chips">${ks.map(chip).join('')}</div></div>`; }).join('')}</div></div></div>
+      <div class="ev-step${hasRate ? '' : ' off'}"><span class="ev-n">4</span><div><b>Какие оценки</b><small>${hasRate ? 'Пусто — любые. Например, «Музыка» — только альбомы, треки и синглы' : 'Появится, когда выбраны оценки'}</small>
+        <div class="ev-chips">${d.cats.map((c) => `<button type="button" class="ev-chip-k" data-evc="${esc(c.k)}" aria-pressed="${EVF.cats.has(c.k)}"${hasRate ? '' : ' disabled'}>${esc(c.label)}</button>`).join('')}</div></div></div>
+      <div class="ev-step"><span class="ev-n">5</span><div><b>Объявление</b>
+        <textarea id="evNote" class="adm-in" maxlength="300" rows="2" placeholder="Пара слов к объявлению о неделе (можно пусто)">${esc(EVF.note)}</textarea>
+        <label class="ev-check"><input type="checkbox" id="evAnn"${EVF.ann ? ' checked' : ''}> окно-объявление при заходе и таймер внизу страницы у всех</label></div></div>
+      <div class="ev-sum" id="evSum">${evSummary(d)}</div>
+      <button type="button" class="btn primary" id="evStart">Начать неделю</button>
+    </div>`;
+  }
+  function bindEvForm(d, msg) {
+    const box = $('#evForm');
+    if (!box) return;
+    const repaint = () => { const y = box.getBoundingClientRect().top; box.outerHTML = evFormHTML(d); bindEvForm(d, msg); const nb = $('#evForm'); if (nb) window.scrollBy(0, nb.getBoundingClientRect().top - y); };
+    const sum = () => { const s = $('#evSum'); if (s) s.innerHTML = evSummary(d); };
+    box.addEventListener('click', async (e) => {
+      const b = e.target.closest('button');
+      if (!b || b.disabled) return;
+      if (b.dataset.evp) {
+        const p = EV_PRESETS.find((x) => x.id === b.dataset.evp);
+        EVF.preset = p.id; EVF.title = p.t; EVF.kinds = new Set(p.kinds.filter((k) => d.kinds.some((x) => x.k === k))); EVF.cats = new Set(p.cats); if (!EVF.note && p.note) EVF.note = p.note;
+        repaint();
+      } else if (b.dataset.evm) { EVF.mult = +b.dataset.evm; box.querySelectorAll('[data-evm]').forEach((x) => x.setAttribute('aria-pressed', String(+x.dataset.evm === EVF.mult))); sum(); }
+      else if (b.dataset.evk) { const k = b.dataset.evk; if (EVF.kinds.has(k)) EVF.kinds.delete(k); else EVF.kinds.add(k); EVF.preset = ''; repaint(); }
+      else if (b.dataset.evg) { const ks = b.dataset.evg.split(','); const all = ks.every((k) => EVF.kinds.has(k)); ks.forEach((k) => (all ? EVF.kinds.delete(k) : EVF.kinds.add(k))); EVF.preset = ''; repaint(); }
+      else if (b.dataset.evc) { const c = b.dataset.evc; if (EVF.cats.has(c)) EVF.cats.delete(c); else EVF.cats.add(c); repaint(); }
+      else if (b.id === 'evStart') {
+        if (!EVF.title.trim()) { msg.textContent = 'Нужно название недели.'; $('#evTitle').focus(); return; }
+        if (!EVF.kinds.size) { msg.textContent = 'Выбери хотя бы одно действие.'; return; }
+        b.disabled = true;
+        const hasRate = [...EVF.kinds].some((k) => EV_RATE.has(k));
+        try {
+          await call('PUT', '/admin/levels/event', { title: EVF.title, mult: EVF.mult, n: EVF.n, unit: EVF.unit, kinds: [...EVF.kinds], cats: hasRate ? [...EVF.cats] : [], note: EVF.note, announce: EVF.ann });
+          Object.assign(EVF, { title: '', kinds: new Set(), cats: new Set(), note: '', preset: '' });
+          levels();
+        } catch (x) { b.disabled = false; if (lostAdmin(x) || lostSession(x)) fail(x); else msg.textContent = x.message; }
+      }
+    });
+    box.addEventListener('input', (e) => {
+      const t = e.target;
+      if (t.id === 'evTitle') { EVF.title = t.value; EVF.preset = ''; sum(); }
+      else if (t.id === 'evN') { EVF.n = Math.max(1, Math.min(999, Math.round(+t.value || 1))); sum(); }
+      else if (t.id === 'evNote') EVF.note = t.value;
+    });
+    box.addEventListener('change', (e) => {
+      if (e.target.id === 'evUnit') { EVF.unit = e.target.value; sum(); }
+      else if (e.target.id === 'evAnn') EVF.ann = e.target.checked;
+    });
+  }
+  // идущая неделя: что, сколько, до когда; «Закончить»
+  function evRunHTML(ev, d) {
+    const left = ev.until - Date.now(), dd = Math.floor(left / 864e5), hh = Math.floor(left / 3600e3) % 24, mm = Math.floor(left / 60e3) % 60;
+    const cats = (ev.cats || []).map((c) => (d.cats.find((x) => x.k === c) || {}).label || c);
+    return `<div class="ev-run"><span class="ev-x">×${String(ev.mult).replace('.', ',')}</span><div><b>${esc(ev.title)}</b>
+      <small>идёт до ${esc(when(ev.until))} — осталось ${dd ? dd + ' д ' : ''}${hh} ч ${mm} мин</small>
+      <small>за: ${esc(ev.kinds.map((k) => evLabel(d, k)).join(', '))}${cats.length ? ' · оценки — только: ' + esc(cats.join(', ')) : ''}</small></div>
+      <button type="button" class="btn ghost" id="lvEvOff">Закончить</button></div>`;
+  }
   async function levels() {
     const my = fresh();
     try {
@@ -468,12 +567,7 @@
           ${gifts.items.length ? `<div class="adm-lv-log" style="display:grid">${gifts.items.map((g) => `<div><span>${esc(when(g.at))}</span><span>${esc(g.to)} · ${esc(g.title)} · +${g.xp} · забрали ${g.claimed}${g.until && g.until < Date.now() ? ' · закрыто' : ''}</span>${g.until && g.until > Date.now() ? `<button type="button" class="btn ghost small" data-giftoff="${esc(g.id)}">Отозвать</button>` : '<b></b>'}</div>`).join('')}</div>` : ''}
         </div>
         <div class="adm-lv-ev"><h3 class="h3">Тематическая неделя</h3>
-          ${ev ? `<p>Идёт: <b>${esc(ev.title)}</b> · ×${ev.mult} до ${esc(when(ev.until))} · ${ev.kinds.map(esc).join(', ')}</p><button type="button" class="btn ghost" id="lvEvOff">Закончить</button>`
-            : `<div class="adm-ann-row"><input id="lvEvTitle" maxlength="80" placeholder="Например: Неделя тир-листов"><select id="lvEvMult"><option value="2">×2</option><option value="1.5">×1,5</option><option value="3">×3</option></select><span class="adm-span"><input class="adm-in" type="number" id="lvEvN" min="1" max="999" value="7" aria-label="Сколько"><select class="adm-in" id="lvEvUnit" aria-label="Чего"><option value="min">минут</option><option value="hour">часов</option><option value="day" selected>дней</option><option value="week">недель</option></select></span></div>
-              <textarea id="lvEvNote" maxlength="300" rows="2" placeholder="Пара слов к объявлению о неделе (можно пусто)"></textarea>
-              <label class="adm-lv-kinds" style="display:flex"><input type="checkbox" id="lvEvAnn" checked> окно-объявление о неделе при заходе и таймер внизу страницы у всех</label>
-              <div class="adm-lv-kinds">${d.kinds.map((k) => `<label><input type="checkbox" value="${esc(k.k)}"> ${esc(k.label)}</label>`).join('')}</div>
-              <button type="button" class="btn primary" id="lvEvOn">Начать неделю</button>`}
+          ${ev ? evRunHTML(ev, d) : evFormHTML(d)}
         </div>
         <ul class="adm-list">${d.users.map((u, i) => `<li class="adm-row" style="--k:${Math.min(i, 12)}">
           <div class="adm-who"><b>${esc(u.username)} <span class="muted">@${esc(u.handle)}</span>${u.fast ? ' <em class="adm-badge bad" title="Больше 60 начислений за последний час">быстро</em>' : ''}${u.hidden ? ' <em class="adm-badge mute">уровень скрыт</em>' : ''}</b>
@@ -516,12 +610,7 @@
       document.querySelectorAll('[data-giftoff]').forEach((b) => b.addEventListener('click', async () => {
         try { await call('DELETE', '/admin/levels/gift?id=' + encodeURIComponent(b.dataset.giftoff)); levels(); } catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else msg.textContent = x.message; }
       }));
-      const on = $('#lvEvOn');
-      if (on) on.addEventListener('click', async () => {
-        const kinds = [...document.querySelectorAll('.adm-lv-kinds input:checked')].map((x) => x.value);
-        try { await call('PUT', '/admin/levels/event', { title: $('#lvEvTitle').value, mult: +$('#lvEvMult').value, n: +$('#lvEvN').value, unit: $('#lvEvUnit').value, kinds, note: $('#lvEvNote').value, announce: $('#lvEvAnn').checked }); levels(); }
-        catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else msg.textContent = x.message; }
-      });
+      bindEvForm(d, msg);
       const offB = $('#lvEvOff');
       if (offB) offB.addEventListener('click', async () => { try { await call('DELETE', '/admin/levels/event'); levels(); } catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else msg.textContent = x.message; } });
       document.querySelectorAll('[data-lvlog]').forEach((b) => b.addEventListener('click', async () => {

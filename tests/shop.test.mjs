@@ -328,3 +328,31 @@ test('оформление за уровень в магазине не прод
   assert.ok(!S.ITEMS.some((x) => x.id.startsWith('look.')));
   assert.ok(!S.ITEMS.some((x) => x.sec === 'look'));
 });
+
+test('скидка: цена со скидкой при покупке и на странице, только в своём разделе, проверка процентов', async () => {
+  const { env, db } = await setup();
+  setXp(db, U, 1000); // 100 рофланов
+  const sale = (pct, sec, until = Date.now() + 3600e3) => { db.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('shop_sale', ?)").run(JSON.stringify({ id: 's1', pct, sec, until })); S.forgetSale(); };
+  sale(60, 'wheel');
+  let v = S.shopView(await S.shopState(env, U));
+  assert.equal(v.items.find((x) => x.id === 'site.bg.horizon').price, 250, 'скидка на «Колесо» не трогает «Сайт»');
+  sale(60, 'site');
+  v = S.shopView(await S.shopState(env, U));
+  const it = v.items.find((x) => x.id === 'site.bg.horizon');
+  assert.deepEqual({ price: it.price, was: it.was }, { price: 100, was: 250 });
+  assert.equal(v.sale.pct, 60);
+  const r = await S.buy(env, U, 'site.bg.horizon');
+  assert.ok(r.ok && !r.already);
+  assert.equal(r.st.balance, 0);
+  assert.equal(db.prepare("SELECT price FROM shop_owned WHERE item = 'site.bg.horizon'").get().price, 100);
+  sale(60, 'site', Date.now() - 1);
+  assert.equal(S.shopView(await S.shopState(env, U)).items.find((x) => x.id === 'site.bg.horizon').price, 250, 'кончилась — цена прежняя');
+  const routes = makeShopRoutes({ json: (o, st) => ({ ...o, status: st || 200 }), fail: (st, error) => ({ status: st, error }), readBody: async (rq) => rq.body, adminActive: async () => true, isAdmin: async () => true, adminCandidate: () => true, adminLog: async () => {} });
+  const me = { id: U, handle: 'admin' };
+  assert.equal((await routes['PUT /admin/shop/sale']({ env, request: { body: { pct: 95, n: 1, unit: 'day' } }, me })).status, 400);
+  const ok = await routes['PUT /admin/shop/sale']({ env, request: { body: { pct: 30, sec: 'wheel', n: 2, unit: 'day' } }, me });
+  assert.equal(ok.ok, true);
+  assert.equal((await S.readSale(env)).pct, 30);
+  await routes['DELETE /admin/shop/sale']({ env, request: {}, me });
+  assert.equal(await S.readSale(env), null);
+});

@@ -8,7 +8,7 @@ import { albumTracks, friendsAlbum, trackPreview } from '../_lib/album.js';
 import { NOTES } from '../_lib/admin-changes.js';
 import { LOT_NAME, MAX_LOTS, STICKER_RE, cleanLive, LIVE_OWNER, liveBusy, liveLots, spinLive, resetLive, stopAuto, settledLive, liveTx, liveView } from '../_lib/lots-live.js';
 import { ONLINE_MS, GUEST_RE, onlineCount, friendsAndIncoming, touchUsers, touchGuests, spanMs } from '../_lib/presence.js';
-import { awardMany as lvAwardMany, revokeMany as lvRevokeMany, visit as lvVisit, shelfDiff, tierDone, nightNow, levelsOn, onSeasonClose, currentEvent } from '../_lib/levels.js';
+import { awardMany as lvAwardMany, revokeMany as lvRevokeMany, visit as lvVisit, shelfDiff, tierDone, nightNow, levelsOn, onSeasonClose, currentEvent, CAT_GROUPS } from '../_lib/levels.js';
 import { makeLevelsRoutes, acceptInvite, tzOf, ensurePast, KIND_LABEL } from '../_lib/levels-api.js';
 import { makeShopRoutes } from '../_lib/shop-api.js';
 import { makeMailoutRoutes, rememberLang } from '../_lib/mailout.js';
@@ -3184,14 +3184,8 @@ async function canSee(env, me, uid) {
   return !!row && row.status === 'accepted';
 }
 
-// адреса уровней (/api/levels/…, /api/admin/levels…) — в functions/_lib/levels-api.js
-Object.assign(routes, makeLevelsRoutes({
-  json, fail, readBody, adminActive, isAdmin, adminCandidate, adminLog,
-  // новое в почте: человеку — сигнал по сокету, всем — по всем открытым сокетам
-  poke: (env, uid) => pokePresence(env, { what: 'notify', to: uid, n: { kind: 'award' } }),
-  pokeAll: (env) => pokePresence(env, { what: 'mail' }),
-  markNews: (request, r) => { if (r && r.news && r.news.length) lvNews.set(request, true); },
-  // объявление вверху сайта (то же, что вкладка «Объявление» в админке): сезоны пишут о сбросе званий
+// объявление из уровней и магазина (сезоны, тематическая неделя, скидка) — те же правила, что у вкладки «Объявление»
+const annHelpers = {
   getAnnounce: async (env) => {
     const r = await env.DB.prepare("SELECT v FROM meta WHERE k = 'announce'").first();
     try { return r ? JSON.parse(r.v) : null; } catch (e) { return null; }
@@ -3205,12 +3199,22 @@ Object.assign(routes, makeLevelsRoutes({
     announceCache.at = 0;
     await pokePresence(env, { what: 'announce' });
   },
+};
+// адреса уровней (/api/levels/…, /api/admin/levels…) — в functions/_lib/levels-api.js
+Object.assign(routes, makeLevelsRoutes({
+  json, fail, readBody, adminActive, isAdmin, adminCandidate, adminLog,
+  // новое в почте: человеку — сигнал по сокету, всем — по всем открытым сокетам
+  poke: (env, uid) => pokePresence(env, { what: 'notify', to: uid, n: { kind: 'award' } }),
+  pokeAll: (env) => pokePresence(env, { what: 'mail' }),
+  markNews: (request, r) => { if (r && r.news && r.news.length) lvNews.set(request, true); },
+  // объявление (то же, что вкладка «Объявление» в админке): сезоны пишут о сбросе званий, неделя — о себе
+  ...annHelpers,
 }));
 // сезон закрылся (первый запрос после срока или «Сбросить сейчас»): всем открытым вкладкам — «загляни за новостями»,
 // там плашка «Новый сезон» и письмо в почте
 onSeasonClose((env) => pokePresence(env, { what: 'mail' }));
 // магазин за рофланы (/api/shop/…, /api/admin/shop…) — в functions/_lib/shop-api.js
-Object.assign(routes, makeShopRoutes({ json, fail, readBody, adminActive, isAdmin, adminCandidate, adminLog }));
+Object.assign(routes, makeShopRoutes({ json, fail, readBody, adminActive, isAdmin, adminCandidate, adminLog, ...annHelpers }));
 
 // письма об обновлениях (/api/mail/*, /api/admin/mailout*) — functions/_lib/mailout.js
 Object.assign(routes, makeMailoutRoutes({
@@ -3258,7 +3262,7 @@ async function eventPub(env) {
   if (!levelsOn(env)) return null;
   let ev = null;
   try { ev = await currentEvent(env); } catch (e) {}
-  return ev ? { id: ev.id, title: ev.title, mult: ev.mult, until: ev.until, kinds: (ev.kinds || []).map((k) => KIND_LABEL[k] || k) } : null;
+  return ev ? { id: ev.id, title: ev.title, mult: ev.mult, until: ev.until, kinds: (ev.kinds || []).map((k) => KIND_LABEL[k] || k), cats: (ev.cats || []).map((c) => (CAT_GROUPS[c] || {}).label || c) } : null;
 }
 let annSeenReady = false;
 async function ensureAnnSeen(env) {

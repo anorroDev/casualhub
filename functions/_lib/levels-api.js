@@ -4,7 +4,7 @@
 // Папка _lib не становится адресом сайта.
 import {
   levelsMode, levelsOn, ensureLevels, readLevel, levelView, prefsOf, lookOf, unlockedAt, levelsOf, achievementsOf, questState,
-  firstSteps, takeNews, dayKey, weekStart, shiftDay, cleanTz, backfillUser, grantSpecial, currentEvent, forgetEvent, RULES, awardMany,
+  firstSteps, takeNews, dayKey, weekStart, shiftDay, cleanTz, backfillUser, grantSpecial, currentEvent, forgetEvent, RULES, awardMany, CAT_GROUPS, RATING_KINDS,
   ACHIEVEMENTS, REWARDS, NAME_COLORS, PROFILE_BGS, isScored, textLen, award, INVITE_REWARDS, INV_SQL, invitesOf, STREAK_BONUS, FIRST_STEPS,
   achBackLetter, ACH_TIER_XP, ACH_ONE_XP, swapQuest,
   SEASON_RANKS, seasonRankOf, rankFields, currentSeason, closeSeason, forgetSeason, seasonXpOf, seasonXpMany, seasonPlanLetter, fmtKyiv,
@@ -422,7 +422,7 @@ export function makeLevelsRoutes(h) {
       const { results: fast } = await env.DB.prepare('SELECT user_id, COUNT(*) AS n FROM xp_log WHERE at > ? AND xp > 0 GROUP BY user_id HAVING n > 60').bind(Date.now() - 3600e3).all();
       const flagged = new Set((fast || []).map((x) => x.user_id));
       return json({
-        mode: levelsMode(env), event: ev, kinds: Object.keys(RULES).filter((k) => !RULES[k].given && !['visit', 'quest', 'quest_all', 'quest_week', 'invite'].includes(k)).map((k) => ({ k, label: KIND_LABEL[k] || k })),
+        mode: levelsMode(env), event: ev, cats: Object.entries(CAT_GROUPS).map(([k, g]) => ({ k, label: g.label })), kinds: Object.keys(RULES).filter((k) => !RULES[k].given && !['visit', 'quest', 'quest_all', 'quest_week', 'invite'].includes(k)).map((k) => ({ k, label: KIND_LABEL[k] || k })),
         users: (results || []).map((r) => {
           const lv = levelView(+r.xp || 0, +r.level || 1);
           return { id: r.id, username: r.username, handle: r.uname, xp: lv.xp, level: lv.level, ...rankFields(+r.season || 0), season: +r.season || 0, streak: +r.streak || 0, best: +r.best_streak || 0, ach: +r.ach || 0, week: +r.week || 0, hidden: prefsOf(r).hideLevel, fast: flagged.has(r.id) };
@@ -526,16 +526,19 @@ export function makeLevelsRoutes(h) {
       // срок: число и единица (минуты, часы, дни, недели); старый вид — дни
       const span = b.unit ? spanMs(b.n, b.unit) : Math.max(1, Math.min(14, Math.round(+b.days || 7))) * 864e5;
       const mult = [1.5, 2, 3].includes(+b.mult) ? +b.mult : 2;
+      // только оценки этих групп категорий (например, «Музыка»); пусто — любые
+      const cats = (Array.isArray(b.cats) ? b.cats : []).map(String).filter((k) => CAT_GROUPS[k]);
       if (!title || !kinds.length) return fail(400, 'Нужны название и хотя бы одно действие.');
       if (span < 10 * 60e3) return fail(400, 'Неделя идёт хотя бы 10 минут.');
-      const ev = { id: Date.now().toString(36), title, kinds, mult, until: Date.now() + span };
+      const ev = { id: Date.now().toString(36), title, kinds, mult, until: Date.now() + span, ...(cats.length ? { cats } : {}) };
       await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('levels_event', ?)").bind(JSON.stringify(ev)).run();
       forgetEvent();
       // объявление-окно о неделе: каждый прочитает его один раз, а потом внизу страницы идёт таймер (online.js)
       if (b.announce !== false && h.setAnnounce) {
         const note = String(b.note || '').replace(/\s+/g, ' ').trim().slice(0, 300);
         const what = kinds.map((k) => KIND_LABEL[k] || k).join(', ');
-        await h.setAnnounce(env, { id: 'ev-' + ev.id, kind: 'event', title, text: `×${String(mult).replace('.', ',')} опыта за: ${what}. До ${fmtKyiv(ev.until)}.${note ? ' ' + note : ''}`, until: ev.until, by: me.handle });
+        const only = cats.length && kinds.some((k) => RATING_KINDS.has(k)) ? ` Оценки — только в категориях: ${cats.map((c) => CAT_GROUPS[c].label).join(', ')}.` : '';
+        await h.setAnnounce(env, { id: 'ev-' + ev.id, kind: 'event', title, text: `×${String(mult).replace('.', ',')} опыта за: ${what}.${only} До ${fmtKyiv(ev.until)}.${note ? ' ' + note : ''}`, until: ev.until, by: me.handle });
       }
       await h.adminLog(env, request, me, `levels: event ${title} ×${mult} ${Math.round(span / 60e3)}m`, true);
       return json({ ok: true, event: ev });

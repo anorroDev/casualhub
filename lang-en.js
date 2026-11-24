@@ -3383,6 +3383,8 @@
 "Оцени что-нибудь из «В планах»":"Rate something from “Planned”",
 "Собери тир-лист":"Make a tier list",
 "Разбери альбом по трекам":"Break an album down by tracks",
+"Скидка":"Discount",
+"на всё в магазине":"on everything in the shop",
 "Важно":"Important",
 "До конца:":"Time left:",
 "Слушать отрывок":"Listen to a preview",

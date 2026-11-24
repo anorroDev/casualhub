@@ -26,6 +26,21 @@
     const s = document.createElement('style');
     s.id = 'admShopCss';
     s.textContent = `
+.ash-sale { display: grid; gap: 10px; }
+.ash-sale h3 { margin: 0; }
+.ash-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.ash-row .adm-in { flex: 0 1 auto; width: auto; min-width: 80px; text-align: left; }
+.ash-sale > .adm-in { text-align: left; }
+.ash-lab { flex: 0 0 110px; color: var(--ink-3); font-size: 13px; }
+.ash-pcts { display: inline-flex; gap: 4px; }
+.ash-pcts button { min-height: 0; height: auto; padding: 6px 11px; border-radius: 999px; border: 1px solid var(--line); background: transparent; color: var(--ink-2); font: inherit; font-weight: 700; cursor: pointer; }
+.ash-pcts button[aria-pressed="true"] { border-color: var(--good, #2EAD60); background: color-mix(in srgb, var(--good, #2EAD60) 18%, transparent); color: var(--ink); }
+.ash-check { display: flex; align-items: center; gap: 8px; font-size: 13.5px; }
+.ash-sale.on { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; border-color: color-mix(in srgb, var(--good, #2EAD60) 55%, var(--line)); }
+.ash-sale.on > div { display: grid; gap: 2px; }
+.ash-sale.on small { color: var(--ink-2); }
+.ash-pct { padding: 6px 10px; border-radius: 999px; background: var(--good, #2EAD60); color: #06130b; font-weight: 900; }
+
 .ash-find { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
 .ash-find .adm-in { flex: 1 1 200px; min-width: 0; }
 .ash-box { border: 1px solid var(--line); border-radius: 16px; padding: 14px 16px; margin: 12px 0; display: grid; gap: 10px; }
@@ -100,12 +115,56 @@
       if (!d.on) { body.innerHTML = '<p class="muted">Магазин выключен вместе с уровнями (LEVELS = "0").</p>'; return; }
       if (d.user) { body.innerHTML = userHTML(d); wireGrant(body, d); return; }
       const t = d.totals || {};
-      body.innerHTML = `<div class="ash-box"><h3>Всего</h3><div class="ash-nums"><span>Покупок: <b>${nf(t.buys)}</b></span><span>Потрачено: <b>${coins(t.spent)}</b></span><span>Покупателей: <b>${nf(t.people)}</b></span></div>
+      body.innerHTML = saleBoxHTML(d) + `<div class="ash-box"><h3>Всего</h3><div class="ash-nums"><span>Покупок: <b>${nf(t.buys)}</b></span><span>Потрачено: <b>${coins(t.spent)}</b></span><span>Покупателей: <b>${nf(t.people)}</b></span></div>
         ${(t.top || []).length ? `<div class="ash-chips">${t.top.map((x) => `<span>${esc(x.title)} · ${nf(x.n)}</span>`).join('')}</div>` : ''}</div>
         <div class="ash-box"><h3>Последние операции</h3>${logHTML(d.log || [], true)}</div>`;
+      wireSale(body, q);
     } catch (x) {
       if (my === view && mineTab()) lost(x);
     }
+  }
+  // ---------- скидка: процент, раздел, срок; идёт — что и до когда, «Закончить» ----------
+  const UNITS = [['min', 'минут'], ['hour', 'часов'], ['day', 'дней'], ['week', 'недель']];
+  function saleBoxHTML(d) {
+    const s = d.sale, secs = d.saleSecs || {};
+    if (s && s.until > Date.now()) {
+      const till = new Date(s.until).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+      return `<div class="ash-box ash-sale on"><span class="ash-pct">−${s.pct}%</span><div><b>${esc(s.title || 'Скидка')}</b><small>${s.sec ? 'раздел «' + esc(secs[s.sec] || s.sec) + '»' : 'весь магазин'} · до ${esc(till)}</small></div><button type="button" class="btn ghost small" id="ashSaleOff">Закончить</button></div>`;
+    }
+    return `<form class="ash-box ash-sale" id="ashSale"><h3>Скидка</h3>
+      <div class="ash-row"><span class="ash-lab">Сколько</span><span class="ash-pcts">${[10, 20, 30, 50].map((p) => `<button type="button" data-pct="${p}" aria-pressed="${p === 20}">−${p}%</button>`).join('')}</span><input class="adm-in" id="ashPct" type="number" min="5" max="90" value="20" aria-label="Процент скидки"><span class="muted">%</span></div>
+      <div class="ash-row"><span class="ash-lab">На что</span><select class="adm-in" id="ashSec"><option value="">весь магазин</option>${Object.entries(secs).map(([k, n]) => `<option value="${esc(k)}">раздел «${esc(n)}»</option>`).join('')}</select></div>
+      <div class="ash-row"><span class="ash-lab">Сколько идёт</span><input class="adm-in" id="ashSN" type="number" min="1" max="999" value="3" aria-label="Сколько"><select class="adm-in" id="ashSU" aria-label="Чего">${UNITS.map(([k, n]) => `<option value="${k}"${k === 'day' ? ' selected' : ''}>${n}</option>`).join('')}</select></div>
+      <input class="adm-in" id="ashST" maxlength="80" placeholder="Название, например: Чёрная пятница (можно пусто)">
+      <label class="ash-check"><input type="checkbox" id="ashSA" checked> окно-объявление о скидке при заходе у всех</label>
+      <div class="ash-act"><button type="submit" class="btn primary small">Запустить скидку</button></div>
+      <p class="ash-err" id="ashSaleErr" role="alert" hidden></p></form>`;
+  }
+  function wireSale(body, q) {
+    const off = body.querySelector('#ashSaleOff');
+    if (off) off.addEventListener('click', async () => { off.disabled = true; try { await call('DELETE', '/admin/shop/sale'); show(q); } catch (x) { off.disabled = false; lost(x); } });
+    const f = body.querySelector('#ashSale');
+    if (!f) return;
+    const pct = f.querySelector('#ashPct');
+    const mark = () => f.querySelectorAll('[data-pct]').forEach((b) => b.setAttribute('aria-pressed', String(+b.dataset.pct === +pct.value)));
+    f.querySelectorAll('[data-pct]').forEach((b) => b.addEventListener('click', () => { pct.value = b.dataset.pct; mark(); }));
+    pct.addEventListener('input', mark);
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const err = f.querySelector('#ashSaleErr'), p = Math.round(+pct.value || 0);
+      err.hidden = true;
+      if (!(p >= 5 && p <= 90)) { err.textContent = 'Скидка — от 5 до 90 процентов'; err.hidden = false; return; }
+      const btn = f.querySelector('[type="submit"]');
+      btn.disabled = true;
+      try {
+        await call('PUT', '/admin/shop/sale', { pct: p, sec: f.querySelector('#ashSec').value, n: +f.querySelector('#ashSN').value, unit: f.querySelector('#ashSU').value, title: f.querySelector('#ashST').value, announce: f.querySelector('#ashSA').checked });
+        show(q);
+      } catch (x) {
+        btn.disabled = false;
+        if (x.status === 404 && x.message === 'Нет такого адреса.') { lost(x); return; }
+        err.textContent = x.message; err.hidden = false;
+      }
+    });
   }
   function userHTML(d) {
     const e = d.earned || {};

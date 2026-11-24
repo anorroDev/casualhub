@@ -2,7 +2,8 @@
 // подключает эти адреса через makeShopRoutes(h), передавая свои помощники (ответы, проверки админа, журнал админки).
 // Папка _lib не становится адресом сайта.
 import { levelsMode } from './levels.js';
-import { shopOn, shopState, shopView, buy, grant, shopLog, shopTotals, wear, looksOf } from './shop.js';
+import { shopOn, shopState, shopView, buy, grant, shopLog, shopTotals, wear, looksOf, readSale, forgetSale, SALE_SECS } from './shop.js';
+import { spanMs } from './presence.js';
 
 // не чаще 30 покупок в минуту на человека (в этом экземпляре функции): кнопку «Купить» не задолбить скриптом
 const hits = new Map();
@@ -66,7 +67,37 @@ export function makeShopRoutes(h) {
         const st = await shopState(env, u.id);
         return json({ on: true, user: { id: u.id, username: u.username, handle: u.uname }, ...shopView(st), log: await shopLog(env, { uid: u.id, limit: 100 }) });
       }
-      return json({ on: true, totals: await shopTotals(env), log: await shopLog(env, { limit: 60 }) });
+      return json({ on: true, totals: await shopTotals(env), log: await shopLog(env, { limit: 60 }), sale: await readSale(env), saleSecs: SALE_SECS });
+    },
+    // скидка: { pct 5–90, sec ('' — весь магазин), n + unit — срок, title, announce — окно-объявление у всех }
+    async 'PUT /admin/shop/sale'({ env, request, me }) {
+      if (!(await h.adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+      const b = await h.readBody(request);
+      const pct = Math.round(+b.pct || 0);
+      if (!(pct >= 5 && pct <= 90)) return fail(400, 'Скидка — от 5 до 90 процентов.');
+      const sec = SALE_SECS[b.sec] ? String(b.sec) : '';
+      const span = spanMs(b.n, b.unit);
+      if (span < 10 * 60e3) return fail(400, 'Скидка действует хотя бы 10 минут.');
+      const title = String(b.title || '').replace(/\s+/g, ' ').trim().slice(0, 80);
+      const v = { id: Date.now().toString(36), pct, sec, until: Date.now() + span, title, by: me.handle };
+      await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('shop_sale', ?)").bind(JSON.stringify(v)).run();
+      forgetSale();
+      if (b.announce && h.setAnnounce) {
+        const where = sec ? `в разделе «${SALE_SECS[sec]}»` : 'на всё в магазине';
+        const till = new Date(v.until).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Kyiv' });
+        await h.setAnnounce(env, { id: 'sale-' + v.id, kind: 'party', title: title || `Скидка ${pct}%`, text: `Скидка ${pct}% ${where} до ${till} по Киеву. Рофланы копятся за опыт, достижения и звания — самое время потратить.`, until: v.until, by: me.handle });
+      }
+      await h.adminLog(env, request, me, `shop: sale ${pct}% ${sec || 'all'} ${Math.round(span / 60e3)}m`, true);
+      return json({ ok: true, sale: v });
+    },
+    async 'DELETE /admin/shop/sale'({ env, request, me }) {
+      if (!(await h.adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+      const was = await readSale(env);
+      await env.DB.prepare("DELETE FROM meta WHERE k = 'shop_sale'").run();
+      forgetSale();
+      if (was && h.getAnnounce && h.setAnnounce) { const a = await h.getAnnounce(env); if (a && a.id === 'sale-' + was.id) await h.setAnnounce(env, null); }
+      await h.adminLog(env, request, me, 'shop: sale off', true);
+      return json({ ok: true });
     },
     // подарить или снять рофланы: { to: юзернейм или id, delta, note }
     async 'POST /admin/shop/grant'({ env, request, me }) {

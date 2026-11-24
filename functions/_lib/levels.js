@@ -461,7 +461,26 @@ export async function seasonXpMany(env, ids, s) {
 }
 
 // ---------- тематическая неделя (админ включает в админке) ----------
-// meta.levels_event = { id, title, kinds: [...], mult, until }
+// meta.levels_event = { id, title, kinds: [...], mult, until, cats? }. cats — только оценки этих групп категорий
+// (CAT_GROUPS: по названию категории); на другие действия cats не влияет. Разбор альбома — всегда «музыка».
+export const CAT_GROUPS = {
+  music: { label: 'Музыка', re: /музык|альбом|трек|песн|music/i },
+  games: { label: 'Игры', re: /игр|game/i },
+  movies: { label: 'Фильмы и сериалы', re: /фильм|сериал|кино|мульт|movie|series|film/i },
+  anime: { label: 'Аниме и манга', re: /аниме|манг|anime|manga/i },
+  books: { label: 'Книги', re: /книг|book/i },
+  food: { label: 'Еда и заведения', re: /\bеда|заведен|ресторан|кафе|food/i },
+};
+export const RATING_KINDS = new Set(['rate', 'review', 'rate_full', 'plan_done', 'import']);
+export const catGroupOf = (name) => Object.keys(CAT_GROUPS).find((k) => CAT_GROUPS[k].re.test(String(name || ''))) || '';
+// попадает ли действие под тематическую неделю: вид из списка и, для оценок, категория из cats (если cats заданы)
+export function eventHits(ev, it) {
+  if (!ev || !Array.isArray(ev.kinds) || !ev.kinds.includes(it.kind)) return false;
+  const cats = Array.isArray(ev.cats) ? ev.cats : [];
+  if (!cats.length) return true;
+  if (it.kind === 'album_track' || it.kind === 'album_full') return cats.includes('music');
+  return !RATING_KINDS.has(it.kind) || cats.includes(it.cg);
+}
 let eventCache = { at: 0, v: null };
 export async function currentEvent(env, now = Date.now()) {
   if (eventCache.at > now - 30e3 && eventCache.db === env.DB) return eventCache.v && eventCache.v.until > now ? eventCache.v : null;
@@ -549,12 +568,12 @@ async function doAward(env, uid, items, opts) {
     if (opts.past || rule.given) xp = Math.max(0, Math.floor(+it.xp || 0));
     else {
       xp = priceOf(rule, { day: dayN[it.kind] || 0, pair: it.peer ? (pairN[it.kind] || {})[it.peer] || 0 : 0, ever: everN[it.kind] || 0 });
-      if (xp && event && Array.isArray(event.kinds) && event.kinds.includes(it.kind)) xp = Math.round(xp * Math.min(3, Math.max(1, +event.mult || 2)));
+      if (xp && eventHits(event, it)) xp = Math.round(xp * Math.min(3, Math.max(1, +event.mult || 2)));
     }
     dayN[it.kind] = (dayN[it.kind] || 0) + 1;
     if (it.peer) { pairN[it.kind] = pairN[it.kind] || {}; pairN[it.kind][it.peer] = (pairN[it.kind][it.peer] || 0) + 1; }
     everN[it.kind] = (everN[it.kind] || 0) + 1;
-    rows.push({ ...it, xp, day: opts.past && it.day ? it.day : today, at: opts.past && it.at ? +it.at : now, ev: event && xp && Array.isArray(event.kinds) && event.kinds.includes(it.kind) ? event.id : null });
+    rows.push({ ...it, xp, day: opts.past && it.day ? it.day : today, at: opts.past && it.at ? +it.at : now, ev: event && xp && eventHits(event, it) ? event.id : null });
   }
   if (!rows.length) return null;
   const writes = [];
@@ -1194,6 +1213,8 @@ export function shelfDiff(oldList, newList) {
   for (const [id, r] of after) {
     if (r.example) continue;
     const o = before.get(id);
+    const cg = catGroupOf(r.catLabel || r.catName);
+    const at = give.length;
     if (isScored(r) && !(o && isScored(o))) {
       give.push({ kind: r.src === 'letterboxd' ? 'import' : 'rate', ref: id });
       if (o && o.status === 'В планах') give.push({ kind: 'plan_done', ref: id });
@@ -1202,6 +1223,7 @@ export function shelfDiff(oldList, newList) {
       if (textLen(r) >= 100 && !(o && textLen(o) >= 100 && isScored(o))) give.push({ kind: 'review', ref: id });
       if (isFull(r) && !(o && isFull(o))) give.push({ kind: 'rate_full', ref: id });
     }
+    if (cg) for (let i = at; i < give.length; i++) give[i].cg = cg;
   }
   // треки внутри альбома: за каждый новый оценённый — album_track (трек по 4+ критериям — отдельная оценка, ему rate, а не это)
   const trackRefs = (r) => (r && !r.example && Array.isArray(r.tracks) ? r.tracks.filter((e) => e && +e.v > 0 && Number.isInteger(+e.n) && !e.rid).map((e) => `${r.id}:${+e.n}`) : []);

@@ -379,6 +379,9 @@
 @keyframes sh-fade { from { opacity: 0; } }
 .sh-head { display: flex; align-items: center; gap: 12px; padding: 20px 20px 12px 26px; }
 .sh-head h2 { margin: 0; font-size: 24px; font-family: var(--font-display, inherit); }
+.sh-sale { display: flex; align-items: center; gap: 10px; margin: 0 0 12px; padding: 10px 12px; border-radius: 14px; border: 1.5px solid color-mix(in srgb, var(--good, #2EAD60) 55%, transparent); background: color-mix(in srgb, var(--good, #2EAD60) 12%, transparent); font-size: 13.5px; }
+.sh-sale b { flex: none; padding: 4px 9px; border-radius: 999px; background: var(--good, #2EAD60); color: #06130b; font-weight: 900; }
+.sh-btn s { opacity: .6; font-weight: 600; margin-right: 2px; }
 .sh-bal { display: inline-flex; align-items: center; gap: 7px; padding: 5px 12px 5px 6px; border-radius: 999px; background: color-mix(in srgb, var(--ink, #fff) 7%, transparent); font-weight: 700; font-size: 14px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .sh-coin { display: inline-block; vertical-align: -4px; flex: none; image-rendering: pixelated; }
 .sh-head .x { margin-left: auto; width: 36px; height: 36px; flex: none; border: 0; border-radius: 50%; background: color-mix(in srgb, var(--ink, #fff) 8%, transparent); color: var(--ink, #fff); font-size: 16px; cursor: pointer; }
@@ -491,7 +494,15 @@ html.unslop .sh-it.on { box-shadow: none; }`;
     if (!token()) { body.innerHTML = '<p class="sh-note">Рофланы копятся у тех, кто вошёл в аккаунт: за оценки, отзывы, задания и всё, за что даётся опыт.</p><a class="sh-btn buy" href="/opinion/#login">Войти</a>'; return; }
     if (!D) { body.innerHTML = '<p class="sh-note">Загружаю…</p>'; return; }
     if (!D.on) { body.innerHTML = '<p class="sh-note">Магазин пока закрыт: он откроется вместе с уровнями.</p>'; return; }
-    body.innerHTML = sec === 'earn' ? earnHTML() : listHTML(sec);
+    body.innerHTML = (sec === 'earn' ? '' : saleHTML()) + (sec === 'earn' ? earnHTML() : listHTML(sec));
+  }
+  // скидка из админки: сколько процентов, на что и до когда
+  function saleHTML() {
+    const s = D && D.sale;
+    if (!s || s.until <= Date.now()) return '';
+    const secName = (SECTIONS.find(([k]) => k === s.sec) || [])[1];
+    const till = new Date(s.until).toLocaleString('ru-RU', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' });
+    return `<div class="sh-sale"><b>−${s.pct}%</b><span>${esc(s.title || 'Скидка')} — ${secName ? `в разделе «${esc(secName)}»` : 'на всё в магазине'} до ${esc(till)}</span></div>`;
   }
   // как тебя видят другие: аватар с рамкой, ник со стилем и значком
   function meHTML() {
@@ -538,12 +549,12 @@ html.unslop .sh-it.on { box-shadow: none; }`;
       : it.byLevel ? `За ${it.unlock}-й уровень`
       : !it.price ? 'Бесплатно'
       : it.owned ? 'Куплено'
-      : it.unlock ? `${coins(it.price)} · Откроется на ${it.unlock}-м уровне` : coins(it.price);
+      : it.unlock ? `${coins(it.price)} · Откроется на ${it.unlock}-м уровне` : it.was ? `${coins(it.price)} вместо ${nf(it.was)}` : coins(it.price);
     return `<div class="sh-it${on ? ' on' : ''}${lock ? ' lock' : ''}" data-id="${esc(it.id)}">${on ? `<span class="sh-tag">${food ? 'В миске' : 'Надето'}</span>` : ''}<div class="sh-pic">${picOf(it)}</div><b>${esc(it.title)}</b><small>${esc(sub)}</small>${btn}</div>`;
   }
   const buyBtn = (it) => (armed === it.id
     ? `<button type="button" class="sh-btn sure" data-buy="${esc(it.id)}">Точно купить?</button>`
-    : `<button type="button" class="sh-btn buy" data-buy="${esc(it.id)}">${coinImg(16)}${nf(it.price)}</button>`);
+    : `<button type="button" class="sh-btn buy" data-buy="${esc(it.id)}">${coinImg(16)}${it.was ? `<s>${nf(it.was)}</s> ` : ''}${nf(it.price)}</button>`);
   function earnHTML() {
     const e = D.earned || {};
     const row = (t, n) => `<div><span>${t}</span><b>${n < 0 ? '−' : ''}${coins(Math.abs(n))}</b></div>`;

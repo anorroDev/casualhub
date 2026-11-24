@@ -761,3 +761,19 @@ test('тематическая неделя: срок числом и едини
   assert.equal(P.spanMs(999, 'week'), 90 * 864e5, 'не дольше 90 дней');
   assert.equal(P.spanMs(3, 'nope'), 0);
 });
+
+test('тематическая неделя по категории: «Музыка» умножает оценки музыки и разбор альбома, но не игры', () => {
+  const ev = { kinds: ['rate', 'album_track', 'tier'], cats: ['music'] };
+  const d = L.shelfDiff([], [
+    { id: 'm1', name: 'A — B', catLabel: 'Музыка и альбомы', status: 'Альбом', scores: [{ id: 'c', v: 8 }], total: 8 },
+    { id: 'g1', name: 'Hades', catLabel: 'Игры', scores: [{ id: 'c', v: 9 }], total: 9 },
+  ]);
+  const by = Object.fromEntries(d.give.filter((x) => x.kind === 'rate').map((x) => [x.ref, x]));
+  assert.equal(by.m1.cg, 'music');
+  assert.equal(by.g1.cg, 'games');
+  assert.equal(L.eventHits(ev, by.m1), true);
+  assert.equal(L.eventHits(ev, by.g1), false, 'игры не попадают под «Музыку»');
+  assert.equal(L.eventHits(ev, { kind: 'album_track', ref: 'x:1' }), true);
+  assert.equal(L.eventHits(ev, { kind: 'tier', ref: 't' }), true, 'не оценки — категория не важна');
+  assert.equal(L.eventHits({ kinds: ['rate'] }, by.g1), true, 'без категорий — все оценки');
+});
