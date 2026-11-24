@@ -468,7 +468,9 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
       // письма об обновлениях (functions/_lib/mailout.js): состояние приходит с сервера — loadMailPrefs() после отрисовки
       + (user() && token() ? grp('Письма', toggle({ name: 'Письма об обновлениях', desc: 'Когда на сайте выходит что-то новое — короткое письмо на подтверждённую почту. Отписаться можно и из самого письма', attr: 'data-mailnews disabled', on: false })
         // язык писем (mail_prefs.lang_pick): пока не выбран — как язык сайта; кнопки оживит loadMailPrefs()
-        + `<div class="st-row st-langrow"><span class="st-t"><b>Язык писем</b><small data-maillang-note>${MAIL_LANG_AUTO}</small></span><span class="st-seg st-lang" role="group" aria-label="Язык писем">${langBtns('data-maillang', '', true)}</span></div>`) : '')
+        + `<div class="st-row st-langrow"><span class="st-t"><b>Язык писем</b><small data-maillang-note>${MAIL_LANG_AUTO}</small></span><span class="st-seg st-lang" role="group" aria-label="Язык писем">${langBtns('data-maillang', '', true)}</span></div>`)
+        // уведомления в Telegram (functions/_lib/tg.js): группа появится, только если бот на сайте подключён — loadTg()
+        + '<div data-tg-grp hidden></div>' : '')
       + grp('Подсказки', `<div class="st-row"><span class="st-t"><b>Показать подсказки снова</b><small>Окно «Впервые тут?» снова откроется на каждой странице при следующем заходе</small></span><button type="button" class="st-btn" data-do="howto">Показать</button></div>`);
   };
 
@@ -501,7 +503,7 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
     $('.st-body').scrollTop = 0;
     card.dataset.view = 'sec';
     if (cur === 'security') loadDevices();
-    if (cur === 'general') loadMailPrefs();
+    if (cur === 'general') { loadMailPrefs(); loadTg(); }
     if (fromList && narrow()) $('.st-back').focus({ preventScroll: true });
   }
   // «Письма об обновлениях»: включён ли, и можно ли вообще (почта подтверждена)
@@ -516,6 +518,41 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
       if (!p.verified) { const d = t.closest('.st-row') && t.closest('.st-row').querySelector('small'); if (d) d.textContent = 'Письма приходят только на подтверждённую почту. Подтверди её в разделе «Безопасность».'; }
       paintMailLang(p);
     } catch (e) { /* сервер без рассылки или нет связи: переключатель так и остаётся выключенным */ }
+  }
+  // «Telegram»: группа есть, только если бот на сайте подключён (/tg/me → on). Не привязан — «Подключить»: ссылка на бота
+  // с одноразовым кодом, «Старт» в Telegram привяжет чат; пока ждём — спрашиваем сервер раз в 3 секунды (до 3 минут).
+  // Привязан — что присылать и «Отключить»
+  const TG_KINDS = [['friend', 'Заявки в друзья', 'Кто хочет добавить и кто принял заявку'], ['react', 'Реакции', 'На твои оценки и тир-листы'], ['comment', 'Комментарии', 'Под твоими оценками и на стене']];
+  let tgPoll = 0;
+  function paintTg(s, waiting) {
+    const g = $('[data-tg-grp]');
+    if (!g) return;
+    g.hidden = false;
+    g.innerHTML = grp('Telegram', s.linked
+      ? TG_KINDS.map(([k, n, d]) => toggle({ name: n, desc: d, attr: `data-tg-kind="${k}"`, on: s.prefs[k] })).join('')
+        + `<div class="st-row"><span class="st-t"><b>Бот @${esc(s.bot)}</b><small>Сообщения приходят от него. Отключить можно и командой /stop в боте</small></span><button type="button" class="st-btn" data-tg="unlink">Отключить</button></div>`
+      : `<div class="st-row"><span class="st-t"><b>Уведомления в Telegram</b><small>${waiting ? 'Открой бота и нажми «Старт» — подключится сразу' : 'Заявки в друзья, реакции и комментарии — сообщением от бота, даже когда сайт закрыт'}</small></span><button type="button" class="st-btn" data-tg="link">${waiting ? 'Открыть ещё раз' : 'Подключить'}</button></div>`);
+  }
+  async function loadTg(waiting) {
+    if (!$('[data-tg-grp]')) return;
+    let s;
+    try { s = await api('/tg/me'); } catch (e) { return; }
+    if (!s.on || !$('[data-tg-grp]')) return;
+    paintTg(s, waiting && !s.linked);
+    return s;
+  }
+  async function tgLink() {
+    try {
+      const r = await api('/tg/link', 'POST', {});
+      window.open(r.url, '_blank', 'noopener');
+      clearInterval(tgPoll);
+      const t0 = Date.now();
+      await loadTg(true);
+      tgPoll = setInterval(async () => {
+        const s = await loadTg(Date.now() - t0 < 180e3);
+        if (!$('[data-tg-grp]') || (s && s.linked) || Date.now() - t0 > 180e3) { clearInterval(tgPoll); if (s && s.linked) toast('Telegram подключён'); }
+      }, 3000);
+    } catch (e) { toast(e.message); }
   }
   // «Язык писем»: на каком языке письма придут (lang) и выбран ли он здесь (pick) или взят с языка сайта
   function paintMailLang(p) {
@@ -542,6 +579,14 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
       const nb = e.target.closest('.st-nb');
       if (nb) { show(nb.dataset.sec, true); return; }
       if (e.target.closest('[data-back]')) { card.dataset.view = 'list'; const b = box.querySelector(`.st-nb[data-sec="${cur}"]`); if (b) b.focus({ preventScroll: true }); return; }
+      // Telegram: подключить (ссылка на бота) или отключить
+      const tg = e.target.closest('[data-tg]');
+      if (tg) {
+        if (tg.dataset.tg === 'link') { tgLink(); return; }
+        tg.disabled = true;
+        try { await api('/tg/unlink', 'POST', {}); clearInterval(tgPoll); await loadTg(); toast('Telegram отключён'); } catch (er) { tg.disabled = false; toast(er.message); }
+        return;
+      }
       // свой атрибут: data-theme стоит и на <html>, closest нашёл бы его при любом нажатии в окне
       const th = e.target.closest('[data-st-theme]');
       if (th) {
@@ -694,6 +739,11 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
         t.disabled = true;
         try { me = (await api('/account', 'PUT', { hideOnline: !t.checked })).user || me; toast(t.checked ? 'Друзья видят, когда ты в сети' : 'Друзья больше не видят, когда ты в сети'); }
         catch (er) { t.checked = !t.checked; toast(er.message); }
+        t.disabled = false;
+      }
+      if (t.matches('[data-tg-kind]')) {
+        t.disabled = true;
+        try { await api('/tg/prefs', 'PUT', { [t.dataset.tgKind]: t.checked }); } catch (er) { t.checked = !t.checked; toast(er.message); }
         t.disabled = false;
       }
       if (t.matches('[data-snow]')) { window.CasualUtil.snow.set(t.checked); toast(t.checked ? 'Снег пошёл' : 'Снег выключен'); }

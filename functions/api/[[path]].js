@@ -15,6 +15,7 @@ import { makeMailoutRoutes, rememberLang } from '../_lib/mailout.js';
 import { makePredictRoutes } from '../_lib/lots-predict.js';
 import { makeRiddleRoutes } from '../_lib/riddle.js';
 import { makeGuessRoutes } from '../_lib/guess.js';
+import { makeTgRoutes, tgNotify } from '../_lib/tg.js';
 import { makeEveningRoutes } from '../_lib/lots-evening.js';
 import { makeBingoRoutes } from '../_lib/bingo.js';
 import { makeKingRoutes } from '../_lib/king.js';
@@ -1245,11 +1246,13 @@ const routes = {
       // встречная заявка: просто принимаем
       await env.DB.prepare("UPDATE friendships SET status = 'accepted' WHERE a = ? AND b = ?").bind(a, b).run();
       await pokePresence(env, { what: 'users', ids: [me.id, other.id] });
+      tgLater(env, request, other.id, 'friend', { t: 'accepted', from: pubUser(me) });
       return json({ status: 'accepted', user: other });
     }
     await env.DB.prepare("INSERT INTO friendships (a, b, status, requested_by, created_at) VALUES (?, ?, 'pending', ?, ?)")
       .bind(a, b, me.id, Date.now()).run();
     await pokePresence(env, { what: 'users', ids: [other.id] });
+    tgLater(env, request, other.id, 'friend', { t: 'request', from: pubUser(me) });
     return json({ status: 'pending', user: other });
   },
 
@@ -1260,6 +1263,7 @@ const routes = {
     const [a, b] = pair(me.id, String(userId));
     await env.DB.prepare("UPDATE friendships SET status = 'accepted' WHERE a = ? AND b = ?").bind(a, b).run();
     await pokePresence(env, { what: 'users', ids: [me.id, String(userId)] });
+    tgLater(env, request, String(userId), 'friend', { t: 'accepted', from: pubUser(me) });
     await lvGive(env, request, me, me.id, [{ kind: 'friend', ref: String(userId) }]);
     await lvGive(env, request, me, String(userId), [{ kind: 'friend', ref: me.id }]);
     return json({ ok: true });
@@ -2080,6 +2084,7 @@ const routes = {
       'INSERT INTO reactions (owner_id, rid, from_id, emoji, text, at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(owner_id, rid, from_id) DO UPDATE SET emoji = excluded.emoji, text = excluded.text, at = excluded.at'
     ).bind(uid, rid, me.id, emoji, text || null, now).run();
     await pokePresence(env, { what: 'notify', to: uid, n: { kind: 'react', from: pubUser(me), rid, emoji, text } });
+    if (uid !== me.id) tgLater(env, request, uid, 'react', { from: pubUser(me), emoji, text });
     if (levelsOn(env)) {
       const [nope, tr] = await env.DB.batch([
         env.DB.prepare("SELECT COUNT(*) AS n FROM reactions WHERE from_id = ? AND emoji = 'nope'").bind(me.id),
@@ -2311,6 +2316,7 @@ const routes = {
     const id = randHex(10), now = Date.now();
     await env.DB.prepare('INSERT INTO comments (id, owner_id, target, from_id, text, at) VALUES (?, ?, ?, ?, ?, ?)').bind(id, uid, target, me.id, text, now).run();
     if (uid !== me.id) await pokePresence(env, { what: 'notify', to: uid, n: { kind: 'comment', from: pubUser(me), target, text: text.slice(0, 140) } });
+    if (uid !== me.id) tgLater(env, request, uid, 'comment', { from: pubUser(me), text });
     if (text.length >= 10) await lvGive(env, request, me, me.id, [{ kind: 'comment', ref: id, peer: uid === me.id ? 'self' : uid }]);
     if (uid !== me.id) await lvGive(env, request, me, uid, [{ kind: 'got_comment', ref: id, peer: me.id }]);
     return json({ item: { id, text, at: now, from: pubUser(me), canDelete: true } });
@@ -3238,6 +3244,8 @@ Object.assign(routes, makePredictRoutes({ json, fail, readBody, burst, currentUs
 Object.assign(routes, makeRiddleRoutes({ json, fail, readBody, burst, lvGive }));
 // «Угадай оценку друга» (/api/guess) — functions/_lib/guess.js
 Object.assign(routes, makeGuessRoutes({ json, fail, readBody, burst, lvGive }));
+// уведомления в Telegram (/api/tg…, вебхук /api/tg/hook — в PUBLIC) — functions/_lib/tg.js
+Object.assign(routes, makeTgRoutes({ json, fail, readBody, adminActive }));
 // «Вечер с друзьями»: вето в сборе лотов (/api/lots/:code/veto, /evening) — functions/_lib/lots-evening.js
 Object.assign(routes, makeEveningRoutes({ json, fail, readBody, burst, currentUser, pokeRoom }));
 // бинго для стрима в сборе лотов (/api/lots/:code/bingo) — functions/_lib/bingo.js
@@ -3251,7 +3259,7 @@ Object.assign(routes, makeTierCoopRoutes({ json, fail, readBody, burst, currentU
 // чат в комнатах — сбор лотов и «Царь Горы» (/api/chat…) — functions/_lib/chat.js, виджет /chat.js
 Object.assign(routes, makeChatRoutes({ json, fail, readBody, burst, clientIp, currentUser, isAdmin, adminCandidate, adminLog }));
 
-const PUBLIC = new Set(['GET /chat', 'GET /chat/ws', 'GET /tiercoop/room', 'GET /king/room', 'GET /king/img', 'GET /plan/info', 'GET /lots/:code/predict', 'GET /lots/:code/veto', 'GET /lots/:code/bingo', 'GET /shop/look', 'GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid', 'GET /mail/unsub', 'POST /mail/unsub', 'GET /levels/invite/who']);
+const PUBLIC = new Set(['GET /chat', 'GET /chat/ws', 'GET /tiercoop/room', 'GET /king/room', 'GET /king/img', 'GET /plan/info', 'GET /lots/:code/predict', 'GET /lots/:code/veto', 'GET /lots/:code/bingo', 'GET /shop/look', 'GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid', 'GET /mail/unsub', 'POST /mail/unsub', 'GET /levels/invite/who', 'POST /tg/hook']);
 // код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности
 const SHARE_RE = /^[A-Za-z0-9]{12}$/;
 function shareId() {
@@ -3283,7 +3291,16 @@ async function ensureAnnSeen(env) {
   annSeenReady = true;
 }
 
-export async function onRequest({ request, env, params }) {
+// уведомление в Telegram — после ответа (waitUntil), чтобы не задерживать сам запрос
+const laterOf = new WeakMap();
+function tgLater(env, request, uid, kind, data) {
+  const p = tgNotify(env, uid, kind, data, new URL(request.url).origin);
+  const w = laterOf.get(request);
+  if (w) { try { w(p); } catch (e) {} }
+}
+
+export async function onRequest({ request, env, params, waitUntil }) {
+  if (typeof waitUntil === 'function') laterOf.set(request, waitUntil);
   const segs = [].concat(params.path || []);
   const path = '/' + segs.join('/');
   if (path === '/health') return json({ ok: !!env.DB });

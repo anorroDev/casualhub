@@ -708,7 +708,7 @@
   async function mail() {
     const my = fresh();
     try {
-      const [d, mo] = await Promise.all([call('GET', '/admin/mail'), call('GET', '/admin/mailout')]);
+      const [d, mo, tg] = await Promise.all([call('GET', '/admin/mail'), call('GET', '/admin/mailout'), call('GET', '/admin/tg').catch(() => ({ on: false }))]);
       if (stale(my)) return;
       const last = d.last;
       const kinds = { reset: 'сброс пароля', verify: 'подтверждение почты', test: 'тестовое' };
@@ -755,7 +755,22 @@
           <div class="adm-ann-row"><button type="button" class="btn ghost" id="moTest"${mo.on ? '' : ' disabled'}>Отправить себе</button><button type="button" class="btn primary" id="moSend"${mo.on && !cur ? '' : ' disabled'}>Разослать всем</button></div>
           <p class="adm-err" id="moMsg" role="status"></p>
           ${recent.length ? `<div class="adm-lv-log" style="display:grid">${recent.map((x) => `<div><span>${esc(when(x.createdAt))}</span><span>«${esc(x.subject)}» · ${x.sent} из ${x.total}${x.canceled ? ' · остановлена' : x.doneAt ? ' · готово' : ''}</span><b></b></div>`).join('')}</div>` : ''}
+        </div>
+        <div class="adm-lv-ev"><h3 class="h3">Уведомления в Telegram</h3>
+          <p class="muted">Бот присылает заявки в друзья, реакции и комментарии тем, кто подключил его в Настройках («Общее» → «Telegram»). Переменные в Cloudflare: TG_TOKEN (от @BotFather), TG_BOT (имя бота без @), TG_SECRET (любая длинная строка). Потом — кнопка ниже.</p>
+          <ul class="adm-mail">
+            <li><b>Бот</b> ${tg.on ? '@' + esc(tg.bot) : 'не подключён (нет TG_TOKEN или TG_BOT)'}</li>
+            ${tg.on ? `<li><b>Вебхук</b> ${tg.webhook ? esc(tg.webhook) : 'не поставлен'}${tg.pending ? ` · ждут ${tg.pending}` : ''}</li>${tg.error ? `<li><b>Ошибка Telegram</b> <span class="adm-bad">${esc(tg.error)}</span></li>` : ''}<li><b>Подключили</b> ${tg.linked} ${plural(tg.linked, 'человек', 'человека', 'человек')}</li>${tg.secret ? '' : '<li><b>TG_SECRET</b> <span class="adm-bad">не задан — без него вебхук не поставить</span></li>'}` : ''}
+          </ul>
+          <div class="adm-ann-row"><button type="button" class="btn primary" id="admTgHook"${tg.on && tg.secret ? '' : ' disabled'}>Поставить вебхук на этот сайт</button></div>
+          <p class="adm-err" id="admTgMsg" role="status"></p>
         </div>`;
+      $('#admTgHook').addEventListener('click', async (e) => {
+        const b = e.currentTarget, m = $('#admTgMsg');
+        b.disabled = true; m.textContent = 'Ставлю…';
+        try { const r = await call('POST', '/admin/tg/webhook'); m.textContent = `Готово: ${r.url}`; setTimeout(mail, 1200); }
+        catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else { m.textContent = x.message; b.disabled = false; } }
+      });
       $('#admMailTest').addEventListener('click', async (e) => {
         const b = e.currentTarget, m = $('#admMailMsg');
         b.disabled = true; m.textContent = 'Отправляю…';

@@ -3815,7 +3815,23 @@ window.CasualLangPack = {
 "Против течения":"Against the current",
 "Оценки, где твой балл дальше 4 баллов от среднего у двух друзей и больше":"Ratings where your score is over 4 points from the average of two or more friends",
 "Телепат":"Telepath",
-"Баллы друзей, угаданные в точку в «Угадай оценку друга":"Friends’ scores guessed spot on in “Guess a friend’s rating"
+"Баллы друзей, угаданные в точку в «Угадай оценку друга":"Friends’ scores guessed spot on in “Guess a friend’s rating",
+// уведомления в Telegram: Настройки → «Общее» → «Telegram» (settings.js), ответы сервера (functions/_lib/tg.js)
+"Кто хочет добавить и кто принял заявку":"Who wants to add you and who accepted your request",
+"Реакции":"Reactions",
+"На твои оценки и тир-листы":"On your ratings and tier lists",
+"Под твоими оценками и на стене":"Under your ratings and on your wall",
+"Бот @{}":"Bot @{}",
+"Сообщения приходят от него. Отключить можно и командой /stop в боте":"Messages come from it. You can also turn them off with /stop in the bot",
+"Отключить":"Disconnect",
+"Уведомления в Telegram":"Telegram notifications",
+"Открой бота и нажми «Старт» — подключится сразу":"Open the bot and press “Start” — it connects right away",
+"Заявки в друзья, реакции и комментарии — сообщением от бота, даже когда сайт закрыт":"Friend requests, reactions and comments — as a message from the bot, even when the site is closed",
+"Открыть ещё раз":"Open again",
+"Telegram подключён":"Telegram connected",
+"Telegram отключён":"Telegram disconnected",
+"Уведомления в Telegram на сайте пока не подключены":"Telegram notifications aren’t set up on the site yet",
+"Telegram не подключён":"Telegram isn’t connected"
 },
   // слово после числа: 1 оценка, 5 оценок. [все русские формы, одна штука, несколько]
   nouns: [
