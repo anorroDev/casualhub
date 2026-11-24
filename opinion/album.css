@@ -131,6 +131,7 @@
   .alb-scale { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .alb-scale button { height: 46px; }
   .alb-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .alb-row .btn { justify-content: center; }
+  .alb-row .btn { justify-content: center; min-width: 0; white-space: normal; text-align: center; line-height: 1.25; }
+  .alb-row .primary { grid-column: 1 / -1; } /* главная кнопка — во всю ширину, длинная надпись не обрезается */
   .alb-sumart { width: 80px; height: 80px; }
 }

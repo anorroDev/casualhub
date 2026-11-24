@@ -357,11 +357,20 @@
     const cat = state.cats.find((c) => c.id === ses.al.cat);
     return cat ? cat.criteria : [];
   }
+  // обложка в окне: не загрузилась (протухла ссылка, браузер внутри Telegram и т. п.) — следующий источник, а нет ни одного — без картинки, не «?»
+  const artList = (al, data) => [...new Set([data.art, al.art, resolvePhotoUrl(al.photo)].filter(Boolean))];
+  function wireArt(box, list) {
+    box.querySelectorAll('img[data-art]').forEach((img) => {
+      let k = 0;
+      img.addEventListener('error', () => { k++; if (list[k]) img.src = list[k]; else img.remove(); });
+    });
+  }
   function paint() {
     const { al, data } = ses;
     const box = ses.ov.querySelector('.alb-box');
-    const art = data.art || resolvePhotoUrl(al.photo) || '';
-    if (ses.summary) { paintSummary(box, art); return; }
+    const arts = artList(al, data);
+    const art = arts[0] || '';
+    if (ses.summary) { paintSummary(box, art); wireArt(box, arts); return; }
     const t = cur();
     const prev = ses.have.get(t.n);
     const v = prev ? prev.v : null;
@@ -379,7 +388,7 @@
       <header class="alb-top"><span class="alb-at"><b>${esc(titleOf(al))}</b><small>${esc(al.artist || data.artist || '')}${data.year ? ' · ' + esc(data.year) : ''}</small></span>
         <button type="button" class="alb-x" data-alb-x="close" aria-label="Закрыть разбор">✕</button></header>
       <div class="alb-stage">
-        <div class="alb-vinyl${ses.playing ? ' on' : ''}"><span class="alb-disc"></span>${art ? `<img src="${esc(art)}" alt="" referrerpolicy="no-referrer">` : ''}<span class="alb-hole"></span></div>
+        <div class="alb-vinyl${ses.playing ? ' on' : ''}"><span class="alb-disc"></span>${art ? `<img data-art src="${esc(art)}" alt="" referrerpolicy="no-referrer">` : ''}<span class="alb-hole"></span></div>
         <div class="alb-now">
           <small>Трек ${t.n} из ${data.tracks.length}</small>
           <b class="alb-title">${esc(t.title)}</b>
@@ -399,6 +408,7 @@
       </div>
       <div class="alb-strip" aria-label="Треки альбома">${strip}</div>
       <p class="alb-keys">Клавиши: 1–9 и 0 (=10) — балл и следующий трек · пробел — отрывок · S — пропустить</p>`;
+    wireArt(box, arts);
     if (t.preview && ses.audio.dataset.n !== String(t.n)) {
       ses.audio.src = t.preview;
       ses.audio.dataset.n = String(t.n);
@@ -434,7 +444,7 @@
       <header class="alb-top"><span class="alb-at"><b>${esc(titleOf(al))}</b><small>${esc(al.artist || data.artist || '')}</small></span>
         <button type="button" class="alb-x" data-alb-x="close" aria-label="Закрыть разбор">✕</button></header>
       <div class="alb-sum">
-        ${art ? `<img class="alb-sumart" src="${esc(art)}" alt="" referrerpolicy="no-referrer">` : ''}
+        ${art ? `<img class="alb-sumart" data-art src="${esc(art)}" alt="" referrerpolicy="no-referrer">` : ''}
         <div><p class="alb-big">${avg != null ? fmt(avg) : '—'}<small>среднее по ${rows.length} ${plural(rows.length, 'треку', 'трекам', 'трекам')}</small></p>
         ${best ? `<p class="alb-best">Лучший трек: <b>${esc(best.t)}</b> · ${fmtS(best.v)}</p>` : ''}
         ${left ? `<p class="alb-best">Осталось разобрать: ${left}</p>` : ''}</div>
@@ -446,6 +456,7 @@
       <div class="alb-row">
         ${left ? '<button type="button" class="btn small primary" data-alb-x="resume">Продолжить</button>' : ''}
         <button type="button" class="btn small${left ? ' ghost' : ' primary'}" data-alb-x="rate-album">${al.rescore && ownScored(al) ? 'Изменить оценку альбома' : 'Оценить альбом по критериям'}</button>
+        ${rows.length ? '<button type="button" class="btn small ghost" data-alb-x="edit" title="Вернуться к первому треку и поменять баллы">Изменить треки</button>' : ''}
         <a class="btn small ghost" href="/tierlist/#album=${encodeURIComponent(al.id)}">Тир-лист треков</a>
         ${rows.length >= 2 ? '<button type="button" class="btn small ghost" data-alb-x="png">Картинка</button>' : ''}
         <button type="button" class="btn small ghost" data-alb-x="close">Готово</button>
@@ -555,6 +566,7 @@
         break;
       }
       case 'resume': ses.summary = false; advance(); break;
+      case 'edit': ses.summary = false; ses.crit = false; ses.i = 0; paint(); break;
       case 'rate-album': { const al = albumOf(ses.al.id); const avg = avgOf(rowsOf(tracksOf(al.id))); close(); loadIntoForm(al, { rate: true }); if (avg != null) setTimeout(() => toast(`Среднее по трекам: ${fmt(avg)}. Поставь баллы по критериям — это станет оценкой альбома`), 2900); break; }
       case 'png': sharePNG(ses.al.id); break;
     }

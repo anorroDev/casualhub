@@ -3383,6 +3383,8 @@
 "Оцени что-нибудь из «В планах»":"Rate something from “Planned”",
 "Собери тир-лист":"Make a tier list",
 "Разбери альбом по трекам":"Break an album down by tracks",
+"Изменить треки":"Edit tracks",
+"Вернуться к первому треку и поменять баллы":"Go back to the first track and change scores",
 "Критерии альбома":"Album criteria",
 "Изменить оценку трека":"Edit track rating",
 "отдельная оценка":"separate rating",
