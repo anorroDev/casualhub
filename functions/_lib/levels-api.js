@@ -139,7 +139,7 @@ export function makeLevelsRoutes(h) {
         event: ev ? { title: ev.title, kinds: ev.kinds, mult: ev.mult, until: ev.until } : null,
         rewards: REWARDS, foods: FOOD_GIFTS, colors: NAME_COLORS, bgs: Object.keys(PROFILE_BGS), invRewards: INVITE_REWARDS, invites: invitesOf(row),
         xpRules: xpRules(), streakBonus: STREAK_BONUS, firstXp: FIRST_STEPS.map((f) => f.xp), achXp: { tiers: ACH_TIER_XP, one: ACH_ONE_XP },
-        recap: recapOpen(now) ? 2026 : null,
+        recap: recapOpen(now) || admin ? 2026 : null, // админ видит итоги заранее, чтобы проверить их до декабря
         mail: await mailUnread(env, me.id),
         vasyan: await vasyanOwned(env, me.id),
       });
@@ -400,7 +400,7 @@ export function makeLevelsRoutes(h) {
       if (!recapOpen(now) && !admin) return fail(404, 'Итоги года откроются в декабре.');
       await ensureLevels(env);
       const data = await recap(env, me.id, 2026);
-      await grantSpecial(env, me.id, 'recap2026');
+      if (recapOpen(now)) await grantSpecial(env, me.id, 'recap2026'); // предпросмотр админа ачивку не выдаёт
       return json(data);
     },
 
@@ -681,7 +681,7 @@ export async function recap(env, uid, year) {
   const from = Date.UTC(year, 0, 1), to = Date.UTC(year + 1, 0, 1);
   const inYear = (t) => { const v = +new Date(t || 0) || 0; return v >= from && v < to; };
   const cur = await currentSeason(env);
-  const [sh, rcOut, rcIn, cmOut, cmIn, tl, lots, lv, ach, me, past, now_] = await env.DB.batch([
+  const [sh, rcOut, rcIn, cmOut, cmIn, tl, lots, lv, ach, me, past, now_, kinds, fr] = await env.DB.batch([
     env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(uid),
     env.DB.prepare('SELECT owner_id AS id, COUNT(*) AS n FROM reactions WHERE from_id = ? AND owner_id != ? AND at >= ? AND at < ? GROUP BY owner_id').bind(uid, uid, from, to),
     env.DB.prepare('SELECT from_id AS id, COUNT(*) AS n FROM reactions WHERE owner_id = ? AND from_id != ? AND at >= ? AND at < ? GROUP BY from_id').bind(uid, uid, from, to),
@@ -695,7 +695,16 @@ export async function recap(env, uid, year) {
     // звание года — лучшее из сезонов этого года (и текущего)
     env.DB.prepare('SELECT r.rank FROM season_results r JOIN seasons s ON s.n = r.season WHERE r.user_id = ? AND s.start_at >= ? AND s.start_at < ?').bind(uid, from - 31 * 864e5, to),
     env.DB.prepare('SELECT COALESCE(SUM(xp), 0) AS s FROM xp_log WHERE user_id = ? AND gone = 0 AND at >= ?').bind(uid, cur ? cur.start : Date.now() + 1),
+    // что засчитано за год по видам: загадки, лоты, «Царь Горы», прогнозы, бинго, задания (снятое не считается)
+    env.DB.prepare('SELECT kind, COUNT(*) AS n FROM xp_log WHERE user_id = ? AND gone = 0 AND at >= ? AND at < ? GROUP BY kind').bind(uid, from, to),
+    env.DB.prepare("SELECT CASE WHEN a = ?1 THEN b ELSE a END AS id FROM friendships WHERE (a = ?1 OR b = ?1) AND status = 'accepted'").bind(uid),
   ]);
+  // рофланы за год: только полученное, без покупок (у сайта без магазина таблицы может не быть)
+  let roflans = 0;
+  try {
+    const r = await env.DB.prepare('SELECT COALESCE(SUM(delta), 0) AS s FROM shop_log WHERE user_id = ? AND delta > 0 AND at >= ? AND at < ?').bind(uid, from, to).first();
+    roflans = +(r && r.s) || 0;
+  } catch (e) {}
   const rankIdx = (id) => SEASON_RANKS.findIndex((r) => r.id === id);
   const bestRank = [...(past.results || []).map((x) => x.rank), seasonRankOf(+(((now_.results || [])[0] || {}).s) || 0).id]
     .reduce((a, id) => (rankIdx(id) > rankIdx(a) ? id : a), SEASON_RANKS[0].id);
@@ -720,6 +729,47 @@ export async function recap(env, uid, year) {
   const l = (lv.results || [])[0] || {};
   const view = levelView(+l.xp || 0, +l.level || 1);
   const name = (r) => (r ? { name: String(r.name || '').slice(0, 80), total: +r.total || 0, cat: String(r.catName || '').slice(0, 40) } : null);
+  // музыка: разобранные по трекам альбомы года, лучший альбом и лучший трек (балл трека живёт в tracks альбома)
+  const albums = ratings.filter((r) => r && !r.example && !r.albumOf && Array.isArray(r.tracks) && (inYear(r.createdAt) || inYear(r.updatedAt)))
+    .map((r) => ({ r, tr: r.tracks.filter((e) => e && +e.v > 0) })).filter((a) => a.tr.length);
+  const topAlbum = albums.filter((a) => isScored(a.r)).sort((a, b) => (+b.r.total || 0) - (+a.r.total || 0))[0] || null;
+  let topTrack = null;
+  for (const a of albums) for (const e of a.tr) if (!topTrack || +e.v > topTrack.v) topTrack = { name: String(e.t || '').slice(0, 80) || `№${+e.n || 0}`, album: String(a.r.name || '').slice(0, 80), v: +e.v };
+  const music = { albums: albums.length, tracks: albums.reduce((s, a) => s + a.tr.length, 0), top: topAlbum ? { name: String(topAlbum.r.name || '').slice(0, 80), total: +topAlbum.r.total || 0 } : null, track: topTrack };
+  // самая спорная оценка года — дальше всего от среднего у друзей; оценки друзей «только я» не считаются, как и в их профиле
+  let hot = null;
+  const fids = (fr.results || []).map((x) => x.id).slice(0, 90);
+  if (fids.length && year_.length) {
+    const mine = new Map(year_.map((r) => [nameKey(r.name), r]));
+    const sums = new Map();
+    const { results: shs } = await env.DB.prepare(`SELECT data FROM shelves WHERE user_id IN (${fids.map(() => '?').join(',')})`).bind(...fids).all();
+    for (const s of shs || []) {
+      let list = [];
+      try { const d = JSON.parse(s.data || '{}'); list = Array.isArray(d) ? d : d.ratings || []; } catch (e) { continue; }
+      const once = new Set();
+      for (const r of list) {
+        if (!r || r.example || r.vis === 'private' || !isScored(r)) continue;
+        const k = nameKey(r.name);
+        if (!mine.has(k) || once.has(k)) continue;
+        once.add(k);
+        const t = sums.get(k) || { sum: 0, n: 0 };
+        t.sum += +r.total; t.n++;
+        sums.set(k, t);
+      }
+    }
+    let best_ = null;
+    for (const [k, t] of sums) {
+      const m = mine.get(k), avg = t.sum / t.n, diff = Math.abs((+m.total || 0) - avg);
+      if (!best_ || diff > best_.diff || (diff === best_.diff && t.n > best_.n)) best_ = { name: String(m.name || '').slice(0, 80), mine: +m.total || 0, theirs: Math.round(avg * 10) / 10, n: t.n, diff };
+    }
+    // меньше полутора баллов разницы — это не спор
+    if (best_ && best_.diff >= 1.5) hot = { name: best_.name, mine: best_.mine, theirs: best_.theirs, n: best_.n };
+  }
+  const kn = Object.fromEntries((kinds.results || []).map((x) => [x.kind, +x.n || 0]));
+  const modes = {
+    riddles: kn.riddle || 0, lotsWon: kn.lot_win || 0, lotsHosted: kn.lots_host || 0, kingHosted: kn.king_host || 0, kingVotes: kn.king_vote || 0,
+    predictWins: kn.predict_win || 0, bingoWins: kn.bingo_win || 0, tierCoop: (kn.tier_coop || 0) + (kn.tier_coop_host || 0), quests: kn.quest || 0,
+  };
   return {
     year, username: ((me.results || [])[0] || {}).username || '',
     ratings: year_.length, plans, avg, favs: year_.filter((r) => r.fav).length,
@@ -728,5 +778,8 @@ export async function recap(env, uid, year) {
     reactsGiven: sum(rcOut), reactsGot: sum(rcIn), commentsGiven: sum(cmOut), commentsGot: sum(cmIn),
     tierlists: ((tl.results || [])[0] || {}).n || 0, lotRooms: ((lots.results || [])[0] || {}).n || 0,
     friend, level: view.level, rank: (SEASON_RANKS[rankIdx(bestRank)] || SEASON_RANKS[0]).title, rankId: bestRank, xp: view.xp, bestStreak: +l.best_streak || 0, achievements: ((ach.results || [])[0] || {}).n || 0,
+    music, modes, hot, roflans,
   };
 }
+// название оценки для сравнения с друзьями — так же, как профиль сравнивает вкусы (без регистра, ё = е, пробелы)
+const nameKey = (s) => String(s || '').trim().toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ');

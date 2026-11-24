@@ -376,6 +376,21 @@ html.lv-on .ava-wrap > .ava-ring { display: none !important; }
 .lv-recap span { font-size: 12.5px; color: var(--ink-3, #8a8f9e); }
 .lv-recap .wide { grid-column: 1 / -1; }
 .lv-recap .wide b { font-size: 18px; }
+/* итоги года экранами: все экраны в одной клетке сетки — высота не прыгает; кнопки над экранами — всегда на виду, без прокрутки */
+.lv-story { gap: 14px; }
+.lv-st-bar { display: flex; gap: 4px; }
+.lv-st-bar i { flex: 1; height: 3px; border-radius: 2px; background: var(--line, #2b2e38); transition: background-color .2s; }
+.lv-st-bar i.on { background: var(--accent, #3550E8); }
+.lv-st-all { display: grid; touch-action: pan-y; }
+.lv-st { grid-area: 1 / 1; display: grid; gap: 12px; align-content: start; min-width: 0; }
+.lv-st.off { visibility: hidden; }
+.lv-st.lv-st-end.off { display: none; }
+.lv-st:not(.off) { animation: lv-up .24s cubic-bezier(.2, .8, .2, 1); }
+.lv-st h3 { font-size: 17px; }
+.lv-st-nav { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.lv-st-nav .lv-btn:disabled { opacity: .45; cursor: default; }
+.lv-st-img { display: block; justify-self: center; width: min(100%, calc(min(calc(56 * var(--dvh, 1vh)), 460px) * .8)); height: auto; aspect-ratio: 4 / 5; border-radius: 14px; border: 1px solid var(--line, #2b2e38); background: #11131A; }
+@media (prefers-reduced-motion: reduce) { .lv-st:not(.off) { animation: none; } .lv-st-bar i { transition: none; } }
 .lv-err { color: #E4553F; font-size: 13px; margin: 0; }
 /* «Пригласить»: ссылка, шаги, награды за друзей, кто пришёл */
 .lv-inv-hero { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 18px; align-items: center; }
@@ -1323,24 +1338,65 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       const achBox = items.length ? `<div class="lv-box"><h3>Достижения</h3><div class="lv-bdg">${items.map((a) => achCard(a, false, show)).join('')}</div></div>` : '';
       return `${hero}${by}${how}${rw}${ppl}${achBox}<p class="lv-muted">Засчитывается, только когда друг сам дойдёт до 3-го уровня — поэтому второй аккаунт ничего не даст. Награды за друзей — только оформление профиля.</p>`;
     },
+    // итоги года — экранами по одному (как истории): год в оценках, самые-самые, музыка, друзья, режимы, прогресс, картинка.
+    // Экран без данных не показывается; листают кнопки, стрелки и свайп (BIND.recap)
     async recap() {
       const d = await api('/levels/recap');
       VIEWS.recapData = d;
       const c = (big, small, wide) => `<div${wide ? ' class="wide"' : ''}><b>${big}</b><span>${small}</span></div>`;
-      return `<div class="lv-box"><h3>Твой 2026 на Казуал Хабе</h3><div class="lv-recap">
-        ${c(d.ratings, plural(d.ratings, 'оценка', 'оценки', 'оценок') + ' за год')}
-        ${d.avg != null ? c(d.avg, 'средний балл') : ''}
-        ${c(d.cats, plural(d.cats, 'категория', 'категории', 'категорий'))}
-        ${c(d.reactsGiven + d.commentsGiven, 'реакций и комментариев друзьям')}
-        ${c(d.reactsGot + d.commentsGot, 'получил от друзей')}
-        ${c(d.tierlists, plural(d.tierlists, 'тир-лист', 'тир-листа', 'тир-листов'))}
-        ${c(d.level, 'уровень · ' + esc(d.rank))}
-        ${c(d.achievements, plural(d.achievements, 'достижение', 'достижения', 'достижений'))}
-        ${d.topCat ? c(esc(d.topCat.name), `любимая категория · ${d.topCat.n} ${plural(d.topCat.n, 'оценка', 'оценки', 'оценок')}`, true) : ''}
-        ${d.best ? c(`${esc(d.best.name)} · ${d.best.total}`, 'лучшая оценка года', true) : ''}
-        ${d.worst ? c(`${esc(d.worst.name)} · ${d.worst.total}`, 'самая строгая оценка', true) : ''}
-        ${d.friend ? c(esc(d.friend.username), `друг года · ${d.friend.together} реакций и комментариев друг другу`, true) : ''}
-      </div></div><div class="lv-link"><button type="button" class="lv-btn" id="lvRecapImg">Сохранить картинкой</button><span class="lv-muted" id="lvRecapMsg" role="status"></span></div>`;
+      const cells = (list) => `<div class="lv-recap">${list.filter(Boolean).join('')}</div>`;
+      const mu = d.music || {}, m = d.modes || {};
+      const slides = [];
+      const add = (title, body) => slides.push(`<h3>${title}</h3>${body}`);
+      add('Твой 2026 на Казуал Хабе', cells([
+        c(d.ratings, plural(d.ratings, 'оценка', 'оценки', 'оценок') + ' за год'),
+        d.avg != null && c(d.avg, 'средний балл'),
+        c(d.cats, plural(d.cats, 'категория', 'категории', 'категорий')),
+        d.favs > 0 && c(d.favs, 'в избранном'),
+        d.plans > 0 && c(d.plans, 'добавлено в «В планах»'),
+        d.topCat && c(esc(d.topCat.name), `любимая категория · ${d.topCat.n} ${plural(d.topCat.n, 'оценка', 'оценки', 'оценок')}`, true),
+      ]));
+      if (d.best || d.worst || d.hot || d.longest) add('Самые-самые', cells([
+        d.best && c(`${esc(d.best.name)} · ${d.best.total}`, 'лучшая оценка года', true),
+        d.worst && c(`${esc(d.worst.name)} · ${d.worst.total}`, 'самая строгая оценка', true),
+        d.hot && c(`${esc(d.hot.name)} · ${d.hot.mine}`, `самая спорная оценка · у друзей в среднем ${d.hot.theirs}`, true),
+        d.longest && c(esc(d.longest.name), `самый длинный отзыв · ${d.longest.chars} ${plural(d.longest.chars, 'символ', 'символа', 'символов')}`, true),
+      ]));
+      if (mu.albums) add('Музыка', cells([
+        c(mu.albums, plural(mu.albums, 'альбом разобран по трекам', 'альбома разобрано по трекам', 'альбомов разобрано по трекам')),
+        c(mu.tracks, plural(mu.tracks, 'трек', 'трека', 'треков')),
+        mu.top && c(`${esc(mu.top.name)} · ${mu.top.total}`, 'альбом года', true),
+        mu.track && c(`${esc(mu.track.name)} · ${mu.track.v}`, `трек года · ${esc(mu.track.album)}`, true),
+      ]));
+      const given = d.reactsGiven + d.commentsGiven, got = d.reactsGot + d.commentsGot;
+      if (given || got || d.friend) add('Друзья', cells([
+        c(given, 'реакций и комментариев друзьям'),
+        c(got, 'получил от друзей'),
+        d.friend && c(esc(d.friend.username), `друг года · ${d.friend.together} реакций и комментариев друг другу`, true),
+      ]));
+      const P = (n, a, b, c) => [n, plural(+n || 0, a, b, c)];
+      const modes = [
+        P(d.tierlists, 'тир-лист', 'тир-листа', 'тир-листов'), P(m.tierCoop, 'тир-лист вместе', 'тир-листа вместе', 'тир-листов вместе'),
+        P(d.lotRooms, 'сбор лотов', 'сбора лотов', 'сборов лотов'), P(m.lotsWon, 'победа твоего лота', 'победы твоих лотов', 'побед твоих лотов'),
+        P(m.kingHosted, 'турнир «Царя Горы»', 'турнира «Царя Горы»', 'турниров «Царя Горы»'), P(m.kingVotes, 'голос в «Царе Горы»', 'голоса в «Царе Горы»', 'голосов в «Царе Горы»'),
+        P(m.riddles, 'загадка отгадана', 'загадки отгаданы', 'загадок отгадано'), P(m.predictWins, 'прогноз сбылся', 'прогноза сбылись', 'прогнозов сбылось'),
+        P(m.bingoWins, 'победа в бинго', 'победы в бинго', 'побед в бинго'), P(m.quests, 'задание выполнено', 'задания выполнены', 'заданий выполнено'),
+      ].filter(([n]) => +n > 0);
+      if (modes.length) add('Режимы и задания', cells(modes.map(([n, t]) => c(n, t))));
+      add('Прогресс', cells([
+        c(d.level, 'уровень · ' + esc(d.rank)),
+        c(d.achievements, plural(d.achievements, 'достижение', 'достижения', 'достижений')),
+        d.bestStreak > 0 && c(d.bestStreak, plural(d.bestStreak, 'день подряд — рекорд', 'дня подряд — рекорд', 'дней подряд — рекорд')),
+        d.roflans > 0 && c(d.roflans, plural(d.roflans, 'рофлан', 'рофлана', 'рофланов') + ' за год'),
+      ]));
+      slides.push(`<h3>Твой 2026 одной картинкой</h3><img class="lv-st-img" alt="Итоги 2026 картинкой" data-recap-img>
+        <div class="lv-link"><button type="button" class="lv-btn" id="lvRecapImg">Сохранить картинкой</button><span class="lv-muted" id="lvRecapMsg" role="status"></span></div>`);
+      const n = slides.length;
+      return `<div class="lv-box lv-story" data-story>
+        <div class="lv-st-bar" aria-hidden="true">${slides.map((_, i) => `<i${i ? '' : ' class="on"'}></i>`).join('')}</div>
+        <div class="lv-st-nav"><button type="button" class="lv-btn ghost" data-st="-1" disabled>Назад</button><span class="lv-muted" data-st-n aria-live="polite">1 из ${n}</span><button type="button" class="lv-btn" data-st="1">Дальше</button></div>
+        <div class="lv-st-all">${slides.map((s, i) => `<section class="lv-st${i === n - 1 ? ' lv-st-end' : ''}${i ? ' off' : ''}"${i ? ' aria-hidden="true" inert' : ''}>${s}</section>`).join('')}</div>
+      </div>`;
     },
   };
   const BIND = {
@@ -1441,13 +1497,59 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       }));
     },
     recap(b) {
+      const box = b.querySelector('[data-story]');
+      if (!box) return;
+      const all = [...box.querySelectorAll('.lv-st')], bars = [...box.querySelectorAll('.lv-st-bar i')];
+      const prev = box.querySelector('[data-st="-1"]'), next = box.querySelector('[data-st="1"]'), cnt = box.querySelector('[data-st-n]');
+      const last = all.length - 1;
+      let at = 0, painted = false;
+      // последний экран — предпросмотр той же картинки, что сохраняется
+      const paint = () => {
+        if (painted) return;
+        painted = true;
+        const img = box.querySelector('[data-recap-img]');
+        try { img.src = drawRecap(VIEWS.recapData).toDataURL('image/png'); } catch (e) { img.remove(); }
+      };
+      const go = (k) => {
+        k = Math.max(0, Math.min(last, k));
+        if (k === at) return;
+        at = k;
+        all.forEach((s, j) => {
+          const off = j !== at;
+          s.classList.toggle('off', off);
+          s.inert = off;
+          if (off) s.setAttribute('aria-hidden', 'true'); else s.removeAttribute('aria-hidden');
+        });
+        bars.forEach((x, j) => x.classList.toggle('on', j <= at));
+        prev.disabled = at === 0;
+        next.textContent = at === last ? 'Сначала' : 'Дальше';
+        cnt.textContent = `${at + 1} из ${all.length}`;
+        if (at === last) paint();
+      };
+      next.addEventListener('click', () => go(at === last ? 0 : at + 1));
+      prev.addEventListener('click', () => go(at - 1));
+      box.addEventListener('keydown', (e) => {
+        if (e.target.closest('input, textarea')) return;
+        if (e.key === 'ArrowRight') { e.preventDefault(); go(at + 1); } else if (e.key === 'ArrowLeft') { e.preventDefault(); go(at - 1); }
+      });
+      // свайп пальцем: влево — дальше, вправо — назад (вертикальная прокрутка окна остаётся)
+      let sx = null, sy = 0;
+      const area = box.querySelector('.lv-st-all');
+      area.addEventListener('pointerdown', (e) => { if (e.pointerType !== 'mouse') { sx = e.clientX; sy = e.clientY; } });
+      area.addEventListener('pointercancel', () => { sx = null; });
+      area.addEventListener('pointerup', (e) => {
+        if (sx == null) return;
+        const dx = e.clientX - sx, dy = e.clientY - sy;
+        sx = null;
+        if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) go(at + (dx < 0 ? 1 : -1));
+      });
       b.querySelector('#lvRecapImg').addEventListener('click', () => saveRecap(VIEWS.recapData, b.querySelector('#lvRecapMsg')));
     },
   };
 
-  // карточка итогов года картинкой (рисуется в браузере)
-  function saveRecap(d, msg) {
-    if (!d) return;
+  // карточка итогов года картинкой (рисуется в браузере; подписи переводит холст — lang-core.js).
+  // Шесть плиток и четыре строки: строки — по важности, звание всегда последней
+  function drawRecap(d) {
     const W = 1080, H = 1350, cv = document.createElement('canvas');
     cv.width = W; cv.height = H;
     const g = cv.getContext('2d');
@@ -1463,29 +1565,37 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     g.font = '500 38px system-ui, sans-serif';
     g.fillStyle = '#B7BCCB';
     g.fillText('на Казуал Хабе', 80, 290);
+    const fit = (t, w) => { t = String(t); while (g.measureText(t).width > w && t.length > 4) t = t.slice(0, -2) + '…'; return t; };
+    const mu = d.music || {};
     const cells = [
       [d.ratings, plural(d.ratings, 'оценка', 'оценки', 'оценок')], [d.avg != null ? d.avg : '—', 'средний балл'],
+      mu.tracks ? [mu.tracks, plural(mu.tracks, 'трек', 'трека', 'треков')] : [d.tierlists, plural(d.tierlists, 'тир-лист', 'тир-листа', 'тир-листов')],
       [d.reactsGiven + d.commentsGiven, 'реакций и комментариев'], [d.level, 'уровень'],
+      d.bestStreak ? [d.bestStreak, plural(d.bestStreak, 'день подряд', 'дня подряд', 'дней подряд')] : [d.achievements, plural(d.achievements, 'достижение', 'достижения', 'достижений')],
     ];
     cells.forEach(([big, small], i) => {
-      const x = 80 + (i % 2) * 470, y = 420 + Math.floor(i / 2) * 220;
-      g.fillStyle = 'rgba(255,255,255,.06)'; g.beginPath(); g.roundRect(x, y - 110, 440, 190, 28); g.fill();
-      g.fillStyle = '#F1F2F6'; g.font = '800 88px system-ui, sans-serif'; g.fillText(String(big), x + 32, y + 2);
-      g.fillStyle = '#9AA0B2'; g.font = '500 32px system-ui, sans-serif'; g.fillText(small, x + 32, y + 52);
+      const x = 80 + (i % 2) * 470, y = 340 + Math.floor(i / 2) * 170;
+      g.fillStyle = 'rgba(255,255,255,.06)'; g.beginPath(); g.roundRect(x, y, 440, 150, 26); g.fill();
+      g.fillStyle = '#F1F2F6'; g.font = '800 70px system-ui, sans-serif'; g.fillText(fit(big, 380), x + 30, y + 82);
+      g.fillStyle = '#9AA0B2'; g.font = '500 28px system-ui, sans-serif'; g.fillText(fit(small, 380), x + 30, y + 124);
     });
     const lines = [
-      d.topCat && ['Любимая категория', d.topCat.name], d.best && ['Лучшая оценка', `${d.best.name} · ${d.best.total}`],
-      d.friend && ['Друг года', d.friend.username], ['Звание', d.rank],
-    ].filter(Boolean);
-    let y = 930;
+      d.best && ['Лучшая оценка', `${d.best.name} · ${d.best.total}`], mu.top && ['Альбом года', `${mu.top.name} · ${mu.top.total}`],
+      d.hot && !(d.best && d.best.name === d.hot.name) && ['Самая спорная оценка', `${d.hot.name} · ${d.hot.mine}`], d.friend && ['Друг года', d.friend.username],
+      d.topCat && ['Любимая категория', d.topCat.name],
+    ].filter(Boolean).slice(0, 3).concat([['Звание', d.rank]]);
+    let y = 885;
     for (const [k, v] of lines) {
-      g.fillStyle = '#9AA0B2'; g.font = '500 30px system-ui, sans-serif'; g.fillText(k, 80, y);
-      g.fillStyle = '#F1F2F6'; g.font = '700 42px system-ui, sans-serif';
-      let t = String(v); while (g.measureText(t).width > W - 160 && t.length > 4) t = t.slice(0, -2) + '…';
-      g.fillText(t, 80, y + 52); y += 115;
+      g.fillStyle = '#9AA0B2'; g.font = '500 28px system-ui, sans-serif'; g.fillText(k, 80, y);
+      g.fillStyle = '#F1F2F6'; g.font = '700 40px system-ui, sans-serif'; g.fillText(fit(v, W - 160), 80, y + 48);
+      y += 95;
     }
     g.fillStyle = '#6E7489'; g.font = '500 28px system-ui, sans-serif'; g.fillText(location.host, 80, H - 70);
-    cv.toBlob(async (blob) => {
+    return cv;
+  }
+  function saveRecap(d, msg) {
+    if (!d) return;
+    drawRecap(d).toBlob(async (blob) => {
       if (!blob) return;
       const file = new File([blob], 'casualhub-2026.png', { type: 'image/png' });
       try { if (navigator.canShare && navigator.canShare({ files: [file] })) { await navigator.share({ files: [file], title: 'Мой 2026 на Казуал Хабе' }); return; } } catch (e) {}

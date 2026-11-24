@@ -874,3 +874,68 @@ test('тематическая неделя по категории: «Музы�
   assert.equal(L.eventHits(ev, { kind: 'tier', ref: 't' }), true, 'не оценки — категория не важна');
   assert.equal(L.eventHits({ kinds: ['rate'] }, by.g1), true, 'без категорий — все оценки');
 });
+
+test('итоги года: музыка, режимы, рофланы и самая спорная оценка', async () => {
+  const env = envOf();
+  const { recap } = await import('../functions/_lib/levels-api.js');
+  await L.ensureLevels(env);
+  env.DB.raw.exec('ALTER TABLE lot_rooms ADD COLUMN created_at INTEGER');
+  const T = (m, d) => new Date(Date.UTC(2026, m - 1, d, 12)).toISOString();
+  env.DB.raw.exec("INSERT INTO users (id, username, uname, created_at) VALUES ('u1', 'Аня', 'anya', 1), ('u2', 'Боря', 'borya', 1), ('u3', 'Вика', 'vika', 1), ('u4', 'Гоша', 'gosha', 1)");
+  env.DB.raw.exec("INSERT INTO friendships (a, b, status) VALUES ('u1', 'u2', 'accepted'), ('u3', 'u1', 'accepted'), ('u1', 'u4', 'pending')");
+  const sc = (v) => [{ v }];
+  const shelf = (id, ratings) => env.DB.raw.prepare('INSERT INTO shelves (user_id, data, updated_at) VALUES (?, ?, 1)').run(id, JSON.stringify({ ratings }));
+  shelf('u1', [
+    { id: 'h', name: 'Hades', catName: 'Игры', total: 9, scores: sc(9), createdAt: T(3, 1) },
+    { id: 'd', name: 'Dune', catName: 'Фильмы', total: 3, scores: sc(3), createdAt: T(5, 1) },
+    { id: 'b', name: 'Blonde', catName: 'Музыка и альбомы', total: 8.6, scores: sc(8.6), trackCount: 3, createdAt: T(11, 24),
+      tracks: [{ n: 1, t: 'Nikes', v: 8 }, { n: 2, t: 'Ivy', v: 9.5 }, { n: 3, t: 'Pink + White', v: 8.2 }] },
+    { id: 'o', name: 'Old', catName: 'Игры', total: 5, scores: sc(5), createdAt: '2025-06-01T12:00:00.000Z' },
+  ]);
+  shelf('u2', [{ id: 'x1', name: 'Hades', total: 4, scores: sc(4), vis: 'friends' }, { id: 'x2', name: 'Dune', total: 3.5, scores: sc(3.5) }]);
+  // скрытая оценка друга («только я») в итоги не идёт: с ней спорной стала бы «Dune»
+  shelf('u3', [{ id: 'y1', name: 'Hades', total: 9, scores: sc(9), vis: 'private' }, { id: 'y2', name: ' dune ', total: 9, scores: sc(9) }]);
+  shelf('u4', [{ id: 'z1', name: 'Hades', total: 0.5, scores: sc(0.5) }]); // только заявка, не друг
+  // журнал опыта: засчитанное за год, без снятого и прошлогоднего
+  const at = Date.UTC(2026, 6, 1);
+  const log = (kind, ref, t = at, gone = 0) => env.DB.raw.prepare('INSERT INTO xp_log (user_id, kind, ref, xp, day, at, gone) VALUES (?, ?, ?, 1, ?, ?, ?)').run('u1', kind, ref, '2026-07-01', t, gone);
+  ['r1', 'r2', 'r3'].forEach((r) => log('riddle', r));
+  log('riddle', 'r4', at, 1);
+  log('riddle', 'r0', Date.UTC(2025, 6, 1));
+  log('lot_win', 'w1'); log('lot_win', 'w2'); log('lots_host', 'h1'); log('king_host', 'k1'); log('king_vote', 'v1'); log('predict_win', 'p1');
+  ['q1', 'q2', 'q3', 'q4'].forEach((r) => log('quest', r));
+  let y = await recap(env, 'u1', 2026);
+  assert.equal(y.ratings, 3);
+  assert.deepEqual(y.music, { albums: 1, tracks: 3, top: { name: 'Blonde', total: 8.6 }, track: { name: 'Ivy', album: 'Blonde', v: 9.5 } });
+  assert.deepEqual(y.modes, { riddles: 3, lotsWon: 2, lotsHosted: 1, kingHosted: 1, kingVotes: 1, predictWins: 1, bingoWins: 0, tierCoop: 0, quests: 4 });
+  assert.deepEqual(y.hot, { name: 'Hades', mine: 9, theirs: 4, n: 1 });
+  assert.equal(y.roflans, 0, 'таблицы магазина ещё нет — итоги не падают');
+  env.DB.raw.exec('CREATE TABLE shop_log (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, item TEXT, delta INTEGER NOT NULL, reason TEXT NOT NULL, note TEXT, by_id TEXT, at INTEGER NOT NULL)');
+  const pay = (id, delta, t) => env.DB.raw.prepare("INSERT INTO shop_log (id, user_id, delta, reason, at) VALUES (?, 'u1', ?, 'x', ?)").run(id, delta, t);
+  pay('a', 60, at); pay('b', 45, at); pay('c', -30, at); pay('d', 100, Date.UTC(2025, 1, 1));
+  y = await recap(env, 'u1', 2026);
+  assert.equal(y.roflans, 105, 'только полученное за год, без покупок');
+  // без друзей и без альбомов — пустые поля, а не ошибка
+  const z = await recap(env, 'u4', 2026);
+  assert.equal(z.hot, null);
+  assert.deepEqual(z.music, { albums: 0, tracks: 0, top: null, track: null });
+});
+
+test('итоги года: админ смотрит заранее, ачивка — только когда итоги открыты', async () => {
+  const env = envOf();
+  env.DB.raw.exec("INSERT INTO users (id, username, uname, created_at, email_ok) VALUES ('u1', 'Аня', 'anya', 1, 0)");
+  env.DB.raw.exec('ALTER TABLE lot_rooms ADD COLUMN created_at INTEGER');
+  const req = { cf: { timezone: 'Europe/Kiev' } };
+  const DEC2 = Date.UTC(2026, 11, 2, 12);
+  const admin = (await levelRoutes({ admin: true })).routes, user = (await levelRoutes()).routes;
+  const me = { id: 'u1' };
+  assert.equal((await atTime(NOON, () => user['GET /levels/me']({ env, request: req, me }))).recap, null);
+  assert.equal((await atTime(NOON, () => admin['GET /levels/me']({ env, request: req, me }))).recap, 2026, 'админ видит вкладку до декабря');
+  assert.equal((await atTime(NOON, () => user['GET /levels/recap']({ env, request: req, me }))).status, 404);
+  const early = await atTime(NOON, () => admin['GET /levels/recap']({ env, request: req, me }));
+  assert.equal(early.year, 2026);
+  const got = () => q(env, "SELECT COUNT(*) AS n FROM achievements WHERE user_id = 'u1' AND code = 'recap2026'")[0].n;
+  assert.equal(got(), 0, 'предпросмотр админа ачивку не выдаёт');
+  await atTime(DEC2, () => user['GET /levels/recap']({ env, request: req, me }));
+  assert.equal(got(), 1);
+});
