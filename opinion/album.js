@@ -123,7 +123,6 @@
       chips.push(`<span class="alb-chip" style="--c:${COLORS[i % COLORS.length]}" data-k="friend">${esc(f.user.username)}: сошлись в ${a.agree} из ${a.of}</span>`);
       if (a.fight) chips.push(`<span class="alb-chip" data-k="bad">Главный спор: трек ${a.fight.n} — ты ${fmtS(a.fight.mine)}, ${esc(f.user.username)} ${fmtS(a.fight.v)}</span>`);
     });
-    const list = tracks.map((e) => `<li><button type="button" data-alb="track" data-id="${esc(r.id)}" data-n="${e.n}"${own ? '' : ' disabled'}><span class="alb-n">${e.n}</span><span class="alb-t">${esc(e.t || '')}${(e.g || []).map((g) => ` <small>${esc(g)}</small>`).join('')}${e.rid ? ' <small class="alb-own" title="Оценён по критериям — есть в рейтинге отдельной оценкой">отдельная оценка</small>' : ''}</span><b class="badge" data-tier="${tierT(e.v)}">${fmtS(e.v)}</b></button></li>`).join('');
     return `<div class="alb-card">
       <div class="alb-head"><b>Кардиограмма альбома</b><span>${avg != null ? 'среднее по трекам ' + fmt(avg) : ''}${done < N ? ` · разобрано ${done} из ${N}` : ''}</span></div>
       ${curveSVG(rows, N, fr)}
@@ -136,7 +135,6 @@
         <a class="btn small ghost" href="/tierlist/#album=${encodeURIComponent(r.id)}">Тир-лист треков</a>
         ${rows.length >= 2 ? `<button type="button" class="btn small ghost" data-alb="png" data-id="${esc(r.id)}">Картинка</button>` : ''}
       </div>
-      <details class="alb-list"><summary>${tracks.length} ${plural(tracks.length, 'трек', 'трека', 'треков')}</summary><ol>${list}</ol></details>
     </div>`;
   }
   // старая оценка альбома (поставлена до разбора): показать разницу со средним по трекам и попросить обновить
@@ -710,7 +708,7 @@
 
   // балл альбома без своих критериев — среднее по трекам (save() в app.js, если в форме критерии сняли)
   const avgScores = (al) => { const avg = avgOf(rowsOf(entriesOf(al))); return avg != null ? [{ id: ALB_AVG, name: 'Среднее по трекам', desc: '', w: 1, v: avg }] : []; };
-  // баллы оценённых треков по порядку — столбики у балла в списке (null, если треков не оценивали)
-  const trackBars = (al) => { const rows = rowsOf(entriesOf(al)); return rows.length ? rows.map((x) => x.v) : null; };
-  window.CasualAlbum = { cardHTML, folded, formHint, open, verdicts, agreement, avgScores, trackBars };
+  // оценённые треки по порядку ({ n, t, v, g, rid }) — столбики у балла и разбор вместо критериев в карточке (null — треков не оценивали)
+  const trackRows = (al) => { const list = entriesOf(al).filter((e) => e.v != null); return list.length ? list : null; };
+  window.CasualAlbum = { cardHTML, folded, formHint, open, verdicts, agreement, avgScores, trackRows };
 })();

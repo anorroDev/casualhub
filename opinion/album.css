@@ -39,16 +39,6 @@
 .alb-old-s { margin: 4px 0 0; }
 .alb-acts { display: flex; flex-wrap: wrap; gap: 6px; }
 .alb-acts a { text-decoration: none; }
-.alb-list { margin-top: 8px; }
-.alb-list summary { cursor: pointer; font-size: 13px; color: var(--ink-2); width: max-content; }
-.alb-list ol { list-style: none; margin: 6px 0 0; padding: 0; display: grid; gap: 2px; }
-.alb-list li button { width: 100%; display: grid; grid-template-columns: 26px minmax(0, 1fr) auto; align-items: center; gap: 8px; padding: 6px 8px; border: 0; border-radius: 8px; background: none; color: var(--ink); font: inherit; font-size: 13.5px; text-align: left; cursor: pointer; }
-.alb-list li button:hover:not(:disabled) { background: color-mix(in srgb, var(--ink) 6%, transparent); }
-.alb-list li button:disabled { cursor: default; }
-.alb-n { color: var(--ink-3); font-family: var(--font-display); font-size: 16px; text-align: right; }
-.alb-t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.alb-t small { font-size: 11px; color: var(--ink-3); margin-left: 4px; }
-.alb-list .badge { min-width: 34px; }
 .alb-listen { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 10px; margin: 0 0 12px; }
 .alb-track-go .alb-listen { margin: 0; }
 .alb-listen .btn[aria-pressed="true"] { border-color: var(--accent); color: var(--ink); }

@@ -2345,14 +2345,22 @@ function imdbSlot(r) {
 }
 function entryHTML(r, rank, showCat) {
   const t = r.total;
+  // альбом с разбором по трекам: в строке — столбик на каждый оценённый трек, в карточке — треки с баллами вместо критериев
+  const trk = !r.albumOf && !r.example && window.CasualAlbum && window.CasualAlbum.trackRows ? window.CasualAlbum.trackRows(r) : null;
+  const trkBars = trk && trk.map(e => e.v);
   const n = r.scores.filter(s => s.v > 0).length;
   const notes = !!r.note || !!r.pros || !!r.cons || r.scores.some(s => s.note);
-  const meta = [t != null ? verdict(t) : 'Без оценки', `${n} ${critWord(n)}`, fmtDate(stamp(r))].filter(Boolean).join(' · ');
-  // у альбома с разбором — столбик на каждый оценённый трек, а не по критериям (у него там один дробный балл)
-  const trkBars = !r.albumOf && !r.example && window.CasualAlbum && window.CasualAlbum.trackBars ? window.CasualAlbum.trackBars(r) : null;
+  const meta = [t != null ? verdict(t) : 'Без оценки', trk ? `${trk.length} ${plural(trk.length, 'трек', 'трека', 'треков')}` : `${n} ${critWord(n)}`, fmtDate(stamp(r))].filter(Boolean).join(' · ');
   const barV = (v) => Math.max(1, Math.min(10, Math.round(v)));
   const spark = (trkBars || r.scores.map(s => s.v)).map(v => `<i data-tier="${tierV(v)}" data-v="${v > 0 ? barV(v) : 0}"></i>`).join('');
-  const bd = r.scores.map(s => `<li data-tier="${tierV(s.v)}"><span class="bd-name">${esc(s.name)}${s.w && s.w !== 1 ? ` <small class="crit-w-badge">×${s.w}</small>` : ''}</span><span class="bd-bar" aria-hidden="true">${cellsHTML(s.v, 'bc', false)}</span><b class="bd-v">${s.v || '—'}</b>${s.note ? `<span class="bd-note">${esc(s.note)}</span>` : ''}</li>`).join('');
+  const critBd = (list) => list.map(s => `<li data-tier="${tierV(s.v)}"><span class="bd-name">${esc(s.name)}${s.w && s.w !== 1 ? ` <small class="crit-w-badge">×${s.w}</small>` : ''}</span><span class="bd-bar" aria-hidden="true">${cellsHTML(s.v, 'bc', false)}</span><b class="bd-v">${s.v || '—'}</b>${s.note ? `<span class="bd-note">${esc(s.note)}</span>` : ''}</li>`).join('');
+  // свой альбом: название трека открывает его оценку в плеере разбора
+  const trkMine = state.canWrite && (!r.author || !state.user || r.author.id === state.user.id);
+  const ownCrit = trk ? r.scores.filter(s => s.id !== ALB_AVG && s.v > 0) : [];
+  const bd = trk
+    ? trk.map(e => `<li class="bd-trk" data-tier="${tierV(e.v)}"><span class="bd-name"><span class="bd-n">${e.n}</span><span class="bd-t">${trkMine ? `<button type="button" class="linkish" data-alb="track" data-id="${esc(r.id)}" data-n="${e.n}" title="Изменить оценку трека">${esc(e.t || 'Трек ' + e.n)}</button>` : esc(e.t || 'Трек ' + e.n)}${(e.g || []).map(g => ` <small class="bd-tag">${esc(g)}</small>`).join('')}${e.rid ? ' <small class="bd-tag own" title="Оценён по критериям — есть в рейтинге отдельной оценкой">отдельная оценка</small>' : ''}</span></span><span class="bd-bar" aria-hidden="true">${cellsHTML(barV(e.v), 'bc', false)}</span><b class="bd-v">${Number.isInteger(e.v) ? e.v : fmt(e.v)}</b></li>`).join('')
+      + (ownCrit.length ? `<li class="bd-sub">Критерии альбома</li>${critBd(ownCrit)}` : '')
+    : critBd(r.scores);
   const prosList = splitLines(r.pros);
   const consList = splitLines(r.cons);
   const pcHTML = (prosList.length || consList.length)
