@@ -751,7 +751,8 @@ test('тематическая неделя: срок числом и едини
     assert.equal(seen.ann.id, 'ev-' + r.event.id);
     assert.equal(seen.ann.kind, 'event');
     assert.equal(seen.ann.until, r.event.until);
-    assert.match(seen.ann.text, /^×2 опыта за: Тир-лист, Реакция другу\. До .+ Зовите друзей!$/);
+    assert.match(seen.ann.text, /^×2 опыта за: Тир-лист, Реакция другу\. До .+\.$/);
+    assert.equal(seen.ann.note, 'Зовите друзей!', 'свои слова админа — отдельным полем');
     assert.equal((await routes['PUT /admin/levels/event']({ env, request: { body: { title: 'x', n: 5, unit: 'min', kinds: ['tier'] } }, me })).status, 400, 'меньше 10 минут нельзя');
     await routes['DELETE /admin/levels/event']({ env, request: {}, me });
     assert.equal(seen.ann, null, 'объявление ушло вместе с неделей');

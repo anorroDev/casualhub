@@ -538,7 +538,8 @@ export function makeLevelsRoutes(h) {
         const note = String(b.note || '').replace(/\s+/g, ' ').trim().slice(0, 300);
         const what = kinds.map((k) => KIND_LABEL[k] || k).join(', ');
         const only = cats.length && kinds.some((k) => RATING_KINDS.has(k)) ? ` Оценки — только в категориях: ${cats.map((c) => CAT_GROUPS[c].label).join(', ')}.` : '';
-        await h.setAnnounce(env, { id: 'ev-' + ev.id, kind: 'event', title, text: `×${String(mult).replace('.', ',')} опыта за: ${what}.${only} До ${fmtKyiv(ev.until)}.${note ? ' ' + note : ''}`, until: ev.until, by: me.handle });
+        // свои слова админа — отдельным полем note: окно показывает их отдельно от строк «за что» и «до когда»
+        await h.setAnnounce(env, { id: 'ev-' + ev.id, kind: 'event', title, text: `×${String(mult).replace('.', ',')} опыта за: ${what}.${only} До ${fmtKyiv(ev.until)}.`, note, until: ev.until, by: me.handle });
       }
       await h.adminLog(env, request, me, `levels: event ${title} ×${mult} ${Math.round(span / 60e3)}m`, true);
       return json({ ok: true, event: ev });

@@ -34,7 +34,7 @@ export async function friendIds(env, uid) {
 export async function readAnnounce(env, now) {
   let a = null;
   try { const r = await env.DB.prepare("SELECT v FROM meta WHERE k = 'announce'").first(); a = r ? JSON.parse(r.v) : null; } catch (e) {}
-  return a && a.text && (!a.until || a.until > now) ? { id: a.id, title: a.title || '', text: a.text, kind: a.kind, until: +a.until || 0 } : null;
+  return a && a.text && (!a.until || a.until > now) ? { id: a.id, title: a.title || '', text: a.text, note: a.note || '', kind: a.kind, until: +a.until || 0 } : null;
 }
 // срок объявления или тематической недели из админки: число и единица (минуты, часы, дни, недели); 0 — без срока
 export const UNIT_MS = { min: 60e3, hour: 3600e3, day: 864e5, week: 7 * 864e5 };

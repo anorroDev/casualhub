@@ -119,6 +119,11 @@
 .ann-head small { display: block; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ann); }
 .ann-head b { display: block; font-size: 19px; line-height: 1.2; font-weight: 800; }
 .ann-text { margin: 0; font-size: 15px; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; color: var(--ink, #e8eaf0); }
+.ann-text.small { font-size: 13.5px; color: var(--ink-2, #b5b5b5); }
+.ann-note { margin: 0; padding: 4px 0 4px 12px; border-left: 3px solid var(--ann); font-size: 16px; line-height: 1.5; font-weight: 600; white-space: pre-line; overflow-wrap: anywhere; color: var(--ink, #e8eaf0); }
+.ann-facts { margin: 0; padding: 0; list-style: none; display: grid; gap: 6px; font-size: 13.5px; line-height: 1.45; color: var(--ink-2, #b5b5b5); }
+.ann-facts li { display: grid; grid-template-columns: 14px minmax(0, 1fr); gap: 6px; }
+.ann-facts li::before { content: ''; width: 6px; height: 6px; margin-top: 7px; border-radius: 50%; background: var(--ann); }
 .ann-ev { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border-radius: 14px; background: color-mix(in srgb, var(--ann) 12%, transparent); }
 .ann-ev .x { font-family: var(--font-display, inherit); font-size: 30px; line-height: 1; color: var(--ann); }
 .ann-ev span { font-size: 13.5px; color: var(--ink-2, #b5b5b5); } .ann-ev b { color: var(--ink, #fff); font-variant-numeric: tabular-nums; }
@@ -161,12 +166,25 @@
     m.innerHTML = `<div class="ann-box" data-kind="${kind}" role="dialog" aria-modal="true" aria-labelledby="annTitle">
       <button type="button" class="ann-x" aria-label="Закрыть">✕</button>
       <div class="ann-head"><span class="ann-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[kind]}</svg></span><span id="annTitle"><small>${LABEL[kind]}</small><b></b></span></div>
+      <p class="ann-note" hidden></p>
       <p class="ann-text"></p>
       ${ev ? `<div class="ann-ev"><span class="x">×${String(ev.mult).replace('.', ',')}</span><span>До конца: <b data-ev-left>${left(ev.until - Date.now())}</b></span></div>` : ''}
       <div class="ann-acts"><button type="button" class="ann-ok">Понятно</button></div></div>`;
     // текст объявления — только как текст, без разметки
     m.querySelector('.ann-head b').textContent = a.title || (kind === 'event' && ev ? ev.title : LABEL[kind]);
-    m.querySelector('.ann-text').textContent = a.text;
+    // свои слова (поле note) — отдельно и крупнее; строки недели и скидки («×2 опыта за…», «До…») — списком, мельче
+    const note = m.querySelector('.ann-note'), txt = m.querySelector('.ann-text');
+    if (a.note) { note.textContent = a.note; note.hidden = false; }
+    const facts = kind === 'event' || /^sale-/.test(a.id || '') ? String(a.text).split(/(?<=\.)\s+(?=[А-ЯЁA-Z×])/).filter(Boolean) : [];
+    if (facts.length > 1) {
+      const ul = document.createElement('ul');
+      ul.className = 'ann-facts';
+      facts.forEach((f) => { const li = document.createElement('li'); li.textContent = f.replace(/\.$/, ''); ul.appendChild(li); });
+      txt.replaceWith(ul);
+    } else {
+      txt.textContent = a.text;
+      if (a.note) txt.classList.add('small');
+    }
     const done = () => closeModal(!again);
     m.querySelector('.ann-ok').addEventListener('click', done);
     m.querySelector('.ann-x').addEventListener('click', done);

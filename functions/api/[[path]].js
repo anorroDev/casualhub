@@ -3193,7 +3193,7 @@ const annHelpers = {
   setAnnounce: async (env, a) => {
     if (!a) await env.DB.prepare("DELETE FROM meta WHERE k = 'announce'").run();
     else {
-      const v = { id: String(a.id || randHex(6)).slice(0, 40), title: clip(String(a.title || ''), 80), text: clip(String(a.text || ''), 600), kind: ['info', 'warn', 'party', 'event'].includes(a.kind) ? a.kind : 'info', at: Date.now(), until: +a.until || 0, by: a.by || '' };
+      const v = { id: String(a.id || randHex(6)).slice(0, 40), title: clip(String(a.title || ''), 80), text: clip(String(a.text || ''), 600), note: clip(String(a.note || '').trim(), 300), kind: ['info', 'warn', 'party', 'event'].includes(a.kind) ? a.kind : 'info', at: Date.now(), until: +a.until || 0, by: a.by || '' };
       await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('announce', ?)").bind(JSON.stringify(v)).run();
     }
     announceCache.at = 0;
@@ -3255,7 +3255,7 @@ async function currentAnnounce(env) {
     announceCache.at = now;
   }
   const a = announceCache.v;
-  return a && a.text && (!a.until || a.until > now) ? { id: a.id, title: a.title || '', text: a.text, kind: a.kind, until: +a.until || 0 } : null;
+  return a && a.text && (!a.until || a.until > now) ? { id: a.id, title: a.title || '', text: a.text, note: a.note || '', kind: a.kind, until: +a.until || 0 } : null;
 }
 // идущая тематическая неделя для всех (и гостей): таймер внизу страницы. За какие действия — подписями
 async function eventPub(env) {
