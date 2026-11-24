@@ -194,11 +194,14 @@
     const single = formMusic() && st !== 'Альбом' && String(form.name || '').trim().length > 1;
     const al = form.editingId ? state.ratings.find((x) => x.id === form.editingId) : null;
     const n = al ? tracksOf(al.id).length : 0;
-    const html = on ? `<button type="button" class="btn small" id="albumGoBtn">${n ? 'Продолжить разбор по трекам' : 'Разобрать по трекам'}</button><span>Каждый трек — отдельная оценка, под 30-секундные отрывки. Баллы альбома можно поставить потом</span>`
-      : single ? `<div class="alb-listen"><button type="button" class="btn small ghost" id="albumListenBtn" aria-pressed="false"><span class="alb-li" aria-hidden="true">▶</span> Слушать отрывок</button><small class="alb-lmsg" role="status"></small></div>` : '';
+    // разбор альбома — заметной карточкой между фото и критериями; отрывок сингла — под названием
+    const html = on ? `<span class="alb-go-disc" aria-hidden="true"></span><span class="alb-go-t"><b>${n ? 'Разбор по трекам начат' : 'Разбор по трекам'}</b><small>Оцени каждый трек под 30-секундный отрывок — получится кардиограмма альбома. Сам альбом можно оценить потом</small></span><button type="button" class="btn primary" id="albumGoBtn">${n ? 'Продолжить разбор' : 'Разобрать по трекам'}</button>` : '';
+    const thtml = single ? `<div class="alb-listen"><button type="button" class="btn small ghost" id="albumListenBtn" aria-pressed="false"><span class="alb-li" aria-hidden="true">▶</span> Слушать отрывок</button><small class="alb-lmsg" role="status"></small></div>` : '';
     if (!single && solo && solo.btn && solo.btn.id === 'albumListenBtn') stopSolo();
     box.hidden = !html;
     if (box.dataset.h !== html) { box.dataset.h = html; box.innerHTML = html; }
+    const tb = document.getElementById('trackGo');
+    if (tb) { tb.hidden = !thtml; if (tb.dataset.h !== thtml) { tb.dataset.h = thtml; tb.innerHTML = thtml; } }
   }
 
   // ---------- треклист ----------
