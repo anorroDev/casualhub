@@ -312,9 +312,9 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
       }
       if (wn) { if (wnFits) { if (wn.parentElement !== corner) corner.appendChild(wn); } else if (wn.parentElement !== panel) panel.appendChild(wn); }
       if (adm) panel.appendChild(adm);
-      // середина шапки по высоте: кнопки в углу стоят на одной линии с её кнопками
-      const hr = header.getBoundingClientRect();
-      corner.style.top = Math.round(hr.top + scrollY + hr.height / 2) + 'px';
+      // по высоте — середина полосы кнопок шапки: у страниц с большим заголовком (Мнение, Колесо…) header выше полосы
+      const hb = (header.querySelector('.theme-btn, .pill') || header.querySelector('a, button') || header).getBoundingClientRect();
+      corner.style.top = Math.round(hb.top + scrollY + hb.height / 2) + 'px';
     };
     placeWn();
     // /…#settings открывает настройки, #settings-security — сразу нужный раздел

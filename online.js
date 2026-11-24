@@ -137,6 +137,10 @@
 .ev-chip .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ev-chip b { font-variant-numeric: tabular-nums; white-space: nowrap; }
 @media (max-width: 480px) { .ev-chip .t { display: none; } }
+/* есть место слева от шапки — таймер в левом верхнем углу, по середине шапки (top ставит placeChip) */
+.ev-chip.top { position: absolute; bottom: auto; top: 14px; transform: translateY(-50%); max-width: none; animation-name: ev-top; }
+@keyframes ev-top { from { transform: translateY(-50%) scale(.85); opacity: 0; } }
+.ev-chip.mini .t { display: none; }
 @media (prefers-reduced-motion: reduce) { .ann-box, .ev-chip { animation: none; } }`;
     document.head.appendChild(css);
   }
@@ -220,8 +224,29 @@
     };
     wait();
   }
-  // таймер тематической недели: внизу слева на всех страницах, пока она идёт. Нажатие — снова окно о неделе
-  let evT = 0;
+  // таймер тематической недели на всех страницах, пока она идёт: в левом верхнем углу, на одной линии с шапкой,
+  // а если слева от шапки места нет (телефон, узкое окно) — внизу слева. Нажатие — снова окно о неделе
+  let evT = 0, evRq = 0;
+  // по высоте — середина полосы кнопок шапки (у страниц с большим заголовком сам header выше полосы).
+  // Места мало — без названия («×2 · 2 д 23:40»), совсем нет — внизу слева
+  function placeChip() {
+    const chip = document.getElementById('evChip');
+    const hdr = document.querySelector('header');
+    if (!chip) return;
+    chip.classList.remove('top', 'mini');
+    chip.style.top = '';
+    if (!hdr) return;
+    const room = hdr.getBoundingClientRect().left;
+    if (room < chip.offsetWidth + 32) {
+      chip.classList.add('mini');
+      if (room < chip.offsetWidth + 32) { chip.classList.remove('mini'); return; }
+    }
+    const btn = hdr.querySelector('.theme-btn, .pill') || hdr.querySelector('a, button') || hdr;
+    const r = btn.getBoundingClientRect();
+    chip.classList.add('top');
+    chip.style.top = Math.round(r.top + scrollY + r.height / 2) + 'px';
+  }
+  addEventListener('resize', () => { cancelAnimationFrame(evRq); evRq = requestAnimationFrame(placeChip); });
   function eventChip(ev) {
     evCur = ev && ev.until > Date.now() ? ev : null;
     let chip = document.getElementById('evChip');
@@ -254,6 +279,8 @@
     clearInterval(evT);
     tick();
     evT = setInterval(tick, 1000);
+    placeChip();
+    setTimeout(placeChip, 600); // шапку могли достроить позже (кнопки, шрифты)
   }
 
   let goneShown = false;
