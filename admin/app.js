@@ -447,6 +447,8 @@
     { id: 'tier', t: 'Неделя тир-листов', kinds: ['tier', 'tier_share', 'tier_coop', 'tier_coop_host'], cats: [] },
     { id: 'friends', t: 'Неделя друзей', kinds: ['react', 'comment', 'friend', 'got_react', 'got_comment'], cats: [] },
     { id: 'games', t: 'Неделя игр', kinds: ['lots_host', 'lot_add', 'predict_win', 'bingo_win', 'king_host', 'king_vote', 'riddle'], cats: [] },
+    // новогодняя: всё, что делают вместе в праздники, — тир-листы, лоты, «Царь Горы», реакции друзьям
+    { id: 'newyear', t: 'Новогодняя неделя', kinds: ['rate', 'review', 'tier', 'tier_coop', 'tier_coop_host', 'react', 'comment', 'lots_host', 'lot_add', 'king_host', 'king_vote'], cats: [], note: 'С наступающим! Опыта больше за оценки, тир-листы, лоты и «Царя Горы»' },
   ];
   const EVF = { title: '', mult: 2, n: 7, unit: 'day', kinds: new Set(), cats: new Set(), note: '', ann: true, preset: '' };
   const UNIT_W = { min: ['минуту', 'минуты', 'минут'], hour: ['час', 'часа', 'часов'], day: ['день', 'дня', 'дней'], week: ['неделю', 'недели', 'недель'] };

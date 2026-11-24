@@ -258,6 +258,12 @@ export const INVITE_REWARDS = [
   { n: 10, kind: 'bg', id: 'horizon', title: 'Фон профиля «Горизонт»' },
 ];
 const INVITE_ONLY = new Set(INVITE_REWARDS.map((r) => r.id));
+// ---------- награды за ивенты (только внешний вид, уровнем не открываются) ----------
+// Выдаются строкой shop_owned look.<id> с ценой 0 (как купленное 12 ноября): так их видят все места, где показывают
+// чужое оформление (shop.js → boughtLooks → bought в unlockedAt/lookOf). frame8 — новогодний календарь (advent.js)
+export const EVENT_REWARDS = [
+  { kind: 'frame', id: 'frame8', title: 'Рамка «Новый год»', event: 'advent2026' },
+];
 export const NAME_COLORS = { blue: '#5B74FF', pink: '#E85FA5', green: '#2EAD60', orange: '#F08A24', violet: '#9B6BFF', teal: '#14A3A8', gold: '#E2A925', mint: '#3DD6A3' };
 export const PROFILE_BGS = { dawn: 1, night: 1, city: 1, forest: 1, ember: 1, legend: 1, horizon: 1 };
 const FRAMES = ['frame1', 'frame5', 'frame2', 'frame3', 'frame4', 'frame6']; // по уровню
@@ -272,8 +278,9 @@ export function unlockedAt(level, all = false, bought = null, inv = 0) {
   const got = new Set(REWARDS.filter((r) => all || level >= r.level || (bought && bought.has(r.id))).map((r) => r.id));
   const iv = new Set(INVITE_REWARDS.filter((r) => all || (+inv || 0) >= r.n).map((r) => r.id));
   const plus = (kind) => INVITE_REWARDS.filter((r) => r.kind === kind && iv.has(r.id)).map((r) => r.id);
+  const ev = (kind) => EVENT_REWARDS.filter((r) => r.kind === kind && (all || (bought && bought.has(r.id)))).map((r) => r.id);
   return {
-    frames: [...FRAMES.filter((f) => got.has(f)), ...plus('frame')],
+    frames: [...FRAMES.filter((f) => got.has(f)), ...plus('frame'), ...ev('frame')],
     colors: [...(got.has('colors') ? Object.keys(NAME_COLORS).filter((c) => !INVITE_ONLY.has(c) && (c !== 'gold' || got.has('gold'))) : []), ...plus('color')],
     bgs: [...(got.has('bgs') ? Object.keys(PROFILE_BGS).filter((b) => !INVITE_ONLY.has(b) && (b !== 'legend' || got.has('frame6'))) : []), ...plus('bg')],
     nicks: NICKS.filter((n) => got.has(n)),

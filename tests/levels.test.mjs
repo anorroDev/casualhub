@@ -75,7 +75,7 @@ test('флаг и награды по уровням', () => {
   assert.equal(unlockedAt(1, true).fonts.length, 17);
   assert.ok(!unlockedAt(24).pet && unlockedAt(25).pet);
   assert.ok(!unlockedAt(49).bgs.includes('legend') && unlockedAt(50).bgs.includes('legend'));
-  assert.equal(unlockedAt(1, true).frames.length, 7); // админу открыто всё (и рамка за приглашения)
+  assert.equal(unlockedAt(1, true).frames.length, 8); // админу открыто всё (и рамка за приглашения, и новогодняя)
   assert.ok(!unlockedAt(29).colors.includes('gold'));
   assert.ok(unlockedAt(30).colors.includes('gold'));
 });
@@ -938,4 +938,71 @@ test('итоги года: админ смотрит заранее, ачивк�
   assert.equal(got(), 0, 'предпросмотр админа ачивку не выдаёт');
   await atTime(DEC2, () => user['GET /levels/recap']({ env, request: req, me }));
   assert.equal(got(), 1);
+});
+
+test('новогодний календарь: день по Киеву, подарок раз в день, рамка за 20 дней', async () => {
+  const A = await import('../functions/_lib/advent.js');
+  const env = envOf();
+  env.DB.raw.exec("INSERT INTO users (id, username, uname, created_at, email_ok) VALUES ('u1', 'Аня', 'anya', 1, 0)");
+  await L.ensureLevels(env);
+  const kyiv = (d, h = 12) => Date.UTC(2026, 11, d, h - 2); // декабрь: Киев = UTC+2
+  // день — по Киеву: 1 декабря 00:30 по Киеву — это ещё 30 ноября по UTC
+  assert.equal(A.adventDay(Date.UTC(2026, 10, 30, 22, 30)), 1);
+  assert.equal(A.adventDay(Date.UTC(2026, 10, 30, 21, 30)), 0, 'ноябрь — календаря нет');
+  assert.equal(A.adventDay(Date.UTC(2027, 0, 1, 10)), 0, 'январь — тоже нет');
+  assert.deepEqual([1, 7, 14, 30, 31].map(A.adventGift), [10, 25, 25, 10, 50]);
+  // в ноябре забрать нечего
+  assert.equal((await A.adventClaim(env, 'u1', Date.UTC(2026, 10, 20))).status, 404);
+  const first = await A.adventClaim(env, 'u1', kyiv(1));
+  assert.deepEqual({ ok: first.ok, day: first.day, roflans: first.roflans, count: first.count, frame: first.frame }, { ok: true, day: 1, roflans: 10, count: 1, frame: false });
+  assert.equal((await A.adventClaim(env, 'u1', kyiv(1, 20))).status, 409, 'второй раз за день — нет');
+  const log = () => q(env, "SELECT id, delta, reason FROM shop_log WHERE user_id = 'u1' ORDER BY at").map((r) => ({ ...r }));
+  assert.deepEqual(log(), [{ id: 'advent:u1:1', delta: 10, reason: 'advent' }]);
+  // пропущенный день не вернуть: забирают только сегодняшний
+  for (let d = 3; d <= 20; d++) await A.adventClaim(env, 'u1', kyiv(d));
+  const owned = () => q(env, "SELECT item, price FROM shop_owned WHERE user_id = 'u1'").map((r) => ({ ...r }));
+  assert.equal(owned().length, 0, '19 дней — рамки ещё нет');
+  const st = await A.adventState(env, 'u1', kyiv(20, 18));
+  assert.equal(st.day, 20);
+  assert.equal(st.today, true);
+  assert.equal(st.opened.length, 19);
+  assert.ok(!st.opened.includes(2), 'пропущенный день так и остался пропущенным');
+  assert.equal(st.frame, false);
+  assert.equal(st.gifts.length, 31);
+  const last = await A.adventClaim(env, 'u1', kyiv(21));
+  assert.deepEqual({ count: last.count, frame: last.frame }, { count: 20, frame: true });
+  assert.deepEqual(owned(), [{ item: 'look.frame8', price: 0 }]);
+  assert.equal((await A.adventClaim(env, 'u1', kyiv(22))).frame, false, 'рамка выдаётся один раз');
+  // рамку видно везде, где показывают оформление: купленное (boughtLooks) открывает её в unlockedAt
+  const { boughtLooks } = await import('../functions/_lib/shop.js');
+  const bought = (await boughtLooks(env, ['u1'])).get('u1');
+  assert.ok(bought && bought.has('frame8'));
+  assert.ok(L.unlockedAt(1, false, bought).frames.includes('frame8'));
+  assert.ok(!L.unlockedAt(50).frames.includes('frame8'), 'уровнем рамка ивента не открывается');
+  assert.ok(L.unlockedAt(1, true).frames.includes('frame8'), 'админу для проверки открыто всё');
+});
+
+test('новогодний календарь в «Почте»: непрочитанное, состояние и кнопка', async () => {
+  const env = envOf();
+  env.DB.raw.exec("INSERT INTO users (id, username, uname, created_at, email_ok) VALUES ('u1', 'Аня', 'anya', 1, 0)");
+  const { routes } = await levelRoutes();
+  const me = { id: 'u1' };
+  const DEC5 = Date.UTC(2026, 11, 5, 10);
+  const { mailUnread } = await import('../functions/_lib/levels-api.js');
+  await L.ensureLevels(env);
+  const before = await atTime(NOON, () => mailUnread(env, 'u1'));
+  assert.equal(await atTime(DEC5, () => mailUnread(env, 'u1')), before + 1, 'подарок дня не забран — +1 к непрочитанному');
+  const mail = await atTime(DEC5, () => routes['GET /levels/mail']({ env, me }));
+  assert.equal(mail.advent.day, 5);
+  assert.equal(mail.advent.today, false);
+  assert.equal(mail.advent.frameAt, 20);
+  assert.equal((await atTime(NOON, () => routes['GET /levels/mail']({ env, me }))).advent, null, 'вне декабря блока нет');
+  const r = await atTime(DEC5, () => routes['POST /levels/advent']({ env, request: { body: {} }, me }));
+  assert.equal(r.ok, true);
+  assert.equal(r.roflans, 10);
+  assert.equal(r.unread, before);
+  assert.equal((await atTime(DEC5, () => routes['POST /levels/advent']({ env, request: { body: {} }, me }))).status, 409);
+  const m = await atTime(DEC5, () => routes['GET /levels/me']({ env, request: { cf: { timezone: 'Europe/Kiev' } }, me }));
+  assert.deepEqual(m.advent, { day: 5, frameAt: 20 });
+  assert.ok(m.evRewards.some((x) => x.id === 'frame8'));
 });

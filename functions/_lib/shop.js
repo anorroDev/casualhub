@@ -13,7 +13,7 @@
 // Что купил — shop_owned; как это носить, решает страница: vasyan.js — окрасы и наряды Васяна, /shop.js — фон и курсор.
 // Купить можно только оформление и «заморозку» серии; ни опыта, ни званий за рофланы нет, случайных наград тоже.
 // Папка _lib не становится адресом сайта.
-import { levelsMode, ensureLevels, ACHIEVEMENTS, REWARDS } from './levels.js';
+import { levelsMode, ensureLevels, ACHIEVEMENTS, REWARDS, EVENT_REWARDS } from './levels.js';
 
 // ---------- сколько рофланов за что ----------
 export const XP_PER_ROFLAN = 10; // 1 рофлан за каждые 10 опыта
@@ -113,7 +113,8 @@ const FOOD_ITEMS = FOODS;
 // в магазине его нет. Один день 12 ноября 2026 его можно было купить раньше уровня (id look.<награда>) — купленное тогда
 // остаётся у купивших: levels.js узнаёт о нём через boughtLooks
 const LOOK_KINDS = ['frame', 'color', 'bg', 'nick', 'font', 'fx', 'pet'];
-const LOOK_REWARD = new Map(REWARDS.filter((r) => LOOK_KINDS.includes(r.kind) && r.level > 1).map((r) => ['look.' + r.id.replace(':', '.'), r.id]));
+// награды за ивенты (EVENT_REWARDS) выдаются так же — строкой look.<id> с ценой 0 (advent.js)
+const LOOK_REWARD = new Map([...REWARDS.filter((r) => LOOK_KINDS.includes(r.kind) && r.level > 1), ...EVENT_REWARDS].map((r) => ['look.' + r.id.replace(':', '.'), r.id]));
 // своё ли: бесплатное, куплено или открыто уровнем
 const ownedBy = (it, st) => !it.price || st.owned.has(it.id) || (!!it.unlock && st.level >= it.unlock);
 // какая еда открылась, когда уровень вырос с from до to (для письма о новом уровне)

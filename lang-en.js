@@ -3760,7 +3760,38 @@ window.CasualLangPack = {
 // вкладки «Прогресса» и плитки: со строчной буквы и с числом непрочитанного (levels-ui.js)
 "Почта ({})":"Email ({})",
 "достижение":"achievement",
-"достижения":"achievements"
+"достижения":"achievements",
+// новогодний календарь в «Почте», рамка «Новый год» и снег (levels-ui.js → adventBox, advent.js, settings.js)
+"Новогодний календарь":"New Year calendar",
+"Пн":"Mon",
+"Вт":"Tue",
+"Ср":"Wed",
+"Чт":"Thu",
+"Пт":"Fri",
+"Сб":"Sat",
+"Вс":"Sun",
+"{} декабря — {}":"December {} — {}",
+"Забрать подарок дня · {}":"Claim today’s gift · {}",
+"Подарок за сегодня забран. Завтра — новый":"Today’s gift is claimed. A new one tomorrow",
+"Забрано дней: {} из {}":"Days claimed: {} of {}",
+"За {} — рамка «Новый год», осталось {}":"At {}, the “New Year” frame — {} to go",
+"Рамка «Новый год» — твоя: она в «Оформлении":"The “New Year” frame is yours: it’s in “Look",
+"Пропущенный день не вернуть: подарок забирают только в свой день":"A missed day can’t be claimed later: each gift is only for its own day",
+"Новогодний календарь открыт только в декабре":"The New Year calendar is open only in December",
+"Подарок за сегодня уже забран. Завтра будет новый":"Today’s gift is already claimed. There’ll be a new one tomorrow",
+"Новогодний календарь: {} декабря":"New Year calendar: December {}",
+"Новый год":"New Year",
+"Рамка «Новый год":"Frame “New Year",
+"календарь":"calendar",
+"Откроется за {} дней новогоднего календаря — он в «Почте":"Unlocks after {} days of the New Year calendar — it’s in “Email",
+"Снег на страницах":"Snow on pages",
+"Не идёт: в системе включено «уменьшить движение":"Off: your system has “reduce motion",
+"Новогодний, до 10 января":"For the New Year, until January 10",
+"Снег пошёл":"Snow is falling",
+"Снег выключен":"Snow is off",
+"Новогодняя неделя":"New Year week",
+// новогодний календарь в «Почте», рамка «Новый год» и снег (levels-ui.js → adventBox, advent.js, settings.js)
+"{} — уже в магазине. Рамка «Новый год» — твоя: надень её в «Оформлении":"{} — already in the shop. The “New Year” frame is yours: put it on in “Look"
 },
   // слово после числа: 1 оценка, 5 оценок. [все русские формы, одна штука, несколько]
   nouns: [

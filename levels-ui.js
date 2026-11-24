@@ -89,6 +89,8 @@ html.unslop .lv-hbtn.lv-pulse { animation-duration: 2.6s; }
 .lv-frame-frame2 { --fr: url(/art/frame/frame2.svg); } .lv-frame-frame3 { --fr: url(/art/frame/frame3.svg); }
 .lv-frame-frame4 { --fr: url(/art/frame/frame4.svg); } .lv-frame-frame6 { --fr: url(/art/frame/frame6.svg); }
 .lv-frame-frame7 { --fr: url(/art/frame/frame7.svg); } /* «Компания» — за трёх друзей по ссылке */
+.lv-frame-frame8 { --fr: url(/art/frame/frame8.svg); } /* «Новый год» — за 20 дней новогоднего календаря; огоньки мигают через один */
+.lv-frame-frame8::after { background-size: 200% 100%; animation: lv-fr 1.4s steps(2, jump-none) infinite; }
 .lv-frame-frame4::after { inset: -23.34%; }
 .lv-frame-frame6::after { inset: -36.67%; }
 .lv-frame-frame2::after, .lv-frame-frame6::after { background-size: 200% 100%; animation: lv-fr 1.4s steps(2, jump-none) infinite; }
@@ -391,6 +393,23 @@ html.lv-on .ava-wrap > .ava-ring { display: none !important; }
 .lv-st-nav .lv-btn:disabled { opacity: .45; cursor: default; }
 .lv-st-img { display: block; justify-self: center; width: min(100%, calc(min(calc(56 * var(--dvh, 1vh)), 460px) * .8)); height: auto; aspect-ratio: 4 / 5; border-radius: 14px; border: 1px solid var(--line, #2b2e38); background: #11131A; }
 @media (prefers-reduced-motion: reduce) { .lv-st:not(.off) { animation: none; } .lv-st-bar i { transition: none; } }
+/* новогодний календарь в «Почте»: 7 колонок с понедельника, клетка — день и подарок */
+.lv-adv-cal { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.lv-adv-cal .wd { font-style: normal; font-size: 11px; color: var(--ink-3, #8a8f9e); text-align: center; }
+.lv-adv-cal span { display: grid; place-items: center; padding: 5px 0 4px; border-radius: 9px; border: 1px solid var(--line, #2b2e38); font-variant-numeric: tabular-nums; min-width: 0; }
+.lv-adv-cal span b { font-size: 13px; line-height: 1.15; }
+.lv-adv-cal span small { font-size: 10.5px; line-height: 1.15; color: var(--ink-3, #8a8f9e); }
+.lv-adv-cal .got { background: color-mix(in srgb, var(--good, #2EAD60) 16%, transparent); border-color: transparent; }
+.lv-adv-cal .got small { color: var(--good-ink, var(--good, #2EAD60)); font-weight: 700; }
+.lv-adv-cal .now { border-color: var(--accent, #3550E8); box-shadow: inset 0 0 0 1px var(--accent, #3550E8); }
+.lv-adv-cal .miss { opacity: .45; }
+.lv-adv-cal .miss b { text-decoration: line-through; }
+.lv-adv-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.lv-adv-row .lv-muted { flex: 1 1 200px; }
+.lv-adv-ava { position: relative; flex: none; width: 32px; height: 32px; margin: 6px; border-radius: 50%; background: var(--accent, #3550E8); }
+.lv-adv-msg { margin: 0; font-size: 13px; color: var(--good-ink, var(--good, #2EAD60)); }
+.lv-adv-msg:empty { display: none; }
+.lv-adv-msg[data-tone="bad"] { color: var(--bad-ink, var(--bad, #E5484D)); }
 .lv-err { color: #E4553F; font-size: 13px; margin: 0; }
 /* «Пригласить»: ссылка, шаги, награды за друзей, кто пришёл */
 .lv-inv-hero { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 18px; align-items: center; }
@@ -1216,7 +1235,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
         ${g.body ? `<p>${esc(g.body)}</p>` : ''}
         ${g.kind === 'vasyan' ? `<div class="act"><span class="lv-vy" aria-hidden="true"></span>${g.claimed ? '<span class="lv-muted">Васян уже у тебя — гуляет внизу экрана</span>' : `<button type="button" class="lv-btn" data-claim="${esc(g.id)}">Забрать котика</button>`}</div>` : ''}
         ${g.xp ? `<div class="act"><span class="gift">+${g.xp} ${g.kind === 'roflans' ? plural(g.xp, 'рофлан', 'рофлана', 'рофланов') : 'опыта'}</span>${g.claimed ? '<span class="lv-muted">Забрано</span>' : `<button type="button" class="lv-btn" data-claim="${esc(g.id)}">Забрать</button>`}${g.until && !g.claimed ? `<span class="lv-muted">до ${when(g.until)}</span>` : ''}</div>` : ''}</div>`).join('');
-      return `<p class="lv-muted">Сюда приходят подарки от администрации и письма о новых уровнях.</p><div class="lv-mail">${rows || '<p class="lv-muted">Писем пока нет.</p>'}</div><p class="lv-err" id="lvMailMsg" role="status"></p>`;
+      return `${d.advent ? adventBox(d.advent) : ''}<p class="lv-muted">Сюда приходят подарки от администрации и письма о новых уровнях.</p><div class="lv-mail">${rows || '<p class="lv-muted">Писем пока нет.</p>'}</div><p class="lv-err" id="lvMailMsg" role="status"></p>`;
     },
     async ach() {
       const d = await api('/levels/achievements');
@@ -1257,10 +1276,13 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       const at = (id) => (m.rewards.find((r) => r.id === id) || {}).level || '';
       // награды за друзей по ссылке открываются не уровнем: на замке — сколько друзей нужно
       const byInv = (id) => (m.invRewards || []).find((r) => r.id === id);
-      const lock = (id) => `<small class="lv-lock">${byInv(id) ? FRIENDS(byInv(id).n) : at(id) + ' ур.'}</small>`;
-      const why = (id) => (byInv(id) ? `Откроется, когда ${FRIENDS(byInv(id).n)} по твоей ссылке дойдут до 3-го уровня` : `Откроется на ${at(id)}-м уровне`);
+      // награды за ивенты (новогодний календарь) — тоже не уровнем
+      const byEv = (id) => (m.evRewards || []).find((r) => r.id === id);
+      const lock = (id) => `<small class="lv-lock">${byEv(id) ? 'календарь' : byInv(id) ? FRIENDS(byInv(id).n) : at(id) + ' ур.'}</small>`;
+      const why = (id) => (byEv(id) ? `Откроется за ${(m.advent && m.advent.frameAt) || 20} дней новогоднего календаря — он в «Почте»` : byInv(id) ? `Откроется, когда ${FRIENDS(byInv(id).n)} по твоей ссылке дойдут до 3-го уровня` : `Откроется на ${at(id)}-м уровне`);
       const opt = (attr, val, cur, open, need, inner) => `<button type="button" data-${attr}="${val}" aria-pressed="${cur === val}"${val && !open ? ` disabled title="${why(need)}"` : ''}>${inner}${val && !open ? lock(need) : ''}</button>`;
-      const FR = { '': 'Без рамки', frame1: 'Казуал', frame5: 'Пиксель', frame2: 'Неон', frame3: 'Переливы', frame4: 'Мастер', frame6: 'Легенда', frame7: 'Компания' };
+      // «Новый год» видна, пока идёт календарь, и у тех, кто её уже получил
+      const FR = { '': 'Без рамки', frame1: 'Казуал', frame5: 'Пиксель', frame2: 'Неон', frame3: 'Переливы', frame4: 'Мастер', frame6: 'Легенда', frame7: 'Компания', ...(m.advent || u.frames.includes('frame8') ? { frame8: 'Новый год' } : {}) };
       const BG = { '': 'Без фона', dawn: 'Закат', night: 'Ночь', city: 'Город', forest: 'Лес', ember: 'Уют', legend: 'Легенда', horizon: 'Горизонт' };
       const NK = { '': 'Обычный', outline: 'Контур', shadow: 'С тенью', arcade: 'Аркада', rainbow: 'Радужный' };
       const nmOf = () => { const a = read('ocenshik.user.v1') || {}; return a.username || a.name || 'Ты'; };
@@ -1431,6 +1453,21 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       // открыл почту — всё прочитано
       if ((VIEWS.mailIds || []).length) api('/levels/mail/read', 'POST', {}).then((r) => { ME.mail = r.unread; paintMenu(); renderTabs(); }).catch(() => {});
       const msg = b.querySelector('#lvMailMsg');
+      // новогодний календарь: подарок дня (рофланы; на 20-м дне — ещё и рамка «Новый год»)
+      const adv = b.querySelector('[data-advent]');
+      if (adv) adv.addEventListener('click', async () => {
+        adv.disabled = true;
+        try {
+          const r = await api('/levels/advent', 'POST', {});
+          ME.mail = r.unread;
+          paintMenu();
+          await refreshMe();
+          renderTabs();
+          await render();
+          const m2 = document.getElementById('lvAdvMsg');
+          if (m2) m2.textContent = `+${r.roflans} ${plural(r.roflans, 'рофлан', 'рофлана', 'рофланов')} — уже в магазине.${r.frame ? ' Рамка «Новый год» — твоя: надень её в «Оформлении».' : ''}`;
+        } catch (e) { adv.disabled = false; const m2 = b.querySelector('#lvAdvMsg'); if (m2) { m2.textContent = e.message; m2.dataset.tone = 'bad'; } }
+      });
       b.querySelectorAll('[data-claim]').forEach((btn) => btn.addEventListener('click', async () => {
         btn.disabled = true;
         try {
@@ -1546,6 +1583,24 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       b.querySelector('#lvRecapImg').addEventListener('click', () => saveRecap(VIEWS.recapData, b.querySelector('#lvRecapMsg')));
     },
   };
+
+  // новогодний календарь вверху «Почты» (декабрь, дни по Киеву; сервер — functions/_lib/advent.js): сетка по неделям
+  // с понедельника (1 декабря 2026 — вторник), у дня — подарок, забранное — галочкой, пропущенное — зачёркнуто
+  function adventBox(a) {
+    const got = new Set(a.opened || []), n = got.size, gift = a.gifts[a.day - 1] || 0;
+    const RF = (v) => `${v} ${plural(v, 'рофлан', 'рофлана', 'рофланов')}`;
+    const head = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'].map((w) => `<i class="wd">${w}</i>`).join('');
+    const days = a.gifts.map((g, i) => {
+      const d = i + 1, st = got.has(d) ? 'got' : d === a.day ? 'now' : d < a.day ? 'miss' : 'next';
+      return `<span class="${st}" title="${d} декабря — ${RF(g)}"><b>${d}</b><small>${st === 'got' ? '✓' : g}</small></span>`;
+    }).join('');
+    const left = Math.max(0, a.frameAt - n);
+    return `<div class="lv-box lv-adv"><h3>Новогодний календарь</h3>
+      <div class="lv-adv-cal">${head}<i class="pad"></i>${days}</div>
+      <div class="lv-adv-row">${a.today ? `<span class="lv-muted">Подарок за сегодня забран. Завтра — новый.</span>` : `<button type="button" class="lv-btn" data-advent>Забрать подарок дня · ${RF(gift)}</button>`}</div>
+      <div class="lv-adv-row"><span class="lv-adv-ava lv-frame-frame8" aria-hidden="true"></span><p class="lv-muted"><span>Забрано дней: ${n} из ${a.gifts.length}.</span> <span>${a.frame ? 'Рамка «Новый год» — твоя: она в «Оформлении».' : `За ${a.frameAt} — рамка «Новый год», осталось ${left}.`}</span> <span>Пропущенный день не вернуть: подарок забирают только в свой день.</span></p></div>
+      <p class="lv-adv-msg" id="lvAdvMsg" role="status"></p></div>`;
+  }
 
   // карточка итогов года картинкой (рисуется в браузере; подписи переводит холст — lang-core.js).
   // Шесть плиток и четыре строки: строки — по важности, звание всегда последней

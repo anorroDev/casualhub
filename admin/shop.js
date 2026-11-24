@@ -96,7 +96,7 @@
     s.innerHTML = `<p class="adm-err">${esc(x.message)}</p>`;
   }
   const logHTML = (items, withWho) => (items.length
-    ? `<div class="ash-log">${items.map((x) => `<div><span>${withWho && x.handle ? `@${esc(x.handle)} · ` : ''}${x.reason === 'buy' ? `Купил «${esc(x.title)}»` : x.delta > 0 ? 'Подарок от администрации' : 'Снято администрацией'}</span><span class="${x.delta > 0 ? 'plus' : 'minus'}">${x.delta > 0 ? '+' : '−'}${nf(Math.abs(x.delta))}</span><small>${esc(when(x.at))}${x.by ? ` · @${esc(x.by)}` : ''}${x.note ? ` · ${esc(x.note)}` : ''}</small></div>`).join('')}</div>`
+    ? `<div class="ash-log">${items.map((x) => `<div><span>${withWho && x.handle ? `@${esc(x.handle)} · ` : ''}${x.reason === 'buy' ? `Купил «${esc(x.title)}»` : x.reason === 'advent' ? 'Новогодний календарь' : x.reason === 'top' ? 'Награда из «Почты»' : x.delta > 0 ? 'Подарок от администрации' : 'Снято администрацией'}</span><span class="${x.delta > 0 ? 'plus' : 'minus'}">${x.delta > 0 ? '+' : '−'}${nf(Math.abs(x.delta))}</span><small>${esc(when(x.at))}${x.by ? ` · @${esc(x.by)}` : ''}${x.note ? ` · ${esc(x.note)}` : ''}</small></div>`).join('')}</div>`
     : '<p class="muted">Пока ничего.</p>');
   async function show(q) {
     const s = sec();

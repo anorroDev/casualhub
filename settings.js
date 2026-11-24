@@ -450,6 +450,8 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
       }).join('')}</div>`)
       + (ui ? grp('Вид интерфейса', `<div class="st-uis">${ui.list.map((x) => `<button type="button" class="st-ui" data-st-ui="${esc(x.id)}" aria-pressed="${x.id === ui.current()}"><i class="st-pv" data-pv="${esc(x.id)}" aria-hidden="true"><b>Аа</b><s></s><u></u></i><span><b>${esc(x.name)}</b><small>${esc(x.desc)}</small></span></button>`).join('')}</div>`) : '')
       + (window.CasualUtil.size ? grp('Размер', sizeRow()) : '')
+      // снег — только в новогодние дни (util.js → CasualUtil.snow, рисует snow.js)
+      + (window.CasualUtil.snow && window.CasualUtil.snow.season() ? grp('Снег', toggle({ name: 'Снег на страницах', desc: window.CasualUtil.snow.calm() ? 'Не идёт: в системе включено «уменьшить движение»' : 'Новогодний, до 10 января', attr: 'data-snow', on: window.CasualUtil.snow.on() })) : '')
       // выбор скинов Васяна рисует сам vasyan.js в [data-vasyan-skins]
       + (window.CasualVasyan && window.CasualVasyan.own() ? grp('Котик Васян', toggle({ name: 'Котик Васян на сайте', desc: 'Гуляет внизу экрана: его можно погладить и покормить из миски в левом углу', attr: 'data-vasyan', on: window.CasualVasyan.on() }) + '<div data-vasyan-skins></div>') : '')
       + grp('Язык', `<div class="st-row st-langrow"><span class="st-t"><b>Язык сайта</b><small>Страница перезагрузится</small></span><span class="st-seg st-lang" role="group" aria-label="Язык сайта">${langBtns('data-lang', lang)}</span></div>`);
@@ -694,6 +696,7 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
         catch (er) { t.checked = !t.checked; toast(er.message); }
         t.disabled = false;
       }
+      if (t.matches('[data-snow]')) { window.CasualUtil.snow.set(t.checked); toast(t.checked ? 'Снег пошёл' : 'Снег выключен'); }
       // «Казуальный вид» (data-unslop) переключает themes.js сам, «Котика Васяна» (data-vasyan) — vasyan.js
     });
 

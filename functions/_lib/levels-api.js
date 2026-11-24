@@ -5,13 +5,14 @@
 import {
   levelsMode, levelsOn, ensureLevels, readLevel, levelView, prefsOf, lookOf, unlockedAt, levelsOf, achievementsOf, questState,
   firstSteps, takeNews, dayKey, weekStart, shiftDay, cleanTz, backfillUser, grantSpecial, currentEvent, forgetEvent, RULES, awardMany, CAT_GROUPS, RATING_KINDS,
-  ACHIEVEMENTS, REWARDS, NAME_COLORS, PROFILE_BGS, isScored, textLen, award, INVITE_REWARDS, INV_SQL, invitesOf, STREAK_BONUS, FIRST_STEPS,
+  ACHIEVEMENTS, REWARDS, NAME_COLORS, PROFILE_BGS, isScored, textLen, award, INVITE_REWARDS, EVENT_REWARDS, INV_SQL, invitesOf, STREAK_BONUS, FIRST_STEPS,
   achBackLetter, ACH_TIER_XP, ACH_ONE_XP, swapQuest, recalcUser,
   SEASON_RANKS, seasonRankOf, rankFields, currentSeason, closeSeason, forgetSeason, seasonXpOf, seasonXpMany, seasonPlanLetter, fmtKyiv,
 } from './levels.js';
 import { FOODS, boughtLooks, ensureShop } from './shop.js';
 import { settleWeekTop, weekTop, TOP_MIN, TOP_BASE, TOP_PER, TOP_BONUS_MAX } from './weektop.js';
 import { spanMs } from './presence.js';
+import { ADVENT, adventDay, adventPending, adventState, adventClaim } from './advent.js';
 // еда Васяна, которая открывается уровнем: показывается в «Прогрессе» рядом с наградами оформления
 const FOOD_GIFTS = FOODS.filter((f) => f.unlock).map((f) => ({ level: f.unlock, title: f.title }));
 import { planSeasonReminder, cancelSeasonReminder, seasonReminderOf, mailOn } from './mailout.js';
@@ -84,7 +85,10 @@ async function ensureFirst(env, uid) {
 const vasyanOwned = async (env, uid) => !!(await env.DB.prepare('SELECT 1 FROM gift_box WHERE gift_id = ? AND user_id = ? AND claimed = 1').bind('vasyan:' + uid, uid).first());
 export async function mailUnread(env, uid) {
   const r = await env.DB.prepare(`SELECT COUNT(*) AS n FROM (${MAIL_SQL}) WHERE read = 0 OR ((xp > 0 OR kind = 'vasyan') AND claimed = 0)`).bind(uid, Date.now()).first();
-  return +(r && r.n) || 0;
+  // в декабре — ещё подарок дня новогоднего календаря, пока его не забрали (advent.js)
+  let pend = false;
+  try { pend = await adventPending(env, uid); } catch (e) { console.error('advent unread', e && e.message); }
+  return (+(r && r.n) || 0) + (pend ? 1 : 0);
 }
 
 // сезон для окна «Прогресс» (поле season в /levels/me): номер, срок сброса, мой опыт и звание за сезон,
@@ -140,6 +144,7 @@ export function makeLevelsRoutes(h) {
         rewards: REWARDS, foods: FOOD_GIFTS, colors: NAME_COLORS, bgs: Object.keys(PROFILE_BGS), invRewards: INVITE_REWARDS, invites: invitesOf(row),
         xpRules: xpRules(), streakBonus: STREAK_BONUS, firstXp: FIRST_STEPS.map((f) => f.xp), achXp: { tiers: ACH_TIER_XP, one: ACH_ONE_XP },
         recap: recapOpen(now) || admin ? 2026 : null, // админ видит итоги заранее, чтобы проверить их до декабря
+        advent: adventDay(now) ? { day: adventDay(now), frameAt: ADVENT.frameAt } : null, evRewards: EVENT_REWARDS, // новогодний календарь и награды за ивенты
         mail: await mailUnread(env, me.id),
         vasyan: await vasyanOwned(env, me.id),
       });
@@ -148,8 +153,20 @@ export function makeLevelsRoutes(h) {
     async 'GET /levels/mail'({ env, me }) {
       if (!(await gate(env, me))) return off();
       await ensureLevels(env);
-      const { results } = await env.DB.prepare(MAIL_SQL).bind(me.id, Date.now()).all();
-      return json({ items: (results || []).map((g) => ({ id: g.id, kind: g.kind, title: g.title, body: g.body || '', xp: +g.xp || 0, at: +g.at, until: g.until ? +g.until : null, read: !!g.read, claimed: !!g.claimed })) });
+      const now = Date.now();
+      const { results } = await env.DB.prepare(MAIL_SQL).bind(me.id, now).all();
+      return json({
+        items: (results || []).map((g) => ({ id: g.id, kind: g.kind, title: g.title, body: g.body || '', xp: +g.xp || 0, at: +g.at, until: g.until ? +g.until : null, read: !!g.read, claimed: !!g.claimed })),
+        advent: await adventState(env, me.id, now), // новогодний календарь — только в декабре
+      });
+    },
+    // новогодний календарь: забрать подарок дня (рофланы; на 20-м дне — ещё и рамка «Новый год»)
+    async 'POST /levels/advent'({ env, me }) {
+      if (!(await gate(env, me))) return off();
+      await ensureLevels(env);
+      const r = await adventClaim(env, me.id, Date.now());
+      if (!r.ok) return fail(r.status, r.error);
+      return json({ ...r, unread: await mailUnread(env, me.id) });
     },
     // открыл почту — всё прочитано (забрать подарки всё равно нужно кнопкой)
     async 'POST /levels/mail/read'({ env, me }) {

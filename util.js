@@ -448,7 +448,26 @@ html.sh-cur ::file-selector-button { cursor: var(--sh-a); }`;
   nsfwClass(nsfwOn());
   addEventListener('storage', (e) => { if (e.key === null || e.key === NSFW_KEY) nsfwPaint(); });
 
-  window.CasualUtil = Object.freeze({ esc, read, plural, script, emptyArt, loop, confetti, size, cursor, nsfw });
+  // снег на страницах в новогодние дни (1 декабря — 10 января, по часам человека): рисует /snow.js на холсте поверх
+  // страницы. Выключается в Настройках («Внешний вид» → «Снег», casualhub.snow.v1 = '0'), при «уменьшить движение»
+  // не идёт; в админке, на /r/ и в виде для OBS (?obs) его нет
+  const SNOW_KEY = 'casualhub.snow.v1';
+  const snowSeason = (d = new Date()) => d.getMonth() === 11 || (d.getMonth() === 0 && d.getDate() <= 10);
+  const snowOn = () => { try { return localStorage.getItem(SNOW_KEY) !== '0'; } catch (e) { return true; } };
+  const snowCalm = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const snowHere = () => !/^\/(admin|r)\//.test(location.pathname) && !/[?&]obs(=|&|$)/.test(location.search);
+  const snowRun = () => {
+    if (snowSeason() && snowOn() && !snowCalm() && snowHere()) script('/snow.js', () => !!window.CasualSnow).then(() => window.CasualSnow.start()).catch(() => {});
+    else if (window.CasualSnow) window.CasualSnow.stop();
+  };
+  const snow = Object.freeze({
+    season: snowSeason, on: snowOn, calm: snowCalm,
+    set(v) { try { if (v) localStorage.removeItem(SNOW_KEY); else localStorage.setItem(SNOW_KEY, '0'); } catch (e) {} snowRun(); },
+  });
+  addEventListener('storage', (e) => { if (e.key === null || e.key === SNOW_KEY) snowRun(); });
+
+  window.CasualUtil = Object.freeze({ esc, read, plural, script, emptyArt, loop, confetti, size, cursor, nsfw, snow });
+  snowRun();
   // котик Васян внизу экрана (vasyan.js сам проверяет, не выключен ли он в Настройках; в админке и на /r/ его нет)
   if (!/^\/(admin|r)\//.test(location.pathname)) script('/vasyan.js', () => !!window.CasualVasyan).catch(() => {});
 })();
