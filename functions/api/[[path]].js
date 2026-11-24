@@ -4,7 +4,7 @@
 import { clip, numOrNull, SAFE_URL, cleanRating, readShelf, stampOf, RID_RE, SPOOF_RE, MUSIC_LINK_RE } from '../_lib/shelf.js';
 import { computeRecs, seedSig, titleKey } from '../_lib/recs.js';
 import { imdbLookup } from '../_lib/imdb.js';
-import { albumTracks, friendsAlbum } from '../_lib/album.js';
+import { albumTracks, friendsAlbum, trackPreview } from '../_lib/album.js';
 import { NOTES } from '../_lib/admin-changes.js';
 import { LOT_NAME, MAX_LOTS, STICKER_RE, cleanLive, LIVE_OWNER, liveBusy, liveLots, spinLive, resetLive, stopAuto, settledLive, liveTx, liveView } from '../_lib/lots-live.js';
 import { ONLINE_MS, GUEST_RE, onlineCount, friendsAndIncoming, touchUsers, touchGuests } from '../_lib/presence.js';
@@ -2021,6 +2021,12 @@ const routes = {
     const sp = new URL(request.url).searchParams;
     const a = await albumTracks({ src: sp.get('src'), link: sp.get('link'), artist: sp.get('artist'), title: sp.get('title') }).catch(() => null);
     return json({ album: a });
+  },
+  // отрывок одного трека: синглы и треки из оценок можно послушать прямо в Мнении
+  async 'GET /music/track'({ request, me }) {
+    if (burst('mtrack:' + me.id, 40, 60e3)) return tooMany(1);
+    const sp = new URL(request.url).searchParams;
+    return json({ track: await trackPreview({ link: sp.get('link'), artist: sp.get('artist'), title: sp.get('title') }).catch(() => null) });
   },
   // тот же альбом, разобранный друзьями: их баллы по номерам треков
   async 'GET /music/album-friends'({ env, request, me }) {

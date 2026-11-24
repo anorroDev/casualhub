@@ -77,6 +77,28 @@ export async function albumTracks({ src, link, artist, title }) {
   return null;
 }
 
+// отрывок одного трека (синглы и треки из прошлых оценок): Deezer по ссылке или поиском, иначе Apple
+export async function trackPreview({ link, artist, title }) {
+  const want = { artist: String(artist || '').slice(0, 80), title: String(title || '').slice(0, 140) };
+  const out = (x) => (x && x.preview ? { title: clip(x.title, 140), artist: clip(x.artist, 80), preview: x.preview, link: x.link || '' } : null);
+  const dz = /deezer\.com\/(?:[a-z]{2}\/)?track\/(\d{1,15})/.exec(String(link || ''));
+  if (dz) {
+    const t = await getJson(`https://api.deezer.com/track/${dz[1]}`, 300).catch(() => null);
+    if (t && !t.error && httpsOr(t.preview)) return out({ title: t.title, artist: (t.artist || {}).name, preview: httpsOr(t.preview), link: linkOr(t.link) });
+  }
+  if (albumNorm(want.title).length < 1) return null;
+  const q = (want.artist ? want.artist + ' ' : '') + want.title;
+  const [dl, il] = await Promise.all([
+    getJson(`https://api.deezer.com/search/track?limit=10&q=${encodeURIComponent(q)}`, 300).then((d) => d.data || []).catch(() => []),
+    getJson(`https://itunes.apple.com/search?media=music&entity=song&limit=10&country=US&term=${encodeURIComponent(q)}`, 3600).then((d) => d.results || []).catch(() => []),
+  ]);
+  const best = [
+    ...dl.map((x) => ({ s: score(want, x.title, (x.artist || {}).name) + 0.5, title: x.title, artist: (x.artist || {}).name, preview: httpsOr(x.preview), link: linkOr(x.link) })),
+    ...il.map((x) => ({ s: score(want, x.trackName, x.artistName), title: x.trackName, artist: x.artistName, preview: httpsOr(x.previewUrl), link: linkOr(x.trackViewUrl) })),
+  ].filter((x) => x.preview && x.s >= 4).sort((a, b) => b.s - a.s)[0];
+  return out(best);
+}
+
 // разборы того же альбома у друзей: баллы треков по номерам. Альбом узнаём по названию оценки («Исполнитель — Альбом»)
 const keyOf = (s) => String(s || '').trim().toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ');
 export async function friendsAlbum(env, me, name) {

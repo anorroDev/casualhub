@@ -5,6 +5,8 @@
    Опыт: каждый трек — оценка rate по обычным правилам, весь альбом целиком — album_full (functions/_lib/levels.js → albumsFull).
    Треклист: /api/music/album (Deezer, Apple), без аккаунта — Apple прямо из браузера. Работает поверх opinion/app.js (его функции общие). */
 (() => {
+  const VOL_KEY = 'casualhub.albvol.v1';
+  const volume = () => { try { const v = parseFloat(localStorage.getItem(VOL_KEY)); return Number.isFinite(v) ? Math.max(0, Math.min(1, v)) : 0.8; } catch (e) { return 0.8; } };
   const TAGS = ['Бэнгер', 'На репит', 'Лучший текст', 'Проходной'];
   const COLORS = ['#F472B6', '#FBBF24', '#60A5FA', '#A78BFA', '#34D399', '#FB923C'];
   const friendsCache = new Map(); // название альбома → разборы друзей (по кнопке «Друзья»)
@@ -83,13 +85,13 @@
   function cardHTML(r) {
     if (r.albumOf) {
       const al = state.ratings.find((x) => x.id === r.albumOf);
-      return al ? `<p class="alb-from">Трек ${r.trackNo} из альбома <button type="button" class="linkish" data-alb="goto" data-id="${esc(al.id)}">${esc(titleOf(al))}</button>${tagsOf(r).length ? ' · ' + esc(tagsOf(r).join(', ')) : ''}</p>` : '';
+      return (al ? `<p class="alb-from">Трек ${r.trackNo} из альбома <button type="button" class="linkish" data-alb="goto" data-id="${esc(al.id)}">${esc(titleOf(al))}</button>${tagsOf(r).length ? ' · ' + esc(tagsOf(r).join(', ')) : ''}</p>` : '') + listenBtn(r);
     }
-    if (!isAlbum(r)) return '';
+    if (!isAlbum(r)) return isMusicCat(catOf(r)) && !r.example ? listenBtn(r) : '';
     const tracks = tracksOf(r.id);
     const own = state.canWrite && (!r.author || !state.user || r.author.id === state.user.id);
     if (!tracks.length) {
-      return own ? `<div class="alb-card alb-empty"><p>Оцени каждый трек отдельно под отрывки — получится кардиограмма альбома.</p><button type="button" class="btn small primary" data-alb="open" data-id="${esc(r.id)}">Разобрать по трекам</button></div>` : '';
+      return own ? `<div class="alb-card alb-empty"><p>${r.total != null ? 'Эту оценку можно уточнить: разбери альбом по трекам под отрывки — получится кардиограмма, а потом обнови оценку альбома.' : 'Оцени каждый трек отдельно под отрывки — получится кардиограмма альбома.'}</p><button type="button" class="btn small primary" data-alb="open" data-id="${esc(r.id)}">Разобрать по трекам</button></div>` : '';
     }
     const rows = rowsOf(tracks);
     const N = r.trackCount || tracks.length;
@@ -112,6 +114,7 @@
       ${curveSVG(rows, N, fr)}
       ${fr && fr.length ? `<p class="alb-legend"><span style="--c:var(--accent)">ты</span>${fr.map((f, i) => `<span style="--c:${COLORS[i % COLORS.length]}">${esc(f.user.username)}</span>`).join('')}</p>` : fr ? '<p class="alb-legend">Никто из друзей ещё не разбирал этот альбом.</p>' : ''}
       ${chips.length ? `<div class="alb-chips">${chips.join('')}</div>` : ''}
+      ${rescoreHTML(r, avg, own)}
       <div class="alb-acts">
         ${own ? `<button type="button" class="btn small ${done < N ? 'primary' : 'ghost'}" data-alb="open" data-id="${esc(r.id)}">${done < N ? 'Продолжить разбор' : 'Переслушать'}</button>` : ''}
         ${window.casualApi && window.casualApi.online() && !fr ? `<button type="button" class="btn small ghost" data-alb="friends" data-id="${esc(r.id)}">Сравнить с друзьями</button>` : ''}
@@ -120,6 +123,58 @@
       </div>
       <details class="alb-list"><summary>${tracks.length} ${plural(tracks.length, 'трек', 'трека', 'треков')}</summary><ol>${list}</ol></details>
     </div>`;
+  }
+  // старая оценка альбома (поставлена до разбора): показать разницу со средним по трекам и попросить обновить
+  function rescoreHTML(r, avg, own) {
+    if (!r.rescore || r.total == null || avg == null) return '';
+    const d = Math.round((avg - r.total) * 10) / 10;
+    return `<div class="alb-old"><p><b>Оценка альбома старая</b> — она поставлена до разбора по трекам: у альбома ${fmt(r.total)}, а в среднем по трекам ${fmt(avg)}${Math.abs(d) >= 0.5 ? ` (${d > 0 ? 'на ' + fmt(d) + ' выше' : 'на ' + fmt(-d) + ' ниже'})` : ''}. Обнови её с учётом треков.</p>${own ? `<button type="button" class="btn small primary" data-alb="rescore" data-id="${esc(r.id)}">Изменить оценку альбома</button>` : ''}</div>`;
+  }
+  // ---------- отрывок одного трека: синглы и треки из прошлых и новых оценок ----------
+  const previews = new Map(); // ключ трека → { preview, link } или null (не нашёлся)
+  let solo = null; // { audio, key, btn }
+  const listenBtn = (r) => `<div class="alb-listen"><button type="button" class="btn small ghost" data-alb="listen" data-id="${esc(r.id)}" aria-pressed="false"><span class="alb-li" aria-hidden="true">▶</span> Слушать отрывок</button><small class="alb-lmsg" role="status"></small></div>`;
+  async function previewOf(q) {
+    const key = keyOf((q.artist || '') + '|' + q.title + '|' + (q.link || ''));
+    if (previews.has(key)) return previews.get(key);
+    let t = null;
+    if (window.casualApi && window.casualApi.online()) {
+      try { t = ((await window.casualApi.get('/music/track?' + new URLSearchParams({ artist: q.artist || '', title: q.title, link: q.link || '' }).toString())) || {}).track || null; } catch (e) {}
+    }
+    if (!t) { // без аккаунта: Apple прямо из браузера
+      try {
+        const d = await (await fetch(`https://itunes.apple.com/search?media=music&entity=song&limit=5&country=US&term=${encodeURIComponent(((q.artist || '') + ' ' + q.title).trim())}`)).json();
+        const hit = (d.results || []).find((x) => x.previewUrl && keyOf(x.trackName).includes(keyOf(q.title).slice(0, 20)));
+        if (hit) t = { preview: hit.previewUrl, link: musicLinkOk(hit.trackViewUrl) };
+      } catch (e) {}
+    }
+    previews.set(key, t);
+    return t;
+  }
+  function stopSolo() {
+    if (!solo) return;
+    solo.audio.pause();
+    if (solo.btn && solo.btn.isConnected) { solo.btn.setAttribute('aria-pressed', 'false'); solo.btn.querySelector('.alb-li').textContent = '▶'; }
+    solo = null;
+  }
+  async function listen(btn, q) {
+    const key = keyOf((q.artist || '') + '|' + q.title + '|' + (q.link || ''));
+    if (solo && solo.key === key) { stopSolo(); return; }
+    stopSolo();
+    const msg = btn.parentElement.querySelector('.alb-lmsg');
+    btn.disabled = true;
+    const t = await previewOf(q);
+    btn.disabled = false;
+    if (!t || !t.preview) { if (msg) msg.textContent = 'Отрывок не нашёлся ни в Deezer, ни в Apple Music.'; return; }
+    if (msg) msg.textContent = '';
+    if (ses) { ses.audio.pause(); ses.playing = false; paintPlay(); }
+    const audio = new Audio(t.preview);
+    audio.volume = volume();
+    solo = { audio, key, btn };
+    btn.setAttribute('aria-pressed', 'true');
+    btn.querySelector('.alb-li').textContent = '❚❚';
+    audio.addEventListener('ended', () => { if (solo && solo.audio === audio) stopSolo(); });
+    audio.play().catch(() => stopSolo());
   }
   // треки, свёрнутые в карточку альбома (альбом есть в рейтинге); тот, к которому ведут ссылкой, остаётся в списке
   function folded(pool) {
@@ -134,11 +189,15 @@
   function formHint() {
     const box = document.getElementById('albumGo');
     if (!box) return;
-    const on = state.canWrite && formMusic() && String(form.status || '').trim() === 'Альбом';
+    const st = String(form.status || '').trim();
+    const on = state.canWrite && formMusic() && st === 'Альбом';
+    const single = formMusic() && st !== 'Альбом' && String(form.name || '').trim().length > 1;
     const al = form.editingId ? state.ratings.find((x) => x.id === form.editingId) : null;
     const n = al ? tracksOf(al.id).length : 0;
-    const html = on ? `<button type="button" class="btn small" id="albumGoBtn">${n ? 'Продолжить разбор по трекам' : 'Разобрать по трекам'}</button><span>Каждый трек — отдельная оценка, под 30-секундные отрывки. Баллы альбома можно поставить потом</span>` : '';
-    box.hidden = !on;
+    const html = on ? `<button type="button" class="btn small" id="albumGoBtn">${n ? 'Продолжить разбор по трекам' : 'Разобрать по трекам'}</button><span>Каждый трек — отдельная оценка, под 30-секундные отрывки. Баллы альбома можно поставить потом</span>`
+      : single ? `<div class="alb-listen"><button type="button" class="btn small ghost" id="albumListenBtn" aria-pressed="false"><span class="alb-li" aria-hidden="true">▶</span> Слушать отрывок</button><small class="alb-lmsg" role="status"></small></div>` : '';
+    if (!single && solo && solo.btn && solo.btn.id === 'albumListenBtn') stopSolo();
+    box.hidden = !html;
     if (box.dataset.h !== html) { box.dataset.h = html; box.innerHTML = html; }
   }
 
@@ -183,6 +242,16 @@
     document.documentElement.classList.add('locked');
     ses = { al, ov, data: null, i: 0, playing: false, crit: false, audio: new Audio(), prevFocus: document.activeElement, tags: new Set(), cs: {} };
     ses.audio.preload = 'auto';
+    ses.audio.volume = volume();
+    // громкость: ползунок у отрывка, запоминается в этом браузере
+    ov.addEventListener('input', (e) => {
+      if (!ses || !e.target.matches('.alb-vol')) return;
+      const v = Math.max(0, Math.min(1, +e.target.value || 0));
+      ses.audio.volume = v;
+      e.target.style.setProperty('--v', v * 100 + '%');
+      e.target.setAttribute('aria-valuetext', Math.round(v * 100) + '%');
+      try { localStorage.setItem(VOL_KEY, String(v)); } catch (x) {}
+    });
     ov.addEventListener('click', onClick);
     ov.addEventListener('keydown', onKey);
     ses.audio.addEventListener('timeupdate', paintTime);
@@ -204,7 +273,8 @@
     }
     ses.skip = new Set(al.skip || []);
     // альбом запоминает, откуда треклист и сколько в нём треков
-    if (al.trackCount !== data.tracks.length || al.albumSrc !== data.src) await saveAlbum({ trackCount: data.tracks.length, albumSrc: data.src });
+    const old = al.total != null && !tracksOf(al.id).length && !al.trackCount;
+    if (al.trackCount !== data.tracks.length || al.albumSrc !== data.src || old) await saveAlbum({ trackCount: data.tracks.length, albumSrc: data.src, ...(old ? { rescore: true } : {}) });
     const first = startN ? data.tracks.findIndex((t) => t.n === startN) : data.tracks.findIndex((t) => !ses.have.has(t.n) && !ses.skip.has(t.n));
     ses.i = first >= 0 ? first : 0;
     if (!startN && first < 0) ses.summary = true;
@@ -212,6 +282,7 @@
   }
   function close() {
     if (!ses) return;
+    stopSolo();
     ses.audio.pause();
     ses.audio.src = '';
     ses.ov.remove();
@@ -257,7 +328,7 @@
           <small>Трек ${t.n} из ${data.tracks.length}</small>
           <b class="alb-title">${esc(t.title)}</b>
           ${t.artist && keyOf(t.artist) !== keyOf(al.artist) ? `<span class="alb-feat">${esc(t.artist)}</span>` : ''}
-          <div class="alb-play">${t.preview ? `<button type="button" class="alb-pp" data-alb-x="play" aria-label="${ses.playing ? 'Пауза' : 'Слушать отрывок'}">${ses.playing ? '❚❚' : '▶'}</button><span class="alb-time"><i style="width:0%"></i></span><small class="alb-sec">0:30</small>` : `<span class="alb-noprev">Отрывка нет.</span>`}${t.link ? `<a class="linkish" href="${esc(t.link)}" target="_blank" rel="noopener">Целиком</a>` : ''}</div>
+          <div class="alb-play">${t.preview ? `<button type="button" class="alb-pp" data-alb-x="play" aria-label="${ses.playing ? 'Пауза' : 'Слушать отрывок'}">${ses.playing ? '❚❚' : '▶'}</button><span class="alb-time"><i style="width:0%"></i></span><small class="alb-sec">0:30</small><label class="alb-volw" title="Громкость"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2.5 6h2.5l3.5-3v10L5 10H2.5z"/><path d="M11 5.5a3.5 3.5 0 0 1 0 5M13 3.5a6.3 6.3 0 0 1 0 9"/></svg><input type="range" class="alb-vol" min="0" max="1" step="0.05" value="${ses.audio.volume}" style="--v:${ses.audio.volume * 100}%" aria-label="Громкость" aria-valuetext="${Math.round(ses.audio.volume * 100)}%"></label>` : `<span class="alb-noprev">Отрывка нет.</span>`}${t.link ? `<a class="linkish" href="${esc(t.link)}" target="_blank" rel="noopener">Целиком</a>` : ''}</div>
         </div>
       </div>
       <div class="alb-scale" role="group" aria-label="Балл трека от 1 до 10">${Array.from({ length: 10 }, (_, k) => k + 1).map((n) => `<button type="button" data-alb-v="${n}" data-tier="${tierV(n)}" aria-pressed="${v != null && Math.round(v) === n}">${n}</button>`).join('')}</div>
@@ -268,6 +339,7 @@
         ${crit.length ? `<button type="button" class="btn small ghost" data-alb-x="crit" aria-pressed="${ses.crit}">По критериям</button>` : ''}
         <button type="button" class="btn small ghost" data-alb-x="skip">${ses.skip.has(t.n) ? 'Пропущен' : 'Пропустить'}</button>
         <button type="button" class="btn small ghost" data-alb-x="next"${ses.i < data.tracks.length - 1 ? '' : ' disabled'}>Дальше →</button>
+        <button type="button" class="btn small ghost" data-alb-x="rate-album" title="Оценить альбом целиком по всем критериям музыки">Оценить целиком</button>
       </div>
       <div class="alb-strip" aria-label="Треки альбома">${strip}</div>
       <p class="alb-keys">Клавиши: 1–9 и 0 (=10) — балл и следующий трек · пробел — отрывок · S — пропустить</p>`;
@@ -308,11 +380,12 @@
         ${best ? `<p class="alb-best">Лучший трек: <b>${esc(best.t)}</b> · ${fmtS(best.v)}</p>` : ''}
         ${left ? `<p class="alb-best">Осталось разобрать: ${left}</p>` : ''}</div>
       </div>
+      ${al.rescore && al.total != null && avg != null ? `<p class="alb-old-s"><b>Оценка альбома старая:</b> ${fmt(al.total)} — она поставлена до разбора. Обнови её с учётом треков.</p>` : ''}
       ${curveSVG(rows, data.tracks.length, null, { big: true })}
       <div class="alb-chips">${verdicts(rows).map((v) => `<span class="alb-chip" data-k="${v.k}">${esc(v.t)}</span>`).join('')}</div>
       <div class="alb-row">
         ${left ? '<button type="button" class="btn small primary" data-alb-x="resume">Продолжить</button>' : ''}
-        ${al.total == null ? `<button type="button" class="btn small${left ? ' ghost' : ' primary'}" data-alb-x="rate-album">Оценить альбом целиком</button>` : ''}
+        ${al.total == null || al.rescore ? `<button type="button" class="btn small${left ? ' ghost' : ' primary'}" data-alb-x="rate-album">${al.rescore ? 'Изменить оценку альбома' : 'Оценить альбом целиком'}</button>` : ''}
         <a class="btn small ghost" href="/tierlist/#album=${encodeURIComponent(al.id)}">Тир-лист треков</a>
         ${rows.length >= 2 ? '<button type="button" class="btn small ghost" data-alb-x="png">Картинка</button>' : ''}
         <button type="button" class="btn small ghost" data-alb-x="close">Готово</button>
@@ -503,6 +576,8 @@
 
   // ---------- кнопки в рейтинге и в форме ----------
   document.addEventListener('click', async (e) => {
+    const fl = e.target.closest('#albumListenBtn');
+    if (fl) { listen(fl, { artist: (form.artist || '').trim(), title: String(form.name || '').trim(), link: form.link || '' }); return; }
     const go = e.target.closest('#albumGoBtn');
     if (go) {
       if (form.editingId && state.ratings.some((x) => x.id === form.editingId && x.trackCount)) { const id = form.editingId; open(id); return; }
@@ -516,7 +591,9 @@
       case 'open': open(id); break;
       case 'track': open(id, +b.dataset.n); break;
       case 'goto': goToRating(id); break;
+      case 'rescore': { const al = state.ratings.find((x) => x.id === id); if (al) loadIntoForm(al); break; }
       case 'png': sharePNG(id); break;
+      case 'listen': { const r = state.ratings.find((x) => x.id === id); if (r) listen(b, { artist: r.artist || '', title: titleOf(r), link: r.link || '' }); break; }
       case 'friends': {
         const al = state.ratings.find((x) => x.id === id);
         if (!al) return;
@@ -529,6 +606,9 @@
       }
     }
   });
+
+  // кнопка «Слушать отрывок» в форме появляется, как только набрано название трека
+  document.addEventListener('input', (e) => { if (e.target && (e.target.id === 'itemName' || e.target.id === 'itemArtist')) formHint(); });
 
   window.CasualAlbum = { cardHTML, folded, formHint, open, verdicts, agreement };
 })();

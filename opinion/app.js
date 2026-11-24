@@ -1293,7 +1293,7 @@ const state = {
   ratings: [],
   cats: clone(STARTERS),
   editCat: false, catDelConfirm: false, catAsk: null,
-  sort: 'score', filter: 'all', sfilter: 'all', bmode: 'list', query: '',
+  sort: 'score', filter: 'all', sfilter: 'all', mfilter: 'all', bmode: 'list', query: '', // mfilter — в музыке: только альбомы или только треки и синглы
   recent: 0, // «Недавние»: только оценки, поставленные или изменённые за столько дней (0 — все)
   cmpIds: [],
   open: new Set(), confirmDel: null, flashId: null, saving: false,
@@ -2528,6 +2528,7 @@ function renderBoard() {
       { master: '8.5+', good: '7.5+', mid: '5–7.4', bad: 'до 5', done: 'завершено', plan: 'в планах', doing: 'в процессе', drop: 'брошено' }[state.sfilter],
       // коротко: на телефоне «Фильтры · за неделю» уже не влезала в строку рядом с «Кто видит»
       state.recent ? `${state.recent} ${plural(state.recent, 'день', 'дня', 'дней')}` : '',
+      { album: 'альбомы', single: 'треки' }[state.mfilter],
       state.genres.length ? (state.genres.length === 1 ? state.genres[0] : 'жанров: ' + state.genres.length) : '',
     ].filter(Boolean);
     moreHint.textContent = parts.length ? ' · ' + parts.join(' · ') : '';
@@ -2537,7 +2538,17 @@ function renderBoard() {
   const catPool = state.filter === 'all' ? state.ratings : state.ratings.filter(r => catKey(r) === state.filter);
   const subPool = applySubFilter(catPool);
   // «Недавние» — до жанров: в окне «Фильтры» у жанров счёт среди недавних
-  const recPool = state.recent ? subPool.filter(recentOk) : subPool;
+  // «Музыка» в окне «Фильтры» — только когда выбрана музыкальная категория: только альбомы или только треки и синглы
+  const musicSec = document.getElementById('musicSec');
+  const musicOn = state.filter !== 'all' && gs.some(g => g.id === state.filter && isMusicCat(state.cats.find(c => keyOf(c.name) === g.id) || { name: g.name }));
+  if (!musicOn) state.mfilter = 'all';
+  if (musicSec) {
+    musicSec.hidden = !musicOn;
+    musicSec.querySelectorAll('[data-mfilter]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mfilter === state.mfilter)));
+  }
+  const isAlb = (r) => !r.albumOf && (r.status === 'Альбом' || r.trackCount > 0);
+  const recPool0 = state.recent ? subPool.filter(recentOk) : subPool;
+  const recPool = state.mfilter === 'album' ? recPool0.filter(isAlb) : state.mfilter === 'single' ? recPool0.filter(r => !isAlb(r)) : recPool0;
   // жанры — раздел в окне «Фильтры»
   const gSec = document.getElementById('genreSec'), gBox = document.getElementById('genreChips');
   if (gSec && gBox) {
@@ -2555,7 +2566,7 @@ function renderBoard() {
   if (el.searchWrap.hidden && state.query) { state.query = ''; el.search.value = ''; }
   const q = keyOf(state.query);
   const found = r => !q || [r.nameKey, keyOf(r.meta), keyOf(r.status), keyOf(r.note), keyOf(r.pros), keyOf(r.cons), keyOf(r.author && r.author.name)].join(' ').includes(q);
-  const folded = window.CasualAlbum && !q ? window.CasualAlbum.folded(pool) : null;
+  const folded = window.CasualAlbum && !q && state.mfilter !== 'single' ? window.CasualAlbum.folded(pool) : null;
   const shown = folded ? pool.filter(r => !folded.has(r.id)) : pool;
   const ranks = computeRanks(shown);
   const list = sortList(shown).filter(found);
@@ -2570,7 +2581,7 @@ function renderBoard() {
   } else {
     if (el.tierBoard) el.tierBoard.hidden = true;
     // другой отбор или порядок — снова первая порция
-    const sel = [state.filter, state.sfilter, state.recent, state.sort, q, state.genres.join('\n'), state.bmode].join('|');
+    const sel = [state.filter, state.sfilter, state.mfilter, state.recent, state.sort, q, state.genres.join('\n'), state.bmode].join('|');
     const newSel = sel !== boardSel;
     if (newSel) { boardSel = sel; boardLimit = BOARD_PAGE; }
     let lim = boardLimit;
@@ -3162,7 +3173,9 @@ function normalizeRating(id, d) {
     ...(+d.trackCount >= 2 ? {
       trackCount: clampInt(d.trackCount, 2, 60),
       skip: [...new Set((Array.isArray(d.skip) ? d.skip : []).map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= 60))],
-      ...(/^(dz|it):\d{1,15}$/.test(str(d.albumSrc)) ? { albumSrc: d.albumSrc } : {})
+      ...(/^(dz|it):\d{1,15}$/.test(str(d.albumSrc)) ? { albumSrc: d.albumSrc } : {}),
+      // оценка альбома поставлена до разбора: просим обновить. Сохранил альбом в форме — пометка пропадает (её нет в ALBUM_KEYS)
+      ...(d.rescore === true ? { rescore: true } : {})
     } : {}),
     createdAt: str(d.createdAt), updatedAt: str(d.updatedAt)
   };
@@ -5621,7 +5634,7 @@ async function applyVis() {
     }
   } catch (e) { handleWriteError(e); return; }
   closeVisModal();
-  toast(changed.length ? `Кто видит: ${VIS_LABEL[v]}. Изменено оценок: ${changed.length}` : `Эти оценки уже видят: ${VIS_LABEL[v]}`);
+  toast(changed.length ? `Приватность: ${VIS_LABEL[v]}. Изменено оценок: ${changed.length}` : `Эти оценки уже видят: ${VIS_LABEL[v]}`);
 }
 (() => {
   const m = document.getElementById('visModal');
@@ -5810,6 +5823,13 @@ if (el.subFilters) {
     if (!b) return;
     // повторное нажатие на уровень снимает фильтр
     state.sfilter = (state.sfilter === b.dataset.sfilter && b.closest('.lvl-chips')) ? 'all' : b.dataset.sfilter;
+    renderBoard();
+  });
+  // «Музыка» в окне «Фильтры»: повторное нажатие снимает
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('button[data-mfilter]');
+    if (!b) return;
+    state.mfilter = state.mfilter === b.dataset.mfilter ? 'all' : b.dataset.mfilter;
     renderBoard();
   });
   // «Недавние»: чипы в окне «Фильтры» (повторное нажатие снимает) и кнопки под пустым списком — своим и друзей

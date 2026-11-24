@@ -695,3 +695,27 @@ test('разбор альбома: засчитан, когда каждый т�
   assert.equal(L.albumsFull(halfSkip).size, 0, 'пропустить почти всё нельзя: оценить нужно хотя бы половину');
   assert.ok(L.shelfDiff(three, three.filter((r) => r.id !== 'rA')).take.some((x) => x.kind === 'album_full' && x.ref === 'rA'));
 });
+
+test('топ недели: топ-5 сайта от 50 опыта получает рофланы письмом один раз, скрывшие себя — нет', async () => {
+  const W = await import('../functions/_lib/weektop.js');
+  const env = envOf();
+  await L.ensureLevels(env);
+  const wk = '2026-11-16';
+  const xp = { a: 486, b: 300, c: 120, d: 90, e: 60, f: 55, g: 40 };
+  for (const [u, n] of Object.entries(xp)) {
+    env.DB.raw.prepare('INSERT INTO xp_log (user_id, kind, ref, xp, day, at, gone) VALUES (?, ?, ?, ?, ?, ?, 0)').run(u, 'admin', 'w' + u, n, '2026-11-18', 1);
+    env.DB.raw.prepare('INSERT OR IGNORE INTO user_level (user_id, xp, level, prefs, updated_at) VALUES (?, ?, 1, ?, 1)').run(u, n, u === 'b' ? JSON.stringify({ hideBoard: true }) : null);
+  }
+  const top = await W.weekTop(env, wk);
+  assert.deepEqual(top.map((t) => t.id), ['a', 'c', 'd', 'e', 'f'], 'b скрыл себя, g меньше 50');
+  assert.equal(top[0].prize, 60 + 19, '486 опыта: +19 за активность');
+  assert.equal(W.topPrize(1, 5000), 100, 'бонус не больше 40');
+  W.forgetSettled();
+  const now = Date.parse('2026-11-24T10:00:00Z');
+  assert.equal(await W.settleWeekTop(env, now), 5);
+  W.forgetSettled();
+  assert.equal(await W.settleWeekTop(env, now), 0, 'вторая раскладка ничего не удваивает');
+  const g = q(env, "SELECT id, to_id, xp FROM gifts WHERE kind = 'roflans' ORDER BY xp DESC");
+  assert.equal(g.length, 5);
+  assert.equal(g[0].id, 'top:2026-11-16:a');
+});

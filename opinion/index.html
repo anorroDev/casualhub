@@ -1732,7 +1732,7 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
             <button type="button" data-sfilter="fav" aria-pressed="false"><svg viewBox="0 0 16 16" width="15" height="15" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 1.9l1.8 3.7 4 .6-2.9 2.8.7 4L8 11.1 4.4 13l.7-4-2.9-2.8 4-.6z"/></svg><span>Избранное</span></button>
           </div>
           <div class="board-tools">
-          <button type="button" class="btn small ghost" id="visBulkBtn" title="Кто видит оценки: все сразу или выбранные" hidden>Кто видит</button>
+          <button type="button" class="btn small ghost" id="visBulkBtn" title="Кто видит оценки: все сразу или выбранные" hidden>Приватность</button>
           <details class="board-more" id="boardMore">
             <summary class="btn small ghost">Фильтры<b id="boardMoreHint"></b></summary>
             <div class="board-more-body">
@@ -1749,6 +1749,13 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
                 <div class="lvl-chips" id="recentChips" role="group" aria-labelledby="recentLabel">
                   <button type="button" class="sub-chip" data-recent="7" aria-pressed="false" title="Оценки, поставленные или изменённые за последние 7 дней">За неделю</button>
                   <button type="button" class="sub-chip" data-recent="30" aria-pressed="false" title="Оценки, поставленные или изменённые за последние 30 дней">За месяц</button>
+                </div>
+              </div>
+              <div id="musicSec" hidden>
+                <span class="label" id="musicLabel">Музыка</span>
+                <div class="lvl-chips" id="musicChips" role="group" aria-labelledby="musicLabel">
+                  <button type="button" class="sub-chip" data-mfilter="album" aria-pressed="false">Только альбомы</button>
+                  <button type="button" class="sub-chip" data-mfilter="single" aria-pressed="false">Только треки и синглы</button>
                 </div>
               </div>
               <div>

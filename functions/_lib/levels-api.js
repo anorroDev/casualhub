@@ -9,7 +9,8 @@ import {
   achBackLetter, ACH_TIER_XP, ACH_ONE_XP, swapQuest,
   SEASON_RANKS, seasonRankOf, rankFields, currentSeason, closeSeason, forgetSeason, seasonXpOf, seasonXpMany, seasonPlanLetter, fmtKyiv,
 } from './levels.js';
-import { FOODS, boughtLooks } from './shop.js';
+import { FOODS, boughtLooks, ensureShop } from './shop.js';
+import { settleWeekTop, weekTop, TOP_MIN, TOP_BASE, TOP_PER, TOP_BONUS_MAX } from './weektop.js';
 // еда Васяна, которая открывается уровнем: показывается в «Прогрессе» рядом с наградами оформления
 const FOOD_GIFTS = FOODS.filter((f) => f.unlock).map((f) => ({ level: f.unlock, title: f.title }));
 import { planSeasonReminder, cancelSeasonReminder, seasonReminderOf, mailOn } from './mailout.js';
@@ -114,6 +115,8 @@ export function makeLevelsRoutes(h) {
       const now = Date.now();
       // опыт за достижения, полученные до того, как за них стали его давать, — письмом в «Почту», забирается кнопкой
       try { await achBackLetter(env, me.id, now); } catch (e) { console.error('levels ach letter', e && e.message); }
+      // неделя закончилась: топ-5 сайта получают рофланы письмом (weektop.js; разложится один раз)
+      try { await settleWeekTop(env, now); } catch (e) { console.error('levels week top', e && e.message); }
       const row = (await userRow(env, me.id)) || {};
       const tz = tzOf(request) || row.tz || 'UTC';
       const today = dayKey(now, tz);
@@ -163,6 +166,15 @@ export function makeLevelsRoutes(h) {
       const now = Date.now();
       const g = await env.DB.prepare('SELECT id, kind, xp, to_id, until FROM gifts WHERE id = ?').bind(String(id || '')).first();
       if (!g || (g.to_id && g.to_id !== me.id) || (g.until && g.until <= now)) return fail(404, 'Такого подарка нет или он уже истёк.');
+      if (g.kind === 'roflans') { // награда за топ недели: рофланы в журнал магазина, один раз
+        if (!(+g.xp > 0)) return fail(400, 'В этом письме нечего забирать.');
+        await ensureShop(env);
+        const w = await env.DB.prepare('INSERT INTO gift_box (gift_id, user_id, read, claimed, at) VALUES (?1, ?2, 1, 1, ?3) ON CONFLICT(gift_id, user_id) DO UPDATE SET claimed = 1, read = 1 WHERE claimed = 0').bind(g.id, me.id, now).run();
+        if (!(w.meta && w.meta.changes)) return fail(409, 'Этот подарок уже забран.');
+        await env.DB.prepare("INSERT OR IGNORE INTO shop_log (id, user_id, item, delta, reason, note, by_id, at) VALUES (?, ?, NULL, ?, 'top', ?, NULL, ?)")
+          .bind('gift:' + g.id + ':' + me.id, me.id, +g.xp, String(g.title || '').slice(0, 120), now).run();
+        return json({ ok: true, gained: 0, roflans: +g.xp, unread: await mailUnread(env, me.id) });
+      }
       if (g.kind === 'vasyan') { // котик, не опыт
         await env.DB.prepare('INSERT INTO gift_box (gift_id, user_id, read, claimed, at) VALUES (?1, ?2, 1, 1, ?3) ON CONFLICT(gift_id, user_id) DO UPDATE SET claimed = 1, read = 1').bind(g.id, me.id, now).run();
         return json({ ok: true, gained: 0, vasyan: true, unread: await mailUnread(env, me.id) });
@@ -325,7 +337,10 @@ export function makeLevelsRoutes(h) {
       const shown = [...top, ...(grown ? [grown] : [])].filter((x) => x.level != null);
       const sx = await seasonXpMany(env, [...new Set(shown.map((x) => x.id))], await currentSeason(env));
       const withRank = (x) => (x.level != null ? { ...x, ...rankFields(sx[x.id] || 0) } : x);
-      return json({ scope, week: wk, top: top.map(withRank), best: grown ? withRank(grown) : null });
+      // награда топ-5 сайта за эту неделю (сколько получит каждый, если неделя закончится сейчас) — и в «Друзьях»
+      const prizes = new Map((await weekTop(env, wk)).map((t) => [t.id, t]));
+      const withPrize = (x) => (prizes.has(x.id) ? { ...x, prize: prizes.get(x.id).prize, sitePlace: prizes.get(x.id).place } : x);
+      return json({ scope, week: wk, top: top.map(withRank).map(withPrize), best: grown ? withRank(grown) : null, prize: { min: TOP_MIN, base: TOP_BASE, per: TOP_PER, max: TOP_BONUS_MAX } });
     },
     // личная ссылка-приглашение и всё про приглашения: кто пришёл (уровень, заявка в друзья, что засчитано),
     // награды за друзей, кто позвал меня самого

@@ -329,6 +329,10 @@ html.lv-on .ava-wrap > .ava-ring { display: none !important; }
 .lv-board b { font-variant-numeric: tabular-nums; }
 .lv-seg { display: inline-flex; gap: 4px; padding: 3px; border-radius: 999px; border: 1px solid var(--line, #2b2e38); justify-self: start; }
 .lv-segs { display: flex; flex-wrap: wrap; gap: 8px; }
+.lv-prize img { vertical-align: -2px; margin-left: 3px; image-rendering: pixelated; }
+.lv-prize { font-style: normal; font-size: 11.5px; font-weight: 700; margin-left: 6px; padding: 1px 7px; border-radius: 999px; color: var(--mid, #F2BA44); background: color-mix(in srgb, var(--mid, #F2BA44) 16%, transparent); white-space: nowrap; }
+.lv-top-prize { margin-top: 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid color-mix(in srgb, var(--mid, #F2BA44) 35%, transparent); font-size: 13px; }
+.lv-top-prize p { margin: 4px 0 0; color: var(--ink-2, #b5b5b5); }
 .lv-gap { margin: 0; text-align: center; color: var(--ink-3, #8a90a0); line-height: 1; padding: 2px 0; }
 .lv-seg button { padding: 5px 12px; border: 0; border-radius: 999px; background: transparent; color: var(--ink-2, #b5b5b5); font: 600 13px/1.2 inherit; font-family: inherit; cursor: pointer; }
 .lv-seg button[aria-pressed="true"] { background: var(--accent, #3550E8); color: #fff; }
@@ -1195,7 +1199,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       const rows = d.items.map((g) => `<div class="lv-letter${!g.read || ((g.xp || g.kind === 'vasyan') && !g.claimed) ? ' new' : ''}"><div class="top"><b>${esc(g.title)}</b><small>${when(g.at)}</small></div>
         ${g.body ? `<p>${esc(g.body)}</p>` : ''}
         ${g.kind === 'vasyan' ? `<div class="act"><span class="lv-vy" aria-hidden="true"></span>${g.claimed ? '<span class="lv-muted">Васян уже у тебя — гуляет внизу экрана</span>' : `<button type="button" class="lv-btn" data-claim="${esc(g.id)}">Забрать котика</button>`}</div>` : ''}
-        ${g.xp ? `<div class="act"><span class="gift">+${g.xp} опыта</span>${g.claimed ? '<span class="lv-muted">Забрано</span>' : `<button type="button" class="lv-btn" data-claim="${esc(g.id)}">Забрать</button>`}${g.until && !g.claimed ? `<span class="lv-muted">до ${when(g.until)}</span>` : ''}</div>` : ''}</div>`).join('');
+        ${g.xp ? `<div class="act"><span class="gift">+${g.xp} ${g.kind === 'roflans' ? plural(g.xp, 'рофлан', 'рофлана', 'рофланов') : 'опыта'}</span>${g.claimed ? '<span class="lv-muted">Забрано</span>' : `<button type="button" class="lv-btn" data-claim="${esc(g.id)}">Забрать</button>`}${g.until && !g.claimed ? `<span class="lv-muted">до ${when(g.until)}</span>` : ''}</div>` : ''}</div>`).join('');
       return `<p class="lv-muted">Сюда приходят подарки от администрации и письма о новых уровнях.</p><div class="lv-mail">${rows || '<p class="lv-muted">Писем пока нет.</p>'}</div><p class="lv-err" id="lvMailMsg" role="status"></p>`;
     },
     async ach() {
@@ -1214,18 +1218,21 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
         return `${segs}
           <div class="lv-box"><h3>Пока соревноваться не с кем</h3><p class="lv-muted">Добавь друзей через кнопку «Друзья» в шапке — тут появится, кто из вас набрал больше опыта. А пока загляни во «Весь сайт».</p></div>`;
       }
-      const row = (x, val) => `<div class="${x.me ? 'me' : ''}"><em>${x.place}</em><span>${emblem(x.rankId, 18, 'sm')}<span class="lv-bn" data-uid="${esc(x.id)}">${esc(x.username)}</span>${x.level ? ` · ур. ${x.level}` : ''}</span><b>${nf(val)}</b></div>`;
+      const prize = (x) => (x.prize ? ` <i class="lv-prize" title="Столько рофланов придёт, если неделя закончится сейчас: ${x.sitePlace}-е место на сайте" aria-label="+${x.prize} рофланов">+${x.prize}<img src="/art/shop/roflan-coin.svg" width="12" height="12" alt="" decoding="async"></i>` : '');
+      const row = (x, val, p) => `<div class="${x.me ? 'me' : ''}"><em>${x.place}</em><span>${emblem(x.rankId, 18, 'sm')}<span class="lv-bn" data-uid="${esc(x.id)}">${esc(x.username)}</span>${x.level ? ` · ур. ${x.level}` : ''}${p ? prize(x) : ''}</span><b>${nf(val)}</b></div>`;
       if (period === 'all') {
         const rows = d.top.map((x) => row(x, x.xp)).join('');
         return `${segs}
         <div class="lv-box"><h3>Опыт за всё время</h3><div class="lv-board">${rows || '<p class="lv-muted">Пока никто не набрал опыта.</p>'}${d.mine ? `<p class="lv-gap" aria-hidden="true">…</p>${row(d.mine, d.mine.xp)}` : ''}</div>
         <p class="lv-muted">Весь опыт с первого дня — он не сбрасывается. Звания считаются отдельно, по сезону.</p></div>`;
       }
-      const rows = d.top.map((x) => row(x, x.week)).join('');
+      const rows = d.top.map((x) => row(x, x.week, true)).join('');
+      const pz = d.prize;
       return `${segs}
         <div class="lv-box"><h3>Опыт за неделю</h3><div class="lv-board">${rows || '<p class="lv-muted">На этой неделе пока никто не набрал опыта.</p>'}</div>
         ${d.best ? `<p class="lv-muted">Лучший прогресс: ${esc(d.best.username)}${d.best.growth != null ? ` — +${d.best.growth}% к прошлой неделе` : ' — новичок недели'}.</p>` : ''}
-        <p class="lv-muted">Рейтинг обнуляется в понедельник.</p></div>`;
+        ${pz ? `<div class="lv-top-prize"><b>Награда топ-5 сайта</b><p>${pz.base.map((v, i) => `${i + 1}-е — ${v}`).join(' · ')} рофланов за место и +1 за каждые ${pz.per} опыта недели (до +${pz.max}). Нужно от ${pz.min} опыта за неделю.</p>
+          <p>Награды придут в «Почту», а рейтинг обнулится через <b class="lv-reset" data-lv-reset="week">${dhms(untilMonday())}</b>.</p></div>` : '<p class="lv-muted">Рейтинг обнуляется в понедельник.</p>'}</div>`;
     },
     async look() {
       await refreshMe();
@@ -1369,7 +1376,9 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
           if (r.vasyan) vasyanOwn(true);
           await refreshMe();
           renderTabs();
-          render();
+          await render();
+          const m2 = document.getElementById('lvMailMsg');
+          if (r.roflans && m2) m2.textContent = `+${r.roflans} ${plural(r.roflans, 'рофлан', 'рофлана', 'рофланов')} — уже в магазине.`;
         } catch (e) { btn.disabled = false; if (msg) msg.textContent = e.message; }
       }));
     },
@@ -1382,6 +1391,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       }));
     },
     board(b) {
+      tickReset(); // таймер до конца недели — как у задания недели
       b.querySelectorAll('[data-scope]').forEach((btn) => btn.addEventListener('click', () => { VIEWS.scope = btn.dataset.scope; render(); }));
       b.querySelectorAll('[data-period]').forEach((btn) => btn.addEventListener('click', () => { VIEWS.period = btn.dataset.period; render(); }));
       // ники из магазина (эффект и значок) — как у людей в профиле
