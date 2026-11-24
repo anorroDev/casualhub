@@ -12,6 +12,8 @@ async function getJson(url, ttl) {
   const res = await fetch(url, { signal: AbortSignal.timeout(6000), headers: UA });
   if (!res.ok) throw new Error('album ' + res.status);
   const data = await res.json();
+  // Deezer сообщает о лимите запросов ответом 200 с полем error: такой ответ не кэшируем, иначе поиск пуст на весь срок кэша
+  if (data && data.error) return data;
   await cache.put(key, new Response(JSON.stringify(data), { headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=' + ttl } }));
   return data;
 }

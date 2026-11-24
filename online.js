@@ -473,6 +473,7 @@
     else start();
   });
   // объявление закрыли в другой вкладке — убираем и здесь
-  addEventListener('storage', (e) => { if (e.key === ANN_KEY) { const bar = document.getElementById('siteAnnounce'); if (bar && bar.dataset.id === e.newValue) bar.remove(); } });
+  // прочитал объявление в другой вкладке — то же окно закрывается и здесь
+  addEventListener('storage', (e) => { if (e.key !== ANN_KEY) return; const m = document.getElementById('annModal'); if (m && m.dataset.id && seenList().includes(m.dataset.id)) closeModal(false); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true }); else start();
 })();

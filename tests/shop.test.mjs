@@ -329,6 +329,22 @@ test('оформление за уровень в магазине не прод
   assert.ok(!S.ITEMS.some((x) => x.sec === 'look'));
 });
 
+test('скидка кончилась, пока магазин открыт: по старой цене молча не списывает, с новой — покупает', async () => {
+  const { env, db } = await setup();
+  setXp(db, U, 4000); // 400 рофланов
+  const sale = (until) => { db.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('shop_sale', ?)").run(JSON.stringify({ id: 's1', pct: 60, sec: 'site', until })); S.forgetSale(); };
+  sale(Date.now() + 3600e3);
+  const shown = S.shopView(await S.shopState(env, U)).items.find((x) => x.id === 'site.bg.horizon').price;
+  assert.equal(shown, 100);
+  sale(Date.now() - 1); // кончилась, а страница ещё показывает 100
+  const r = await S.buy(env, U, 'site.bg.horizon', { seen: shown });
+  assert.equal(r.err && r.err[0], 409);
+  assert.match(r.err[1], /250/);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM shop_owned WHERE item = 'site.bg.horizon'").get().n, 0, 'ничего не куплено и не списано');
+  assert.ok((await S.buy(env, U, 'site.bg.horizon', { seen: 250 })).ok, 'увидел новую цену — покупается');
+  assert.ok((await S.buy(env, U, 'site.cursor.pixel')).ok, 'старая вкладка без цены — как раньше');
+});
+
 test('скидка: цена со скидкой при покупке и на странице, только в своём разделе, проверка процентов', async () => {
   const { env, db } = await setup();
   setXp(db, U, 1000); // 100 рофланов

@@ -39,7 +39,7 @@ export function makeShopRoutes(h) {
       if (!(await gate(env, me))) return fail(404, 'Магазин пока закрыт.');
       if (tooFast(me.id)) return fail(429, 'Слишком часто. Подожди минуту.');
       const b = await h.readBody(request);
-      return answer(await buy(env, me.id, b.item, { rid: String(b.rid || '') }));
+      return answer(await buy(env, me.id, b.item, { rid: String(b.rid || ''), seen: b.price == null || b.price === '' ? undefined : +b.price }));
     },
     // надеть купленное или вернуть «как у всех»: { item }
     async 'PUT /shop/wear'({ env, request, me }) {

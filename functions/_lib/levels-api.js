@@ -540,7 +540,7 @@ export function makeLevelsRoutes(h) {
         const only = cats.length && kinds.some((k) => RATING_KINDS.has(k)) ? ` Оценки — только в категориях: ${cats.map((c) => CAT_GROUPS[c].label).join(', ')}.` : '';
         // свои слова админа — отдельным полем note: окно показывает их отдельно от строк «за что» и «до когда»
         await h.setAnnounce(env, { id: 'ev-' + ev.id, kind: 'event', title, text: `×${String(mult).replace('.', ',')} опыта за: ${what}.${only} До ${fmtKyiv(ev.until)}.`, note, until: ev.until, by: me.handle });
-      }
+      } else if (h.pokeAnnounce) await h.pokeAnnounce(env); // без объявления: открытые вкладки всё равно узнают и покажут таймер
       await h.adminLog(env, request, me, `levels: event ${title} ×${mult} ${Math.round(span / 60e3)}m`, true);
       return json({ ok: true, event: ev });
     },
@@ -550,7 +550,10 @@ export function makeLevelsRoutes(h) {
       await env.DB.prepare("DELETE FROM meta WHERE k = 'levels_event'").run();
       forgetEvent();
       // объявление о неделе уходит вместе с ней
-      if (was && h.getAnnounce && h.setAnnounce) { const a = await h.getAnnounce(env); if (a && a.id === 'ev-' + was.id) await h.setAnnounce(env, null); }
+      let poked = false;
+      if (was && h.getAnnounce && h.setAnnounce) { const a = await h.getAnnounce(env); if (a && a.id === 'ev-' + was.id) { await h.setAnnounce(env, null); poked = true; } }
+      // объявление уже другое (или его не было): таймер «×2» в открытых вкладках всё равно должен пропасть сразу
+      if (!poked && h.pokeAnnounce) await h.pokeAnnounce(env);
       await h.adminLog(env, request, me, 'levels: event off', true);
       return json({ ok: true });
     },

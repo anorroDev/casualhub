@@ -152,6 +152,16 @@ label.st-row { cursor: pointer; }
 .st-seg button { min-height: 36px; padding: 0 14px; border: 0; border-radius: 9px; background: transparent; color: var(--ink-2, #b9bdc8); font: inherit; font-size: 14px; font-weight: 600; cursor: pointer; }
 .st-seg button[aria-pressed="true"] { background: var(--ink, #f3f4f6); color: var(--panel, #1b1d24); }
 .st-seg button:disabled { opacity: .4; cursor: default; }
+/* язык: флаг перед названием — картинкой из /art/flag/<код>.svg, потому что эмодзи флагов Windows показывает буквами */
+.st-lang button { display: inline-flex; align-items: center; gap: 7px; }
+.st-flag { flex: none; width: 18px; height: 12px; border-radius: 2px; box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink, #fff) 18%, transparent); }
+/* три языка в ряд — 320–370 px смотря по виду (шире всех «Арена»): где строка уже (телефон, крупный размер сайта),
+   они встают столбиком на всю ширину. Ширина — самой строки (container), а не окна: @media не видит zoom размера интерфейса */
+.st-langrow { container-type: inline-size; flex-wrap: wrap; }
+@container (max-width: 380px) {
+  .st-lang { display: grid; flex: 1 1 100%; min-width: 0; }
+  .st-lang button { justify-content: flex-start; }
+}
 /* размер интерфейса: «−», сам размер (ширина постоянная, чтобы кнопки не прыгали под курсором) и «+» */
 .st-size { flex: none; }
 .st-size button { min-width: 40px; padding: 0 10px; font-variant-numeric: tabular-nums; }
@@ -218,7 +228,7 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
     return day(t);
   };
   // даты и страны — на языке сайта
-  const loc = () => (window.CasualLang && window.CasualLang.lang === 'en' ? 'en-US' : 'ru-RU');
+  const loc = () => ({ en: 'en-US', uk: 'uk-UA' })[window.CasualLang && window.CasualLang.lang] || 'ru-RU';
   const day = (t, year) => new Date(t).toLocaleDateString(loc(), { day: 'numeric', month: 'long', ...(year ? { year: 'numeric' } : {}) });
   const country = (c) => { try { return c ? new Intl.DisplayNames([loc().slice(0, 2)], { type: 'region' }).of(c) : ''; } catch (e) { return c || ''; } };
   // поменяли ник, юзернейм или почту здесь — та же запись в браузере, чтобы кнопка профиля и Мнение сразу видели новое
@@ -427,7 +437,7 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
   R.look = () => {
     const curTheme = window.CasualThemes ? window.CasualThemes.current() : 'auto';
     const list = (window.CasualThemes && window.CasualThemes.list) || [];
-    const en = window.CasualLang && window.CasualLang.lang === 'en';
+    const lang = (window.CasualLang && window.CasualLang.lang) || 'ru';
     const ui = window.CasualThemes && window.CasualThemes.ui; // вид интерфейса: «Обычный», «Казуальный», «Пиксель»…
     return grp('Тема', `<div class="st-themes">${list.map((t) => {
         const p = t.prev, bg = t.id === 'auto' ? `linear-gradient(135deg, ${p.bg} 50%, ${p.panel} 50%)` : p.bg;
@@ -437,7 +447,7 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
       + (window.CasualUtil.size ? grp('Размер', sizeRow()) : '')
       // выбор скинов Васяна рисует сам vasyan.js в [data-vasyan-skins]
       + (window.CasualVasyan && window.CasualVasyan.own() ? grp('Котик Васян', toggle({ name: 'Котик Васян на сайте', desc: 'Гуляет внизу экрана: его можно погладить и покормить из миски в левом углу', attr: 'data-vasyan', on: window.CasualVasyan.on() }) + '<div data-vasyan-skins></div>') : '')
-      + grp('Язык', `<div class="st-row"><span class="st-t"><b>Язык сайта</b><small>Страница перезагрузится</small></span><span class="st-seg" role="group" aria-label="Язык сайта"><button type="button" data-lang="ru" aria-pressed="${!en}">Русский</button><button type="button" data-lang="en" aria-pressed="${en}">English</button></span></div>`);
+      + grp('Язык', `<div class="st-row st-langrow"><span class="st-t"><b>Язык сайта</b><small>Страница перезагрузится</small></span><span class="st-seg st-lang" role="group" aria-label="Язык сайта">${[['ru', 'Русский'], ['uk', 'Українська'], ['en', 'English']].map(([id, name]) => `<button type="button" data-lang="${id}" lang="${id}" aria-pressed="${lang === id}"><img class="st-flag" src="/art/flag/${id}.svg" width="18" height="12" alt="" decoding="async">${name}</button>`).join('')}</span></div>`);
   };
   R.data = () => grp('Импорт', row({ name: 'Импорт из Letterboxd', desc: 'Перенести оценки фильмов из архива Letterboxd', href: '/opinion/#letterboxd', attr: 'data-lb-open data-close' }))
     + grp('Обложки и названия', row({ name: 'Обновить обложки и названия', desc: 'Подтянуть к сохранённым оценкам обложки, русские названия, год и жанры', href: '/opinion/#refresh', attr: 'data-refresh-open data-close' }))

@@ -81,7 +81,12 @@
     const fl = (friends || []).map((f, i) => `<polyline class="alb-fl" points="${line(f.tracks.slice().sort((a, b) => a.n - b.n))}" style="--c:${COLORS[i % COLORS.length]}"/>`).join('');
     const ticks = Array.from({ length: N }, (_, i) => i + 1).filter((n) => N <= 16 || n === 1 || n === N || n % 5 === 0)
       .map((n) => `<text class="alb-tk" x="${X(n).toFixed(1)}" y="${H - 4}">${n}</text>`).join('');
-    const dots = rows.map((x) => `<circle class="alb-dot" data-tier="${tierV(x.v)}" cx="${X(x.n).toFixed(1)}" cy="${Y(x.v).toFixed(1)}" r="${best && x.n === best.n ? 4.6 : 3.2}"><title>${esc(x.n + '. ' + (x.t || '') + ' — ' + fmtS(x.v))}</title></circle>`).join('');
+    const dot = (x) => `<circle class="alb-dot" data-tier="${tierV(x.v)}" cx="${X(x.n).toFixed(1)}" cy="${Y(x.v).toFixed(1)}" r="${best && x.n === best.n ? 4.6 : 3.2}"><title>${esc(x.n + '. ' + (x.t || '') + ' — ' + fmtS(x.v))}</title></circle>`;
+    // с id альбома точка — кнопка: нажатие играет отрывок трека. Ловит вся полоса трека по высоте графика, чтобы попасть пальцем
+    const id = opts && opts.id, step = (W - L - R) / (N - 1);
+    const dots = rows.map((x) => (id
+      ? `<g class="alb-pt" role="button" tabindex="0" data-alb-pt="${x.n}" data-id="${esc(id)}" aria-pressed="${!!(solo && solo.key === ptKey(id, x.n))}" aria-label="${esc('Слушать отрывок: ' + x.n + '. ' + (x.t || '') + ' — ' + fmtS(x.v))}"><rect class="alb-hit" x="${(X(x.n) - step / 2).toFixed(1)}" y="0" width="${step.toFixed(1)}" height="${H - B}"/>${dot(x)}</g>`
+      : dot(x))).join('');
     const tag = (x, text, below) => `<text class="alb-lab" x="${Math.min(W - 24, Math.max(24, X(x.n))).toFixed(1)}" y="${(below ? Y(x.v) + 14 : Y(x.v) - 8).toFixed(1)}">${text}</text>`;
     return `<svg class="alb-curve${opts && opts.big ? ' big' : ''}" viewBox="0 0 ${W} ${H}" role="img" aria-label="Баллы треков по порядку${avg != null ? ', в среднем ' + fmt(Math.round(avg * 10) / 10) : ''}">
       ${[2.5, 5, 7.5].map((v) => `<line class="alb-grid" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/>`).join('')}
@@ -125,7 +130,8 @@
     });
     return `<div class="alb-card">
       <div class="alb-head"><b>Кардиограмма альбома</b><span>${avg != null ? 'среднее по трекам ' + fmt(avg) : ''}${done < N ? ` · разобрано ${done} из ${N}` : ''}</span></div>
-      ${curveSVG(rows, N, fr)}
+      ${curveSVG(rows, N, fr, { id: r.id })}
+      <p class="alb-hint">Нажми на точку — заиграет отрывок</p>
       ${fr && fr.length ? `<p class="alb-legend"><span style="--c:var(--accent)">ты</span>${fr.map((f, i) => `<span style="--c:${COLORS[i % COLORS.length]}">${esc(f.user.username)}</span>`).join('')}</p>` : fr ? '<p class="alb-legend">Никто из друзей ещё не разбирал этот альбом.</p>' : ''}
       ${chips.length ? `<div class="alb-chips">${chips.join('')}</div>` : ''}
       ${rescoreHTML(r, avg, own)}
@@ -167,7 +173,10 @@
   function stopSolo() {
     if (!solo) return;
     solo.audio.pause();
-    if (solo.btn && solo.btn.isConnected) { solo.btn.setAttribute('aria-pressed', 'false'); solo.btn.querySelector('.alb-li').textContent = '▶'; }
+    const b = solo.btn;
+    if (b && b.isConnected) { b.setAttribute('aria-pressed', 'false'); const li = b.querySelector('.alb-li'); if (li) li.textContent = '▶'; }
+    // точку кардиограммы могли перерисовать, пока играл отрывок: снять отметку и с новой
+    document.querySelectorAll('[data-alb-pt][aria-pressed="true"]').forEach((p) => p.setAttribute('aria-pressed', 'false'));
     solo = null;
   }
   async function listen(btn, q) {
@@ -189,12 +198,54 @@
     audio.addEventListener('ended', () => { if (solo && solo.audio === audio) stopSolo(); });
     audio.play().catch(() => stopSolo());
   }
-  // треки, оценённые раньше отдельными оценками с одним баллом (до 1.19c), переезжают внутрь своих альбомов: отдельной оценкой
-  // остаётся только трек с TRACK_FULL и больше критериями. Удаление уходит в аккаунт и на другие устройства как обычно
+  // ---------- отрывок с кардиограммы: нажал на точку — играет этот трек, нажал ещё раз — тишина ----------
+  const ptKey = (id, n) => 'pt|' + id + '|' + n;
+  const albData = new Map(); // id альбома → { at, data }: треклист с отрывками. Ссылки Deezer протухают — держим недолго
+  let ptTok = 0;
+  async function albumTrack(al, n) {
+    const e = entriesOf(al).find((x) => x.n === n);
+    let c = albData.get(al.id);
+    if (!c || Date.now() - c.at > 4 * 60e3) {
+      const data = ses && ses.al.id === al.id && ses.data ? ses.data : await loadAlbum(al);
+      c = { at: Date.now(), data };
+      if (data) albData.set(al.id, c);
+    }
+    // трек — по номеру, если сходится название (треклист мог смениться), иначе по названию; нет в треклисте — поиск, как у синглов
+    const same = (t) => !!e && keyOf(t.title || '') === keyOf(e.t || '');
+    const list = (c.data && c.data.tracks) || [];
+    const t = list.find((x) => x.n === n && (!e || same(x))) || list.find(same);
+    if (t && t.preview) return { preview: t.preview, link: t.link || '' };
+    return e && e.t ? previewOf({ artist: al.artist || '', title: e.t, link: e.l || '' }) : null;
+  }
+  async function listenPoint(el, id, n) {
+    const al = albumOf(id);
+    if (!al || !(n >= 1)) return;
+    const key = ptKey(id, n);
+    if (solo && solo.key === key) { stopSolo(); return; }
+    stopSolo();
+    const tok = ++ptTok;
+    el.classList.add('wait');
+    let t = null;
+    try { t = await albumTrack(al, n); } catch (x) {}
+    el.classList.remove('wait');
+    if (tok !== ptTok) return; // пока искали, нажали другую точку
+    if (!t || !t.preview) { toast('Отрывок не нашёлся ни в Deezer, ни в Apple Music.'); return; }
+    if (ses) { ses.audio.pause(); ses.playing = false; paintPlay(); }
+    const audio = new Audio(t.preview);
+    audio.volume = volume();
+    solo = { audio, key, btn: el };
+    document.querySelectorAll(`[data-alb-pt="${n}"][data-id="${CSS.escape(id)}"]`).forEach((p) => p.setAttribute('aria-pressed', 'true'));
+    audio.addEventListener('ended', () => { if (solo && solo.audio === audio) stopSolo(); });
+    audio.play().catch(() => { if (solo && solo.audio === audio) stopSolo(); });
+  }
+  // треки, оценённые раньше отдельными оценками с одним баллом (до 1.19c), переезжают внутрь своих альбомов. Только такие:
+  // без своих критериев, текста и избранного — оценку трека, которую правили в форме, не трогаем. Удаление уходит в аккаунт
+  // и на другие устройства как обычно
+  const oldTrack = (r) => !!r.albumOf && critN(r.scores) === 0 && !r.fav && !String((r.note || '') + (r.pros || '') + (r.cons || '')).trim() && !!albumOf(r.albumOf);
   let migrating = false;
   async function migrate() {
     if (migrating || !state.loaded || !state.canWrite) return;
-    const inner = state.ratings.filter((r) => r.albumOf && critN(r.scores) < TRACK_FULL && albumOf(r.albumOf));
+    const inner = state.ratings.filter(oldTrack);
     if (!inner.length) return;
     migrating = true;
     try {
@@ -212,10 +263,9 @@
       }
     } finally { migrating = false; }
   }
-  // раньше сворачивал треки в карточку альбома; теперь отдельной оценкой бывает только трек по 4+ критериям — его видно в списке
-  function folded() {
-    if (!migrating && state.loaded && state.ratings.some((r) => r.albumOf && critN(r.scores) < TRACK_FULL)) setTimeout(migrate, 0);
-    return null;
+  // зовёт renderBoard (app.js): есть такие старые оценки треков — перенести их, не задерживая отрисовку
+  function migrateSoon() {
+    if (!migrating && state.loaded && state.canWrite && state.ratings.some(oldTrack)) setTimeout(migrate, 0);
   }
   // сохранить альбом: записи tracks и, пока альбом не оценён по критериям, его балл — среднее по трекам
   async function putAlbum(al, patch) {
@@ -331,9 +381,11 @@
     // альбом запоминает, откуда треклист, сколько в нём треков и обложку; старая оценка по критериям — пометка rescore
     const old = ownScored(al) && !tracksOf(al.id).length && !al.trackCount;
     if (al.trackCount !== data.tracks.length || al.albumSrc !== data.src || old || (data.art && al.art !== data.art)) await saveAlbum({ trackCount: data.tracks.length, albumSrc: data.src, ...(/^https:\/\//.test(data.art || '') ? { art: data.art } : {}), ...(old ? { rescore: true } : {}) });
-    const first = startN ? data.tracks.findIndex((t) => t.n === startN) : data.tracks.findIndex((t) => !ses.have.has(t.n) && !ses.skip.has(t.n));
+    const todo = data.tracks.findIndex((t) => !ses.have.has(t.n) && !ses.skip.has(t.n));
+    const first = startN ? data.tracks.findIndex((t) => t.n === startN) : todo;
     ses.i = first >= 0 ? first : 0;
-    if (!startN && first < 0) ses.summary = true;
+    // разбор уже закончен — правка по порядку: «Переслушать» начинает с первого трека, название трека в карточке — с него
+    ses.edit = todo < 0;
     paint();
   }
   function close() {
@@ -451,7 +503,8 @@
       </div>
       ${!ownScored(al) && avg != null ? `<p class="alb-old-s">Балл альбома — среднее по трекам: <b>${fmt(avg)}</b>. Оцени альбом по критериям, если хочешь свой балл.</p>` : ''}
       ${al.rescore && ownScored(al) && al.total != null && avg != null ? `<p class="alb-old-s"><b>Оценка альбома старая:</b> ${fmt(al.total)} — она поставлена до разбора. Обнови её с учётом треков.</p>` : ''}
-      ${curveSVG(rows, data.tracks.length, null, { big: true })}
+      ${curveSVG(rows, data.tracks.length, null, { big: true, id: al.id })}
+      ${rows.length ? '<p class="alb-hint">Нажми на точку — заиграет отрывок</p>' : ''}
       <div class="alb-chips">${verdicts(rows).map((v) => `<span class="alb-chip" data-k="${v.k}">${esc(v.t)}</span>`).join('')}</div>
       <div class="alb-row">
         ${left ? '<button type="button" class="btn small primary" data-alb-x="resume">Продолжить</button>' : ''}
@@ -475,15 +528,24 @@
     const tags = TAGS.filter((g) => ses.tags.has(g));
     const entry = { n: t.n, t: t.title.slice(0, 140), v: total, g: tags, ...(musicLinkOk(t.link) ? { l: t.link } : {}) };
     const ownRid = prev && prev.rid && !prev.single ? prev.rid : '';
-    if (critN(scores) < TRACK_FULL) {
-      // внутри альбома; была отдельная оценка трека — она больше не нужна
+    // у трека своя оценка по критериям: в ней могут быть заметки, фото, комментарии и реакции друзей — её не удаляем.
+    // Шкала 1–10 её не заменяет: тот же балл — просто дальше, другой — правка по критериям
+    const own = ownRid ? albumOf(ownRid) : null;
+    if (own && critN(scores) === 0) {
+      if (scoreOf(own) != null && Math.round(scoreOf(own)) === Math.round(total)) { ses.crit = false; advance(); return; }
+      ses.crit = true;
+      paint();
+      toast('У трека своя оценка по критериям — поменяй баллы здесь, тогда её заметки и комментарии останутся');
+      return;
+    }
+    if (critN(scores) < TRACK_FULL && !own) {
+      // внутри альбома
       if (Object.keys(cs).length) entry.s = cs;
       if (prev && prev.single) entry.rid = prev.rid;
       const list = ((al.tracks) || []).filter((e) => e.n !== t.n).concat([entry]).sort((a, b) => a.n - b.n);
       try {
         ses.skip.delete(t.n);
         ses.al = await putAlbum(al, { tracks: list, skip: [...ses.skip] });
-        if (ownRid && albumOf(ownRid)) await removeRating(ownRid);
       } catch (e) { handleWriteError(e); return; }
       ses.have.set(t.n, entry);
       ses.crit = false;
@@ -501,7 +563,8 @@
     const id = pv ? pv.id : newId('r');
     const doc = {
       cat: al.cat, catName: al.catName, name, nameKey: keyOf(name), scores, total,
-      fav: !!(pv && pv.fav), status: 'Трек', ...(al.vis ? { vis: al.vis } : {}),
+      // видимость своя у оценки, которая уже была (закрытый сингл не становится виден всем); у новой — как у альбома
+      fav: !!(pv && pv.fav), status: 'Трек', ...(pv && pv.vis ? { vis: pv.vis } : !pv && al.vis ? { vis: al.vis } : {}),
       meta: [year, ...keepMeta, ...tags].filter(Boolean).join(', ').slice(0, 80),
       ...(musicLinkOk(t.link) ? { link: t.link } : pv && pv.link ? { link: pv.link } : {}),
       pros: pv ? pv.pros : '', cons: pv ? pv.cons : '', note: pv ? pv.note : '', example: false,
@@ -528,7 +591,8 @@
     const { data } = ses;
     const next = data.tracks.findIndex((x, i) => i > ses.i && !ses.have.has(x.n) && !ses.skip.has(x.n));
     const any = data.tracks.findIndex((x) => !ses.have.has(x.n) && !ses.skip.has(x.n));
-    const go = () => { if (!ses) return; if (next >= 0) ses.i = next; else if (any >= 0) ses.i = any; else ses.summary = true; paint(); };
+    // в правке после разбора неоценённых не осталось: балл ведёт к следующему треку по порядку, после последнего — итоги
+    const go = () => { if (!ses) return; if (next >= 0) ses.i = next; else if (any >= 0) ses.i = any; else if (ses.edit && ses.i < data.tracks.length - 1) ses.i++; else ses.summary = true; paint(); };
     if (reduce()) go(); else { ses.ov.querySelector('.alb-box').classList.add('flip'); setTimeout(() => { if (ses) { ses.ov.querySelector('.alb-box').classList.remove('flip'); go(); } }, 220); }
   }
   async function toggleSkip() {
@@ -540,7 +604,7 @@
   function play() {
     const a = ses.audio;
     if (ses.playing) { a.pause(); ses.playing = false; }
-    else { ses.playing = true; a.play().catch(() => { if (ses) { ses.playing = false; paintPlay(); } }); }
+    else { stopSolo(); ses.playing = true; a.play().catch(() => { if (ses) { ses.playing = false; paintPlay(); } }); }
     paintPlay();
   }
   function onClick(e) {
@@ -566,7 +630,7 @@
         break;
       }
       case 'resume': ses.summary = false; advance(); break;
-      case 'edit': ses.summary = false; ses.crit = false; ses.i = 0; paint(); break;
+      case 'edit': ses.summary = false; ses.crit = false; ses.edit = true; ses.i = 0; paint(); break;
       case 'rate-album': { const al = albumOf(ses.al.id); const avg = avgOf(rowsOf(tracksOf(al.id))); close(); loadIntoForm(al, { rate: true }); if (avg != null) setTimeout(() => toast(`Среднее по трекам: ${fmt(avg)}. Поставь баллы по критериям — это станет оценкой альбома`), 2900); break; }
       case 'png': sharePNG(ses.al.id); break;
     }
@@ -579,7 +643,7 @@
     const al = albumOf(ses.al.id) || ses.al;
     const entry = { ...prev, g: tags };
     delete entry.single;
-    if (prev.single) { /* у сингла свои метки — в альбоме только запись */ }
+    // у сингла свои метки: меняется только запись в альбоме. У отдельной оценки трека — и её метки
     const full = prev.rid && !prev.single ? albumOf(prev.rid) : null;
     if (full) {
       const year = yearOf(al.meta) || ses.data.year || '';
@@ -602,7 +666,7 @@
     if (!ses) return;
     if (e.key === 'Escape') { e.preventDefault(); close(); return; }
     if (e.key === 'Tab') { // фокус не уходит из окна
-      const f = [...ses.ov.querySelectorAll('button:not([disabled]), a[href]')];
+      const f = [...ses.ov.querySelectorAll('button:not([disabled]), a[href], [data-alb-pt]')];
       if (!f.length) return;
       const i = f.indexOf(document.activeElement);
       if (e.shiftKey && i <= 0) { e.preventDefault(); f[f.length - 1].focus(); } else if (!e.shiftKey && i === f.length - 1) { e.preventDefault(); f[0].focus(); }
@@ -684,6 +748,9 @@
 
   // ---------- кнопки в рейтинге и в форме ----------
   document.addEventListener('click', async (e) => {
+    // точка кардиограммы — в карточке альбома и в итогах разбора
+    const pt = e.target.closest('[data-alb-pt]');
+    if (pt) { listenPoint(pt, pt.dataset.id, +pt.dataset.albPt); return; }
     const fl = e.target.closest('#albumListenBtn');
     if (fl) { listen(fl, { artist: (form.artist || '').trim(), title: String(form.name || '').trim(), link: form.link || '' }); return; }
     const go = e.target.closest('#albumGoBtn');
@@ -715,6 +782,13 @@
     }
   });
 
+  // точка кардиограммы с клавиатуры: Enter или пробел
+  document.addEventListener('keydown', (e) => {
+    const pt = e.target && e.target.closest && e.target.closest('[data-alb-pt]');
+    if (!pt || (e.key !== 'Enter' && e.key !== ' ') || e.repeat) return;
+    e.preventDefault();
+    listenPoint(pt, pt.dataset.id, +pt.dataset.albPt);
+  });
   // кнопка «Слушать отрывок» в форме появляется, как только набрано название трека
   document.addEventListener('input', (e) => { if (e.target && (e.target.id === 'itemName' || e.target.id === 'itemArtist')) formHint(); });
 
@@ -722,5 +796,5 @@
   const avgScores = (al) => { const avg = avgOf(rowsOf(entriesOf(al))); return avg != null ? [{ id: ALB_AVG, name: 'Среднее по трекам', desc: '', w: 1, v: avg }] : []; };
   // оценённые треки по порядку ({ n, t, v, g, rid }) — столбики у балла и разбор вместо критериев в карточке (null — треков не оценивали)
   const trackRows = (al) => { const list = entriesOf(al).filter((e) => e.v != null); return list.length ? list : null; };
-  window.CasualAlbum = { cardHTML, folded, formHint, open, verdicts, agreement, avgScores, trackRows };
+  window.CasualAlbum = { cardHTML, migrateSoon, formHint, open, avgScores, trackRows };
 })();

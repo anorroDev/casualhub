@@ -1,4 +1,4 @@
-// «Что нового» (whatsnew.html и whatsnew-en.html): английский журнал повторяет русский — те же дни, абзацы и смайлики;
+// «Что нового» (whatsnew.html, whatsnew-en.html, whatsnew-uk.html): английский и украинский журналы повторяют русский — те же дни, абзацы и смайлики;
 // смайлик у абзаца свой — в одном дне и у соседних абзацев не повторяется, файл стикера на месте.
 // node --test tests/whatsnew.test.mjs
 import { test } from 'node:test';
@@ -13,6 +13,7 @@ const parse = (file) => readFileSync(new URL(file, ROOT), 'utf8').split('<sectio
 }));
 const ru = parse('whatsnew.html');
 const en = parse('whatsnew-en.html');
+const uk = parse('whatsnew-uk.html');
 
 // подсказка в ошибке: стикеры, которых в журнале ещё нет, вперемешку из разных наборов
 function free() {
@@ -24,10 +25,12 @@ function free() {
   return out.join(', ');
 }
 
-test('английский журнал повторяет русский: те же дни, абзацы и смайлики', () => {
+test('английский и украинский журналы повторяют русский: те же дни, абзацы и смайлики', () => {
   assert.ok(ru.length > 0, 'дни в whatsnew.html не нашлись');
-  assert.equal(en.length, ru.length, 'число дней в whatsnew-en.html');
-  ru.forEach((d, i) => assert.deepEqual(en[i].emo, d.emo, `${d.date}: абзацы или смайлики в whatsnew-en.html не те, что в whatsnew.html`));
+  for (const [file, list] of [['whatsnew-en.html', en], ['whatsnew-uk.html', uk]]) {
+    assert.equal(list.length, ru.length, `число дней в ${file}`);
+    ru.forEach((d, i) => assert.deepEqual(list[i].emo, d.emo, `${d.date}: абзацы или смайлики в ${file} не те, что в whatsnew.html`));
+  }
 });
 
 test('смайлик у абзаца свой: в одном дне не повторяется, у соседних абзацев разный', () => {

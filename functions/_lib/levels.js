@@ -181,7 +181,7 @@ export const tierFor = (a, v) => (a.tiers || []).reduce((t, need, i) => (v >= ne
 // title — коротко, что сделать (он же в уведомлении «Задание выполнено»); hint — строка под ним в «Прогрессе»: где это
 // делается и что именно засчитывается. Пороги в hint — те же, что в shelfDiff, isFull, textLen и в API (комментарий
 // от 10 знаков, тир-лист от 8 карточек, сбор от трёх человек): поменял правило — поправь и подсказку.
-// Новые title и hint — в словарь lang-en.js (это проверяет тест).
+// Новые title и hint — в словари lang-en.js и lang-uk.js (это проверяют тесты).
 export const DAILY = [
   { code: 'rate2', title: 'Поставь 2 новые оценки', hint: 'В Мнении поставь баллы чему-то новому и нажми «Сохранить». Правка уже оценённого не считается', kinds: ['rate', 'import'], goal: 2 },
   { code: 'review1', title: 'Напиши отзыв к оценке', hint: 'Отзыв — это «Плюсы», «Минусы» и «Заметки» в форме оценки: вместе от 100 знаков, примерно пара предложений. Можно дописать к старой оценке', kinds: ['review'], goal: 1 },
@@ -464,12 +464,14 @@ export async function seasonXpMany(env, ids, s) {
 // meta.levels_event = { id, title, kinds: [...], mult, until, cats? }. cats — только оценки этих групп категорий
 // (CAT_GROUPS: по названию категории); на другие действия cats не влияет. Разбор альбома — всегда «музыка».
 export const CAT_GROUPS = {
-  music: { label: 'Музыка', re: /музык|альбом|трек|песн|music/i },
-  games: { label: 'Игры', re: /игр|game/i },
-  movies: { label: 'Фильмы и сериалы', re: /фильм|сериал|кино|мульт|movie|series|film/i },
-  anime: { label: 'Аниме и манга', re: /аниме|манг|anime|manga/i },
+  // названия категорий бывают и по-украински: «Музика», «Ігри», «Фільми», «Їжа»
+  music: { label: 'Музыка', re: /музык|музик|альбом|трек|песн|пісн|music/i },
+  games: { label: 'Игры', re: /игр|ігр|game/i },
+  movies: { label: 'Фильмы и сериалы', re: /фильм|фільм|сериал|серіал|кино|кіно|мульт|movie|series|film/i },
+  anime: { label: 'Аниме и манга', re: /аниме|аніме|манг|anime|manga/i },
   books: { label: 'Книги', re: /книг|book/i },
-  food: { label: 'Еда и заведения', re: /\bеда|заведен|ресторан|кафе|food/i },
+  // «еда» отдельным словом: \b в JS не видит кириллицу, поэтому — «перед ней не буква» (и «Беда» сюда не попадёт)
+  food: { label: 'Еда и заведения', re: /(?<!\p{L})(?:еда|їжа)|заведен|заклад|ресторан|кафе|food/iu },
 };
 export const RATING_KINDS = new Set(['rate', 'review', 'rate_full', 'plan_done', 'import']);
 export const catGroupOf = (name) => Object.keys(CAT_GROUPS).find((k) => CAT_GROUPS[k].re.test(String(name || ''))) || '';
@@ -1231,7 +1233,11 @@ export function shelfDiff(oldList, newList) {
     const had = new Set(trackRefs(before.get(id)));
     for (const ref of trackRefs(r)) if (!had.has(ref)) give.push({ kind: 'album_track', ref });
   }
-  for (const [id, r] of before) if (!after.has(id)) for (const ref of trackRefs(r)) take.push({ kind: 'album_track', ref });
+  // трек пропал из альбома или стал отдельной оценкой (rid; ей даётся rate) — album_track за него списывается, удалили альбом — за все
+  for (const [id, r] of before) {
+    const now = new Set(trackRefs(after.get(id)));
+    for (const ref of trackRefs(r)) if (!now.has(ref)) take.push({ kind: 'album_track', ref });
+  }
   const fullBefore = albumsFull([...before.values()]);
   for (const id of albumsFull([...after.values()])) if (!fullBefore.has(id)) give.push({ kind: 'album_full', ref: id });
   for (const [id] of before) if (!after.has(id)) for (const kind of ['rate', 'import', 'review', 'rate_full', 'plan_done', 'album_full']) take.push({ kind, ref: id });

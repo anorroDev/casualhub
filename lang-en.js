@@ -1,9 +1,17 @@
-/* Казуал Хаб: английский перевод сайта. Подключается из i18n.js, только если выбран английский.
-   Страницы пишут текст по-русски, а этот файл заменяет его на лету: и в разметке, и в том, что появляется позже
-   (окна, сообщения сервера, подсказки). Новую строку достаточно дописать в словарь X. {} в ключе — любое значение.
+/* Казуал Хаб: английский перевод сайта — словарь и особенности языка (window.CasualLangPack). Подключается из i18n.js
+   вместе с движком /lang-core.js, только если выбран английский. Страницы пишут текст по-русски, движок заменяет его на лету.
+   Новую строку достаточно дописать в словарь dict — и в lang-uk.js тоже (это проверяет tests/lang.test.mjs). {} в ключе — любое значение.
    Текст, написанный людьми (оценки, комментарии, ники), не переводится: совпасть со словарём он может только дословно. */
-(() => {
-  const X = {"Что выпадало по очереди":"What came up, in order",
+window.CasualLangPack = {
+  lang: 'en',
+  locale: 'en-GB',
+  quotes: true, // «» → “”
+  dot: true, // 7,5–10 → 7.5–10
+  over: 'over', // «5 записей за 3 дня» → 5 entries over 3 days
+  // подписи, которые заданы в самих стилях
+  css: '.wg[data-off]::after { content: "Hidden" !important; } .wheel-wrap.drop::after { content: "Drop to put it in the center" !important; } .banner.drag::before { content: "Drop to set the banner" !important; }',
+  wordmark: ['Casual', 'Hub'], // большая надпись на главной собрана по буквам
+  dict: {"Что выпадало по очереди":"What came up, in order",
 "Победитель:":"Winner:",
 "Картинка в центре":"Picture in the center",
 "Загрузить свою":"Upload your own",
@@ -3403,10 +3411,11 @@
 "Пока никто не набрал опыта.":"No one has earned XP yet.",
 "Весь опыт с первого дня — он не сбрасывается. Звания считаются отдельно, по сезону.":"All XP since day one — it never resets. Ranks are counted separately, by season.",
 "Разобрать по трекам":"Break down by tracks",
-"Продолжить разбор по трекам":"Continue track breakdown",
 "Продолжить разбор":"Continue breakdown",
 "Переслушать":"Listen again",
 "Кардиограмма альбома":"Album cardiogram",
+"Нажми на точку — заиграет отрывок":"Tap a point to play its preview",
+"Оценить альбом по критериям":"Rate the album by criteria",
 "Сравнить с друзьями":"Compare with friends",
 "Тир-лист треков":"Track tier list",
 "Бэнгер":"Banger",
@@ -3421,7 +3430,9 @@
 "Отрывка нет.":"No preview.",
 "Оценить альбом целиком":"Rate the whole album",
 "Клавиши: 1–9 и 0 (=10) — балл и следующий трек · пробел — отрывок · S — пропустить":"Keys: 1–9 and 0 (=10) — score and next track · space — preview · S — skip",
-"Каждый трек — отдельная оценка, под 30-секундные отрывки. Баллы альбома можно поставить потом":"Every track is its own rating, with 30-second previews. You can score the album itself later",
+"Разбор по трекам":"Track breakdown",
+"Разбор по трекам начат":"Track breakdown started",
+"Оцени каждый трек под 30-секундный отрывок — получится кардиограмма альбома. Сам альбом можно оценить потом":"Rate each track to its 30-second preview — you’ll get the album’s cardiogram. You can rate the album itself later",
 "Оцени каждый трек отдельно под отрывки — получится кардиограмма альбома.":"Rate each track to its preview — you’ll get the album’s cardiogram.",
 "Никто из друзей ещё не разбирал этот альбом.":"None of your friends has broken down this album yet.",
 "Ровный от начала до конца":"Even from start to finish",
@@ -3534,9 +3545,184 @@
 "За месяц нет новых или изменённых оценок":"No new or edited ratings in the past month",
 "Последняя — «{}», {}":"Latest: “{}”, {}",
 "Показать за месяц":"Show the past month",
-"Показать все":"Show all"};
+"Показать все":"Show all",
+// разбор альбома по трекам, кардиограмма, столбики (opinion/album.js, opinion/app.js)
+"лучший":"best",
+"Баллы треков по порядку":"Track scores in order",
+"Баллы треков по порядку, в среднем {}":"Track scores in order, average {}",
+"Трек {} из альбома":"Track {} from the album",
+"Эту оценку можно уточнить: разбери альбом по трекам под отрывки — получится кардиограмма, а потом обнови оценку альбома":"You can refine this rating: break the album down by tracks with previews — you’ll get a cardiogram, then update the album rating",
+"{}: сошлись в {} из {}":"{}: agreed on {} of {}",
+"Главный спор: трек {} — ты {}, {} {}":"Biggest argument: track {} — you {}, {} {}",
+"среднее по трекам {}":"track average {}",
+"разобрано {} из {}":"{} of {} done",
+"она поставлена до разбора по трекам: у альбома {}, а в среднем по трекам {}. Обнови её с учётом треков":"it was given before the track breakdown: the album has {}, the track average is {}. Update it with the tracks in mind",
+"{} (на {} выше)":"{} ({} higher)",
+"{} (на {} ниже)":"{} ({} lower)",
+"Среднее по трекам":"Track average",
+"Разбор альбома":"Album breakdown",
+"разбор альбома":"album breakdown",
+"Разбор альбома {}":"Album breakdown: {}",
+"Ищу треклист «{}»…":"Looking for the track list of “{}”…",
+"Не нашёл треклист этого альбома в Deezer и Apple Music. Проверь исполнителя и название альбома в оценке":"Couldn’t find this album’s track list on Deezer or Apple Music. Check the artist and the album title in the rating",
+"Перемотка отрывка":"Seek in the preview",
+"Сохранить трек":"Save track",
+"Закрыть разбор":"Close the breakdown",
+"Балл трека от 1 до 10":"Track score from 1 to 10",
+"Метки трека":"Track marks",
+"Оценить альбом целиком по всем критериям музыки":"Rate the whole album by all the music criteria",
+"Треки альбома":"Album tracks",
+"Трек {} из {}":"Track {} of {}",
+"Трек {}: {}":"Track {}: {}",
+"{} — пропущен":"{} — skipped",
+"среднее по 1 треку":"average of 1 track",
+"среднее по {} треку":"average of {} tracks",
+"среднее по {} трекам":"average of {} tracks",
+"Лучший трек":"Best track",
+"Осталось разобрать: {}":"Left to rate: {}",
+"Балл альбома — среднее по трекам":"The album score is the track average",
+"Оцени альбом по критериям, если хочешь свой балл":"Rate the album by criteria if you want it to have its own score",
+"{} — она поставлена до разбора. Обнови её с учётом треков":"{} — it was given before the breakdown. Update it with the tracks in mind",
+"У трека своя оценка по критериям — поменяй баллы здесь, тогда её заметки и комментарии останутся":"This track has its own rating by criteria — change the scores here so its notes and comments stay",
+"«{}» оценён по {} критериям — теперь это отдельная оценка в рейтинге":"“{}” is rated by {} criteria — it’s now a separate entry in your ratings",
+"Оценка трека":"Track score",
+"Поставь балл хотя бы по одному критерию":"Score at least one criterion",
+"Среднее по трекам: {}. Поставь баллы по критериям — это станет оценкой альбома":"Track average: {}. Score the criteria — that becomes the album’s rating",
+"Картинка не собралась: обложку не дали нарисовать. Попробуй ещё раз":"The picture couldn’t be made: the cover couldn’t be drawn. Try again",
+"Картинка скачана":"Picture downloaded",
+"Не получилось спросить друзей. Попробуй ещё раз":"Couldn’t ask your friends. Try again",
+"Оценён по критериям — есть в рейтинге отдельной оценкой":"Rated by criteria — it’s a separate entry in your ratings",
+"Треков оценено: {}":"Tracks rated: {}",
+"альбомы":"albums",
+"треки":"tracks",
+// Мнение: сравнение, приглашение (opinion/app.js)
+"Выбери две оценки в рейтинге кнопкой «Сравнить»":"Pick two ratings in the list with the “Compare” button",
+"после регистрации вы станете друзьями":"once you sign up, you’ll be friends",
+// окно «Прогресс»: лимиты, серия, рейтинг недели, приглашения, итоги года (levels-ui.js)
+"{} — в разработке":"{} — in development",
+"Не получилось загрузить":"Couldn’t load",
+"потом по +{}, ещё {}":"then +{} each for {} more",
+"с одним человеком — {}":"{} with one person",
+"Сверх лимита действие засчитывается, но без опыта. Удалишь оценку, отзыв или комментарий — опыт за них уйдёт. День считается по твоему часовому поясу":"Over the limit an action still counts, but without XP. Delete a rating, review or comment and its XP goes away. A day is counted in your time zone",
+"{} опыта до {}":"{} XP until {}",
+"Получено {} из {}. Три любимых можно показать в профиле":"Earned {} of {}. You can show three favourites in your profile",
+"За какое время":"Which period",
+"Добавь друзей через кнопку «Друзья» в шапке — тут появится, кто из вас набрал больше опыта. А пока загляни во «Весь сайт».":"Add friends with the “Friends” button in the header — this will show which of you has more XP. Meanwhile, look at “Whole site”.",
+"Столько рофланов придёт, если неделя закончится сейчас: {}-е место на сайте":"This many Souls will come if the week ends now: place {} on the site",
+"{}-е — {}":"#{} — {}",
+"рофланов за место и +1 за каждые {} опыта недели (до +{}). Нужно от {} опыта за неделю":"Souls per place, plus 1 for every {} XP of the week (up to +{}). You need at least {} XP in the week",
+"Награды придут в «Почту», а рейтинг обнулится через":"Rewards arrive in Mail, and the leaderboard resets in",
+"конфетти при открытии профиля":"confetti when the profile opens",
+"удалено, опыт списан":"deleted, XP taken back",
+"Ссылка-приглашение":"Invite link",
+"реакций и комментариев друзьям":"reactions and comments to friends",
+"получил от друзей":"received from friends",
+"достижений":"achievements",
+"реакций и комментариев друг другу":"reactions and comments to each other",
+"{} {} — уже в магазине":"{} {} — already in the shop",
+"Поехали":"Let’s go",
+// сбор лотов: музыка, правила, замена лота, настройка лотов (lots/app.js)
+"Сейчас играет: {}":"Now playing: {}",
+"Музыка продолжит играть и на других страницах сайта, пока ты следишь за этим сбором":"The music keeps playing on other pages of the site while you follow this collection",
+"Сейчас играет: {} Музыка продолжит играть и на других страницах сайта, пока ты следишь за этим сбором":"Now playing: {} The music keeps playing on other pages of the site while you follow this collection",
+"Ты ведущий: колесо закрутится через 2–3 секунды после нажатия, у тебя и у зрителей одновременно. Сейчас играет: {}":"You’re the host: the wheel starts 2–3 seconds after you press, for you and the viewers at the same time. Now playing: {}",
+"Одна игра — один лот, похожие названия не пройдут":"One game — one lot, similar titles won’t get through",
+"Одна игра — один лот":"One game — one lot",
+"Одну игру можно добавить несколько раз":"The same game can be added several times",
+"Свой лот можно убрать или заменить, пока идёт сбор":"You can remove or replace your lot while the collection is open",
+"Добавленный лот убрать нельзя":"A lot can’t be removed once added",
+"Ведущий: {}. Категория: {}. Можно добавить {} {} на человека. {}":"Host: {}. Category: {}. Up to {} {} per person. {}",
+"Твой лимит исчерпан: {} из {}. {}":"Your limit is used up: {} of {}. {}",
+"Убрать или заменить лот можно в списке ниже":"You can remove or replace a lot in the list below",
+"Убрать лот нельзя":"A lot can’t be removed",
+"Выбери, чем заменить «{}».":"Choose what to replace “{}” with.",
+"Не заменять":"Don’t replace",
+"Новый лот":"New lot",
+"Заменить «{}» этим лотом? Пока идёт сбор, его можно будет убрать или заменить":"Replace “{}” with this lot? While the collection is open, you can remove or replace it",
+"Заменить «{}» этим лотом? Потом убрать его будет нельзя":"Replace “{}” with this lot? You won’t be able to remove it later",
+"Добавить этот лот на колесо? Пока идёт сбор, его можно будет убрать или заменить":"Add this lot to the wheel? While the collection is open, you can remove or replace it",
+"Добавить этот лот на колесо? Потом убрать его будет нельзя":"Add this lot to the wheel? You won’t be able to remove it later",
+"твой":"yours",
+"Пока ни одного лота. Будь первым":"No lots yet. Be the first",
+"Не похоже на ссылку сбора: в ней после /lots/ идут 12 букв и цифр":"That doesn’t look like a collection link: it should have 12 letters and digits after /lots/",
+"Зрители не увидят это":"Viewers won’t see this",
+"Настройка лотов не сохранилась":"Lot settings weren’t saved",
+"попробуй другую":"try another one",
+"Остаётся":"Stays",
+"Как выпадет":"Up to chance",
+"{} — {}. Нажми, чтобы поменять":"{} — {}. Tap to change",
+"Пока пусто":"Empty for now",
+"Остаются: {} · Вылетают: {}":"Staying: {} · Out: {}",
+"Игра по ссылке из Steam":"Game from a Steam link",
+// тир-листы: подборка из оценок, обложки, файл, доступ (tierlist/app.js)
+"Всё разложено":"All sorted",
+"Пока нет оценок":"No ratings yet",
+"{}0-е":"{}0s",
+"уже в тир-листе":"already in the tier list",
+"Найти обложки":"Find covers",
+"Обложки нашлись: {}":"Covers found: {}",
+"Обложек для этих оценок не нашлось":"No covers found for these ratings",
+"Файл скачан: открой его на другом устройстве через «Из файла».":"File downloaded: open it on another device with “From a file”.",
+"Этот тир-лист видят только друзья автора. Добавь автора в друзья или попроси ссылку для всех: кнопка «Ссылка» в самом тир-листе.":"Only the author’s friends can see this tier list. Add the author as a friend or ask for a link for everyone: the “Link” button in the tier list itself.",
+"Пока никто не написал. Друзья увидят этот тир-лист в своей вкладке «Друзья».":"No one has written yet. Friends will see this tier list in their “Friends” tab.",
+"У этого альбома пока нет оценённых треков":"This album has no rated tracks yet",
+// настройки, магазин, профиль, сеть, друзья, Васян, бинго, приглашение, почта (разные файлы)
+"Отсканируй QR-код приложением-аутентификатором или нажми «Открыть в приложении».":"Scan the QR code with an authenticator app or tap “Open in app”.",
+"{} — в разделе «{}» до {}":"{} — in “{}” until {}",
+"{} — на всё в магазине до {}":"{} — on everything in the shop until {}",
+"{} вместо {}":"{} instead of {}",
+"Часть опыта ушла (например, удалены оценки), и потрачено больше, чем заработано: нужно ещё {}, прежде чем копить на новое":"Some XP is gone (say, ratings were deleted), and more was spent than earned: you need {} more before saving up for something new",
+"Общих оценок мало, процент пока примерный":"There are few shared ratings, so the percentage is rough for now",
+"Анимация больше 1 МБ — ужимаю, чтобы влезла…":"The animation is over 1 MB — shrinking it to fit…",
+"Ужать эту анимацию не вышло — поставлю её первый кадр":"Couldn’t shrink this animation — I’ll use its first frame",
+"Анимация большая — ужимаю, чтобы влезла…":"The animation is big — shrinking it to fit…",
+"Ужать эту анимацию до {} МБ не вышло. Возьми GIF покороче или поменьше":"Couldn’t shrink this animation to {} MB. Pick a shorter or smaller GIF",
+"{} д {}":"{}d {}",
+"{} опыта за: {}":"{} XP for: {}",
+"Тематическая неделя «{}»: ×{} опыта за {}":"Theme week “{}”: ×{} XP for {}",
+"Тематическая неделя «{}», до конца {}":"Theme week “{}”, ends in {}",
+"неизвестная ошибка":"unknown error",
+"Оценки не отправились в аккаунт":"Ratings weren’t sent to your account",
+"Оценки с этого устройства ({}) пока не дошли до аккаунта: {}":"Ratings from this device ({}) haven’t reached your account yet: {}",
+"Миска Васяна: насыпать корм":"Vasyan’s bowl: pour some food",
+"Котик Васян: нажми, чтобы погладить, или перетащи":"Vasyan the cat: tap to pet, or drag",
+"мяу?":"meow?",
+"Отмечай, что случилось на стриме. Карточек у зрителей: {}":"Mark what happened on stream. Viewer cards: {}",
+"БИНГО! Ты {}-й — держи опыт":"BINGO! You’re #{} — have some XP",
+"БИНГО! Ты {}-й":"BINGO! You’re #{}",
+"Закончить бинго? Карточки зрителей пропадут":"End the bingo? Viewers’ cards will disappear",
+"Зарегистрируйся — и вы сразу станете друзьями":"Sign up — and you’ll be friends right away",
+"Если на эту почту есть аккаунт, письмо со ссылкой уже отправлено. Ссылка работает час. Не видно письма — загляни в «Спам».":"If there’s an account with this email, a link has already been sent. The link works for an hour. Don’t see the email? Check “Spam”.",
+"Открыть оценку «{}»":"Open the rating “{}”",
+// опыт и объявления с сервера: подписи действий, тематическая неделя, дата «по Киеву» (functions/_lib/levels*.js)
+"среднее по трекам {} · разобрано {} из {}":"track average {} · {} of {} done",
+"{} опыта":"{} XP",
+"{} опыта за: {}. До {}":"{} XP for: {}. Until {}",
+"{} опыта за: {}. Оценки — только в категориях: {}. До {}":"{} XP for: {}. Ratings count only in the categories: {}. Until {}",
+"Линия в бинго":"Bingo line",
+"Провёл «Царя Горы»":"Hosted “King of the Hill”",
+"Голос в «Царе Горы»":"Vote in “King of the Hill”",
+"Провёл «Тир-лист вместе»":"Hosted “Tier list together”",
+"{} января в {} по Киеву":"{} January at {} Kyiv time",
+"{} февраля в {} по Киеву":"{} February at {} Kyiv time",
+"{} марта в {} по Киеву":"{} March at {} Kyiv time",
+"{} апреля в {} по Киеву":"{} April at {} Kyiv time",
+"{} мая в {} по Киеву":"{} May at {} Kyiv time",
+"{} июня в {} по Киеву":"{} June at {} Kyiv time",
+"{} июля в {} по Киеву":"{} July at {} Kyiv time",
+"{} августа в {} по Киеву":"{} August at {} Kyiv time",
+"{} сентября в {} по Киеву":"{} September at {} Kyiv time",
+"{} октября в {} по Киеву":"{} October at {} Kyiv time",
+"{} ноября в {} по Киеву":"{} November at {} Kyiv time",
+"{} декабря в {} по Киеву":"{} December at {} Kyiv time",
+// подпись в конце списка «за что опыт»: последнюю » движок отрезает как край строки, поэтому — без неё
+"Оценено из «В планах":"Rated from “Planned",
+"Провёл «Царя Горы":"Hosted “King of the Hill",
+"Голос в «Царе Горы":"Vote in “King of the Hill",
+"Провёл «Тир-лист вместе":"Hosted “Tier list together",
+"«Тир-лист вместе":"“Tier list together"},
   // слово после числа: 1 оценка, 5 оценок. [все русские формы, одна штука, несколько]
-  const NOUNS = [
+  nouns: [
     [['рофлан', 'рофлана', 'рофланов', 'рофланы'], 'Soul', 'Souls'],
     [['оценка', 'оценки', 'оценок', 'оценкой', 'оценками'], 'rating', 'ratings'],
     [['строка', 'строки', 'строк'], 'row', 'rows'],
@@ -3566,180 +3752,7 @@
     [['оценка за месяц', 'оценки за месяц', 'оценок за месяц'], 'rating this month', 'ratings this month'],
     [['день подряд — рекорд', 'дня подряд — рекорд', 'дней подряд — рекорд'], 'day in a row — record', 'days in a row — record'],
     [['день в клубе', 'дня в клубе', 'дней в клубе'], 'day in the club', 'days in the club'],
-  ];
-  const CYR = /[а-яёА-ЯЁ]/;
-  const norm = (s) => s.replace(/\s+/g, ' ').trim();
-  const reEsc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const exact = new Map(), lower = new Map(), tpls = [], noun = new Map();
-  for (const k of Object.keys(X)) {
-    if (k.includes('{}')) {
-      const lit = k.replace(/\{\}/g, '');
-      tpls.push({ re: new RegExp('^' + k.split('{}').map(reEsc).join('(.*?)') + '$', 's'), v: X[k], len: lit.length, needNum: lit.trim().length < 6 && k.startsWith('{}') });
-    } else {
-      const nk = norm(k);
-      exact.set(nk, X[k]);
-      if (!lower.has(nk.toLowerCase())) lower.set(nk.toLowerCase(), X[k]);
-    }
-  }
-  tpls.sort((a, b) => b.len - a.len);
-  // слово без числа рядом (число в соседнем теге): первая форма — одна штука, остальные — несколько
-  const nounAlone = new Map();
-  NOUNS.forEach(([ru, one, many]) => ru.forEach((w, i) => { noun.set(w, [one, many]); nounAlone.set(w, i ? many : one); }));
-  const up = (s) => (s ? s[0].toUpperCase() + s.slice(1) : s);
-  const dress = (s) => s.replace(/«/g, '“').replace(/»/g, '”');
-  const cache = new Map();
-
-  function known(core) {
-    if (exact.has(core)) return exact.get(core);
-    const low = core.toLowerCase();
-    if (lower.has(low)) { const v = lower.get(low); return core[0] !== low[0] ? up(v) : v; }
-    const w = nounAlone.get(core);
-    return w != null ? w : null;
-  }
-  // перевод текста без внешних знаков; null — такого в словаре нет (значит, это написал человек)
-  function inner(core) {
-    const k = known(core);
-    if (k != null) return k;
-    // число и слово: «5 оценок»
-    let m = /^(\d[\d\s]*) (.+)$/.exec(core);
-    if (m) {
-      const n = +m[1].replace(/\s/g, ''), w = noun.get(m[2]);
-      if (w) return `${m[1]} ${w[n === 1 ? 0 : 1]}`;
-      const t = known(m[2]);
-      if (t != null) return `${m[1]} ${t}`;
-    }
-    // «5 записей за 3 дня»
-    m = /^(\d+) (\S+) за (\d+) (\S+)$/.exec(core);
-    if (m && noun.has(m[2]) && noun.has(m[4])) return `${m[1]} ${noun.get(m[2])[+m[1] === 1 ? 0 : 1]} over ${m[3]} ${noun.get(m[4])[+m[3] === 1 ? 0 : 1]}`;
-    for (const t of tpls) {
-      const g = t.re.exec(core);
-      if (!g) continue;
-      if (t.needNum && !/^\s*\d/.test(g[1] || '')) continue; // «Девушка из Омска» — не «{} из {}»
-      let i = 1;
-      return t.v.replace(/\{\}/g, () => tr(g[i++] || ''));
-    }
-    // составное: части переводятся по отдельности
-    if (core.includes(' · ')) {
-      const p = core.split(' · '), o = p.map(tr);
-      if (o.some((x, i) => x !== p[i])) return dress(o.join(' · '));
-    }
-    const c = core.indexOf(': ');
-    if (c > 0) {
-      const l = core.slice(0, c), r = core.slice(c + 2), lt = known(l), rt = tr(r);
-      if (lt != null || rt !== r) return `${lt != null ? lt : l}: ${rt}`;
-    }
-    const d = core.indexOf(' — ');
-    if (d > 0) {
-      const l = known(core.slice(0, d));
-      if (l != null) return `${l} — ${tr(core.slice(d + 3))}`;
-    }
-    // списки вроде «2010, фантастика, боевик»: только если известно всё
-    if (core.includes(', ')) {
-      const p = core.split(', '), o = p.map((x) => (CYR.test(x) ? known(x) : x));
-      if (o.every((x) => x != null) && p.some((x) => CYR.test(x))) return o.join(', ');
-    }
-    // два предложения
-    const dot = core.indexOf('. ');
-    if (dot > 0) {
-      const l = known(core.slice(0, dot)), r = tr(core.slice(dot + 2));
-      if (l != null && !CYR.test(r)) return `${l}. ${r}`;
-    }
-    return null;
-  }
-  function tr(raw) {
-    // одна буква без пробелов вокруг — заглушка обложки или аватарки («И» от «Игры»), а не союз
-    if (typeof raw !== 'string' || raw.length < 2 || !CYR.test(raw)) return raw;
-    const hit = cache.get(raw);
-    if (hit !== undefined) return hit;
-    if (cache.size > 8000) cache.clear();
-    let out = null;
-    const whole = norm(raw);
-    const direct = exact.get(whole);
-    if (direct != null) out = raw.match(/^\s*/)[0] + direct + raw.match(/\s*$/)[0];
-    else {
-      const m = /^([^\p{L}\p{N}]*)([\s\S]*?)([^\p{L}\p{N}]*)$/u.exec(raw);
-      const core = norm(m[2]);
-      const t = core ? inner(core) : null;
-      if (t != null) out = dress(m[1] + t + m[3]);
-    }
-    const res = out == null ? raw : out;
-    cache.set(raw, res);
-    return res;
-  }
-  window.CasualLang.t = tr;
-
-  // ---------- страница: текст и подписи, в том числе то, что появится позже ----------
-  const ATTRS = ['title', 'placeholder', 'aria-label', 'alt', 'aria-valuetext'];
-  const SKIP_TAG = new Set(['SCRIPT', 'STYLE', 'TEXTAREA', 'NOSCRIPT']);
-  // написанное людьми и журнал «Что нового» не трогаем, даже если слово случайно есть в словаре
-  const SKIP = '.pv-cap, .cm-text, .rx-list span, .adm-text, .site-ann span, .wn-body, .cm-meta b, .adm-who b, .fr-who b, .tl-txt, .tl-lab, .tl-tile b, .ch-txt, .ch-who';
-  function text(n) {
-    const v = n.nodeValue;
-    // шкала в подписях: 7,5–10 → 7.5–10
-    if (v && /^\s*\d+(,\d+)?[–-]\d+(,\d+)?\s*$/.test(v) && v.includes(',')) { n.nodeValue = v.replace(/,/g, '.'); return; }
-    if (!v || !CYR.test(v)) return;
-    const p = n.parentElement;
-    if (!p || SKIP_TAG.has(p.tagName)) return;
-    const o = tr(v);
-    if (o !== v && !p.closest(SKIP)) n.nodeValue = o;
-  }
-  function attrs(el) {
-    for (const a of ATTRS) {
-      const v = el.getAttribute(a);
-      if (!v || !CYR.test(v)) continue;
-      const o = tr(v);
-      if (o !== v) el.setAttribute(a, o);
-    }
-  }
-  function scan(root) {
-    if (root.nodeType === 3) { text(root); return; }
-    if (root.nodeType !== 1 || SKIP_TAG.has(root.tagName)) return;
-    attrs(root);
-    root.querySelectorAll('[title],[placeholder],[aria-label],[alt],[aria-valuetext]').forEach(attrs);
-    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-    let n;
-    while ((n = w.nextNode())) text(n);
-  }
-  new MutationObserver((list) => {
-    for (const m of list) {
-      if (m.type === 'childList') m.addedNodes.forEach(scan);
-      else if (m.type === 'characterData') text(m.target);
-      else if (m.type === 'attributes' && m.target.nodeType === 1) attrs(m.target);
-    }
-  }).observe(document.documentElement, { subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ATTRS });
-  scan(document.documentElement);
-
-  // ---------- то, что не лежит в разметке ----------
-  // даты и числа: 5 Oct, 8.5
-  const toEn = (l) => (l === 'ru-RU' || l === 'ru' ? 'en-GB' : l);
-  [[Date.prototype, 'toLocaleDateString'], [Date.prototype, 'toLocaleTimeString'], [Date.prototype, 'toLocaleString'], [Number.prototype, 'toLocaleString']].forEach(([o, m]) => {
-    const f = o[m];
-    o[m] = function (l, opt) { return f.call(this, toEn(l), opt); };
-  });
-  // картинки с итогом и тир-листом рисуются на холсте: подписи проходят через тот же словарь
-  if (window.CanvasRenderingContext2D) {
-    const C = CanvasRenderingContext2D.prototype, ft = C.fillText, mt = C.measureText;
-    C.fillText = function (s, ...a) { return ft.call(this, tr(s), ...a); };
-    C.measureText = function (s) { return mt.call(this, tr(s)); };
-  }
-  // системные окна и копирование итога текстом
-  const conf = window.confirm;
-  window.confirm = (s) => conf.call(window, tr(s));
-  const clip = navigator.clipboard;
-  if (clip && clip.writeText) {
-    const wt = clip.writeText.bind(clip);
-    clip.writeText = (s) => wt(String(s).split('\n').map(tr).join('\n'));
-  }
-  // подписи, которые заданы в самих стилях
-  const st = document.createElement('style');
-  st.textContent = '.wg[data-off]::after { content: "Hidden" !important; } .wheel-wrap.drop::after { content: "Drop to put it in the center" !important; } .banner.drag::before { content: "Drop to set the banner" !important; }';
-  document.head.appendChild(st);
-  // большая надпись на главной собрана по буквам
-  const hero = () => {
-    let i = 0;
-    document.querySelectorAll('.wordmark .word').forEach((w, k) => {
-      w.innerHTML = [...(k ? 'Hub' : 'Casual')].map((c) => `<span class="ch" style="--i:${i++}">${c}</span>`).join('');
-    });
-  };
-  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', hero); else hero();
-})();
+    [['трек', 'трека', 'треков'], 'track', 'tracks'],
+    [['день подряд', 'дня подряд', 'дней подряд'], 'day in a row', 'days in a row'],
+  ],
+};

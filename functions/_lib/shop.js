@@ -306,7 +306,8 @@ export async function looksOf(env, ids) {
 const RID_RE = /^[a-z0-9]{6,32}$/i;
 // хватает ли рофланов: заработанное (?6) + сумма журнала >= цена (?4). Проверка — в той же пачке, что и списание
 const ENOUGH = '?6 + COALESCE((SELECT SUM(delta) FROM shop_log WHERE user_id = ?2), 0) >= ?4';
-export async function buy(env, uid, itemId, { rid = '', now = Date.now() } = {}) {
+// seen — цена, которую человек видел на кнопке (страница шлёт её с покупкой; у старых вкладок её нет)
+export async function buy(env, uid, itemId, { rid = '', now = Date.now(), seen } = {}) {
   const it = itemOf(itemId);
   if (!it) return { err: [400, 'Такого в магазине нет.'] };
   if (!it.price) return { ok: true, free: true };
@@ -320,6 +321,8 @@ export async function buy(env, uid, itemId, { rid = '', now = Date.now() } = {})
     if (st.freezes >= FREEZE_MAX) return { err: [409, `Заморозок уже ${FREEZE_MAX} — больше не помещается.`] };
   }
   const price = salePrice(it, st.sale);
+  // скидка кончилась, пока магазин был открыт: дороже, чем на кнопке, молча не списываем — пусть увидит новую цену
+  if (Number.isFinite(seen) && price > seen) return { err: [409, `Скидка закончилась: теперь цена — ${price}. Нажми «Купить» ещё раз, если всё равно берёшь.`] };
   if (st.balance < price) return { err: [409, `Не хватает рофланов: нужно ещё ${price - Math.max(0, st.balance)}.`], need: price - Math.max(0, st.balance) };
   const id = it.consumable ? `buy:${uid}:${it.id}:${RID_RE.test(rid) ? rid : now}` : `own:${uid}:${it.id}`;
   const log = (extra) => env.DB.prepare(`INSERT OR IGNORE INTO shop_log (id, user_id, item, delta, reason, note, by_id, at) SELECT ?1, ?2, ?3, -?4, 'buy', NULL, NULL, ?5 WHERE ${ENOUGH} AND ${extra}`)

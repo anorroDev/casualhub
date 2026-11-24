@@ -23,7 +23,7 @@ function fakeD1() {
     },
   });
   // таблицы сайта, которые читают уровни
-  db.exec(`CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT, uname TEXT, created_at INTEGER, email_ok INTEGER);
+  db.exec(`CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT, uname TEXT, created_at INTEGER, email_ok INTEGER, banned INTEGER);
     CREATE TABLE friendships (a TEXT, b TEXT, status TEXT, requested_by TEXT, created_at INTEGER, PRIMARY KEY (a, b));
     CREATE TABLE shelves (user_id TEXT PRIMARY KEY, data TEXT, updated_at INTEGER);
     CREATE TABLE photos (key TEXT PRIMARY KEY, user_id TEXT, data TEXT, updated_at INTEGER);
@@ -696,18 +696,47 @@ test('разбор альбома: засчитан, когда каждый т�
   assert.ok(L.shelfDiff(three, three.filter((r) => r.id !== 'rA')).take.some((x) => x.kind === 'album_full' && x.ref === 'rA'));
 });
 
-test('топ недели: топ-5 сайта от 50 опыта получает рофланы письмом один раз, скрывшие себя — нет', async () => {
+test('группы категорий для тематической недели: по названию, и кириллица тоже', () => {
+  assert.equal(L.catGroupOf('Еда'), 'food');
+  assert.equal(L.catGroupOf('Моя еда'), 'food');
+  assert.equal(L.catGroupOf('Еда и заведения'), 'food');
+  assert.notEqual(L.catGroupOf('Беда'), 'food', '«еда» внутри слова — не еда');
+  assert.equal(L.catGroupOf('Музыка и альбомы'), 'music');
+  assert.equal(L.catGroupOf('Что-то своё'), '');
+  // названия по-украински
+  assert.equal(L.catGroupOf('Музика'), 'music');
+  assert.equal(L.catGroupOf('Ігри'), 'games');
+  assert.equal(L.catGroupOf('Фільми й серіали'), 'movies');
+  assert.equal(L.catGroupOf('Аніме'), 'anime');
+  assert.equal(L.catGroupOf('Моя їжа'), 'food');
+});
+
+test('трек внутри альбома: album_track за новый трек; стал отдельной оценкой (rid) — album_track списывается', () => {
+  const album = (tracks) => ({ id: 'rA', name: 'X — Y', status: 'Альбом', trackCount: 3, scores: [], total: null, tracks });
+  const one = [album([{ n: 1, v: 8 }, { n: 2, v: 6 }])];
+  assert.deepEqual(L.shelfDiff([], one).give.filter((g) => g.kind === 'album_track').map((g) => g.ref), ['rA:1', 'rA:2']);
+  // трек 1 оценили по 4+ критериям: отдельная оценка, в записи альбома — rid
+  const full = [album([{ n: 1, v: 8, rid: 'rT1' }, { n: 2, v: 6 }])];
+  const d = L.shelfDiff(one, full);
+  assert.deepEqual(d.take.filter((x) => x.kind === 'album_track').map((x) => x.ref), ['rA:1'], 'за такой трек — rate, а не album_track');
+  assert.equal(L.shelfDiff(full, full).take.filter((x) => x.kind === 'album_track').length, 0, 'повторное сохранение ничего не списывает');
+  assert.equal(L.shelfDiff(one, [album([{ n: 1, v: 9 }, { n: 2, v: 6 }])]).take.length, 0, 'другой балл того же трека — не списание');
+});
+
+test('топ недели: топ-5 сайта от 50 опыта получает рофланы письмом один раз, скрывшие себя, удалённые и заблокированные — нет', async () => {
   const W = await import('../functions/_lib/weektop.js');
   const env = envOf();
   await L.ensureLevels(env);
   const wk = '2026-11-16';
-  const xp = { a: 486, b: 300, c: 120, d: 90, e: 60, f: 55, g: 40 };
+  // y — аккаунт удалён (опыт в журнале остался), z — заблокирован
+  const xp = { a: 486, b: 300, c: 120, d: 90, e: 60, f: 55, g: 40, y: 900, z: 700 };
   for (const [u, n] of Object.entries(xp)) {
     env.DB.raw.prepare('INSERT INTO xp_log (user_id, kind, ref, xp, day, at, gone) VALUES (?, ?, ?, ?, ?, ?, 0)').run(u, 'admin', 'w' + u, n, '2026-11-18', 1);
     env.DB.raw.prepare('INSERT OR IGNORE INTO user_level (user_id, xp, level, prefs, updated_at) VALUES (?, ?, 1, ?, 1)').run(u, n, u === 'b' ? JSON.stringify({ hideBoard: true }) : null);
+    if (u !== 'y') env.DB.raw.prepare('INSERT OR IGNORE INTO users (id, username, uname, created_at, banned) VALUES (?, ?, ?, 1, ?)').run(u, u, u, u === 'z' ? 1 : null);
   }
   const top = await W.weekTop(env, wk);
-  assert.deepEqual(top.map((t) => t.id), ['a', 'c', 'd', 'e', 'f'], 'b скрыл себя, g меньше 50');
+  assert.deepEqual(top.map((t) => t.id), ['a', 'c', 'd', 'e', 'f'], 'b скрыл себя, g меньше 50, y удалён, z заблокирован');
   assert.equal(top[0].prize, 60 + 19, '486 опыта: +19 за активность');
   assert.equal(W.topPrize(1, 5000), 100, 'бонус не больше 40');
   W.forgetSettled();

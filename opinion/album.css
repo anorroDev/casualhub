@@ -24,8 +24,19 @@
 .alb-line { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; }
 .alb-fl { fill: none; stroke: var(--c); stroke-width: 1.5; stroke-dasharray: 4 3; stroke-linejoin: round; opacity: .9; }
 .alb-dot { fill: var(--tier); stroke: var(--panel); stroke-width: 1.2; }
-.alb-tk { fill: var(--ink-3); font-size: 8.5px; text-anchor: middle; font-family: var(--font-display); }
-.alb-lab { fill: var(--ink-2); font-size: 8.5px; text-anchor: middle; }
+.alb-tk { fill: var(--ink-3); font-size: 8.5px; text-anchor: middle; font-family: var(--font-display); pointer-events: none; }
+.alb-lab { fill: var(--ink-2); font-size: 8.5px; text-anchor: middle; pointer-events: none; }
+/* точка — кнопка: нажатие играет отрывок трека; ловит вся полоса трека (.alb-hit), играющая — цвета акцента */
+.alb-pt { cursor: pointer; outline: none; }
+.alb-hit { fill: transparent; }
+.alb-pt .alb-dot { transform-box: fill-box; transform-origin: center; transition: transform .15s; }
+.alb-pt:hover .alb-dot, .alb-pt:focus-visible .alb-dot { transform: scale(1.45); }
+.alb-pt:focus-visible .alb-hit { fill: color-mix(in srgb, var(--accent) 16%, transparent); }
+.alb-pt[aria-pressed="true"] .alb-hit { fill: color-mix(in srgb, var(--accent) 12%, transparent); }
+.alb-pt[aria-pressed="true"] .alb-dot { fill: var(--accent); stroke: var(--ink); transform: scale(1.6); }
+.alb-pt.wait { opacity: .5; }
+@media (prefers-reduced-motion: reduce) { .alb-pt .alb-dot { transition: none; } }
+.alb-hint { margin: 0 0 6px; font-size: 12px; color: var(--ink-3); }
 .alb-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; margin: 2px 0 6px; font-size: 12px; color: var(--ink-3); }
 .alb-legend span::before { content: ''; display: inline-block; width: 12px; height: 2px; margin-right: 5px; vertical-align: middle; background: var(--c); }
 .alb-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 8px; }
@@ -106,8 +117,11 @@
 .alb-row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 14px; }
 .alb-row a { text-decoration: none; }
 /* полоса треков: столбик растёт с баллом — кардиограмма собирается на глазах */
-.alb-strip { display: flex; gap: 3px; height: 54px; margin-top: 14px; align-items: stretch; }
-.alb-bar { flex: 1 1 0; min-width: 6px; display: flex; align-items: flex-end; padding: 0; border: 0; border-radius: 4px; background: color-mix(in srgb, var(--ink) 6%, transparent); cursor: pointer; }
+.alb-strip { display: flex; gap: 3px; height: 54px; margin-top: 14px; align-items: stretch; overflow-x: auto; scrollbar-width: none; }
+.alb-strip::-webkit-scrollbar { display: none; }
+/* длинный альбом (до 60 треков) влезает в телефон: столбики до 2px, а с 30 треков и щели тоньше */
+.alb-strip:has(> .alb-bar:nth-child(30)) { gap: 1px; }
+.alb-bar { flex: 1 1 0; min-width: 2px; display: flex; align-items: flex-end; padding: 0; border: 0; border-radius: 4px; background: color-mix(in srgb, var(--ink) 6%, transparent); cursor: pointer; }
 .alb-bar i { display: block; width: 100%; height: var(--h); border-radius: 4px; background: var(--tier); transition: height .25s; }
 .alb-bar[data-tier="none"] i { background: color-mix(in srgb, var(--ink) 14%, transparent); }
 .alb-bar.sk i { background: repeating-linear-gradient(135deg, var(--line) 0 3px, transparent 3px 6px); height: 100%; }
@@ -132,6 +146,8 @@
   .alb-scale button { height: 46px; }
   .alb-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .alb-row .btn { justify-content: center; min-width: 0; white-space: normal; text-align: center; line-height: 1.25; }
+  /* надпись в две-три строки: кнопка растёт по ней. .btn.small со своей высотой подключается позже этого файла — поэтому селектор сильнее */
+  .alb-box .alb-row .btn { height: auto; min-height: 40px; padding-top: 8px; padding-bottom: 8px; }
   .alb-row .primary { grid-column: 1 / -1; } /* главная кнопка — во всю ширину, длинная надпись не обрезается */
   .alb-sumart { width: 80px; height: 80px; }
 }

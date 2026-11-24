@@ -1170,11 +1170,12 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       const days = s.end ? Math.max(0, Math.ceil((s.end - Date.now()) / 864e5)) : null;
       // сброс назначают по Киеву (админка, объявление): дата и время — тоже по Киеву, иначе у кого-то вышло бы «30 ноября»
       // на английском строка собирается здесь же: месяц и «дней» внутри одной строки словарь lang-en не переведёт
-      const en = window.CasualLang && window.CasualLang.lang === 'en', loc = en ? 'en-GB' : 'ru-RU';
+      const lg = (window.CasualLang && window.CasualLang.lang) || 'ru', en = lg === 'en', uk = lg === 'uk', loc = en ? 'en-GB' : uk ? 'uk-UA' : 'ru-RU';
       const T = (t) => (window.CasualLang && window.CasualLang.t ? window.CasualLang.t(t) : t);
       const kyiv = { timeZone: 'Europe/Kiev' };
-      const when = s.end ? `${new Date(s.end).toLocaleDateString(loc, { ...kyiv, day: 'numeric', month: 'long' })}, ${new Date(s.end).toLocaleTimeString(loc, { ...kyiv, hour: '2-digit', minute: '2-digit' })} ${en ? 'Kyiv time' : 'по Киеву'}` : '';
-      const reset = days == null ? '' : en ? ` · resets in ${days} ${days === 1 ? 'day' : 'days'}, ${when}` : ` · до сброса ${days} ${plural(days, 'день', 'дня', 'дней')}, ${when}`;
+      const when = s.end ? `${new Date(s.end).toLocaleDateString(loc, { ...kyiv, day: 'numeric', month: 'long' })}, ${new Date(s.end).toLocaleTimeString(loc, { ...kyiv, hour: '2-digit', minute: '2-digit' })} ${en ? 'Kyiv time' : uk ? 'за Києвом' : 'по Киеву'}` : '';
+      const reset = days == null ? '' : en ? ` · resets in ${days} ${days === 1 ? 'day' : 'days'}, ${when}`
+        : uk ? ` · до скидання ${days} ${plural(days, 'день', 'дні', 'днів')}, ${when}` : ` · до сброса ${days} ${plural(days, 'день', 'дня', 'дней')}, ${when}`;
       const part = next ? Math.max(0, Math.min(1, (s.xp - cur.xp) / Math.max(1, next.xp - cur.xp))) : 1;
       const lit = Math.min(5, Math.floor(part * 5));
       const stars = Array.from({ length: 5 }, (_, k) => `<i class="${k < lit ? 'on' : ''}"></i>`).join('');
@@ -1231,7 +1232,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       return `${segs}
         <div class="lv-box"><h3>Опыт за неделю</h3><div class="lv-board">${rows || '<p class="lv-muted">На этой неделе пока никто не набрал опыта.</p>'}</div>
         ${d.best ? `<p class="lv-muted">Лучший прогресс: ${esc(d.best.username)}${d.best.growth != null ? ` — +${d.best.growth}% к прошлой неделе` : ' — новичок недели'}.</p>` : ''}
-        ${pz ? `<div class="lv-top-prize"><b>Награда топ-5 сайта</b><p>${pz.base.map((v, i) => `${i + 1}-е — ${v}`).join(' · ')} рофланов за место и +1 за каждые ${pz.per} опыта недели (до +${pz.max}). Нужно от ${pz.min} опыта за неделю.</p>
+        ${pz ? `<div class="lv-top-prize"><b>Награда топ-5 сайта</b><p>${pz.base.map((v, i) => `<span>${i + 1}-е — ${v}</span>`).join(' · ')} <span>рофланов за место и +1 за каждые ${pz.per} опыта недели (до +${pz.max}). Нужно от ${pz.min} опыта за неделю.</span></p>
           <p>Награды придут в «Почту», а рейтинг обнулится через <b class="lv-reset" data-lv-reset="week">${dhms(untilMonday())}</b>.</p></div>` : '<p class="lv-muted">Рейтинг обнуляется в понедельник.</p>'}</div>`;
     },
     async look() {

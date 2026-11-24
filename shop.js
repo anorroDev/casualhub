@@ -590,7 +590,8 @@ html.unslop .sh-it.on { box-shadow: none; }`;
     b.disabled = true;
     try {
       const rid = Math.random().toString(36).slice(2, 12) + Date.now().toString(36);
-      const d = await api('/shop/buy', 'POST', { item: it.id, rid });
+      // цена с кнопки: если скидка за это время кончилась, сервер не спишет больше молча, а скажет новую
+      const d = await api('/shop/buy', 'POST', { item: it.id, rid, price: it.price });
       take(d);
       // купленное сервер надевает сам; Васяна (окрас, наряд, еду) — vasyan.js, если умеет
       if (VY_SET[it.kind]) await wearIt(it).catch(() => {});
@@ -601,6 +602,8 @@ html.unslop .sh-it.on { box-shadow: none; }`;
     } catch (err) {
       render();
       say(err.message, true);
+      // цена или баланс уже другие (кончилась скидка, купили в соседней вкладке): показать то, что сейчас на сервере
+      if (err.status === 409) refresh().then(() => render()).catch(() => {});
     }
   }
 

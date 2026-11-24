@@ -1629,7 +1629,7 @@ function renderStatusSet() {
 // чтобы другие устройства и друзья знали, какую картинку подтянуть с сервера
 const ARTISTS_KEY = 'ocenshik.artists.v1';
 const MUSIC_TPL = 'Музыка и альбомы';
-function isMusicCat(c) { return !!c && (c.id === tplId(MUSIC_TPL) || keyOf(c.name).startsWith('музык')); }
+function isMusicCat(c) { return !!c && (c.id === tplId(MUSIC_TPL) || /^муз[ыи]к|^music/.test(keyOf(c.name))); }
 function avaFp(s) {
   let h = 0x811c9dc5;
   for (let i = 0; i < s.length; i += 7) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); }
@@ -1898,10 +1898,11 @@ function catKind(c) {
   if (isMusicCat(c)) return 'music';
   const k = `${keyOf(c.name)} ${c.id}`;
   if (window.CasualUtil.nsfw.cat(c.name)) return 'hentai'; // взрослое аниме — раньше «аниме», чтобы «Хентай-аниме» не искалось как обычное
-  if (/игр|game/.test(k)) return 'game';
-  if (/фильм|сериал|кино|мульт|film|movie|series|cartoon|animat/.test(k)) return 'movie';
-  if (/книг|литератур|book/.test(k)) return 'book';
-  if (/аниме|манг|anime|manga/.test(k)) return 'anime';
+  // названия категорий — по-русски, по-украински или по-английски
+  if (/игр|ігр|game/.test(k)) return 'game';
+  if (/фильм|фільм|сериал|серіал|кино|кіно|мульт|film|movie|series|cartoon|animat/.test(k)) return 'movie';
+  if (/книг|литератур|літератур|book/.test(k)) return 'book';
+  if (/аниме|аніме|манг|anime|manga/.test(k)) return 'anime';
   return '';
 }
 function coverQuery() {
@@ -2582,10 +2583,10 @@ function renderBoard() {
   if (el.searchWrap.hidden && state.query) { state.query = ''; el.search.value = ''; }
   const q = keyOf(state.query);
   const found = r => !q || [r.nameKey, keyOf(r.meta), keyOf(r.status), keyOf(r.note), keyOf(r.pros), keyOf(r.cons), keyOf(r.author && r.author.name)].join(' ').includes(q);
-  const folded = window.CasualAlbum && !q && state.mfilter !== 'single' ? window.CasualAlbum.folded(pool) : null;
-  const shown = folded ? pool.filter(r => !folded.has(r.id)) : pool;
-  const ranks = computeRanks(shown);
-  const list = sortList(shown).filter(found);
+  // старые оценки треков с одним баллом переезжают внутрь своих альбомов (opinion/album.js)
+  if (window.CasualAlbum) window.CasualAlbum.migrateSoon();
+  const ranks = computeRanks(pool);
+  const list = sortList(pool).filter(found);
   if (state.pinId) { const i = list.findIndex(r => r.id === state.pinId); if (i > 0) list.unshift(...list.splice(i, 1)); }
   const showCat = state.filter === 'all' && showFilters;
   const isTiers = state.bmode === 'tiers';

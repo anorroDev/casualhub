@@ -6,8 +6,8 @@
 
   function load() {
     if (!cache) {
-      // Cloudflare отдаёт whatsnew.html по адресу без .html; в английской версии свой файл
-      cache = fetch(document.documentElement.lang === 'en' ? '/whatsnew-en' : '/whatsnew', { cache: 'no-cache' })
+      // Cloudflare отдаёт whatsnew.html по адресу без .html; у английской и украинской версий свои файлы
+      cache = fetch(({ en: '/whatsnew-en', uk: '/whatsnew-uk' })[document.documentElement.lang] || '/whatsnew', { cache: 'no-cache' })
         .then((r) => (r.ok ? r.text() : Promise.reject(new Error(r.status))))
         .then((html) => {
           const box = document.createElement('div');

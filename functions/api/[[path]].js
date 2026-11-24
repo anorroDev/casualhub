@@ -236,7 +236,9 @@ const BAD_CODE = 'Код не подходит. Возьми свежий из �
 // ---------- письма (Resend): сброс пароля и подтверждение почты. Ключи — в настройках Cloudflare ----------
 // MAIL_KEY — ключ Resend, MAIL_FROM — отправитель с подтверждённого в Resend домена, например «Казуал Хаб <no-reply@домен>»
 const mailOn = (env) => !!(env.MAIL_KEY && env.MAIL_FROM);
-const langOf = (request) => (/(?:^|;\s*)casualhub_lang=en(?:;|$)/.test(request.headers.get('cookie') || '') ? 'en' : 'ru');
+const langOf = (request) => { const m = /(?:^|;\s*)casualhub_lang=(en|uk)(?:;|$)/.exec(request.headers.get('cookie') || ''); return m ? m[1] : 'ru'; };
+// текст на языке сайта у человека: русский, украинский или английский
+const byLang = (l, ru, uk, en) => (l === 'en' ? en : l === 'uk' ? uk : ru);
 const escMail = (v) => String(v == null ? '' : v).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 // маска для журнала почты: первые буквы и домен
 const maskMail = (m) => { const [a, d] = String(m || '').split('@'); return d ? a.slice(0, 2) + '…@' + d : ''; };
@@ -1018,12 +1020,13 @@ const routes = {
     // ответ одинаковый, есть такая почта или нет: по форме не узнать, кто зарегистрирован
     if (u && !u.banned && !(await bump(env, 'forgot-acc:' + u.id, 'forgotAcc'))) {
       const url = `${new URL(request.url).origin}/opinion/#reset=${await mailToken(env, u.id, 'reset', mail, 60)}`;
-      const en = langOf(request) === 'en';
+      const l = langOf(request);
       try {
-        await sendMail(env, mail, en ? 'Reset your Casual Hub password' : 'Сброс пароля в Казуал Хабе',
-          en ? [`Someone asked to reset the password for @${u.uname}.`, 'The link works for one hour and only once. If it wasn’t you, just ignore this email: your password stays the same.']
-             : [`Кто-то попросил сбросить пароль аккаунта @${u.uname}.`, 'Ссылка работает час и один раз. Если это был не ты, просто не обращай внимания: пароль останется прежним.'],
-          en ? 'Set a new password' : 'Задать новый пароль', url, 'reset');
+        await sendMail(env, mail, byLang(l, 'Сброс пароля в Казуал Хабе', 'Скидання пароля в Казуал Хабі', 'Reset your Casual Hub password'),
+          byLang(l, [`Кто-то попросил сбросить пароль аккаунта @${u.uname}.`, 'Ссылка работает час и один раз. Если это был не ты, просто не обращай внимания: пароль останется прежним.'],
+            [`Хтось попросив скинути пароль акаунта @${u.uname}.`, 'Посилання працює годину й один раз. Якщо це був не ти, просто не зважай: пароль залишиться попереднім.'],
+            [`Someone asked to reset the password for @${u.uname}.`, 'The link works for one hour and only once. If it wasn’t you, just ignore this email: your password stays the same.']),
+          byLang(l, 'Задать новый пароль', 'Задати новий пароль', 'Set a new password'), url, 'reset');
       } catch (e) {}
     }
     return json({ ok: true });
@@ -1056,12 +1059,13 @@ const routes = {
     const wait = await bump(env, 'verify-acc:' + me.id, 'verifyMail');
     if (wait) return tooMany(wait);
     const url = `${new URL(request.url).origin}/opinion/#verify=${await mailToken(env, me.id, 'verify', me.email, 24 * 60)}`;
-    const en = langOf(request) === 'en';
+    const l = langOf(request);
     try {
-      await sendMail(env, me.email, en ? 'Confirm your email for Casual Hub' : 'Подтверди почту в Казуал Хабе',
-        en ? [`This email was added to @${me.handle}.`, 'Confirm it so you can reset your password by email if you ever forget it. The link works for 24 hours.']
-           : [`Эту почту указали в аккаунте @${me.handle}.`, 'Подтверди её, чтобы при случае можно было сбросить пароль по почте. Ссылка работает сутки.'],
-        en ? 'Confirm email' : 'Подтвердить почту', url, 'verify');
+      await sendMail(env, me.email, byLang(l, 'Подтверди почту в Казуал Хабе', 'Підтверди пошту в Казуал Хабі', 'Confirm your email for Casual Hub'),
+        byLang(l, [`Эту почту указали в аккаунте @${me.handle}.`, 'Подтверди её, чтобы при случае можно было сбросить пароль по почте. Ссылка работает сутки.'],
+          [`Цю пошту вказали в акаунті @${me.handle}.`, 'Підтверди її, щоб за потреби можна було скинути пароль через пошту. Посилання працює добу.'],
+          [`This email was added to @${me.handle}.`, 'Confirm it so you can reset your password by email if you ever forget it. The link works for 24 hours.']),
+        byLang(l, 'Подтвердить почту', 'Підтвердити пошту', 'Confirm email'), url, 'verify');
     } catch (e) { return fail(502, 'Письмо не ушло, попробуй через пару минут.' + (e.resend ? ' Resend: ' + e.resend : '')); }
     return json({ ok: true });
   },
@@ -3206,6 +3210,8 @@ Object.assign(routes, makeLevelsRoutes({
   // новое в почте: человеку — сигнал по сокету, всем — по всем открытым сокетам
   poke: (env, uid) => pokePresence(env, { what: 'notify', to: uid, n: { kind: 'award' } }),
   pokeAll: (env) => pokePresence(env, { what: 'mail' }),
+  // неделя началась или кончилась без своего объявления: вкладки с сокетом сами /api/announce не опрашивают
+  pokeAnnounce: (env) => pokePresence(env, { what: 'announce' }),
   markNews: (request, r) => { if (r && r.news && r.news.length) lvNews.set(request, true); },
   // объявление (то же, что вкладка «Объявление» в админке): сезоны пишут о сбросе званий, неделя — о себе
   ...annHelpers,

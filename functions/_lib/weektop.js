@@ -2,7 +2,8 @@
 // получает рофланы письмом в «Почту» (gifts.kind 'roflans', сумма — в поле xp), забирается кнопкой «Забрать».
 // Сколько: за место 60 / 45 / 35 / 25 / 20 и +1 за каждые 25 опыта недели, но не больше +40 — активный первый получит
 // до 100, пятый — от 22. В топ попадают только набравшие от 50 опыта: на маленьком сайте пятое место с 5 опыта — не награда.
-// Кто скрыл себя из рейтинга (prefs.hideBoard), в топ не попадает, как и в «Рейтинге».
+// Кто скрыл себя из рейтинга (prefs.hideBoard), в топ не попадает, как и в «Рейтинге». Удалённые и заблокированные — тоже:
+// забрать награду они не могут, а место заняли бы.
 // Выдача ленивая: первый запрос /levels/me после конца недели (по UTC) раскладывает письма; id письма — top:<неделя>:<id>,
 // поэтому две вкладки или два запроса подряд ничего не удвоят. Папка _lib не становится адресом сайта.
 import { dayKey, shiftDay, weekStart, prefsOf } from './levels.js';
@@ -17,7 +18,8 @@ export const topPrize = (place, xp) => (place >= 1 && place <= TOP_BASE.length ?
 // топ-5 недели wk (понедельник 'YYYY-MM-DD'): места, опыт и награда
 export async function weekTop(env, wk) {
   const { results } = await env.DB.prepare(
-    `SELECT l.user_id, SUM(l.xp) AS xp, ul.prefs FROM xp_log l LEFT JOIN user_level ul ON ul.user_id = l.user_id
+    `SELECT l.user_id, SUM(l.xp) AS xp, ul.prefs FROM xp_log l JOIN users u ON u.id = l.user_id AND COALESCE(u.banned, 0) = 0
+     LEFT JOIN user_level ul ON ul.user_id = l.user_id
      WHERE l.day >= ?1 AND l.day < ?2 AND l.gone = 0 GROUP BY l.user_id HAVING SUM(l.xp) >= ?3 ORDER BY SUM(l.xp) DESC, l.user_id LIMIT 30`
   ).bind(wk, shiftDay(wk, 7), TOP_MIN).all();
   return (results || []).filter((r) => !prefsOf(r).hideBoard).slice(0, TOP_BASE.length)

@@ -13,10 +13,10 @@
   if (!rec || !/^[A-Za-z0-9]{12}$/.test(rec.code || '') || !rec.heard || Date.now() - (+rec.at || 0) > MAX_AGE) return;
   window.__lotsFollow = true;
   const code = rec.code;
-  const en = document.documentElement.lang === 'en';
-  const T = en
-    ? { now: 'Host’s music', on: 'Turn on the music', stop: 'Stop following this auction', open: 'Open the auction' }
-    : { now: 'Музыка ведущего', on: 'Включить музыку', stop: 'Не следить за этим аукционом', open: 'Открыть аукцион' };
+  const T = {
+    en: { now: 'Host’s music', on: 'Turn on the music', stop: 'Stop following this auction', open: 'Open the auction' },
+    uk: { now: 'Музика ведучого', on: 'Увімкнути музику', stop: 'Не стежити за цим аукціоном', open: 'Відкрити аукціон' },
+  }[document.documentElement.lang] || { now: 'Музыка ведущего', on: 'Включить музыку', stop: 'Не следить за этим аукционом', open: 'Открыть аукцион' };
   // те же треки, что в Колесе и на странице зрителя
   const PRESETS = [
     { id: 'vika', key: 'SXe1aTEJU2w', start: 0.6 },
