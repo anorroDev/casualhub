@@ -298,6 +298,11 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .adm-ann select { height: 44px; text-align: left; letter-spacing: 0; font-size: 14px; }
 .adm-ann-row { display: flex; flex-wrap: wrap; gap: 8px; }
 .adm-ann-row > * { flex: 1 1 180px; }
+/* срок числом и единицей: «7 · дней» */
+.adm-span { display: flex; align-items: center; gap: 6px; }
+.adm-span > input { flex: 0 0 84px; width: 84px; }
+.adm-span > select { flex: 1; min-width: 0; }
+.adm-span > .muted { flex: none; }
 .adm-more { display: block; margin: 12px auto 0; }
 .btn:disabled { opacity: .55; cursor: default; }
 @media (prefers-reduced-motion: reduce) { .adm-stat, .adm-row, .adm-row.gone { animation: none; } }

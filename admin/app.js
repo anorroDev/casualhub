@@ -469,7 +469,9 @@
         </div>
         <div class="adm-lv-ev"><h3 class="h3">Тематическая неделя</h3>
           ${ev ? `<p>Идёт: <b>${esc(ev.title)}</b> · ×${ev.mult} до ${esc(when(ev.until))} · ${ev.kinds.map(esc).join(', ')}</p><button type="button" class="btn ghost" id="lvEvOff">Закончить</button>`
-            : `<div class="adm-ann-row"><input id="lvEvTitle" maxlength="80" placeholder="Например: Неделя тир-листов"><select id="lvEvMult"><option value="2">×2</option><option value="1.5">×1,5</option><option value="3">×3</option></select><select id="lvEvDays"><option value="7">7 дней</option><option value="3">3 дня</option><option value="14">14 дней</option></select></div>
+            : `<div class="adm-ann-row"><input id="lvEvTitle" maxlength="80" placeholder="Например: Неделя тир-листов"><select id="lvEvMult"><option value="2">×2</option><option value="1.5">×1,5</option><option value="3">×3</option></select><span class="adm-span"><input class="adm-in" type="number" id="lvEvN" min="1" max="999" value="7" aria-label="Сколько"><select class="adm-in" id="lvEvUnit" aria-label="Чего"><option value="min">минут</option><option value="hour">часов</option><option value="day" selected>дней</option><option value="week">недель</option></select></span></div>
+              <textarea id="lvEvNote" maxlength="300" rows="2" placeholder="Пара слов к объявлению о неделе (можно пусто)"></textarea>
+              <label class="adm-lv-kinds" style="display:flex"><input type="checkbox" id="lvEvAnn" checked> окно-объявление о неделе при заходе и таймер внизу страницы у всех</label>
               <div class="adm-lv-kinds">${d.kinds.map((k) => `<label><input type="checkbox" value="${esc(k.k)}"> ${esc(k.label)}</label>`).join('')}</div>
               <button type="button" class="btn primary" id="lvEvOn">Начать неделю</button>`}
         </div>
@@ -517,7 +519,7 @@
       const on = $('#lvEvOn');
       if (on) on.addEventListener('click', async () => {
         const kinds = [...document.querySelectorAll('.adm-lv-kinds input:checked')].map((x) => x.value);
-        try { await call('PUT', '/admin/levels/event', { title: $('#lvEvTitle').value, mult: +$('#lvEvMult').value, days: +$('#lvEvDays').value, kinds }); levels(); }
+        try { await call('PUT', '/admin/levels/event', { title: $('#lvEvTitle').value, mult: +$('#lvEvMult').value, n: +$('#lvEvN').value, unit: $('#lvEvUnit').value, kinds, note: $('#lvEvNote').value, announce: $('#lvEvAnn').checked }); levels(); }
         catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else msg.textContent = x.message; }
       });
       const offB = $('#lvEvOff');
@@ -759,12 +761,13 @@
       if (stale(my)) return;
       const live = a && a.text && (!a.until || a.until > Date.now());
       sec().innerHTML = `<div class="head"><h2 class="h2">Объявление</h2><span class="label">${live ? 'висит' + (a.until ? ' до ' + when(a.until) : '') : 'нет'}</span></div>
-        <p class="muted">Плашка вверху у всех на сайте. Каждый может её закрыть; новое объявление покажется снова.</p>
+        <p class="muted">Окно при заходе на сайт — у всех, и у гостей. Каждый видит его один раз: закрыл — на этом устройстве и в аккаунте оно больше не появится. Новое объявление покажется снова.</p>
         <form class="adm-ann" id="admAnn">
-          <textarea class="adm-in" maxlength="280" rows="3" placeholder="Например: «Завтра вечером сайт ненадолго выключится»">${live ? esc(a.text) : ''}</textarea>
+          <input class="adm-in" name="title" maxlength="80" placeholder="Заголовок, например: «Вечером обновление»" value="${live ? esc(a.title || '') : ''}">
+          <textarea class="adm-in" maxlength="600" rows="4" placeholder="Текст объявления. Можно в несколько строк">${live ? esc(a.text) : ''}</textarea>
           <div class="adm-ann-row">
             <select class="adm-in" name="kind" aria-label="Вид"><option value="info">📢 Обычное</option><option value="warn">⚠️ Важное</option><option value="party">🎉 Праздник</option></select>
-            <select class="adm-in" name="hours" aria-label="Сколько висит"><option value="0">Пока не уберу</option><option value="1">1 час</option><option value="24">Сутки</option><option value="168">Неделю</option></select>
+            <span class="adm-span"><span class="muted">Висит</span><input class="adm-in" type="number" name="n" min="1" max="999" value="1" aria-label="Сколько"><select class="adm-in" name="unit" aria-label="Чего"><option value="0">без срока — пока не уберу</option><option value="min">минут</option><option value="hour">часов</option><option value="day" selected>дней</option><option value="week">недель</option></select></span>
           </div>
           <div class="adm-ann-row"><button type="submit" class="btn primary">Показать всем</button>${live ? '<button type="button" class="btn ghost" id="admAnnOff">Убрать</button>' : ''}</div>
           <p class="adm-err" id="admAnnMsg" role="status"></p>
@@ -777,7 +780,7 @@
         if (sending) return;
         sending = true;
         f.querySelectorAll('button').forEach((b) => { b.disabled = true; });
-        try { await call('PUT', '/admin/announce', { text, kind: f.kind.value, hours: +f.hours.value }); announce(); }
+        try { await call('PUT', '/admin/announce', { text, title: f.title.value, kind: f.kind.value, n: +f.n.value, unit: f.unit.value === '0' ? '' : f.unit.value, hours: 0 }); announce(); }
         catch (x) {
           sending = false;
           f.querySelectorAll('button').forEach((b) => { b.disabled = false; });

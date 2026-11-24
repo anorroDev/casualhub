@@ -73,41 +73,169 @@
     ping: () => ping(),
   };
 
+  // ---------- объявления: окно при заходе, один раз ----------
+  // Окно показывается каждому один раз: закрыл — id запоминается в браузере (ANN_KEY, список) и, если вошёл, в аккаунте
+  // (/api/announce/seen), поэтому на другом устройстве то же объявление не всплывёт. Тематическая неделя приходит своим
+  // объявлением (kind 'event'), а пока она идёт, внизу слева у всех висит таймер (eventChip).
   const ANN_KEY = 'casualhub.announceSeen.v1';
-  function announce(a) {
-    let bar = document.getElementById('siteAnnounce');
-    let seenId = '';
-    try { seenId = localStorage.getItem(ANN_KEY) || ''; } catch (e) {}
-    if (!document.getElementById('annCss')) {
-      const css = document.createElement('style');
-      css.id = 'annCss';
-      css.textContent = `.site-ann { position: relative; z-index: 50; display: flex; align-items: center; gap: 10px; max-width: 1180px; margin: 10px auto 0; padding: 10px 12px 10px 16px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--ann) 45%, transparent); background: color-mix(in srgb, var(--ann) 14%, var(--panel, #161920)); color: var(--ink, #e8eaf0); font: 600 14px/1.4 var(--font-body, system-ui, sans-serif); animation: ann-in .3s cubic-bezier(.34, 1.56, .64, 1); }
+  const seenList = () => {
+    let v = '';
+    try { v = localStorage.getItem(ANN_KEY) || ''; } catch (e) {}
+    if (!v) return [];
+    if (v[0] !== '[') return [v]; // раньше хранился один id
+    try { return JSON.parse(v).filter((x) => typeof x === 'string'); } catch (e) { return []; }
+  };
+  const remember = (id) => { try { localStorage.setItem(ANN_KEY, JSON.stringify([...new Set([...seenList(), id])].slice(-30))); } catch (e) {} };
+  const authH = () => { const t = token(); return t ? { authorization: 'Bearer ' + t } : null; };
+  const ICONS = {
+    info: '<path d="M4 10v4h3l7 4V6l-7 4z"/><path d="M18 9.5a3.5 3.5 0 0 1 0 5"/>',
+    warn: '<path d="M12 4 2.5 20h19z"/><path d="M12 10v4M12 17h.01"/>',
+    party: '<path d="M4 20 9 7l8 8z"/><path d="M13 4v2M18 6l-1.5 1.5M20 11h-2M14 9l1-1"/>',
+    event: '<path d="M12 3c1 3.5 4.5 5 4.5 9.5A4.5 4.5 0 0 1 12 17a4.5 4.5 0 0 1-4.5-4.5C7.5 10 9 9 9.5 7c1 1.5 2 2 2.5 2.5C12.5 7.5 12 5 12 3z"/><path d="M8 21h8"/>',
+  };
+  const LABEL = { info: 'Объявление', warn: 'Важно', party: 'Праздник', event: 'Тематическая неделя' };
+  const pad = (n) => String(n).padStart(2, '0');
+  const left = (ms) => { const t = Math.max(0, Math.floor(ms / 1000)), d = Math.floor(t / 86400); return (d ? d + ' д ' : '') + pad(Math.floor(t / 3600) % 24) + ':' + pad(Math.floor(t / 60) % 60) + ':' + pad(t % 60); };
+  let annCur = null, evCur = null, annBusy = '';
+  function annCss() {
+    if (document.getElementById('annCss')) return;
+    const css = document.createElement('style');
+    css.id = 'annCss';
+    css.textContent = `.site-ann { position: relative; z-index: 50; display: flex; align-items: center; gap: 10px; max-width: 1180px; margin: 10px auto 0; padding: 10px 12px 10px 16px; border-radius: 14px; border: 1px solid color-mix(in srgb, var(--ann) 45%, transparent); background: color-mix(in srgb, var(--ann) 14%, var(--panel, #161920)); color: var(--ink, #e8eaf0); font: 600 14px/1.4 var(--font-body, system-ui, sans-serif); animation: ann-in .3s cubic-bezier(.34, 1.56, .64, 1); }
 .site-ann[data-kind="info"] { --ann: var(--accent, #3550E8); } .site-ann[data-kind="warn"] { --ann: var(--mid, #EAA92C); } .site-ann[data-kind="party"] { --ann: var(--good, #2EAD60); }
 .site-ann span { flex: 1; min-width: 0; overflow-wrap: anywhere; } .site-ann i { font-style: normal; font-size: 18px; }
 .site-ann button { flex: none; width: 30px; height: 30px; border: 0; border-radius: 50%; background: color-mix(in srgb, var(--ann) 20%, transparent); color: inherit; font: inherit; cursor: pointer; }
 @keyframes ann-in { from { transform: translateY(-14px) scale(.97); } }
 @media (max-width: 1220px) { .site-ann { margin: 10px 16px 0; } }
 .site-ann a { color: inherit; font-weight: 800; }
-@media (prefers-reduced-motion: reduce) { .site-ann { animation: none; } }`;
-      document.head.appendChild(css);
+@media (prefers-reduced-motion: reduce) { .site-ann { animation: none; } }
+.ann-modal { position: fixed; inset: 0; z-index: 96; display: grid; place-items: center; padding: 16px; background: color-mix(in srgb, var(--bg, #0d0f14) 50%, transparent); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+.ann-box { --ann: var(--accent, #3550E8); position: relative; width: min(100%, 480px); max-height: calc(100 * var(--dvh, 1vh) - 32px); overflow-y: auto; display: grid; gap: 14px; padding: 20px 18px 16px; border-radius: 22px; border: 2px solid var(--ann);
+  background: linear-gradient(160deg, var(--panel, #161920), color-mix(in srgb, var(--ann) 14%, var(--panel, #161920))); color: var(--ink, #e8eaf0); box-shadow: 0 30px 70px -24px rgba(0, 0, 0, .55), 0 14px 34px -18px color-mix(in srgb, var(--ann) 70%, transparent); animation: ann-pop .3s cubic-bezier(.34, 1.56, .64, 1) both; font-family: var(--font-body, system-ui, sans-serif); }
+.ann-box[data-kind="warn"] { --ann: var(--mid, #EAA92C); } .ann-box[data-kind="party"] { --ann: var(--good, #2EAD60); } .ann-box[data-kind="event"] { --ann: #F28E4C; }
+@keyframes ann-pop { from { transform: translateY(40px) scale(.9); } }
+.ann-head { display: flex; align-items: center; gap: 12px; padding-right: 36px; }
+.ann-ico { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 14px; background: color-mix(in srgb, var(--ann) 22%, transparent); color: var(--ann); }
+.ann-head small { display: block; font-size: 12px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--ann); }
+.ann-head b { display: block; font-size: 19px; line-height: 1.2; font-weight: 800; }
+.ann-text { margin: 0; font-size: 15px; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; color: var(--ink, #e8eaf0); }
+.ann-ev { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding: 10px 12px; border-radius: 14px; background: color-mix(in srgb, var(--ann) 12%, transparent); }
+.ann-ev .x { font-family: var(--font-display, inherit); font-size: 30px; line-height: 1; color: var(--ann); }
+.ann-ev span { font-size: 13.5px; color: var(--ink-2, #b5b5b5); } .ann-ev b { color: var(--ink, #fff); font-variant-numeric: tabular-nums; }
+.ann-acts { display: flex; justify-content: flex-end; }
+.ann-ok { height: 44px; padding: 0 22px; border-radius: 999px; border: 0; background: var(--ann); color: #fff; font: inherit; font-size: 15px; font-weight: 800; cursor: pointer; }
+.ann-x { position: absolute; top: 12px; right: 12px; width: 34px; height: 34px; border: 0; border-radius: 50%; background: var(--panel-2, #1d2029); color: var(--ink-2, #b5b5b5); font: inherit; font-size: 15px; cursor: pointer; }
+@media (max-width: 560px) { .ann-ok { flex: 1; } }
+.ev-chip { position: fixed; left: max(14px, env(safe-area-inset-left, 0px)); bottom: calc(env(safe-area-inset-bottom, 0px) + 16px); z-index: 61; display: flex; align-items: center; gap: 8px; max-width: calc(100 * var(--vw, 1vw) - 92px); height: 44px; padding: 0 14px 0 6px; border-radius: 999px;
+  border: 1.5px solid color-mix(in srgb, #F28E4C 70%, transparent); background: color-mix(in srgb, #F28E4C 14%, var(--panel, #161920)); color: var(--ink, #e8eaf0); font: 600 13.5px/1 var(--font-body, system-ui, sans-serif); cursor: pointer; box-shadow: 0 10px 26px -14px rgba(0, 0, 0, .7); animation: ann-pop .35s cubic-bezier(.34, 1.56, .64, 1) both; }
+.ev-chip .x { display: grid; place-items: center; min-width: 32px; height: 32px; padding: 0 6px; border-radius: 999px; background: #F28E4C; color: #1a0f05; font-weight: 900; }
+.ev-chip .t { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ev-chip b { font-variant-numeric: tabular-nums; white-space: nowrap; }
+@media (max-width: 480px) { .ev-chip .t { display: none; } }
+@media (prefers-reduced-motion: reduce) { .ann-box, .ev-chip { animation: none; } }`;
+    document.head.appendChild(css);
+  }
+  function closeModal(mark) {
+    const m = document.getElementById('annModal');
+    if (!m) return;
+    const id = m.dataset.id;
+    m.remove();
+    if (mark && id) {
+      remember(id);
+      const h = authH();
+      if (h) fetch('/api/announce/seen', { method: 'POST', headers: { ...h, 'content-type': 'application/json' }, body: JSON.stringify({ id }) }).catch(() => {});
     }
-    if (!a || !a.text || a.id === seenId) { if (bar) bar.remove(); return; }
-    if (bar && bar.dataset.id === a.id) return;
-    if (!bar) {
-      bar = document.createElement('div');
-      bar.id = 'siteAnnounce';
-      bar.className = 'site-ann';
-      bar.setAttribute('role', 'status');
-      document.body.prepend(bar);
-    }
-    bar.dataset.id = a.id;
-    bar.dataset.kind = a.kind || 'info';
+    if (m.prevFocus && m.prevFocus.isConnected) m.prevFocus.focus({ preventScroll: true });
+  }
+  // окно объявления; повтор (кнопка таймера) — без пометки «прочитано»
+  function showModal(a, again) {
+    annCss();
+    closeModal(false);
+    const kind = LABEL[a.kind] ? a.kind : 'info';
+    const m = document.createElement('div');
+    m.id = 'annModal';
+    m.className = 'ann-modal';
+    m.dataset.id = again ? '' : a.id;
+    m.prevFocus = document.activeElement;
+    const ev = kind === 'event' && evCur && evCur.until > Date.now() ? evCur : null;
+    m.innerHTML = `<div class="ann-box" data-kind="${kind}" role="dialog" aria-modal="true" aria-labelledby="annTitle">
+      <button type="button" class="ann-x" aria-label="Закрыть">✕</button>
+      <div class="ann-head"><span class="ann-ico"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[kind]}</svg></span><span id="annTitle"><small>${LABEL[kind]}</small><b></b></span></div>
+      <p class="ann-text"></p>
+      ${ev ? `<div class="ann-ev"><span class="x">×${String(ev.mult).replace('.', ',')}</span><span>До конца: <b data-ev-left>${left(ev.until - Date.now())}</b></span></div>` : ''}
+      <div class="ann-acts"><button type="button" class="ann-ok">Понятно</button></div></div>`;
     // текст объявления — только как текст, без разметки
-    bar.innerHTML = '<i aria-hidden="true"></i><span></span><button type="button" aria-label="Закрыть объявление">✕</button>';
-    bar.querySelector('i').innerHTML = a.kind === 'warn' ? '<span class="u-old">⚠️</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4 2.5 20h19z"/><path d="M12 10v4M12 17h.01"/></svg>' : a.kind === 'party' ? '<span class="u-old">🎉</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10v4h3l7 4V6l-7 4z"/><path d="M18 9.5a3.5 3.5 0 0 1 0 5"/></svg>' : '<span class="u-old">📢</span><svg class="u-new" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 10v4h3l7 4V6l-7 4z"/><path d="M18 9.5a3.5 3.5 0 0 1 0 5"/></svg>';
-    // текст — в свой span, а не в первый попавшийся: внутри значка тоже есть span (эмодзи для обычного вида)
-    bar.querySelector(':scope > span').textContent = a.text;
-    bar.querySelector('button').addEventListener('click', () => { try { localStorage.setItem(ANN_KEY, a.id); } catch (e) {} bar.remove(); });
+    m.querySelector('.ann-head b').textContent = a.title || (kind === 'event' && ev ? ev.title : LABEL[kind]);
+    m.querySelector('.ann-text').textContent = a.text;
+    const done = () => closeModal(!again);
+    m.querySelector('.ann-ok').addEventListener('click', done);
+    m.querySelector('.ann-x').addEventListener('click', done);
+    m.addEventListener('click', (e) => { if (e.target === m) done(); });
+    m.addEventListener('keydown', (e) => { if (e.key === 'Escape') { e.preventDefault(); done(); } });
+    document.body.appendChild(m);
+    m.querySelector('.ann-ok').focus({ preventScroll: true });
+  }
+  async function announce(a, ev) {
+    annCss();
+    if (ev !== undefined) eventChip(ev);
+    annCur = a && a.text ? a : null;
+    const open = document.getElementById('annModal');
+    if (!annCur) { if (open && open.dataset.id) closeModal(false); return; }
+    if (location.pathname.startsWith('/admin')) return; // в админке окно не мешает работе
+    if (seenList().includes(annCur.id) || annBusy === annCur.id || (open && open.dataset.id === annCur.id)) return;
+    annBusy = annCur.id;
+    const cur = annCur;
+    // вошёл: вдруг уже прочитал на другом устройстве
+    const h = authH();
+    if (h) {
+      try {
+        const r = await fetch('/api/announce/seen?id=' + encodeURIComponent(cur.id), { headers: h, cache: 'no-store' });
+        if (r.ok && (await r.json()).seen) { remember(cur.id); annBusy = ''; return; }
+      } catch (e) {}
+    }
+    // поверх подсказки «Впервые тут?» не открываем: подождём, пока её закроют
+    const wait = () => {
+      if (annCur !== cur || seenList().includes(cur.id)) { annBusy = ''; return; }
+      if (document.querySelector('.howto-modal:not([hidden]), .lv-spot, .alb-ov')) { setTimeout(wait, 1500); return; }
+      annBusy = '';
+      showModal(cur);
+    };
+    wait();
+  }
+  // таймер тематической недели: внизу слева на всех страницах, пока она идёт. Нажатие — снова окно о неделе
+  let evT = 0;
+  function eventChip(ev) {
+    evCur = ev && ev.until > Date.now() ? ev : null;
+    let chip = document.getElementById('evChip');
+    if (!evCur) { if (chip) chip.remove(); clearInterval(evT); return; }
+    if (!chip) {
+      chip = document.createElement('button');
+      chip.type = 'button';
+      chip.id = 'evChip';
+      chip.className = 'ev-chip';
+      chip.addEventListener('click', () => {
+        const e = evCur;
+        if (!e) return;
+        const a = annCur && annCur.kind === 'event' ? annCur : { id: 'ev-' + e.id, kind: 'event', title: e.title, text: `×${String(e.mult).replace('.', ',')} опыта за: ${(e.kinds || []).join(', ')}.` };
+        showModal(a, true);
+      });
+      document.body.appendChild(chip);
+    }
+    chip.innerHTML = '<span class="x"></span><span class="t"></span><b></b>';
+    chip.querySelector('.x').textContent = '×' + String(evCur.mult).replace('.', ',');
+    chip.querySelector('.t').textContent = evCur.title;
+    chip.title = `Тематическая неделя «${evCur.title}»: ×${String(evCur.mult).replace('.', ',')} опыта за ${(evCur.kinds || []).join(', ')}`;
+    const tick = () => {
+      const ms = evCur ? evCur.until - Date.now() : 0;
+      if (ms <= 0) { eventChip(null); return; }
+      chip.querySelector('b').textContent = left(ms);
+      chip.setAttribute('aria-label', `Тематическая неделя «${evCur.title}», до конца ${left(ms)}`);
+      const l = document.querySelector('[data-ev-left]');
+      if (l) l.textContent = left(ms);
+    };
+    clearInterval(evT);
+    tick();
+    evT = setInterval(tick, 1000);
   }
 
   let goneShown = false;
@@ -118,7 +246,7 @@
     } catch (e) {}
     if (goneShown || location.pathname.startsWith('/admin')) return;
     goneShown = true;
-    if (!document.getElementById('annCss')) announce(null);
+    annCss();
     const bar = document.createElement('div');
     bar.className = 'site-ann';
     bar.dataset.kind = 'warn';
@@ -160,7 +288,8 @@
     st.incoming = +d.incoming || 0;
     st.ready = true;
     render();
-    announce(d.announce);
+    // от сервера сайта — полное объявление и неделя; из комнаты присутствия — только знак, что пора спросить
+    if (fromRT) pollAnnounce(true); else announce(d.announce, d.event);
   }
   function render() {
     paint(document);
@@ -207,7 +336,7 @@
       st.friends.set(m.id, +m.at || Date.now());
       render();
     } else if (m.t === 'count') { st.online = +m.online || 0; render(); }
-    else if (m.t === 'announce') announce(m.announce);
+    else if (m.t === 'announce') pollAnnounce(true);
     else if (m.t === 'notify') notify(m);
   }
   // вошёл или вышел в этой вкладке или в другой: сокет переподключается уже с новым токеном (или гостем)
@@ -282,9 +411,9 @@
     document.dispatchEvent(new CustomEvent('casual-notify', { detail: n }));
   }
   let annTimer = 0;
-  async function pollAnnounce() {
-    if (document.hidden) return;
-    try { const r = await fetch('/api/announce', { cache: 'no-store' }); if (r.ok) announce((await r.json()).announce); } catch (e) {}
+  async function pollAnnounce(force) {
+    if (document.hidden && !force) return;
+    try { const r = await fetch('/api/announce', { cache: 'no-store' }); if (r.ok) { const d = await r.json(); announce(d.announce, d.event || null); } } catch (e) {}
   }
   const start = () => {
     clearInterval(timer); clearInterval(annTimer);

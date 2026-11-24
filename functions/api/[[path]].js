@@ -7,9 +7,9 @@ import { imdbLookup } from '../_lib/imdb.js';
 import { albumTracks, friendsAlbum, trackPreview } from '../_lib/album.js';
 import { NOTES } from '../_lib/admin-changes.js';
 import { LOT_NAME, MAX_LOTS, STICKER_RE, cleanLive, LIVE_OWNER, liveBusy, liveLots, spinLive, resetLive, stopAuto, settledLive, liveTx, liveView } from '../_lib/lots-live.js';
-import { ONLINE_MS, GUEST_RE, onlineCount, friendsAndIncoming, touchUsers, touchGuests } from '../_lib/presence.js';
-import { awardMany as lvAwardMany, revokeMany as lvRevokeMany, visit as lvVisit, shelfDiff, tierDone, nightNow, levelsOn, onSeasonClose } from '../_lib/levels.js';
-import { makeLevelsRoutes, acceptInvite, tzOf, ensurePast } from '../_lib/levels-api.js';
+import { ONLINE_MS, GUEST_RE, onlineCount, friendsAndIncoming, touchUsers, touchGuests, spanMs } from '../_lib/presence.js';
+import { awardMany as lvAwardMany, revokeMany as lvRevokeMany, visit as lvVisit, shelfDiff, tierDone, nightNow, levelsOn, onSeasonClose, currentEvent } from '../_lib/levels.js';
+import { makeLevelsRoutes, acceptInvite, tzOf, ensurePast, KIND_LABEL } from '../_lib/levels-api.js';
 import { makeShopRoutes } from '../_lib/shop-api.js';
 import { makeMailoutRoutes, rememberLang } from '../_lib/mailout.js';
 import { makePredictRoutes } from '../_lib/lots-predict.js';
@@ -607,7 +607,22 @@ const routes = {
   // объявление отдельно и часто: страницы спрашивают его раз в 15 секунд, поэтому новое появляется у всех почти сразу
   async 'GET /announce'({ env, request }) {
     if (burst('ann:' + clientIp(request), 40, 60e3)) return tooMany(1); // страница просто пропустит этот раз, плашка не пропадёт
-    return json({ announce: await currentAnnounce(env) });
+    return json({ announce: await currentAnnounce(env), event: await eventPub(env) });
+  },
+  // прочитал ли человек объявление (окно показывается один раз — и на других его устройствах тоже)
+  async 'GET /announce/seen'({ env, request, me }) {
+    const id = String(new URL(request.url).searchParams.get('id') || '').slice(0, 60);
+    await ensureAnnSeen(env);
+    const r = id ? await env.DB.prepare('SELECT 1 AS ok FROM ann_seen WHERE user_id = ? AND ann_id = ?').bind(me.id, id).first() : null;
+    return json({ seen: !!r });
+  },
+  async 'POST /announce/seen'({ env, request, me }) {
+    const { id } = await readBody(request);
+    const a = String(id || '').slice(0, 60);
+    if (!a) return fail(400, 'Нет объявления.');
+    await ensureAnnSeen(env);
+    await env.DB.prepare('INSERT OR IGNORE INTO ann_seen (user_id, ann_id, at) VALUES (?, ?, ?)').bind(me.id, a, Date.now()).run();
+    return json({ ok: true });
   },
   async 'GET /admin/stats'({ env, request, me }) {
     if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
@@ -760,12 +775,13 @@ const routes = {
   },
   async 'PUT /admin/announce'({ env, request, me }) {
     if (!(await adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
-    const { text, kind, hours } = await readBody(request);
-    const t = clip(String(text || '').replace(/\s+/g, ' ').trim(), 280);
+    const { text, title, kind, hours, n, unit } = await readBody(request);
+    const t = clip(String(text || '').replace(/[ \t]+/g, ' ').replace(/\n{3,}/g, '\n\n').trim(), 600);
     if (!t) await env.DB.prepare("DELETE FROM meta WHERE k = 'announce'").run();
     else {
-      const h = Math.max(0, Math.min(24 * 30, +hours || 0));
-      const v = { id: randHex(6), text: t, kind: ['info', 'warn', 'party'].includes(kind) ? kind : 'info', at: Date.now(), until: h ? Date.now() + h * 3600e3 : 0, by: me.handle };
+      // срок: число и единица (минуты, часы, дни, недели); старый вид — часы
+      const span = unit ? spanMs(n, unit) : Math.max(0, Math.min(24 * 30, +hours || 0)) * 3600e3;
+      const v = { id: randHex(6), title: clip(String(title || '').replace(/\s+/g, ' ').trim(), 80), text: t, kind: ['info', 'warn', 'party'].includes(kind) ? kind : 'info', at: Date.now(), until: span ? Date.now() + span : 0, by: me.handle };
       await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('announce', ?)").bind(JSON.stringify(v)).run();
     }
     await pokePresence(env, { what: 'announce' });
@@ -1145,7 +1161,7 @@ const routes = {
     const { friends, incoming } = me ? await friendsAndIncoming(env, me.id, now) : { friends: [], incoming: 0 };
     const sentToken = /^Bearer /.test(request.headers.get('authorization') || '');
     // rt — страница может подключить комнату присутствия (WebSocket) и больше не спрашивать раз в минуту
-    return json({ online: Math.max(onlineCache.n, me ? 1 : 0), friends, incoming, window: ONLINE_MS, announce: await currentAnnounce(env), rt: presenceOn(env), ...(sentToken ? { authed: !!me } : {}) });
+    return json({ online: Math.max(onlineCache.n, me ? 1 : 0), friends, incoming, window: ONLINE_MS, announce: await currentAnnounce(env), event: await eventPub(env), rt: presenceOn(env), ...(sentToken ? { authed: !!me } : {}) });
   },
 
   async 'GET /friends'({ env, me }) {
@@ -3183,7 +3199,7 @@ Object.assign(routes, makeLevelsRoutes({
   setAnnounce: async (env, a) => {
     if (!a) await env.DB.prepare("DELETE FROM meta WHERE k = 'announce'").run();
     else {
-      const v = { id: String(a.id || randHex(6)).slice(0, 40), text: clip(String(a.text || ''), 280), kind: ['info', 'warn', 'party'].includes(a.kind) ? a.kind : 'info', at: Date.now(), until: +a.until || 0, by: a.by || '' };
+      const v = { id: String(a.id || randHex(6)).slice(0, 40), title: clip(String(a.title || ''), 80), text: clip(String(a.text || ''), 600), kind: ['info', 'warn', 'party', 'event'].includes(a.kind) ? a.kind : 'info', at: Date.now(), until: +a.until || 0, by: a.by || '' };
       await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('announce', ?)").bind(JSON.stringify(v)).run();
     }
     announceCache.at = 0;
@@ -3235,7 +3251,20 @@ async function currentAnnounce(env) {
     announceCache.at = now;
   }
   const a = announceCache.v;
-  return a && a.text && (!a.until || a.until > now) ? { id: a.id, text: a.text, kind: a.kind } : null;
+  return a && a.text && (!a.until || a.until > now) ? { id: a.id, title: a.title || '', text: a.text, kind: a.kind, until: +a.until || 0 } : null;
+}
+// идущая тематическая неделя для всех (и гостей): таймер внизу страницы. За какие действия — подписями
+async function eventPub(env) {
+  if (!levelsOn(env)) return null;
+  let ev = null;
+  try { ev = await currentEvent(env); } catch (e) {}
+  return ev ? { id: ev.id, title: ev.title, mult: ev.mult, until: ev.until, kinds: (ev.kinds || []).map((k) => KIND_LABEL[k] || k) } : null;
+}
+let annSeenReady = false;
+async function ensureAnnSeen(env) {
+  if (annSeenReady) return;
+  await env.DB.prepare('CREATE TABLE IF NOT EXISTS ann_seen (user_id TEXT NOT NULL, ann_id TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (user_id, ann_id))').run();
+  annSeenReady = true;
 }
 
 export async function onRequest({ request, env, params }) {

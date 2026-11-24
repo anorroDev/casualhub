@@ -3383,6 +3383,8 @@
 "Оцени что-нибудь из «В планах»":"Rate something from “Planned”",
 "Собери тир-лист":"Make a tier list",
 "Разбери альбом по трекам":"Break an album down by tracks",
+"Важно":"Important",
+"До конца:":"Time left:",
 "Слушать отрывок":"Listen to a preview",
 "Оценить целиком":"Rate as a whole",
 "Изменить оценку альбома":"Change the album rating",

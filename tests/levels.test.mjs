@@ -739,3 +739,25 @@ test('разбор альбома: треки внутри альбома — о
   const d4 = L.shelfDiff([a3, full], [full]);
   assert.deepEqual(d4.take.filter((x) => x.kind === 'album_track').map((x) => x.ref).sort(), ['rB:1', 'rB:2', 'rB:3']);
 });
+
+test('тематическая неделя: срок числом и единицей, объявление о ней, «Закончить» снимает объявление', async () => {
+  const env = envOf();
+  const { routes, seen } = await levelRoutes({ admin: true });
+  const me = { id: 'a'.repeat(24), handle: 'admin' };
+  await atTime(NOON, async () => {
+    const r = await routes['PUT /admin/levels/event']({ env, request: { body: { title: 'Неделя тир-листов', mult: 2, n: 36, unit: 'hour', kinds: ['tier', 'react'], note: 'Зовите друзей!' } }, me });
+    assert.equal(r.ok, true);
+    assert.equal(r.event.until, NOON + 36 * 3600e3);
+    assert.equal(seen.ann.id, 'ev-' + r.event.id);
+    assert.equal(seen.ann.kind, 'event');
+    assert.equal(seen.ann.until, r.event.until);
+    assert.match(seen.ann.text, /^×2 опыта за: Тир-лист, Реакция другу\. До .+ Зовите друзей!$/);
+    assert.equal((await routes['PUT /admin/levels/event']({ env, request: { body: { title: 'x', n: 5, unit: 'min', kinds: ['tier'] } }, me })).status, 400, 'меньше 10 минут нельзя');
+    await routes['DELETE /admin/levels/event']({ env, request: {}, me });
+    assert.equal(seen.ann, null, 'объявление ушло вместе с неделей');
+  });
+  const P = await import('../functions/_lib/presence.js');
+  assert.equal(P.spanMs(2, 'week'), 14 * 864e5);
+  assert.equal(P.spanMs(999, 'week'), 90 * 864e5, 'не дольше 90 дней');
+  assert.equal(P.spanMs(3, 'nope'), 0);
+});

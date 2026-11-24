@@ -11,6 +11,7 @@ import {
 } from './levels.js';
 import { FOODS, boughtLooks, ensureShop } from './shop.js';
 import { settleWeekTop, weekTop, TOP_MIN, TOP_BASE, TOP_PER, TOP_BONUS_MAX } from './weektop.js';
+import { spanMs } from './presence.js';
 // еда Васяна, которая открывается уровнем: показывается в «Прогрессе» рядом с наградами оформления
 const FOOD_GIFTS = FOODS.filter((f) => f.unlock).map((f) => ({ level: f.unlock, title: f.title }));
 import { planSeasonReminder, cancelSeasonReminder, seasonReminderOf, mailOn } from './mailout.js';
@@ -23,6 +24,8 @@ export const KIND_LABEL = {
   lot_add: 'Лот в чужой сбор', lot_win: 'Твой лот победил', visit: 'Заход на сайт', invite: 'Приглашение', quest: 'Задание дня',
   quest_all: 'Все задания дня', quest_week: 'Задание недели', streak: 'Серия дней', first: 'Первые шаги', past: 'Опыт за прошлое',
   admin: 'От администрации', event: 'Тематическая неделя', gift: 'Подарок из почты', ach: 'Достижение', mentor: 'Друг по твоей ссылке дошёл до 10-го уровня',
+  riddle: 'Загадка дня', predict_win: 'Угадал победителя сбора', bingo_win: 'Линия в бинго', king_host: 'Провёл «Царя Горы»', king_vote: 'Голос в «Царе Горы»',
+  tier_coop: '«Тир-лист вместе»', tier_coop_host: 'Провёл «Тир-лист вместе»',
 };
 // таблица «За что сколько опыта» в «Прогрессе»: цифры — прямо из RULES, подписи — в levels-ui.js (XP_TABLE)
 const xpRules = () => Object.fromEntries(Object.entries(RULES).filter(([, r]) => !r.given).map(([k, r]) => [k, { xp: r.xp, day: r.day, tail: r.tail, pair: r.pair, ever: r.ever }]));
@@ -520,19 +523,30 @@ export function makeLevelsRoutes(h) {
       const b = await h.readBody(request);
       const title = String(b.title || '').replace(/\s+/g, ' ').trim().slice(0, 80);
       const kinds = (Array.isArray(b.kinds) ? b.kinds : []).map(String).filter((k) => RULES[k] && !RULES[k].given);
-      const days = Math.max(1, Math.min(14, Math.round(+b.days || 7)));
+      // срок: число и единица (минуты, часы, дни, недели); старый вид — дни
+      const span = b.unit ? spanMs(b.n, b.unit) : Math.max(1, Math.min(14, Math.round(+b.days || 7))) * 864e5;
       const mult = [1.5, 2, 3].includes(+b.mult) ? +b.mult : 2;
       if (!title || !kinds.length) return fail(400, 'Нужны название и хотя бы одно действие.');
-      const ev = { id: Date.now().toString(36), title, kinds, mult, until: Date.now() + days * 864e5 };
+      if (span < 10 * 60e3) return fail(400, 'Неделя идёт хотя бы 10 минут.');
+      const ev = { id: Date.now().toString(36), title, kinds, mult, until: Date.now() + span };
       await env.DB.prepare("INSERT OR REPLACE INTO meta (k, v) VALUES ('levels_event', ?)").bind(JSON.stringify(ev)).run();
       forgetEvent();
-      await h.adminLog(env, request, me, `levels: event ${title} ×${mult} ${days}d`, true);
+      // объявление-окно о неделе: каждый прочитает его один раз, а потом внизу страницы идёт таймер (online.js)
+      if (b.announce !== false && h.setAnnounce) {
+        const note = String(b.note || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+        const what = kinds.map((k) => KIND_LABEL[k] || k).join(', ');
+        await h.setAnnounce(env, { id: 'ev-' + ev.id, kind: 'event', title, text: `×${String(mult).replace('.', ',')} опыта за: ${what}. До ${fmtKyiv(ev.until)}.${note ? ' ' + note : ''}`, until: ev.until, by: me.handle });
+      }
+      await h.adminLog(env, request, me, `levels: event ${title} ×${mult} ${Math.round(span / 60e3)}m`, true);
       return json({ ok: true, event: ev });
     },
     async 'DELETE /admin/levels/event'({ env, request, me }) {
       if (!(await h.adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+      const was = await currentEvent(env);
       await env.DB.prepare("DELETE FROM meta WHERE k = 'levels_event'").run();
       forgetEvent();
+      // объявление о неделе уходит вместе с ней
+      if (was && h.getAnnounce && h.setAnnounce) { const a = await h.getAnnounce(env); if (a && a.id === 'ev-' + was.id) await h.setAnnounce(env, null); }
       await h.adminLog(env, request, me, 'levels: event off', true);
       return json({ ok: true });
     },
