@@ -710,5 +710,7 @@
 
   // балл альбома без своих критериев — среднее по трекам (save() в app.js, если в форме критерии сняли)
   const avgScores = (al) => { const avg = avgOf(rowsOf(entriesOf(al))); return avg != null ? [{ id: ALB_AVG, name: 'Среднее по трекам', desc: '', w: 1, v: avg }] : []; };
-  window.CasualAlbum = { cardHTML, folded, formHint, open, verdicts, agreement, avgScores };
+  // баллы оценённых треков по порядку — столбики у балла в списке (null, если треков не оценивали)
+  const trackBars = (al) => { const rows = rowsOf(entriesOf(al)); return rows.length ? rows.map((x) => x.v) : null; };
+  window.CasualAlbum = { cardHTML, folded, formHint, open, verdicts, agreement, avgScores, trackBars };
 })();

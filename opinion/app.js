@@ -2348,7 +2348,10 @@ function entryHTML(r, rank, showCat) {
   const n = r.scores.filter(s => s.v > 0).length;
   const notes = !!r.note || !!r.pros || !!r.cons || r.scores.some(s => s.note);
   const meta = [t != null ? verdict(t) : 'Без оценки', `${n} ${critWord(n)}`, fmtDate(stamp(r))].filter(Boolean).join(' · ');
-  const spark = r.scores.map(s => `<i data-tier="${tierV(s.v)}" data-v="${s.v}"></i>`).join('');
+  // у альбома с разбором — столбик на каждый оценённый трек, а не по критериям (у него там один дробный балл)
+  const trkBars = !r.albumOf && !r.example && window.CasualAlbum && window.CasualAlbum.trackBars ? window.CasualAlbum.trackBars(r) : null;
+  const barV = (v) => Math.max(1, Math.min(10, Math.round(v)));
+  const spark = (trkBars || r.scores.map(s => s.v)).map(v => `<i data-tier="${tierV(v)}" data-v="${v > 0 ? barV(v) : 0}"></i>`).join('');
   const bd = r.scores.map(s => `<li data-tier="${tierV(s.v)}"><span class="bd-name">${esc(s.name)}${s.w && s.w !== 1 ? ` <small class="crit-w-badge">×${s.w}</small>` : ''}</span><span class="bd-bar" aria-hidden="true">${cellsHTML(s.v, 'bc', false)}</span><b class="bd-v">${s.v || '—'}</b>${s.note ? `<span class="bd-note">${esc(s.note)}</span>` : ''}</li>`).join('');
   const prosList = splitLines(r.pros);
   const consList = splitLines(r.cons);
@@ -2383,7 +2386,7 @@ function entryHTML(r, rank, showCat) {
 <summary><span class="sum">
 <span class="rank">${rank == null ? '—' : rank}</span>
 <span class="e-main">${pUrl ? `<img class="e-thumb" data-photo="thumb"${adultAttr(r)} src="${esc(pUrl)}" alt="" loading="lazy" decoding="async">` : aUrl ? `<img class="e-thumb ava" src="${esc(aUrl)}" alt="" loading="lazy" decoding="async">` : ''}<span class="e-text"><span class="e-name">${r.fav ? '<span class="fav-star-inline" title="В избранном">★</span>' : ''}${esc(r.name)}</span><span class="e-sub"><span>${esc(meta)}</span>${imdbSlot(r)}${showCat ? `<span class="tag">${esc(catNameOf(r))}</span>` : ''}${r.status ? `<span class="tag status-tag">${esc(r.status)}</span>` : ''}${r.meta ? `<span class="tag meta-tag">${esc(r.meta)}</span>` : ''}${r.author && r.author.name ? `<span class="tag author-tag" title="Автор: ${esc(r.author.name)}">${renderAuthorMini(r.author)} ${esc(r.author.name)}</span>` : ''}${r.example ? '<span class="tag ex">пример</span>' : ''}${notes ? `<span class="has-note" title="Есть заметки">${ICON.noteSm}<span class="vh">есть заметки</span></span>` : ''}</span></span></span>
-<span class="spark" aria-hidden="true">${spark}</span>
+<span class="spark${trkBars ? ' trk' + (trkBars.length > 12 ? ' many' : '') : ''}" aria-hidden="true"${trkBars ? ` title="Треков оценено: ${trkBars.length}"` : ''}>${spark}</span>
 <span class="badge" data-tier="${tierT(t)}">${t != null ? fmt(t) : '—'}</span>
 ${ICON.chev}
 </span></summary>

@@ -1097,6 +1097,9 @@ input::placeholder, textarea::placeholder { color: var(--ink-3); font-weight: 40
 .spark i[data-v="4"] { height: 40%; } .spark i[data-v="5"] { height: 50%; } .spark i[data-v="6"] { height: 60%; }
 .spark i[data-v="7"] { height: 70%; } .spark i[data-v="8"] { height: 80%; } .spark i[data-v="9"] { height: 90%; }
 .spark i[data-v="10"] { height: 100%; }
+/* альбом с разбором: столбик на трек; треков много — тоньше, чтобы полоса не разъезжалась */
+.spark.trk.many { gap: 1px; }
+.spark.trk.many i { width: 3px; border-radius: 1px; }
 .chev { color: var(--ink-3); transition: transform .18s ease; }
 details[open] .chev { transform: rotate(180deg); }
 .e-body { margin: 0 -8px; padding: 6px 8px 18px; background: var(--panel-2); border-radius: 0 0 12px 12px; }
