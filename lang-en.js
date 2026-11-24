@@ -3808,7 +3808,14 @@ window.CasualLangPack = {
 "Сыграй в «Угадай оценку друга»":"Play “Guess a friend’s rating”",
 "Проверить":"Check",
 "Ты":"You",
-"В Мнении — кнопка «Угадай оценку друга» в шапке: угадай баллы друзей ползунком и нажми «Проверить». Нужны друзья с оценками":"In Opinion — the “Guess a friend’s rating” button in the header: guess your friends’ scores with the slider and press “Check”. You need friends with ratings"
+"В Мнении — кнопка «Угадай оценку друга» в шапке: угадай баллы друзей ползунком и нажми «Проверить». Нужны друзья с оценками":"In Opinion — the “Guess a friend’s rating” button in the header: guess your friends’ scores with the slider and press “Check”. You need friends with ratings",
+// достижения «Единогласно», «Против течения», «Телепат» (levels.js → ACHIEVEMENTS)
+"Единогласно":"Unanimous",
+"Оценки, где ты и хотя бы двое друзей разошлись не больше чем на полбалла":"Ratings where you and at least two friends were within half a point",
+"Против течения":"Against the current",
+"Оценки, где твой балл дальше 4 баллов от среднего у двух друзей и больше":"Ratings where your score is over 4 points from the average of two or more friends",
+"Телепат":"Telepath",
+"Баллы друзей, угаданные в точку в «Угадай оценку друга":"Friends’ scores guessed spot on in “Guess a friend’s rating"
 },
   // слово после числа: 1 оценка, 5 оценок. [все русские формы, одна штука, несколько]
   nouns: [

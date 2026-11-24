@@ -124,7 +124,15 @@ export function makeGuessRoutes(h) {
       const score = st.items.reduce((s, x, k) => s + (guesses[k] == null ? 0 : pointsFor(guesses[k], x.total)), 0);
       const w = await env.DB.prepare('UPDATE guess_days SET answers = ?, score = ?, done_at = ? WHERE user_id = ? AND day = ? AND answers IS NULL').bind(JSON.stringify(guesses), score, now, me.id, day).run();
       if (!(w.meta && w.meta.changes)) return fail(409, 'Сегодня ты уже угадывал. Завтра — новые оценки.');
-      if (h.lvGive) { try { await h.lvGive(env, request, me, me.id, [{ kind: 'guess', ref: day }]); } catch (e) { console.error('guess xp', e && e.message); } }
+      if (h.lvGive) {
+        try {
+          // «Телепат» (мерка @telepath): сколько всего баллов друзей угадано в точку, за все дни
+          const { results: all } = await env.DB.prepare('SELECT items, answers FROM guess_days WHERE user_id = ? AND answers IS NOT NULL').bind(me.id).all();
+          let telepath = 0;
+          for (const row of all || []) { const it = parse(row.items, []), an = parse(row.answers, []); it.forEach((x, k) => { if (an[k] != null && pointsFor(an[k], x.total) === 3) telepath++; }); }
+          await h.lvGive(env, request, me, me.id, [{ kind: 'guess', ref: day }], { metrics: { telepath } });
+        } catch (e) { console.error('guess xp', e && e.message); }
+      }
       return json(await stateOf(env, me.id, now));
     },
   };

@@ -1090,11 +1090,15 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     comeback: ['#67E8F9', '#0E7490', '<path d="M9 7L4.5 11.5 9 16"/><path d="M4.5 11.5H14a5.5 5.5 0 0 1 0 11h-2"/>'],
     event: ['#F0ABFC', '#A21CAF', '<rect x="4" y="5" width="16" height="15" rx="2.5"/><path d="M4 9.5h16M8.5 3.5v3M15.5 3.5v3"/><path d="M12 12l1 2 2.2.3-1.6 1.5.4 2.2-2-1-2 1 .4-2.2-1.6-1.5 2.2-.3z"/>'],
     recap2026: ['#FDE68A', '#CA8A04', '<rect x="4" y="9" width="16" height="11" rx="2"/><path d="M3 9h18v-3H3zM12 6v14M12 6c-1-2.5-4.5-2.5-4.5-.5S10 6 12 6zm0 0c1-2.5 4.5-2.5 4.5-.5S14 6 12 6z"/>'],
+    unanimous: ['#FCA5A5', '#DC2626', '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/>'],
+    contrarian: ['#93C5FD', '#2563EB', '<path d="M6.5 12c3-4.5 9-4.5 12 0-3 4.5-9 4.5-12 0zM6.5 12 3 9v6z"/><path d="M15 11h.01"/>'],
+    telepath: ['#C4B5FD', '#7C3AED', '<circle cx="12" cy="10" r="6.5"/><path d="M7 20h10M9 16.5 8 20M15 16.5l1 3.5"/>'],
   };
   // пиксельная эмблема: клетка листа /art/ach.webp (6×5) — порядок клеток свой, не порядок ACH_ART: новые достижения
   // дописываются в конец листа и сюда же (незнакомый код — как у «Критика»)
   const ACH_SHEET = ['founder', 'first_steps', 'critic', 'reviewer', 'omnivore', 'finisher', 'moved', 'tiermaker', 'masterpiece', 'soul', 'chatter', 'fan',
-    'popular', 'recruiter', 'auctioneer', 'lucky', 'rhythm', 'questor', 'night', 'strict', 'nope', 'comeback', 'event', 'recap2026', 'riddler', 'mentor', 'invited'];
+    'popular', 'recruiter', 'auctioneer', 'lucky', 'rhythm', 'questor', 'night', 'strict', 'nope', 'comeback', 'event', 'recap2026', 'riddler', 'mentor', 'invited',
+    'unanimous', 'contrarian', 'telepath']; // лист заполнен: следующему достижению — новый ряд в /art/ach.webp
   function achPx(code) {
     if (code === 'first10') return '<i class="lv-px vasyan"></i>'; // эмблема — сам Васян
     const i = ACH_SHEET.indexOf(code), k = i < 0 ? ACH_SHEET.indexOf('critic') : i;

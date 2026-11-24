@@ -78,17 +78,17 @@ async function setup() {
   shelf('f1', [r('a', 'Hades', 9), r('b', 'Dune', 6, { vis: 'private' }), r('c', 'Doom', 7)]);
   shelf('f2', [r('d', 'Blonde', 8.5), r('e', 'Ivy', 4)]);
   shelf('f3', [r('z', 'Чужое', 1)]); // только заявка — не друг
-  const given = [];
+  const given = [], metrics = [];
   const routes = makeGuessRoutes({
     json: (o) => o, fail: (status, error) => ({ status, error }), readBody: async (req) => (req && req.body) || {},
-    lvGive: async (e, req, me, uid, items) => { given.push({ uid, items }); },
+    lvGive: async (e, req, me, uid, items, opts) => { given.push({ uid, items }); metrics.push(opts && opts.metrics); },
   });
-  return { env, routes, given };
+  return { env, routes, given, metrics };
 }
 const at = async (t, fn) => { const real = Date.now; Date.now = () => t; try { return await fn(); } finally { Date.now = real; } };
 
 test('игра: набор без баллов, ответы один раз, очки, опыт и таблица недели', async () => {
-  const { env, routes, given } = await setup();
+  const { env, routes, given, metrics } = await setup();
   const me = { id: 'u1' };
   const s = await at(NOW, () => routes['GET /guess']({ env, me }));
   assert.equal(s.day, '2026-12-03');
@@ -106,6 +106,7 @@ test('игра: набор без баллов, ответы один раз, о
   assert.equal(res.score, res.items.reduce((sum, x) => sum + x.points, 0));
   assert.equal(res.max, 3 * 4);
   assert.deepEqual(given, [{ uid: 'u1', items: [{ kind: 'guess', ref: '2026-12-03' }] }], 'опыт — один раз за день');
+  assert.deepEqual(metrics[0], { telepath: 1 }, 'для «Телепата» — сколько всего баллов угадано в точку');
   assert.equal((await at(NOW + 120e3, () => routes['POST /guess']({ env, request: { body: { answers } }, me }))).status, 409);
   const again = await at(NOW + 180e3, () => routes['GET /guess']({ env, me }));
   assert.equal(again.done, true);

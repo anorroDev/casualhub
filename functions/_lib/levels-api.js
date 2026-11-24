@@ -6,7 +6,7 @@ import {
   levelsMode, levelsOn, ensureLevels, readLevel, levelView, prefsOf, lookOf, unlockedAt, levelsOf, achievementsOf, questState,
   firstSteps, takeNews, dayKey, weekStart, shiftDay, cleanTz, backfillUser, grantSpecial, currentEvent, forgetEvent, RULES, awardMany, CAT_GROUPS, RATING_KINDS,
   ACHIEVEMENTS, REWARDS, NAME_COLORS, PROFILE_BGS, isScored, textLen, award, INVITE_REWARDS, EVENT_REWARDS, INV_SQL, invitesOf, STREAK_BONUS, FIRST_STEPS,
-  achBackLetter, ACH_TIER_XP, ACH_ONE_XP, swapQuest, recalcUser,
+  achBackLetter, ACH_TIER_XP, ACH_ONE_XP, swapQuest, recalcUser, nameKey,
   SEASON_RANKS, seasonRankOf, rankFields, currentSeason, closeSeason, forgetSeason, seasonXpOf, seasonXpMany, seasonPlanLetter, fmtKyiv,
 } from './levels.js';
 import { FOODS, boughtLooks, ensureShop } from './shop.js';
@@ -798,5 +798,3 @@ export async function recap(env, uid, year) {
     music, modes, hot, roflans,
   };
 }
-// название оценки для сравнения с друзьями — так же, как профиль сравнивает вкусы (без регистра, ё = е, пробелы)
-const nameKey = (s) => String(s || '').trim().toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ');

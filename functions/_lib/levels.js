@@ -168,6 +168,10 @@ export const ACHIEVEMENTS = [
   { code: 'comeback', title: 'Вернулся', desc: 'Зашёл после перерыва в 30 дней', metric: '@comeback', tiers: [1], hidden: true },
   { code: 'event', title: 'Участник события', desc: 'Сделал что-нибудь в тематическую неделю', metric: '@event', tiers: [1, 3, 10] },
   { code: 'recap2026', title: 'Итоги 2026', desc: 'Посмотрел свои итоги 2026 года', special: true },
+  // оценки друзей (socialMetrics): мерки считаются, когда появилась новая оценка с баллами (сохранение полки в API)
+  { code: 'unanimous', title: 'Единогласно', desc: 'Оценки, где ты и хотя бы двое друзей разошлись не больше чем на полбалла', metric: '@unanimous', tiers: [1, 5, 20] },
+  { code: 'contrarian', title: 'Против течения', desc: 'Оценки, где твой балл дальше 4 баллов от среднего у двух друзей и больше', metric: '@contrarian', tiers: [1, 5, 20] },
+  { code: 'telepath', title: 'Телепат', desc: 'Баллы друзей, угаданные в точку в «Угадай оценку друга»', metric: '@telepath', tiers: [5, 25, 100] },
 ];
 const ACH = Object.fromEntries(ACHIEVEMENTS.map((a) => [a.code, a]));
 // опыт за ступень достижения: бронза, серебро, золото; одна ступень и особые — одинаково
@@ -1265,6 +1269,46 @@ export async function recalcUser(env, uid, { apply = false } = {}) {
 // у оценки есть баллы (не «В планах» и не «В процессе» без баллов)
 export const isScored = (r) => !!r && r.total != null && Number.isFinite(+r.total) && Array.isArray(r.scores) && r.scores.length > 0 && r.status !== 'В планах';
 export const textLen = (r) => [r.note, r.pros, r.cons].map((x) => String(x || '').trim().length).reduce((a, b) => a + b, 0);
+// одно и то же у разных людей: название без регистра, ё = е, лишние пробелы — так профиль сравнивает вкусы
+export const nameKey = (s) => String(s || '').trim().toLowerCase().replace(/ё/g, 'е').replace(/\s+/g, ' ');
+// «Единогласно» и «Против течения» (мерки @unanimous и @contrarian): мои оценки с баллом, которые оценили хотя бы
+// двое друзей (их «только я» не считаются). Единогласно — все баллы, мой и друзей, в пределах полбалла; против течения —
+// мой балл дальше 4 баллов от среднего у друзей. friends — списки оценок друзей (friendRatings)
+export function socialMetrics(mine, friends) {
+  const by = new Map();
+  for (const list of friends || []) {
+    const once = new Set();
+    for (const r of list || []) {
+      if (!r || r.example || r.vis === 'private' || !isScored(r)) continue;
+      const k = nameKey(r.name);
+      if (!k || once.has(k)) continue;
+      once.add(k);
+      (by.get(k) || by.set(k, []).get(k)).push(+r.total);
+    }
+  }
+  let unanimous = 0, contrarian = 0;
+  const seen = new Set();
+  for (const r of mine || []) {
+    if (!r || r.example || !isScored(r)) continue;
+    const k = nameKey(r.name);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    const t = by.get(k);
+    if (!t || t.length < 2) continue;
+    const me = +r.total, all = [me, ...t];
+    if (Math.max(...all) - Math.min(...all) <= 0.5 + 1e-9) unanimous++;
+    if (Math.abs(me - t.reduce((s, v) => s + v, 0) / t.length) >= 4 - 1e-9) contrarian++;
+  }
+  return { unanimous, contrarian };
+}
+// списки оценок друзей (до 90 друзей, как лента) — для socialMetrics
+export async function friendRatings(env, uid) {
+  const { results: fr } = await env.DB.prepare("SELECT CASE WHEN a = ?1 THEN b ELSE a END AS id FROM friendships WHERE (a = ?1 OR b = ?1) AND status = 'accepted'").bind(uid).all();
+  const ids = (fr || []).map((x) => x.id).slice(0, 90);
+  if (!ids.length) return [];
+  const { results } = await env.DB.prepare(`SELECT data FROM shelves WHERE user_id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all();
+  return (results || []).map((s) => { try { const d = JSON.parse(s.data || '{}'); return Array.isArray(d) ? d : d.ratings || []; } catch (e) { return []; } });
+}
 const isFull = (r) => isScored(r) && r.scores.length >= 2 && r.scores.every((s) => +s.v > 0) && !!r.photo;
 const stamp = (r) => +new Date(r.createdAt || r.updatedAt || 0) || 0;
 // «Разбор альбома»: у оценки альбома trackCount — сколько треков, skip — номера пропущенных, tracks — баллы треков внутри

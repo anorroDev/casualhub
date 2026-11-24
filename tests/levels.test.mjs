@@ -1006,3 +1006,20 @@ test('новогодний календарь в «Почте»: непрочи�
   assert.deepEqual(m.advent, { day: 5, frameAt: 20 });
   assert.ok(m.evRewards.some((x) => x.id === 'frame8'));
 });
+
+test('достижения «Единогласно» и «Против течения»: совпадения с оценками друзей', () => {
+  const R = (name, total, extra = {}) => ({ id: name, name, total, scores: total == null ? [] : [{ v: total }], ...extra });
+  const mine = [R('Hades', 9), R('Dune', 3), R('Blonde', 8), R('Solo', 5), R('План', null, { status: 'В планах' })];
+  const friends = [
+    [R('hades', 9.5), R('Dune', 8), R('Blonde', 8.5), R('Solo', 5)],
+    [R('Hades', 9), R('Dune', 7.5), R('Blonde', 9.5)],
+    [R('Hades', 8, { vis: 'private' }), R('Dune', 7)], // скрытая оценка друга не считается: с ней Hades — уже не единогласно
+  ];
+  // Hades: 9, 9.5, 9 — все в полбалла; Dune: 3 против среднего 7.5 — разница 4.5; Blonde — ни то ни другое; Solo — один друг
+  assert.deepEqual(L.socialMetrics(mine, friends), { unanimous: 1, contrarian: 1 });
+  assert.deepEqual(L.socialMetrics(mine, []), { unanimous: 0, contrarian: 0 });
+  for (const code of ['unanimous', 'contrarian', 'telepath']) {
+    const a = ACHIEVEMENTS.find((x) => x.code === code);
+    assert.ok(a && a.metric === '@' + code, code);
+  }
+});

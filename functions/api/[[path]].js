@@ -8,7 +8,7 @@ import { albumTracks, friendsAlbum, trackPreview } from '../_lib/album.js';
 import { NOTES } from '../_lib/admin-changes.js';
 import { LOT_NAME, MAX_LOTS, STICKER_RE, cleanLive, LIVE_OWNER, liveBusy, liveLots, spinLive, resetLive, stopAuto, settledLive, liveTx, liveView } from '../_lib/lots-live.js';
 import { ONLINE_MS, GUEST_RE, onlineCount, friendsAndIncoming, touchUsers, touchGuests, spanMs } from '../_lib/presence.js';
-import { awardMany as lvAwardMany, revokeMany as lvRevokeMany, visit as lvVisit, shelfDiff, tierDone, nightNow, levelsOn, onSeasonClose, currentEvent, CAT_GROUPS } from '../_lib/levels.js';
+import { awardMany as lvAwardMany, revokeMany as lvRevokeMany, visit as lvVisit, shelfDiff, tierDone, nightNow, levelsOn, onSeasonClose, currentEvent, CAT_GROUPS, socialMetrics, friendRatings } from '../_lib/levels.js';
 import { makeLevelsRoutes, acceptInvite, tzOf, ensurePast, KIND_LABEL } from '../_lib/levels-api.js';
 import { makeShopRoutes } from '../_lib/shop-api.js';
 import { makeMailoutRoutes, rememberLang } from '../_lib/mailout.js';
@@ -1374,7 +1374,10 @@ const routes = {
       const diff = shelfDiff(old.ratings, merged);
       if (diff.take.length) await lvRevokeMany(env, me.id, diff.take.slice(0, 500));
       const night = diff.give.some((x) => x.kind === 'rate') && nightNow(now, tzOf(request)) ? 1 : 0;
-      if (diff.give.length) await lvGive(env, request, me, me.id, diff.give, { metrics: { ...diff.metrics, night } });
+      // новая оценка с баллами — сверить с оценками друзей («Единогласно», «Против течения»)
+      let social = {};
+      if (diff.give.some((x) => x.kind === 'rate')) { try { social = socialMetrics(merged, await friendRatings(env, me.id)); } catch (e) { console.error('social metrics', e && e.message); } }
+      if (diff.give.length) await lvGive(env, request, me, me.id, diff.give, { metrics: { ...diff.metrics, night, ...social } });
     }
     return json({ ok: true, updatedAt: updated, count: merged.length, catsAt: catsOut ? catsOut.at : null });
   },
