@@ -167,12 +167,131 @@
     document.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
     return box;
   }
+  // ---------- альбом, разобранный по трекам (поля tracks, trackCount, skip, amode из Мнения) ----------
+  // Вне Мнения — в этом окне и в профиле: кардиограмма, подписи и треки с баллами на месте «Среднего по трекам».
+  // В Мнении своя кардиограмма с отрывками (opinion/album.js); правила подписей здесь те же, что в verdicts там — меняй вместе.
+  const ALB_AVG = 'alb-avg';
+  const AMODES = ['tracks', 'crit', 'mix'];
+  const round1 = (x) => Math.round(x * 10) / 10;
+  const fmtS = (v) => (Number.isInteger(v) ? String(v) : fmt(v));
+  const trackRows = (r) => (r && !r.albumOf && Array.isArray(r.tracks) ? r.tracks : [])
+    .filter((t) => t && +t.n >= 1 && +t.v > 0)
+    .map((t) => ({ n: +t.n, t: String(t.t || '').slice(0, 140), v: Math.min(10, +t.v), g: (Array.isArray(t.g) ? t.g : []).filter((x) => typeof x === 'string').slice(0, 6) }))
+    .sort((a, b) => a.n - b.n);
+  const critTotal = (scores) => {
+    let sum = 0, w = 0;
+    for (const s of scores) { if (!s || s.id === ALB_AVG || !(+s.v > 0)) continue; const k = typeof s.w === 'number' && s.w > 0 ? s.w : 1; sum += +s.v * k; w += k; }
+    return w ? round1(sum / w) : null;
+  };
+  // балл альбома по режиму, как scoreTotal в Мнении: 'tracks' — среднее по трекам (ALB_AVG), 'crit' — свои критерии,
+  // 'mix' — пополам (критерии весят как все треки вместе); без режима — критерии, если есть, иначе треки. null — не альбом
+  function albumTotal(scores, amode) {
+    const a = (scores || []).find((s) => s && s.id === ALB_AVG && +s.v > 0);
+    if (!a) return null;
+    const crit = critTotal(scores || []);
+    const mode = AMODES.includes(amode) ? amode : crit != null ? 'crit' : 'tracks';
+    if (crit == null || mode === 'tracks') return +a.v;
+    return mode === 'crit' ? crit : round1((crit + +a.v) / 2);
+  }
+  function verdicts(rows) {
+    const vs = rows.map((x) => x.v);
+    const n = vs.length;
+    if (n < 3) return [];
+    const avg = vs.reduce((a, b) => a + b, 0) / n;
+    const sd = Math.sqrt(vs.reduce((a, b) => a + (b - avg) ** 2, 0) / n);
+    const third = Math.max(1, Math.round(n / 3));
+    const mean = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+    const head = mean(vs.slice(0, third)), tail = mean(vs.slice(-third)), mid = n >= 5 ? mean(vs.slice(third, n - third)) : null;
+    const out = [];
+    if (vs.every((v) => v >= 8)) out.push({ t: 'Ни одного проходного', k: 'good' });
+    else if (vs.filter((v) => v >= 9).length / n >= 0.5) out.push({ t: 'Бэнгер на бэнгере', k: 'good' });
+    if (sd < 0.9) out.push({ t: 'Ровный от начала до конца', k: 'none' });
+    else if (sd >= 2.2) out.push({ t: 'Американские горки', k: 'mid' });
+    if (tail - head >= 1.2) out.push({ t: 'Разгоняется к финалу', k: 'good' });
+    else if (head - tail >= 1.2) out.push({ t: 'Сильный старт, слабый финал', k: 'mid' });
+    if (mid != null && mid <= Math.min(head, tail) - 1) out.push({ t: 'Провис в середине', k: 'bad' });
+    if (!out.length) out.push(Math.min(...vs) >= 6 ? { t: 'Без провалов', k: 'good' } : Math.max(...vs) - Math.min(...vs) >= 4 ? { t: 'Есть и хиты, и проходные', k: 'mid' } : { t: 'Без сюрпризов', k: 'none' });
+    return out.slice(0, 3);
+  }
+  function curveSVG(rows, total) {
+    const W = 320, H = 118, L = 14, R = 10, T = 14, B = 18;
+    const N = Math.max(total || 0, rows.reduce((a, x) => Math.max(a, x.n), 0), 2);
+    const X = (n) => L + ((n - 1) / (N - 1)) * (W - L - R);
+    const Y = (v) => T + (1 - v / 10) * (H - T - B);
+    const avg = rows.reduce((a, x) => a + x.v, 0) / rows.length;
+    const best = rows.reduce((a, x) => (x.v > a.v ? x : a), rows[0]);
+    const worst = rows.reduce((a, x) => (x.v < a.v ? x : a), rows[0]);
+    const ticks = Array.from({ length: N }, (_, i) => i + 1).filter((n) => N <= 16 || n === 1 || n === N || n % 5 === 0)
+      .map((n) => `<text class="av-tk" x="${X(n).toFixed(1)}" y="${H - 4}">${n}</text>`).join('');
+    const tag = (x, text, below) => `<text class="av-lab" x="${Math.min(W - 24, Math.max(24, X(x.n))).toFixed(1)}" y="${(below ? Y(x.v) + 14 : Y(x.v) - 8).toFixed(1)}">${text}</text>`;
+    return `<svg class="av-curve" viewBox="0 0 ${W} ${H}" role="img" aria-label="Баллы треков по порядку, в среднем ${fmt(round1(avg))}">
+      ${[2.5, 5, 7.5].map((v) => `<line class="av-grid" x1="${L}" x2="${W - R}" y1="${Y(v)}" y2="${Y(v)}"/>`).join('')}
+      <line class="av-avg" x1="${L}" x2="${W - R}" y1="${Y(avg).toFixed(1)}" y2="${Y(avg).toFixed(1)}"/>
+      ${rows.length > 1 ? `<polyline class="av-line" points="${rows.map((x) => `${X(x.n).toFixed(1)},${Y(x.v).toFixed(1)}`).join(' ')}"/>` : ''}
+      ${rows.map((x) => `<circle class="av-dot" data-tier="${tierV(x.v)}" cx="${X(x.n).toFixed(1)}" cy="${Y(x.v).toFixed(1)}" r="${x.n === best.n ? 4.6 : 3.2}"><title>${esc(x.n + '. ' + x.t + ' — ' + fmtS(x.v))}</title></circle>`).join('')}
+      ${rows.length > 2 ? tag(best, 'лучший') : ''}
+      ${rows.length > 2 && avg - worst.v >= 1.5 ? tag(worst, 'провал', true) : ''}
+      ${ticks}
+    </svg>`;
+  }
+  const MODE_LABEL = { tracks: 'среднее по трекам', crit: 'оценка по критериям', mix: 'пополам: критерии и треки' };
+  // блок альбома: '' — у оценки нет разобранных треков (тогда показываются обычные критерии)
+  function albumHTML(r) {
+    const rows = trackRows(r);
+    if (!rows.length) return '';
+    const N = Math.max(+r.trackCount || 0, rows[rows.length - 1].n);
+    const done = rows.length + (Array.isArray(r.skip) ? r.skip.filter((n) => !rows.some((x) => x.n === +n)).length : 0);
+    const avg = round1(rows.reduce((a, x) => a + x.v, 0) / rows.length);
+    const crit = critTotal(r.scores || []);
+    const mode = AMODES.includes(r.amode) ? r.amode : crit != null ? 'crit' : 'tracks';
+    const chips = verdicts(rows).map((v) => `<span class="av-chip" data-k="${v.k}">${esc(v.t)}</span>`).join('');
+    return `<section class="av" aria-label="Кардиограмма альбома">
+      <div class="av-head"><b>Кардиограмма альбома</b><span>среднее по трекам ${fmt(avg)}${done < N ? ` · разобрано ${done} из ${N}` : ''}</span></div>
+      ${curveSVG(rows, N)}
+      ${chips ? `<div class="av-chips">${chips}</div>` : ''}
+      ${crit != null ? `<p class="av-mode">Балл альбома — ${MODE_LABEL[mode]}</p>` : ''}
+      <ol class="av-list">${rows.map((x) => { const v = Math.max(1, Math.min(10, Math.round(x.v))); return `<li data-tier="${tierV(x.v)}"><span class="av-n">${x.n}</span><span class="av-t">${esc(x.t || 'Трек ' + x.n)}${x.g.map((g) => ` <small>${esc(g)}</small>`).join('')}</span><span class="av-bar" aria-hidden="true">${Array.from({ length: 10 }, (_, i) => `<i${i < v ? ' class="on"' : ''}></i>`).join('')}</span><b>${fmtS(x.v)}</b></li>`; }).join('')}</ol>
+    </section>`;
+  }
+  const avCss = document.createElement('style');
+  avCss.textContent = `
+.av { display: grid; gap: 8px; }
+.av-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; }
+.av-head b { font-size: 15px; }
+.av-head span { font-size: 12.5px; color: var(--ink-3, #7b8191); }
+.av-curve { display: block; width: 100%; height: auto; overflow: visible; }
+.av-grid { stroke: var(--line, #2a2f3a); stroke-width: 1; }
+.av-avg { stroke: var(--ink-3, #7b8191); stroke-width: 1; stroke-dasharray: 4 4; opacity: .7; }
+.av-line { fill: none; stroke: var(--accent, #3550E8); stroke-width: 2.4; stroke-linejoin: round; stroke-linecap: round; }
+.av-dot { fill: var(--cell, #272c36); stroke: var(--panel, #161920); stroke-width: 1.5; }
+.av-dot[data-tier="good"] { fill: var(--good, #2EAD60); } .av-dot[data-tier="mid"] { fill: var(--mid, #EAA92C); } .av-dot[data-tier="bad"] { fill: var(--bad, #E4553F); }
+.av-tk { fill: var(--ink-3, #7b8191); font-size: 9px; text-anchor: middle; font-family: inherit; }
+.av-lab { fill: var(--ink-2, #a3a9b8); font-size: 9.5px; text-anchor: middle; font-family: inherit; }
+.av-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.av-chip { --c: var(--ink-3, #7b8191); padding: 3px 10px; border: 1px solid color-mix(in srgb, var(--c) 55%, transparent); border-radius: 999px; font-size: 12.5px; color: var(--c); }
+.av-chip[data-k="good"] { --c: var(--good, #2EAD60); } .av-chip[data-k="mid"] { --c: var(--mid, #EAA92C); } .av-chip[data-k="bad"] { --c: var(--bad, #E4553F); }
+.av-mode { margin: 0; font-size: 12.5px; color: var(--ink-2, #a3a9b8); }
+.av-list { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 8px; }
+.av-list li { --tier: var(--cell, #272c36); display: grid; grid-template-columns: 22px minmax(0, 1fr) auto 32px; align-items: center; gap: 10px; font-size: 13.5px; }
+.av-list li[data-tier="good"] { --tier: var(--good, #2EAD60); } .av-list li[data-tier="mid"] { --tier: var(--mid, #EAA92C); } .av-list li[data-tier="bad"] { --tier: var(--bad, #E4553F); }
+.av-n { font-size: 12.5px; font-weight: 700; color: var(--ink-3, #7b8191); font-variant-numeric: tabular-nums; text-align: right; }
+.av-t { min-width: 0; overflow-wrap: anywhere; }
+.av-t small { font-size: 11px; color: var(--ink-3, #7b8191); }
+.av-bar { display: grid; grid-template-columns: repeat(10, 7px); gap: 2px; }
+.av-bar i { height: 8px; border-radius: 2px; background: var(--cell, #272c36); }
+.av-bar i.on { background: var(--tier); }
+.av-list b { text-align: right; font-family: var(--font-display, inherit); font-size: 17px; font-variant-numeric: tabular-nums; }
+@media (max-width: 420px) { .av-bar { grid-template-columns: repeat(10, 5px); } }
+.av-sub { margin: 4px 0 -6px; font-size: 11.5px; font-weight: 700; letter-spacing: .04em; color: var(--ink-3, #7b8191); }`;
+  document.head.appendChild(avCss);
   const LB_MARK = '<span class="rc-lb" aria-hidden="true"><i></i><i></i><i></i></span>';
   function cardHTML(r, uid, who, handle) {
     const total = typeof r.total === 'number' ? r.total : null;
     const word = total != null ? WORDS[Math.max(1, Math.min(10, Math.round(total)))] : 'Без балла';
     const lb = r.src === 'letterboxd' || (r.scores || []).some((s) => s && s.id === 'lb-score');
-    const scores = (r.scores || []).filter((s) => s && s.name);
+    // альбом с разбором: вместо «Среднего по трекам» — кардиограмма и треки, свои критерии альбома — ниже
+    const alb = albumHTML(r), trk = alb ? trackRows(r).length : 0;
+    const scores = (r.scores || []).filter((s) => s && s.name && !(alb && s.id === ALB_AVG));
     const n = scores.filter((s) => +s.v > 0).length;
     const pros = lines(r.pros), cons = lines(r.cons);
     const cat = r.catName || r.catLabel || r.cat || '';
@@ -182,10 +301,12 @@
       ${r.photo ? `<div class="rc-pic" id="rcPic"${window.CasualUtil.nsfw.attr(window.CasualUtil.nsfw.is(r))}><span class="rc-ltr">${esc([...String(r.name).trim()][0] || '?')}</span>${lb ? LB_MARK : ''}</div>` : ''}
       <div class="rc-top">
         <div class="rc-name"><span class="rc-label">${esc(cat)}</span><h2 id="rcTitle">${esc(r.name)}</h2>
-          <p>${esc([word, n ? `${n} ${plural(n, 'критерий', 'критерия', 'критериев')}` : '', r.status, r.meta].filter(Boolean).join(' · '))}${lb ? ' · из Letterboxd' : ''}</p></div>
+          <p>${esc([word, trk ? `${trk} ${plural(trk, 'трек', 'трека', 'треков')}` : n ? `${n} ${plural(n, 'критерий', 'критерия', 'критериев')}` : '', r.status, r.meta].filter(Boolean).join(' · '))}${lb ? ' · из Letterboxd' : ''}</p></div>
         <div class="rc-score"><b>${total != null ? fmt(total) : '—'}</b><small>из 10</small></div>
       </div>
       ${window.CasualIMDb && window.CasualIMDb.isMovie(cat) ? `<div class="imdb-slot" data-imdb-row="1" data-imdb-n="${esc(r.name)}" data-imdb-y="${window.CasualIMDb.yearOf(r.meta) || ''}"></div>` : ''}
+      ${alb}
+      ${alb && scores.length ? '<p class="av-sub">Критерии альбома</p>' : ''}
       ${scores.length ? `<ul class="rc-crit">${scores.map((s) => { const v = Math.max(0, Math.min(10, Math.round(+s.v || 0))); return `<li data-tier="${tierV(v)}">
         <div class="rc-ct"><b>${esc(s.name)}</b><span>${v || '—'}</span></div>
         ${s.desc ? `<small class="rc-desc">${esc(s.desc)}</small>` : ''}
@@ -289,5 +410,6 @@ html.unslop .rc-label { letter-spacing: normal; text-transform: none; }
 @media (max-width: 560px) { .rc-card { padding: 16px; border-radius: 22px; } .rc-score b { min-width: 84px; font-size: 38px; } .rc-foot .rc-take, .rc-foot .rc-btn.ghost { flex: 1 1 100%; } .rc-take .rc-btn { flex: 1 1 0; } }`;
   document.head.appendChild(css);
 
-  window.CasualRatingCard = { open, close, takeHTML, bindTake, take, srcOf, profUrl };
+  // album — альбом с разбором по трекам для профиля: html (блок), rows (треки с баллами), total (балл по режиму)
+  window.CasualRatingCard = { open, close, takeHTML, bindTake, take, srcOf, profUrl, album: { html: albumHTML, rows: trackRows, total: albumTotal, AVG: ALB_AVG } };
 })();

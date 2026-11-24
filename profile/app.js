@@ -65,6 +65,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     text: String(r.note || '').trim().slice(0, 4000), pros: String(r.pros || '').slice(0, 1000), cons: String(r.cons || '').slice(0, 1000),
     created: +new Date(r.createdAt || r.date || 0) || 0,
     at: +new Date(r.updatedAt || r.date || r.createdAt || 0) || 0,
+    // альбом, разобранный по трекам: кардиограмма в окне оценки (rating-card.js, CasualRatingCard.album)
+    ...(Array.isArray(r.tracks) && !r.albumOf ? { tracks: r.tracks, trackCount: +r.trackCount || 0, skip: Array.isArray(r.skip) ? r.skip : [], amode: r.amode || '' } : {}),
   });
   const myRatings = () => {
     const all = (read('ocenshik.ratings.v2') || []).filter((r) => r && !r.example);
@@ -1414,8 +1416,12 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   // править можно свою оценку, которая лежит в этом браузере (Мнение здесь уже открывали)
   const ownDoc = (p, id) => (p.kind === 'me' && (read(RKEY) || []).find((x) => x && x.id === id && !x.example && (!user || !x.author || x.author.id === user.id))) || null;
   const round1 = (x) => Math.round(x * 10) / 10;
-  // итог — как в Мнении: среднее поставленных баллов с весами критериев
-  const totalOf = (scores) => {
+  // итог — как в Мнении: среднее поставленных баллов с весами критериев; у альбома с разбором — по его режиму (треки,
+  // критерии или пополам), среднее по трекам (alb-avg) — не критерий
+  const albumApi = () => window.CasualRatingCard && window.CasualRatingCard.album;
+  const totalOf = (scores, amode) => {
+    const A = albumApi(), at = A ? A.total(scores, amode) : null;
+    if (at != null) return at;
     let sum = 0, wSum = 0;
     for (const s of scores) { if (!(s.v > 0)) continue; const w = typeof s.w === 'number' && s.w > 0 ? s.w : 1; sum += s.v * w; wSum += w; }
     return wSum ? round1(sum / wSum) : null;
@@ -1469,7 +1475,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const same = scores.every((s, k) => (+s.v || 0) === (+doc.scores[k].v || 0)) && next.pros === (doc.pros || '') && next.cons === (doc.cons || '') && next.note === (doc.note || '');
     rdEd = null;
     if (same) { openRating(p, r); return; }
-    rdCommit(p, Object.assign(doc, next, { scores, total: totalOf(scores), updatedAt: new Date().toISOString() }), 'Оценка сохранена');
+    rdCommit(p, Object.assign(doc, next, { scores, total: totalOf(scores, doc.amode), updatedAt: new Date().toISOString() }), 'Оценка сохранена');
   }
   function rdFav() {
     const { p, r } = rdCur;
@@ -1513,7 +1519,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       li.querySelectorAll('.rd-bar button').forEach((b, i) => { b.classList.toggle('on', i < nv); b.setAttribute('aria-pressed', String(i < nv)); });
     }
     const doc = ownDoc(rdCur.p, rdCur.r.id);
-    const t = totalOf(((doc && doc.scores) || []).map((s, i) => ({ v: rdEd.v[i], w: s.w })));
+    const t = totalOf(((doc && doc.scores) || []).map((s, i) => ({ id: s.id, v: rdEd.v[i], w: s.w })), doc && doc.amode);
     rdBox.querySelector('.rd-card').dataset.tier = tierT(t);
     rdBox.querySelector('.rd-score b').textContent = t != null ? fmt(t) : '—';
   }
@@ -1534,7 +1540,8 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         if (act === 'edit') {
           const doc = ownDoc(rdCur.p, rdCur.r.id);
           if (!doc) return;
-          rdEd = { v: (doc.scores || []).map((s) => Math.max(0, Math.min(10, Math.round(+s.v || 0)))), pros: doc.pros || '', cons: doc.cons || '', note: doc.note || '' };
+          // среднее по трекам у альбома — дробное и не правится здесь: остаётся как есть
+          rdEd = { v: (doc.scores || []).map((s) => (s.id === 'alb-avg' ? +s.v || 0 : Math.max(0, Math.min(10, Math.round(+s.v || 0))))), pros: doc.pros || '', cons: doc.cons || '', note: doc.note || '' };
           openRating(rdCur.p, rdCur.r);
           const first = rdBox.querySelector('.rd-bar.ed button');
           if (first) first.focus({ preventScroll: true });
@@ -1556,9 +1563,12 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
     const own = ownDoc(p, r.id);
     const ed = own && rdEd;
     const scores = ed ? (own.scores || []) : r.scores;
-    const total = ed ? totalOf(scores.map((s, k) => ({ v: rdEd.v[k], w: s.w }))) : r.total;
+    const total = ed ? totalOf(scores.map((s, k) => ({ id: s.id, v: rdEd.v[k], w: s.w })), own && own.amode) : r.total;
     const word = total != null ? WORDS[Math.max(1, Math.min(10, Math.round(total)))] : 'Без балла';
-    const n = r.scores.filter((s) => +s.v > 0).length;
+    // альбом с разбором: кардиограмма и треки (rating-card.js) на месте «Среднего по трекам», его строку не показываем
+    const A = albumApi(), alb = A ? A.html(r) : '', trk = alb ? A.rows(r).length : 0;
+    const shownCrit = scores.map((s, k) => [s, k]).filter(([s]) => !(alb && s.id === 'alb-avg'));
+    const n = r.scores.filter((s) => +s.v > 0 && !(alb && s.id === 'alb-avg')).length;
     const pros = lines(r.pros), cons = lines(r.cons);
     const when = r.created || r.at;
     const tools = !own ? '' : ed
@@ -1574,13 +1584,15 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       ${r.photo ? `<div class="rd-pic" id="rdPic"><span class="ltr">${letter(r.name)}</span>${lbm(r)}</div>` : ''}
       <div class="rd-top">
         <div class="rd-name"><span class="label">${esc(r.cat)}</span><h2 id="rdTitle">${r.fav ? `<span class="fav">${ICON.star}</span> ` : ''}${esc(r.name)}</h2>
-          <p>${esc([word, n ? `${n} ${plural(n, 'критерий', 'критерия', 'критериев')}` : '', r.status, r.meta].filter(Boolean).join(' · '))}${r.lb ? ' <span class="lb-src">· <span class="lb-mark"><i></i><i></i><i></i></span>из Letterboxd</span>' : ''}</p></div>
+          <p>${esc([word, trk ? `${trk} ${plural(trk, 'трек', 'трека', 'треков')}` : n ? `${n} ${plural(n, 'критерий', 'критерия', 'критериев')}` : '', r.status, r.meta].filter(Boolean).join(' · '))}${r.lb ? ' <span class="lb-src">· <span class="lb-mark"><i></i><i></i><i></i></span>из Letterboxd</span>' : ''}</p></div>
         <div class="rd-score"><b>${total != null ? fmt(total) : '—'}</b><small>из 10</small></div>
       </div>
       ${window.CasualIMDb && window.CasualIMDb.isMovie(r.cat) && !ed ? `<div class="imdb-slot" data-imdb-row="1" data-imdb-n="${esc(r.name)}" data-imdb-y="${window.CasualIMDb.yearOf(r.meta) || ''}"></div>` : ''}
       ${tools}
       ${r.link && !ed ? `<a class="rd-listen" href="${esc(r.link)}" target="_blank" rel="noopener noreferrer"><span class="u-old">🎧 </span>Слушать</a>` : ''}
-      ${scores.length ? `<ul class="rd-crit">${scores.map((s, k) => { const v = ed ? rdEd.v[k] : Math.max(0, Math.min(10, Math.round(+s.v || 0))); return `<li data-tier="${tierV(v)}" data-k="${k}">
+      ${alb}
+      ${alb && shownCrit.length ? '<p class="av-sub">Критерии альбома</p>' : ''}
+      ${shownCrit.length ? `<ul class="rd-crit">${shownCrit.map(([s, k]) => { const v = ed ? rdEd.v[k] : Math.max(0, Math.min(10, Math.round(+s.v || 0))); return `<li data-tier="${tierV(v)}" data-k="${k}">
         <div class="rd-ct"><b>${esc(s.name)}${s.w && s.w !== 1 ? ` <small>×${String(s.w).replace('.', ',')}</small>` : ''}</b><span>${v || '—'}</span></div>
         ${s.desc ? `<small class="rd-desc">${esc(s.desc)}</small>` : ''}
         ${ed ? `<div class="rd-bar ed" role="group" aria-label="${esc(s.name)}: балл">${Array.from({ length: 10 }, (_, i) => `<button type="button" data-k="${k}" data-v="${i + 1}"${i < v ? ' class="on"' : ''} aria-pressed="${i < v}" aria-label="${i + 1}"></button>`).join('')}</div>`
