@@ -100,7 +100,7 @@ export const RULES = {
   plan_done: { xp: 5, day: 5 }, // оценил то, что было «В планах»
   album_track: { xp: 4, day: 40 }, // трек альбома: оценённый внутри альбома (album.tracks) или отдельной оценкой (albumOf) — ref «альбом:номер»
   album_full: { xp: 20, day: 3 }, // разобрал альбом по трекам целиком (albumsFull); треки — album_track, не rate (isTrack)
-  import: { xp: 1, ever: 100 }, // оценка из импорта (Letterboxd)
+  import: { xp: 1, ever: 100 }, // оценка из импорта (Letterboxd, Steam)
   tier: { xp: 25, day: 2 }, // в тир-листе впервые набралось 8 элементов (tierDone)
   tier_share: { xp: 5, day: 1 }, // поделился тир-листом
   react: { xp: 3, day: 10, pair: 3 }, // реакция на оценку или тир-лист друга
@@ -148,7 +148,7 @@ export const ACHIEVEMENTS = [
   { code: 'omnivore', title: 'Всеядный', desc: 'Оценки в разных категориях', metric: '@cats', tiers: [3, 5, 8] },
   { code: 'fullalbum', title: 'Полное прослушивание', desc: 'Альбомы, разобранные по трекам целиком', metric: 'album_full', tiers: [1, 10, 50] },
   { code: 'finisher', title: 'Довёл до конца', desc: 'Оценил то, что было «В планах»', metric: 'plan_done', tiers: [5, 25, 100] },
-  { code: 'moved', title: 'Переезд', desc: 'Перенёс оценки из Letterboxd', metric: 'import', tiers: [1] },
+  { code: 'moved', title: 'Переезд', desc: 'Перенёс оценки из Letterboxd или Steam', metric: 'import', tiers: [1] },
   { code: 'tiermaker', title: 'Тир-лист-мейкер', desc: 'Тир-листы', metric: 'tier', tiers: [1, 10, 30] },
   { code: 'masterpiece', title: 'Хит тир-листов', desc: 'Тир-лист собрал 10 реакций', metric: '@tierReacts', tiers: [10] },
   { code: 'soul', title: 'Душа компании', desc: 'Друзья', metric: 'friend', tiers: [3, 10, 25] },
@@ -1146,7 +1146,7 @@ export async function backfillUser(env, uid, { now = Date.now(), founderBefore }
   const scored = ratings.filter((r) => isScored(r) && !isTrack(r)).sort((a, b) => stamp(a) - stamp(b));
   for (const r of ratings.filter((x) => isScored(x) && isTrack(x))) items.push({ kind: 'album_track', ref: `${r.albumOf}:${+r.trackNo}`, xp: RULES.album_track.xp, day: dayOf(stamp(r)), at: stamp(r) || now });
   scored.forEach((r, i) => {
-    const kind = r.src === 'letterboxd' ? 'import' : 'rate';
+    const kind = IMPORTED.has(r.src) ? 'import' : 'rate';
     const xp = kind === 'import' ? (i < 100 ? 1 : 0) : i < PAST.rateFull ? PAST.rateXp : PAST.rateTailXp;
     items.push({ kind, ref: r.id, xp, day: dayOf(stamp(r)), at: stamp(r) || now });
     if (kind === 'rate' && textLen(r) >= 100) items.push({ kind: 'review', ref: r.id, xp: PAST.review, day: dayOf(stamp(r)), at: stamp(r) || now });
@@ -1267,6 +1267,8 @@ export async function recalcUser(env, uid, { apply = false } = {}) {
 
 // ---------- оценки: что нового на полке ----------
 // у оценки есть баллы (не «В планах» и не «В процессе» без баллов)
+// оценки, перенесённые из других сервисов (src): опыт — import (1, всего до 100), без «отзыва» и «оценки целиком»
+const IMPORTED = new Set(['letterboxd', 'steam']);
 export const isScored = (r) => !!r && r.total != null && Number.isFinite(+r.total) && Array.isArray(r.scores) && r.scores.length > 0 && r.status !== 'В планах';
 export const textLen = (r) => [r.note, r.pros, r.cons].map((x) => String(x || '').trim().length).reduce((a, b) => a + b, 0);
 // одно и то же у разных людей: название без регистра, ё = е, лишние пробелы — так профиль сравнивает вкусы
@@ -1365,10 +1367,10 @@ export function shelfDiff(oldList, newList) {
     const cg = catGroupOf(r.catLabel || r.catName);
     const at = give.length;
     if (isScored(r) && !(o && isScored(o)) && !isTrack(r)) {
-      give.push({ kind: r.src === 'letterboxd' ? 'import' : 'rate', ref: id });
+      give.push({ kind: IMPORTED.has(r.src) ? 'import' : 'rate', ref: id });
       if (o && o.status === 'В планах') give.push({ kind: 'plan_done', ref: id });
     }
-    if (r.src !== 'letterboxd' && isScored(r)) {
+    if (!IMPORTED.has(r.src) && isScored(r)) {
       if (textLen(r) >= 100 && !(o && textLen(o) >= 100 && isScored(o))) give.push({ kind: 'review', ref: id });
       if (isFull(r) && !(o && isFull(o))) give.push({ kind: 'rate_full', ref: id });
     }

@@ -202,6 +202,12 @@ npx wrangler secret put BACKUP_KEY -c rt/wrangler.toml
 
 Без `TG_TOKEN` и `TG_BOT` всё выключено: в Настройках строки «Telegram» нет.
 
+## Импорт игр из Steam
+
+В Мнении (окно аккаунта и Настройки → «Данные») — «Импорт из Steam»: ссылка на свой профиль → игры по наигранному → отмечаешь, что перенести, по желанию с баллом (без балла — «В планах»). Обложки — из Steam. Код — `functions/_lib/steam.js` и `opinion/steam.js`, тесты — `tests/steam.test.mjs`.
+
+Как включить: ключ Steam Web API (https://steamcommunity.com/dev/apikey, домен — адрес сайта) положить в `STEAM_KEY` (`npx wrangler pages secret put STEAM_KEY`) и выложить сайт. Без ключа кнопок нет. У человека список игр в Steam должен быть открытым («Приватность» → «Сведения об играх» — «Открытые»), иначе сайт так и скажет.
+
 ## Запуск локально
 
 ```bash

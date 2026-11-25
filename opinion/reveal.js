@@ -38,6 +38,12 @@ function openAuthFromHash() {
     Promise.resolve(ready).catch(() => {}).then(() => { if (window.CasualLetterboxd) window.CasualLetterboxd.open(); });
     return;
   }
+  // импорт игр из Steam — из Настроек («Данные») на любой странице: /opinion/#steam
+  if (h === '#steam') {
+    history.replaceState(null, '', location.pathname + location.search);
+    Promise.resolve(ready).catch(() => {}).then(() => { if (window.CasualSteam) window.CasualSteam.open(); });
+    return;
+  }
   // «Обновить обложки и названия» из меню ☰ на других страницах
   if (h === '#refresh') {
     history.replaceState(null, '', location.pathname + location.search);

@@ -30,6 +30,7 @@
   const STYLE = `
 .st-sheet { position: fixed; inset: 0; z-index: 110; display: grid; place-items: center; padding: 16px; background: rgba(8, 10, 14, .6); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
 .st-sheet[hidden] { display: none; }
+.st-row[hidden] { display: none; }
 .st-card { position: relative; width: min(880px, 100%); height: min(640px, calc(100 * var(--dvh, 1vh) - 32px)); display: grid; grid-template-columns: 230px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); border: 1px solid var(--line, #2b2e38); border-radius: 20px; background: var(--panel, #1b1d24); color: var(--ink, #f3f4f6); box-shadow: 0 30px 70px -28px rgba(0, 0, 0, .7); overflow: hidden; animation: st-in .24s cubic-bezier(.22, 1, .36, 1); }
 @keyframes st-in { from { transform: translateY(12px) scale(.98); opacity: 0; } }
 .st-nav { min-height: 0; display: grid; align-content: start; gap: 2px; padding: 18px 10px; border-right: 1px solid var(--line, #2b2e38); background: var(--panel-2, #23262f); overflow: auto; }
@@ -456,7 +457,9 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
       + (window.CasualVasyan && window.CasualVasyan.own() ? grp('Котик Васян', toggle({ name: 'Котик Васян на сайте', desc: 'Гуляет внизу экрана: его можно погладить и покормить из миски в левом углу', attr: 'data-vasyan', on: window.CasualVasyan.on() }) + '<div data-vasyan-skins></div>') : '')
       + grp('Язык', `<div class="st-row st-langrow"><span class="st-t"><b>Язык сайта</b><small>Страница перезагрузится</small></span><span class="st-seg st-lang" role="group" aria-label="Язык сайта">${langBtns('data-lang', lang)}</span></div>`);
   };
-  R.data = () => grp('Импорт', row({ name: 'Импорт из Letterboxd', desc: 'Перенести оценки фильмов из архива Letterboxd', href: '/opinion/#letterboxd', attr: 'data-lb-open data-close' }))
+  // «Импорт из Steam» — только если на сайте есть ключ Steam (loadSteamRow после отрисовки раздела)
+  R.data = () => grp('Импорт', row({ name: 'Импорт из Letterboxd', desc: 'Перенести оценки фильмов из архива Letterboxd', href: '/opinion/#letterboxd', attr: 'data-lb-open data-close' })
+      + row({ name: 'Импорт из Steam', desc: 'Перенести игры из своего профиля Steam: с баллом или в «В планах»', href: '/opinion/#steam', attr: 'data-sm-open data-close data-sm-row hidden' }))
     + grp('Обложки и названия', row({ name: 'Обновить обложки и названия', desc: 'Подтянуть к сохранённым оценкам обложки, русские названия, год и жанры', href: '/opinion/#refresh', attr: 'data-refresh-open data-close' }))
     + grp('Копия', `<div class="st-row"><span class="st-t"><b>Скачать копию</b><small>Оценки, категории, фото и журнал из этого браузера в одном файле</small></span><button type="button" class="st-btn" data-do="backup">Скачать</button></div>
         <div class="st-row"><span class="st-t"><b>Восстановить из копии</b><small>Каких оценок нет — добавит, более старые обновит, остальные не тронет. Подходит и копия из профиля в Мнении</small></span><label class="st-btn">Выбрать файл<input type="file" accept=".json,application/json" data-restore hidden></label></div>`);
@@ -504,6 +507,7 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
     card.dataset.view = 'sec';
     if (cur === 'security') loadDevices();
     if (cur === 'general') { loadMailPrefs(); loadTg(); }
+    if (cur === 'data' && token()) api('/steam/on').then((d) => { const r = $('[data-sm-row]'); if (r && d && d.on) r.hidden = false; }).catch(() => {});
     if (fromList && narrow()) $('.st-back').focus({ preventScroll: true });
   }
   // «Письма об обновлениях»: включён ли, и можно ли вообще (почта подтверждена)

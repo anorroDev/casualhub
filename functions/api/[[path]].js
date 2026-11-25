@@ -17,6 +17,7 @@ import { makeRiddleRoutes } from '../_lib/riddle.js';
 import { makeGuessRoutes } from '../_lib/guess.js';
 import { makeTgRoutes, tgNotify } from '../_lib/tg.js';
 import { cleanTwitchLots, twitchCounts } from '../_lib/lots-twitch.js';
+import { makeSteamRoutes } from '../_lib/steam.js';
 import { makeEveningRoutes } from '../_lib/lots-evening.js';
 import { makeBingoRoutes } from '../_lib/bingo.js';
 import { makeKingRoutes } from '../_lib/king.js';
@@ -3288,6 +3289,8 @@ Object.assign(routes, makeRiddleRoutes({ json, fail, readBody, burst, lvGive }))
 Object.assign(routes, makeGuessRoutes({ json, fail, readBody, burst, lvGive }));
 // уведомления в Telegram (/api/tg…, вебхук /api/tg/hook — в PUBLIC) — functions/_lib/tg.js
 Object.assign(routes, makeTgRoutes({ json, fail, readBody, adminActive }));
+// импорт игр из Steam в Мнение (/api/steam/…, ключ STEAM_KEY) — functions/_lib/steam.js
+Object.assign(routes, makeSteamRoutes({ json, fail, burst }));
 // «Вечер с друзьями»: вето в сборе лотов (/api/lots/:code/veto, /evening) — functions/_lib/lots-evening.js
 Object.assign(routes, makeEveningRoutes({ json, fail, readBody, burst, currentUser, pokeRoom }));
 // бинго для стрима в сборе лотов (/api/lots/:code/bingo) — functions/_lib/bingo.js

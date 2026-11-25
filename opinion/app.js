@@ -826,6 +826,7 @@ function renderAuthModal() {
           <label class="btn ghost small" for="fileImportBackup"><span class="u-old">📥 </span>Восстановить из файла</label>
           <input type="file" id="fileImportBackup" accept=".json" class="vh">
           <button type="button" class="btn ghost small" data-lb-open><span class="u-old">🎬 </span>Импорт из Letterboxd</button>
+          <button type="button" class="btn ghost small" data-sm-open><span class="u-old">🎮 </span>Импорт из Steam</button>
         </div>
       </div>
     `;
@@ -994,6 +995,7 @@ function renderAuthModal() {
         <label class="btn ghost small" for="fileImportBackup"><span class="u-old">📥 </span>Загрузить базу</label>
         <input type="file" id="fileImportBackup" accept=".json" class="vh">
         <button type="button" class="btn ghost small" data-lb-open><span class="u-old">🎬 </span>Импорт из Letterboxd</button>
+        <button type="button" class="btn ghost small" data-sm-open><span class="u-old">🎮 </span>Импорт из Steam</button>
       </div>
     </div>
   `;
@@ -3208,7 +3210,7 @@ function normalizeRating(id, d) {
     note: str(d.note).slice(0, 4000), example: d.example === true,
     author: (d.author && typeof d.author === 'object') ? { id: str(d.author.id), name: str(d.author.name), avatar: str(d.author.avatar), color: str(d.author.color) } : null,
     photo: normPhoto(d.photo),
-    ...(d.src === 'letterboxd' ? { src: 'letterboxd' } : {}),
+    ...(d.src === 'letterboxd' || d.src === 'steam' ? { src: d.src } : {}), // откуда перенесена: опыт за неё — как за импорт
     ...(str(d.lbName).trim() ? { lbName: str(d.lbName).slice(0, 140) } : {}), // название в Letterboxd, если оценку переименовали
     ...(str(d.artist).trim() ? { artist: str(d.artist).slice(0, 80), title: str(d.title).slice(0, 140), artistAva: str(d.artistAva).slice(0, 40) } : {}),
     ...(/^[\w.-]{1,80}$/.test(str(d.albumOf)) && +d.trackNo >= 1 ? { albumOf: d.albumOf, trackNo: clampInt(d.trackNo, 1, 99) } : {}),

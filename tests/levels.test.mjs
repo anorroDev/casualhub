@@ -1023,3 +1023,11 @@ test('достижения «Единогласно» и «Против тече
     assert.ok(a && a.metric === '@' + code, code);
   }
 });
+
+test('импорт из Steam засчитывается как импорт, а не как новая оценка', () => {
+  const r = { id: 's1', src: 'steam', status: 'Завершено', scores: [{ v: 8 }], total: 8, photo: { url: 'https://a/b.jpg' }, note: 'x'.repeat(120) };
+  assert.deepEqual(shelfDiff([], [r]).give.map((x) => x.kind), ['import'], 'без опыта за отзыв и «оценку целиком»: это перенос, а не новая оценка');
+  // из «В планах» после импорта — уже своя оценка
+  const plan = { id: 's2', src: 'steam', status: 'В планах', scores: [], total: null };
+  assert.deepEqual(shelfDiff([], [plan]).give, []);
+});
