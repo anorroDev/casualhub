@@ -655,6 +655,7 @@ html.intro .masthead .scale { animation: card-rise .3s var(--out) .04s backwards
 .lots-acts .btn.danger { color: var(--bad-ink, var(--bad)); }
 .lots-acts .btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
 .lots-replacing { padding: 8px 10px; border-radius: 10px; background: var(--accent-soft); color: var(--ink); }
+.host-hint { display: block; margin-top: 6px; font-size: 12.5px; line-height: 1.4; color: var(--ink-3); }
 .lots-link { border: 0; background: none; padding: 0; color: var(--accent); font: inherit; font-weight: 700; text-decoration: underline; text-underline-offset: 2px; cursor: pointer; }
 @media (max-width: 560px) {
   .total-meta strong { white-space: normal; overflow-wrap: anywhere; }
@@ -889,6 +890,21 @@ html.unslop[data-ui] .hub { font-size: clamp(9px, calc(5.4cqw - 3px), 26px); let
   html.unslop[data-ui] .hub:hover:not(:disabled) { transform: translate(-50%, -50%) scale(1.04); }
   html.unslop[data-ui] .th:hover { transform: translateY(-2px) scale(1.02); }
 }
+</style>
+<style id="obs-page">
+/* вид для OBS (/lots/<код>?obs=1, Browser Source; класс obs ставит /wheel/head.js): прозрачный фон, только «под стрелкой»,
+   колесо и итог. Плееры музыки (.mp-offscreen) остаются — они и так за краем экрана. Победа — без подложки на весь экран */
+html.obs, html.obs body { background: transparent !important; }
+html.obs::before, html.obs::after, html.obs body::before, html.obs body::after { content: none !important; display: none !important; }
+html.obs body > :not(.page):not(#winFx):not(script):not(style):not(link) { display: none !important; }
+html.obs .page { padding: 0 !important; margin: 0 auto !important; max-width: none !important; }
+html.obs .page > :not(#view) { display: none !important; }
+html.obs #view { display: block !important; max-width: 760px; margin: 0 auto; padding: 12px !important; }
+html.obs #view > :not(#stage) { display: none !important; }
+html.obs #stage { background: none !important; border: 0 !important; box-shadow: none !important; }
+html.obs #stage > :not(.readout):not(.wheel-wrap):not(.scorebar):not(.mp-offscreen) { display: none !important; }
+html.obs .winfx { background: transparent !important; cursor: default; }
+html.obs .winfx .fx-stage, html.obs #stage .readout, html.obs #stage .scorebar { filter: drop-shadow(0 2px 6px rgb(0 0 0 / .5)); }
 </style>
 </head>
 <body>

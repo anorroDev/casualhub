@@ -32,6 +32,11 @@
   const css = document.createElement('style');
   css.textContent = `
 .kg { display: grid; gap: 18px; }
+.kg-tw { display: grid; gap: 6px; margin-top: 10px; }
+.kg-tw-row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.kg-tw-row .inp { flex: 1 1 200px; min-width: 0; }
+.kg-tw small { font-size: 12.5px; line-height: 1.4; color: var(--ink-3); }
+.kg-tw .kg-tw-err { color: var(--bad-ink, var(--bad)); }
 .kg .card { animation: kg-in .24s cubic-bezier(.2, .8, .2, 1) backwards; }
 @keyframes kg-in { from { opacity: 0; transform: translateY(8px); } }
 .kg-lead { margin: 0 0 18px; max-width: 72ch; font-size: 14px; color: var(--ink-2); text-wrap: pretty; }
@@ -702,7 +707,61 @@ html.unslop:not([data-ui]) :is(.kg-pp.in, .kg-pp.pop) { animation: none; }
       : `<div class="kg-title"><h2>${esc(room.title)}</h2>${own ? `<button type="button" class="kg-ico" data-k="ren" title="${esc(T('Переименовать'))}" aria-label="${esc(T('Переименовать'))}">${ICON.pen}</button>` : ''}</div>`;
     const undo = own && st.canUndo ? `<button type="button" class="btn ghost small" data-k="undo">${T(undoLabel(st))}</button>` : '';
     const fin = own && st.status === 'live' && st.fmt === 'hill' ? `<button type="button" class="btn ghost small" data-k="finish">${T('Закончить')}</button>` : '';
-    return `<div class="kg-head"><div class="kg-head-main">${title}<div class="kg-tags">${tags}</div></div><div class="kg-acts"><button type="button" class="btn ghost small" data-k="share">${ICON.link}${T('Ссылка')}</button>${undo}${fin}</div></div>`;
+    // ведущему: ссылка для OBS и голоса из чата Twitch (twitch-chat.js) — только когда бои решает голосование
+    const obs = own ? `<button type="button" class="btn ghost small" data-k="obs">${T('Для OBS')}</button>` : '';
+    const twb = own && st.mode === 'vote' && st.status !== 'done' ? `<button type="button" class="btn ${tw ? 'primary' : 'ghost'} small" data-k="twitch" aria-pressed="${!!tw}">${tw ? `${T('Чат')} #${esc(tw.channel)}` : T('Чат Twitch')}</button>` : '';
+    return `<div class="kg-head"><div class="kg-head-main">${title}<div class="kg-tags">${tags}</div></div><div class="kg-acts"><button type="button" class="btn ghost small" data-k="share">${ICON.link}${T('Ссылка')}</button>${obs}${twb}${undo}${fin}</div></div>${own ? twHTML() : ''}`;
+  }
+  // ---------- голоса из чата Twitch: ведущий подключает свой канал (чат читается без входа), «!1» — за левого, «!2» — за
+  // правого. Голоса ника в открытом бою уходят пачкой на POST /api/king/chat (сервер пишет их от 'tw:<ник>' и считает как
+  // обычные). Пока чат подключён, бой не закрывается от «все в комнате высказались» (act chat) — только таймер или кнопка
+  const TWK = 'casualhub.king.twitch.v1'; // последний канал ведущего
+  let tw = null, twState = 'off', twForm = false, twBout = 0, twVotes = new Map(), twSent = new Map(), twTimer = 0, twErr = '';
+  function twHTML() {
+    if (twForm && !tw) {
+      let last = '';
+      try { last = localStorage.getItem(TWK) || ''; } catch (e) {}
+      return `<div class="kg-tw"><div class="kg-tw-row"><input class="inp" id="kgTw" data-keep placeholder="${esc(T('Ник канала или ссылка twitch.tv/…'))}" value="${esc(last)}" autocomplete="off" spellcheck="false"><button type="button" class="btn primary small" data-k="tw-go">${T('Подключить')}</button><button type="button" class="btn ghost small" data-k="tw-x">${T('Отмена')}</button></div>
+        <small>${T('Зрители голосуют в чате: «!1» — за левого, «!2» — за правого. Голоса чата идут в общий счёт')}</small>${twErr ? `<small class="kg-tw-err">${esc(twErr)}</small>` : ''}</div>`;
+    }
+    if (!tw) return '';
+    const n = [...twVotes.values()].length;
+    const st = { connecting: T('Подключаюсь к чату…'), retry: T('Связь с чатом пропала — переподключаюсь…'), on: T('Слушаю чат') }[twState] || '';
+    return `<div class="kg-tw"><small>${st} #${esc(tw.channel)} · ${T(`голосов из чата в этом бою: ${n}`)}</small>${twErr ? `<small class="kg-tw-err">${esc(twErr)}</small>` : ''}</div>`;
+  }
+  async function twConnect() {
+    twErr = '';
+    try { await window.CasualUtil.script('/twitch-chat.js', () => !!window.CasualTwitch); } catch (e) { twErr = T('Не загрузился модуль чата — обнови страницу'); paintRoom(); return; }
+    const ch = window.CasualTwitch.channelOf((document.getElementById('kgTw') || {}).value);
+    if (!ch) { twErr = T('Ник канала — как в ссылке twitch.tv/ник: латиница, цифры и _'); paintRoom(); return; }
+    try { localStorage.setItem(TWK, ch); } catch (e) {}
+    try { await api('POST', '/king/act', { c: code, act: 'chat', on: true }); } catch (e) { twErr = e.message; paintRoom(); return; }
+    twForm = false; twVotes = new Map(); twSent = new Map();
+    tw = window.CasualTwitch.connect(ch, { onMsg: twMsg, onState: (s) => { twState = s; paintRoom(); } });
+    paintRoom();
+  }
+  async function twOff() {
+    if (tw) tw.close();
+    tw = null; twState = 'off'; twErr = '';
+    clearTimeout(twTimer); twTimer = 0;
+    try { await api('POST', '/king/act', { c: code, act: 'chat', on: false }); } catch (e) {}
+    paintRoom();
+  }
+  function twMsg(m) {
+    const c = window.CasualTwitch.command(m.text), st = R && R.state, bt = st && st.bout;
+    if (!c || c.cmd !== 'vote' || !bt || st.status !== 'live' || st.mode !== 'vote') return;
+    if (twBout !== bt.n) { twBout = bt.n; twVotes = new Map(); twSent = new Map(); }
+    twVotes.set(m.login, c.pick);
+    if (!twTimer) twTimer = setTimeout(twFlush, 1200);
+  }
+  async function twFlush() {
+    twTimer = 0;
+    const n = twBout, votes = [...twVotes].filter(([u, p]) => twSent.get(u) !== p).map(([u, pick]) => ({ u, pick }));
+    if (!votes.length) return;
+    votes.forEach((v) => twSent.set(v.u, v.pick));
+    try { await api('POST', '/king/chat', { c: code, n, votes }); twErr = ''; }
+    catch (e) { if (e.status !== 409) twErr = e.message; } // 409 — бой уже закрыт: голоса опоздали, это не ошибка
+    paintRoom();
   }
   // карточка участника в бою; o: tag (button | div), attr, king — «Царь горы» с серией, vote — полоса и счёт голосов, cls, won
   function sideHTML(k, x, o) {
@@ -1135,6 +1194,17 @@ html.unslop:not([data-ui]) :is(.kg-pp.in, .kg-pp.pop) { animation: none; }
       paintRoom();
       return;
     }
+    // вид для OBS: только текущий бой на прозрачном фоне (Browser Source)
+    if (k === 'obs') {
+      const url = `${location.origin}/king/?c=${code}&obs=1&theme=dark`;
+      try { await navigator.clipboard.writeText(url); msg = T('Ссылка для OBS скопирована: «Источники» → «Браузер», на экране — только бой, фон прозрачный.'); } catch (er) { msg = url; }
+      msgOk = true; msgAt = 'main';
+      paintRoom();
+      return;
+    }
+    if (k === 'twitch') { if (tw) twOff(); else { twForm = true; twErr = ''; paintRoom(); const i = document.getElementById('kgTw'); if (i) i.focus(); } return; }
+    if (k === 'tw-go') { twConnect(); return; }
+    if (k === 'tw-x') { twForm = false; twErr = ''; paintRoom(); return; }
     if (k === 'ren') { editing = true; paintRoom(); const i = document.getElementById('kgRename'); if (i) { i.focus(); i.select(); } return; }
     if (k === 'ren-cancel') { editing = false; paintRoom(); return; }
     if (k === 'ren-save') { rename(); return; }

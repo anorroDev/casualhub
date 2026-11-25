@@ -148,3 +148,14 @@ test('все в комнате высказались: голоса есть —
   startState(host, 0);
   assert.ok(closeAll(host, { a: 1, b: 0 }, 10).same);
 });
+
+test('голоса из чата Twitch: ник — как в Twitch, последний голос ника — его, «все высказались» с чатом не закрывает бой', async () => {
+  const { cleanChatVotes, allInClose } = await import('../functions/_lib/king.js');
+  assert.deepEqual(cleanChatVotes([{ u: 'Viewer_1', pick: 'a' }, { u: 'viewer_1', pick: 'b' }, { u: 'bad nick', pick: 'a' }, { u: 'x'.repeat(26), pick: 'a' }, { u: 'ok', pick: 'x' }, { u: 'two', pick: 'b' }, null]),
+    [{ u: 'viewer_1', pick: 'b' }, { u: 'two', pick: 'b' }]);
+  assert.deepEqual(cleanChatVotes('nope'), []);
+  assert.equal(cleanChatVotes(Array.from({ length: 300 }, (_, i) => ({ u: 'u' + i, pick: 'a' }))).length, 200, 'не больше 200 за раз');
+  const voted = [{ user_id: 'u1', pick: 'a' }];
+  assert.equal(allInClose({ status: 'live' }, voted), true);
+  assert.equal(allInClose({ status: 'live', chat: true }, voted), false, 'ведущий ждёт голоса чата — только таймер или кнопка');
+});

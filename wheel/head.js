@@ -1,5 +1,14 @@
 /* тема ставится до первой отрисовки, чтобы при обновлении страница не мелькала */
 try { var cp = JSON.parse(localStorage.getItem('ocenshik.prefs.v1') || 'null'); if (cp && cp.theme && cp.theme !== 'auto') document.documentElement.setAttribute('data-theme', cp.theme); } catch (e) {}
+/* вид для OBS (?obs=1 у сбора лотов и «Царя Горы», Browser Source): прозрачный фон, только колесо или бой — класс obs до
+   первой отрисовки, правила — в странице. &theme=dark или light — тема для стрима, без оглядки на настройки браузера OBS */
+try {
+  if (/[?&]obs(=|&|$)/.test(location.search)) {
+    document.documentElement.classList.add('obs');
+    var ot = (/[?&]theme=(dark|light)\b/.exec(location.search) || [])[1];
+    if (ot) document.documentElement.setAttribute('data-theme', ot);
+  }
+} catch (e) {}
 /* вид интерфейса (Настройки → «Внешний вид», themes.js): «Казуальный» — класс unslop, остальные — unslop + data-ui и свой
    /ui/<вид>.css. Файл пишется в разметку сразу, чтобы страница не мелькнула в обычном виде. Список — как UI в themes.js */
 try {

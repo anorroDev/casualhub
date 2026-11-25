@@ -213,6 +213,23 @@ export const timerDue = (st, now) => !!(st && st.status === 'live' && st.bout &&
 export const allIn = (people) => Array.isArray(people) && people.length > 0 && people.every((p) => !!p && ['a', 'b', 'x'].includes(p.pick));
 // все в комнате высказались: голоса есть — бой закрывается по ним; все «пас» — как у таймера без голосов: таймер
 // останавливается, решает ведущий (pass — чтобы страница сказала, почему)
+// «все высказались — закрыть бой сразу»: не тогда, когда ведущий собирает голоса из чата Twitch (st.chat) — чат не в комнате,
+// и один зритель сайта закрывал бы бой раньше, чем чат успеет; тогда — таймер или кнопка ведущего
+export const allInClose = (st, people) => !(st && st.chat) && allIn(people);
+// голоса из чата Twitch (страница ведущего, twitch-chat.js): [{ u: ник, pick: 'a' | 'b' }] → годные, у ника — последний голос,
+// не больше 200 за раз. В king_votes — от 'tw:<ник>': в счёт идут как обычные голоса
+export function cleanChatVotes(list) {
+  if (!Array.isArray(list)) return [];
+  const by = new Map();
+  for (const v of list) {
+    if (!v || typeof v !== 'object') continue;
+    const u = String(v.u || '').toLowerCase();
+    if (!/^[a-z0-9_]{1,25}$/.test(u) || !['a', 'b'].includes(v.pick)) continue;
+    by.delete(u); // последний голос ника — в конец
+    by.set(u, v.pick);
+  }
+  return [...by].slice(-200).map(([u, pick]) => ({ u, pick }));
+}
 export function closeAll(st, tally, now) {
   const bt = st.bout;
   if (st.status !== 'live' || st.mode !== 'vote' || !bt || now < bt.opens) return { same: true };
@@ -385,7 +402,7 @@ export function makeKingRoutes(h) {
     const r = await tx(env, code, async (st) => {
       if (!(st.status === 'live' && st.mode === 'vote' && st.bout && now >= st.bout.opens)) return { same: true };
       const [p, t] = await env.DB.batch([env.DB.prepare(PEOPLE).bind(code, now - SEEN_MS), env.DB.prepare(TALLY).bind(code, st.bout.n)]);
-      if (!allIn(p.results)) return { same: true };
+      if (!allInClose(st, p.results)) return { same: true };
       return closeAll(st, tallyOf(t.results), now);
     }, now);
     if (r.wrote) { await after(env, code, r.row, r); if (r.done) await hostXp(env, request, me, r.row, r.st); }
@@ -414,7 +431,7 @@ export function makeKingRoutes(h) {
     if (timerDue(st, now)) { await settleDue(env, request, me, code, now); ({ row, votes, here } = await read()); st = parse(row && row.state); if (!row || !st) return fail(404, 'Такого турнира нет.'); }
     // все высказались — не ждём таймера (все «пас» и бой уже ждёт ведущего — повторять нечего)
     const bt = st && st.bout, t0 = tallyOf(votes);
-    if (st.status === 'live' && st.mode === 'vote' && bt && now >= bt.opens && allIn(here) && !(bt.idle && !bt.ends && !(t0.a + t0.b))) {
+    if (st.status === 'live' && st.mode === 'vote' && bt && now >= bt.opens && allInClose(st, here) && !(bt.idle && !bt.ends && !(t0.a + t0.b))) {
       await allInDue(env, request, me, code, now);
       ({ row, votes, here } = await read()); st = parse(row && row.state);
       if (!row || !st) return fail(404, 'Такого турнира нет.');
@@ -510,6 +527,8 @@ export function makeKingRoutes(h) {
           case 'undo': return undoLast(st, now);
           case 'finish': return finishEarly(st, now);
           case 'title': { const t = clean(b.title, KING.TITLE); return t ? { ok: true, title: t } : { err: [400, 'Нужно название.'] }; }
+          // ведущий подключил или отключил чат Twitch: пока подключён, бой не закрывается от «все в комнате высказались»
+          case 'chat': { if (!!st.chat === !!b.on) return { same: true }; if (b.on) st.chat = true; else delete st.chat; return { ok: true }; }
           default: return { err: [400, 'Нет такого действия.'] };
         }
       }, now);
@@ -546,6 +565,28 @@ export function makeKingRoutes(h) {
       if (h.lvGive && me.id !== row.owner_id && pick !== 'x') { try { await h.lvGive(env, request, me, me.id, [{ kind: 'king_vote', ref: `${code}:${n}`, peer: row.owner_id }]); } catch (e) {} }
       await poke(env, code);
       return answer(env, request, me, code, b.pv, false);
+    },
+    // голоса из чата Twitch: страница ведущего читает чат («!1» / «!2», /twitch-chat.js) и шлёт пачкой { c, n, votes: [{ u, pick }] }.
+    // Только ведущий и только в открытом бою с голосованием; голос — строка от 'tw:<ник>' (передумал — перезаписывается)
+    async 'POST /king/chat'({ env, request, me }) {
+      if (slow('kingchat:' + me.id, 120, 60e3)) return busy();
+      await ensureKing(env);
+      const b = await readBody(request);
+      const code = codeOf(b.c), n = Math.floor(+b.n || 0);
+      if (!code) return fail(404, 'Такого турнира нет.');
+      const row = await env.DB.prepare('SELECT owner_id, state FROM king_rooms WHERE id = ?').bind(code).first();
+      const st = row && parse(row.state);
+      if (!st) return fail(404, 'Такого турнира нет.');
+      if (row.owner_id !== me.id) return fail(403, 'Это может только ведущий.');
+      const now = Date.now(), bt = st.bout;
+      if (st.status !== 'live' || st.mode !== 'vote' || !bt || bt.n !== n) return fail(409, 'Этот бой уже закрыт.');
+      if (now < bt.opens - 1000 || (bt.ends && now > bt.ends + 1500)) return fail(409, 'Время вышло.');
+      const votes = cleanChatVotes(b.votes);
+      if (votes.length) {
+        await env.DB.batch(votes.map((v) => env.DB.prepare('INSERT INTO king_votes (room_id, bout, user_id, pick, at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(room_id, bout, user_id) DO UPDATE SET pick = excluded.pick, at = excluded.at').bind(code, n, 'tw:' + v.u, v.pick, now)));
+        await poke(env, code);
+      }
+      return json({ ok: true, n: votes.length });
     },
     // своя картинка участника (обложка из «Мнения»): ?c=код&p=id. Открыта без входа, как и турнир; у участника она не меняется — кэш надолго
     async 'GET /king/img'({ env, request }) {

@@ -951,7 +951,7 @@
     const canEdit = !!token && !!S.room.editOwn && isOpen() && !(S.live && S.live.winner);
     // админ с открытым входом в админку и хозяин сбора удаляют любой лот и строки «Ведущий»
     const canMod = !!token && (S.admin || !!S.room.own);
-    const html = `<p class="board-stat"><b>${n}</b> ${plural(n, 'лот', 'лота', 'лотов')}</p>${n ? `<ul class="lots-list">${rows.map((l) => { const k = l.name.toLowerCase(), gone = String(l.id).startsWith('host:') ? outNames.has(k) : outIds.has(l.id); const own = l.mine && canEdit && !gone ? `<button type="button" class="btn small ghost" data-replace="${esc(l.id)}"${S.replacing === l.id ? ' aria-pressed="true"' : ''}>Заменить</button><button type="button" class="btn small ghost danger" data-del="${esc(l.id)}">Убрать</button>` : ''; const host = String(l.id).startsWith('host:'); const modBtn = canMod && !own ? `<button type="button" class="btn small ghost danger" ${host ? `data-mod-name="${esc(l.name)}"` : `data-mod-lot="${esc(l.id)}"`} title="Удалить из сбора">Удалить</button>` : ''; const edit = own || modBtn ? `<span class="lots-acts">${own}${modBtn}</span>` : ''; return `<li data-lot="${esc(l.id)}" class="${gone ? 'out' : ''}">${lotPic(l)}<span class="lots-who"><b>${esc(l.name)}</b><small>${esc(l.by)}${l.mine ? ' · твой' : ''}${gone ? ' · вылетел' : ''}</small></span>${edit}</li>`; }).join('')}</ul>` : `<p class="lots-empty">${window.CasualUtil.emptyArt('lots')}Пока ни одного лота. Будь первым</p>`}`;
+    const html = `<p class="board-stat"><b>${n}</b> ${plural(n, 'лот', 'лота', 'лотов')}</p>${n ? `<ul class="lots-list">${rows.map((l) => { const k = l.name.toLowerCase(), gone = String(l.id).startsWith('host:') ? outNames.has(k) : outIds.has(l.id); const own = l.mine && canEdit && !gone ? `<button type="button" class="btn small ghost" data-replace="${esc(l.id)}"${S.replacing === l.id ? ' aria-pressed="true"' : ''}>Заменить</button><button type="button" class="btn small ghost danger" data-del="${esc(l.id)}">Убрать</button>` : ''; const host = String(l.id).startsWith('host:'); const modBtn = canMod && !own ? `<button type="button" class="btn small ghost danger" ${host ? `data-mod-name="${esc(l.name)}"` : `data-mod-lot="${esc(l.id)}"`} title="Удалить из сбора">Удалить</button>` : ''; const edit = own || modBtn ? `<span class="lots-acts">${own}${modBtn}</span>` : ''; return `<li data-lot="${esc(l.id)}" class="${gone ? 'out' : ''}">${lotPic(l)}<span class="lots-who"><b>${esc(l.name)}</b><small>${esc(l.by)}${l.tw ? ' · Twitch' : l.mine ? ' · твой' : ''}${gone ? ' · вылетел' : ''}</small></span>${edit}</li>`; }).join('')}</ul>` : `<p class="lots-empty">${window.CasualUtil.emptyArt('lots')}Пока ни одного лота. Будь первым</p>`}`;
     if (box.dataset.sig === html) return;
     box.dataset.sig = html;
     // как участники в Колесе: оставшиеся плывут на новое место, новые въезжают
@@ -1390,7 +1390,9 @@
     const sig = JSON.stringify([open, r.closed, !!r.endsAt, r.perUser, r.editOwn, r.uniq, r.fuzzy]);
     if (room.dataset.sig === sig) return;
     room.dataset.sig = sig;
-    room.innerHTML = `<div class="lots-f"><span>Ссылка для зрителей</span><div class="lots-row"><input class="inp" id="hostUrl" readonly value="${esc(url)}"><button type="button" class="btn small primary" data-host="copy">Скопировать</button></div></div>
+    room.innerHTML = `<div class="lots-f"><span>Ссылка для зрителей</span><div class="lots-row"><input class="inp" id="hostUrl" readonly value="${esc(url)}"><button type="button" class="btn small primary" data-host="copy" data-copy="hostUrl">Скопировать</button></div></div>
+      <div class="lots-f"><span>Для OBS: колесо на прозрачном фоне</span><div class="lots-row"><input class="inp" id="hostObs" readonly value="${esc(url + '?obs=1&theme=dark')}"><button type="button" class="btn small ghost" data-host="copy" data-copy="hostObs">Скопировать</button></div><small class="host-hint">В OBS: «Источники» → «Браузер», вставь ссылку, размер — от 600 × 700. Светлая тема — theme=light в конце ссылки</small></div>
+      ${twitchBox()}
       <div class="lots-f"><span>Время сбора: <b class="host-clock" id="hostClock">${esc(hostClockText())}</b></span><div class="lots-row">
         <button type="button" class="btn small ghost" data-host="minus"${open && r.endsAt ? '' : ' disabled title="Отнять можно только у идущего таймера"'}>−1 минута</button>
         <button type="button" class="btn small ghost" data-host="plus">+1 минута</button>
@@ -1403,6 +1405,64 @@
         <label class="lots-chk"><input type="checkbox" data-host-rule="fuzzy"${r.fuzzy ? ' checked' : ''}${r.uniq ? '' : ' disabled'}><span>Ловить обход по похожему названию (outlast и ooutlast)</span></label>
       </div>`;
   }
+  // ---------- лоты из чата Twitch: ведущий подключает свой канал (чат читается без входа, /twitch-chat.js), «!лот название»
+  // в чате — лот в сбор от зрителя Twitch. Сервер (POST /api/lots/:code/twitch) пишет его от ведущего с пометкой «из Twitch»:
+  // лимит на человека и «одна игра — один лот» — как у зрителей сайта, по нику в чате. Канал помнится в этом браузере
+  const TW_KEY = 'casualhub.lots.twitch.v1'; // { [код сбора]: { ch, subs } }
+  let tw = null, twState = 'off', twQueue = [], twTimer = 0, twAdded = 0, twNoteText = '';
+  const twCfg = () => (read(TW_KEY) || {})[code] || {};
+  const twSave = (c) => { try { const all = read(TW_KEY) || {}; all[code] = { ...twCfg(), ...c }; localStorage.setItem(TW_KEY, JSON.stringify(all)); } catch (e) {} };
+  const twKindOk = () => !!S.room && (S.room.kind === 'any' || S.room.kind === 'game');
+  function twNote() {
+    if (twNoteText) return twNoteText;
+    if (!tw) return 'Зрители пишут в чате «!лот название» — лот появится в сборе с их ником. Лимит на человека — как у зрителей сайта';
+    const st = { connecting: 'Подключаюсь к чату…', retry: 'Связь с чатом пропала — переподключаюсь…', on: `Слушаю чат #${tw.channel}` }[twState] || '';
+    return `${st}${twAdded ? ` · из чата добавлено: ${twAdded}` : ''}`;
+  }
+  const twPaintNote = () => { const n = $('#twNote'); if (n) n.textContent = twNote(); };
+  function twitchBox() {
+    if (!twKindOk()) return '<div class="lots-f"><span>Лоты из чата Twitch</span><small class="host-hint">Из чата лоты принимает только сбор «что угодно» или игр: остальным нужен выбор из каталога</small></div>';
+    const c = twCfg();
+    return `<div class="lots-f"><span>Лоты из чата Twitch</span>
+      <div class="lots-row"><input class="inp" id="twCh" placeholder="Ник канала или ссылка twitch.tv/…" value="${esc(tw ? tw.channel : c.ch || '')}"${tw ? ' disabled' : ''} autocomplete="off" spellcheck="false"><button type="button" class="btn small ${tw ? 'ghost' : 'primary'}" data-host="twitch">${tw ? 'Отключить' : 'Подключить'}</button></div>
+      <label class="lots-chk"><input type="checkbox" id="twSubs"${c.subs ? ' checked' : ''}><span>Только сабы, VIP и модераторы</span></label>
+      <small class="host-hint" id="twNote" role="status">${esc(twNote())}</small></div>`;
+  }
+  async function twitchToggle() {
+    twNoteText = '';
+    if (tw) { tw.close(); tw = null; twState = 'off'; }
+    else {
+      try { await window.CasualUtil.script('/twitch-chat.js', () => !!window.CasualTwitch); } catch (e) { twNoteText = 'Не загрузился модуль чата — обнови страницу'; twPaintNote(); return; }
+      const ch = window.CasualTwitch.channelOf(($('#twCh') || {}).value);
+      if (!ch) { twNoteText = 'Ник канала — как в ссылке twitch.tv/ник: латиница, цифры и _'; twPaintNote(); twNoteText = ''; return; }
+      twSave({ ch, subs: !!($('#twSubs') || {}).checked });
+      twAdded = 0;
+      tw = window.CasualTwitch.connect(ch, { onMsg: twMsg, onState: (s) => { twState = s; twPaintNote(); } });
+    }
+    const room = $('#hostRoom');
+    if (room) room.dataset.sig = '';
+    paintHost();
+  }
+  function twMsg(m) {
+    const c = window.CasualTwitch.command(m.text);
+    if (!c || c.cmd !== 'lot' || !isOpen()) return;
+    if (twCfg().subs && !(m.sub || m.vip || m.mod || m.broadcaster)) return;
+    twQueue.push({ login: m.login, display: m.name, name: c.name });
+    if (!twTimer) twTimer = setTimeout(twFlush, 1500);
+  }
+  async function twFlush() {
+    twTimer = 0;
+    const items = twQueue.splice(0, 25);
+    if (!items.length) return;
+    try {
+      const r = await api(`/lots/${code}/twitch`, 'POST', { items });
+      twAdded += r.added || 0;
+      if (r.added) poll();
+    } catch (e) { twNoteText = e.message; twPaintNote(); twNoteText = ''; }
+    twPaintNote();
+    if (twQueue.length) twTimer = setTimeout(twFlush, 1500);
+  }
+
   (() => {
     const panel = $('#hostPanel');
     if (!panel) return;
@@ -1486,9 +1546,11 @@
       if (!b) return;
       const a = b.dataset.host;
       if (a === 'copy') {
-        try { await navigator.clipboard.writeText($('#hostUrl').value); b.textContent = 'Скопировано'; setTimeout(() => { if (b.isConnected) b.textContent = 'Скопировать'; }, 1500); }
-        catch (er) { const u = $('#hostUrl'); u.focus(); u.select(); }
-      } else if (a === 'plus') hostRoom({ extra: 1 });
+        const inp = document.getElementById(b.dataset.copy || 'hostUrl');
+        try { await navigator.clipboard.writeText(inp.value); b.textContent = 'Скопировано'; setTimeout(() => { if (b.isConnected) b.textContent = 'Скопировать'; }, 1500); }
+        catch (er) { inp.focus(); inp.select(); }
+      } else if (a === 'twitch') twitchToggle();
+      else if (a === 'plus') hostRoom({ extra: 1 });
       else if (a === 'minus') hostRoom({ extra: -1 });
       else if (a === 'close') hostRoom({ closed: true });
       else if (a === 'reopen') hostRoom({ closed: false, ...(timeLeft() != null && timeLeft() <= 0 ? { extra: 5 } : {}) });
@@ -1496,6 +1558,7 @@
     room.addEventListener('change', (e) => {
       const c = e.target.closest('[data-host-rule]');
       if (c) hostRoom({ [c.dataset.hostRule]: c.checked });
+      if (e.target.id === 'twSubs') twSave({ subs: e.target.checked });
     });
   })();
 

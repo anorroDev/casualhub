@@ -879,6 +879,19 @@ html.unslop .kg-champ.kg-enter :is(.kg-champ-art, .kg-champ-name, .kg-stats) { a
 html.unslop .kg-champ.kg-enter .kg-crown { animation: u-fade var(--mo-in) var(--mo-ease) .1s backwards; }
 @media (hover: hover) { html.unslop button.kg-side:not(:disabled):hover { transform: translateY(-1px); box-shadow: none; } }
 </style>
+<style id="obs-page">
+/* вид для OBS (/king/?c=<код>&obs=1, Browser Source; класс obs ставит /wheel/head.js): прозрачный фон, на экране — только бой */
+html.obs, html.obs body { background: transparent !important; }
+html.obs::before, html.obs::after, html.obs body::before, html.obs body::after { content: none !important; display: none !important; }
+html.obs body > :not(.page):not(script):not(style):not(link) { display: none !important; }
+html.obs .page { padding: 0 !important; margin: 0 auto !important; max-width: none !important; }
+html.obs .page > :not(#view) { display: none !important; }
+html.obs #view { padding: 12px !important; max-width: 900px; margin: 0 auto; }
+html.obs #view > :not(.kg-main) { display: none !important; }
+html.obs .kg-main { background: none !important; border: 0 !important; box-shadow: none !important; }
+html.obs .kg-main > :not(#kgStage) { display: none !important; }
+html.obs #kgStage { filter: drop-shadow(0 2px 8px rgb(0 0 0 / .45)); }
+</style>
 </head>
 <body>
 <div class="page">

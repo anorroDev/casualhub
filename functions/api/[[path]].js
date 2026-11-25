@@ -16,6 +16,7 @@ import { makePredictRoutes } from '../_lib/lots-predict.js';
 import { makeRiddleRoutes } from '../_lib/riddle.js';
 import { makeGuessRoutes } from '../_lib/guess.js';
 import { makeTgRoutes, tgNotify } from '../_lib/tg.js';
+import { cleanTwitchLots, twitchCounts } from '../_lib/lots-twitch.js';
 import { makeEveningRoutes } from '../_lib/lots-evening.js';
 import { makeBingoRoutes } from '../_lib/bingo.js';
 import { makeKingRoutes } from '../_lib/king.js';
@@ -111,6 +112,9 @@ async function ensureScheme(env) {
   for (const [c, d] of [['edit_own', 'INTEGER NOT NULL DEFAULT 0'], ['uniq', 'INTEGER NOT NULL DEFAULT 1'], ['fuzzy', 'INTEGER NOT NULL DEFAULT 1']]) {
     if (!lr.some((x) => x.name === c)) await env.DB.prepare(`ALTER TABLE lot_rooms ADD COLUMN ${c} ${d}`).run();
   }
+  // лоты из чата Twitch: via — 'tw:<ник>' (кто прислал «!лот»), via_name — как он виден в чате; строка — от ведущего
+  const { results: lc } = await env.DB.prepare('PRAGMA table_info(lots)').all();
+  for (const c of ['via', 'via_name']) if (!lc.some((x) => x.name === c)) await env.DB.prepare(`ALTER TABLE lots ADD COLUMN ${c} TEXT`).run();
   // видимость оценок и тир-листов появилась позже самих таблиц
   try {
     const shelves = (await env.DB.prepare('PRAGMA table_info(shelves)').all()).results;
@@ -1822,6 +1826,43 @@ const routes = {
     await pokeRoom(env, arg, 'lots');
     return lotAnswer(env, arg, me, null, request);
   },
+  // лоты из чата Twitch: страница ведущего читает чат («!лот название», /twitch-chat.js) и шлёт пачкой { items: [{ login,
+  // display, name }] }. Лот — от ведущего с пометкой via 'tw:<ник>': лимит на человека, время и «закрыт», «одна игра — один
+  // лот» — как у зрителей сайта, только по нику Twitch. Только «что угодно» и игры: остальным нужен выбор из каталога
+  async 'POST /lots/:code/twitch'({ env, request, me, arg }) {
+    if (burst('lottw:' + me.id, 60, 60e3)) return tooMany(1);
+    const room = await env.DB.prepare('SELECT * FROM lot_rooms WHERE id = ? AND owner_id = ?').bind(arg, me.id).first();
+    if (!room) return fail(404, 'Такого сбора нет.');
+    if (room.kind !== 'any' && room.kind !== 'game') return fail(400, 'Из чата лоты принимает только сбор «что угодно» или игр: остальным нужен выбор из каталога.');
+    const now = Date.now();
+    if (room.closed || (room.ends_at && now >= room.ends_at)) return json({ added: 0, skipped: [{ why: 'closed' }] });
+    const items = cleanTwitchLots((await readBody(request)).items);
+    if (!items.length) return fail(400, 'Нет лотов.');
+    const { results: all } = await env.DB.prepare('SELECT id, name, ref, via FROM lots WHERE room_id = ? ORDER BY created_at').bind(arg).all();
+    const names = [...all.map((x) => x.name), ...liveNames(room)], refs = new Set(all.map((x) => x.ref)), per = twitchCounts(all);
+    const writes = [], skipped = [];
+    let total = all.length;
+    for (const it of items) {
+      const via = 'tw:' + it.login;
+      if ((per[via] || 0) >= room.per_user) { skipped.push({ login: it.login, why: 'limit' }); continue; }
+      if (total >= MAX_LOTS) { skipped.push({ login: it.login, why: 'full' }); break; }
+      const lot = await lotItem(room.kind, room.kind === 'any' ? { name: it.name } : { custom: it.name });
+      if (lot.error) { skipped.push({ login: it.login, why: 'name' }); continue; }
+      let ref = lot.ref;
+      if (room.uniq) {
+        const twin = refs.has(ref) ? lot.name : lotTwin(room, names, lot.name);
+        if (twin) { skipped.push({ login: it.login, why: 'twin', twin }); continue; }
+      } else if (refs.has(ref)) ref = ref + '~' + randHex(3);
+      writes.push(env.DB.prepare('INSERT OR IGNORE INTO lots (room_id, id, user_id, ref, name, img, link, created_at, via, via_name) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(arg, randHex(8), me.id, ref, lot.name, lot.img, lot.link, now + writes.length, via, it.display));
+      per[via] = (per[via] || 0) + 1; total++; names.push(lot.name); refs.add(ref);
+    }
+    if (writes.length) {
+      await env.DB.batch([...writes, env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(arg)]);
+      await pokeRoom(env, arg, 'lots');
+    }
+    return json({ added: writes.length, skipped });
+  },
   // ведущий: лимит, время, закрыть или открыть снова
   async 'PATCH /lots/:code'({ env, request, me, arg }) {
     if (burst('lotroom:' + me.id, 120, 600e3)) return tooMany(10);
@@ -2677,7 +2718,7 @@ async function lotAnswer(env, id, me, knownVer, request, conditional) {
   out.live = liveView(settled.live, !!(request && (await adminActiveCached(env, request, me))));
   // список лотов отдаём, только если он поменялся: страница спрашивает часто
   if (String(knownVer) !== String(row.ver)) {
-    let { results } = await env.DB.prepare('SELECT l.id, l.ref, l.name, l.img, l.link, l.user_id, u.id AS uid, u.username FROM lots l LEFT JOIN users u ON u.id = l.user_id WHERE l.room_id = ? ORDER BY l.created_at LIMIT ?').bind(id, MAX_LOTS).all();
+    let { results } = await env.DB.prepare('SELECT l.id, l.ref, l.name, l.img, l.link, l.user_id, l.via, l.via_name, u.id AS uid, u.username FROM lots l LEFT JOIN users u ON u.id = l.user_id WHERE l.room_id = ? ORDER BY l.created_at LIMIT ?').bind(id, MAX_LOTS).all();
     // лоты аккаунтов, которых больше нет (удалены раньше, чем это начали чистить): убираем из сбора насовсем
     if (results.some((x) => !x.uid)) {
       await env.DB.batch([
@@ -2687,7 +2728,8 @@ async function lotAnswer(env, id, me, knownVer, request, conditional) {
       results = results.filter((x) => x.uid);
       out.room.ver = row.ver + 1;
     }
-    out.lots = results.map((x) => ({ id: x.id, ref: x.ref, name: x.name, img: x.img, link: x.link, by: x.username || '', mine: !!me && x.user_id === me.id }));
+    // лот из чата Twitch: «от кого» — ник в чате, а не ведущий (строка — от него)
+    out.lots = results.map((x) => ({ id: x.id, ref: x.ref, name: x.name, img: x.img, link: x.link, by: x.via ? x.via_name || x.via.slice(3) : x.username || '', ...(x.via ? { tw: true } : {}), mine: !!me && x.user_id === me.id }));
   }
   if (!conditional) return json(out);
   // метка — от всего ответа, кроме часов сервера: в нём и то, что видит именно этот человек (свой сбор, свои лоты)
@@ -3328,6 +3370,7 @@ export async function onRequest({ request, env, params, waitUntil }) {
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'live') { key = `${request.method} /lots/:code/live`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'drop') { key = `${request.method} /lots/:code/drop`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'spin') { key = `${request.method} /lots/:code/spin`; arg = segs[1]; }
+  if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'twitch') { key = `${request.method} /lots/:code/twitch`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'ws') { key = `${request.method} /lots/:code/ws`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'hub') { key = `${request.method} /lots/:code/hub`; arg = segs[1]; }
   if (!routes[key] && segs.length === 3 && segs[0] === 'lots' && SHARE_RE.test(segs[1]) && segs[2] === 'predict') { key = `${request.method} /lots/:code/predict`; arg = segs[1]; }

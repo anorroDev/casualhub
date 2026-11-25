@@ -3831,7 +3831,30 @@ window.CasualLangPack = {
 "Telegram подключён":"Telegram connected",
 "Telegram отключён":"Telegram disconnected",
 "Уведомления в Telegram на сайте пока не подключены":"Telegram notifications aren’t set up on the site yet",
-"Telegram не подключён":"Telegram isn’t connected"
+"Telegram не подключён":"Telegram isn’t connected",
+// вид для OBS и чат Twitch: пульт лотов (lots/app.js), «Царь Горы» (king/app.js), ответы сервера
+"Для OBS: колесо на прозрачном фоне":"For OBS: the wheel on a transparent background",
+"В OBS: «Источники» → «Браузер», вставь ссылку, размер — от 600 × 700. Светлая тема — theme=light в конце ссылки":"In OBS: “Sources” → “Browser”, paste the link, size — from 600 × 700. For the light theme, put theme=light at the end of the link",
+"Лоты из чата Twitch":"Lots from Twitch chat",
+"Из чата лоты принимает только сбор «что угодно» или игр: остальным нужен выбор из каталога":"Only “anything” and game collections take lots from chat: the others need a pick from the catalog",
+"Ник канала или ссылка twitch.tv/…":"Channel name or twitch.tv/… link",
+"Только сабы, VIP и модераторы":"Subs, VIPs and mods only",
+"Зрители пишут в чате «!лот название» — лот появится в сборе с их ником. Лимит на человека — как у зрителей сайта":"Viewers type “!lot name” in chat — the lot shows up in the collection with their nick. The per-person limit is the same as for site viewers",
+"Подключаюсь к чату…":"Connecting to chat…",
+"Связь с чатом пропала — переподключаюсь…":"Lost the chat connection — reconnecting…",
+"Слушаю чат #{}":"Listening to #{} chat",
+"Слушаю чат":"Listening to chat",
+"из чата добавлено: {}":"added from chat: {}",
+"Не загрузился модуль чата — обнови страницу":"The chat module didn’t load — refresh the page",
+"Ник канала — как в ссылке twitch.tv/ник: латиница, цифры и _":"Channel name as in the twitch.tv/name link: Latin letters, digits and _",
+"Нет лотов":"No lots",
+"Для OBS":"For OBS",
+"Чат Twitch":"Twitch chat",
+"Зрители голосуют в чате: «!1» — за левого, «!2» — за правого. Голоса чата идут в общий счёт":"Viewers vote in chat: “!1” for the left one, “!2” for the right one. Chat votes count toward the total",
+"голосов из чата в этом бою: {}":"chat votes in this battle: {}",
+"Ссылка для OBS скопирована: «Источники» → «Браузер», на экране — только бой, фон прозрачный":"OBS link copied: “Sources” → “Browser”, only the battle on screen, transparent background",
+"Это может только ведущий":"Only the host can do this",
+"Этот бой уже закрыт":"This battle is already closed"
 },
   // слово после числа: 1 оценка, 5 оценок. [все русские формы, одна штука, несколько]
   nouns: [
