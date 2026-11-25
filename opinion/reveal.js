@@ -32,6 +32,16 @@ function openAuthFromHash() {
     Promise.resolve(ready).then(() => openAuthModal(tab === 'profile' ? (state.user ? 'edit' : undefined) : tab));
     return;
   }
+  // вход по QR-коду: ссылку из QR на экране компьютера открыл телефон — спросить, пускать ли то устройство (/qr-login.js).
+  // Код убираем из адреса сразу: обновление страницы или «Назад» не должны спрашивать снова
+  const qr = /^#qr=([0-9a-f]{32})$/.exec(h);
+  if (qr) {
+    history.replaceState(null, '', location.pathname + location.search);
+    Promise.resolve(ready).catch(() => {})
+      .then(() => window.CasualUtil.script('/qr-login.js', () => window.CasualQrLogin))
+      .then(() => window.CasualQrLogin.ask(qr[1]), () => toast('Не получилось открыть вход по QR-коду'));
+    return;
+  }
   // ссылка для друзей с Letterboxd: /opinion/#letterboxd сразу открывает импорт
   if (h === '#letterboxd') {
     history.replaceState(null, '', location.pathname + location.search);

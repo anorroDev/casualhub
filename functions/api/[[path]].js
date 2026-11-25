@@ -25,6 +25,7 @@ import { makePlanInfoRoutes } from '../_lib/plan-info.js';
 import { findWorks, WORK_KINDS, IMDB_KIND } from '../_lib/works.js';
 import { makeTierCoopRoutes } from '../_lib/tiercoop.js';
 import { makeChatRoutes, ensureChat, chatDrop, chatGone, CHAT_USER_SQL } from '../_lib/chat.js';
+import { makeQrLoginRoutes, dropQr } from '../_lib/qr-login.js';
 
 const enc = new TextEncoder();
 const ITER = 10000;
@@ -358,6 +359,7 @@ const LIMITS = {
   verifyMail: { max: 3, win: 60 * 60e3 },
   loginIp: { max: 30, win: 15 * 60e3 },
   loginAcc: { max: 10, win: 15 * 60e3 },
+  qrNew: { max: 30, win: 30 * 60e3 }, // коды входа по QR с одного адреса (functions/_lib/qr-login.js)
   register: { max: 10, win: 60 * 60e3 },
   friendReq: { max: 40, win: 10 * 60e3 },
   react: { max: 120, win: 10 * 60e3 },
@@ -757,6 +759,7 @@ const routes = {
     if (!u) return fail(404, 'Нет такого аккаунта.');
     if (u.id === me.id || (await isAdminAccount(env, u))) return fail(400, 'Админа выкинуть нельзя.');
     await env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(u.id).run();
+    await dropQr(env, u.id);
     await pokePresence(env, { what: 'drop', ids: [u.id] });
     await adminLog(env, request, me, 'kick ' + u.uname, true);
     return json({ ok: true });
@@ -937,6 +940,7 @@ const routes = {
       const m = (request.headers.get('authorization') || '').match(/^Bearer ([0-9a-f]{64})$/);
       await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?').bind(me.id, m ? await sha256(m[1]) : '').run();
       await env.DB.prepare('DELETE FROM admin_sessions WHERE user_id = ?').bind(me.id).run();
+      await dropQr(env, me.id);
     }
     if (pass) await pokePresence(env, { what: 'drop', ids: [me.id] });
     else if (hideOnline != null) await pokePresence(env, { what: 'users', ids: [me.id] });
@@ -959,6 +963,7 @@ const routes = {
   async 'POST /sessions/others'({ env, request, me }) {
     const cur = await tokenHash(request);
     const r = await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?').bind(me.id, cur).run();
+    await dropQr(env, me.id);
     await pokePresence(env, { what: 'drop', ids: [me.id] });
     return json({ ok: true, n: r.meta.changes || 0 });
   },
@@ -1057,6 +1062,7 @@ const routes = {
       env.DB.prepare('DELETE FROM admin_sessions WHERE user_id = ?').bind(row.user_id),
       env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind('login-acc:' + row.user_id),
     ]);
+    await dropQr(env, row.user_id);
     await pokePresence(env, { what: 'drop', ids: [row.user_id] });
     return json({ ok: true });
   },
@@ -3338,8 +3344,10 @@ Object.assign(routes, makePlanInfoRoutes({ json, fail, burst, clientIp }));
 Object.assign(routes, makeTierCoopRoutes({ json, fail, readBody, burst, currentUser, lvGive }));
 // чат в комнатах — сбор лотов и «Царь Горы» (/api/chat…) — functions/_lib/chat.js, виджет /chat.js
 Object.assign(routes, makeChatRoutes({ json, fail, readBody, burst, clientIp, currentUser, isAdmin, adminCandidate, adminLog }));
+// вход по QR-коду (/api/qr/new и /api/qr/poll — без входа, в PUBLIC) — functions/_lib/qr-login.js
+Object.assign(routes, makeQrLoginRoutes({ json, fail, readBody, burst, bump, tooMany, clientIp, sha256, randHex, newSession, ownUser, deviceLabel }));
 
-const PUBLIC = new Set(['GET /chat', 'GET /chat/ws', 'GET /tiercoop/room', 'GET /king/room', 'GET /king/img', 'GET /plan/info', 'GET /lots/:code/predict', 'GET /lots/:code/veto', 'GET /lots/:code/bingo', 'GET /shop/look', 'GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid', 'GET /mail/unsub', 'POST /mail/unsub', 'GET /levels/invite/who', 'POST /tg/hook']);
+const PUBLIC = new Set(['GET /chat', 'GET /chat/ws', 'GET /tiercoop/room', 'GET /king/room', 'GET /king/img', 'GET /plan/info', 'GET /lots/:code/predict', 'GET /lots/:code/veto', 'GET /lots/:code/bingo', 'GET /shop/look', 'GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /qr/new', 'POST /qr/poll', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid', 'GET /mail/unsub', 'POST /mail/unsub', 'GET /levels/invite/who', 'POST /tg/hook']);
 // код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности
 const SHARE_RE = /^[A-Za-z0-9]{12}$/;
 function shareId() {

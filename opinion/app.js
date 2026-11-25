@@ -601,10 +601,16 @@ function openAuthModal(tab) {
 function closeAuthModal() {
   el.authModal.hidden = true;
   document.documentElement.classList.remove('locked');
+  if (window.CasualQrLogin) window.CasualQrLogin.stop(); // QR-код на экране больше никто не ждёт
 }
 
 function renderAuthModal() {
   if (!el.authBody) return;
+  // вход по QR-коду: и QR на компьютере, и вопрос «пустить то устройство?» на телефоне рисует /qr-login.js
+  if (authActiveTab === 'qr') {
+    if (window.CasualQrLogin) { window.CasualQrLogin.paint(el.authBody, el.authTitle); return; }
+    authActiveTab = state.user ? 'profile' : 'login';
+  }
 
   if (state.user && authActiveTab === 'edit') {
     editSelectedAvatar = (editSelectedAvatar !== undefined && editSelectedAvatar !== null) ? editSelectedAvatar : (state.user.avatar || '');
@@ -899,6 +905,7 @@ function renderAuthModal() {
           <button type="button" class="btn text small auth-forgot" data-forgot>Забыли пароль?</button>
         </div>
         <button type="submit" class="btn primary" style="margin-top:4px;">Войти</button>
+        <button type="button" class="btn ghost auth-qr-btn" id="btnQrLogin"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 18h2v2h-2zM18 14h2M14 18v2"/></svg>Войти по QR-коду</button>
         <div class="auth-guest-row">
           <button type="button" class="btn text small" id="btnGuestLogin">${state.user ? '← Назад к профилю' : 'Продолжить как гость'}</button>
         </div>
@@ -1030,6 +1037,11 @@ function renderAuthModal() {
       e.preventDefault();
       saveAuthDraft('login', { ident: $('inputLoginIdent').value.trim().slice(0, 120) }); // логин запоминается и после входа
       loginUser($('inputLoginIdent').value, $('inputLoginPass').value);
+    });
+    // вход по QR-коду с телефона, где уже выполнен вход: скрипт подгружается только по кнопке
+    const qrBtn = $('btnQrLogin');
+    if (qrBtn) qrBtn.addEventListener('click', () => {
+      window.CasualUtil.script('/qr-login.js', () => window.CasualQrLogin).then(() => window.CasualQrLogin.show(), () => toast('Не получилось открыть вход по QR-коду'));
     });
   }
 

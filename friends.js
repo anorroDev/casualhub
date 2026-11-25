@@ -152,7 +152,8 @@
   const card = sheet.querySelector('#friendCard');
 
   // для Мнения: запросы к серверу от имени вошедшего (фото исполнителей с Genius)
-  window.casualApi = { get: (path) => api(path), online: () => !!(F.me && F.token) };
+  // post — с сессией, если она есть (вход по QR-коду: qr-login.js)
+  window.casualApi = { get: (path) => api(path), post: (path, data) => api(path, 'POST', data || {}), online: () => !!(F.me && F.token) };
   // ссылки на отзыв: код ссылки у каждой своей оценки, у которой она открыта
   F.shares = new Map(); // id оценки -> код ссылки
   async function loadShares() {
@@ -1292,6 +1293,37 @@ ${ICON.chev}
     };
   }
 
+  // сервер впустил: r — { token, user }, как от /login. local — профиль этого устройства, в который входили по паролю
+  async function signedIn(r, local) {
+    let u = state.users.find((x) => x.serverId === r.user.id) || (local && (!local.serverId || local.serverId === r.user.id) ? local : null);
+    if (!u) {
+      // вход на новом устройстве: заводим профиль сайта из онлайн-аккаунта
+      u = {
+        id: 'u_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+        name: r.user.username, email: r.user.email || '', handle: r.user.handle || '', pass: '',
+        avatar: r.user.username.charAt(0).toUpperCase(),
+        color: randomAvatarColor(r.user.username),
+        createdAt: new Date().toISOString(),
+      };
+      state.users.push(u);
+    }
+    u.serverId = r.user.id;
+    delete u.pass; delete u.passHash; // пароль проверяет сервер, в браузере не хранится ни он, ни его хеш
+    setTokenFor(u.id, r.token);
+    state.user = u;
+    adoptAccount(r.user);
+    saveUsers();
+    renderUserBar();
+    renderBoard();
+    toast(`Вход выполнен: ${u.name}`);
+    closeAuthModal();
+    await syncSession();
+    return true;
+  }
+  // вход по QR-коду (qr-login.js): сессию выдал сервер, когда на телефоне нажали «Войти». Профиль — только свой
+  // (по коду аккаунта), чужой профиль этого устройства с тем же юзернеймом не подхватывается
+  if (typeof orig.login === 'function') window.loginWithSession = (r) => (r && r.token && r.user ? signedIn(r, null) : Promise.resolve(false));
+
   if (typeof orig.login === 'function') {
     window.loginUser = async function (identifier, password) {
       if (F.online === false) { toast(OFFLINE_LOGIN); return false; }
@@ -1312,32 +1344,7 @@ ${ICON.chev}
         try { r = await api('/login', 'POST', { login: ident, password: pass, code }, null); }
         catch (e) { err = e; if (!e.need2fa) break; }
       }
-      if (r) {
-        let u = state.users.find((x) => x.serverId === r.user.id) || (local && (!local.serverId || local.serverId === r.user.id) ? local : null);
-        if (!u) {
-          // вход на новом устройстве: заводим профиль сайта из онлайн-аккаунта
-          u = {
-            id: 'u_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-            name: r.user.username, email: r.user.email || '', handle: r.user.handle || '', pass: '',
-            avatar: r.user.username.charAt(0).toUpperCase(),
-            color: randomAvatarColor(r.user.username),
-            createdAt: new Date().toISOString(),
-          };
-          state.users.push(u);
-        }
-        u.serverId = r.user.id;
-        delete u.pass; delete u.passHash; // пароль проверяет сервер, в браузере не хранится ни он, ни его хеш
-        setTokenFor(u.id, r.token);
-        state.user = u;
-        adoptAccount(r.user);
-        saveUsers();
-        renderUserBar();
-        renderBoard();
-        toast(`Вход выполнен: ${u.name}`);
-        closeAuthModal();
-        await syncSession();
-        return true;
-      }
+      if (r) return signedIn(r, local);
       // сервер недоступен: без него не входим
       if (err && (err.status === 0 || err.status === 503)) { toast(OFFLINE_LOGIN); return false; }
       // бан, «письмо не ушло», «слишком много попыток»: сервер сам сказал, что не так. «Неверный пароль» — только при 401
