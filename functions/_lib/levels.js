@@ -98,8 +98,8 @@ export const RULES = {
   review: { xp: 5, day: 5 }, // отзыв: плюсы, минусы и заметки оценки вместе от 100 знаков (textLen)
   rate_full: { xp: 3, day: 8 }, // оценка заполнена целиком: баллы по 2+ критериям и обложка
   plan_done: { xp: 5, day: 5 }, // оценил то, что было «В планах»
-  album_track: { xp: 4, day: 40 }, // трек, оценённый внутри альбома (album.tracks) — опыт растёт с числом треков; ref «альбом:номер»
-  album_full: { xp: 20, day: 3 }, // разобрал альбом по трекам целиком (albumsFull); сами треки — обычные оценки rate
+  album_track: { xp: 4, day: 40 }, // трек альбома: оценённый внутри альбома (album.tracks) или отдельной оценкой (albumOf) — ref «альбом:номер»
+  album_full: { xp: 20, day: 3 }, // разобрал альбом по трекам целиком (albumsFull); треки — album_track, не rate (isTrack)
   import: { xp: 1, ever: 100 }, // оценка из импорта (Letterboxd)
   tier: { xp: 25, day: 2 }, // в тир-листе впервые набралось 8 элементов (tierDone)
   tier_share: { xp: 5, day: 1 }, // поделился тир-листом
@@ -183,7 +183,8 @@ export const tierFor = (a, v) => (a.tiers || []).reduce((t, need, i) => (v >= ne
 // от 10 знаков, тир-лист от 8 карточек, сбор от трёх человек): поменял правило — поправь и подсказку.
 // Новые title и hint — в словари lang-en.js и lang-uk.js (это проверяют тесты).
 export const DAILY = [
-  { code: 'rate2', title: 'Поставь 2 новые оценки', hint: 'В Мнении поставь баллы чему-то новому и нажми «Сохранить». Правка уже оценённого не считается', kinds: ['rate', 'import'], goal: 2 },
+  // «новые оценки» — только rate: импорт из Letterboxd (import) и треки альбома (album_track) не в счёт (с 25.11.2026)
+  { code: 'rate2', title: 'Поставь 2 новые оценки', hint: 'В Мнении поставь баллы чему-то новому и нажми «Сохранить». Правка уже оценённого, импорт из Letterboxd и треки альбома не считаются', kinds: ['rate'], goal: 2 },
   { code: 'review1', title: 'Напиши отзыв к оценке', hint: 'Отзыв — это «Плюсы», «Минусы» и «Заметки» в форме оценки: вместе от 100 знаков, примерно пара предложений. Можно дописать к старой оценке', kinds: ['review'], goal: 1 },
   { code: 'full1', title: 'Сделай оценку с обложкой', hint: 'Баллы хотя бы по двум критериям и обложка или фото — блок «Фото» в форме оценки. Можно дополнить старую оценку', kinds: ['rate_full'], goal: 1 },
   { code: 'react3', title: 'Отреагируй на 3 оценки друзей', hint: 'Мнение → «Друзья»: открой оценку друга и выбери реакцию под ней. Реакции на тир-листы друзей тоже считаются', kinds: ['react'], goal: 3, need: 'friends' },
@@ -193,7 +194,7 @@ export const DAILY = [
 export const WEEKLY = [
   { code: 'tier1', title: 'Собери тир-лист', hint: 'В Тир-листах: засчитается, как только в тир-листе наберётся 8 карточек', kinds: ['tier'], goal: 1 },
   { code: 'album1', title: 'Разбери альбом по трекам', hint: 'В Мнении выбери альбом и нажми «Разобрать по трекам». Каждый трек нужно оценить или пропустить, оценить — хотя бы половину', kinds: ['album_full'], goal: 1 },
-  { code: 'rate10', title: '10 новых оценок за неделю', hint: 'В Мнении поставь баллы новому с понедельника по воскресенье. Правка уже оценённого не считается', kinds: ['rate', 'import'], goal: 10 },
+  { code: 'rate10', title: '10 новых оценок за неделю', hint: 'В Мнении поставь баллы новому с понедельника по воскресенье. Правка уже оценённого, импорт из Letterboxd и треки альбома не считаются', kinds: ['rate'], goal: 10 },
   { code: 'social10', title: '10 реакций и комментариев друзьям', hint: 'Под оценками и тир-листами друзей, в любом сочетании. Комментарий — от 10 знаков', kinds: ['react', 'comment'], goal: 10, need: 'friends' },
   { code: 'host1', title: 'Проведи сбор лотов до победителя', hint: 'Колесо → «Лоты по ссылке»: открой сбор и дай друзьям ссылку. Лоты должны добавить хотя бы три человека, а колесо — докрутиться до победителя', kinds: ['lots_host'], goal: 1, need: 'friends' },
 ];
@@ -1128,7 +1129,9 @@ export async function backfillUser(env, uid, { now = Date.now(), founderBefore }
   let ratings = [];
   try { const d = JSON.parse(((sh.results || [])[0] || {}).data || '{}'); ratings = Array.isArray(d) ? d : d.ratings || []; } catch (e) {}
   ratings = ratings.filter((r) => r && typeof r.id === 'string' && !r.example);
-  const scored = ratings.filter(isScored).sort((a, b) => stamp(a) - stamp(b));
+  // треки альбомов — не оценки, а album_track (как у живого разбора)
+  const scored = ratings.filter((r) => isScored(r) && !isTrack(r)).sort((a, b) => stamp(a) - stamp(b));
+  for (const r of ratings.filter((x) => isScored(x) && isTrack(x))) items.push({ kind: 'album_track', ref: `${r.albumOf}:${+r.trackNo}`, xp: RULES.album_track.xp, day: dayOf(stamp(r)), at: stamp(r) || now });
   scored.forEach((r, i) => {
     const kind = r.src === 'letterboxd' ? 'import' : 'rate';
     const xp = kind === 'import' ? (i < 100 ? 1 : 0) : i < PAST.rateFull ? PAST.rateXp : PAST.rateTailXp;
@@ -1172,6 +1175,83 @@ export async function backfillUser(env, uid, { now = Date.now(), founderBefore }
   return readLevel(env, uid);
 }
 
+// ---------- пересчёт опыта по нынешним правилам (админка → «Уровни» → «Пересчёт опыта») ----------
+// С 25 ноября 2026 трек альбома — не новая оценка (album_track, а не rate), а импорт из Letterboxd не идёт в задания
+// «новые оценки». Пересчёт приводит журнал человека к этим правилам:
+//   1) rate за оценку-трек (isTrack) списывается, вместо него — album_track «альбом:номер» (4 опыта, до 40 в день);
+//   2) задание дня и недели, которое по журналу не набрано, списывается, а с ним — «все три» за тот день.
+//      Считаются и строки, списанные позже (удалил оценку после задания — задание честное, как и при живом начислении),
+//      кроме треков: нынешних оценок-треков и rate с 24 ноября 00:00 до 16:00 UTC, которые потом списаны, — тогда
+//      каждый трек был отдельной оценкой, а позже треки переехали внутрь альбомов (opinion/album.js, migrate);
+//   3) опыт — сумма журнала; уровень опускается на столько, сколько отнял пересчёт (уровень, оставшийся после удалений
+//      по правилу «не опускается», не трогаем). Достижения не трогаем.
+// apply: false — только посчитать, ничего не записывая. Повторный пересчёт ничего не меняет
+export const TRACK_ERA = [Date.UTC(2026, 10, 24, 0, 0), Date.UTC(2026, 10, 24, 16, 0)];
+export async function recalcUser(env, uid, { apply = false } = {}) {
+  const [sh, lg, ul] = await env.DB.batch([
+    env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(uid),
+    env.DB.prepare('SELECT kind, ref, xp, day, at, gone FROM xp_log WHERE user_id = ?').bind(uid),
+    env.DB.prepare('SELECT xp, level FROM user_level WHERE user_id = ?').bind(uid),
+  ]);
+  let ratings = [];
+  try { const d = JSON.parse(((sh.results || [])[0] || {}).data || '{}'); ratings = Array.isArray(d) ? d : d.ratings || []; } catch (e) {}
+  const trackOf = new Map(ratings.filter((r) => r && typeof r.id === 'string' && isTrack(r)).map((r) => [r.id, `${r.albumOf}:${+r.trackNo}`]));
+  const rows = (lg.results || []).map((r) => ({ kind: r.kind, ref: r.ref, xp: +r.xp || 0, day: r.day, at: +r.at || 0, gone: +r.gone ? 1 : 0 }));
+  const key = (k, ref) => k + '\n' + ref;
+  const byKey = new Map(rows.map((r) => [key(r.kind, r.ref), r]));
+  const sum = () => rows.reduce((a, r) => a + (r.gone ? 0 : r.xp), 0);
+  const xpBefore = sum();
+  const off = [], on = [], add = [];
+  // 1) rate за оценку-трек → album_track
+  const trackDay = {};
+  for (const r of rows) if (r.kind === 'album_track' && !r.gone) trackDay[r.day] = (trackDay[r.day] || 0) + 1;
+  let tracks = 0;
+  for (const r of rows.filter((x) => x.kind === 'rate' && !x.gone && trackOf.has(x.ref)).sort((a, b) => a.at - b.at)) {
+    r.gone = 1; off.push(r); tracks++;
+    const ref = trackOf.get(r.ref), have = byKey.get(key('album_track', ref));
+    if (have) { if (have.gone) { have.gone = 0; on.push(have); trackDay[have.day] = (trackDay[have.day] || 0) + 1; } continue; }
+    const n = trackDay[r.day] || 0;
+    const row = { kind: 'album_track', ref, xp: n < RULES.album_track.day ? RULES.album_track.xp : 0, day: r.day, at: r.at, gone: 0 };
+    trackDay[r.day] = n + 1;
+    rows.push(row); byKey.set(key('album_track', ref), row); add.push(row);
+  }
+  // 2) задания: сколько действий их вида было в тот день или ту неделю
+  const isOldTrack = (r) => r.kind === 'rate' && (trackOf.has(r.ref) || (r.gone && r.at >= TRACK_ERA[0] && r.at < TRACK_ERA[1]));
+  const per = {};
+  for (const r of rows) {
+    if (isOldTrack(r)) continue;
+    const d = (per[r.kind] = per[r.kind] || {});
+    d[r.day] = (d[r.day] || 0) + 1;
+  }
+  const count = (kinds, from, to) => { let n = 0; for (let d = from; d <= to; d = shiftDay(d, 1)) for (const k of kinds) n += (per[k] && per[k][d]) || 0; return n; };
+  const quests = [], dropDays = new Set();
+  for (const r of rows.filter((x) => !x.gone && (x.kind === 'quest' || x.kind === 'quest_week'))) {
+    const i = r.ref.indexOf(':'), from = r.ref.slice(0, i), code = r.ref.slice(i + 1);
+    const def = (r.kind === 'quest' ? DAILY : WEEKLY).find((d) => d.code === code);
+    if (!def || !/^\d{4}-\d{2}-\d{2}$/.test(from)) continue;
+    if (count(def.kinds, from, r.kind === 'quest' ? from : shiftDay(from, 6)) >= def.goal) continue;
+    r.gone = 1; off.push(r); quests.push({ kind: r.kind, ref: r.ref, xp: r.xp, title: def.title });
+    if (r.kind === 'quest') dropDays.add(from);
+  }
+  for (const r of rows.filter((x) => !x.gone && x.kind === 'quest_all' && dropDays.has(x.ref))) { r.gone = 1; off.push(r); quests.push({ kind: 'quest_all', ref: r.ref, xp: r.xp, title: 'Все задания дня' }); }
+  // 3) опыт и уровень
+  const xpAfter = sum();
+  const u = (ul.results || [])[0] || null;
+  const levelBefore = u ? Math.max(+u.level || 1, levelOf(+u.xp || 0).level) : levelOf(xpBefore).level;
+  const levelAfter = Math.max(levelOf(xpAfter).level, levelBefore - Math.max(0, levelOf(xpBefore).level - levelOf(xpAfter).level));
+  const changed = off.length + on.length + add.length > 0;
+  if (apply && changed) {
+    const writes = [
+      ...off.map((r) => env.DB.prepare('UPDATE xp_log SET gone = 1 WHERE user_id = ? AND kind = ? AND ref = ?').bind(uid, r.kind, r.ref)),
+      ...on.map((r) => env.DB.prepare('UPDATE xp_log SET gone = 0 WHERE user_id = ? AND kind = ? AND ref = ?').bind(uid, r.kind, r.ref)),
+      ...add.map((r) => env.DB.prepare('INSERT OR IGNORE INTO xp_log (user_id, kind, ref, xp, day, peer, at) VALUES (?, ?, ?, ?, ?, NULL, ?)').bind(uid, r.kind, r.ref, r.xp, r.day, r.at)),
+    ];
+    for (let i = 0; i < writes.length; i += 50) await env.DB.batch(writes.slice(i, i + 50));
+    await env.DB.prepare("UPDATE user_level SET xp = (SELECT COALESCE(SUM(xp), 0) FROM xp_log WHERE user_id = ?1 AND gone = 0), level = ?2 WHERE user_id = ?1").bind(uid, levelAfter).run();
+  }
+  return { id: uid, changed, xpBefore, xpAfter, levelBefore, levelAfter, tracks, quests };
+}
+
 // ---------- оценки: что нового на полке ----------
 // у оценки есть баллы (не «В планах» и не «В процессе» без баллов)
 export const isScored = (r) => !!r && r.total != null && Number.isFinite(+r.total) && Array.isArray(r.scores) && r.scores.length > 0 && r.status !== 'В планах';
@@ -1179,7 +1259,21 @@ export const textLen = (r) => [r.note, r.pros, r.cons].map((x) => String(x || ''
 const isFull = (r) => isScored(r) && r.scores.length >= 2 && r.scores.every((s) => +s.v > 0) && !!r.photo;
 const stamp = (r) => +new Date(r.createdAt || r.updatedAt || 0) || 0;
 // «Разбор альбома»: у оценки альбома trackCount — сколько треков, skip — номера пропущенных, tracks — баллы треков внутри
-// альбома ({ n, v }); трек по 4+ критериям — ещё и отдельная оценка с albumOf и trackNo (её опыт — обычный rate).
+// альбома ({ n, v }); трек по 4+ критериям — ещё и отдельная оценка с albumOf и trackNo.
+// Трек — не новая оценка: ни rate, ни задания «новые оценки», ни «Критик», а album_track, как у трека внутри альбома.
+// Раньше отдельная оценка-трек давала rate, и разбор одного альбома закрывал задание недели «10 новых оценок»
+export const isTrack = (r) => !!r && typeof r.albumOf === 'string' && Number.isInteger(+r.trackNo) && +r.trackNo >= 1;
+// треки альбомов на полке, за которые положен album_track («альбом:номер»): оценённые внутри альбома (tracks, кроме
+// вынесенных в отдельную оценку — rid) и отдельные оценки-треки с баллами. Вынесенный трек остаётся тем же ref
+export function trackRefsOf(list) {
+  const out = new Set();
+  for (const r of list || []) {
+    if (!r || r.example) continue;
+    if (typeof r.id === 'string' && Array.isArray(r.tracks)) for (const e of r.tracks) if (e && +e.v > 0 && Number.isInteger(+e.n) && !e.rid) out.add(`${r.id}:${+e.n}`);
+    if (isTrack(r) && isScored(r)) out.add(`${r.albumOf}:${+r.trackNo}`);
+  }
+  return out;
+}
 // Альбом разобран целиком, когда каждый трек оценён или пропущен и оценена хотя бы половина (подсказка задания album1)
 export const ALBUM_MIN = 3;
 export function albumsFull(list) {
@@ -1217,7 +1311,7 @@ export function shelfDiff(oldList, newList) {
     const o = before.get(id);
     const cg = catGroupOf(r.catLabel || r.catName);
     const at = give.length;
-    if (isScored(r) && !(o && isScored(o))) {
+    if (isScored(r) && !(o && isScored(o)) && !isTrack(r)) {
       give.push({ kind: r.src === 'letterboxd' ? 'import' : 'rate', ref: id });
       if (o && o.status === 'В планах') give.push({ kind: 'plan_done', ref: id });
     }
@@ -1227,17 +1321,11 @@ export function shelfDiff(oldList, newList) {
     }
     if (cg) for (let i = at; i < give.length; i++) give[i].cg = cg;
   }
-  // треки внутри альбома: за каждый новый оценённый — album_track (трек по 4+ критериям — отдельная оценка, ему rate, а не это)
-  const trackRefs = (r) => (r && !r.example && Array.isArray(r.tracks) ? r.tracks.filter((e) => e && +e.v > 0 && Number.isInteger(+e.n) && !e.rid).map((e) => `${r.id}:${+e.n}`) : []);
-  for (const [id, r] of after) {
-    const had = new Set(trackRefs(before.get(id)));
-    for (const ref of trackRefs(r)) if (!had.has(ref)) give.push({ kind: 'album_track', ref });
-  }
-  // трек пропал из альбома или стал отдельной оценкой (rid; ей даётся rate) — album_track за него списывается, удалили альбом — за все
-  for (const [id, r] of before) {
-    const now = new Set(trackRefs(after.get(id)));
-    for (const ref of trackRefs(r)) if (!now.has(ref)) take.push({ kind: 'album_track', ref });
-  }
+  // треки альбомов (внутри альбома и отдельные оценки-треки): за каждый новый — album_track; трек пропал (удалили трек
+  // или альбом) — списывается. Вынесенный из альбома в отдельную оценку — тот же трек: ни опыта второй раз, ни списания
+  const tb = trackRefsOf([...before.values()]), ta = trackRefsOf([...after.values()]);
+  for (const ref of ta) if (!tb.has(ref)) give.push({ kind: 'album_track', ref });
+  for (const ref of tb) if (!ta.has(ref)) take.push({ kind: 'album_track', ref });
   const fullBefore = albumsFull([...before.values()]);
   for (const id of albumsFull([...after.values()])) if (!fullBefore.has(id)) give.push({ kind: 'album_full', ref: id });
   for (const [id] of before) if (!after.has(id)) for (const kind of ['rate', 'import', 'review', 'rate_full', 'plan_done', 'album_full']) take.push({ kind, ref: id });

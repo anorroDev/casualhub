@@ -711,16 +711,82 @@ test('группы категорий для тематической недел
   assert.equal(L.catGroupOf('Моя їжа'), 'food');
 });
 
-test('трек внутри альбома: album_track за новый трек; стал отдельной оценкой (rid) — album_track списывается', () => {
+test('трек внутри альбома: album_track за новый трек; вынесен в отдельную оценку (rid) — тот же трек, без rate и без списания', () => {
   const album = (tracks) => ({ id: 'rA', name: 'X — Y', status: 'Альбом', trackCount: 3, scores: [], total: null, tracks });
   const one = [album([{ n: 1, v: 8 }, { n: 2, v: 6 }])];
   assert.deepEqual(L.shelfDiff([], one).give.filter((g) => g.kind === 'album_track').map((g) => g.ref), ['rA:1', 'rA:2']);
-  // трек 1 оценили по 4+ критериям: отдельная оценка, в записи альбома — rid
-  const full = [album([{ n: 1, v: 8, rid: 'rT1' }, { n: 2, v: 6 }])];
+  // трек 1 оценили по 4+ критериям: отдельная оценка (albumOf, trackNo), в записи альбома — rid
+  const t1 = { id: 'rT1', name: 'X — t1', status: 'Трек', albumOf: 'rA', trackNo: 1, scores: [1, 2, 3, 4].map((i) => ({ id: 'c' + i, v: 8 })), total: 8 };
+  const full = [album([{ n: 1, v: 8, rid: 'rT1' }, { n: 2, v: 6 }]), t1];
   const d = L.shelfDiff(one, full);
-  assert.deepEqual(d.take.filter((x) => x.kind === 'album_track').map((x) => x.ref), ['rA:1'], 'за такой трек — rate, а не album_track');
-  assert.equal(L.shelfDiff(full, full).take.filter((x) => x.kind === 'album_track').length, 0, 'повторное сохранение ничего не списывает');
+  assert.deepEqual([...d.give, ...d.take].map((x) => x.kind + ':' + x.ref), [], 'тот же трек: ни rate, ни второй album_track, ни списания');
+  assert.equal(L.shelfDiff(full, full).take.length + L.shelfDiff(full, full).give.length, 0, 'повторное сохранение ничего не меняет');
   assert.equal(L.shelfDiff(one, [album([{ n: 1, v: 9 }, { n: 2, v: 6 }])]).take.length, 0, 'другой балл того же трека — не списание');
+  // отдельную оценку-трек удалили, а в альбоме осталась ссылка rid — трек пропал, album_track списывается
+  assert.deepEqual(L.shelfDiff(full, [full[0]]).take.filter((x) => x.kind === 'album_track').map((x) => x.ref), ['rA:1']);
+});
+
+test('трек альбома — не новая оценка: задания «новые оценки» и «Критик» его не считают, импорт — тоже не новая оценка', async () => {
+  const sc = [1, 2, 3, 4].map((i) => ({ id: 'c' + i, v: 7 }));
+  const tracks = Array.from({ length: 12 }, (_, i) => ({ id: 'tr' + i, name: 'A — t' + i, status: 'Трек', albumOf: 'alb', trackNo: i + 1, scores: sc, total: 7 }));
+  const d = L.shelfDiff([], tracks);
+  assert.equal(d.give.filter((g) => g.kind === 'rate').length, 0, 'оценка-трек не даёт rate');
+  assert.equal(d.give.filter((g) => g.kind === 'album_track').length, 12);
+  for (const code of ['rate2', 'rate10']) assert.deepEqual([...L.DAILY, ...L.WEEKLY].find((x) => x.code === code).kinds, ['rate'], code);
+  // живое начисление: 12 треков одного альбома и 5 импортов — задание недели «10 новых оценок» не выполнено
+  const env = envOf();
+  await L.ensureLevels(env);
+  const now = Date.UTC(2026, 10, 25, 12);
+  env.DB.raw.prepare("INSERT INTO user_level (user_id, xp, level, updated_at, quest_week, wquest, quest_day, quests) VALUES ('u1', 0, 1, 1, '2026-11-23', 'rate10', '2026-11-25', ?)").run(JSON.stringify({ l: ['rate2', 'review1', 'full1'], s: 0 }));
+  await awardMany(env, 'u1', [...d.give, ...Array.from({ length: 5 }, (_, i) => ({ kind: 'import', ref: 'lb' + i }))], { now, tz: 'UTC' });
+  const st = await questState(env, 'u1', { now, today: '2026-11-25' });
+  assert.equal(st.weekly.code, 'rate10');
+  assert.equal(st.weekly.progress, 0);
+  assert.equal(q(env, "SELECT COUNT(*) AS n FROM xp_log WHERE kind IN ('quest', 'quest_week')")[0].n, 0, 'ни задания дня, ни недели');
+});
+
+test('пересчёт опыта: rate за треки → album_track, задания без треков и импорта списываются, повтор ничего не меняет', async () => {
+  const env = envOf();
+  await L.ensureLevels(env);
+  const sc = [1, 2, 3, 4].map((i) => ({ id: 'c' + i, v: 7 }));
+  const trk = (i) => ({ id: 'tr' + i, name: 'A — t' + i, status: 'Трек', albumOf: 'alb', trackNo: i + 1, scores: sc, total: 7 });
+  // на полке: альбом с 9 треками-оценками и одна обычная оценка
+  const shelf = [{ id: 'alb', name: 'A', status: 'Альбом', scores: sc, total: 7 }, ...Array.from({ length: 9 }, (_, i) => trk(i)), { id: 'r1', name: 'Фильм', status: 'Просмотрено', scores: sc, total: 8 }];
+  env.DB.raw.prepare('INSERT INTO shelves (user_id, data, updated_at) VALUES (?, ?, ?)').run('u1', JSON.stringify({ ratings: shelf }), 1);
+  const at = Date.UTC(2026, 10, 25, 10), day = '2026-11-25', wk = '2026-11-23';
+  const ins = env.DB.raw.prepare('INSERT INTO xp_log (user_id, kind, ref, xp, day, at, gone) VALUES (?, ?, ?, ?, ?, ?, ?)');
+  // как начисляли раньше: rate за альбом, 9 треков и фильм (по 10, дальше по 2), задание дня, «все три», задание недели
+  ins.run('u1', 'rate', 'alb', 10, day, at, 0);
+  for (let i = 0; i < 9; i++) ins.run('u1', 'rate', 'tr' + i, i < 7 ? 10 : 2, day, at + i + 1, 0);
+  ins.run('u1', 'rate', 'r1', 2, day, at + 20, 0);
+  ins.run('u1', 'review', 'r1', 5, day, at + 20, 0);
+  ins.run('u1', 'rate_full', 'r1', 3, day, at + 20, 0);
+  ins.run('u1', 'quest', `${day}:rate2`, 15, day, at + 21, 0);
+  ins.run('u1', 'quest', `${day}:review1`, 15, day, at + 21, 0);
+  ins.run('u1', 'quest', `${day}:full1`, 15, day, at + 21, 0);
+  ins.run('u1', 'quest_all', day, 20, day, at + 21, 0);
+  ins.run('u1', 'quest_week', `${wk}:rate10`, 100, day, at + 21, 0);
+  // давний трек 24 ноября, когда каждый трек был отдельной оценкой, потом переехал внутрь альбома (rate списан)
+  ins.run('u1', 'rate', 'oldtrack', 10, '2026-11-24', Date.UTC(2026, 10, 24, 3), 1);
+  ins.run('u1', 'quest', '2026-11-24:rate2', 15, '2026-11-24', Date.UTC(2026, 10, 24, 3), 0);
+  ins.run('u1', 'rate', 'other', 10, '2026-11-24', Date.UTC(2026, 10, 24, 3), 0);
+  env.DB.raw.prepare("INSERT INTO user_level (user_id, xp, level, updated_at) VALUES ('u1', 0, 1, 1)").run();
+  const sumNow = () => q(env, "SELECT COALESCE(SUM(xp), 0) AS n FROM xp_log WHERE user_id = 'u1' AND gone = 0")[0].n;
+  const before = sumNow();
+  const dry = await L.recalcUser(env, 'u1');
+  assert.equal(sumNow(), before, 'проверка ничего не пишет');
+  assert.equal(dry.tracks, 9);
+  // задание недели: без треков за неделю 3 новые оценки (альбом, фильм, «other») — не 10; задание дня rate2 за 25-е:
+  // альбом и фильм — 2, честное; за 24-е — одна «other» (трек тогда не в счёт) — списывается, «все три» за 25-е остаются
+  assert.deepEqual(dry.quests.map((x) => x.ref).sort(), ['2026-11-23:rate10', '2026-11-24:rate2']);
+  const res = await L.recalcUser(env, 'u1', { apply: true });
+  assert.equal(res.xpAfter, sumNow());
+  assert.equal(res.xpBefore - res.xpAfter, (7 * 10 + 2 * 2) - 9 * RULES.album_track.xp + 100 + 15, 'минус rate за треки (+ 4 за каждый трек) и два задания');
+  assert.equal(q(env, "SELECT COUNT(*) AS n FROM xp_log WHERE kind = 'album_track' AND gone = 0 AND xp = 4")[0].n, 9);
+  assert.equal(q(env, "SELECT xp FROM user_level WHERE user_id = 'u1'")[0].xp, res.xpAfter);
+  // повторный пересчёт ничего не меняет, а новое сохранение полки трек второй раз не засчитывает
+  assert.equal((await L.recalcUser(env, 'u1', { apply: true })).changed, false);
+  assert.equal(await award(env, 'u1', 'album_track', 'alb:1', { now: at + DAY }), null);
 });
 
 test('топ недели: топ-5 сайта от 50 опыта получает рофланы письмом один раз, скрывшие себя, удалённые и заблокированные — нет', async () => {
@@ -763,8 +829,9 @@ test('разбор альбома: треки внутри альбома — о
   const full = { id: 'rt5', name: 'X — t', status: 'Трек', albumOf: 'rB', trackNo: 4, scores: [1, 2, 3, 4].map((i) => ({ id: 'c' + i, name: 'c', v: 8 })), total: 8 };
   const a3 = { ...a2, skip: [], tracks: [...a2.tracks, { n: 4, v: 8, rid: 'rt5' }] };
   const d3 = L.shelfDiff([a2], [a3, full]);
-  assert.equal(d3.give.filter((g) => g.kind === 'album_track').length, 0, 'трек по 4+ критериям — отдельная оценка, ему rate');
-  assert.ok(d3.give.some((g) => g.kind === 'rate' && g.ref === 'rt5'));
+  // трек по 4+ критериям — отдельная оценка, но не новая оценка: album_track за трек 4, rate за неё нет
+  assert.deepEqual(d3.give.filter((g) => g.kind === 'album_track').map((g) => g.ref), ['rB:4']);
+  assert.ok(!d3.give.some((g) => g.kind === 'rate' && g.ref === 'rt5'));
   const d4 = L.shelfDiff([a3, full], [full]);
   assert.deepEqual(d4.take.filter((x) => x.kind === 'album_track').map((x) => x.ref).sort(), ['rB:1', 'rB:2', 'rB:3']);
 });

@@ -559,6 +559,11 @@
         <p class="muted">Опыт за оценки, общение, тир-листы и лоты. Правила — в functions/_lib/levels.js, включение — LEVELS в wrangler.toml.</p>
         ${d.mode === 'off' ? '' : `${seasonBox}<div class="adm-ann-row"><button type="button" class="btn ghost" id="lvBack">Начислить опыт за прошлое всем</button></div>
         <p class="adm-err" id="lvMsg" role="status"></p>
+        <div class="adm-lv-ev"><h3 class="h3">Пересчёт опыта</h3>
+          <p class="muted">Приводит опыт всех к нынешним правилам: трек альбома — не новая оценка, а импорт из Letterboxd не идёт в задания «новые оценки». Оценка-трек вместо опыта за оценку получает опыт за трек, а задания дня и недели, которые без треков и импорта не набраны, списываются вместе с «Все три». Уровень опускается на столько, сколько отнял пересчёт; достижения остаются. Сначала «Проверить» — ничего не меняет, только показывает.</p>
+          <div class="adm-ann-row"><button type="button" class="btn ghost" id="lvRcCheck">Проверить</button><button type="button" class="btn primary" id="lvRcApply" disabled>Применить</button></div>
+          <div id="lvRcOut"></div>
+        </div>
         <div class="adm-lv-ev"><h3 class="h3">Почта: подарок</h3>
           <p class="muted">Письмо придёт в «Почту» в меню ☰. Если указать опыт, у письма будет кнопка «Забрать»; каждый заберёт один раз.</p>
           <div class="adm-ann-row"><input id="lvGiftTo" maxlength="40" placeholder="Кому: всем или @юзернейм" value="всем"><input id="lvGiftTitle" maxlength="80" placeholder="Заголовок, например: Спасибо, что вы с нами"></div>
@@ -597,6 +602,40 @@
         back.disabled = true; msg.textContent = 'Считаю…';
         try { const r = await call('POST', '/admin/levels/backfill'); msg.textContent = `Готово: ${r.users.length} человек.`; setTimeout(levels, 1200); }
         catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else { msg.textContent = x.message; back.disabled = false; } }
+      });
+      // пересчёт опыта: по 10 человек за запрос, пока сервер отдаёт next
+      const rcCheck = $('#lvRcCheck'), rcApply = $('#lvRcApply'), rcOut = $('#lvRcOut');
+      const recalc = async (apply) => {
+        const users = [];
+        let after = '', scanned = 0;
+        do {
+          const r = await call('POST', '/admin/levels/recalc', { apply, after });
+          users.push(...r.users); scanned += r.scanned; after = r.next;
+          rcOut.innerHTML = `<p class="muted">Проверено ${scanned}…</p>`;
+        } while (after);
+        return { users, scanned };
+      };
+      const rcShow = (res, applied) => {
+        const lost = res.users.reduce((a, u) => a + u.xpBefore - u.xpAfter, 0);
+        const head = res.users.length
+          ? `${applied ? 'Готово' : 'Изменится'}: ${res.users.length} из ${res.scanned} · опыта ${lost > 0 ? '−' : '+'}${Math.abs(lost)}`
+          : `Всё уже по правилам: проверено ${res.scanned}.`;
+        rcOut.innerHTML = `<p>${head}</p>${res.users.length ? `<div class="adm-lv-log" style="display:grid">${res.users.map((u) => {
+          const what = [u.tracks ? `треков ${u.tracks}` : '', ...u.quests.map((q) => `${q.kind === 'quest_week' ? 'неделя' : q.kind === 'quest_all' ? 'все три' : 'день'} ${q.ref.split(':')[0]} «${q.title}» −${q.xp}`)].filter(Boolean).join(' · ');
+          return `<div><span>${esc(u.username)}${u.handle ? ' @' + esc(u.handle) : ''}</span><span>${esc(what)}${u.levelAfter !== u.levelBefore ? ` · ур. ${u.levelBefore} → ${u.levelAfter}` : ''}</span><b>${u.xpBefore} → ${u.xpAfter}</b></div>`;
+        }).join('')}</div>` : ''}`;
+      };
+      if (rcCheck) rcCheck.addEventListener('click', async () => {
+        rcCheck.disabled = true; rcApply.disabled = true;
+        try { const res = await recalc(false); rcShow(res, false); rcApply.disabled = !res.users.length; }
+        catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else rcOut.innerHTML = `<p class="adm-err">${esc(x.message)}</p>`; }
+        rcCheck.disabled = false;
+      });
+      if (rcApply) rcApply.addEventListener('click', async () => {
+        const ok = await dialog({ icon: '⚖', danger: true, title: 'Пересчитать опыт всем?', who: 'Уровни',
+          text: 'Опыт, задания и уровни приведутся к нынешним правилам — как в списке после «Проверить». Отменить можно только вручную: «Опыт ±» у человека.',
+          button: 'Пересчитать', submit: async () => { const res = await recalc(true); rcShow(res, true); } });
+        if (ok) rcApply.disabled = true; // итог остаётся на экране; список людей обновится при следующем открытии вкладки
       });
       const send = $('#lvGiftSend');
       if (send) send.addEventListener('click', async () => {

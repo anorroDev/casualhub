@@ -6,7 +6,7 @@ import {
   levelsMode, levelsOn, ensureLevels, readLevel, levelView, prefsOf, lookOf, unlockedAt, levelsOf, achievementsOf, questState,
   firstSteps, takeNews, dayKey, weekStart, shiftDay, cleanTz, backfillUser, grantSpecial, currentEvent, forgetEvent, RULES, awardMany, CAT_GROUPS, RATING_KINDS,
   ACHIEVEMENTS, REWARDS, NAME_COLORS, PROFILE_BGS, isScored, textLen, award, INVITE_REWARDS, INV_SQL, invitesOf, STREAK_BONUS, FIRST_STEPS,
-  achBackLetter, ACH_TIER_XP, ACH_ONE_XP, swapQuest,
+  achBackLetter, ACH_TIER_XP, ACH_ONE_XP, swapQuest, recalcUser,
   SEASON_RANKS, seasonRankOf, rankFields, currentSeason, closeSeason, forgetSeason, seasonXpOf, seasonXpMany, seasonPlanLetter, fmtKyiv,
 } from './levels.js';
 import { FOODS, boughtLooks, ensureShop } from './shop.js';
@@ -448,6 +448,23 @@ export function makeLevelsRoutes(h) {
       }
       await h.adminLog(env, request, me, `levels: backfill ${out.length}`, true);
       return json({ ok: true, users: out });
+    },
+    // пересчёт опыта по нынешним правилам (recalcUser в levels.js): { apply, after } — по 10 человек за запрос (разбор полки
+    // и журнала каждого — время процессора), админка зовёт, пока next не пустой. apply: false — только показать, что изменится
+    async 'POST /admin/levels/recalc'({ env, request, me }) {
+      if (!(await h.adminActive(env, request, me))) return fail(404, 'Нет такого адреса.');
+      if (!levelsOn(env)) return fail(400, 'Уровни выключены (LEVELS = "0").');
+      await ensureLevels(env);
+      const b = (await h.readBody(request)) || {};
+      const after = /^[0-9a-f]{24}$/.test(String(b.after || '')) ? String(b.after) : '';
+      const { results } = await env.DB.prepare('SELECT ul.user_id AS id, u.username, u.uname FROM user_level ul LEFT JOIN users u ON u.id = ul.user_id WHERE ul.user_id > ? ORDER BY ul.user_id LIMIT 10').bind(after).all();
+      const list = results || [], users = [];
+      for (const x of list) {
+        const r = await recalcUser(env, x.id, { apply: b.apply === true });
+        if (r.changed) users.push({ ...r, username: x.username || '', handle: x.uname || '' });
+      }
+      if (b.apply === true && users.length) await h.adminLog(env, request, me, `levels: recalc ${users.length} (${users.reduce((a, r) => a + r.xpAfter - r.xpBefore, 0)} xp)`, true);
+      return json({ users, scanned: list.length, next: list.length === 10 ? list[list.length - 1].id : '' });
     },
     // поправить опыт вручную: +N или −N с пометкой
     async 'POST /admin/levels/adjust'({ env, request, me }) {
