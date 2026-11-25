@@ -767,6 +767,8 @@
     const genresOf = (r) => [...new Set(tags(r).filter((x) => x.length <= 24 && !/^\d{4}$/.test(x)).map((x) => x.toLowerCase()))];
     const decadeOf = (r) => { const y = tags(r).find((x) => /^(19|20)\d\d$/.test(x)); return y ? y.slice(0, 3) + '0' : ''; };
     const statusOf = (r) => String(r.status || '').trim() || 'Без статуса';
+    // отмечена одна категория — статусы её словами («Хочу прочитать» у книг), несколько — как лежат в оценках
+    const stShow = (s) => (F.cats.size === 1 ? window.CasualUtil.status.label(s, [...F.cats][0]) : s);
     const SCORE = [['', 'Любой'], ['9', '9+'], ['8', '8+'], ['7', '7+'], ['5', '5+'], ['low', 'Ниже 5'], ['none', 'Без балла']];
     const scoreOk = (r, k) => { const t = typeof r.total === 'number' ? r.total : null; return !k || (k === 'none' ? t == null : k === 'low' ? t != null && t < 5 : t != null && t >= +k); };
     const cats = [...new Set(rs.map(catOf))];
@@ -790,7 +792,7 @@
       const base = rs.filter((r) => okBy(r, 'score'));
       const pick = rs.filter((r) => okBy(r)), fresh = pick.filter((r) => !has(l.items, ratingItemId(r))), bare = pick.filter(bareCard);
       box.innerHTML = `<section><p class="label">Категории</p><div class="tl-chips">${cats.map((c) => chip('data-cat', c, c, F.cats.has(c), cN.get(c) || 0)).join('')}</div></section>
-        ${sts.length > 1 ? `<section><p class="label">Статус</p><div class="tl-chips">${chip('data-st', '*', 'Любой', !F.st.size)}${sts.map((x) => chip('data-st', x, x, F.st.has(x), sN.get(x) || 0)).join('')}</div></section>` : ''}
+        ${sts.length > 1 ? `<section><p class="label">Статус</p><div class="tl-chips">${chip('data-st', '*', 'Любой', !F.st.size)}${sts.map((x) => chip('data-st', x, stShow(x), F.st.has(x), sN.get(x) || 0)).join('')}</div></section>` : ''}
         <section><p class="label">Балл</p><div class="tl-chips">${SCORE.map(([k, t]) => chip('data-sc', k, t, F.score === k, base.filter((r) => scoreOk(r, k)).length)).join('')}</div></section>
         ${gs.length ? `<section><p class="label">Жанры и теги</p><div class="tl-chips">${chip('data-g', '*', 'Любые', !F.genres.size)}${gShow.map((g) => chip('data-g', g, g, F.genres.has(g), gN.get(g) || 0)).join('')}${gs.length > gShow.length ? `<button type="button" class="tl-chip tl-more" data-gall>Ещё ${gs.length - gShow.length}</button>` : ''}</div>${F.genres.size > 1 ? '<p class="tl-hint">Подойдёт оценка хотя бы с одним из отмеченных.</p>' : ''}</section>` : ''}
         ${decs.length > 1 ? `<section><p class="label">Годы</p><div class="tl-chips">${chip('data-y', '*', 'Любые', !F.dec.size)}${decs.map((y) => chip('data-y', y, y + '-е', F.dec.has(y), yN.get(y) || 0)).join('')}</div></section>` : ''}

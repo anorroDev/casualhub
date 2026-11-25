@@ -273,8 +273,10 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   const KINDS = [['movie', /фильм|сериал|кино|мульт|film|movie|series/, 'фильмы и сериалы'], ['anime', /аниме|манг|anime|manga/, 'аниме'], ['game', /игр|game/, 'игры'], ['book', /книг|литератур|book/, 'книги']];
   const kindOf = (cat) => { const k = keyOf(cat); const f = KINDS.find(([, re]) => re.test(k)); return f ? f[0] : ''; };
   const ST_RE = { done: /Завершено|Просмотрено/, doing: /В процессе/, plan: /В планах/, drop: /Брошено/ };
-  const DONE_WORD = { movie: 'просмотрено', anime: 'просмотрено', game: 'пройдено', book: 'прочитано' };
-  const stWord = (kind, s) => (s === 'done' ? DONE_WORD[kind] || 'завершено' : { doing: 'в процессе', plan: 'в планах', drop: 'брошено' }[s]);
+  // слова статусов — вида категории (util.js, CasualUtil.status): «игры · пройдено», «книги · хочу прочитать»
+  const stWord = (kind, s) => window.CasualUtil.status.words(kind)[s].toLowerCase();
+  // статус оценки словами её категории: «Завершено» у книги — «Прочитано»
+  const stName = (r) => window.CasualUtil.status.label(r.status, r.cat);
   // id цифры по категории — короткий отпечаток названия (в названии бывают любые символы)
   const catHash = (s) => { let h = 0x811c9dc5; for (const ch of keyOf(s)) { h ^= ch.codePointAt(0); h = Math.imul(h, 0x01000193); } return (h >>> 0).toString(36); };
   // все цифры, которые можно поставить в профиль: { group, id, value, label, tier?, jump?, count? }
@@ -354,7 +356,10 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
   const STATUS_F = [['plan', /В планах/, '◷ В планах'], ['doing', /В процессе/, '▶ В процессе']];
   const statusOk = (r, f) => { const s = STATUS_F.find((x) => x[0] === f); return !s || s[1].test(r.status || ''); };
   function statusSegUI(box, pool, S) {
-    const opts = STATUS_F.map(([k, re, t]) => [k, t, pool.filter((r) => re.test(r.status || '')).length]).filter((x) => x[2] || S.status === x[0]);
+    // все оценки из одной категории — её слова («◷ Хочу прочитать», «▶ Играю»), из нескольких — общие
+    const one = pool.length && new Set(pool.map((r) => keyOf(r.cat))).size === 1 ? pool[0].cat : '';
+    const w = window.CasualUtil.status.words(window.CasualUtil.status.kind(one));
+    const opts = STATUS_F.map(([k, re, t]) => [k, t.slice(0, 2) + w[k], pool.filter((r) => re.test(r.status || '')).length]).filter((x) => x[2] || S.status === x[0]);
     box.hidden = !opts.length;
     if (!opts.length) { S.status = 'all'; box.replaceChildren(); return; }
     box.innerHTML = `<button type="button" data-st="all" aria-pressed="${S.status === 'all'}">Все</button>`
@@ -1372,7 +1377,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
         body.innerHTML = `<div class="list">${shown.map((r) => `<a class="item" href="${rateLink(p, r)}" title="Открыть оценку «${esc(r.name)}»" data-tier="${tierT(r.total)}">
           <span class="th" data-photo="${r.photo ? esc(r.id) : ''}"${adultAttr(r)}>${letter(r.name)}${lbm(r)}</span>
           <span class="nm">${r.fav ? `<span class="fav">${ICON.star}</span> ` : ''}${esc(r.name)}</span>${badge(r.total)}
-          <span class="meta">${cells(r.total)}<span>${esc(r.cat)}${r.status ? ' · ' + esc(r.status) : ''}</span></span></a>`).join('')}</div>`;
+          <span class="meta">${cells(r.total)}<span>${esc(r.cat)}${r.status ? ' · ' + esc(stName(r)) : ''}</span></span></a>`).join('')}</div>`;
       } else if (AST.view === 'grid') {
         body.innerHTML = `<div class="tiles">${shown.map((r) => `<a class="tile" href="${rateLink(p, r)}" title="${esc(r.name)}" data-tier="${tierT(r.total)}">${pic(r)}
           <strong>${r.fav ? `<span class="fav">${ICON.star}</span> ` : ''}${esc(r.name)}</strong><div class="row"><small>${esc(r.cat)}</small>${badge(r.total)}</div></a>`).join('')}</div>`;
@@ -1381,7 +1386,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
           const pros = lines(r.pros), cons = lines(r.cons);
           return `<article class="fr-card" data-tier="${tierT(r.total)}">
             <header><div class="th" data-photo="${r.photo ? esc(r.id) : ''}"${adultAttr(r)}>${letter(r.name)}${lbm(r)}</div>
-              <div class="fr-t"><a href="${rateLink(p, r)}">${r.fav ? `<span class="fav">${ICON.star}</span> ` : ''}${esc(r.name)}</a><small>${esc([r.cat, r.status, r.meta].filter(Boolean).join(' · '))}</small></div>${badge(r.total)}</header>
+              <div class="fr-t"><a href="${rateLink(p, r)}">${r.fav ? `<span class="fav">${ICON.star}</span> ` : ''}${esc(r.name)}</a><small>${esc([r.cat, stName(r), r.meta].filter(Boolean).join(' · '))}</small></div>${badge(r.total)}</header>
             ${r.scores.length ? `<ul class="crit">${r.scores.map((s) => `<li><span>${esc(s.name)}${s.w && s.w !== 1 ? ` <small>×${String(s.w).replace('.', ',')}</small>` : ''}</span>${cellsV(+s.v || 0)}<b>${+s.v || '—'}</b>${s.note ? `<em>${esc(s.note)}</em>` : ''}</li>`).join('')}</ul>` : ''}
             ${pros.length || cons.length ? `<div class="fr-pc">${pros.length ? `<div><span class="label">Плюсы</span><ul>${pros.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}${cons.length ? `<div><span class="label">Минусы</span><ul>${cons.map((x) => `<li>${esc(x)}</li>`).join('')}</ul></div>` : ''}</div>` : ''}
             ${r.text ? `<p class="fr-note">${esc(r.text)}</p>` : ''}
@@ -1584,7 +1589,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       ${r.photo ? `<div class="rd-pic" id="rdPic"><span class="ltr">${letter(r.name)}</span>${lbm(r)}</div>` : ''}
       <div class="rd-top">
         <div class="rd-name"><span class="label">${esc(r.cat)}</span><h2 id="rdTitle">${r.fav ? `<span class="fav">${ICON.star}</span> ` : ''}${esc(r.name)}</h2>
-          <p>${esc([word, trk ? `${trk} ${plural(trk, 'трек', 'трека', 'треков')}` : n ? `${n} ${plural(n, 'критерий', 'критерия', 'критериев')}` : '', r.status, r.meta].filter(Boolean).join(' · '))}${r.lb ? ' <span class="lb-src">· <span class="lb-mark"><i></i><i></i><i></i></span>из Letterboxd</span>' : ''}</p></div>
+          <p>${esc([word, trk ? `${trk} ${plural(trk, 'трек', 'трека', 'треков')}` : n ? `${n} ${plural(n, 'критерий', 'критерия', 'критериев')}` : '', stName(r), r.meta].filter(Boolean).join(' · '))}${r.lb ? ' <span class="lb-src">· <span class="lb-mark"><i></i><i></i><i></i></span>из Letterboxd</span>' : ''}</p></div>
         <div class="rd-score"><b>${total != null ? fmt(total) : '—'}</b><small>из 10</small></div>
       </div>
       ${window.CasualIMDb && window.CasualIMDb.isMovie(r.cat) && !ed ? `<div class="imdb-slot" data-imdb-row="1" data-imdb-n="${esc(r.name)}" data-imdb-y="${window.CasualIMDb.yearOf(r.meta) || ''}"></div>` : ''}
@@ -1924,7 +1929,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
           <span class="th" data-photo="${r.photo ? esc(r.id) : ''}"${adultAttr(r)}>${letter(r.name)}${lbm(r)}</span>
           <span class="nm" title="${esc(r.name)}">${r.fav ? `<span class="fav">${ICON.star}</span> ` : ''}${esc(r.name)}</span>
           ${badge(r.total)}
-          <span class="meta">${cells(r.total)}<span>${esc(r.cat)}${r.status ? ' · ' + esc(r.status) : ''}</span></span>
+          <span class="meta">${cells(r.total)}<span>${esc(r.cat)}${r.status ? ' · ' + esc(stName(r)) : ''}</span></span>
         </a>`).join('') : '<p class="muted">Ничего не нашлось.</p>';
       $('#more').hidden = list.length <= lim;
       hydratePhotos(p, $('#list'));

@@ -837,7 +837,7 @@
       </div>` : '';
     return `<li class="entry fr-in" style="--k:${Math.min(rank, 12)}" data-rid="${esc(r.id || '')}" data-uid="${esc(uid)}"><details><summary><span class="sum">
 <span class="rank">${rank}</span>
-<span class="e-main">${friendPhoto(r, 'thumb', uid)}<span class="e-text"><span class="e-name">${r.fav ? '<span class="fav-star-inline">★</span>' : ''}${esc(r.name)}</span><span class="e-sub">${who ? `<span class="tag author-tag">${esc(who)}</span>` : ''}<span>${esc(meta)}</span><span class="rx-sum-slot">${rxSummary(reactsOf(uid, r.id))}</span>${r.catLabel ? `<span class="tag">${esc(r.catLabel)}</span>` : ''}${r.status ? `<span class="tag status-tag">${esc(r.status)}</span>` : ''}${r.meta ? `<span class="tag meta-tag">${esc(r.meta)}</span>` : ''}</span></span></span>
+<span class="e-main">${friendPhoto(r, 'thumb', uid)}<span class="e-text"><span class="e-name">${r.fav ? '<span class="fav-star-inline">★</span>' : ''}${esc(r.name)}</span><span class="e-sub">${who ? `<span class="tag author-tag">${esc(who)}</span>` : ''}<span>${esc(meta)}</span><span class="rx-sum-slot">${rxSummary(reactsOf(uid, r.id))}</span>${r.catLabel ? `<span class="tag">${esc(r.catLabel)}</span>` : ''}${r.status ? `<span class="tag status-tag">${esc(window.CasualUtil.status.label(r.status, r.catLabel || r.catName))}</span>` : ''}${r.meta ? `<span class="tag meta-tag">${esc(r.meta)}</span>` : ''}</span></span></span>
 <span class="spark" aria-hidden="true">${spark}</span>
 <span class="badge" data-tier="${tierT(t)}">${t != null ? fmt(t) : '—'}</span>
 ${ICON.chev}

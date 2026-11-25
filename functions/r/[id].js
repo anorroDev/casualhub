@@ -30,6 +30,28 @@ const langOf = (request) => { const m = /(?:^|;\s*)casualhub_lang=(en|uk)\b/.exe
 // статусы, стандартные категории и критерии лежат в оценке по-русски
 const EN_WORDS = { __proto__: null, 'Завершено': 'Completed', 'Просмотрено': 'Watched', 'В процессе': 'In progress', 'В планах': 'Planned', 'Брошено': 'Dropped', 'Сингл': 'Single', 'Альбом': 'Album', 'Игры': 'Games', 'Фильмы и сериалы': 'Films and series', 'Музыка и альбомы': 'Music and albums', 'Книги': 'Books', 'Еда и заведения': 'Food and places', 'Аниме и манга': 'Anime and manga', 'Мультики': 'Cartoons', 'Мультфильмы': 'Animated films', 'Юмор': 'Humor', 'Сюжет и серии': 'Story and episodes', 'Рисовка и анимация': 'Art and animation', 'Озвучка и музыка': 'Voices and music', 'Для всей семьи': 'For the whole family', 'Музыка и озвучка': 'Music and voice acting', 'Персонажи': 'Characters', 'Эмоции': 'Emotions', 'Гаджеты и техника': 'Gadgets and tech', 'Геймплей': 'Gameplay', 'Сюжет': 'Story', 'Графика': 'Graphics', 'Звук и музыка': 'Sound and music', 'Атмосфера': 'Atmosphere', 'Реиграбельность': 'Replayability', 'Концовка': 'Ending', 'Техническое состояние': 'Technical condition', 'Актёрская игра': 'Acting', 'Режиссура': 'Direction', 'Визуал': 'Visuals', 'Музыка и звук': 'Music and sound', 'Пересматриваемость': 'Rewatchability'};
 const UK_WORDS = { __proto__: null, 'Завершено': 'Завершено', 'Просмотрено': 'Переглянуто', 'В процессе': 'У процесі', 'В планах': 'У планах', 'Брошено': 'Кинуто', 'Сингл': 'Сингл', 'Альбом': 'Альбом', 'Игры': 'Ігри', 'Фильмы и сериалы': 'Фільми й серіали', 'Музыка и альбомы': 'Музика й альбоми', 'Книги': 'Книги', 'Еда и заведения': 'Їжа й заклади', 'Аниме и манга': 'Аніме й манга', 'Мультики': 'Мультики', 'Мультфильмы': 'Мультфільми', 'Юмор': 'Гумор', 'Сюжет и серии': 'Сюжет і серії', 'Рисовка и анимация': 'Малювання й анімація', 'Озвучка и музыка': 'Озвучення й музика', 'Для всей семьи': 'Для всієї родини', 'Музыка и озвучка': 'Музика й озвучення', 'Персонажи': 'Персонажі', 'Эмоции': 'Емоції', 'Гаджеты и техника': 'Гаджети й техніка', 'Геймплей': 'Геймплей', 'Сюжет': 'Сюжет', 'Графика': 'Графіка', 'Звук и музыка': 'Звук і музика', 'Атмосфера': 'Атмосфера', 'Реиграбельность': 'Реіграбельність', 'Концовка': 'Фінал', 'Техническое состояние': 'Технічний стан', 'Актёрская игра': 'Акторська гра', 'Режиссура': 'Режисура', 'Визуал': 'Візуал', 'Музыка и звук': 'Музика й звук', 'Пересматриваемость': 'Переглядуваність' };
+// статусы словами вида категории — как CasualUtil.status в util.js: «Завершено» у книги — «Прочитано», у игры — «Пройдено»
+Object.assign(EN_WORDS, { 'Прочитано': 'Read', 'Читаю': 'Reading', 'Хочу прочитать': 'Want to read', 'Пройдено': 'Completed', 'Играю': 'Playing', 'Хочу поиграть': 'Want to play',
+  'Смотрю': 'Watching', 'Хочу посмотреть': 'Want to watch', 'Попробовано': 'Tried', 'Хожу сюда': 'Regular here', 'Хочу попробовать': 'Want to try', 'Не вернусь': "Won't return",
+  'Опробовано': 'Tried out', 'Пользуюсь': 'Using', 'Хочу купить': 'Want to buy', 'Не пользуюсь': 'No longer using' });
+Object.assign(UK_WORDS, { 'Прочитано': 'Прочитано', 'Читаю': 'Читаю', 'Хочу прочитать': 'Хочу прочитати', 'Пройдено': 'Пройдено', 'Играю': 'Граю', 'Хочу поиграть': 'Хочу пограти',
+  'Смотрю': 'Дивлюся', 'Хочу посмотреть': 'Хочу подивитися', 'Попробовано': 'Скуштовано', 'Хожу сюда': 'Ходжу сюди', 'Хочу попробовать': 'Хочу скуштувати', 'Не вернусь': 'Не повернуся',
+  'Опробовано': 'Випробувано', 'Пользуюсь': 'Користуюся', 'Хочу купить': 'Хочу купити', 'Не пользуюсь': 'Не користуюся' });
+const ST_KIND = [
+  ['game', /игр|ігр|game/], ['movie', /фильм|фільм|сериал|серіал|кино|кіно|мульт|film|movie|series|cartoon|animat/], ['book', /книг|литератур|літератур|book/],
+  ['anime', /аниме|аніме|манг|anime|manga/], ['food', /еда|заведен|ресторан|кафе|кухн|їжа|заклад|food|restaurant|cafe|dining/],
+  ['tech', /гаджет|ґаджет|техник|техні|электрон|електрон|смартфон|gadget|tech|electronic|device/],
+];
+const ST_WATCH = ['Просмотрено', 'Смотрю', 'Хочу посмотреть', 'Брошено'];
+const ST_WORDS = { book: ['Прочитано', 'Читаю', 'Хочу прочитать', 'Брошено'], game: ['Пройдено', 'Играю', 'Хочу поиграть', 'Брошено'], movie: ST_WATCH, anime: ST_WATCH, hentai: ST_WATCH,
+  food: ['Попробовано', 'Хожу сюда', 'Хочу попробовать', 'Не вернусь'], tech: ['Опробовано', 'Пользуюсь', 'Хочу купить', 'Не пользуюсь'] };
+const statusWord = (s, catName) => {
+  const v = String(s || ''), i = /Завершено|Просмотрено/.test(v) ? 0 : /В процессе/.test(v) ? 1 : /В планах/.test(v) ? 2 : /Брошено/.test(v) ? 3 : -1;
+  const k = String(catName || '').trim().toLowerCase().replace(/ё/g, 'е');
+  if (i < 0 || /^муз[ыи]к|^music/.test(k)) return v;
+  const kind = /хентай|hentai|18\s*\+|nsfw/i.test(k) ? 'hentai' : (ST_KIND.find(([, re]) => re.test(k)) || [''])[0];
+  return ST_WORDS[kind] ? ST_WORDS[kind][i] : v;
+};
 const WORDS = { en: EN_WORDS, uk: UK_WORDS };
 const word = (T, v) => { const W = WORDS[T.html]; return W ? W[v] || String(v || '').replace(/[А-Яа-яЁё][А-Яа-яЁё ]*[А-Яа-яЁё]/g, (m) => W[m] || m) : v; };
 const verdict = (t, T) => (t == null ? T.notRated : T.verdicts[Math.max(1, Math.min(10, Math.round(t))) - 1]);
@@ -253,7 +275,7 @@ export async function onRequest({ request, env, params }) {
 ${photo ? `<img class="photo" src="${esc(photo)}" alt="" referrerpolicy="no-referrer">` : ''}
 <div class="head"><h1>${esc(r.name)}</h1>
 <div class="score"><span class="badge" data-tier="${tier(t)}">${t != null ? fmt(t, T) : '—'}</span><span class="verdict">${esc(verdict(t, T))}</span></div></div>
-<div class="chips">${r.fav ? `<span class="chip">${T.fav}</span>` : ''}${cat ? `<span class="chip">${esc(cat)}</span>` : ''}${r.status ? `<span class="chip">${esc(word(T, r.status))}</span>` : ''}${r.meta ? `<span class="chip">${esc(r.meta)}</span>` : ''}</div>
+<div class="chips">${r.fav ? `<span class="chip">${T.fav}</span>` : ''}${cat ? `<span class="chip">${esc(cat)}</span>` : ''}${r.status ? `<span class="chip">${esc(word(T, statusWord(r.status, r.catLabel || r.catName)))}</span>` : ''}${r.meta ? `<span class="chip">${esc(r.meta)}</span>` : ''}</div>
 ${typeof r.link === 'string' && MUSIC_LINK_RE.test(r.link) ? `<p><a class="btn ghost" href="${esc(r.link)}" target="_blank" rel="noopener noreferrer">${T.listen}</a></p>` : ''}
 <p class="by">${T.ratingByCap} <b>${esc(user.username)}</b> @${esc(user.uname)}${when ? ' · ' + esc(when) : ''}</p>
 ${scores.length ? `<section><p class="label">${T.crit}</p><ul class="crit">${scores.map((s) => `<li data-tier="${tierV(s.v)}"><span class="n">${esc(word(T, s.name))}</span><span class="v">${s.v || '—'}</span><span class="cells">${Array.from({ length: 10 }, (_, i) => `<i${i < s.v ? ' class="on"' : ''}></i>`).join('')}</span>${s.note ? `<span class="cnote">${esc(s.note)}</span>` : ''}</li>`).join('')}</ul></section>` : ''}

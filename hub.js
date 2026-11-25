@@ -234,7 +234,7 @@
     const pic = r.photo && r.photo.url ? `<img src="${esc(r.photo.url)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-fallback="${esc(String(r.name).charAt(0))}">`
       : r.photo && r.photo.remote ? '' : esc(String(r.name).charAt(0));
     const rx = it.reacts ? Object.keys(RXI).map((k) => (it.reacts[k] ? RXI[k] + it.reacts[k] : '')).concat(it.reacts.text ? ['💬' + it.reacts.text] : []).filter(Boolean).join(' ') : '';
-    const meta = [`<em class="fd-who" data-prof="${esc(it.user.id)}" data-handle="${esc(it.user.handle || '')}" title="Открыть профиль ${who}">${who}</em>`, r.cat && esc(r.cat), r.status && esc(r.status), rx, ago(it.at)].filter(Boolean).join(' · ');
+    const meta = [`<em class="fd-who" data-prof="${esc(it.user.id)}" data-handle="${esc(it.user.handle || '')}" title="Открыть профиль ${who}">${who}</em>`, r.cat && esc(r.cat), r.status && esc(window.CasualUtil.status.label(r.status, r.cat)), rx, ago(it.at)].filter(Boolean).join(' · ');
     // оценка друга открывается окном прямо здесь (rating-card.js), без перехода в Мнение; ссылка остаётся на случай без скриптов
     return `<li><a class="fd" href="/opinion/#friend=${encodeURIComponent(it.user.id)}&r=${encodeURIComponent(r.id)}" title="Открыть оценку у ${who}" data-rc="${esc(it.user.id + '|' + r.id)}" data-rc-who="${who}" data-rc-handle="${esc(it.user.handle || '')}" data-rc-name="${esc(r.name)}" data-rc-cat="${esc(r.cat || '')}" data-rc-total="${r.total != null ? r.total : ''}">
       <span class="fd-pic" style="--fc:${colorOf(r.id || r.name)}"${window.CasualUtil.nsfw.attr(window.CasualUtil.nsfw.cat(r.cat))}${r.photo && r.photo.remote ? ` data-ph="${esc(it.user.id + '|' + r.id)}"` : ''}>${pic || esc(String(r.name).charAt(0))}</span>

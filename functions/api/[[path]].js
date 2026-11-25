@@ -22,6 +22,7 @@ import { makeEveningRoutes } from '../_lib/lots-evening.js';
 import { makeBingoRoutes } from '../_lib/bingo.js';
 import { makeKingRoutes } from '../_lib/king.js';
 import { makePlanInfoRoutes } from '../_lib/plan-info.js';
+import { findWorks, WORK_KINDS, IMDB_KIND } from '../_lib/works.js';
 import { makeTierCoopRoutes } from '../_lib/tiercoop.js';
 import { makeChatRoutes, ensureChat, chatDrop, chatGone, CHAT_USER_SQL } from '../_lib/chat.js';
 
@@ -1501,25 +1502,27 @@ const routes = {
     const q = (sp.get('q') || '').trim().slice(0, 100);
     if (q.length < 2 || !Object.prototype.hasOwnProperty.call(COVER_FIND, kind)) return json({ items: [] });
     try {
-      // по-русски Steam и сайты аниме ничего не находят: для кириллицы сразу ищем по английскому названию
-      // у 18+ русское название понимает сам поиск (Shikimori), перевод через Wikidata не нужен
-      const ru = (kind === 'game' || kind === 'anime') && CYR.test(q);
-      let items = ru ? [] : await COVER_FIND[kind](q).catch(() => []);
-      // Steam и AniList не знают русских названий: сначала ищем английское (Wikidata, русская Википедия)
-      if (ru) {
-        const found = [];
-        const titles = await latinTitles(q, kind);
-        for (const t of titles) found.push(...(await COVER_FIND[kind](t).catch(() => [])));
-        // перевод не помог — возможно, это транслит («Элден ринг» → Elden ring)
-        const tr = translit(q);
-        if (!found.length && !titles.some((t) => t.toLowerCase() === tr.toLowerCase())) found.push(...(await COVER_FIND[kind](tr).catch(() => [])));
-        items = found.concat(items);
-      }
-      const seen = new Set();
-      items = items.filter((c) => c.title && /^https:\/\//.test(c.art) && !seen.has(c.art) && seen.add(c.art)).slice(0, 8);
-      return json({ items });
+      return json({ items: (await coverSearch(kind, q)).slice(0, 8) });
     } catch (e) {
       return fail(502, 'Поиск обложек сейчас не отвечает');
+    }
+  },
+  // поиск произведения для «Новой оценки»: по названию и по автору одной строкой (functions/_lib/works.js)
+  async 'GET /works'({ request, me }) {
+    if (burst('works:' + me.id, 40, 60e3)) return tooMany(1);
+    const sp = new URL(request.url).searchParams;
+    const kind = sp.get('kind') || '';
+    const q = (sp.get('q') || '').trim().slice(0, 100);
+    if (q.length < 2 || !WORK_KINDS.includes(kind)) return json({ items: [], src: '' });
+    const lang = ['uk', 'en'].includes(sp.get('lang')) ? sp.get('lang') : 'ru';
+    // заведения ищутся сначала рядом: примерное место по адресу (его знает Cloudflare), округлённое до ~10 км
+    const cf = request.cf || {};
+    const lat = +cf.latitude, lon = +cf.longitude;
+    const geo = kind === 'food' && cf.latitude != null && cf.longitude != null && Number.isFinite(lat) && Number.isFinite(lon) ? { lat: Math.round(lat * 10) / 10, lon: Math.round(lon * 10) / 10 } : null;
+    try {
+      return json(await findWorks(kind, q, { get: cachedJson, cover: coverSearch, latin: latinTitles, translit, steam: steamCards, genres: genresRu, lang, geo }));
+    } catch (e) {
+      return fail(502, 'Поиск сейчас не отвечает');
     }
   },
   // подробности выбранной обложки: русское название и основные жанры (фильмы — Wikidata по коду IMDb, игры — Steam)
@@ -1527,8 +1530,9 @@ const routes = {
     if (burst('cinfo:' + me.id, 60, 60e3)) return tooMany(1);
     const sp = new URL(request.url).searchParams;
     const kind = sp.get('kind') || '', id = sp.get('id') || '';
+    const lang = ['uk', 'en'].includes(sp.get('lang')) ? sp.get('lang') : 'ru';
     try {
-      if (kind === 'movie' && /^tt\d{5,10}$/.test(id)) return json(await filmInfo(id));
+      if (kind === 'movie' && /^tt\d{5,10}$/.test(id)) return json(await filmInfo(id, lang));
       if (kind === 'game' && /^\d{1,9}$/.test(id)) return json(await gameInfo(id));
       if (kind === 'hentai' && /^\d{1,9}$/.test(id)) return json(await hentaiInfo(id)); // id с MyAnimeList
     } catch (e) {
@@ -2918,8 +2922,9 @@ async function cachedJson(url, init, ttl) {
   const key = new Request('https://covers-cache.casualhub/' + encodeURIComponent(url + '|' + ((init && init.body) || '')));
   const hitRes = await cache.match(key);
   if (hitRes) return hitRes.json();
-  // долго молчащий сайт не держит поиск: через 6 секунд переходим к следующему источнику
-  const res = await fetch(url, { ...(init || {}), signal: AbortSignal.timeout(6000), headers: { 'user-agent': 'CasualHub/1.0 (+https://casualhub.pages.dev)', accept: 'application/json', ...((init && init.headers) || {}) } });
+  // долго молчащий сайт не держит поиск: через 6 секунд (init.wait — своё время) переходим к следующему источнику
+  const { wait, ...opts } = init || {};
+  const res = await fetch(url, { ...opts, signal: AbortSignal.timeout(wait || 6000), headers: { 'user-agent': 'CasualHub/1.0 (+https://casualhub.pages.dev)', accept: 'application/json', ...((init && init.headers) || {}) } });
   if (!res.ok) throw new Error('covers ' + res.status);
   const data = await res.json();
   await cache.put(key, new Response(JSON.stringify(data), { headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=' + ttl } }));
@@ -3070,21 +3075,69 @@ function genresRu(list) {
   }
   return GENRE_RULES.map(([name]) => name).filter((n) => got.has(n)).slice(0, 3);
 }
-async function filmInfo(imdb) {
-  const q = `SELECT ?ru (GROUP_CONCAT(DISTINCT ?g; separator="|") AS ?gs) WHERE { ?f wdt:P345 "${imdb}". OPTIONAL { ?f rdfs:label ?ru FILTER(lang(?ru) = "ru") } OPTIONAL { ?f wdt:P136 ?gg. ?gg rdfs:label ?g FILTER(lang(?g) = "ru") } } GROUP BY ?ru LIMIT 1`;
+// by — режиссёр: имя на языке сайта (lang — ru, uk или en), нет такого — по-английски. Его подставляет «Новая оценка»
+async function filmInfo(imdb, lang = 'ru') {
+  const q = `SELECT ?ru (GROUP_CONCAT(DISTINCT ?g; separator="|") AS ?gs) (SAMPLE(COALESCE(?d1, ?d2)) AS ?dir) WHERE { ?f wdt:P345 "${imdb}". OPTIONAL { ?f rdfs:label ?ru FILTER(lang(?ru) = "ru") } OPTIONAL { ?f wdt:P136 ?gg. ?gg rdfs:label ?g FILTER(lang(?g) = "ru") } `
+    + `OPTIONAL { ?f wdt:P57 ?dd. OPTIONAL { ?dd rdfs:label ?d1 FILTER(lang(?d1) = "${lang}") } OPTIONAL { ?dd rdfs:label ?d2 FILTER(lang(?d2) = "en") } } } GROUP BY ?ru LIMIT 1`;
   const d = await cachedJson('https://query.wikidata.org/sparql?format=json&query=' + encodeURIComponent(q), { headers: { accept: 'application/sparql-results+json' } }, 7 * 86400);
   const b = ((d && d.results && d.results.bindings) || [])[0] || {};
-  return { ru: b.ru ? String(b.ru.value).slice(0, 140) : '', genres: genresRu(b.gs ? String(b.gs.value).split('|') : []) };
+  return { ru: b.ru ? String(b.ru.value).slice(0, 140) : '', genres: genresRu(b.gs ? String(b.gs.value).split('|') : []), by: b.dir ? String(b.dir.value).slice(0, 80) : '' };
 }
+// by — разработчик (первый из списка Steam)
 async function gameInfo(appid) {
-  const d = await cachedJson(`https://store.steampowered.com/api/appdetails?appids=${appid}&l=russian&cc=US&filters=basic,genres`, null, 7 * 86400);
+  const d = await cachedJson(`https://store.steampowered.com/api/appdetails?appids=${appid}&l=russian&cc=US&filters=basic,genres,developers`, null, 7 * 86400);
   const g = (d && d[appid] && d[appid].success && d[appid].data) || {};
   const genres = (g.genres || []).map((x) => String((x && x.description) || '').toLowerCase()).filter(Boolean).slice(0, 3);
-  return { ru: typeof g.name === 'string' ? g.name.slice(0, 140) : '', genres };
+  const dev = Array.isArray(g.developers) && typeof g.developers[0] === 'string' ? g.developers[0].slice(0, 80) : '';
+  return { ru: typeof g.name === 'string' ? g.name.slice(0, 140) : '', genres, by: dev };
 }
 const STEAM_ART = (id, file) => `https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/${id}/${file}`;
-const IMDB_KIND = { movie: 'Фильм', tvMovie: 'Фильм', video: 'Фильм', tvSeries: 'Сериал', tvMiniSeries: 'Мини-сериал', short: 'Короткий метр', tvSpecial: 'Спецвыпуск' };
 const ANI_KIND = { TV: 'Аниме', TV_SHORT: 'Аниме', MOVIE: 'Аниме-фильм', OVA: 'OVA', ONA: 'ONA', SPECIAL: 'Спецвыпуск', MANGA: 'Манга', ONE_SHOT: 'Манга', NOVEL: 'Ранобэ' };
+// карточки игр Steam по кодам: list — [{ id, name }], пустое name берётся из Steam. Вертикальная обложка, у старых игр
+// её может не быть — тогда шапка магазина. У новых игр картинки лежат по путям с хешем (…/apps/<id>/<хеш>/library_capsule.jpg):
+// по старому пути без хеша Steam отдаёт серую заглушку, а у DLC — 404 (так было с Battlefield 6). Настоящие пути и тип
+// (0 — игра, 4 — DLC) отдаёт IStoreBrowseService/GetItems одним запросом; не ответил — старые пути, как раньше
+async function steamCards(list) {
+  const found = (list || []).filter((i) => i && Number.isInteger(i.id));
+  if (!found.length) return [];
+  let info = null;
+  try {
+    const input = { ids: found.map((i) => ({ appid: i.id })), context: { language: 'english', country_code: 'US' }, data_request: { include_assets: true } };
+    const r = await cachedJson('https://api.steampowered.com/IStoreBrowseService/GetItems/v1/?input_json=' + encodeURIComponent(JSON.stringify(input)), null, 86400);
+    info = new Map(((r && r.response && r.response.store_items) || []).filter((it) => it && it.appid).map((it) => [it.appid, it]));
+  } catch (e) { info = null; }
+  const asset = (it, file) => (file ? 'https://shared.akamai.steamstatic.com/store_item_assets/' + String(it.assets.asset_url_format || '').replace('${FILENAME}', file) : '');
+  const out = [];
+  for (const i of found) {
+    const it = info && info.get(i.id);
+    if (it && it.type !== 0) continue; // дополнения, паки, саундтреки — не игра
+    const name = String(i.name || (it && it.name) || '').slice(0, 140);
+    if (!name) continue;
+    const a = it && it.assets && it.assets.asset_url_format ? it.assets : null;
+    out.push({ id: String(i.id), title: name, sub: 'Игра', year: '',
+      art: a ? asset(it, a.library_capsule_2x || a.library_capsule || a.header) : STEAM_ART(i.id, 'library_600x900.jpg'),
+      alt: a ? asset(it, a.header || a.main_capsule) : STEAM_ART(i.id, 'header.jpg'), tall: true });
+  }
+  return out;
+}
+// обложки по названию для /covers и /works: по-русски Steam и сайты аниме ничего не находят — для кириллицы сначала
+// ищем английское название (Wikidata, русская Википедия), потом транслит («Элден ринг» → Elden ring).
+// У 18+ русское название понимает сам поиск (Shikimori), перевод не нужен
+async function coverSearch(kind, q) {
+  if (!Object.prototype.hasOwnProperty.call(COVER_FIND, kind)) return [];
+  const ru = (kind === 'game' || kind === 'anime') && CYR.test(q);
+  let items = ru ? [] : await COVER_FIND[kind](q).catch(() => []);
+  if (ru) {
+    const found = [];
+    const titles = await latinTitles(q, kind);
+    for (const t of titles) found.push(...(await COVER_FIND[kind](t).catch(() => [])));
+    const tr = translit(q);
+    if (!found.length && !titles.some((t) => t.toLowerCase() === tr.toLowerCase())) found.push(...(await COVER_FIND[kind](tr).catch(() => [])));
+    items = found.concat(items);
+  }
+  const seen = new Set();
+  return items.filter((c) => c.title && /^https:\/\//.test(c.art) && !seen.has(c.art) && seen.add(c.art));
+}
 const DZ_IMG = /^https:\/\/(cdn-images|e-cdns-images)\.dzcdn\.net\//;
 const DZ_KIND = { album: 'Альбом', ep: 'EP', single: 'Сингл', compile: 'Сборник' };
 const COVER_FIND = {
@@ -3110,25 +3163,7 @@ const COVER_FIND = {
   // отдаёт IStoreBrowseService/GetItems одним запросом; не ответил — старые пути, как раньше
   async game(q) {
     const d = await cachedJson('https://store.steampowered.com/api/storesearch/?l=english&cc=US&term=' + encodeURIComponent(q), null, 86400);
-    const found = (d.items || []).filter((i) => i && Number.isInteger(i.id) && !/\b(soundtrack|ost|artbook|dlc)\b/i.test(i.name || '')).slice(0, 12);
-    if (!found.length) return [];
-    let info = null;
-    try {
-      const input = { ids: found.map((i) => ({ appid: i.id })), context: { language: 'english', country_code: 'US' }, data_request: { include_assets: true } };
-      const r = await cachedJson('https://api.steampowered.com/IStoreBrowseService/GetItems/v1/?input_json=' + encodeURIComponent(JSON.stringify(input)), null, 86400);
-      info = new Map(((r && r.response && r.response.store_items) || []).filter((it) => it && it.appid).map((it) => [it.appid, it]));
-    } catch (e) { info = null; }
-    const asset = (it, file) => (file ? 'https://shared.akamai.steamstatic.com/store_item_assets/' + String(it.assets.asset_url_format || '').replace('${FILENAME}', file) : '');
-    const out = [];
-    for (const i of found) {
-      const it = info && info.get(i.id);
-      if (it && it.type !== 0) continue; // дополнения, паки, саундтреки — не игра
-      const a = it && it.assets && it.assets.asset_url_format ? it.assets : null;
-      out.push({ id: String(i.id), title: String(i.name || '').slice(0, 140), sub: 'Игра', year: '',
-        art: a ? asset(it, a.library_capsule_2x || a.library_capsule || a.header) : STEAM_ART(i.id, 'library_600x900.jpg'),
-        alt: a ? asset(it, a.header || a.main_capsule) : STEAM_ART(i.id, 'header.jpg'), tall: true });
-    }
-    return out;
+    return steamCards((d.items || []).filter((i) => i && Number.isInteger(i.id) && !/\b(soundtrack|ost|artbook|dlc)\b/i.test(i.name || '')).slice(0, 12));
   },
   async movie(q) {
     const d = await cachedJson(`https://v3.sg.media-imdb.com/suggestion/x/${encodeURIComponent(q.toLowerCase())}.json`, null, 86400);

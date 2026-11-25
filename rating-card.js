@@ -301,7 +301,7 @@
       ${r.photo ? `<div class="rc-pic" id="rcPic"${window.CasualUtil.nsfw.attr(window.CasualUtil.nsfw.is(r))}><span class="rc-ltr">${esc([...String(r.name).trim()][0] || '?')}</span>${lb ? LB_MARK : ''}</div>` : ''}
       <div class="rc-top">
         <div class="rc-name"><span class="rc-label">${esc(cat)}</span><h2 id="rcTitle">${esc(r.name)}</h2>
-          <p>${esc([word, trk ? `${trk} ${plural(trk, 'трек', 'трека', 'треков')}` : n ? `${n} ${plural(n, 'критерий', 'критерия', 'критериев')}` : '', r.status, r.meta].filter(Boolean).join(' · '))}${lb ? ' · из Letterboxd' : ''}</p></div>
+          <p>${esc([word, trk ? `${trk} ${plural(trk, 'трек', 'трека', 'треков')}` : n ? `${n} ${plural(n, 'критерий', 'критерия', 'критериев')}` : '', window.CasualUtil.status.label(r.status, cat), r.meta].filter(Boolean).join(' · '))}${lb ? ' · из Letterboxd' : ''}</p></div>
         <div class="rc-score"><b>${total != null ? fmt(total) : '—'}</b><small>из 10</small></div>
       </div>
       ${window.CasualIMDb && window.CasualIMDb.isMovie(cat) ? `<div class="imdb-slot" data-imdb-row="1" data-imdb-n="${esc(r.name)}" data-imdb-y="${window.CasualIMDb.yearOf(r.meta) || ''}"></div>` : ''}

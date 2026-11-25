@@ -1336,9 +1336,8 @@ function paintVis() {
   const box = document.getElementById('visChips');
   if (!box) return;
   const v = form.vis || 'friends';
-  box.querySelectorAll('[data-vis]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.vis === v)));
-  const hint = document.getElementById('visHint');
-  if (hint) hint.textContent = VIS_HINT[v] || VIS_HINT.friends;
+  // что значит каждый выбор — в подсказке при наведении, а не строкой под кнопками
+  box.querySelectorAll('[data-vis]').forEach(b => { b.setAttribute('aria-pressed', String(b.dataset.vis === v)); b.title = VIS_HINT[b.dataset.vis] || ''; });
 }
 const DEFAULT_STATUS = 'Завершено'; // новая оценка — сразу «Завершено» / «Просмотрено», поменять можно
 function blankForm(cat) {
@@ -1431,7 +1430,8 @@ function cellsHTML(v, cls, knob) {
 const CAT_X = '<svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6L6 18"/></svg>';
 function renderCats() {
   const editing = !!form.editingId;
-  const canDel = !editing && state.cats.length > 1;
+  // крестик «удалить категорию» — только в «Настроить»: удалять приходится редко, а пять крестиков на виду мешают
+  const canDel = !editing && state.editCat && state.cats.length > 1;
   let h = state.cats.map(c => {
     const name = esc(c.name.trim() || 'Без названия');
     if (state.catAsk === c.id) {
@@ -1445,14 +1445,22 @@ function renderCats() {
   }).join('');
   if (state.cats.length < MAX_CATS) h += `<button type="button" class="chip-btn add" data-act="newcat"${editing ? ' disabled' : ''}>${ICON.plus}Категория</button>`;
   el.cats.innerHTML = h;
+  // категория могла стать другой по виду (новая, шаблон, переименовали): поле «Исполнитель», подсказка в «Названии»
+  // и слова статусов («Хочу прочитать» у книг)
+  renderArtist();
+  renderStatusSet();
 }
 function critRowHTML(r) {
   const v = form.scores[r.id] || 0;
   const note = form.notes[r.id] || '';
   const open = !!note || !!form.openNotes[r.id];
   const nid = 'cn-' + r.id;
-  const w = r.w || 1;
-  const wBadge = `<button type="button" class="crit-w${w !== 1 ? ' on' : ''}" data-act="w" title="Вес критерия в итоге этой оценки. Нажми: ×1 → ×2 → ×0,5" aria-label="Вес критерия «${esc(r.name)}»: ×${String(w).replace('.', ',')}">×${String(w).replace('.', ',')}</button>`;
+  // вес меняется в «Настроить» (editorHTML), здесь виден только непривычный: ×2 или ×0,5. Кнопка остаётся у критериев,
+  // которых в «Настроить» нет: из сохранённой оценки (extra) и когда категории уже нет
+  const w = r.w || 1, wt = '×' + String(w).replace('.', ',');
+  const wBadge = r.extra || !currentCat()
+    ? `<button type="button" class="crit-w${w !== 1 ? ' on' : ''}" data-act="w" title="Вес критерия в итоге этой оценки. Нажми: ×1 → ×2 → ×0,5" aria-label="Вес критерия «${esc(r.name)}»: ${wt}">${wt}</button>`
+    : w !== 1 ? ` <small class="crit-w-badge" title="Вес критерия в итоге. Поменять — «Настроить»">${wt}</small>` : '';
   return `<li class="crit" data-id="${esc(r.id)}" data-tier="${tierV(v)}">
 <div class="crit-top">
 <div class="crit-name"><span class="crit-title" id="${esc(nid)}">${esc(r.name.trim() || 'Без названия')}${wBadge}</span>${r.desc ? `<span class="crit-desc">${esc(r.desc)}</span>` : ''}</div>
@@ -1469,6 +1477,8 @@ function editorHTML(cat) {
   const starter = STARTERS.some(s => s.id === cat.id);
   const tpls = allTemplates().map((t, idx) => `<button type="button" class="tpl-btn" data-act="apply-tpl" data-tpl="${idx}">${esc(t.name)}</button>`).join('');
   const items = cat.criteria.map((c, i) => {
+    // вес — у этой оценки (form.weights), как и раньше; кнопка просто живёт здесь, а не у каждого критерия на виду
+    const w = form.weights[c.id] || 1, wt = '×' + String(w).replace('.', ',');
     return `<li class="ed-item" data-id="${esc(c.id)}">
 <span class="ed-num" aria-hidden="true">${i + 1}</span>
 <div class="ed-fields">
@@ -1476,6 +1486,7 @@ function editorHTML(cat) {
 <textarea class="ed-input ed-desc" id="edd-${esc(c.id)}" data-act="cdesc" rows="1" maxlength="120" enterkeyhint="next" placeholder="Описание, по желанию" aria-label="Критерий ${i + 1}, описание">${esc(c.desc || '')}</textarea>
 </div>
 <div class="ed-tools">
+<button type="button" class="crit-w${w !== 1 ? ' on' : ''}" data-act="w" title="Вес критерия в итоге этой оценки. Нажми: ×1 → ×2 → ×0,5" aria-label="Вес критерия «${esc(c.name)}»: ${wt}">${wt}</button>
 <button type="button" class="mini-btn" data-act="up" aria-label="Поднять критерий ${i + 1}"${i === 0 ? ' disabled' : ''}>${ICON.up}</button>
 <button type="button" class="mini-btn" data-act="down" aria-label="Опустить критерий ${i + 1}"${i === n - 1 ? ' disabled' : ''}>${ICON.down}</button>
 <button type="button" class="mini-btn del" data-act="delcrit" aria-label="Удалить критерий ${i + 1}"${n <= 1 ? ' disabled' : ''}>${ICON.trash}</button>
@@ -1488,7 +1499,7 @@ function editorHTML(cat) {
   return `<div class="editor">
 <div class="tpl-box"><span class="label">Быстрые шаблоны критериев</span><div class="tpl-list">${tpls}</div></div>
 <div><label class="label" for="catNameInput">Название категории</label><input class="ed-input ed-cat" id="catNameInput" data-act="catname" type="text" maxlength="40" enterkeyhint="next" value="${esc(cat.name)}" placeholder="Например, Кофейни"></div>
-<div><p class="label">Критерии · ${n} из ${MAX_CRIT}. Вес критерия ставится в каждой оценке, кнопкой ×1 рядом с его названием</p><ul class="ed-list">${items}</ul></div>
+<div><p class="label">Критерии · ${n} из ${MAX_CRIT}. ×1 — вес критерия в итоге этой оценки</p><ul class="ed-list">${items}</ul></div>
 <div class="ed-actions">
 <button type="button" class="btn small ghost" data-act="addcrit"${n >= MAX_CRIT ? ' disabled' : ''}>${ICON.plus}Добавить критерий</button>
 ${starter ? '<button type="button" class="btn small text" data-act="resetcat">Вернуть стандартные</button>' : ''}
@@ -1543,8 +1554,8 @@ function updateTotal() {
   el.total.dataset.tier = tierT(t);
   el.totalNum.textContent = t == null ? '—' : fmt(t);
   const plan = t == null && noScoreOk(form.status);
-  el.verdict.textContent = t == null ? (plan ? form.status.trim() : 'Пока без оценки') : verdict(t);
-  el.totalSub.textContent = t == null ? (plan ? 'Можно сохранить и без балла' : 'Нажми на клетку или отметь «В планах»') : coverage(ratedRows.length, rows.length);
+  el.verdict.textContent = t == null ? (plan ? stLabel(form.status.trim(), catKind(currentCat())) : 'Пока без оценки') : verdict(t);
+  el.totalSub.textContent = t == null ? (plan ? 'Можно сохранить и без балла' : `Нажми на клетку или отметь «${planWord()}»`) : coverage(ratedRows.length, rows.length);
   el.total.classList.remove('nudge');
 }
 function updateHead() {
@@ -1599,25 +1610,33 @@ function renderForm() {
   updateNameState();
 }
 
-// статусы: у музыки «Сингл / Альбом», у фильмов и сериалов «Просмотрено» вместо «Завершено»;
+// статусы: у музыки «Сингл / Альбом». У остальных в оценке лежат общие «Завершено» (у фильмов и 18+ — «Просмотрено»),
+// «В процессе», «В планах», «Брошено», а на кнопках и в списках — слова вида категории (CasualUtil.status в util.js):
+// у книг «Прочитано, Читаю, Хочу прочитать», у игр «Пройдено, Играю…», у техники «Опробовано, Пользуюсь, Хочу купить…».
 // «В планах» и «В процессе» можно сохранить и без балла
-const STATUS_SETS = {
-  music: [['Сингл', '♪ Сингл'], ['Альбом', '◉ Альбом']],
-  movie: [['Просмотрено', '✓ Просмотрено'], ['В процессе', '▶ В процессе'], ['В планах', '◷ В планах'], ['Брошено', '✕ Брошено']],
-  base: [['Завершено', '✓ Завершено'], ['В процессе', '▶ В процессе'], ['В планах', '◷ В планах'], ['Брошено', '✕ Брошено']]
-};
+const MUSIC_SET = [['Сингл', '♪ Сингл'], ['Альбом', '◉ Альбом']];
+const ST_ICON = { done: '✓', doing: '▶', plan: '◷', drop: '✕' };
 const NO_SCORE_OK = ['В планах', 'В процессе'];
 const noScoreOk = (st) => NO_SCORE_OK.includes(String(st || '').trim());
 // «Просмотрено» — у фильмов и сериалов и у категории 18+ (catKind 'hentai')
 const WATCHED = new Set(['movie', 'hentai']);
-function statusSet() { return formMusic() ? STATUS_SETS.music : WATCHED.has(catKind(currentCat())) ? STATUS_SETS.movie : STATUS_SETS.base; }
+// [значение в оценке, подпись на кнопке]
+function statusSet() {
+  if (formMusic()) return MUSIC_SET;
+  const kind = catKind(currentCat()), w = window.CasualUtil.status.words(kind);
+  return [[WATCHED.has(kind) ? 'Просмотрено' : 'Завершено', 'done'], ['В процессе', 'doing'], ['В планах', 'plan'], ['Брошено', 'drop']].map(([v, g]) => [v, `${ST_ICON[g]} ${w[g]}`]);
+}
+// слово статуса в категории: kind — вид (catKind); у своих оценок вид берётся из их категории
+const stLabel = (s, kind) => { const st = window.CasualUtil.status, g = st.group(s); return g ? st.words(kind)[g] : String(s || ''); };
+const ratingKind = (r) => catKind(state.cats.find(c => c.id === r.cat) || { id: r.cat, name: catNameOf(r) });
+const planWord = () => window.CasualUtil.status.words(catKind(currentCat())).plan;
 // статус под текущую категорию: «Завершено» у фильма становится «Просмотрено» и наоборот, чужой статус сбрасывается
 function fitStatus(v) {
   const t = String(v || '').trim();
   if (!t) return '';
   const set = statusSet();
-  if (t === 'Трек' && set === STATUS_SETS.music) return t;
-  const swap = set === STATUS_SETS.movie ? t.replace('Завершено', 'Просмотрено') : t.replace('Просмотрено', 'Завершено');
+  if (t === 'Трек' && set === MUSIC_SET) return t;
+  const swap = set[0][0] === 'Просмотрено' ? t.replace('Завершено', 'Просмотрено') : t.replace('Просмотрено', 'Завершено');
   return set.some(([k]) => swap.includes(k)) ? swap : '';
 }
 // старые оценки фильмов и сериалов: «Завершено» → «Просмотрено» (время правки не трогаем, это не правка оценки)
@@ -1635,7 +1654,7 @@ function renderStatusSet() {
   const box = el.statusChips || $('statusChips');
   if (!box) return;
   const set = statusSet();
-  const sig = set.map(x => x[0]).join('|');
+  const sig = set.map(x => x.join('=')).join('|'); // подписи у книг и игр разные при тех же значениях
   if (box.dataset.set !== sig) {
     box.dataset.set = sig;
     box.innerHTML = set.map(([v, t]) => `<button type="button" class="status-chip" data-status="${v}" aria-pressed="false">${t}</button>`).join('');
@@ -1791,7 +1810,11 @@ function renderArtist() {
   if (!music && form.link) form.link = ''; // «Слушать» есть только у музыки
   renderMusicPicked();
   el.nameLabel.textContent = music ? 'Название трека или альбома' : 'Название';
-  el.name.placeholder = music ? 'Начни писать, и трек найдётся' : 'Что оцениваешь?';
+  const wk = workKind();
+  // «Название или автор» — только когда поиск работает (со входом)
+  el.name.placeholder = music ? 'Начни писать, и трек найдётся' : (workLive() && WORK_HINT[wk]) || 'Что оцениваешь?';
+  // сменили категорию — найденное и ещё не пришедшее было для другой
+  if ((workItems.length && workKindNow !== wk) || (workAsked && workAsked !== wk)) workClose();
   if (!music) { hideArtistList(); return; }
   if (el.artist.value !== (form.artist || '')) el.artist.value = form.artist || '';
   const parts = artistParts(form.artist);
@@ -1915,21 +1938,18 @@ let coverTimer = null, coverCtl = null, coverKey = '', coverItems = [], coverFro
 const COVER_SRC = { music: 'Apple Music и Deezer', game: 'Steam', movie: 'IMDb', book: 'Open Library', anime: 'AniList', hentai: 'AniList' };
 function coverKind() { return catKind(currentCat()); }
 // какие обложки подходят категории: по её названию
+// названия категорий — по-русски, по-украински или по-английски; общая проверка — CasualUtil.status.kind (util.js):
+// взрослое аниме раньше «аниме» («Хентай-аниме» не ищется как обычное), еда и техника — без обложек, но с поиском в «Названии»
 function catKind(c) {
   if (!c) return '';
   if (isMusicCat(c)) return 'music';
-  const k = `${keyOf(c.name)} ${c.id}`;
-  if (window.CasualUtil.nsfw.cat(c.name)) return 'hentai'; // взрослое аниме — раньше «аниме», чтобы «Хентай-аниме» не искалось как обычное
-  // названия категорий — по-русски, по-украински или по-английски
-  if (/игр|ігр|game/.test(k)) return 'game';
-  if (/фильм|фільм|сериал|серіал|кино|кіно|мульт|film|movie|series|cartoon|animat/.test(k)) return 'movie';
-  if (/книг|литератур|літератур|book/.test(k)) return 'book';
-  if (/аниме|аніме|манг|anime|manga/.test(k)) return 'anime';
-  return '';
+  // по названию, как на остальных страницах; id стартовых категорий (games, films) — если название ничего не сказало
+  const st = window.CasualUtil.status;
+  return st.kind(keyOf(c.name)) || st.kind(String(c.id || ''));
 }
 function coverQuery() {
   const kind = coverKind();
-  if (!kind || form.photo || !canPhoto() || photoBusy) return '';
+  if (!kind || !COVER_SRC[kind] || form.photo || !canPhoto() || photoBusy) return '';
   if (kind !== 'music' && !(window.casualApi && window.casualApi.online())) return '';
   const t = form.name.trim(), a = kind === 'music' ? (form.artist || '').trim() : '';
   if (t.length < 2 && a.length < 2) return ''; // у музыки хватает и одного исполнителя
@@ -2002,8 +2022,8 @@ async function findCovers() {
 function renderCovers() {
   const box = $('coverSugg');
   if (!box) return;
-  // пока открыт список найденных треков, вторая подборка обложек только мешает
-  const show = coverItems.length > 0 && !!coverQuery() && !musicItems.length;
+  // пока открыт список найденных треков или произведений, вторая подборка обложек только мешает
+  const show = coverItems.length > 0 && !!coverQuery() && !musicItems.length && !workItems.length;
   box.hidden = !show;
   if (!show) { box.replaceChildren(); return; }
   box.innerHTML = `<span class="label">Обложки из ${esc(COVER_SRC[coverFrom] || 'интернета')}</span><div class="cover-list">${coverItems.map((c, i) => `<button type="button" class="cover-opt${c.tall ? ' tall' : ''}" data-cover="${i}" title="${esc([c.artist, c.title].filter(Boolean).join(' — '))}"><img${window.CasualUtil.nsfw.attr(coverFrom === 'hentai')} src="${esc(c.thumb || c.art)}"${c.alt ? ` data-alt="${esc(c.alt)}"` : ''} alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer"><span>${esc(c.title)}</span>${c.ru && c.ru !== c.title ? `<em class="cover-ru">${esc(c.ru)}</em>` : ''}<small>${esc([c.kind, c.year].filter(Boolean).join(' · '))}</small></button>`).join('')}</div>`;
@@ -2017,9 +2037,11 @@ document.addEventListener('error', e => {
     img.src = img.dataset.alt;
   }
 }, true);
-async function pickCover(i) {
+// keepText — название и описание уже подставил выбор в списке (трек, произведение): только фото
+async function pickCover(i, keepText) {
   const c = coverItems[i];
   if (!c || photoBusy) return;
+  const f0 = form; // пока картинка качается, могли открыть другую оценку: туда обложку не ставим
   try {
     let blob = null;
     if (c.via === 'server') {
@@ -2034,9 +2056,10 @@ async function pickCover(i) {
       if (!res.ok) throw new Error('http');
       blob = await res.blob();
     }
+    if (form !== f0) return;
     await setPhotoFromFile(new File([blob], 'cover.jpg', { type: blob.type || 'image/jpeg' }), false);
     if (!form.photo) throw new Error('photo');
-    await fillFromCover(c);
+    if (!keepText) await fillFromCover(c);
     coverItems = [];
     renderCovers();
     scheduleDraft();
@@ -2106,7 +2129,7 @@ function musicMsg(text, bad) {
   m.hidden = !text;
   m.classList.toggle('err', !!bad);
 }
-let musicItems = [], musicTimer = 0, musicSeq = 0, musicPhotoAuto = false, musicPickedArtist = '';
+let musicItems = [], musicTimer = 0, musicSeq = 0, musicPhotoAuto = false, musicPhotoRef = null, musicPickedArtist = '';
 function renderMusicPicked() {
   const box = $('musicPicked');
   if (!box) return;
@@ -2125,7 +2148,7 @@ function renderMusicResults() {
 }
 function musicClear() {
   clearTimeout(musicTimer); musicSeq++;
-  musicItems = []; musicPhotoAuto = false;
+  musicItems = []; musicPhotoAuto = false; musicPhotoRef = null;
   musicPickedArtist = '';
   renderMusicResults();
 }
@@ -2168,7 +2191,8 @@ async function applyMusicPick(c) {
   // год из прошлого выбранного трека не должен остаться у нового
   if (musicPhotoAuto && /^(18|19|20)\d{2}$/.test((form.meta || '').trim())) form.meta = '';
   fillMusicFromCover({ title: c.title, artist: c.artist, kind: c.kind, year: c.year, genre: '' });
-  const swap = !form.photo || musicPhotoAuto; // своё фото не заменяем, а обложку от прошлого выбора — да
+  // своё фото не заменяем (и поставленное после выбора тоже), а обложку от прошлого выбора — да
+  const swap = !form.photo || (musicPhotoAuto && form.photo === musicPhotoRef);
   musicItems = [];
   renderMusicResults();
   clearTimeout(musicTimer); musicSeq++;
@@ -2178,9 +2202,127 @@ async function applyMusicPick(c) {
   if (c.art && swap) {
     coverItems = [{ ...c, kind: c.kind === 'Альбом' ? 'Альбом' : 'Трек' }]; coverFrom = 'music';
     await pickCover(0);
-    musicPhotoAuto = !!form.photo;
+    musicPhotoAuto = !!form.photo; musicPhotoRef = form.photo;
     coverItems = []; renderCovers();
     if (!form.photo) musicMsg('Обложка не загрузилась');
+  }
+}
+
+/* ---------- Поиск произведения: по названию и автору ---------- */
+// у книг, аниме, фильмов, игр, заведений и техники «Название» ищет одной строкой и по названию, и по автору (студии,
+// режиссёру, актёру, разработчику, бренду) — через наш сервер (/works, нужен вход; functions/_lib/works.js).
+// Выбрал — подставляются название, автор и год в «Год / Жанр / Теги» и обложка. Своё фото и своё описание не заменяются,
+// а подставленное прошлым выбором — да
+const WORK_HINT = { book: 'Название книги или автор', anime: 'Название, автор или студия', hentai: 'Название', movie: 'Название, режиссёр или актёр', game: 'Название игры или разработчик', food: 'Заведение и город', tech: 'Модель или бренд' };
+const WORK_ICON = {
+  book: '<path d="M5 4h9a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h9"/>',
+  food: '<path d="M12 21s-6-5.4-6-11a6 6 0 0 1 12 0c0 5.6-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/>',
+  tech: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>',
+};
+// workAsked — вид, для которого поиск ждёт или идёт; workPhotoRef — фото, которое поставил прошлый выбор (своё не заменяем)
+let workItems = [], workTimer = 0, workSeq = 0, workKindNow = '', workSrc = '', workPhotoAuto = false, workMetaAuto = '', workAsked = '', workPhotoRef = null, workPickSeq = 0;
+function workKind() { const k = catKind(currentCat()); return k && k !== 'music' && WORK_HINT[k] ? k : ''; }
+const workLive = () => !!workKind() && !!(window.casualApi && window.casualApi.online());
+const siteLang = () => (window.CasualLang && /^(uk|en)$/.test(window.CasualLang.lang) ? window.CasualLang.lang : 'ru');
+const trText = (s) => (window.CasualLang && typeof window.CasualLang.t === 'function' ? window.CasualLang.t(s) : s);
+function workMsg(text, bad) {
+  const m = $('workMsg');
+  if (!m) return;
+  m.textContent = text || '';
+  m.hidden = !text;
+  m.classList.toggle('err', !!bad);
+}
+function workClose() {
+  clearTimeout(workTimer); workSeq++; workAsked = '';
+  if (workItems.length) { workItems = []; renderWorkResults(); }
+  workMsg('');
+}
+// новая оценка или другая из списка — подставленное прошлым выбором уже не своё
+function workForget() { workClose(); workPickSeq++; workPhotoAuto = false; workPhotoRef = null; workMetaAuto = ''; }
+function scheduleWorkSearch() {
+  clearTimeout(workTimer);
+  const kind = workKind(), q = form.name.trim();
+  if (!kind || q.length < 2 || !workLive()) { workClose(); return; }
+  workAsked = kind;
+  workTimer = setTimeout(() => searchWorks(kind, q), 450);
+}
+async function searchWorks(kind, q) {
+  if (kind !== workKind()) return; // категорию сменили, пока ждали
+  const seq = ++workSeq;
+  workMsg('Ищу…');
+  let r = null;
+  try {
+    r = await window.casualApi.get(`/works?kind=${kind}&lang=${siteLang()}&q=${encodeURIComponent(q)}`);
+  } catch (_) {
+    if (seq === workSeq) workMsg('Поиск сейчас не отвечает, попробуй ещё раз.', true);
+    return;
+  }
+  if (seq !== workSeq) return;
+  if (kind !== workKind()) { workClose(); return; }
+  const ok = (u) => (typeof u === 'string' && /^https:\/\//.test(u) ? u : '');
+  workItems = ((r && r.items) || []).filter(c => c && c.title).slice(0, 12).map(c => ({
+    id: String(c.id || ''), title: String(c.title).slice(0, 140), ru: String(c.ru || '').slice(0, 140), by: String(c.by || '').slice(0, 80),
+    sub: String(c.sub || '').slice(0, 30), note: String(c.note || '').slice(0, 90), year: /^\d{4}$/.test(String(c.year || '')) ? String(c.year) : '',
+    art: ok(c.art), thumb: ok(c.thumb) || ok(c.art), alt: ok(c.alt), tall: !!c.tall, genres: Array.isArray(c.genres) ? c.genres.map(String).slice(0, 6) : [], via: 'server',
+  }));
+  workKindNow = kind;
+  workSrc = String((r && r.src) || '').slice(0, 60);
+  renderWorkResults();
+  workMsg(workItems.length ? '' : 'Ничего не нашлось. Попробуй короче или по-английски');
+}
+function renderWorkResults() {
+  const box = $('workResults');
+  if (!box) return;
+  box.hidden = !workItems.length;
+  if (!workItems.length) { box.replaceChildren(); renderCovers(); return; }
+  const adult = window.CasualUtil.nsfw.attr(workKindNow === 'hentai');
+  const icon = WORK_ICON[workKindNow] || WORK_ICON.book;
+  box.innerHTML = workItems.map((c, i) => {
+    // под названием: оригинальное (если показано русское), автор, год, адрес или описание
+    const line = [c.ru && c.ru !== c.title ? c.title : '', c.by, c.year, c.note].filter(Boolean).join(' · ');
+    const pic = c.thumb ? `<img${adult} src="${esc(c.thumb)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : `<span class="wk-ph">${svg(icon, 20)}</span>`;
+    return `<button type="button" class="music-opt" data-work="${i}">${pic}<span><b>${esc(c.ru || c.title)}</b>${line ? `<small>${esc(line)}</small>` : ''}</span><i>${esc(c.sub)}</i></button>`;
+  }).join('') + (workSrc ? `<p class="work-src">Источник: ${esc(workSrc)}</p>` : '');
+  renderCovers();
+}
+// выбрали: название (писал по-русски — русское, если оно есть), автор и год в описание, обложка в фото
+async function applyWorkPick(c) {
+  const kind = workKindNow;
+  const typed = form.name.trim();
+  // пока ждём подробности и картинку, могли открыть другую оценку или выбрать другое — тогда этот выбор уже не нужен
+  const f = form, pick = ++workPickSeq;
+  const gone = () => form !== f || pick !== workPickSeq;
+  workClose();
+  let info = { ru: '', genres: c.genres, by: '' };
+  // у фильмов и игр русское название, жанры и режиссёр (разработчик) — отдельным запросом по коду
+  if (c.id && (kind === 'movie' || kind === 'game' || (kind === 'hentai' && !c.genres.length)) && window.casualApi && window.casualApi.online()) {
+    try { info = Object.assign(info, await window.casualApi.get(`/covers/info?kind=${kind}&lang=${siteLang()}&id=${encodeURIComponent(c.id)}`)); } catch (_) {}
+    if (gone()) return;
+  }
+  // название — как в списке (жирным): русское, если оно там было; русское из подробностей — только если писал по-русски
+  const name = (String(c.ru || '').trim() || (/[а-яёіїєґ]/i.test(typed) && String(info.ru || '').trim()) || c.title.trim()).slice(0, 140);
+  if (name && name !== typed) { form.name = name; el.name.value = name; }
+  const meta = (form.meta || '').trim();
+  if (!meta || /^(18|19|20)\d{2}$/.test(meta) || meta === workMetaAuto) {
+    // у фильмов в списке — актёры, а в описание идёт режиссёр
+    const by = kind === 'movie' ? String(info.by || '') : String(c.by || info.by || '');
+    const parts = kind === 'food' ? [trText(c.sub).toLowerCase(), c.note]
+      : kind === 'tech' ? [c.year]
+      : [by, c.year, ...(info.genres || []).map(g => String(g).toLowerCase())];
+    // до 80 знаков целыми частями: лишнее отбрасывается, а не обрезается посередине
+    form.meta = parts.filter(Boolean).reduce((acc, x) => (acc ? (acc.length + 2 + x.length <= 80 ? acc + ', ' + x : acc) : x.slice(0, 80)), '');
+    workMetaAuto = form.meta;
+    if (el.meta) el.meta.value = form.meta;
+  }
+  updateNameState();
+  scheduleDraft();
+  // обложку ставим, если фото нет или оно от прошлого выбора; своё (поставил сам после) не трогаем
+  if (c.art && canPhoto() && (!form.photo || (workPhotoAuto && form.photo === workPhotoRef))) {
+    coverItems = [c]; coverFrom = kind;
+    await pickCover(0, true);
+    if (gone()) return;
+    workPhotoAuto = !!form.photo; workPhotoRef = form.photo;
+    coverItems = []; renderCovers();
   }
 }
 /* ---------- Фото исполнителя с Genius ---------- */
@@ -2416,7 +2558,7 @@ function entryHTML(r, rank, showCat) {
 <details${state.open.has(r.id) ? ' open' : ''}>
 <summary><span class="sum">
 <span class="rank">${rank == null ? '—' : rank}</span>
-<span class="e-main">${pUrl ? `<img class="e-thumb" data-photo="thumb"${adultAttr(r)} src="${esc(pUrl)}" alt="" loading="lazy" decoding="async">` : aUrl ? `<img class="e-thumb ava" src="${esc(aUrl)}" alt="" loading="lazy" decoding="async">` : ''}<span class="e-text"><span class="e-name">${r.fav ? '<span class="fav-star-inline" title="В избранном">★</span>' : ''}${esc(r.name)}</span><span class="e-sub"><span>${esc(meta)}</span>${imdbSlot(r)}${showCat ? `<span class="tag">${esc(catNameOf(r))}</span>` : ''}${r.status ? `<span class="tag status-tag">${esc(r.status)}</span>` : ''}${r.meta ? `<span class="tag meta-tag">${esc(r.meta)}</span>` : ''}${r.author && r.author.name ? `<span class="tag author-tag" title="Автор: ${esc(r.author.name)}">${renderAuthorMini(r.author)} ${esc(r.author.name)}</span>` : ''}${r.example ? '<span class="tag ex">пример</span>' : ''}${notes ? `<span class="has-note" title="Есть заметки">${ICON.noteSm}<span class="vh">есть заметки</span></span>` : ''}</span></span></span>
+<span class="e-main">${pUrl ? `<img class="e-thumb" data-photo="thumb"${adultAttr(r)} src="${esc(pUrl)}" alt="" loading="lazy" decoding="async">` : aUrl ? `<img class="e-thumb ava" src="${esc(aUrl)}" alt="" loading="lazy" decoding="async">` : ''}<span class="e-text"><span class="e-name">${r.fav ? '<span class="fav-star-inline" title="В избранном">★</span>' : ''}${esc(r.name)}</span><span class="e-sub"><span>${esc(meta)}</span>${imdbSlot(r)}${showCat ? `<span class="tag">${esc(catNameOf(r))}</span>` : ''}${r.status ? `<span class="tag status-tag">${esc(stLabel(r.status, ratingKind(r)))}</span>` : ''}${r.meta ? `<span class="tag meta-tag">${esc(r.meta)}</span>` : ''}${r.author && r.author.name && !ownRating(r) ? `<span class="tag author-tag" title="Автор: ${esc(r.author.name)}">${renderAuthorMini(r.author)} ${esc(r.author.name)}</span>` : ''}${r.example ? '<span class="tag ex">пример</span>' : ''}${notes ? `<span class="has-note" title="Есть заметки">${ICON.noteSm}<span class="vh">есть заметки</span></span>` : ''}</span></span></span>
 <span class="spark${trkBars ? ' trk' + (trkBars.length > 12 ? ' many' : '') : ''}" aria-hidden="true"${trkBars ? ` title="Треков оценено: ${trkBars.length}"` : ''}>${spark}</span>
 <span class="badge" data-tier="${tierT(t)}">${t != null ? fmt(t) : '—'}</span>
 ${ICON.chev}
@@ -2548,10 +2690,15 @@ function renderBoard() {
     ? `<button type="button" class="chip-btn" data-filter="all" aria-pressed="${state.filter === 'all'}">Все <b>${state.ratings.length}</b></button>`
       + gs.map(g => `<button type="button" class="chip-btn" data-filter="${esc(g.id)}" aria-pressed="${state.filter === g.id}">${esc(g.name)} <b>${g.n}</b></button>`).join('')
     : '';
+  // статусы в фильтрах — словами выбранной категории («Прочитано» у книг), у «Все» — общими
+  const fcat = state.filter === 'all' ? null : gs.find(g => g.id === state.filter);
+  const sw = window.CasualUtil.status.words(fcat ? catKind(state.cats.find(c => keyOf(c.name) === fcat.id) || { id: '', name: fcat.name }) : '');
   if (el.subFilters) {
     el.subFilters.hidden = false; // всегда видно: даже без своих оценок нужен вход к друзьям во «Мои»
     el.subFilters.querySelectorAll('button[data-sfilter]').forEach(b => {
       b.setAttribute('aria-pressed', String(b.dataset.sfilter === state.sfilter));
+      const g = b.dataset.sfilter, t = sw[g] ? `${ST_ICON[g]} ${sw[g]}` : '';
+      if (t && b.dataset.lb !== t) { b.dataset.lb = t; b.textContent = t; }
     });
   }
   if (el.layoutGroup) {
@@ -2564,7 +2711,7 @@ function renderBoard() {
   if (moreHint) {
     const parts = [
       { date: 'новые', name: 'А–Я' }[state.sort],
-      { master: '8.5+', good: '7.5+', mid: '5–7.4', bad: 'до 5', done: 'завершено', plan: 'в планах', doing: 'в процессе', drop: 'брошено' }[state.sfilter],
+      { master: '8.5+', good: '7.5+', mid: '5–7.4', bad: 'до 5' }[state.sfilter] || (sw[state.sfilter] || '').toLowerCase(),
       // коротко: на телефоне «Фильтры · за неделю» уже не влезала в строку рядом с «Кто видит»
       state.recent ? `${state.recent} ${plural(state.recent, 'день', 'дня', 'дней')}` : '',
       { album: 'альбомы', single: 'треки' }[state.mfilter],
@@ -2692,6 +2839,8 @@ function setScore(id, v) {
 function resetForm(cat) {
   musicMsg('');
   musicClear();
+  workForget();
+  photoUrlOpen = false;
   revokeFormPhoto();
   form = blankForm(cat && state.cats.some(c => c.id === cat) ? cat : undefined);
   state.editCat = false;
@@ -2701,6 +2850,7 @@ function resetForm(cat) {
 }
 function loadIntoForm(r, opts) {
   revokeFormPhoto();
+  workForget();
   const cat = state.cats.find(c => c.id === r.cat) || null;
   const ids = new Set(cat ? cat.criteria.map(c => c.id) : []);
   form = blankForm(r.cat);
@@ -2896,6 +3046,7 @@ function toggleEditCat() {
     scheduleCatSave(0);
   } else {
     state.editCat = true;
+    renderCats(); // крестики у категорий видны только в «Настроить»
     renderCrit();
   }
 }
@@ -2983,7 +3134,7 @@ async function save(opts) {
   const t = scoreTotal(scores, albT && albT.amode);
   if (t == null && !noScoreOk(form.status) && !breakdown) {
     el.total.classList.remove('nudge'); void el.total.offsetWidth; el.total.classList.add('nudge');
-    toast('Оцени хотя бы один критерий или отметь «В планах»');
+    toast(`Оцени хотя бы один критерий или отметь «${planWord()}»`);
     return;
   }
   const dup = findDup();
@@ -3514,7 +3665,7 @@ function exportFromForm() {
   const cat = currentCat();
   return {
     name: formFullName() || 'Без названия', catName: cat ? cat.name.trim() : form.extraCatName,
-    status: form.status, meta: form.meta, pros: form.pros, cons: form.cons,
+    status: stLabel(form.status, catKind(currentCat())), meta: form.meta, pros: form.pros, cons: form.cons,
     scores, total: t, note: form.note.trim(), date: new Date().toISOString(), photo: form.photo
   };
 }
@@ -3525,7 +3676,7 @@ function exportFromRating(r) {
     return Object.assign({}, s, { desc: s.desc || (cur && cur.desc ? cur.desc.trim() : '') });
   });
   return {
-    name: r.name, catName: catNameOf(r), status: r.status, meta: r.meta, pros: r.pros, cons: r.cons,
+    name: r.name, catName: catNameOf(r), status: stLabel(r.status, ratingKind(r)), meta: r.meta, pros: r.pros, cons: r.cons,
     scores, total: r.total, note: r.note, date: stamp(r) || new Date().toISOString(),
     photo: r.photo ? { kind: 'saved', id: r.photo.id, data: r.photo.data || '', w: r.photo.w, h: r.photo.h } : null
   };
@@ -3934,7 +4085,10 @@ el.name.addEventListener('input', () => {
   form.name = el.name.value;
   // название стало другим — старая кнопка «Слушать» вела бы не туда
   if (form.link) { form.link = ''; renderMusicPicked(); }
-  updateNameState(); scheduleDraft(); scheduleCovers(); scheduleMusicSearch();
+  updateNameState(); scheduleDraft(); scheduleMusicSearch(); scheduleWorkSearch();
+  // где есть поиск произведений, обложки приходят в его списке: отдельная подборка обложек при вводе не нужна
+  if (!workLive()) scheduleCovers();
+  else if (coverItems.length || coverKey) { clearTimeout(coverTimer); coverItems = []; coverKey = ''; renderCovers(); }
 });
 el.note.addEventListener('input', () => { form.note = el.note.value; autoGrow(el.note); scheduleDraft(); });
 el.name.addEventListener('keydown', e => {
@@ -3943,7 +4097,8 @@ el.name.addEventListener('keydown', e => {
 el.headBtn.addEventListener('click', () => resetForm(form.cat));
 el.editCrit.addEventListener('click', toggleEditCat);
 el.save.addEventListener('click', save);
-el.exportForm.addEventListener('click', () => {
+// экспорта рядом с «Сохранить» больше нет (картинка и текст — у сохранённой оценки в рейтинге); старые вкладки с кнопкой — как раньше
+if (el.exportForm) el.exportForm.addEventListener('click', () => {
   const d = exportFromForm();
   if (!d) { toast('Сначала оцени хотя бы один критерий'); return; }
   openShare(d, el.exportForm);
@@ -4073,7 +4228,7 @@ el.critArea.addEventListener('click', e => {
     renderCrit();
     updateTotal();
     scheduleDraft();
-    const nb = el.critArea.querySelector(`.crit[data-id="${CSS.escape(id)}"] [data-act="w"]`);
+    const nb = el.critArea.querySelector(`[data-id="${CSS.escape(id)}"] [data-act="w"]`);
     if (nb) nb.focus({ preventScroll: true });
   } else if (act === 'note') {
     const inp = host.querySelector('.crit-note');
@@ -4366,6 +4521,7 @@ async function cropNow() {
   p.blob = blob; p.w = w; p.h = h;
   p.url = blob === p.orig ? p.origUrl : URL.createObjectURL(blob);
 }
+let photoUrlOpen = false; // поле «ссылка на картинку» открыто кнопкой «Вставить ссылку на картинку»
 function renderPhoto() {
   scheduleCovers();
   const p = form.photo;
@@ -4396,8 +4552,10 @@ function renderPhoto() {
       + tools(croppable ? `<button type="button" class="btn small ghost" data-act="photo-crop">Кадрировать</button>` : '')
       + '</div>';
   } else {
-    el.photoBox.innerHTML = `<label class="photo-drop" for="photoInput">${ICON.imageLg}<span><strong>Добавить фото или обложку</strong><small class="hint-desk">Выбери файл, перетащи сюда, вставь из буфера (Ctrl+V) или укажи ссылку ниже. Потом можно выбрать пропорции: 1:1, 4:3, 16:9 и другие</small><small class="hint-touch">Из галереи, с камеры или по ссылке, потом выберешь пропорции</small></span></label>
-    <div class="photo-url-row"><input type="url" id="photoUrlInput" aria-label="Ссылка на картинку" inputmode="url" autocapitalize="none" spellcheck="false" placeholder="Или вставь прямую ссылку на картинку (https://…)"><button type="button" class="btn small ghost" data-act="photo-url-apply">Ок</button></div>`;
+    // ссылка на картинку — по кнопке: поле с «Ок» под блоком всё время мешало
+    el.photoBox.innerHTML = `<label class="photo-drop" for="photoInput">${ICON.imageLg}<span><strong>Добавить фото или обложку</strong><small class="hint-desk">Выбери файл, перетащи сюда или вставь из буфера (Ctrl+V)</small><small class="hint-touch">Из галереи или с камеры</small></span></label>
+    <button type="button" class="btn text photo-url-open" data-act="photo-url-open"${photoUrlOpen ? ' hidden' : ''}>Вставить ссылку на картинку</button>
+    <div class="photo-url-row"${photoUrlOpen ? '' : ' hidden'}><input type="url" id="photoUrlInput" aria-label="Ссылка на картинку" inputmode="url" autocapitalize="none" spellcheck="false" placeholder="https://…"><button type="button" class="btn small ghost" data-act="photo-url-apply">Ок</button></div>`;
   }
 }
 // перетаскивание кадра и масштаб: двигаем только картинку внутри рамки, обрезаем, когда отпустили
@@ -4606,6 +4764,13 @@ el.photoBox.addEventListener('click', e => {
     commitCrop();
   }
   if (e.target.closest('button[data-act="photo-url-apply"]')) applyPhotoUrl();
+  const uo = e.target.closest('button[data-act="photo-url-open"]');
+  if (uo) {
+    photoUrlOpen = true;
+    uo.hidden = true;
+    const row = el.photoBox.querySelector('.photo-url-row');
+    if (row) { row.hidden = false; const inp = row.querySelector('input'); if (inp) inp.focus(); }
+  }
 });
 // Фото по ссылке: картинку сразу скачиваем (через наш сервер) и храним как своё фото.
 // Раньше в оценке оставалась только чужая ссылка, а такие ссылки (особенно скопированные на телефоне) часто
@@ -5757,6 +5922,26 @@ function scheduleMusicSearch() {
     if (e.key === 'Escape') { e.stopPropagation(); closeMusic(); el.name.focus(); }
   });
   document.addEventListener('click', (e) => { if (musicItems.length && !e.target.closest('#musicResults, #itemName')) closeMusic(); });
+  // найденные произведения: стрелками по списку, Esc и щелчок мимо закрывают
+  // старая страница из кэша без списка — новые обработчики не вешаем, остальное работает
+  const works = $('workResults');
+  if (works) {
+    el.name.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') workClose();
+      if (e.key === 'Escape' && workItems.length) { e.stopPropagation(); workClose(); }
+      if (e.key === 'ArrowDown' && workItems.length) { e.preventDefault(); const f = works.querySelector('.music-opt'); if (f) f.focus(); }
+    });
+    works.addEventListener('click', (e) => { const b = e.target.closest('[data-work]'); if (b && workItems[+b.dataset.work]) applyWorkPick(workItems[+b.dataset.work]); });
+    works.addEventListener('keydown', (e) => {
+      const b = e.target.closest('.music-opt');
+      if (!b) return;
+      const opts = [...works.querySelectorAll('.music-opt')], i = opts.indexOf(b);
+      if (e.key === 'ArrowDown' && opts[i + 1]) { e.preventDefault(); opts[i + 1].focus(); }
+      if (e.key === 'ArrowUp') { e.preventDefault(); (opts[i - 1] || el.name).focus(); }
+      if (e.key === 'Escape') { e.stopPropagation(); workClose(); el.name.focus(); }
+    });
+    document.addEventListener('click', (e) => { if (workItems.length && !e.target.closest('#workResults, #itemName')) workClose(); });
+  }
   $('musicPicked').addEventListener('click', (e) => { if (e.target.closest('#musicUnlink')) { form.link = ''; renderMusicPicked(); scheduleDraft(); } });
 }
 if (el.artist) {

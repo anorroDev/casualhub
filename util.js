@@ -8,7 +8,8 @@
    emptyArt(name)            — котик Васян в пустом состоянии (/art/empty-*.webp: rate, friends, tier, lots), в половину исходника — пиксели ровные
    loop(fn, fps)             — цикл анимации под любую частоту экрана: движение по времени, не чаще fps раз в секунду; ответ — stop()
    confetti(canvas, o)       — конфетти на холсте победы (колесо, лоты); ответ — stop()
-   size                      — размер интерфейса (Настройки → «Внешний вид»): list, get(), stored(), fits(pct), ok(), apply(pct, save) */
+   size                      — размер интерфейса (Настройки → «Внешний вид»): list, get(), stored(), fits(pct), ok(), apply(pct, save)
+   status                    — вид категории по названию (kind) и слова статусов этого вида: label(s, имя категории), words(вид), group(s) */
 (() => {
   // фон сайта (base.css, html[data-bg]): у всех пиксельные звёзды. Пейзаж в запасе — ?bg=horizon запоминается в этом браузере, ?bg= — вернуть звёзды
   try {
@@ -466,7 +467,43 @@ html.sh-cur ::file-selector-button { cursor: var(--sh-a); }`;
   });
   addEventListener('storage', (e) => { if (e.key === null || e.key === SNOW_KEY) snowRun(); });
 
-  window.CasualUtil = Object.freeze({ esc, read, plural, script, emptyArt, loop, confetti, size, cursor, nsfw, snow });
+  // Вид категории по названию (ru, uk, en): music, hentai, game, movie, book, anime, food, tech или ''.
+  // Им пользуются catKind в opinion/app.js (там ещё id шаблона музыки) и слова статусов ниже; та же проверка — в functions/r/[id].js
+  const KIND_RE = [
+    ['game', /игр|ігр|game/], ['movie', /фильм|фільм|сериал|серіал|кино|кіно|мульт|film|movie|series|cartoon|animat/],
+    ['book', /книг|литератур|літератур|book/], ['anime', /аниме|аніме|манг|anime|manga/],
+    ['food', /еда|заведен|ресторан|кафе|кухн|їжа|заклад|food|restaurant|cafe|dining/],
+    ['tech', /гаджет|ґаджет|техник|техні|электрон|електрон|смартфон|gadget|tech|electronic|device/],
+  ];
+  const kindOf = (name) => {
+    const k = String(name || '').trim().toLowerCase().replace(/ё/g, 'е');
+    if (/^муз[ыи]к|^music/.test(k)) return 'music';
+    if (NSFW_RE.test(k)) return 'hentai';
+    const f = KIND_RE.find(([, re]) => re.test(k));
+    return f ? f[0] : '';
+  };
+  // Статусы оценки. В оценке лежат общие слова — «Завершено» (у фильмов и 18+ — «Просмотрено»), «В процессе», «В планах»,
+  // «Брошено»: по ним работают планы, опыт, фильтры и колесо. Показываются слова вида категории: у книг «Прочитано, Читаю,
+  // Хочу прочитать», у игр «Пройдено, Играю, Хочу поиграть», у техники «Опробовано, Пользуюсь, Хочу купить, Не пользуюсь».
+  // status.label(s, имя категории) — подпись (другие слова, «Сингл» или «Альбом» у музыки, — как есть);
+  // status.words(вид) — { done, doing, plan, drop }; status.group(s) — done, doing, plan, drop или ''
+  const ST_WATCH = ['Просмотрено', 'Смотрю', 'Хочу посмотреть', 'Брошено'];
+  const ST_WORDS = {
+    book: ['Прочитано', 'Читаю', 'Хочу прочитать', 'Брошено'], game: ['Пройдено', 'Играю', 'Хочу поиграть', 'Брошено'],
+    movie: ST_WATCH, anime: ST_WATCH, hentai: ST_WATCH,
+    food: ['Попробовано', 'Хожу сюда', 'Хочу попробовать', 'Не вернусь'], tech: ['Опробовано', 'Пользуюсь', 'Хочу купить', 'Не пользуюсь'],
+    '': ['Завершено', 'В процессе', 'В планах', 'Брошено'],
+  };
+  const stGroup = (s) => { const v = String(s || ''); return /Завершено|Просмотрено/.test(v) ? 'done' : /В процессе/.test(v) ? 'doing' : /В планах/.test(v) ? 'plan' : /Брошено/.test(v) ? 'drop' : ''; };
+  const stWords = (kind) => { const w = ST_WORDS[kind] || ST_WORDS['']; return { done: w[0], doing: w[1], plan: w[2], drop: w[3] }; };
+  const status = Object.freeze({
+    kind: kindOf,
+    group: stGroup,
+    words: stWords,
+    label: (s, catName) => { const g = stGroup(s); return g ? stWords(kindOf(catName))[g] : String(s || ''); },
+  });
+
+  window.CasualUtil = Object.freeze({ esc, read, plural, script, emptyArt, loop, confetti, size, cursor, nsfw, snow, status });
   snowRun();
   // котик Васян внизу экрана (vasyan.js сам проверяет, не выключен ли он в Настройках; в админке и на /r/ его нет)
   if (!/^\/(admin|r)\//.test(location.pathname)) script('/vasyan.js', () => !!window.CasualVasyan).catch(() => {});

@@ -305,6 +305,7 @@ a.user-pill { color: inherit; text-decoration: none; }
 
 /* Photo URL bar */
 .photo-url-row { display: flex; gap: 6px; margin-top: 8px; }
+.photo-url-open { margin-top: 6px; }
 .photo-url-row input {
   flex: 1; height: 34px; padding: 0 10px; font-size: 13px;
   background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
@@ -321,6 +322,9 @@ a.user-pill { color: inherit; text-decoration: none; }
 .music-opt b { font-size: 14px; font-weight: 700; }
 .music-opt small { font-size: 12.5px; color: var(--ink-2); }
 .music-opt i { font-style: normal; font-size: 11px; font-weight: 600; color: var(--ink-3); white-space: nowrap; }
+/* найденные книги, фильмы, заведения: без обложки — значок вида; подпись источника под списком */
+.music-opt .wk-ph { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 7px; background: var(--cell); color: var(--ink-3); }
+.work-src { margin: 2px 6px 4px; font-size: 11.5px; line-height: 1.3; color: var(--ink-3); }
 .music-picked { display: flex; align-items: center; gap: 8px; margin: 10px 0 0; }
 .music-picked:not([hidden]) { animation: enter-up .24s cubic-bezier(.2, .8, .2, 1) both; }
 .music-picked .e-listen { margin: 0; }
@@ -1654,6 +1658,8 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
         </div>
         <div class="music-results" id="musicResults" hidden></div>
         <p id="musicMsg" class="field-msg" hidden></p>
+        <div class="music-results work-results" id="workResults" hidden></div>
+        <p id="workMsg" class="field-msg" hidden></p>
         <div class="music-picked" id="musicPicked" hidden></div>
         <div class="alb-track-go" id="trackGo" hidden></div>
         <p id="nameMsg" class="field-msg" hidden></p>
@@ -1679,7 +1685,6 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
             <button type="button" class="status-chip" data-vis="friends" aria-pressed="true"><span class="u-old">👥 </span>Друзья</button>
             <button type="button" class="status-chip" data-vis="private" aria-pressed="false"><span class="u-old">🔒 </span>Только я</button>
           </div>
-          <small class="vis-hint" id="visHint">Её видят друзья: в профиле и ленте</small>
         </div>
       </div>
 
@@ -1701,11 +1706,11 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
 
       <div class="pc-grid">
         <div class="pc-col">
-          <label class="label pc-label-pro" for="itemPros"><span class="u-old">➕ </span>Плюсы (каждый с новой строки)</label>
+          <label class="label pc-label-pro" for="itemPros"><span class="u-old">➕ </span>Плюсы</label>
           <textarea id="itemPros" rows="3" maxlength="1000" placeholder="+ Крутая атмосфера&#10;+ Отличный саундтрек"></textarea>
         </div>
         <div class="pc-col">
-          <label class="label pc-label-con" for="itemCons"><span class="u-old">➖ </span>Минусы (каждый с новой строки)</label>
+          <label class="label pc-label-con" for="itemCons"><span class="u-old">➖ </span>Минусы</label>
           <textarea id="itemCons" rows="3" maxlength="1000" placeholder="- Затянутый финал&#10;- Мелкие баги"></textarea>
         </div>
       </div>
@@ -1720,9 +1725,6 @@ html.intro .spark i:nth-child(3n) { animation-delay: .1s; }
           <span class="badge big" id="totalNum">—</span>
           <span class="total-meta"><strong id="verdict">Пока без оценки</strong><span id="totalSub">Нажми на любую клетку</span></span>
         </div>
-        <button type="button" class="btn icon" id="exportForm" aria-label="Экспорт оценки картинкой или текстом" title="Экспорт картинкой или текстом">
-          <svg viewBox="0 0 24 24" width="19" height="19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3.5" y="4.5" width="17" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="M20.5 16l-4.5-4.5L7 19.5"/></svg>
-        </button>
         <button type="button" class="btn primary" id="saveBtn">Сохранить</button>
       </div>
     </section>
