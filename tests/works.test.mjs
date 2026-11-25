@@ -2,7 +2,7 @@
 // Сеть подменена: ответы источников — по началу адреса.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { findWorks, cyrTitle, bookItems, foodItems, techItems, ordered, nameHit, WORK_KINDS } from '../functions/_lib/works.js';
+import { findWorks, cyrTitle, bookItems, foodItems, techItems, ordered, nameHit, norm, platformLine, gameGenres, devName, WORK_KINDS } from '../functions/_lib/works.js';
 
 function deps(routes, extra = {}) {
   const asked = [];
@@ -161,18 +161,162 @@ test('фильмы: название совпало — найденное по 
   assert.ok(!d.asked.some((u) => u.startsWith('https://query.wikidata.org/')), 'Wikidata не спрашивали');
 });
 
-test('игры: разработчик из Wikidata — его игры из Steam с автором', async () => {
+const E = (id) => 'http://www.wikidata.org/entity/' + id;
+const WD_SEARCH = 'https://www.wikidata.org/w/api.php?format=json&action=query&list=search';
+const WD_ENT = 'https://www.wikidata.org/w/api.php?format=json&action=wbsearchentities';
+// строки подробностей игры: у каждого разработчика своя строка (как отдаёт SPARQL)
+const gameRows = (g, devs = [{}]) => devs.map((v) => ({ g: E(g.id), links: g.links || 1, ...(g.en ? { en: g.en } : {}), ...(g.mul ? { mul: g.mul } : {}), ...(g.lo ? { lo: g.lo } : {}),
+  ...(g.date ? { date: g.date } : {}), ...(g.steam ? { steam: g.steam } : {}), ...(g.wiki ? { wiki: 'https://en.wikipedia.org/wiki/' + g.wiki } : {}),
+  ...(g.ruwiki ? { ruwiki: 'https://ru.wikipedia.org/wiki/' + g.ruwiki } : {}), ...(g.pfs ? { pfs: g.pfs } : {}), ...(g.gns ? { gns: g.gns } : {}), ...(g.pubs ? { pubs: g.pubs } : {}),
+  ...(v.by ? { by: v.by, byn: v.n || 1, late: v.late ? 'true' : 'false' } : {}) }));
+
+test('платформы игры: коротко, сначала те, что были при выходе, остальные числом; жанры без «компьютерной игры»; студии короче', () => {
+  assert.equal(platformLine(['Q122761124', 'Q56942', 'Q19610114'], '2017'), 'Switch, Wii U, Switch 2', 'Switch 2 вышла позже игры');
+  assert.equal(platformLine(['Q8079', 'Q56942', 'Q184839', 'Q182172', 'Q203597'], '1998'), 'N64, Wii U, 3DS +2', 'у Ocarina of Time первой — N64');
+  assert.equal(platformLine(['Q63184502', 'Q98973368', 'Q1406', 'Q5014725', 'Q13361286'], '2022'), 'PS5, Xbox Series, PC +2');
+  assert.equal(platformLine(['Q170434', 'Q47604', 'Q6368'], ''), 'DOS', 'повторы склеены, незнакомые пропущены');
+  assert.deepEqual(gameGenres(['постапокалиптическая компьютерная игра', 'компьютерная ролевая игра', 'приключенческий экшен', 'шутер']), ['ролевая игра', 'приключенческий экшен']);
+  assert.deepEqual(gameGenres(["Комп’ютерна рольова гра", 'role-playing video game', '2015 video game']), ['рольова гра', 'role-playing game']);
+  assert.equal(devName('Nintendo Entertainment Planning & Development'), 'Nintendo EPD');
+  assert.equal(devName('Monolith Soft Inc.'), 'Monolith Soft');
+  assert.equal(devName('Square Enix Co., Ltd.'), 'Square Enix');
+});
+
+test('игры всех платформ из Wikidata: платформы, разработчик, год; известная — первой; со Steam склеено по коду', async () => {
   const d = deps([
-    ['https://www.wikidata.org/w/api.php', { search: [{ id: 'Q2414470', label: 'FromSoftware', description: 'Japanese video game developer' }] }],
-    ['https://query.wikidata.org/sparql', sparqlRows([{ steam: 1245620, dev: 'http://www.wikidata.org/entity/Q2414470', links: 46 }, { steam: 211420, dev: 'http://www.wikidata.org/entity/Q2414470', links: 40 }])],
-  ], {
-    cover: async () => [{ id: '999', title: 'FromSoftware Tribute', sub: 'Игра', art: 'https://s/x.jpg', tall: true }],
-    steam: async (list) => list.map((i) => ({ id: String(i.id), title: i.id === 1245620 ? 'ELDEN RING' : 'DARK SOULS', sub: 'Игра', art: `https://s/${i.id}.jpg`, tall: true })),
+    [WD_SEARCH, { query: { search: [{ title: 'Q3' }, { title: 'Q1' }, { title: 'Q2' }] } }],
+    [WD_ENT, { search: [{ id: 'Q9', label: 'Zelda', description: 'fictional character' }] }],
+    ['https://query.wikidata.org/sparql', (url) => sparqlRows(decodeURIComponent(url).includes('VALUES ?g') ? [
+      ...gameRows({ id: 'Q1', links: 52, en: 'The Legend of Zelda: Breath of the Wild', date: '2017-03-03T00:00:00Z', wiki: 'BotW', pfs: 'Q122761124 Q56942 Q19610114',
+        gns: 'постапокалиптическая компьютерная игра|приключенческий экшен', pubs: 'Nintendo' },
+        [{ by: 'Monolith Soft Inc.', n: 21 }, { by: 'Nintendo Entertainment Planning & Development', n: 18 }, { by: 'Microsoft', n: 178, late: true }]),
+      ...gameRows({ id: 'Q2', links: 40, mul: 'Elden Ring', date: '2022-02-25T00:00:00Z', steam: '1245620', wiki: 'Elden_Ring', pfs: 'Q63184502 Q1406' }, [{ by: 'Microsoft', n: 178, late: true }, { by: 'FromSoftware', n: 30 }]),
+      ...gameRows({ id: 'Q3', links: 2, en: 'Zelda', date: '1989-01-01T00:00:00Z' }),
+    ] : [])],
+    ['https://en.wikipedia.org/w/api.php', { query: { normalized: [{ from: 'Elden_Ring', to: 'Elden Ring' }], redirects: [{ from: 'BotW', to: 'Breath of the Wild' }], pages: {
+      1: { title: 'Breath of the Wild', thumbnail: { source: 'https://upload.wikimedia.org/wikipedia/en/c/c6/BotW.jpg?utm_source=x', width: 273, height: 365 } },
+      2: { title: 'Elden Ring', thumbnail: { source: 'https://upload.wikimedia.org/wikipedia/en/b/b9/ER.jpg', width: 300, height: 300 } },
+    } } }],
+  ], { cover: async () => [{ id: '1245620', title: 'ELDEN RING', sub: 'Игра', art: 'https://s/er.jpg', tall: true }, { id: '777', title: 'Zelda-like Indie', sub: 'Игра', art: 'https://s/z.jpg', tall: true }] });
+  const r = await findWorks('game', 'zelda', d);
+  assert.equal(r.src, 'Wikidata, Wikipedia, Steam');
+  assert.deepEqual(r.items.map((x) => x.title), ['The Legend of Zelda: Breath of the Wild', 'Zelda', 'Elden Ring', 'Zelda-like Indie'],
+    'малоизвестная «Zelda» — не первой, хоть название и совпало; без слова запроса в названии — после; только из Steam — в конце');
+  const [botw, , er, indie] = r.items;
+  assert.equal(botw.note, 'Switch, Wii U, Switch 2');
+  assert.equal(botw.by, 'Nintendo EPD, Monolith Soft', 'первой — студия издателя, хоть помогавшая и известнее');
+  assert.equal(r.items[2].by, 'FromSoftware, Microsoft', 'пришедший потом разработчик — в конце, хоть он и известнее');
+  assert.equal(botw.year, '2017');
+  assert.deepEqual(botw.genres, ['приключенческий экшен']);
+  assert.equal(botw.id, 'Q1', 'без Steam — код Wikidata');
+  assert.equal(botw.art, 'https://upload.wikimedia.org/wikipedia/en/c/c6/BotW.jpg', 'обложка через перенаправление, без хвоста ?utm');
+  assert.equal(botw.tall, true);
+  assert.equal(er.id, '1245620', 'та же игра в Steam — по коду Steam из Wikidata');
+  assert.equal(er.art, 'https://s/er.jpg', 'обложка — из Steam');
+  assert.equal(er.alt, 'https://upload.wikimedia.org/wikipedia/en/b/b9/ER.jpg', 'запасная — из Википедии');
+  assert.equal(er.note, 'PS5, PC');
+  assert.equal(indie.note, 'PC', 'только из Steam — значит, PC');
+  assert.ok(!d.asked.some((u) => decodeURIComponent(u).includes('VALUES ?dev')), 'персонаж — не студия: её игры не ищем');
+  assert.match(decodeURIComponent(d.asked.find((u) => u.startsWith(WD_SEARCH))), /zelda haswbstatement:P31=Q7889/);
+});
+
+test('игры: Steam к игре Wikidata по названию — только однозначно: чужой код и одинаковые названия не склеиваются', async () => {
+  assert.equal(norm('STAR WARS™ Battlefront™ II'), 'star wars battlefront ii', '™ вплотную к слову не превращается в «tm»');
+  const run = async (q, rows, steam, extra = []) => {
+    const d = deps([
+      [WD_SEARCH, { query: { search: rows.map((g) => ({ title: g.id })) } }],
+      [WD_ENT, { search: [] }],
+      ['https://query.wikidata.org/sparql', sparqlRows(rows.flatMap((g) => gameRows(g)))],
+      ['https://en.wikipedia.org/w/api.php', { query: { pages: {} } }],
+      ...extra,
+    ], { cover: async () => steam });
+    return (await findWorks('game', q, d)).items.map((x) => [x.title, x.year, x.id]);
+  };
+  const card = (id, title) => ({ id, title, sub: 'Игра', art: `https://s/${id}.jpg`, tall: true });
+  // в Steam только ремейк: его код есть в Wikidata у ремейка — игра 2001 года его не забирает, обе на месте
+  assert.deepEqual(await run('silent hill 2', [
+    { id: 'Q752835', links: 60, en: 'Silent Hill 2', date: '2001-09-24T00:00:00Z', pfs: 'Q1406 Q10680' },
+    { id: 'Q114770599', links: 30, en: 'Silent Hill 2', date: '2024-10-08T00:00:00Z', steam: '2124490', pfs: 'Q63184502 Q1406' },
+  ], [card('2124490', 'SILENT HILL 2')]), [['Silent Hill 2', '2001', 'Q752835'], ['Silent Hill 2', '2024', '2124490']]);
+  // у Wikidata нет кода, а название в списке не одно — Steam-игра остаётся отдельной
+  assert.deepEqual(await run('god of war', [
+    { id: 'Q1', links: 50, en: 'God of War', date: '2005-03-22T00:00:00Z' },
+    { id: 'Q2', links: 60, en: 'God of War', date: '2018-04-20T00:00:00Z' },
+  ], [card('1593500', 'God of War')]), [['God of War', '2018', 'Q2'], ['God of War', '2005', 'Q1'], ['God of War', '', '1593500']]);
+  // одно название, код ничей, ™ не мешает — та же игра
+  assert.deepEqual(await run('star wars battlefront', [{ id: 'Q3', links: 40, en: 'Star Wars Battlefront II', date: '2017-11-17T00:00:00Z', pfs: 'Q1406' }],
+    [card('1237950', 'STAR WARS™ Battlefront™ II')]), [['Star Wars Battlefront II', '2017', '1237950']]);
+  // названия без латиницы и кириллицы (после norm пустые) не совпадают друг с другом
+  assert.deepEqual(await run('kirby', [{ id: 'Q4', links: 20, mul: '星のカービィ', date: '1992-04-27T00:00:00Z' }], [card('555', '三国志')]),
+    [['星のカービィ', '1992', 'Q4'], ['三国志', '', '555']]);
+});
+
+test('игры студии: свои первыми, изданные потом; песня и игра со студией в описании — не студия', async () => {
+  const d = deps([
+    [WD_SEARCH, { query: { search: [] } }],
+    [WD_ENT, { search: [
+      { id: 'Q10', label: 'Capcom', description: '2017 single by Post Malone' },
+      { id: 'Q12', label: 'Capcom Fighting', description: 'компьютерная игра, разработанная студией Capcom' },
+      { id: 'Q11', label: 'Capcom', description: 'Japanese video game developer and publisher' },
+    ] }],
+    ['https://query.wikidata.org/sparql', (url) => {
+      const u = decodeURIComponent(url);
+      if (u.includes('VALUES ?dev')) return sparqlRows([['Q20', 80], ['Q21', 50], ['Q22', 44]].map(([g, links]) => ({ g: E(g), dev: E('Q11'), links })));
+      return sparqlRows([
+        ...gameRows({ id: 'Q20', links: 80, en: 'Grand Theft Auto III', date: '2001-10-22T00:00:00Z' }, [{ by: 'Rockstar North' }]),
+        ...gameRows({ id: 'Q21', links: 50, en: 'Resident Evil 4', date: '2005-01-11T00:00:00Z' }, [{ by: 'Capcom' }]),
+        ...gameRows({ id: 'Q22', links: 44, en: 'Resident Evil', date: '1996-03-22T00:00:00Z' }, [{ by: 'Capcom' }]),
+      ]);
+    }],
+    ['https://en.wikipedia.org/w/api.php', { query: { pages: {} } }],
+  ], { cover: async () => [{ id: '42', title: 'Capcom', sub: 'Игра', art: 'https://s/42.jpg', tall: true }] });
+  const r = await findWorks('game', 'capcom', d);
+  assert.deepEqual(r.items.map((x) => [x.title, x.by]), [['Resident Evil 4', 'Capcom'], ['Resident Evil', 'Capcom'], ['Grand Theft Auto III', 'Rockstar North'], ['Capcom', '']],
+    'игра из Steam, названная как студия, не ставит себя выше игр студии');
+  const q = decodeURIComponent(d.asked.find((u) => decodeURIComponent(u).includes('VALUES ?dev')));
+  assert.match(q, /VALUES \?dev \{ wd:Q11 \}/, 'спрашиваем только про студию');
+  assert.match(q, /\{ \?g wdt:P178 \?dev \} UNION \{ \?g wdt:P123 \?dev \}/, 'разработчик или издатель');
+});
+
+test('игры по-русски: поиск Wikidata и транслитом, русское название; не нашлось — Steam через поиск обложек', async () => {
+  const d = deps([
+    [WD_SEARCH, (url) => ({ query: { search: decodeURIComponent(url).includes('vedmak') ? [{ title: 'Q5' }] : [{ title: 'Q4' }] } })],
+    [WD_ENT, { search: [] }],
+    ['https://query.wikidata.org/sparql', sparqlRows([
+      ...gameRows({ id: 'Q4', links: 60, en: 'The Witcher 3: Wild Hunt', lo: 'Ведьмак 3: Дикая Охота', date: '2015-05-19T00:00:00Z', steam: '292030', pfs: 'Q1406 Q5014725' }, [{ by: 'CD Projekt RED' }]),
+      ...gameRows({ id: 'Q5', links: 30, en: 'The Witcher 2: Assassins of Kings', lo: 'Ведьмак 2: Убийцы королей', date: '2011-05-17T00:00:00Z' }),
+    ])],
+    ['https://en.wikipedia.org/w/api.php', { query: { pages: {} } }],
+  ], { translit: () => 'vedmak 3', steam: async (list) => list.map((i) => ({ id: String(i.id), title: 'The Witcher 3', sub: 'Игра', art: `https://s/${i.id}.jpg`, tall: true })) });
+  const r = await findWorks('game', 'ведьмак 3', d);
+  assert.deepEqual(r.items.map((x) => [x.ru, x.title]), [['Ведьмак 3: Дикая Охота', 'The Witcher 3: Wild Hunt'], ['Ведьмак 2: Убийцы королей', 'The Witcher 2: Assassins of Kings']]);
+  assert.equal(r.items[0].art, 'https://s/292030.jpg', 'обложка из Steam по коду из Wikidata');
+  assert.equal(d.asked.filter((u) => u.startsWith(WD_SEARCH)).length, 2, 'поиск и по-русски, и транслитом');
+  assert.match(decodeURIComponent(d.asked.find((u) => u.startsWith('https://query.wikidata.org/'))), /LANG\(\?lo\) = "ru"/);
+  let coverAsked = '';
+  const e = deps([[WD_SEARCH, { query: { search: [] } }], [WD_ENT, { search: [] }]], {
+    cover: async (kind, q) => { coverAsked = q; return [{ id: '1817070', title: "Marvel's Spider-Man Remastered", sub: 'Игра', art: 'https://s/sm.jpg', tall: true }]; },
   });
-  const r = await findWorks('game', 'FromSoftware', d);
-  assert.deepEqual(r.items.map((x) => x.title), ['ELDEN RING', 'DARK SOULS', 'FromSoftware Tribute']);
-  assert.equal(r.items[0].by, 'FromSoftware');
-  assert.equal(r.items[0].id, '1245620');
+  const s = await findWorks('game', 'спайдермен', e);
+  assert.equal(coverAsked, 'спайдермен', 'Wikidata ничего не знает — Steam сам переведёт название');
+  assert.deepEqual(s.items.map((x) => x.title), ["Marvel's Spider-Man Remastered"]);
+});
+
+test('игры: SPARQL не ответил — список из API Wikidata: название, год из описания, обложка, известные первыми', async () => {
+  const many = Object.fromEntries(['enwiki', 'ruwiki', 'dewiki', 'frwiki', 'jawiki', 'eswiki'].map((k) => [k, { title: 'Bloodborne' }]));
+  const d = deps([
+    [WD_SEARCH, { query: { search: [{ title: 'Q99' }, { title: 'Q17154554' }] } }],
+    [WD_ENT, { search: [] }],
+    ['https://www.wikidata.org/w/api.php?format=json&action=wbgetentities', { entities: {
+      Q99: { labels: { en: { value: 'Bloodborne' } }, descriptions: { en: { value: '2030 fan game' } }, sitelinks: {} },
+      Q17154554: { labels: { mul: { value: 'Bloodborne' } }, descriptions: { en: { value: '2015 video game' } }, sitelinks: many },
+    } }],
+    ['https://en.wikipedia.org/w/api.php', { query: { pages: { 1: { title: 'Bloodborne', thumbnail: { source: 'https://upload.wikimedia.org/wikipedia/en/6/68/BB.jpg', width: 288, height: 345 } } } } }],
+  ]);
+  const r = await findWorks('game', 'bloodborne', d);
+  assert.deepEqual(r.items.map((x) => [x.title, x.year, x.art]), [['Bloodborne', '2015', 'https://upload.wikimedia.org/wikipedia/en/6/68/BB.jpg'], ['Bloodborne', '2030', '']],
+    'у какой больше статей в Википедиях — та и первая');
+  assert.ok(d.asked.some((u) => u.startsWith('https://query.wikidata.org/')), 'сначала спросили SPARQL');
 });
 
 test('заведения: вид по-русски, адрес, повторы убраны; рядом — по примерному месту', async () => {

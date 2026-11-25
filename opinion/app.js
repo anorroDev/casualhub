@@ -2218,6 +2218,7 @@ const WORK_ICON = {
   book: '<path d="M5 4h9a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3z"/><path d="M5 17a3 3 0 0 1 3-3h9"/>',
   food: '<path d="M12 21s-6-5.4-6-11a6 6 0 0 1 12 0c0 5.6-6 11-6 11z"/><circle cx="12" cy="10" r="2.2"/>',
   tech: '<rect x="7" y="3" width="10" height="18" rx="2"/><path d="M11 18h2"/>',
+  game: '<path d="M7 7h10a5 5 0 0 1 0 10h-1l-2-2h-4l-2 2H7A5 5 0 0 1 7 7z"/><path d="M7.5 10.5v3M6 12h3"/><path d="M15.5 11h.01M17.5 13h.01"/>',
 };
 // workAsked — вид, для которого поиск ждёт или идёт; workPhotoRef — фото, которое поставил прошлый выбор (своё не заменяем)
 let workItems = [], workTimer = 0, workSeq = 0, workKindNow = '', workSrc = '', workPhotoAuto = false, workMetaAuto = '', workAsked = '', workPhotoRef = null, workPickSeq = 0;
@@ -2294,8 +2295,9 @@ async function applyWorkPick(c) {
   const gone = () => form !== f || pick !== workPickSeq;
   workClose();
   let info = { ru: '', genres: c.genres, by: '' };
-  // у фильмов и игр русское название, жанры и режиссёр (разработчик) — отдельным запросом по коду
-  if (c.id && (kind === 'movie' || kind === 'game' || (kind === 'hentai' && !c.genres.length)) && window.casualApi && window.casualApi.online()) {
+  // у фильмов и игр русское название, жанры и режиссёр (разработчик) — отдельным запросом по коду. У игры без Steam код
+  // из Wikidata («Q…»): её жанры и разработчик уже пришли со списком
+  if (c.id && !/^Q\d+$/.test(c.id) && (kind === 'movie' || kind === 'game' || (kind === 'hentai' && !c.genres.length)) && window.casualApi && window.casualApi.online()) {
     try { info = Object.assign(info, await window.casualApi.get(`/covers/info?kind=${kind}&lang=${siteLang()}&id=${encodeURIComponent(c.id)}`)); } catch (_) {}
     if (gone()) return;
   }
