@@ -9,7 +9,8 @@
    loop(fn, fps)             — цикл анимации под любую частоту экрана: движение по времени, не чаще fps раз в секунду; ответ — stop()
    confetti(canvas, o)       — конфетти на холсте победы (колесо, лоты); ответ — stop()
    size                      — размер интерфейса (Настройки → «Внешний вид»): list, get(), stored(), fits(pct), ok(), apply(pct, save)
-   status                    — вид категории по названию (kind) и слова статусов этого вида: label(s, имя категории), words(вид), group(s) */
+   status                    — вид категории по названию (kind) и слова статусов этого вида: label(s, имя категории), words(вид), group(s)
+   release                   — с какого времени показывать кнопки OBS и Twitch: open() — уже можно, at — когда */
 (() => {
   // фон сайта (base.css, html[data-bg]): у всех пиксельные звёзды. Пейзаж в запасе — ?bg=horizon запоминается в этом браузере, ?bg= — вернуть звёзды
   try {
@@ -503,7 +504,12 @@ html.sh-cur ::file-selector-button { cursor: var(--sh-a); }`;
     label: (s, catName) => { const g = stGroup(s); return g ? stWords(kindOf(catName))[g] : String(s || ''); },
   });
 
-  window.CasualUtil = Object.freeze({ esc, read, plural, script, emptyArt, loop, confetti, size, cursor, nsfw, snow, status });
+  // кнопки «Для OBS» и чата Twitch у лотов и «Царя Горы» показываются с RELEASE_AT (ссылки ?obs=1 работают всегда);
+  // release.open() — пора ли показывать
+  const RELEASE_AT = Date.UTC(2026, 10, 30, 22, 0);
+  const release = Object.freeze({ at: RELEASE_AT, open: (now = Date.now()) => now >= RELEASE_AT });
+
+  window.CasualUtil = Object.freeze({ esc, read, plural, script, emptyArt, loop, confetti, size, cursor, nsfw, snow, status, release });
   snowRun();
   // котик Васян внизу экрана (vasyan.js сам проверяет, не выключен ли он в Настройках; в админке и на /r/ его нет)
   if (!/^\/(admin|r)\//.test(location.pathname)) script('/vasyan.js', () => !!window.CasualVasyan).catch(() => {});

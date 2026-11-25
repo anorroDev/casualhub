@@ -1391,8 +1391,8 @@
     if (room.dataset.sig === sig) return;
     room.dataset.sig = sig;
     room.innerHTML = `<div class="lots-f"><span>Ссылка для зрителей</span><div class="lots-row"><input class="inp" id="hostUrl" readonly value="${esc(url)}"><button type="button" class="btn small primary" data-host="copy" data-copy="hostUrl">Скопировать</button></div></div>
-      <div class="lots-f"><span>Для OBS: колесо на прозрачном фоне</span><div class="lots-row"><input class="inp" id="hostObs" readonly value="${esc(url + '?obs=1&theme=dark')}"><button type="button" class="btn small ghost" data-host="copy" data-copy="hostObs">Скопировать</button></div><small class="host-hint">В OBS: «Источники» → «Браузер», вставь ссылку, размер — от 600 × 700. Светлая тема — theme=light в конце ссылки</small></div>
-      ${twitchBox()}
+      ${relOpen() ? `<div class="lots-f"><span>Для OBS: колесо на прозрачном фоне</span><div class="lots-row"><input class="inp" id="hostObs" readonly value="${esc(url + '?obs=1&theme=dark')}"><button type="button" class="btn small ghost" data-host="copy" data-copy="hostObs">Скопировать</button></div><small class="host-hint">В OBS: «Источники» → «Браузер», вставь ссылку, размер — от 600 × 700. Светлая тема — theme=light в конце ссылки</small></div>` : ''}
+      ${relOpen() || tw ? twitchBox() : ''}
       <div class="lots-f"><span>Время сбора: <b class="host-clock" id="hostClock">${esc(hostClockText())}</b></span><div class="lots-row">
         <button type="button" class="btn small ghost" data-host="minus"${open && r.endsAt ? '' : ' disabled title="Отнять можно только у идущего таймера"'}>−1 минута</button>
         <button type="button" class="btn small ghost" data-host="plus">+1 минута</button>
@@ -1410,6 +1410,8 @@
   // лимит на человека и «одна игра — один лот» — как у зрителей сайта, по нику в чате. Канал помнится в этом браузере
   const TW_KEY = 'casualhub.lots.twitch.v1'; // { [код сбора]: { ch, subs } }
   let tw = null, twState = 'off', twQueue = [], twTimer = 0, twAdded = 0, twNoteText = '';
+  // ссылка для OBS и лоты из чата Twitch — по CasualUtil.release (util.js); уже подключённый чат не прячем
+  const relOpen = () => !window.CasualUtil.release || window.CasualUtil.release.open();
   const twCfg = () => (read(TW_KEY) || {})[code] || {};
   const twSave = (c) => { try { const all = read(TW_KEY) || {}; all[code] = { ...twCfg(), ...c }; localStorage.setItem(TW_KEY, JSON.stringify(all)); } catch (e) {} };
   const twKindOk = () => !!S.room && (S.room.kind === 'any' || S.room.kind === 'game');

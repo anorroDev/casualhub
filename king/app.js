@@ -707,9 +707,11 @@ html.unslop:not([data-ui]) :is(.kg-pp.in, .kg-pp.pop) { animation: none; }
       : `<div class="kg-title"><h2>${esc(room.title)}</h2>${own ? `<button type="button" class="kg-ico" data-k="ren" title="${esc(T('Переименовать'))}" aria-label="${esc(T('Переименовать'))}">${ICON.pen}</button>` : ''}</div>`;
     const undo = own && st.canUndo ? `<button type="button" class="btn ghost small" data-k="undo">${T(undoLabel(st))}</button>` : '';
     const fin = own && st.status === 'live' && st.fmt === 'hill' ? `<button type="button" class="btn ghost small" data-k="finish">${T('Закончить')}</button>` : '';
-    // ведущему: ссылка для OBS и голоса из чата Twitch (twitch-chat.js) — только когда бои решает голосование
-    const obs = own ? `<button type="button" class="btn ghost small" data-k="obs">${T('Для OBS')}</button>` : '';
-    const twb = own && st.mode === 'vote' && st.status !== 'done' ? `<button type="button" class="btn ${tw ? 'primary' : 'ghost'} small" data-k="twitch" aria-pressed="${!!tw}">${tw ? `${T('Чат')} #${esc(tw.channel)}` : T('Чат Twitch')}</button>` : '';
+    // ведущему: ссылка для OBS и голоса из чата Twitch (twitch-chat.js) — только когда бои решает голосование.
+    // Обе кнопки — по CasualUtil.release (util.js), а уже подключённый чат не прячем
+    const rel = !window.CasualUtil.release || window.CasualUtil.release.open() || !!tw;
+    const obs = own && rel ? `<button type="button" class="btn ghost small" data-k="obs">${T('Для OBS')}</button>` : '';
+    const twb = own && rel && st.mode === 'vote' && st.status !== 'done' ? `<button type="button" class="btn ${tw ? 'primary' : 'ghost'} small" data-k="twitch" aria-pressed="${!!tw}">${tw ? `${T('Чат')} #${esc(tw.channel)}` : T('Чат Twitch')}</button>` : '';
     return `<div class="kg-head"><div class="kg-head-main">${title}<div class="kg-tags">${tags}</div></div><div class="kg-acts"><button type="button" class="btn ghost small" data-k="share">${ICON.link}${T('Ссылка')}</button>${obs}${twb}${undo}${fin}</div></div>${own ? twHTML() : ''}`;
   }
   // ---------- голоса из чата Twitch: ведущий подключает свой канал (чат читается без входа), «!1» — за левого, «!2» — за
