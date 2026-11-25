@@ -390,6 +390,13 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
             <span class="st-hint"><b>Новые запасные коды.</b> Старые перестанут работать. Нужен код из приложения.</span>
             <label class="st-f"><span>Код из приложения</span><input class="st-in" name="code" autocomplete="one-time-code" inputmode="numeric" maxlength="6" required></label>
             <div class="st-acts"><button type="submit" class="st-btn">Получить новые коды</button><span class="st-msg" role="status"></span></div></form>
+          <form class="st-form" data-f="tfa-free" style="padding:12px 0 0;border-top:1px solid var(--line, #2b2e38)">
+            <span class="st-hint"><b>Вход по коду без пароля</b></span>
+            <span class="st-hint">Войти можно будет по почте или @юзернейму и коду из приложения, без пароля. Удобнее, но слабее: кто держит телефон с приложением, тот и войдёт</span>
+            <span class="st-hint">После 10 неверных кодов подряд вход по коду выключится сам — включишь его снова здесь</span>
+            <span class="st-hint">${me.codeLogin ? 'Сейчас вход по коду включён' : 'Сейчас вход по коду выключен'}</span>
+            <label class="st-f"><span>Код из приложения</span><input class="st-in" name="code" autocomplete="one-time-code" inputmode="numeric" maxlength="12" required></label>
+            <div class="st-acts"><button type="submit" class="st-btn${me.codeLogin ? ' bad' : ''}">${me.codeLogin ? 'Выключить вход по коду' : 'Включить вход по коду'}</button><span class="st-msg" role="status"></span></div></form>
           <form class="st-form" data-f="tfa-off" style="padding:12px 0 0;border-top:1px solid var(--line, #2b2e38)">
             <span class="st-hint"><b>Выключить защиту.</b> Входить можно будет снова только по паролю.</span>
             <label class="st-f"><span>Текущий пароль</span><input class="st-in" type="password" name="current" autocomplete="current-password" required></label>
@@ -799,6 +806,14 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
           const r = await api('/2fa/codes', 'POST', { code: v.code });
           me = r.user;
           showCodes(f.closest('[data-tfa]'), r.codes);
+          return;
+        } else if (f.dataset.f === 'tfa-free') {
+          // вход по коду из приложения без пароля (qr-login.js в окне входа): включает и выключает сам человек
+          btn.disabled = true;
+          const on = !(me && me.codeLogin);
+          me = (await api('/2fa/free', 'POST', { on, code: v.code })).user;
+          show('security');
+          toast(on ? 'Вход по коду включён' : 'Вход по коду выключен');
           return;
         } else if (f.dataset.f === 'tfa-off') {
           btn.disabled = true;

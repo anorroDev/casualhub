@@ -72,7 +72,7 @@ function recsView(d, hidden, ratings) {
 }
 // двухфакторная защита: { s: секрет base32, last: последний принятый 30-секундный шаг, codes: [sha256 запасных кодов], at }
 const totpOf = (u) => { try { const t = u && u.totp ? JSON.parse(u.totp) : null; return t && t.s ? t : null; } catch (e) { return null; } };
-const ownUser = (u) => { const t = totpOf(u); return { ...pubUser(u), email: u.email || '', createdAt: u.created_at || u.createdAt || null, hideOnline: !!u.hide_online, emailOk: !!u.email_ok, twoFactor: !!t, backupLeft: t ? (t.codes || []).length : 0 }; };
+const ownUser = (u) => { const t = totpOf(u); return { ...pubUser(u), email: u.email || '', createdAt: u.created_at || u.createdAt || null, hideOnline: !!u.hide_online, emailOk: !!u.email_ok, twoFactor: !!t, backupLeft: t ? (t.codes || []).length : 0, codeLogin: !!(t && t.free) }; };
 
 // Таблицы создаются и обновляются сами при первом запросе,
 // чтобы новые поля вроде email не требовали ручной миграции.
@@ -217,30 +217,49 @@ async function hotp(secret, counter) {
   return String((((h[o] & 127) << 24) | (h[o + 1] << 16) | (h[o + 2] << 8) | h[o + 3]) % 1e6).padStart(6, '0');
 }
 // код подходит: текущий 30-секундный шаг или соседний (часы телефона могут спешить); уже принятый шаг второй раз не проходит
-async function totpStep(secret, code, last) {
+// offsets — какие шаги принимать: по умолчанию текущий и соседние; вход по коду без пароля — только текущий и прошлый
+async function totpStep(secret, code, last, offsets = [0, -1, 1]) {
   const c = String(code || '').replace(/\D/g, '');
   if (c.length !== 6) return 0;
   const now = Math.floor(Date.now() / 30e3);
-  for (const st of [now, now - 1, now + 1]) if (st > (last || 0) && sameHex(await hotp(secret, st), c)) return st;
+  for (const st of offsets.map((d) => now + d)) if (st > (last || 0) && sameHex(await hotp(secret, st), c)) return st;
   return 0;
 }
 // запасные коды: 10 штук вида 1a2b-3c4d, каждый работает один раз; в базе только хеши
 const newCodes = () => Array.from({ length: 10 }, () => { const h = randHex(4); return h.slice(0, 4) + '-' + h.slice(4); });
 const codeKey = (c) => String(c || '').toLowerCase().replace(/[^0-9a-f]/g, '');
 // второй шаг входа: код из приложения или запасной код. Включённой защиты нет — второй шаг не нужен
+// Запись — только тех полей JSON, что меняются, и только если их никто не поменял после чтения: иначе параллельный вход
+// мог бы вернуть выключенный «вход по коду» (free) или откатить last, и код прошёл бы второй раз
 async function secondFactor(env, u, code) {
   const t = totpOf(u);
   if (!t) return true;
   const st = await totpStep(t.s, code, t.last);
-  if (st) { t.last = st; await env.DB.prepare('UPDATE users SET totp = ? WHERE id = ?').bind(JSON.stringify(t), u.id).run(); return true; }
+  if (st) {
+    const w = await env.DB.prepare("UPDATE users SET totp = json_set(totp, '$.last', ?1) WHERE id = ?2 AND COALESCE(json_extract(totp, '$.last'), 0) < ?1").bind(st, u.id).run();
+    return !!(w.meta && w.meta.changes);
+  }
   const k = codeKey(code);
   if (k.length === 8) {
-    const i = (t.codes || []).indexOf(await sha256(k));
-    if (i >= 0) { t.codes.splice(i, 1); await env.DB.prepare('UPDATE users SET totp = ? WHERE id = ?').bind(JSON.stringify(t), u.id).run(); return true; }
+    const h = await sha256(k), i = (t.codes || []).indexOf(h);
+    if (i >= 0) {
+      const left = t.codes.filter((x) => x !== h);
+      const w = await env.DB.prepare("UPDATE users SET totp = json_set(totp, '$.codes', json(?1)) WHERE id = ?2 AND json_extract(totp, '$.codes') = json(?3)").bind(JSON.stringify(left), u.id, JSON.stringify(t.codes)).run();
+      return !!(w.meta && w.meta.changes);
+    }
   }
   return false;
 }
 const BAD_CODE = 'Код не подходит. Возьми свежий из приложения или введи запасной.';
+// аккаунт для входа по написанному: юзернейм («@ник» тоже), почта или старый ник, если он ни у кого не совпадает.
+// Общее для входа по паролю и по коду из приложения (functions/_lib/qr-login.js)
+const LOGIN_COLS = 'id, username, uname, email, created_at, pass_hash, salt, banned, ban_reason, totp, email_ok';
+async function findLogin(env, ident) {
+  const u = await env.DB.prepare(`SELECT ${LOGIN_COLS} FROM users WHERE uname = ? OR email = ?`).bind(cleanHandle(ident), cleanEmail(ident)).first();
+  if (u) return u;
+  const { results: same } = await env.DB.prepare(`SELECT ${LOGIN_COLS} FROM users WHERE nkey = ? LIMIT 2`).bind(cleanName(ident).toLowerCase()).all();
+  return same.length === 1 ? same[0] : null;
+}
 
 // ---------- письма (Resend): сброс пароля и подтверждение почты. Ключи — в настройках Cloudflare ----------
 // MAIL_KEY — ключ Resend, MAIL_FROM — отправитель с подтверждённого в Resend домена, например «Казуал Хаб <no-reply@домен>»
@@ -360,6 +379,10 @@ const LIMITS = {
   loginIp: { max: 30, win: 15 * 60e3 },
   loginAcc: { max: 10, win: 15 * 60e3 },
   qrNew: { max: 30, win: 30 * 60e3 }, // коды входа по QR с одного адреса (functions/_lib/qr-login.js)
+  // вход по коду из приложения без пароля: в коде всего 6 цифр, поэтому попыток мало (functions/_lib/qr-login.js;
+  // главный тормоз там — 10 неверных кодов подряд выключают вход по коду совсем)
+  codeIp: { max: 20, win: 60 * 60e3 },
+  codeAcc: { max: 5, win: 60 * 60e3 },
   register: { max: 10, win: 60 * 60e3 },
   friendReq: { max: 40, win: 10 * 60e3 },
   react: { max: 120, win: 10 * 60e3 },
@@ -522,12 +545,7 @@ const routes = {
     if (burst('login:all', 300, 60e3)) return tooMany(1);
     const waitIp = await bump(env, ipKey, 'loginIp');
     if (waitIp) return tooMany(waitIp);
-    const COLS = 'id, username, uname, email, created_at, pass_hash, salt, banned, ban_reason, totp, email_ok';
-    let u = await env.DB.prepare(`SELECT ${COLS} FROM users WHERE uname = ? OR email = ?`).bind(cleanHandle(ident), cleanEmail(ident)).first();
-    if (!u) {
-      const { results: same } = await env.DB.prepare(`SELECT ${COLS} FROM users WHERE nkey = ? LIMIT 2`).bind(cleanName(ident).toLowerCase()).all();
-      if (same.length === 1) u = same[0];
-    }
+    const u = await findLogin(env, ident);
     // счётчик на сам аккаунт, а не на написанное: «@ник», «@@ник», почта и ник — один и тот же человек
     const accKey = u ? 'login-acc:' + u.id : '';
     if (u) { const waitAcc = await bump(env, accKey, 'loginAcc'); if (waitAcc) return tooMany(waitAcc); }
@@ -539,11 +557,13 @@ const routes = {
       if (!code) return json({ error: 'Нужен код из приложения-аутентификатора.', need2fa: true }, 401);
       if (!(await secondFactor(env, u, code))) return json({ error: BAD_CODE, need2fa: true }, 401);
     }
-    // пароль верный: попытка не считается
+    // пароль верный: попытка не считается. Неверные коды входа без пароля, накопленные чужими попытками, — тоже в ноль
+    // (functions/_lib/qr-login.js: десятый подряд выключает вход по коду)
     await env.DB.batch([
       env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind(accKey),
       env.DB.prepare('UPDATE attempts SET count = MAX(0, count - 1) WHERE key = ?').bind(ipKey),
       env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND expires_at < ?').bind(u.id, Date.now()),
+      env.DB.prepare("UPDATE users SET totp = json_set(totp, '$.bad', 0) WHERE id = ? AND totp IS NOT NULL AND COALESCE(json_extract(totp, '$.bad'), 0) > 0").bind(u.id),
     ]);
     return json({ token: await newSession(env, u.id, request), user: ownUser(u) });
   },
@@ -1011,11 +1031,11 @@ const routes = {
     const wait = await bump(env, 'acc:' + me.id, 'loginAcc');
     if (wait) return tooMany(wait);
     if (!(await secondFactor(env, me, code))) return fail(403, BAD_CODE);
+    const codes = newCodes(), hashed = await Promise.all(codes.map((c) => sha256(codeKey(c))));
+    // только поле codes: остальное (last, «вход по коду») мог поменять вход на другом устройстве
+    await env.DB.prepare("UPDATE users SET totp = json_set(totp, '$.codes', json(?)) WHERE id = ? AND totp IS NOT NULL").bind(JSON.stringify(hashed), me.id).run();
     const t = totpOf(await env.DB.prepare('SELECT totp FROM users WHERE id = ?').bind(me.id).first());
-    const codes = newCodes();
-    t.codes = await Promise.all(codes.map((c) => sha256(codeKey(c))));
-    await env.DB.prepare('UPDATE users SET totp = ? WHERE id = ?').bind(JSON.stringify(t), me.id).run();
-    return json({ codes, user: ownUser({ ...me, totp: JSON.stringify(t) }) });
+    return json({ codes, user: ownUser({ ...me, totp: t ? JSON.stringify(t) : null }) });
   },
 
   // ---------- письма: сброс пароля и подтверждение почты ----------
@@ -3344,10 +3364,11 @@ Object.assign(routes, makePlanInfoRoutes({ json, fail, burst, clientIp }));
 Object.assign(routes, makeTierCoopRoutes({ json, fail, readBody, burst, currentUser, lvGive }));
 // чат в комнатах — сбор лотов и «Царь Горы» (/api/chat…) — functions/_lib/chat.js, виджет /chat.js
 Object.assign(routes, makeChatRoutes({ json, fail, readBody, burst, clientIp, currentUser, isAdmin, adminCandidate, adminLog }));
-// вход по QR-коду (/api/qr/new и /api/qr/poll — без входа, в PUBLIC) — functions/_lib/qr-login.js
-Object.assign(routes, makeQrLoginRoutes({ json, fail, readBody, burst, bump, tooMany, clientIp, sha256, randHex, newSession, ownUser, deviceLabel }));
+// вход без пароля: по QR-коду и по коду из приложения (/api/qr/new, /api/qr/poll и /api/login/code — без входа,
+// в PUBLIC) — functions/_lib/qr-login.js
+Object.assign(routes, makeQrLoginRoutes({ json, fail, readBody, burst, bump, tooMany, clientIp, sha256, randHex, newSession, ownUser, deviceLabel, findLogin, totpOf, totpStep, secondFactor, BAD_CODE }));
 
-const PUBLIC = new Set(['GET /chat', 'GET /chat/ws', 'GET /tiercoop/room', 'GET /king/room', 'GET /king/img', 'GET /plan/info', 'GET /lots/:code/predict', 'GET /lots/:code/veto', 'GET /lots/:code/bingo', 'GET /shop/look', 'GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /qr/new', 'POST /qr/poll', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid', 'GET /mail/unsub', 'POST /mail/unsub', 'GET /levels/invite/who', 'POST /tg/hook']);
+const PUBLIC = new Set(['GET /chat', 'GET /chat/ws', 'GET /tiercoop/room', 'GET /king/room', 'GET /king/img', 'GET /plan/info', 'GET /lots/:code/predict', 'GET /lots/:code/veto', 'GET /lots/:code/bingo', 'GET /shop/look', 'GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /qr/new', 'POST /qr/poll', 'POST /login/code', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid', 'GET /mail/unsub', 'POST /mail/unsub', 'GET /levels/invite/who', 'POST /tg/hook']);
 // код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности
 const SHARE_RE = /^[A-Za-z0-9]{12}$/;
 function shareId() {

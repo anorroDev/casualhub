@@ -1,5 +1,6 @@
-/* Казуал Хаб: вход по QR-коду (сервер — functions/_lib/qr-login.js). Окно — то же, что у входа в Мнении (#authModal,
-   вкладка 'qr': renderAuthModal в opinion/app.js зовёт paint).
+/* Казуал Хаб: вход без пароля — по QR-коду и по коду из приложения-аутентификатора (сервер — functions/_lib/qr-login.js).
+   Окно — то же, что у входа в Мнении (#authModal, вкладка 'qr': renderAuthModal в opinion/app.js зовёт paint).
+   Код из приложения: почта или юзернейм и 6 цифр (byCode) — работает, только если человек сам включил это в Настройках.
    Компьютер: «Войти по QR-коду» в окне входа — QR со ссылкой /opinion/#qr=<id>. Каждые 2,5 с спрашиваем сервер. На
    телефоне нажали «Войти» — спрашиваем здесь «Войти как @…?» (QR мог отсканировать не хозяин, например зритель стрима),
    и только по «Да» берём сессию и входим (friends.js → loginWithSession). Код живёт 3 минуты, потом новый — до трёх раз
@@ -183,9 +184,59 @@
     </div>`;
   }
 
+  // ---------- вход по коду из приложения, без пароля (сервер — POST /login/code) ----------
+  // работает, только если человек сам включил его в Настройках → Безопасность; почта или юзернейм — из формы пароля
+  // codeSeq — номер открытой формы: ошибка запроса из прошлой формы (вернулись к паролю и открыли снова) в новую не пишется.
+  // Введённое переживает перерисовку; неверный код с сервера стирается — фокус в поле, вводить новый
+  let codeIdent = '', codeOtp = '', codeErr = '', codeBusy = false, codeSeq = 0;
+  const codeFocus = () => { const f = document.getElementById(codeIdent ? 'inputCodeOtp' : 'inputCodeIdent'); if (f) f.focus(); };
+  function byCode(ident) {
+    stop();
+    mode = 'code'; codeIdent = String(ident || '').trim().slice(0, 120); codeOtp = ''; codeErr = ''; codeBusy = false; codeSeq++;
+    window.openAuthModal('qr');
+    codeFocus();
+  }
+  async function codeSubmit(form) {
+    if (codeBusy) return;
+    codeIdent = form.querySelector('#inputCodeIdent').value.trim().slice(0, 120);
+    codeOtp = form.querySelector('#inputCodeOtp').value.replace(/\D/g, '').slice(0, 6);
+    codeErr = !codeIdent ? 'Впиши почту или @юзернейм' : codeOtp.length !== 6 ? 'Нужно 6 цифр из приложения' : '';
+    if (codeErr) { repaint(); codeFocus(); return; }
+    const my = ++codeSeq;
+    codeBusy = true;
+    repaint();
+    let r = null, err = '';
+    try { r = await api().post('/login/code', { login: codeIdent, code: codeOtp }); } catch (e) { err = (e && e.message) || 'Сервер не отвечает, попробуй ещё раз'; }
+    if (my === codeSeq) codeBusy = false;
+    // верный код — входим, даже если форму успели закрыть: сессия уже выдана, и человек сам её просил
+    if (r && r.token) {
+      if (window.loginWithSession && (await window.loginWithSession(r))) { if (mode === 'code' && my === codeSeq) mode = ''; return; }
+      err = 'Не получилось войти, попробуй ещё раз';
+    }
+    if (my !== codeSeq || mode !== 'code') return;
+    codeErr = err; codeOtp = '';
+    repaint(); codeFocus();
+  }
+  function paintCode(body, title) {
+    title.textContent = 'Вход по коду из приложения';
+    body.innerHTML = `<form class="auth-form" id="formCodeLogin" novalidate>
+      <div class="auth-field"><label for="inputCodeIdent">Почта или @юзернейм</label>
+        <input type="text" id="inputCodeIdent" autocomplete="username" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="name@domain.com или @юзернейм" value="${esc(codeIdent)}"></div>
+      <div class="auth-field"><label for="inputCodeOtp">Код из приложения</label>
+        <input type="text" id="inputCodeOtp" autocomplete="one-time-code" inputmode="numeric" maxlength="7" placeholder="123456" value="${esc(codeOtp)}"></div>
+      <span class="auth-help">Работает, если в Настройках → Безопасность подключено приложение-аутентификатор и включён вход по коду без пароля</span>
+      <p class="qr-login-status${codeErr && !codeBusy ? ' bad' : ''}" role="status">${esc(codeBusy ? 'Вхожу…' : codeErr)}</p>
+      <button type="submit" class="btn primary"${codeBusy ? ' disabled' : ''}>Войти</button>
+      <div class="auth-guest-row"><button type="button" class="btn text small" data-qr="back">← Войти по паролю</button></div>
+    </form>`;
+  }
+  document.addEventListener('submit', (e) => {
+    if (e.target && e.target.id === 'formCodeLogin') { e.preventDefault(); codeSubmit(e.target); }
+  });
+
   function paint(body, title) {
     if (!body || !title) return;
-    if (mode === 'ask') paintAsk(body, title); else paintShow(body, title);
+    if (mode === 'ask') paintAsk(body, title); else if (mode === 'code') paintCode(body, title); else paintShow(body, title);
   }
   // кнопки окна (обработчики — отсюда: в разметке onclick CSP не пропустит)
   document.addEventListener('click', (e) => {
@@ -194,11 +245,11 @@
     const what = b.dataset.qr;
     if (what === 'again') { renews = 0; fresh(); }
     else if (what === 'take') take();
-    else if (what === 'back') { stop(); mode = ''; window.openAuthModal('login'); }
+    else if (what === 'back') { stop(); mode = ''; codeSeq++; window.openAuthModal('login'); }
     else if (what === 'yes' || what === 'no') reply(what === 'yes');
     else if (what === 'login') window.openAuthModal('login');
     else if (what === 'close') { mode = ''; window.closeAuthModal(); }
   });
 
-  window.CasualQrLogin = { show, ask, paint, stop };
+  window.CasualQrLogin = { show, ask, code: byCode, paint, stop };
 })();

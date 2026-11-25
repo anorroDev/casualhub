@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
-import { makeQrLoginRoutes, dropQr, QR_GONE, QR_TTL, CONFIRM_TTL } from '../functions/_lib/qr-login.js';
+import { makeQrLoginRoutes, dropQr, netOf, QR_GONE, QR_TTL, CONFIRM_TTL, CODE_BAD, CODE_TRIES } from '../functions/_lib/qr-login.js';
 
 function fakeD1() {
   const db = new DatabaseSync(':memory:');
@@ -14,25 +14,32 @@ function fakeD1() {
     all: async () => ({ results: db.prepare(sql).all(...args) }),
     run: async () => ({ meta: { changes: Number(db.prepare(sql).run(...args).changes) } }),
   });
-  db.exec(`CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT, uname TEXT, email TEXT, created_at INTEGER, banned INTEGER DEFAULT 0, totp TEXT, email_ok INTEGER, hide_online INTEGER);
+  db.exec(`CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT, uname TEXT, email TEXT, created_at INTEGER, banned INTEGER DEFAULT 0, ban_reason TEXT, totp TEXT, email_ok INTEGER, hide_online INTEGER);
+    CREATE TABLE attempts (key TEXT PRIMARY KEY, count INTEGER, reset_at INTEGER);
     INSERT INTO users (id, username, uname) VALUES ('u1', 'Тестер', 'tester'), ('u2', 'Зритель', 'viewer');`);
   return { raw: db, prepare: (sql) => stmt(sql) };
 }
-function setup() {
-  const sessions = [], limits = [];
+function setup(over = {}) {
+  const sessions = [], limits = [], steps = [];
   const h = {
     json: (data, status = 200) => ({ status, data }),
     fail: (status, error) => ({ status, data: { error } }),
     readBody: async (req) => req.body || {},
     burst: () => 0,
-    bump: async (env, key, kind) => { limits.push([key, kind]); return 0; },
+    bump: async (env, key, kind) => { limits.push([key, kind]); return over.wait && over.wait(key) ? 7 : 0; },
     tooMany: (min) => ({ status: 429, data: { error: 'wait ' + min } }),
     clientIp: () => '1.2.3.4',
     sha256: async (s) => createHash('sha256').update(s).digest('hex'),
     randHex: (n) => randomBytes(n).toString('hex'),
     newSession: async (env, uid, req) => { sessions.push({ uid, ua: req.headers.get('user-agent') }); return 'tok-' + uid; },
-    ownUser: (u) => ({ id: u.id, username: u.username, handle: u.uname }),
+    ownUser: (u) => ({ id: u.id, username: u.username, handle: u.uname, ...(u.totp ? { codeLogin: !!JSON.parse(u.totp).free } : {}) }),
     deviceLabel: (ua) => (/Windows/.test(ua || '') ? 'Chrome · Windows' : ''),
+    // вход по коду: «верный» код из приложения — 123456 (шаг 100), запасной для настроек — тот же
+    findLogin: async (env, ident) => env.DB.raw.prepare('SELECT * FROM users WHERE uname = ? OR email = ?').get(ident.replace(/^@+/, '').toLowerCase(), ident.toLowerCase()) ?? null,
+    totpOf: (u) => { try { const t = u && u.totp ? JSON.parse(u.totp) : null; return t && t.s ? t : null; } catch (e) { return null; } },
+    totpStep: async (secret, code, last, offsets) => { steps.push(offsets); return String(code) === '123456' && 100 > (last || 0) ? 100 : 0; },
+    secondFactor: async (env, u, code) => String(code) === '123456',
+    BAD_CODE: 'bad code',
   };
   const env = { DB: fakeD1() };
   const R = makeQrLoginRoutes(h);
@@ -40,11 +47,13 @@ function setup() {
   const me = { id: 'u1', username: 'Тестер', handle: 'tester' };
   const at = (id) => env.DB.raw.prepare('SELECT state, expires_at FROM qr_logins WHERE id = ?').get(id);
   return {
-    env, sessions, limits, at,
+    env, sessions, limits, steps, at,
     create: async () => (await R['POST /qr/new']({ env, request: req() })).data,
     poll: async (id, key, take) => (await R['POST /qr/poll']({ env, request: req(take ? { id, key, take: true } : { id, key }) })).data,
     see: async (id, who = me) => (await R['POST /qr/see']({ env, request: req({ id }, 'iPhone'), me: who })).data,
     answer: async (id, ok, who = me) => R['POST /qr/answer']({ env, request: req({ id, ok }, 'iPhone'), me: who }),
+    byCode: async (login, code) => R['POST /login/code']({ env, request: req({ login, code }) }),
+    free: async (on, code) => { const u = env.DB.raw.prepare('SELECT * FROM users WHERE id = ?').get('u1'); return R['POST /2fa/free']({ env, request: req({ on, code }, 'iPhone'), me: { ...me, totp: u.totp } }); },
   };
 }
 const viewer = { id: 'u2', username: 'Зритель', handle: 'viewer' };
@@ -138,4 +147,74 @@ test('вход по QR: заблокированный аккаунт и ото�
   assert.deepEqual(await s.see('../../etc'), { state: 'gone' });
   assert.equal((await s.answer("1' OR '1'='1", true)).status, 410);
   assert.deepEqual(await s.poll('', ''), { state: 'gone' });
+});
+
+test('вход по коду из приложения: только если включён в Настройках; один ответ на всё неверное; повтор кода не проходит', async () => {
+  const s = setup();
+  const db = s.env.DB.raw;
+  assert.equal((await s.free(true, '123456')).status, 400, 'без двухфакторной защиты включать нечего');
+  db.prepare('UPDATE users SET totp = ? WHERE id = ?').run(JSON.stringify({ s: 'SECRET', last: 0, codes: [] }), 'u1');
+  const off = await s.byCode('@tester', '123456');
+  assert.deepEqual([off.status, off.data.error], [401, CODE_BAD], 'приложение есть, но вход по коду не включён — не пускаем');
+  const bad = await s.free(true, '000000');
+  assert.deepEqual([bad.status, bad.data.error], [403, 'bad code'], 'включить — только с кодом из приложения');
+  const on = await s.free(true, '123456');
+  assert.equal(on.data.user.codeLogin, true);
+  assert.equal(JSON.parse(db.prepare('SELECT totp FROM users WHERE id = ?').get('u1').totp).free, 1);
+  for (const [login, code] of [['@tester', '000000'], ['nobody', '123456'], ['', '123456']]) {
+    const r = await s.byCode(login, code);
+    assert.deepEqual([r.status, r.data.error], [401, CODE_BAD], 'неверный код, чужой аккаунт и пустое поле — один и тот же ответ: ' + login);
+  }
+  const ok = await s.byCode('TESTER', '123456');
+  assert.deepEqual(ok.data, { token: 'tok-u1', user: { id: 'u1', username: 'Тестер', handle: 'tester', codeLogin: true } });
+  assert.equal(JSON.parse(db.prepare('SELECT totp FROM users WHERE id = ?').get('u1').totp).last, 100, 'шаг кода запомнен');
+  const again = await s.byCode('@tester', '123456');
+  assert.deepEqual([again.status, again.data.error], [401, CODE_BAD], 'тот же код второй раз не проходит');
+  assert.equal(s.sessions.length, 1);
+  assert.ok(s.limits.some(([k, kind]) => k === 'code-acc:u1' && kind === 'codeAcc'), 'попытки считаются на аккаунт');
+  assert.ok(s.limits.some(([k]) => k === 'code-acc:x:nobody'), 'и на написанное, если такого аккаунта нет: по лимиту не узнать, есть ли он');
+  assert.ok(s.steps.every((o) => JSON.stringify(o) === '[0,-1]'), 'без пароля — только текущий и прошлый код');
+  const offAgain = await s.free(false, '123456');
+  assert.equal(offAgain.data.user.codeLogin, false);
+  assert.equal((await s.byCode('@tester', '123456')).status, 401, 'выключил — снова только пароль');
+});
+
+test('вход по коду из приложения: заблокированный не входит, лимиты попыток работают', async () => {
+  const s = setup({ wait: (key) => key === 'code-acc:u2' });
+  const db = s.env.DB.raw;
+  db.prepare('UPDATE users SET totp = ?, banned = 1, ban_reason = ? WHERE id = ?').run(JSON.stringify({ s: 'S', last: 0, free: 1 }), 'спам', 'u1');
+  const ban = await s.byCode('@tester', '123456');
+  assert.deepEqual([ban.status, ban.data.error], [403, 'Аккаунт заблокирован администрацией: спам']);
+  assert.equal(s.sessions.length, 0);
+  db.prepare('UPDATE users SET totp = ? WHERE id = ?').run(JSON.stringify({ s: 'S', last: 0, free: 1 }), 'u2');
+  const many = await s.byCode('@viewer', '123456');
+  assert.deepEqual([many.status, many.data.error], [429, 'Слишком много попыток входа по коду. Войди по паролю или подожди 7 мин.'], 'много попыток на аккаунт — ждать или войти по паролю, даже с верным кодом');
+  assert.equal(s.sessions.length, 0);
+});
+
+test('вход по коду из приложения: 10 неверных кодов подряд выключают его, верный — обнуляет счёт', async () => {
+  const s = setup();
+  const db = s.env.DB.raw;
+  const totp = () => JSON.parse(db.prepare('SELECT totp FROM users WHERE id = ?').get('u1').totp);
+  db.prepare('UPDATE users SET totp = ? WHERE id = ?').run(JSON.stringify({ s: 'S', last: 0, free: 1, codes: ['x'] }), 'u1');
+  for (let i = 0; i < 4; i++) await s.byCode('@tester', '000000');
+  assert.equal(totp().bad, 4);
+  assert.equal((await s.byCode('@tester', '123456')).status, 200);
+  assert.deepEqual([totp().bad, totp().last, totp().codes], [0, 100, ['x']], 'верный код: счёт в ноль, шаг запомнен, остальное не тронуто');
+  db.prepare('UPDATE users SET totp = ? WHERE id = ?').run(JSON.stringify({ s: 'S', last: 0, free: 1 }), 'u1');
+  for (let i = 0; i < CODE_TRIES; i++) assert.equal((await s.byCode('@tester', '000000')).status, 401);
+  assert.equal(totp().free, undefined, 'десятый неверный подряд — вход по коду выключен');
+  assert.equal(totp().bad, 0);
+  const late = await s.byCode('@tester', '123456');
+  assert.deepEqual([late.status, late.data.error], [401, CODE_BAD], 'теперь и верный код не пускает — тот же ответ, что всегда');
+  assert.equal(s.sessions.length, 1);
+  assert.equal((await s.free(true, '123456')).data.user.codeLogin, true, 'включить снова — в Настройках, с кодом');
+});
+
+test('адрес для лимита: у IPv6 — сеть /64', () => {
+  assert.equal(netOf('2001:db8:85a3:8d3:1319:8a2e:370:7348'), '2001:db8:85a3:8d3::/64');
+  assert.equal(netOf('2001:DB8::1'), '2001:db8:0:0::/64');
+  assert.equal(netOf('2001:db8:1:2::abcd'), '2001:db8:1:2::/64');
+  assert.equal(netOf('::1'), '0:0:0:0::/64');
+  assert.equal(netOf('203.0.113.9'), '203.0.113.9');
 });

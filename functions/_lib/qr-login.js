@@ -1,4 +1,6 @@
-// Казуал Хаб: вход по QR-коду (окно входа в Мнении, страница — /qr-login.js). Компьютер без входа просит код
+// Казуал Хаб: вход без пароля (окно входа в Мнении, страница — /qr-login.js): по QR-коду с телефона, где вход уже есть,
+// и по коду из приложения-аутентификатора (POST /login/code — ниже, у makeQrLoginRoutes).
+// Вход по QR-коду. Компьютер без входа просит код
 // (POST /qr/new): id уходит в QR — ссылка /opinion/#qr=<id>, key остаётся у компьютера: без него сессию не забрать,
 // даже сфотографировав QR. Телефон, где уже выполнен вход, открывает ссылку, видит, какое устройство просит войти
 // (браузер, система, страна, город), и разрешает или отказывает (POST /qr/see, POST /qr/answer).
@@ -14,6 +16,18 @@ const ID_RE = /^[0-9a-f]{32}$/;
 const KEY_RE = /^[0-9a-f]{64}$/;
 const BUSY = 'Слишком часто. Подожди немного.';
 export const QR_GONE = 'Код устарел: обнови его на компьютере и отсканируй снова.';
+// один ответ на «нет такого аккаунта», «вход по коду выключен» и «код не тот»: по нему не узнать, у кого что включено
+export const CODE_BAD = 'Код не подходит. Вход по коду работает, только если в Настройках включён вход по коду без пароля.';
+export const CODE_TRIES = 10; // неверных кодов подряд — и вход по коду выключается сам
+// адрес для лимита: у IPv6 — вся сеть /64 (у одного человека их обычно целая подсеть), у IPv4 — сам адрес
+export function netOf(ip) {
+  ip = String(ip || '').toLowerCase();
+  if (!ip.includes(':')) return ip;
+  const [a, b] = ip.split('::');
+  const head = a ? a.split(':') : [], tail = b ? b.split(':') : [];
+  const full = b === undefined ? head : [...head, ...Array(Math.max(0, 8 - head.length - tail.length)).fill('0'), ...tail];
+  return full.slice(0, 4).map((x) => x.replace(/^0+(?=.)/, '')).join(':') + '::/64';
+}
 
 const ready = new WeakSet(); // по базе: в тестах их несколько, в Worker'е одна
 async function ensure(env) {
@@ -27,11 +41,63 @@ export async function dropQr(env, uid) {
   try { await env.DB.prepare('DELETE FROM qr_logins WHERE user_id = ?').bind(uid).run(); } catch (e) {}
 }
 
-// h: json, fail, readBody, burst, bump, tooMany, clientIp, sha256, randHex, newSession, ownUser, deviceLabel — из API
+// h: json, fail, readBody, burst, bump, tooMany, clientIp, sha256, randHex, newSession, ownUser, deviceLabel, findLogin,
+// totpOf, totpStep, secondFactor, BAD_CODE — из API
 export function makeQrLoginRoutes(h) {
   const { json, fail } = h;
   const row = (env, id) => env.DB.prepare('SELECT * FROM qr_logins WHERE id = ?').bind(id).first();
   return {
+    // ---------- вход по коду из приложения, без пароля ----------
+    // Только у тех, кто сам включил его в Настройках (totp.free): иначе код из приложения — второй шаг после пароля, и
+    // молча делать его единственным нельзя. В коде всего 6 цифр, поэтому:
+    //   • 10 неверных кодов подряд (t.bad, обнуляет только верный) выключают вход по коду совсем — включить снова можно
+    //     только войдя по паролю. Так у подбора всего 10 попыток, сколько бы адресов и дней у него ни было;
+    //   • принимаются только текущий и прошлый код (2 из миллиона), один и тот же второй раз не пройдёт (t.last);
+    //   • в час — 5 попыток на аккаунт (и на написанное, если такого аккаунта нет: по лимиту не узнать, есть ли он),
+    //     20 с адреса (у IPv6 — с сети /64), 120 в минуту на всех.
+    async 'POST /login/code'({ env, request }) {
+      const { login, code } = await h.readBody(request);
+      const ident = String(login || '').trim().slice(0, 120);
+      if (h.burst('code:all', 120, 60e3)) return fail(429, BUSY);
+      const waitIp = await h.bump(env, 'code-ip:' + netOf(h.clientIp(request)), 'codeIp');
+      if (waitIp) return h.tooMany(waitIp);
+      const u = ident ? await h.findLogin(env, ident) : null;
+      const waitAcc = await h.bump(env, 'code-acc:' + (u ? u.id : 'x:' + ident.toLowerCase()), 'codeAcc');
+      if (waitAcc) return fail(429, `Слишком много попыток входа по коду. Войди по паролю или подожди ${waitAcc} мин.`);
+      const t = u ? h.totpOf(u) : null;
+      if (!t || !t.free) return fail(401, CODE_BAD);
+      const st = await h.totpStep(t.s, code, t.last, [0, -1]);
+      if (!st) {
+        // неверный код: +1 к счётчику подряд; десятый — вход по коду выключается (одним запросом, без гонок)
+        await env.DB.prepare("UPDATE users SET totp = CASE WHEN COALESCE(json_extract(totp, '$.bad'), 0) + 1 >= ?2 THEN json_remove(json_set(totp, '$.bad', 0), '$.free') "
+          + "ELSE json_set(totp, '$.bad', COALESCE(json_extract(totp, '$.bad'), 0) + 1) END WHERE id = ?1 AND json_extract(totp, '$.free') = 1").bind(u.id, CODE_TRIES).run();
+        return fail(401, CODE_BAD);
+      }
+      if (u.banned) return fail(403, 'Аккаунт заблокирован администрацией' + (u.ban_reason ? ': ' + u.ban_reason : '.'));
+      // верный код: шаг запоминается, счётчик неверных — в ноль, и только если вход по коду всё ещё включён, а этот шаг
+      // никто не успел забрать: два одновременных входа одним кодом — один вход
+      const w = await env.DB.prepare("UPDATE users SET totp = json_set(totp, '$.last', ?1, '$.bad', 0) WHERE id = ?2 AND json_extract(totp, '$.free') = 1 AND COALESCE(json_extract(totp, '$.last'), 0) < ?1")
+        .bind(st, u.id).run();
+      if (!(w.meta && w.meta.changes)) return fail(401, CODE_BAD);
+      await env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind('code-acc:' + u.id).run();
+      return json({ token: await h.newSession(env, u.id, request), user: h.ownUser({ ...u, totp: JSON.stringify({ ...t, last: st, bad: 0 }) }) });
+    },
+    // Настройки → Безопасность: включить или выключить вход по коду без пароля. Нужен код из приложения (или запасной).
+    // Меняется только поле free (и счётчик неверных), а не весь JSON: last и запасные коды мог поменять другой вход
+    async 'POST /2fa/free'({ env, request, me }) {
+      const { on, code } = await h.readBody(request);
+      if (!h.totpOf(me)) return fail(400, 'Сначала включи двухфакторную защиту.');
+      const wait = await h.bump(env, 'acc:' + me.id, 'loginAcc');
+      if (wait) return h.tooMany(wait);
+      if (!(await h.secondFactor(env, me, code))) return fail(403, h.BAD_CODE);
+      await env.DB.prepare(on === true
+        ? "UPDATE users SET totp = json_set(totp, '$.free', 1, '$.bad', 0) WHERE id = ? AND totp IS NOT NULL"
+        : "UPDATE users SET totp = json_remove(totp, '$.free') WHERE id = ? AND totp IS NOT NULL").bind(me.id).run();
+      const cur = await env.DB.prepare('SELECT totp FROM users WHERE id = ?').bind(me.id).first();
+      if (!h.totpOf(cur)) return fail(400, 'Сначала включи двухфакторную защиту.');
+      return json({ user: h.ownUser({ ...me, totp: cur.totp }) });
+    },
+    // ---------- вход по QR-коду ----------
     // компьютер: новый код. Устройство и примерное место — чтобы на телефоне было видно, кто просит войти.
     // Лимит — в базе (как у входа по паролю): обычному человеку хватает пары кодов на вход
     async 'POST /qr/new'({ env, request }) {
