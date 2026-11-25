@@ -1475,12 +1475,9 @@ function critRowHTML(r) {
   const note = form.notes[r.id] || '';
   const open = !!note || !!form.openNotes[r.id];
   const nid = 'cn-' + r.id;
-  // вес меняется в «Настроить» (editorHTML), здесь виден только непривычный: ×2 или ×0,5. Кнопка остаётся у критериев,
-  // которых в «Настроить» нет: из сохранённой оценки (extra) и когда категории уже нет
+  // вес — у каждого критерия в строке оценки, кнопкой рядом с названием: ×1 → ×2 → ×0,5
   const w = r.w || 1, wt = '×' + String(w).replace('.', ',');
-  const wBadge = r.extra || !currentCat()
-    ? `<button type="button" class="crit-w${w !== 1 ? ' on' : ''}" data-act="w" title="Вес критерия в итоге этой оценки. Нажми: ×1 → ×2 → ×0,5" aria-label="Вес критерия «${esc(r.name)}»: ${wt}">${wt}</button>`
-    : w !== 1 ? ` <small class="crit-w-badge" title="Вес критерия в итоге. Поменять — «Настроить»">${wt}</small>` : '';
+  const wBadge = `<button type="button" class="crit-w${w !== 1 ? ' on' : ''}" data-act="w" title="Вес критерия в итоге этой оценки. Нажми: ×1 → ×2 → ×0,5" aria-label="Вес критерия «${esc(r.name)}»: ${wt}">${wt}</button>`;
   return `<li class="crit" data-id="${esc(r.id)}" data-tier="${tierV(v)}">
 <div class="crit-top">
 <div class="crit-name"><span class="crit-title" id="${esc(nid)}">${esc(r.name.trim() || 'Без названия')}${wBadge}</span>${r.desc ? `<span class="crit-desc">${esc(r.desc)}</span>` : ''}</div>
@@ -1497,8 +1494,6 @@ function editorHTML(cat) {
   const starter = STARTERS.some(s => s.id === cat.id);
   const tpls = allTemplates().map((t, idx) => `<button type="button" class="tpl-btn" data-act="apply-tpl" data-tpl="${idx}">${esc(t.name)}</button>`).join('');
   const items = cat.criteria.map((c, i) => {
-    // вес — у этой оценки (form.weights), как и раньше; кнопка просто живёт здесь, а не у каждого критерия на виду
-    const w = form.weights[c.id] || 1, wt = '×' + String(w).replace('.', ',');
     return `<li class="ed-item" data-id="${esc(c.id)}">
 <span class="ed-num" aria-hidden="true">${i + 1}</span>
 <div class="ed-fields">
@@ -1506,7 +1501,6 @@ function editorHTML(cat) {
 <textarea class="ed-input ed-desc" id="edd-${esc(c.id)}" data-act="cdesc" rows="1" maxlength="120" enterkeyhint="next" placeholder="Описание, по желанию" aria-label="Критерий ${i + 1}, описание">${esc(c.desc || '')}</textarea>
 </div>
 <div class="ed-tools">
-<button type="button" class="crit-w${w !== 1 ? ' on' : ''}" data-act="w" title="Вес критерия в итоге этой оценки. Нажми: ×1 → ×2 → ×0,5" aria-label="Вес критерия «${esc(c.name)}»: ${wt}">${wt}</button>
 <button type="button" class="mini-btn" data-act="up" aria-label="Поднять критерий ${i + 1}"${i === 0 ? ' disabled' : ''}>${ICON.up}</button>
 <button type="button" class="mini-btn" data-act="down" aria-label="Опустить критерий ${i + 1}"${i === n - 1 ? ' disabled' : ''}>${ICON.down}</button>
 <button type="button" class="mini-btn del" data-act="delcrit" aria-label="Удалить критерий ${i + 1}"${n <= 1 ? ' disabled' : ''}>${ICON.trash}</button>
@@ -1519,7 +1513,7 @@ function editorHTML(cat) {
   return `<div class="editor">
 <div class="tpl-box"><span class="label">Быстрые шаблоны критериев</span><div class="tpl-list">${tpls}</div></div>
 <div><label class="label" for="catNameInput">Название категории</label><input class="ed-input ed-cat" id="catNameInput" data-act="catname" type="text" maxlength="40" enterkeyhint="next" value="${esc(cat.name)}" placeholder="Например, Кофейни"></div>
-<div><p class="label">Критерии · ${n} из ${MAX_CRIT}. ×1 — вес критерия в итоге этой оценки</p><ul class="ed-list">${items}</ul></div>
+<div><p class="label">Критерии · ${n} из ${MAX_CRIT}. Вес критерия ставится в каждой оценке, кнопкой ×1 рядом с его названием</p><ul class="ed-list">${items}</ul></div>
 <div class="ed-actions">
 <button type="button" class="btn small ghost" data-act="addcrit"${n >= MAX_CRIT ? ' disabled' : ''}>${ICON.plus}Добавить критерий</button>
 ${starter ? '<button type="button" class="btn small text" data-act="resetcat">Вернуть стандартные</button>' : ''}
