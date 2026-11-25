@@ -511,6 +511,11 @@ export function eventHits(ev, it) {
   if (it.kind === 'album_track' || it.kind === 'album_full') return cats.includes('music');
   return !RATING_KINDS.has(it.kind) || cats.includes(it.cg);
 }
+// оценки выбранной темы (у недели есть cats) в её время идут без дневного лимита: полный опыт за каждую.
+// Такие строки пишутся с peer «ev:<id недели>» и в дневной лимит не входят — оценки других категорий считаются как обычно
+export const FREE_KINDS = new Set(['rate', 'review', 'rate_full', 'plan_done', 'album_track', 'album_full']);
+export const eventFree = (ev, it) => !!(ev && Array.isArray(ev.cats) && ev.cats.length && FREE_KINDS.has(it.kind) && !it.peer && eventHits(ev, it));
+export const EV_PEER = 'ev:';
 let eventCache = { at: 0, v: null };
 export async function currentEvent(env, now = Date.now()) {
   if (eventCache.at > now - 30e3 && eventCache.db === env.DB) return eventCache.v && eventCache.v.until > now ? eventCache.v : null;
@@ -586,21 +591,23 @@ async function doAward(env, uid, items, opts) {
   reads.forEach((r, i) => {
     const rows = got[i].results || [];
     if (r.t === 'has') rows.forEach((x) => has.add(x.kind + '\n' + x.ref));
-    else if (r.t === 'day') { dayN[r.k] = 0; pairN[r.k] = {}; rows.forEach((x) => { dayN[r.k] += +x.n || 0; if (x.peer) pairN[r.k][x.peer] = +x.n || 0; }); }
+    else if (r.t === 'day') { dayN[r.k] = 0; pairN[r.k] = {}; rows.forEach((x) => { if (x.peer && x.peer.startsWith(EV_PEER)) return; dayN[r.k] += +x.n || 0; if (x.peer) pairN[r.k][x.peer] = +x.n || 0; }); }
     else everN[r.k] = n0(got[i]);
   });
   const event = opts.past ? null : await currentEvent(env, now);
   const rows = [];
-  for (const it of list) {
+  for (let it of list) {
     if (has.has(it.kind + '\n' + it.ref)) continue;
     const rule = RULES[it.kind];
+    const free = !opts.past && !rule.given && eventFree(event, it);
     let xp;
     if (opts.past || rule.given) xp = Math.max(0, Math.floor(+it.xp || 0));
     else {
-      xp = priceOf(rule, { day: dayN[it.kind] || 0, pair: it.peer ? (pairN[it.kind] || {})[it.peer] || 0 : 0, ever: everN[it.kind] || 0 });
+      xp = free ? rule.xp : priceOf(rule, { day: dayN[it.kind] || 0, pair: it.peer ? (pairN[it.kind] || {})[it.peer] || 0 : 0, ever: everN[it.kind] || 0 });
       if (xp && eventHits(event, it)) xp = Math.round(xp * Math.min(3, Math.max(1, +event.mult || 2)));
     }
-    dayN[it.kind] = (dayN[it.kind] || 0) + 1;
+    if (free) it = { ...it, peer: (EV_PEER + event.id).slice(0, 64) };
+    else dayN[it.kind] = (dayN[it.kind] || 0) + 1;
     if (it.peer) { pairN[it.kind] = pairN[it.kind] || {}; pairN[it.kind][it.peer] = (pairN[it.kind][it.peer] || 0) + 1; }
     everN[it.kind] = (everN[it.kind] || 0) + 1;
     rows.push({ ...it, xp, day: opts.past && it.day ? it.day : today, at: opts.past && it.at ? +it.at : now, ev: event && xp && eventHits(event, it) ? event.id : null });

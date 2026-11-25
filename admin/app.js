@@ -441,6 +441,7 @@
     ['Лоты и игры', ['lots_host', 'lot_add', 'lot_win', 'predict_win', 'bingo_win', 'king_host', 'king_vote', 'riddle', 'guess']],
   ];
   const EV_RATE = new Set(['rate', 'review', 'rate_full', 'plan_done', 'import']);
+  const EV_FREE = new Set(['rate', 'review', 'rate_full', 'plan_done', 'album_track', 'album_full']); // как FREE_KINDS в levels.js
   const EV_PRESETS = [
     { id: 'music', t: 'Неделя музыки', kinds: ['rate', 'review', 'rate_full', 'album_track', 'album_full'], cats: ['music'], note: 'Оценивай альбомы и треки — опыта больше' },
     { id: 'rate', t: 'Неделя оценок', kinds: ['rate', 'review', 'rate_full', 'plan_done'], cats: [] },
@@ -458,7 +459,9 @@
     const ks = [...EVF.kinds];
     if (!ks.length) return '<span class="muted">Выбери заготовку или действия ниже — тут появится, что получится.</span>';
     const cats = [...EVF.cats].map((c) => (d.cats.find((x) => x.k === c) || {}).label || c);
-    const rateOnly = cats.length && ks.some((k) => EV_RATE.has(k)) ? ` <span class="ev-only">оценки — только: ${esc(cats.join(', '))}</span>` : '';
+    // оценки выбранной темы в неделю идут без дневного лимита (eventFree в functions/_lib/levels.js)
+    const free = cats.length && ks.some((k) => EV_FREE.has(k));
+    const rateOnly = cats.length && ks.some((k) => EV_RATE.has(k) || EV_FREE.has(k)) ? ` <span class="ev-only">оценки — только: ${esc(cats.join(', '))}${free ? ', без дневного лимита' : ''}</span>` : '';
     return `<b>${esc(EVF.title || 'Без названия')}</b> · ×${String(EVF.mult).replace('.', ',')} на ${EVF.n} ${plw(EVF.n, UNIT_W[EVF.unit])}<br><span class="muted">за: ${esc(ks.map((k) => evLabel(d, k)).join(', '))}</span>${rateOnly}`;
   }
   function evFormHTML(d) {
@@ -529,7 +532,7 @@
     const cats = (ev.cats || []).map((c) => (d.cats.find((x) => x.k === c) || {}).label || c);
     return `<div class="ev-run"><span class="ev-x">×${String(ev.mult).replace('.', ',')}</span><div><b>${esc(ev.title)}</b>
       <small>идёт до ${esc(when(ev.until))} — осталось ${dd ? dd + ' д ' : ''}${hh} ч ${mm} мин</small>
-      <small>за: ${esc(ev.kinds.map((k) => evLabel(d, k)).join(', '))}${cats.length ? ' · оценки — только: ' + esc(cats.join(', ')) : ''}</small></div>
+      <small>за: ${esc(ev.kinds.map((k) => evLabel(d, k)).join(', '))}${cats.length ? ' · оценки — только: ' + esc(cats.join(', ')) + (ev.kinds.some((k) => EV_FREE.has(k)) ? ', без дневного лимита' : '') : ''}</small></div>
       <button type="button" class="btn ghost" id="lvEvOff">Закончить</button></div>`;
   }
   async function levels() {

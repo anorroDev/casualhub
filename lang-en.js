@@ -4044,6 +4044,8 @@ window.CasualLangPack = {
 "{} опыта":"{} XP",
 "{} опыта за: {}. До {}":"{} XP for: {}. Until {}",
 "{} опыта за: {}. Оценки — только в категориях: {}. До {}":"{} XP for: {}. Ratings count only in the categories: {}. Until {}",
+"{} опыта за: {}. Оценки — только в категориях: {}, и за них нет дневного лимита. До {}":"{} XP for: {}. Ratings count only in the categories: {}, with no daily limit. Until {}",
+"Оценки в категориях: {} — без дневного лимита":"Ratings in {}: no daily limit",
 "Линия в бинго":"Bingo line",
 "Провёл «Царя Горы»":"Hosted “King of the Hill”",
 "Голос в «Царе Горы»":"Vote in “King of the Hill”",

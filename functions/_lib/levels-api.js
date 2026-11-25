@@ -8,6 +8,7 @@ import {
   ACHIEVEMENTS, REWARDS, NAME_COLORS, PROFILE_BGS, isScored, textLen, award, INVITE_REWARDS, EVENT_REWARDS, INV_SQL, invitesOf, STREAK_BONUS, FIRST_STEPS,
   achBackLetter, ACH_TIER_XP, ACH_ONE_XP, swapQuest, recalcUser, nameKey, claimPast, payAchievements, freezesNow,
   SEASON_RANKS, seasonRankOf, rankFields, currentSeason, closeSeason, forgetSeason, seasonXpOf, seasonXpMany, seasonPlanLetter, fmtKyiv,
+  FREE_KINDS,
 } from './levels.js';
 import { FOODS, boughtLooks, ensureShop, hasVasyan, vasyanClaim, vasyanGone } from './shop.js';
 import { settleWeekTop, weekTop, TOP_MIN, TOP_BASE, TOP_PER, TOP_BONUS_MAX } from './weektop.js';
@@ -33,6 +34,8 @@ export const KIND_LABEL = {
   hilo: 'Верный ответ в «Выше или ниже»', hilo_streak: 'Серия от 10 в «Выше или ниже»',
 };
 // таблица «За что сколько опыта» в «Прогрессе»: цифры — прямо из RULES, подписи — в levels-ui.js (XP_TABLE)
+// группы категорий, оценки которых в эту неделю идут без дневного лимита — названиями (для «Прогресса» и объявления)
+const freeCats = (ev) => (Array.isArray(ev && ev.cats) && ev.kinds.some((k) => FREE_KINDS.has(k)) ? ev.cats.filter((c) => CAT_GROUPS[c]).map((c) => CAT_GROUPS[c].label) : []);
 const xpRules = () => Object.fromEntries(Object.entries(RULES).filter(([, r]) => !r.given).map(([k, r]) => [k, { xp: r.xp, day: r.day, tail: r.tail, pair: r.pair, ever: r.ever }]));
 const INVITE_RE = /^[a-z0-9]{8}$/;
 const FOUNDERS_BEFORE = Date.UTC(2026, 10, 12); // кто зарегистрировался до запуска уровней — «Основатель хаба»
@@ -158,7 +161,7 @@ export function makeLevelsRoutes(h) {
         on: true, mode: levelsMode(env), ...lv, ...rankFields(season.xp), season, prefs, look: lookOf(row, season.xp, bought), unlocked: unlockedAt(lv.level, false, bought, invitesOf(row)), admin,
         streak: { days: alive ? +row.streak || 0 : 0, best: +row.best_streak || 0, freezes, today: row.streak_day === today },
         quests, steps: steps.every((s) => s.paid) ? null : steps,
-        event: ev ? { title: ev.title, kinds: ev.kinds, mult: ev.mult, until: ev.until } : null,
+        event: ev ? { title: ev.title, kinds: ev.kinds, mult: ev.mult, until: ev.until, free: freeCats(ev) } : null,
         rewards: REWARDS, foods: FOOD_GIFTS, colors: NAME_COLORS, bgs: Object.keys(PROFILE_BGS), invRewards: INVITE_REWARDS, invites: invitesOf(row),
         xpRules: xpRules(), streakBonus: STREAK_BONUS, firstXp: FIRST_STEPS.map((f) => f.xp), achXp: { tiers: ACH_TIER_XP, one: ACH_ONE_XP },
         recap: recapOpen(now) || admin ? 2026 : null, // админ видит итоги заранее, чтобы проверить их до декабря
@@ -606,7 +609,9 @@ export function makeLevelsRoutes(h) {
       if (b.announce !== false && h.setAnnounce) {
         const note = String(b.note || '').replace(/\s+/g, ' ').trim().slice(0, 300);
         const what = kinds.map((k) => KIND_LABEL[k] || k).join(', ');
-        const only = cats.length && kinds.some((k) => RATING_KINDS.has(k)) ? ` Оценки — только в категориях: ${cats.map((c) => CAT_GROUPS[c].label).join(', ')}.` : '';
+        // оценки выбранной темы идут без дневного лимита (eventFree в levels.js)
+        const free = freeCats(ev).length ? ', и за них нет дневного лимита' : '';
+        const only = cats.length && kinds.some((k) => RATING_KINDS.has(k) || FREE_KINDS.has(k)) ? ` Оценки — только в категориях: ${cats.map((c) => CAT_GROUPS[c].label).join(', ')}${free}.` : '';
         // свои слова админа — отдельным полем note: окно показывает их отдельно от строк «за что» и «до когда»
         await h.setAnnounce(env, { id: 'ev-' + ev.id, kind: 'event', title, text: `×${String(mult).replace('.', ',')} опыта за: ${what}.${only} До ${fmtKyiv(ev.until)}.`, note, until: ev.until, by: me.handle });
       } else if (h.pokeAnnounce) await h.pokeAnnounce(env); // без объявления: открытые вкладки всё равно узнают и покажут таймер

@@ -1383,3 +1383,23 @@ test('почта: рофланы из письма и опыт из подарк
   assert.equal(q(env, "SELECT xp FROM xp_log WHERE user_id = 'u1' AND kind = 'gift' AND ref = 'g1'")[0].xp, 40);
   assert.equal((await claim('g1')).status, 409);
 });
+
+test('тематическая неделя по теме: оценки темы без дневного лимита, другие категории — с обычным', async () => {
+  const env = envOf();
+  L.forgetEvent();
+  await L.ensureLevels(env);
+  env.DB.raw.prepare("INSERT INTO meta (k, v) VALUES ('levels_event', ?)").run(JSON.stringify({ id: 'evm', title: 'Неделя музыки', kinds: ['rate', 'album_track'], cats: ['music'], mult: 2, until: NOON + DAY }));
+  const rates = (pre, n, cg) => Array.from({ length: n }, (_, i) => ({ kind: 'rate', ref: pre + i, cg }));
+  const m = await awardMany(env, 'u1', rates('m', 15, 'music'), { now: NOON, ...bare });
+  assert.equal(m.gained, 15 * RULES.rate.xp * 2, 'все 15 оценок музыки — полный опыт ×2, сверх 8 в день');
+  const tracks = await awardMany(env, 'u1', Array.from({ length: 50 }, (_, i) => ({ kind: 'album_track', ref: 'a:' + i })), { now: NOON + 1, ...bare });
+  assert.equal(tracks.gained, 50 * RULES.album_track.xp * 2, 'треки альбома тоже без лимита');
+  const g = await awardMany(env, 'u1', rates('g', 9, 'games'), { now: NOON + 2, ...bare });
+  assert.equal(g.gained, 8 * RULES.rate.xp + RULES.rate.tail.xp, 'игры: оценки музыки не съели их дневной лимит');
+  // без выбранной темы лимит прежний
+  L.forgetEvent();
+  env.DB.raw.prepare("UPDATE meta SET v = ? WHERE k = 'levels_event'").run(JSON.stringify({ id: 'eva', title: 'Неделя оценок', kinds: ['rate'], mult: 2, until: NOON + DAY }));
+  const all = await awardMany(env, 'u2', rates('x', 9, 'games'), { now: NOON, ...bare });
+  assert.equal(all.gained, (8 * RULES.rate.xp + RULES.rate.tail.xp) * 2);
+  L.forgetEvent();
+});
