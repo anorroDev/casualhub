@@ -153,8 +153,9 @@
   // ---------- страница: текст и подписи, в том числе то, что появится позже ----------
   const ATTRS = ['title', 'placeholder', 'aria-label', 'alt', 'aria-valuetext'];
   const SKIP_TAG = new Set(['SCRIPT', 'STYLE', 'TEXTAREA', 'NOSCRIPT']);
-  // написанное людьми и журнал «Что нового» не трогаем, даже если слово случайно есть в словаре
-  const SKIP = '.pv-cap, .cm-text, .rx-list span, .adm-text, .site-ann span, .wn-body, .cm-meta b, .adm-who b, .fr-who b, .tl-txt, .tl-lab, .tl-tile b, .ch-txt, .ch-who';
+  // написанное людьми и журнал «Что нового» не трогаем, даже если слово случайно есть в словаре: ни текст, ни подписи
+  // (title, aria-label…). translate="no", как у переводчиков браузера, — то же для любого элемента и всего внутри него
+  const SKIP = '[translate="no"], .pv-cap, .cm-text, .rx-list span, .adm-text, .site-ann span, .wn-body, .cm-meta b, .adm-who b, .fr-who b, .tl-txt, .tl-tile b, .ch-txt, .ch-who';
   function text(n) {
     const v = n.nodeValue;
     // шкала в подписях: 7,5–10 → 7.5–10
@@ -166,9 +167,12 @@
     if (o !== v && !p.closest(SKIP)) n.nodeValue = o;
   }
   function attrs(el) {
+    let skip;
     for (const a of ATTRS) {
       const v = el.getAttribute(a);
       if (!v || !CYR.test(v)) continue;
+      if (skip === undefined) skip = !!el.closest(SKIP); // подпись из написанного людьми (имя карточки в title) — как их текст
+      if (skip) return;
       const o = tr(v);
       if (o !== v) el.setAttribute(a, o);
     }
@@ -199,11 +203,13 @@
     const f = o[m];
     o[m] = function (l, opt) { return f.call(this, toLoc(l), opt); };
   });
-  // картинки с итогом и тир-листом рисуются на холсте: подписи проходят через тот же словарь
+  // картинки с итогом и тир-листом рисуются на холсте: подписи проходят через тот же словарь. Холст с canvas.translate = false
+  // (translate="no") рисует как есть — для написанного людьми; холсту с подписями сайта можно выключать его на время fillText
   if (window.CanvasRenderingContext2D) {
     const C = CanvasRenderingContext2D.prototype, ft = C.fillText, mt = C.measureText;
-    C.fillText = function (s, ...a) { return ft.call(this, tr(s), ...a); };
-    C.measureText = function (s) { return mt.call(this, tr(s)); };
+    const own = (g) => !!g.canvas && g.canvas.translate === false;
+    C.fillText = function (s, ...a) { return ft.call(this, own(this) ? s : tr(s), ...a); };
+    C.measureText = function (s) { return mt.call(this, own(this) ? s : tr(s)); };
   }
   // системные окна и копирование итога текстом
   const conf = window.confirm;

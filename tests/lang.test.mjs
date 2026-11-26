@@ -81,3 +81,72 @@ test('движок: строки, слова после числа, шаблон
   assert.equal(tUk('Тестер Два'), 'Тестер Два', 'чего нет в словаре — не трогаем');
   assert.equal(tUk(tUk('Настройки')), 'Налаштування', 'переведённое второй раз не меняется');
 });
+
+// страница в песочнице: элементы с классами и подписями, текст в них и холст. closest понимает то, что есть в SKIP
+// движка: [translate="no"], .класс и «.класс тег»
+function pageWith(lang) {
+  const all = [], texts = [];
+  const match = (n, s) => {
+    if (s === '[translate="no"]') return n.a.translate === 'no';
+    const [c, tag] = s.split(/\s+/);
+    if (!tag) return c.startsWith('.') && n.cls.includes(c.slice(1));
+    if (n.tagName !== tag.toUpperCase()) return false;
+    for (let p = n.parentElement; p; p = p.parentElement) if (p.cls.includes(c.slice(1))) return true;
+    return false;
+  };
+  const el = (tag, a = {}, parent = null, cls = []) => {
+    const n = { nodeType: 1, tagName: tag.toUpperCase(), parentElement: parent, a: { ...a }, cls,
+      getAttribute: (k) => (k in n.a ? n.a[k] : null), setAttribute: (k, v) => { n.a[k] = String(v); },
+      closest: (sel) => { for (let x = n; x; x = x.parentElement) if (sel.split(',').some((s) => match(x, s.trim()))) return x; return null; } };
+    all.push(n);
+    return n;
+  };
+  const text = (parent, v) => { const t = { nodeType: 3, nodeValue: v, parentElement: parent }; texts.push(t); return t; };
+  class Ctx { constructor(canvas) { this.canvas = canvas; this.out = []; } fillText(s) { this.out.push(s); } measureText(s) { return { s }; } }
+  const root = el('html');
+  const page = { el: (tag, a, parent, cls) => el(tag, a, parent || root, cls), text, Ctx };
+  page.run = () => {
+    const ctx = {
+      window: { CasualLang: { lang }, CanvasRenderingContext2D: Ctx },
+      CanvasRenderingContext2D: Ctx,
+      document: { documentElement: Object.assign(root, { querySelectorAll: () => all.filter((n) => n !== root && Object.keys(n.a).length) }), head: { appendChild() {} }, readyState: 'complete', createElement: () => ({}), createTreeWalker: () => { let i = 0; return { nextNode: () => texts[i++] || null }; }, querySelectorAll: () => [], addEventListener() {} },
+      MutationObserver: class { observe() {} },
+      NodeFilter: { SHOW_TEXT: 4 },
+      navigator: {},
+      Date, Number,
+    };
+    ctx.window.confirm = () => true;
+    vm.createContext(ctx);
+    vm.runInContext(src(`lang-${lang}.js`), ctx);
+    vm.runInContext(src('lang-core.js'), ctx);
+  };
+  return page;
+}
+
+test('написанное людьми не переводится: ни текст, ни подписи (SKIP и translate="no"), ни надписи на холсте с translate = false', () => {
+  const P = pageWith('en');
+  const plainBtn = P.el('button', { title: 'Сохранить', 'aria-label': 'Сохранить' });
+  const card = P.el('button', { title: 'Сохранить', 'aria-label': 'Сохранить', translate: 'no' }, null, ['tl-card']); // карточка тир-листа по имени «Сохранить»
+  const inCard = P.el('small', { title: 'Сохранить' }, card);
+  const meta = P.el('div', {}, null, ['cm-meta']), who = P.el('b', { title: 'Сохранить' }, meta); // ник в комментарии
+  const lab = P.el('button', { title: 'Настроить ряд' }, null, ['tl-lab']); // ряд тир-листа: подпись кнопки — интерфейс
+  const labText = P.el('span', { translate: 'no' }, lab);
+  const t1 = P.text(plainBtn, 'Сохранить'), t2 = P.text(inCard, 'Сохранить'), t3 = P.text(labText, 'Сохранить');
+  P.run();
+  assert.equal(plainBtn.a.title, 'Save');
+  assert.equal(plainBtn.a['aria-label'], 'Save');
+  assert.equal(t1.nodeValue, 'Save');
+  assert.equal(card.a.title, 'Сохранить', 'title карточки — её название');
+  assert.equal(card.a['aria-label'], 'Сохранить');
+  assert.equal(inCard.a.title, 'Сохранить', 'и всё внутри неё');
+  assert.equal(t2.nodeValue, 'Сохранить');
+  assert.equal(who.a.title, 'Сохранить', 'подписи внутри SKIP — как их текст');
+  assert.equal(lab.a.title, 'Row settings', 'у ряда подпись кнопки переводится…');
+  assert.equal(t3.nodeValue, 'Сохранить', '…а его название — нет');
+  // холст: картинка тир-листа (canvas.translate = false) рисует как есть, остальные — с переводом
+  const own = new P.Ctx({ translate: false }), site = new P.Ctx({});
+  own.fillText('Сохранить', 0, 0); site.fillText('Сохранить', 0, 0);
+  assert.deepEqual([own.out, site.out], [['Сохранить'], ['Save']]);
+  assert.equal(own.measureText('Сохранить').s, 'Сохранить');
+  assert.equal(site.measureText('Сохранить').s, 'Save');
+});

@@ -34,11 +34,18 @@
   const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
   // ---------- аккаунт ----------
+  // У профиля в браузере свой id (u_…, ocenshik.user.v1): по нему ключи хранилища — тир-листы и отметки синхронизации.
+  // У аккаунта на сервере другой код: по нему адреса API, ссылка #f=<автор>.<id>, реакции, картинки и обложки.
+  // Код помнит профиль (serverId, его ставит friends.js); если ещё нет — спросим /api/me до первой отрисовки (внизу)
   const user = read('ocenshik.user.v1');
-  const token = user ? (read('casualhub.tokens.v1') || {})[user.id] || null : null;
-  const me = user && token ? user.id : '';
+  // токен — каждый раз из хранилища: в соседней вкладке могли войти заново, и старый уже не действует
+  const tokenNow = () => (user && user.id ? (read('casualhub.tokens.v1') || {})[user.id] || null : null);
+  let tokenSeen = tokenNow();
+  const local = user && tokenSeen ? String(user.id) : '';
+  let me = local && user.serverId ? String(user.serverId) : '';
   const KEY = user && user.id ? `${BASE_KEY}:${user.id}` : BASE_KEY; // у каждого аккаунта свои тир-листы, гостю чужие не видны
   async function api(path, method = 'GET', body) {
+    const token = tokenNow();
     let r;
     try {
       r = await fetch('/api' + path, { method, cache: 'no-store', headers: { 'content-type': 'application/json', ...(token ? { authorization: 'Bearer ' + token } : {}) }, body: body ? JSON.stringify(body) : undefined });
@@ -173,10 +180,10 @@
 
   // ---------- синхронизация с аккаунтом ----------
   // marks — версия каждого тир-листа, уже известная серверу; sent — картинки, которые на сервере уже есть; del — ждут удаления там
-  const SYNC_KEY = `${SYNC_BASE}:${me}`;
-  const sync = (() => { const d = me ? read(SYNC_KEY) : null; return { marks: (d && d.marks) || {}, sent: (d && d.sent) || {}, del: (d && Array.isArray(d.del) && d.del) || [] }; })();
-  const keepSync = () => { if (!me) return; try { localStorage.setItem(SYNC_KEY, JSON.stringify(sync)); } catch (e) {} };
-  let syncTimer = 0, syncing = false, syncAgain = false, needPull = false, pulledOnce = !me, syncState = me ? 'ok' : 'guest', lastPull = 0, imgLimitShown = false, listLimitShown = false;
+  const SYNC_KEY = `${SYNC_BASE}:${local}`;
+  const sync = (() => { const d = local ? read(SYNC_KEY) : null; return { marks: (d && d.marks) || {}, sent: (d && d.sent) || {}, del: (d && Array.isArray(d.del) && d.del) || [] }; })();
+  const keepSync = () => { if (!local) return; try { localStorage.setItem(SYNC_KEY, JSON.stringify(sync)); } catch (e) {} };
+  let syncTimer = 0, syncing = false, syncAgain = false, needPull = false, pulledOnce = !local, syncState = local ? 'ok' : 'guest', lastPull = 0, imgLimitShown = false, listLimitShown = false;
   const isBlank = (l) => !l.title && !Object.keys(l.items).length;
   function paintSync() {
     const n = $('#tlSync');
@@ -429,7 +436,7 @@
     if (S.who && !people.some((p) => p.id === S.who)) S.who = '';
     const shown = bySort(feed.items.filter((x) => (!S.who || x.user.id === S.who) && inQuery(x.title, x.user.username)), (x) => x.title || 'Без названия', (x) => x.at);
     box.innerHTML = `<p class="tl-stat"><b>${shown.length}</b> ${plural(shown.length, 'тир-лист', 'тир-листа', 'тир-листов')}</p>
-      ${people.length > 1 ? `<div class="tl-chips tl-mt"><button type="button" class="tl-chip" data-who="" aria-pressed="${!S.who}">Все</button>${people.map((p) => `<button type="button" class="tl-chip" data-who="${esc(p.id)}" aria-pressed="${S.who === p.id}">${esc(p.username)}</button>`).join('')}</div>` : ''}
+      ${people.length > 1 ? `<div class="tl-chips tl-mt"><button type="button" class="tl-chip" data-who="" aria-pressed="${!S.who}">Все</button>${people.map((p) => `<button type="button" class="tl-chip" data-who="${esc(p.id)}" aria-pressed="${S.who === p.id}" translate="no">${esc(p.username)}</button>`).join('')}</div>` : ''}
       ${shown.length ? '' : '<p class="tl-empty">Ничего не нашлось.</p>'}<div class="tl-grid">${shown.map((x, k) => `<a class="tl-tile" href="#f=${esc(x.user.id)}.${esc(x.id)}" style="--k:${Math.min(k, 8)}"><span class="tl-mini" aria-hidden="true">${(x.rows || []).slice(0, 5).map((r) => `<span class="tl-mini-r"><i style="background:${COLOR_RE.test(r.color) ? r.color : '#9AA0AE'}"></i><span>${(r.items || []).map((it) => miniThumb(it, x.user.id)).join('')}</span></span>`).join('')}</span><b>${esc(x.title || 'Без названия')}</b><small>${esc(x.user.username)} · ${cards(+x.count || 0)} · ${esc(fmtDate(x.at))}</small></a>`).join('')}</div>`;
     hydrateMini(box);
   }
@@ -455,12 +462,15 @@
   }
 
   // ---------- карточки и ряды ----------
+  // название карточки, подпись ряда и заголовок написал человек: translate="no" — перевод сайта (lang-core.js) их не трогает,
+  // ни текст, ни title с aria-label. Без названия подпись карточки — «Картинка», её переводим
   function cardHTML(l, id, readOnly) {
     const it = l.items[id], src = imgOf(it), sel = S.sel === id, just = S.pop === id;
     const cap = l.captions && it.name && it.kind !== 'text' ? `<small>${esc(it.name)}</small>` : '';
     const face = src ? `<img src="${esc(src)}" alt="" draggable="false" loading="lazy" decoding="async">` : `<span class="tl-txt">${esc(it.name || '?')}</span>`;
-    if (readOnly) return `<div class="tl-it" title="${esc(it.name)}"><span class="tl-card"><span class="tl-face">${face}</span>${cap}</span></div>`;
-    return `<div class="tl-it${sel ? ' sel' : ''}${just ? ' pop' : ''}" data-id="${esc(id)}"><button type="button" class="tl-card" aria-pressed="${sel}" title="${esc(it.name)}" aria-label="${esc(it.name || 'Картинка')}"><span class="tl-face">${face}</span>${cap}</button><button type="button" class="tl-x" aria-label="Удалить карточку" title="Удалить карточку">✕</button></div>`;
+    const keep = it.name ? ' translate="no"' : '';
+    if (readOnly) return `<div class="tl-it"${keep} title="${esc(it.name)}"><span class="tl-card"><span class="tl-face">${face}</span>${cap}</span></div>`;
+    return `<div class="tl-it${sel ? ' sel' : ''}${just ? ' pop' : ''}" data-id="${esc(id)}"><button type="button" class="tl-card"${keep} aria-pressed="${sel}" title="${esc(it.name)}" aria-label="${esc(it.name || 'Картинка')}"><span class="tl-face">${face}</span>${cap}</button><button type="button" class="tl-x" aria-label="Удалить карточку" title="Удалить карточку">✕</button></div>`;
   }
   // подпись ряда читается на любом цвете
   function inkOn(hex) {
@@ -471,8 +481,8 @@
   function rowsHTML(l, readOnly) {
     return l.rows.map((r, k) => {
       const style = `background:${esc(r.color)};color:${inkOn(r.color)}`;
-      const lab = readOnly ? `<div class="tl-lab${labClass(r.label)}" style="${style}">${esc(r.label) || '&nbsp;'}</div>`
-        : `<button type="button" class="tl-lab${labClass(r.label)}" data-edit="${esc(r.id)}" style="${style}" title="Настроить ряд">${esc(r.label) || '&nbsp;'}</button>`;
+      const lab = readOnly ? `<div class="tl-lab${labClass(r.label)}" translate="no" style="${style}">${esc(r.label) || '&nbsp;'}</div>`
+        : `<button type="button" class="tl-lab${labClass(r.label)}" data-edit="${esc(r.id)}" style="${style}" title="Настроить ряд"><span translate="no">${esc(r.label) || '&nbsp;'}</span></button>`;
       const empty = readOnly ? '' : `<span class="tl-drop">${touch ? 'пусто' : 'перетащи сюда'}</span>`;
       return `<div class="tl-row" ${readOnly ? '' : `data-row="${esc(r.id)}"`} style="--k:${Math.min(k, 8)}">${lab}<div class="tl-items">${r.items.map((id) => cardHTML(l, id, readOnly)).join('') || empty}</div></div>`;
     }).join('');
@@ -941,6 +951,7 @@
     const H = PAD + (hasTitle ? 72 : 0) + rowsH.reduce((a, b) => a + b + 6, 0) + 34;
     const c = document.createElement('canvas');
     c.width = W; c.height = H;
+    c.translate = false; // на картинке только написанное человеком (название, ряды, карточки): перевод сайта его не трогает
     const g = c.getContext('2d');
     g.fillStyle = EXPORT_BG; g.fillRect(0, 0, W, H);
     let y = PAD;
@@ -1083,8 +1094,8 @@
       const n = Object.keys(l.items).length;
       view.innerHTML = `<div class="tl-editor tl-view">
         <section class="card tl-bar">
-          <div class="tl-bar-top"><a class="btn small ghost" href="#friends">‹ Тир-листы друзей</a><h2 class="tl-view-title">${esc(l.title || 'Без названия')}</h2></div>
-          <p class="tl-who"><a href="${profUrl(uid, d.user.handle)}">${esc(d.user.username)}</a><span>@${esc(d.user.handle)}</span><span>${cards(n)} · ${esc(fmtDate(l.at))}</span></p>
+          <div class="tl-bar-top"><a class="btn small ghost" href="#friends">‹ Тир-листы друзей</a><h2 class="tl-view-title"${l.title ? ' translate="no"' : ''}>${esc(l.title || 'Без названия')}</h2></div>
+          <p class="tl-who"><a href="${profUrl(uid, d.user.handle)}" translate="no">${esc(d.user.username)}</a><span>@${esc(d.user.handle)}</span><span>${cards(n)} · ${esc(fmtDate(l.at))}</span></p>
           <div class="tl-tools"><span class="tl-group">${me ? '<button type="button" class="btn small primary" data-do="clone">Собрать свой из этих карточек</button>' : ''}<button type="button" class="btn small ghost" data-do="f-png">Скачать PNG</button><button type="button" class="btn small ghost" data-do="f-copy">Скопировать картинку</button></span></div>
         </section>
         <div class="tl-board" id="tlFriendBoard">${rowsHTML(l, true)}</div>
@@ -1182,7 +1193,7 @@
     const cm = $('#tlComments');
     if (cm && window.CasualComments) {
       window.CasualComments.mount(cm, {
-        uid, target: 't.' + id, token, title: 'Комментарии',
+        uid, target: 't.' + id, token: tokenNow(), title: 'Комментарии',
         placeholder: own ? 'Напиши что-нибудь об этом тир-листе…' : 'Напиши, что думаешь об этом тир-листе…',
         empty: own ? (S.list && visOf(S.list) === 'private' ? 'Этот тир-лист видишь только ты: комментировать его некому.' : 'Пока никто не написал. Друзья увидят этот тир-лист в своей вкладке «Друзья».') : 'Пока пусто. Напиши первым',
       });
@@ -1199,7 +1210,7 @@
   function discardBlank(l) {
     if (!l || !isBlank(l) || !lists.includes(l)) return;
     lists = lists.filter((x) => x !== l);
-    if (me && sync.marks[l.id]) { sync.del.push({ id: l.id, at: Date.now() }); keepSync(); scheduleSync(0); }
+    if (local && sync.marks[l.id]) { sync.del.push({ id: l.id, at: Date.now() }); keepSync(); scheduleSync(0); }
     delete sync.marks[l.id];
     save();
   }
@@ -1243,7 +1254,7 @@
     else if (a === 'delete') armed(b, 'delete', 'Точно удалить?', () => {
       dropImgs(Object.values(l.items).map((it) => it.img).filter(Boolean));
       lists = lists.filter((x) => x !== l);
-      if (me) { sync.del.push({ id: l.id, at: Date.now() }); keepSync(); scheduleSync(0); }
+      if (local) { sync.del.push({ id: l.id, at: Date.now() }); keepSync(); scheduleSync(0); }
       save();
       S.list = null;
       location.hash = '';
@@ -1461,8 +1472,21 @@
   });
 
   addEventListener('storage', (e) => {
-    if (e.key === 'ocenshik.user.v1') { const u = read('ocenshik.user.v1'); if ((u && u.id) !== (user && user.id)) location.reload(); return; }
-    if (e.key !== KEY) return;
+    const all = e.key === null; // хранилище очистили целиком
+    if (all || e.key === 'ocenshik.user.v1') { const u = read('ocenshik.user.v1'); if ((u && u.id) !== (user && user.id)) { location.reload(); return; } }
+    // вход в соседней вкладке. Вышли или вошли — у страницы другой режим (тир-листы в аккаунте или только здесь): перезагружаем.
+    // Вошли заново тем же аккаунтом (старый вход кончился) — запросы и так берут новый токен: досылаем, что не ушло,
+    // и заново открываем комментарии (свой токен они получают при открытии)
+    if (all || e.key === 'casualhub.tokens.v1') {
+      const t = tokenNow();
+      if (t !== tokenSeen) {
+        if (!t || !tokenSeen || !me) { location.reload(); return; }
+        tokenSeen = t;
+        if (rxState && $('#tlComments')) mountSocial(rxState.uid, rxState.rid.slice(2), rxState.own);
+        runSync(true);
+      }
+    }
+    if (!all && e.key !== KEY) return;
     lists = readLists(KEY); // другая вкладка изменила тир-листы
     if (S.list) S.list = lists.find((x) => x.id === S.list.id) || null;
     if (!drag && !dlg) route();
@@ -1513,7 +1537,8 @@
     const am = /^album=([\w.-]{1,80})$/.exec(h);
     if (am) { await albumList(am[1]); return; }
     const fm = /^f=([^.]+)\.(\w+)$/.exec(h);
-    if (fm && fm[1] !== me) {
+    // свой — и по коду аккаунта, и по id профиля в браузере: так выглядели свои ссылки раньше
+    if (fm && fm[1] !== me && fm[1] !== local) {
       closeDialog();
       if (S.built !== 'friend:' + fm[1] + '.' + fm[2]) await renderFriendList(fm[1], fm[2]);
       return;
@@ -1570,5 +1595,7 @@
 
   const openId = (/^#(?:l=|f=[^.]+\.)(\w+)$/.exec(location.hash) || [])[1];
   lists.filter((l) => isBlank(l) && l.id !== openId).forEach(discardBlank);
-  route().then(() => { if (me) runSync(true); });
+  // код аккаунта обычно помнит профиль; нет — спрашиваем сервер. Не ответил — тир-листы пока только здесь, дошлются потом
+  const whoAmI = me || !local ? Promise.resolve() : api('/me').then((d) => { if (d && d.user && d.user.id) me = String(d.user.id); }).catch(() => {});
+  whoAmI.then(() => { if (local && !me) { pulledOnce = true; syncState = 'off'; } return route(); }).then(() => { if (me) runSync(true); });
 })();
