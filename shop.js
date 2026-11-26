@@ -31,7 +31,7 @@
   const VY_KEY = 'casualhub.vasyan.v1'; // состояние Васяна (vasyan.js): надетые окрас и наряд
   // бесплатное «как у всех» в каждом слоте (сервер считает так же)
   const DEF = { frame: 'shop.frame.none', badge: 'shop.badge.none', nick: 'shop.nick.none', wheel: 'shop.wheel.default', confetti: 'shop.confetti.default', tier: 'shop.tier.default', bg: 'site.bg.stars', cursor: 'site.cursor.default' };
-  const FREE = new Set([...Object.values(DEF), 'vasyan.skin.classic', 'vasyan.outfit.none', 'vasyan.food.kibble']);
+  const FREE = new Set([...Object.values(DEF), 'vasyan.skin.classic', 'vasyan.outfit.none', 'vasyan.food.kibble', 'vasyan.bowl.steel']);
   // монетка «рофлан» (Souls) — пиксельная, в манере значков званий (/art/shop/roflan-coin.svg)
   const COIN = '/art/shop/roflan-coin.svg';
   const coinImg = (s = 18) => `<img class="sh-coin" src="${COIN}" width="${s}" height="${s}" alt="" decoding="async">`;
@@ -212,8 +212,8 @@
     D = d;
     const before = JSON.stringify([S.owned, S.balance, S.wear]);
     const wear = { ...DEF, ...(d.wear || {}) };
-    // owned — купленное и открытое уровнем (еда Васяна); unlock — с какого уровня еда своя без покупки
-    S = { ...S, uid: uid(), owned: (d.items || []).filter((x) => x.owned && x.price > 0).map((x) => x.id), balance: +d.balance || 0, wear, look: lookFrom(wear),
+    // owned — купленное, открытое уровнем (еда Васяна) и тайными достижениями (миски); unlock — с какого уровня еда своя без покупки
+    S = { ...S, uid: uid(), owned: (d.items || []).filter((x) => x.owned && (x.price > 0 || x.secret)).map((x) => x.id), balance: +d.balance || 0, wear, look: lookFrom(wear),
       unlock: Object.fromEntries((d.items || []).filter((x) => x.unlock).map((x) => [x.id, x.unlock])), at: Date.now() };
     save();
     applyCursor();
@@ -276,7 +276,7 @@
       try { const s = String(V.preview(id) || ''); if (/^\s*<svg[\s>]/i.test(s) && !/<(script|foreignObject)|\son[a-z]+\s*=/i.test(s)) return s; } catch (e) {}
     }
     const [, kind, name] = id.split('.');
-    if (kind === 'food') return ''; // еду рисует только vasyan.js
+    if (kind === 'food' || kind === 'bowl') return ''; // еду и миски рисует только vasyan.js
     return kind === 'skin' ? catSvg(name) : catSvg('classic', name === 'none' ? '' : name);
   }
   const FLAKE = px(['....W....', '.W..W..W.', '..W.W.W..', '...WWW...', 'WWWWWWWWW', '...WWW...', '..W.W.W..', '.W..W..W.', '....W....'], { W: '#7FC8F8' }, 5).svg;
@@ -348,10 +348,11 @@
     if (it.kind === 'outfit') return (vyState().outfit || 'none') === tail(it.id);
     // еда: что сейчас в миске (у старого vasyan.js в food лежало число порций — это сухой корм)
     if (it.kind === 'food') { const f = vyState().food; return (typeof f === 'string' ? f : 'kibble') === tail(it.id); }
+    if (it.kind === 'bowl') return (vyState().bowlSkin || 'steel') === tail(it.id);
     return false;
   }
-  // окрас, наряд и еду Васяна носит vasyan.js (CasualVasyan.setSkin / setOutfit / setFood), остальное — сервер (PUT /shop/wear)
-  const VY_SET = { skin: 'setSkin', outfit: 'setOutfit', food: 'setFood' };
+  // окрас, наряд, еду и миску Васяна носит vasyan.js (CasualVasyan.setSkin / setOutfit / setFood / setBowl), остальное — сервер (PUT /shop/wear)
+  const VY_SET = { skin: 'setSkin', outfit: 'setOutfit', food: 'setFood', bowl: 'setBowl' };
   const vyCan = (kind) => { const V = window.CasualVasyan; return !!(V && VY_SET[kind] && typeof V[VY_SET[kind]] === 'function'); };
   async function wearIt(it) {
     if (VY_SET[it.kind]) {
@@ -522,8 +523,8 @@ html.unslop .sh-it.on { box-shadow: none; }`;
     const note = (t) => `<p class="sh-note">${t}</p>`;
     if (k === 'vasyan') {
       return note(D.vasyan
-        ? 'Окрасы, наряды и еда для котика Васяна. Купленное надевается здесь же или в Настройках → «Внешний вид». Еда открывается и сама: по одной за каждый уровень, начиная со 2-го, — купить можно раньше.'
-        : 'Котик Васян есть у первой десятки и у всех с 25-го уровня. Окрасы, наряды и еда откроются, когда он появится у тебя.') + group('skin', 'Окрасы') + group('outfit', 'Наряды') + group('food', 'Еда');
+        ? 'Окрасы, наряды, миски и еда для котика Васяна. Купленное надевается здесь же или в Настройках → «Внешний вид». Еда открывается и сама: по одной за каждый уровень, начиная со 2-го, — купить можно раньше. Четыре миски не продаются: их открывают тайные достижения.'
+        : 'Котик Васян есть у первой десятки и у всех с 25-го уровня. Окрасы, наряды, миски и еда откроются, когда он появится у тебя.') + group('skin', 'Окрасы') + group('outfit', 'Наряды') + group('bowl', 'Миски') + group('food', 'Еда');
     }
     if (k === 'profile') return meHTML() + note(NOTES.profile) + group('frame', 'Рамки аватара') + group('badge', 'Значки у ника');
     if (k === 'nick') return meHTML() + note(NOTES.nick) + group('nick', '');
@@ -537,20 +538,24 @@ html.unslop .sh-it.on { box-shadow: none; }`;
     const lock = it.sec === 'vasyan' && !D.vasyan;
     const on = it.owned && !it.consumable && isWorn(it);
     const food = it.kind === 'food'; // еду не надевают, а насыпают в миску
+    const bowl = it.kind === 'bowl'; // миску — ставят
+    const onTxt = food ? 'В миске' : bowl ? 'Стоит' : 'Надето';
     let btn;
     if (lock) btn = '<button type="button" class="sh-btn" disabled>Нужен Васян</button>';
     else if (it.kind === 'freeze') btn = D.freezes >= D.freezeMax ? '<button type="button" class="sh-btn" disabled>Больше не помещается</button>' : buyBtn(it);
+    else if (!it.owned && it.secret) btn = '<button type="button" class="sh-btn" disabled>Не продаётся</button>'; // миска за тайное достижение
     else if (!it.owned) btn = buyBtn(it);
-    else if (on) btn = `<button type="button" class="sh-btn" disabled>${food ? 'В миске' : 'Надето'}</button>`;
-    else if (it.sec === 'vasyan' && !vyCan(it.kind)) btn = `<button type="button" class="sh-btn" disabled>${it.byLevel ? 'Открыто' : 'Куплено'}</button>`;
-    else btn = `<button type="button" class="sh-btn" data-wear="${esc(it.id)}">${food ? 'Насыпать' : 'Надеть'}</button>`;
+    else if (on) btn = `<button type="button" class="sh-btn" disabled>${onTxt}</button>`;
+    else if (it.sec === 'vasyan' && !vyCan(it.kind)) btn = `<button type="button" class="sh-btn" disabled>${it.byLevel || it.secret ? 'Открыто' : 'Куплено'}</button>`;
+    else btn = `<button type="button" class="sh-btn" data-wear="${esc(it.id)}">${food ? 'Насыпать' : bowl ? 'Поставить' : 'Надеть'}</button>`;
     // еда: своя за уровень — «За N-й уровень»; закрытая — цена и с какого уровня откроется сама
     const sub = it.kind === 'freeze' ? 'Расходуется, если пропустишь день'
+      : it.secret ? (it.owned ? 'За тайное достижение' : 'Откроется тайным достижением')
       : it.byLevel ? `За ${it.unlock}-й уровень`
       : !it.price ? 'Бесплатно'
       : it.owned ? 'Куплено'
       : it.unlock ? `${coins(it.price)} · Откроется на ${it.unlock}-м уровне` : it.was ? `${coins(it.price)} вместо ${nf(it.was)}` : coins(it.price);
-    return `<div class="sh-it${on ? ' on' : ''}${lock ? ' lock' : ''}" data-id="${esc(it.id)}">${on ? `<span class="sh-tag">${food ? 'В миске' : 'Надето'}</span>` : ''}<div class="sh-pic">${picOf(it)}</div><b>${esc(it.title)}</b><small>${esc(sub)}</small>${btn}</div>`;
+    return `<div class="sh-it${on ? ' on' : ''}${lock ? ' lock' : ''}" data-id="${esc(it.id)}">${on ? `<span class="sh-tag">${onTxt}</span>` : ''}<div class="sh-pic">${picOf(it)}</div><b>${esc(it.title)}</b><small>${esc(sub)}</small>${btn}</div>`;
   }
   const buyBtn = (it) => (armed === it.id
     ? `<button type="button" class="sh-btn sure" data-buy="${esc(it.id)}">Точно купить?</button>`
@@ -568,7 +573,7 @@ html.unslop .sh-it.on { box-shadow: none; }`;
       const it = (D.items || []).find((x) => x.id === w.dataset.wear);
       if (!it || !it.owned) return;
       w.disabled = true;
-      try { if (await wearIt(it)) { render(); say(it.kind === 'food' ? `В миске: ${it.title}` : `Надето: ${it.title}`); } else w.disabled = false; } catch (err) { render(); say(err.message, true); }
+      try { if (await wearIt(it)) { render(); say(it.kind === 'food' ? `В миске: ${it.title}` : it.kind === 'bowl' ? `Миска: ${it.title}` : `Надето: ${it.title}`); } else w.disabled = false; } catch (err) { render(); say(err.message, true); }
       return;
     }
     const b = e.target.closest('[data-buy]');

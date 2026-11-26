@@ -233,6 +233,7 @@
     const chip = document.getElementById('evChip');
     const hdr = document.querySelector('header');
     if (!chip) return;
+    if (chip.dataset.plq) return; // таймер перетащили: лежит внизу, где его уронили (CasualUtil.plaque)
     chip.classList.remove('top', 'mini');
     chip.style.top = '';
     if (!hdr) return;
@@ -279,6 +280,8 @@
     clearInterval(evT);
     tick();
     evT = setInterval(tick, 1000);
+    // таймер можно утащить и уронить вниз, куда удобно; место помнится (после текста и времени — чтобы знать ширину)
+    if (window.CasualUtil && window.CasualUtil.plaque) window.CasualUtil.plaque.drag(chip, 'evChip');
     placeChip();
     setTimeout(placeChip, 600); // шапку могли достроить позже (кнопки, шрифты)
   }

@@ -10,7 +10,8 @@
    confetti(canvas, o)       — конфетти на холсте победы (колесо, лоты); ответ — stop()
    size                      — размер интерфейса (Настройки → «Внешний вид»): list, get(), stored(), fits(pct), ok(), apply(pct, save)
    status                    — вид категории по названию (kind) и слова статусов этого вида: label(s, имя категории), words(вид), group(s)
-   release                   — с какого времени показывать кнопки OBS и Twitch: open() — уже можно, at — когда */
+   release                   — с какого времени показывать кнопки OBS и Twitch: open() — уже можно, at — когда
+   plaque                    — плашки внизу экрана (таймер тематической недели и будущие): drag(el, id) — тянуть и ронять */
 (() => {
   // фон сайта (base.css, html[data-bg]): у всех пиксельные звёзды. Пейзаж в запасе — ?bg=horizon запоминается в этом браузере, ?bg= — вернуть звёзды
   try {
@@ -509,7 +510,121 @@ html.sh-cur ::file-selector-button { cursor: var(--sh-a); }`;
   const RELEASE_AT = Date.UTC(2026, 10, 30, 22, 0);
   const release = Object.freeze({ at: RELEASE_AT, open: (now = Date.now()) => now >= RELEASE_AT });
 
-  window.CasualUtil = Object.freeze({ esc, read, plural, script, emptyArt, loop, confetti, size, cursor, nsfw, snow, status, release });
+  // ---------- плашки внизу экрана: таймер тематической недели и такие же в будущем ----------
+  // plaque.drag(el, id): плашку (элемент с position: fixed) можно утащить мышкой или пальцем; отпустил — падает вниз
+  // с отскоком и остаётся там, где упала. Место (x) помнится в этом браузере — casualhub.plaques.v1 { id: { x } } — и
+  // одно на всех страницах. Нажатие без перетаскивания работает как раньше. Пока плашка лежит там, куда её уронили,
+  // у неё data-plq ('down'; 'move' — в руке или в полёте): свою раскладку (как placeChip в online.js) ей тогда не делать.
+  // Место ставится inline-стилями с !important: они сильнее классов раскладки и анимации появления.
+  // При «уменьшить движение» — без полёта: сразу вниз
+  const PLQ_KEY = 'casualhub.plaques.v1', PLQ_GAP = 16;
+  const plqAll = () => { const v = read(PLQ_KEY); return v && typeof v === 'object' ? v : {}; };
+  const plqSet = (el, o) => { for (const k of Object.keys(o)) { if (o[k] == null) el.style.removeProperty(k); else el.style.setProperty(k, o[k], 'important'); } };
+  const plqCalm = () => !!(window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const plqDragEnd = new WeakMap();
+  let plqReady = false;
+  const plqInit = () => {
+    if (plqReady) return;
+    plqReady = true;
+    const s = document.createElement('style');
+    s.textContent = '[data-plq-on] { touch-action: none; cursor: grab; } [data-plq="move"] { cursor: grabbing; }';
+    document.head.appendChild(s);
+    // клик сразу после перетаскивания — не нажатие (не открывать окно недели)
+    addEventListener('click', (e) => {
+      const el = e.target && e.target.closest ? e.target.closest('[data-plq-on]') : null;
+      if (el && performance.now() - (plqDragEnd.get(el) || -1e9) < 400) { e.stopImmediatePropagation(); e.preventDefault(); }
+    }, true);
+    // окно сузили — лежащие плашки остаются на экране
+    addEventListener('resize', () => document.querySelectorAll('[data-plq="down"]').forEach((el) => plqRest(el, parseFloat(el.style.left) || 0)));
+  };
+  // сколько снизу занимает вырез экрана (safe-area): столько же отступает и плашка в покое
+  const plqInset = () => {
+    const d = document.createElement('i');
+    d.style.cssText = 'position:fixed;left:0;bottom:0;width:0;height:env(safe-area-inset-bottom,0px);visibility:hidden;pointer-events:none';
+    document.body.appendChild(d);
+    const h = d.offsetHeight;
+    d.remove();
+    return h;
+  };
+  // в покое: внизу экрана, x — левый край (не дальше краёв окна); ответ — где встала
+  const plqRest = (el, x) => {
+    const lx = Math.round(Math.max(8, Math.min(innerWidth - (el.offsetWidth || 0) - 8, x)));
+    plqSet(el, { position: 'fixed', left: lx + 'px', right: 'auto', top: 'auto', bottom: `calc(env(safe-area-inset-bottom, 0px) + ${PLQ_GAP}px)`, transform: null, transition: null });
+    el.dataset.plq = 'down';
+    return lx;
+  };
+  const plqDrag = (el, id) => {
+    if (!el || !id || el.dataset.plqOn) return;
+    plqInit();
+    el.dataset.plqOn = id;
+    el.dataset.noPress = ''; // без «проседания» из fx.js: его scale мешает наклону
+    const keep = (x) => { try { const v = plqAll(); v[id] = { x }; localStorage.setItem(PLQ_KEY, JSON.stringify(v)); } catch (e) {} };
+    const saved = plqAll()[id];
+    if (saved && Number.isFinite(+saved.x)) { el.classList.remove('top', 'mini'); plqRest(el, +saved.x); }
+    // плашка стала шире (дописался таймер, другой язык) — не вылезает за край экрана
+    if (window.ResizeObserver) new ResizeObserver(() => { if (el.dataset.plq === 'down') plqRest(el, parseFloat(el.style.left) || 0); }).observe(el);
+    let p = null, raf = 0;
+    // приземлилась: чуть сплющилась (Web Animations — не трогает её собственную анимацию появления)
+    const squash = () => { if (el.animate && !plqCalm()) try { el.animate([{ scale: '1.06 0.86' }, { scale: '0.98 1.04', offset: 0.6 }, { scale: '1 1' }], { duration: 300, easing: 'ease-out' }); } catch (e) {} };
+    const off = () => { removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up); };
+    function move(e) {
+      if (!p || e.pointerId !== p.id) return;
+      if (!p.on) {
+        if (Math.hypot(e.clientX - p.sx, e.clientY - p.sy) < 6) return;
+        p.on = true;
+        cancelAnimationFrame(raf);
+        el.classList.remove('top', 'mini');
+        el.dataset.plq = 'move';
+      }
+      const t = performance.now(), pts = p.pts;
+      pts.push([t, e.clientX, e.clientY]);
+      while (pts.length > 2 && t - pts[0][0] > 100) pts.shift();
+      // в руке качается по ходу, как вывеска
+      const vx = t > pts[0][0] ? (e.clientX - pts[0][1]) / ((t - pts[0][0]) / 1000) : 0;
+      p.rot = plqCalm() ? 0 : Math.max(-12, Math.min(12, vx / 80));
+      plqSet(el, { position: 'fixed', left: e.clientX - p.dx + 'px', top: e.clientY - p.dy + 'px', right: 'auto', bottom: 'auto', transform: `rotate(${p.rot.toFixed(1)}deg)`, transition: 'none' });
+    }
+    function up(e) {
+      if (!p || (e && e.pointerId !== p.id)) return;
+      off();
+      const q = p;
+      p = null;
+      if (!q.on) return;
+      plqDragEnd.set(el, performance.now());
+      // скорость броска — за последние ~0,1 с движения; подержал на месте и отпустил — просто падает
+      const r = el.getBoundingClientRect(), a = q.pts[0], b = q.pts[q.pts.length - 1], dt = b[0] > a[0] && performance.now() - b[0] < 80 ? (b[0] - a[0]) / 1000 : 0;
+      let lx = r.left, ty = r.top, rot = q.rot, last = performance.now(), hops = 0;
+      let vx = dt ? Math.max(-1400, Math.min(1400, (b[1] - a[1]) / dt)) * 0.5 : 0, vy = dt ? Math.max(-1100, Math.min(1500, (b[2] - a[2]) / dt)) : 0;
+      const done = () => { keep(plqRest(el, lx)); plqDragEnd.set(el, performance.now()); };
+      if (plqCalm()) { done(); return; }
+      const floorY = innerHeight - PLQ_GAP - plqInset();
+      const step = (t) => {
+        const d = Math.min(0.05, (t - last) / 1000), w = el.offsetWidth, floor = floorY - el.offsetHeight;
+        last = t;
+        vy += 2600 * d; ty += vy * d; lx += vx * d; vx *= Math.max(0, 1 - 1.6 * d);
+        if (lx < 8) { lx = 8; vx = Math.abs(vx) * 0.4; } else if (lx > innerWidth - w - 8) { lx = innerWidth - w - 8; vx = -Math.abs(vx) * 0.4; }
+        rot *= Math.max(0, 1 - 7 * d);
+        if (ty >= floor) {
+          ty = floor;
+          squash();
+          // ударилась — отскок, два раза всё ниже; потом лежит
+          if (vy > 380 && hops < 2) { vy = -vy * 0.3; hops += 1; } else { done(); return; }
+        }
+        plqSet(el, { left: lx + 'px', top: ty + 'px', transform: `rotate(${rot.toFixed(1)}deg)` });
+        raf = requestAnimationFrame(step);
+      };
+      raf = requestAnimationFrame(step);
+    }
+    el.addEventListener('pointerdown', (e) => {
+      if (e.button > 0 || p) return;
+      const r = el.getBoundingClientRect();
+      p = { id: e.pointerId, sx: e.clientX, sy: e.clientY, dx: e.clientX - r.left, dy: e.clientY - r.top, on: false, rot: 0, pts: [[performance.now(), e.clientX, e.clientY]] };
+      addEventListener('pointermove', move); addEventListener('pointerup', up); addEventListener('pointercancel', up);
+    });
+  };
+  const plaque = Object.freeze({ drag: plqDrag });
+
+  window.CasualUtil = Object.freeze({ esc, read, plural, script, emptyArt, loop, confetti, size, cursor, nsfw, snow, status, release, plaque });
   snowRun();
   // котик Васян внизу экрана (vasyan.js сам проверяет, не выключен ли он в Настройках; в админке и на /r/ его нет)
   if (!/^\/(admin|r)\//.test(location.pathname)) script('/vasyan.js', () => !!window.CasualVasyan).catch(() => {});

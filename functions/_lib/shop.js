@@ -109,14 +109,29 @@ export const FOODS = [
   ['cake', 'Тортик', 200],
 ].map(([name, title, price], i) => ({ id: 'vasyan.food.' + name, sec: 'vasyan', kind: 'food', title, price, unlock: price ? i + 1 : 0 }));
 const FOOD_ITEMS = FOODS;
+// миски Васяна (id и названия общие с BOWLS в vasyan.js): стальная — у всех, часть продаётся, а четыре не продаются —
+// их открывают тайные достижения (ach — код достижения). Какое достижение, странице не говорим: оно тайное (secret: true).
+// Ставит миску vasyan.js (CasualVasyan.setBowl), сервер только знает, чья она
+export const BOWLS = [
+  ['steel', 'Стальная', 0],
+  ['red', 'Красная', 40],
+  ['dots', 'В горошек', 70],
+  ['wood', 'Деревянная', 90],
+  ['sea', 'С рыбкой', 120], // не fish: так называется еда, а превью в магазине различает их по id
+  ['gold', 'Золотая', 300],
+  ['moon', 'Лунная', 0, 'night'],
+  ['ref', 'Судейская', 0, 'strict'],
+  ['nope', 'Несогласная', 0, 'nope'],
+  ['home', 'Домашняя', 0, 'comeback'],
+].map(([name, title, price, ach]) => ({ id: 'vasyan.bowl.' + name, sec: 'vasyan', kind: 'bowl', title, price, ...(ach ? { ach } : {}) }));
 // оформление из «Прогресса» (рамки, цвета, стили и шрифты ника, фоны, эффекты, котик в профиле) открывается только уровнем:
 // в магазине его нет. Один день 12 ноября 2026 его можно было купить раньше уровня (id look.<награда>) — купленное тогда
 // остаётся у купивших: levels.js узнаёт о нём через boughtLooks
 const LOOK_KINDS = ['frame', 'color', 'bg', 'nick', 'font', 'fx', 'pet'];
 // награды за ивенты (EVENT_REWARDS) выдаются так же — строкой look.<id> с ценой 0 (advent.js)
 const LOOK_REWARD = new Map([...REWARDS.filter((r) => LOOK_KINDS.includes(r.kind) && r.level > 1), ...EVENT_REWARDS].map((r) => ['look.' + r.id.replace(':', '.'), r.id]));
-// своё ли: бесплатное, куплено или открыто уровнем
-const ownedBy = (it, st) => !it.price || st.owned.has(it.id) || (!!it.unlock && st.level >= it.unlock);
+// своё ли: бесплатное, куплено, открыто уровнем или (миска) тайным достижением
+const ownedBy = (it, st) => (it.ach ? !!(st.achs && st.achs.has(it.ach)) : !it.price) || st.owned.has(it.id) || (!!it.unlock && st.level >= it.unlock);
 // какая еда открылась, когда уровень вырос с from до to (для письма о новом уровне)
 export const foodsUnlocked = (from, to) => FOODS.filter((f) => f.unlock > (+from || 0) && f.unlock <= (+to || 0));
 export const SLOTS = ['frame', 'badge', 'nick', 'wheel', 'confetti', 'tier', 'bg', 'cursor'];
@@ -140,6 +155,7 @@ export const ITEMS = [
   { id: 'vasyan.outfit.headphones', sec: 'vasyan', kind: 'outfit', title: 'Наушники', price: 150 },
   { id: 'vasyan.outfit.crown', sec: 'vasyan', kind: 'outfit', title: 'Корона', price: 300 },
   ...FOOD_ITEMS,
+  ...BOWLS,
 ];
 const BY_ID = new Map(ITEMS.map((x) => [x.id, x]));
 export const itemOf = (id) => BY_ID.get(String(id || '')) || null;
@@ -214,6 +230,7 @@ export async function shopState(env, uid) {
     gifts: +sums.gifts || 0,
     balance: earned.total + (+sums.sum || 0),
     owned: ownedSet,
+    achs: new Set((ach.results || []).map((a) => String(a.code))), // полученные достижения: открывают тайные миски
     wear: wearMap(worn.results || [], ownedSet),
     level,
     // Васян есть у «Первой десятки» (забрал письмо с котиком) и у всех с 25-го уровня (награда «Васян в профиле»)
@@ -248,10 +265,11 @@ export function shopView(st) {
     freezes: st.freezes,
     freezeMax: FREEZE_MAX,
     wear: { ...DEFAULT, ...(st.wear || {}) },
-    // unlock — с какого уровня еда своя без покупки; byLevel — своя именно за уровень (не куплена)
+    // unlock — с какого уровня еда своя без покупки; byLevel — своя именно за уровень (не куплена);
+    // secret — миска за тайное достижение (какое — не говорим), не продаётся
     sale: st.sale ? { pct: st.sale.pct, sec: st.sale.sec || '', until: st.sale.until, title: st.sale.title || '' } : null,
     items: ITEMS.map((x) => ({ id: x.id, sec: x.sec, kind: x.kind, slot: x.slot || null, pub: !!x.pub, title: x.title, price: salePrice(x, st.sale), ...(salePrice(x, st.sale) !== x.price ? { was: x.price } : {}), consumable: !!x.consumable,
-      owned: ownedBy(x, st), unlock: x.unlock || 0, byLevel: !!x.unlock && st.level >= x.unlock && !st.owned.has(x.id) })),
+      owned: ownedBy(x, st), unlock: x.unlock || 0, byLevel: !!x.unlock && st.level >= x.unlock && !st.owned.has(x.id), ...(x.ach ? { secret: true } : {}) })),
   };
 }
 
@@ -311,11 +329,13 @@ const ENOUGH = '?6 + COALESCE((SELECT SUM(delta) FROM shop_log WHERE user_id = ?
 export async function buy(env, uid, itemId, { rid = '', now = Date.now(), seen } = {}) {
   const it = itemOf(itemId);
   if (!it) return { err: [400, 'Такого в магазине нет.'] };
-  if (!it.price) return { ok: true, free: true };
+  if (!it.price && !it.ach) return { ok: true, free: true };
   const st = await shopState(env, uid);
+  // миска за тайное достижение не продаётся: она своя, только когда достижение получено
+  if (it.ach) return ownedBy(it, st) ? { ok: true, already: true, st } : { err: [403, 'Эту миску не купить: её открывает тайное достижение.'] };
   // еда, которую уже открыл уровень, — своя и без покупки: рофланы не списываются
   if (it.unlock && st.level >= it.unlock) return { ok: true, already: true, st };
-  if (it.sec === 'vasyan' && !st.vasyan) return { err: [403, 'Окрасы, наряды и еда — для тех, у кого есть котик Васян: первая десятка и все с 25-го уровня.'] };
+  if (it.sec === 'vasyan' && !st.vasyan) return { err: [403, 'Окрасы, наряды, миски и еда — для тех, у кого есть котик Васян: первая десятка и все с 25-го уровня.'] };
   if (!it.consumable && st.owned.has(it.id)) return { ok: true, already: true, st };
   if (it.kind === 'freeze') {
     if (!st.hasLevel) return { err: [409, 'Серии ещё нет: заморозка пригодится, когда начнёшь серию.'] };

@@ -324,6 +324,57 @@ test('еда: id и названия общие с vasyan.js, в том же п�
   assert.deepEqual(client, server);
 });
 
+// ---------- миски Васяна ----------
+test('миски: id и названия общие с vasyan.js, в том же порядке; стальная бесплатная, тайные — за тайные достижения', () => {
+  const src = readFileSync(new URL('../vasyan.js', import.meta.url), 'utf8');
+  const at = src.indexOf('const BOWLS = [');
+  const block = src.slice(at, src.indexOf('];', at));
+  const client = [...block.matchAll(/\{ id: '([a-z]+)', name: '([^']+)'(, secret: true)?/g)].map((m) => [m[1], m[2], !!m[3]]);
+  const bowls = S.ITEMS.filter((x) => x.kind === 'bowl');
+  assert.deepEqual(client, bowls.map((x) => [x.id.split('.').pop(), x.title, !!x.ach]));
+  assert.equal(bowls[0].id, 'vasyan.bowl.steel');
+  assert.equal(bowls[0].price, 0);
+  const levels = readFileSync(new URL('../functions/_lib/levels.js', import.meta.url), 'utf8');
+  const hidden = new Set([...levels.matchAll(/code: '([a-z0-9]+)'[^\n]*hidden: true/g)].map((m) => m[1]));
+  for (const b of bowls.filter((x) => x.ach)) { assert.equal(b.price, 0, b.id); assert.ok(hidden.has(b.ach), b.id + ' — тайное достижение'); }
+  for (const b of bowls.filter((x) => x.price)) assert.ok(b.price >= 30 && b.price <= 400 && !b.ach, b.id);
+  assert.equal(new Set(bowls.filter((x) => x.ach).map((x) => x.ach)).size, bowls.filter((x) => x.ach).length); // одно достижение — одна миска
+});
+
+test('миски: тайная — своя только с достижением, не продаётся и не выдаёт, какое достижение', async () => {
+  const { env, db } = await setup();
+  setXp(db, U, 5000); // 500 рофланов
+  hasVasyan(db, U);
+  const it = async (id) => S.shopView(await S.shopState(env, U)).items.find((x) => x.id === id);
+  const moon = await it('vasyan.bowl.moon');
+  assert.equal(moon.owned, false);
+  assert.equal(moon.secret, true);
+  assert.equal(moon.price, 0);
+  assert.ok(!('ach' in moon) && !JSON.stringify(moon).includes('night')); // какое достижение — не говорим
+  assert.equal((await S.buy(env, U, 'vasyan.bowl.moon')).err[0], 403); // купить нельзя
+  const before = S.shopView(await S.shopState(env, U)).balance;
+  db.prepare('INSERT INTO achievements (user_id, code, tier, at) VALUES (?, ?, ?, 1)').run(U, 'night', 1);
+  assert.equal((await it('vasyan.bowl.moon')).owned, true);
+  assert.ok((await S.buy(env, U, 'vasyan.bowl.moon')).already); // своя — «покупка» ничего не списывает
+  assert.equal(S.shopView(await S.shopState(env, U)).balance, before + 15); // +15 — за само достижение (бронза)
+  assert.equal((await it('vasyan.bowl.ref')).owned, false); // другая тайная — нет
+  assert.equal((await it('vasyan.bowl.steel')).owned, true); // стальная — у всех
+});
+
+test('миски: обычная продаётся тем, у кого есть Васян', async () => {
+  const { env, db } = await setup();
+  setXp(db, U, 2000); // 200 рофланов
+  setXp(db, V, 2000);
+  assert.equal((await S.buy(env, V, 'vasyan.bowl.wood')).err[0], 403); // без Васяна
+  hasVasyan(db, U);
+  const r = await S.buy(env, U, 'vasyan.bowl.wood');
+  assert.ok(r.ok && !r.already);
+  const v = S.shopView(r.st);
+  assert.equal(v.balance, 200 - 90);
+  assert.ok(v.items.find((x) => x.id === 'vasyan.bowl.wood').owned);
+  assert.equal((await S.wear(env, U, 'vasyan.bowl.wood')).err[0], 400); // миску ставит vasyan.js, сервер её не «надевает»
+});
+
 test('оформление за уровень в магазине не продаётся', () => {
   assert.ok(!S.ITEMS.some((x) => x.id.startsWith('look.')));
   assert.ok(!S.ITEMS.some((x) => x.sec === 'look'));
