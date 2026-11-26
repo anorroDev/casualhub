@@ -263,15 +263,18 @@
       if (it.y + s.hh >= FLOOR + 1) { g.items.splice(i, 1); landed(it); }
     }
   }
+  const snd = (n, p) => { if (window.CasualSound) window.CasualSound.play(n, p); }; // звуки — /games/sound.js
   function eat(it) {
     const p = R.POINTS[it.k];
     g.score += p; g.caught++;
+    snd('coin', p >= 10 ? 1.5 : p >= 5 ? 1.26 : p >= 3 ? 1.12 : 1); // чем ценнее еда, тем выше звук
     cat.eatT = 0.22;
     pop('+' + p, it.k === 'cake' ? C.accent : C.good, cat.x, FLOOR - 17);
     bits(it.x, FLOOR - 11, S.crumb[it.k], 3);
     // побил свой рекорд посреди игры — подпрыгнул от радости и плашка «Новый рекорд!» на пару секунд (один раз за игру)
     if (!g.beat && best > 0 && g.score > best) {
       g.beat = true; cat.joyT = 0.4;
+      snd('win');
       newEl.hidden = false;
       clearTimeout(newT); newT = setTimeout(() => { newEl.hidden = true; }, 2500);
     }
@@ -281,6 +284,7 @@
     if (it.k === 'drop') bits(it.x, it.y, ['#4FA3F7', '#D4EDFC'], 3);
     if (g.inv > 0) return; // только что задело: ещё не бьют
     g.lives--; g.inv = INV; cat.hitT = 0.5; cat.eatT = 0;
+    if (g.lives > 0) snd('bad'); // последнюю жизнь озвучит конец игры
     pop('-1', C.bad, cat.x, FLOOR - 19);
     hudLives(true);
     if (g.lives <= 0) end();
@@ -509,6 +513,7 @@
     fit(); // окно могли поменять, пока вкладка была в фоне (там нет ни кадров, ни событий resize)
     reset();
     g.state = 'play';
+    snd('tap');
     over.hidden = true;
     frame.classList.add('playing');
     pauseBtn.disabled = false;
@@ -548,6 +553,7 @@
     pauseIcon(false);
     const score = g.score, ms = Math.round(g.t * 1000);
     const rec = best > 0 && score > best;
+    snd(rec ? 'win' : 'lose');
     if (!token()) { guestBest = Math.max(guestBest, score); best = guestBest; }
     showOver(score, ms, rec);
     save(score, ms, g.runP);

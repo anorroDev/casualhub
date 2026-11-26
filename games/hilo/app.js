@@ -186,6 +186,7 @@
     board.insertAdjacentHTML('beforeend', overBox(had));
   }
 
+  const snd = (n, p) => { if (window.CasualSound) window.CasualSound.play(n, p); }; // звуки — /games/sound.js
   // ---------- таймер хода: только показывает, срок считает сервер ----------
   function stopTimer() { cancelAnimationFrame(S.raf); S.raf = 0; }
   function tick() {
@@ -195,7 +196,7 @@
       const left = Math.max(0, S.end - performance.now());
       const sec = String(Math.ceil(left / 1000));
       const el = document.getElementById('hlSec'), m = document.getElementById('hlMeter'), box = document.getElementById('hlTime');
-      if (el && el.textContent !== sec) el.textContent = sec;
+      if (el && el.textContent !== sec) { el.textContent = sec; if (left > 0 && +sec <= 3) snd('tick'); }
       if (m) m.style.setProperty('--p', (left / (S.ms || 15000)).toFixed(4));
       if (box) box.classList.toggle('low', left <= 5000);
       if (left <= 0) { timeUp(); return; }
@@ -248,6 +249,7 @@
   function endLocal(why, beacon) {
     if (!S.live) return;
     stop();
+    snd('lose');
     const run = S.run;
     // ушёл, пока был виден балл после верного ответа: на сервере уже новая пара — её и показываем
     if (S.phase === 'wait' && S.next) { S.a = S.next.a; S.b = S.next.b; }
@@ -274,6 +276,7 @@
     Object.assign(S, { run: d.run, a: d.a, b: d.b, ms: d.ms || 15000, streak: 0, xp: 0, over: null, reveal: null, next: null, busy: false, phase: 'play', live: true });
     S.end = performance.now() + S.ms;
     renderBoard('start');
+    snd('tap');
     arm();
     // пока шёл запрос, ушёл с вкладки или переключил окно — игра не начинается
     if (document.visibilityState === 'hidden' || !focused()) { leave(false); return; }
@@ -305,6 +308,7 @@
     if (d.over) {
       stop();
       if (d.ok) { S.streak = d.streak; S.xp += d.xp || 0; }
+      snd(d.ok || d.over.record ? 'win' : 'lose');
       finish(d.over);
       return;
     }
@@ -312,6 +316,7 @@
     S.streak = d.streak; S.xp += d.xp || 0; S.best = Math.max(S.best, d.streak);
     S.phase = 'wait'; S.reveal = d.score; S.next = d;
     openB(d.score, 'good');
+    snd('good');
     bump();
     if (!token()) renderSide();
     if (d.b && d.b.img) { const im = new Image(); im.decoding = 'async'; im.src = d.b.img; }

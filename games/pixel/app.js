@@ -318,6 +318,7 @@
     if (over) clockT = setInterval(() => { clock(); if (S && S.next - (Date.now() + skew) <= 0) { clearInterval(clockT); setTimeout(load, 1500); } }, 1000);
   }
 
+  const snd = (n, p) => { if (window.CasualSound) window.CasualSound.play(n, p); }; // звуки — /games/sound.js
   // ---------- ответ ----------
   async function submit(skip) {
     if (busy || !S || !S.ready || done()) return;
@@ -332,6 +333,7 @@
       const d = await api('POST', '/games/pixel/guess', body);
       S = d;
       if (S.guest) guestSave();
+      if (d.right != null) snd(S.solved && d.right ? 'win' : done() ? 'lose' : skip ? 'skip' : 'bad');
       // верный ответ и конец игры объявляет сам итог; мимо — строка под полем
       if (d.right === false && !done()) setMsg(skip ? 'Пропущено — картинка стала чётче' : 'Мимо — картинка стала чётче', 'err');
       else setMsg('');

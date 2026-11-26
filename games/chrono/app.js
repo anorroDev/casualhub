@@ -250,9 +250,11 @@
       if (Math.abs(dy) > 1) el.animate([{ transform: `translateY(${dy}px)` }, { transform: 'none' }], { duration: 200, easing: 'cubic-bezier(.2, .8, .2, 1)' });
     });
   }
+  const snd = (n, p) => { if (window.CasualSound) window.CasualSound.play(n, p); }; // звуки — /games/sound.js
   function move(id, dir, focus) {
     const k = order.indexOf(id), j = k + dir;
     if (k < 0 || j < 0 || j >= order.length || S.result || busy) return;
+    snd('tap');
     const was = tops();
     [order[k], order[j]] = [order[j], order[k]];
     renderList(was);
@@ -362,6 +364,7 @@
     }
     busy = false;
     paint();
+    if (fresh) snd(S.result.perfect ? 'win' : S.result.score * 2 >= S.result.max ? 'good' : 'bad');
     // кнопки «Проверить» больше нет: фокус — на счёт (экранный диктор прочтёт итог), страница не прыгает
     const sc = document.getElementById('crScore');
     if (sc) sc.focus({ preventScroll: true });
