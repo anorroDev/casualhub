@@ -158,7 +158,8 @@
   F.shares = new Map(); // id оценки -> код ссылки
   async function loadShares() {
     if (!F.me) return;
-    try { F.shares = new Map(((await api('/shares')).items || []).map((x) => [x.rid, x.id])); } catch (e) {}
+    const live = sessionMark();
+    try { const d = await api('/shares'); if (live()) F.shares = new Map((d.items || []).map((x) => [x.rid, x.id])); } catch (e) {}
     try { renderBoard(); } catch (e) {}
   }
   window.CasualShare = {
@@ -226,7 +227,7 @@
     }
     let out = {};
     try { out = await res.json(); } catch (e) {}
-    if (res.status === 401 && token && token === F.token && path !== '/login' && path !== '/register') dropSession();
+    if (res.status === 401 && token && token === F.token && path !== '/login' && path !== '/register') dropSession(token);
     if (!res.ok) {
       const err = new Error(out.error || 'Сервер не отвечает.');
       err.status = res.status;
@@ -237,12 +238,22 @@
     return out;
   }
 
-  function dropSession() {
-    if (state.user) setTokenFor(state.user.id, null);
+  // сервер не принял токен: стираем только его. В соседней вкладке могли уже войти заново — её свежий токен
+  // лежит под тем же профилем, и эта вкладка возьмёт его сама (обработчик storage внизу)
+  function dropSession(failed) {
+    if (state.user && readTokens()[state.user.id] === failed) setTokenFor(state.user.id, null);
     F.token = null;
     F.me = null;
     F.friends = []; F.incoming = []; F.outgoing = [];
     F.shelves.clear();
+    F.follow = []; F.followFeed = []; paintFollow(); renderFollowFeed(); // кружок на «Журнале» и подписки — прошлого входа
+  }
+  // вход, с которым начали запрос: live() — он ещё тот же. Поменялся, пока ждали ответ (вышли, вошли другим, переключили
+  // профиль, вошли заново), — ответ уже не для этого входа, и его не применяем: иначе оценки и ник одного аккаунта попали бы
+  // в другой. Токен, который сервер только что не принял (401 → dropSession), — не другой вход
+  function sessionMark() {
+    const uid = state.user ? state.user.id : null, tok = F.token;
+    return () => (state.user ? state.user.id : null) === uid && (!F.token || F.token === tok);
   }
   function setView(v) { if (v !== F.view) F.animated = null; F.view = v; lsSet(VIEW_KEY, v); }
 
@@ -265,38 +276,51 @@
       F.shelves.clear();
       F.linkError = '';
       F.pushedAt = null;
+      F.follow = []; F.followFeed = []; // подписки прошлого аккаунта: их кружок и лента гаснут ниже (checkFollow)
       if (F.sessionUser !== undefined && F.view !== 'all') setView('all');
     }
     F.token = uid ? readTokens()[uid] || null : null;
     authSignal(uid);
     F.me = null;
+    // пока шли запросы, вход поменялся: дальше синхронизирует уже новый вход (он сам запустил syncSession)
+    const live = sessionMark();
     // старый профиль без онлайн-сессии подключается к аккаунту при входе (loginUser ниже): пароля в браузере больше нет
     if (F.online && F.token) {
       try {
-        F.me = (await api('/me')).user;
+        const me = (await api('/me')).user;
+        if (!live()) return;
+        F.me = me;
         if (state.user && state.user.serverId !== F.me.id) { state.user.serverId = F.me.id; saveUsers(); }
         adoptAccount(F.me);
         forgetPass();
         await syncAvatar();
+        if (!live()) return;
         await refreshFriends();
+        if (!live()) return;
         await pullOwnShelf(); // сначала забираем свои оценки с сервера, потом отправляем общий список
+        if (!live()) return;
         pushShelf();
         loadReacts(F.me.id, true).then(() => decorateOwn());
         loadShares();
       } catch (e) {}
     }
+    if (!live()) return;
     if (F.view !== 'all' && !F.friends.some((f) => f.id === F.view)) setView('all');
     redraw();
-    if (F.me) loadFollow().then(() => checkFollow(true));
+    if (F.me) loadFollow().then(() => checkFollow(true)); else checkFollow();
   }
 
   // свои оценки с сервера: на новом устройстве появятся все, на старом добавятся недостающие.
   // Совпадающие по id остаются в более свежей версии; фото на сервер не уходят, поэтому у местных оценок они сохраняются.
   async function pullOwnShelf() {
     if (!F.me || !state.user) return;
+    // после каждого ожидания сверяем вход: оценки аккаунта кладём только в его профиль (автор — state.user ниже)
+    const same = sessionMark(), meId = F.me.id, live = () => same() && !!F.me && F.me.id === meId;
     try { await ready; } catch (e) {}
+    if (!live()) return;
     let r;
-    try { r = await api('/shelf/' + encodeURIComponent(F.me.id)); } catch (e) { return; }
+    try { r = await api('/shelf/' + encodeURIComponent(meId)); } catch (e) { return; }
+    if (!live()) return;
     const remote = r && Array.isArray(r.ratings) ? r.ratings : [];
     const remoteDeleted = r && Array.isArray(r.deleted) ? r.deleted : [];
     const stampOf = (x) => +new Date(x.updatedAt || x.createdAt || 0) || 0;
@@ -332,9 +356,11 @@
         const needs = !localData || (fp(localData) !== remotePhoto.remote && stampOf(rr) >= stampOf(loc));
         if (needs) {
           try {
-            const ph = await api('/photo/' + encodeURIComponent(F.me.id) + '/' + encodeURIComponent(rr.id));
+            const ph = await api('/photo/' + encodeURIComponent(meId) + '/' + encodeURIComponent(rr.id));
+            if (!live()) return;
             if (ph && ph.data) { loc.photo = { id: ph.data, data: ph.data, w: remotePhoto.w || 0, h: remotePhoto.h || 0 }; sent[rr.id] = fp(ph.data); photos++; }
           } catch (e) {}
+          if (!live()) return;
         }
       }
     }
@@ -353,9 +379,11 @@
             seen.add(rid);
             if (parts.length > 1 && (artistGet(part) || {}).ava) continue;
             try {
-              const ph = await api('/photo/' + encodeURIComponent(F.me.id) + '/' + encodeURIComponent(rid));
+              const ph = await api('/photo/' + encodeURIComponent(meId) + '/' + encodeURIComponent(rid));
+              if (!live()) return;
               if (ph && ph.data) { artistSetAva(part, ph.data, true); sent[rid] = avaFp(ph.data); photos++; }
             } catch (e) {}
+            if (!live()) return;
           }
         }
       } catch (e) { console.error('artist avatars', e); } // не мешаем сохранить полученные оценки
@@ -421,11 +449,13 @@
 
   async function refreshFriends() {
     if (!F.me) return;
+    const live = sessionMark();
     try {
       const r = await api('/friends');
+      if (!live()) return; // друзья прошлого входа
       F.friends = r.friends; F.incoming = r.incoming; F.outgoing = r.outgoing;
       if (F.view !== 'all' && !F.friends.some((f) => f.id === F.view)) setView('all');
-    } catch (e) { say(e.message, true); }
+    } catch (e) { if (!live()) return; say(e.message, true); }
     redraw();
   }
 
@@ -569,32 +599,36 @@
     const sent = readJSON(PHOTOS_KEY, {});
     const thumbs = readJSON(THUMBS_KEY, {});
     let changed = false, tChanged = false, busy = 0;
+    // фото профиля уходят с его токеном, даже если пока шла отправка вошли другим (тогда дальше не шлём): иначе они легли бы
+    // в чужой аккаунт, а здесь считались бы отправленными
+    const tok = F.token, gone = () => F.token !== tok;
     // сервер попросил подождать (429): остальные фото уйдут со следующей отправкой, через столько, сколько он сказал
     const pause = (e) => { busy = Math.max(65e3, ((e && e.retryAfter) || 0) * 1000); };
     for (const r of state.ratings.filter(ownsRating)) {
-      if (busy) break;
+      if (busy || gone()) break;
       const d = photoData(r.photo);
       if (!d) continue;
       const f = fp(d);
       if (sent[r.id] !== f) {
-        try { await api('/photo/' + encodeURIComponent(r.id), 'PUT', { data: d }); sent[r.id] = f; changed = true; }
+        try { await api('/photo/' + encodeURIComponent(r.id), 'PUT', { data: d }, tok); sent[r.id] = f; changed = true; }
         catch (e) { if (e.status === 413) { sent[r.id] = f; changed = true; } if (e.status === 429) { pause(e); break; } }
       }
       // превью уходит и для старых фото, и для слишком больших, которые сервер не принял целиком
       if (thumbs[r.id] !== f) {
         const t = await thumbOf(d);
         if (t) {
-          try { await api('/photo/' + encodeURIComponent(r.id + '.t'), 'PUT', { data: t }); thumbs[r.id] = f; tChanged = true; } catch (e) { if (e.status === 429) pause(e); }
+          try { await api('/photo/' + encodeURIComponent(r.id + '.t'), 'PUT', { data: t }, tok); thumbs[r.id] = f; tChanged = true; } catch (e) { if (e.status === 429) pause(e); }
         }
       }
     }
     // аватарки исполнителей (музыка): одна картинка на исполнителя по адресу art.<хеш имени>
     if (typeof artistsMap === 'function' && !busy) {
       for (const a of Object.values(artistsMap())) {
+        if (gone()) break;
         if (!a || !a.name || !a.fp || typeof a.ava !== 'string' || !a.ava.startsWith('data:image/')) continue;
         const rid = artistRid(a.name);
         if (sent[rid] === a.fp) continue;
-        try { await api('/photo/' + encodeURIComponent(rid), 'PUT', { data: a.ava }); sent[rid] = a.fp; changed = true; } catch (e) { if (e.status === 429) break; }
+        try { await api('/photo/' + encodeURIComponent(rid), 'PUT', { data: a.ava }, tok); sent[rid] = a.fp; changed = true; } catch (e) { if (e.status === 429) break; }
       }
     }
     if (changed) lsSet(PHOTOS_KEY, JSON.stringify(sent));
@@ -606,18 +640,24 @@
   async function pushShelf() {
     if (!F.me) return false;
     if (claimGuestRatings()) { saveLocalRatingsQuiet(); renderBoard(); }
+    // вошли другим, пока шла отправка: оценки нового входа отправит его же синхронизация, а итог прошлой — не для этого окна.
+    // Вход просто кончился (401) — не «другой»: про это человеку скажем, как раньше
+    const live = sessionMark();
     let ok = false;
     try {
       // не все фото ушли (сервер попросил подождать): досылаем, когда он разрешит
       let later = 0;
       try { later = await uploadPhotos(); } catch (e) { console.error('photos', e); } // сбой с фото не должен остановить отправку оценок
+      if (!live()) return false;
       if (later) { clearTimeout(F.photoRetry); F.photoRetry = setTimeout(() => pushShelf(), later); }
       const r = await api('/shelf', 'PUT', { ratings: myRatings(), deleted: readJSON(DELETED_KEY, []), cats: catsPayload() });
+      if (!live()) return true;
       F.pushedAt = r.updatedAt;
       F.pushedCount = r.count;
       F.pushErr = '';
       ok = true;
     } catch (e) {
+      if (!live()) return false;
       F.pushErr = e.message || 'неизвестная ошибка';
       say(e.message, true);
       // без связи — это нормально (оценки уйдут позже), а вот отказ сервера человеку надо показать, иначе оценки «пропадают» между устройствами
@@ -983,7 +1023,8 @@ ${ICON.chev}
   const SEEN_KEY = 'casualhub.followSeen.v1'; // { id друга: когда последний раз смотрели его новые оценки }
   F.follow = []; F.followFeed = [];
   async function loadFollow() {
-    try { F.follow = ((await api('/follow')) || {}).ids || []; } catch (e) { return; }
+    const live = sessionMark();
+    try { const d = await api('/follow'); if (!live()) return; F.follow = (d || {}).ids || []; } catch (e) { return; }
     // подписка с другого устройства: старые оценки не считаем новыми
     const seen = readJSON(SEEN_KEY, {});
     let ch = false;
@@ -993,7 +1034,9 @@ ${ICON.chev}
   async function checkFollow(force) {
     const ids = F.me ? F.follow.filter((id) => F.friends.some((f) => f.id === id)) : [];
     if (!ids.length) { F.followFeed = []; paintFollow(); renderFollowFeed(); return; }
+    const live = sessionMark();
     await Promise.all(ids.map((id) => loadShelf(id, force)));
+    if (!live() || !F.me) return; // лента подписок прошлого входа
     const seen = readJSON(SEEN_KEY, {});
     const items = [];
     for (const id of ids) {
@@ -1245,8 +1288,9 @@ ${ICON.chev}
   // аватар общий для аккаунта: на новом устройстве подтягивается с сервера (avatar-sync.js)
   async function syncAvatar() {
     if (!window.CasualAvatar || !F.me || !state.user) return;
+    const live = sessionMark();
     const ch = await window.CasualAvatar.sync(F.me.id, F.token);
-    if (!ch || !state.user) return;
+    if (!ch || !state.user || !live()) return; // аватар прошлого входа в другой профиль не кладём
     state.user.avatar = ch.still;
     state.users.forEach((u) => { if (u.id === state.user.id) u.avatar = ch.still; });
     state.ratings.forEach((r) => { if (r.author && r.author.id === state.user.id) r.author = { ...r.author, avatar: ch.still }; });
@@ -1467,6 +1511,22 @@ ${ICON.chev}
       return o.apply(this, arguments);
     };
   }
+
+  // вход поменяли в соседней вкладке (вошли заново, вышли, переключили профиль): здесь тот же профиль и тот же токен.
+  // Иначе эта вкладка ходила бы со старым токеном и показывала прошлый аккаунт
+  addEventListener('storage', (e) => {
+    if (e.key !== null && e.key !== TOKENS_KEY && e.key !== 'ocenshik.user.v1') return;
+    const cur = readJSON('ocenshik.user.v1', null), curId = (cur && cur.id) || null;
+    if (curId !== (state.user ? state.user.id : null) && typeof loadUsers === 'function') {
+      try {
+        loadUsers();
+        if (!curId) state.user = null; // там вышли: loadUsers профиль сам не снимает
+        renderUserBar(); renderBoard();
+      } catch (x) {}
+    }
+    const uid = state.user ? state.user.id : null;
+    if (uid !== F.sessionUser || (uid ? readTokens()[uid] || null : null) !== F.token) syncSession();
+  });
 
   // ---------- старт ----------
   (async () => {
