@@ -397,6 +397,14 @@
 @media (max-width: 700px) { .sh-tabs { -webkit-mask: linear-gradient(90deg, #000 82%, transparent); mask: linear-gradient(90deg, #000 82%, transparent); } }
 .sh-body { overflow-y: auto; padding: 18px 26px 24px; display: grid; gap: 14px; align-content: start; }
 .sh-note { margin: 0; font-size: 13px; color: var(--ink-3, #8a8f9e); line-height: 1.45; }
+.sh-bond { display: grid; gap: 7px; padding: 12px 14px; border: 1px solid var(--line, #2b2e38); border-radius: 14px; }
+.sh-bond-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-size: 14px; }
+.sh-bond-top span { color: #E4553F; font-weight: 700; }
+.sh-bond-bar { position: relative; height: 10px; border-radius: 6px; background: color-mix(in srgb, var(--ink, #f3f4f6) 10%, transparent); overflow: hidden; }
+.sh-bond-bar i { position: absolute; inset: 0 auto 0 0; border-radius: inherit; background: #E4553F; }
+/* деления — ступени отношений (каждые 20) */
+.sh-bond-bar::after { content: ""; position: absolute; inset: 0; background: repeating-linear-gradient(90deg, transparent 0 calc(20% - 2px), var(--panel, #15171d) calc(20% - 2px) 20%); }
+.sh-bond small { font-size: 12px; color: var(--ink-3, #8a8f9e); line-height: 1.4; }
 .sh-h3 { margin: 6px 0 0; font-size: 14px; }
 .sh-me { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border-radius: 16px; border: 1px dashed var(--line, #2b2e38); }
 .sh-me small { display: block; font-size: 12px; color: var(--ink-3, #8a8f9e); }
@@ -524,12 +532,19 @@ html.unslop .sh-it.on { box-shadow: none; }`;
     tier: 'Тема задаёт цвета рядов новых тир-листов, палитру рядов и фон картинки, когда скачиваешь тир-лист.',
     site: 'Фон и курсор видишь только ты, на всех страницах сайта. Курсор — на компьютере, на телефоне его нет.',
   };
+  // отношения с Васяном (vasyan.js, CasualVasyan.bond): ступень, полоска 0–100 с делениями по ступеням, как поднять
+  function bondHTML() {
+    const V = window.CasualVasyan, b = D.vasyan && V && V.bond ? V.bond() : null;
+    if (!b) return '';
+    const hint = b.next == null ? 'Выше некуда: Васян тебя обожает' : 'Гладь без спешки, корми и убирай лоток — дружба растёт. Бросать и пугать — падает';
+    return `<div class="sh-bond"><div class="sh-bond-top"><b>Отношения с Васяном</b><span>${esc(b.name)}</span></div><div class="sh-bond-bar" role="progressbar" aria-label="Отношения с Васяном" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${b.v}" aria-valuetext="${esc(b.name)}"><i style="width:${b.v}%"></i></div><small>${hint}</small></div>`;
+  }
   function listHTML(k) {
     const items = (D.items || []).filter((x) => x.sec === k);
     const group = (kind, title) => { const xs = items.filter((x) => x.kind === kind); return xs.length ? `${title ? `<h3 class="sh-h3">${title}</h3>` : ''}<div class="sh-grid">${xs.map(card).join('')}</div>` : ''; };
     const note = (t) => `<p class="sh-note">${t}</p>`;
     if (k === 'vasyan') {
-      return note(D.vasyan
+      return bondHTML() + note(D.vasyan
         ? 'Окрасы, наряды, миски, лотки и еда для котика Васяна. Купленное надевается здесь же или в Настройках → «Внешний вид». Еда открывается и сама: по одной за каждый уровень, начиная со 2-го, — купить можно раньше. Часть мисок и лотков не продаётся: их открывают достижения, некоторые — тайные.'
         : 'Котик Васян есть у первой десятки и у всех с 25-го уровня. Окрасы, наряды, миски, лотки и еда откроются, когда он появится у тебя.') + group('skin', 'Окрасы') + group('outfit', 'Наряды') + group('bowl', 'Миски') + group('box', 'Лотки') + group('food', 'Еда');
     }

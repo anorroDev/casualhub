@@ -482,7 +482,8 @@
 .vy-bowl.land .vy-bowl-in { transform-origin: 50% 100%; animation: vy-land .3s steps(3, jump-none); }
 .vy-bowl.add svg, .vy-box.add svg { animation: vy-hop .3s steps(2, jump-none); }
 /* рассыпанная еда — под миской и котиком */
-.vy-spill { position: fixed; left: 0; top: 0; z-index: 39; pointer-events: none; line-height: 0; }
+.vy-spill { position: fixed; left: 0; top: 0; z-index: 39; line-height: 0; cursor: grab; touch-action: none; -webkit-tap-highlight-color: transparent; }
+.vy-spill.drag { cursor: grabbing; z-index: 60; }
 .vy-spill svg { display: block; }
 /* лоток — за котиком; пока он в лотке, поверх него — только передняя стенка (.vy-box-front) */
 .vy-box, .vy-poo { position: fixed; left: 0; top: 0; z-index: 39; padding: 0; margin: 0; border: 0; background: none; line-height: 0; -webkit-tap-highlight-color: transparent; }
@@ -562,6 +563,8 @@
   // злость 0–100 (много кликов, бросили, грязный лоток): проходит сама, пока сайт закрыт — тоже (1 пункт за 5 секунд)
   st.anger = Math.max(0, Math.min(100, (+st.anger || 0) - (st.at ? Math.max(0, now0 - st.at) / 5000 : 0)));
   st.at = now0;
+  // отношения 0–100 (BOND ниже): у нового котика — «Привыкает», у того, кого уже много гладили, — повыше
+  st.bond = Number.isFinite(+st.bond) ? Math.max(0, Math.min(100, +st.bond)) : (+st.pets || 0) > 30 ? 45 : 25;
   coat = coatOf(st.skin); outfit = outfitOf(st.outfit); bowlSkin = bowlOf(st.bowlSkin); boxSkin = boxSkinOf(st.boxSkin);
   // эти поля пишутся всегда: по ним другая вкладка отличает запись этой версии от записи старой (там их нет совсем)
   st.bowlSkin = bowlSkin.id; st.boxSkin = boxSkin.id; st.flip = !!st.flip;
@@ -623,10 +626,13 @@
     // весь сдвиг сжимался к левому верхнему углу, и схваченный Васян висел далеко от курсора
     cat.dataset.noPress = '';
     cat.setAttribute('aria-label', 'Котик Васян: нажми, чтобы погладить, или перетащи');
+    bondLabel(); // подсказка при наведении — как он к тебе относится
     cat.innerHTML = '<span class="vy-body"></span>';
     body = cat.firstChild;
     cat.addEventListener('pointerdown', down);
     cat.addEventListener('click', (e) => { e.preventDefault(); if (dragged) { dragged = false; return; } pet(); });
+    // любит — встречает сердечком, когда открываешь страницу
+    if (bondLv() >= 3) setTimeout(() => { if (alive && cat && !BUSY.includes(mode) && !grumpy()) { hearts(2); say('love'); } }, 1500);
     document.body.append(box, bowl, cat, boxFront);
     measure();
     x = Math.min(innerWidth - 80, 90 + Math.random() * Math.max(40, innerWidth / 3));
@@ -823,6 +829,9 @@
     const q = { n, food, seed, x: 0, y: 0, s: null, ox: 0, w: 0, h: 0, mode: 'rest', vy: 0, el: document.createElement('span') };
     q.el.className = 'vy-spill';
     q.el.setAttribute('aria-hidden', 'true');
+    q.el.dataset.noPress = '';
+    // кучку можно утащить и бросить, как миску: где встанет — туда Васян и пойдёт доедать (pileLand)
+    q.el.addEventListener('pointerdown', (e) => tdown(e, q));
     document.body.insertBefore(q.el, bowl && bowl.parentNode === document.body ? bowl : null);
     sps.push(q);
     if (sps.length > 3) sps.shift().el.remove();
@@ -842,13 +851,25 @@
   function drawSpill(q) { const s = sprite(spillRows(q.n, foodOf(q.food), q.seed), K); q.el.innerHTML = s.svg; q.w = s.cw; q.h = s.ch; }
   function paintPile(q) { q.el.style.transform = `translate(${Math.round(q.x)}px, ${Math.round(q.y - q.h)}px)`; }
   function dropSpill(q) { q.el.remove(); sps = sps.filter((v) => v !== q); keepSpills(); }
-  // кучка (рассыпанное, кучка мимо лотка): держится своего блока, блок уехал — падает
+  // кучку корма отпустили или бросили: летит и падает на блок или пол («меньше движения» — сразу туда)
+  function pileFall(q, vx = 0, vy = 0) {
+    Object.assign(q, { mode: 'fall', s: null, vx, vy });
+    if (calm) { q.mode = 'rest'; q.vx = q.vy = 0; setOn(q, below(q), q.x); pileLand(q); }
+  }
+  // кучка корма встала на новое место (перенесли, бросили, уехала при прокрутке) — Васян идёт её собирать
+  function pileLand() { keepSpills(); afterBowl('drop'); }
+  // кучка (рассыпанное, кучка мимо лотка): держится своего блока, блок уехал — падает; в руке — за пальцем (tmove)
   function stepPile(q, dt) {
+    if (q.mode === 'drag') { paintPile(q); return; }
     if (q.mode === 'fall') {
       const prev = q.y;
       q.vy = Math.min(1700, q.vy + 2200 * dt); q.y += q.vy * dt;
-      const hit = hitBelow(q, prev);
-      if (hit !== undefined) { q.mode = 'rest'; q.vy = 0; setOn(q, hit, q.x); }
+      if (q.vx) {
+        q.x += q.vx * dt; q.vx *= Math.max(0, 1 - 1.5 * dt);
+        if (q.x < 4) { q.x = 4; q.vx = Math.abs(q.vx) * 0.4; } else if (q.x > innerWidth - q.w - 4) { q.x = innerWidth - q.w - 4; q.vx = -Math.abs(q.vx) * 0.4; }
+      }
+      const hit = q.vy > 0 ? hitBelow(q, prev) : undefined;
+      if (hit !== undefined) { q.mode = 'rest'; q.vy = 0; q.vx = 0; setOn(q, hit, q.x); if (sps.includes(q)) pileLand(q); }
     } else if (q.s && !surfaceOk(q.s)) {
       // «меньше движения»: без полёта — сразу туда, куда упала бы (как миска)
       if (calm) setOn(q, below(q), q.x); else { q.mode = 'fall'; q.s = null; q.vy = 0; }
@@ -900,9 +921,9 @@
     if (Math.abs(bw.vx) < 10) { bw.vx = 0; bw.mode = 'rest'; if (!bw.s) { st.bx = Math.round(bw.x); save(); } }
   }
 
-  // ---------- миску и лоток можно утащить мышкой или пальцем ----------
-  // o — bw (миска) или lt (лоток); o.dragged — тащили, и клик после этого — не клик
-  const elOf = (o) => (o === bw ? bowl : box);
+  // ---------- миску, лоток и кучки корма можно утащить мышкой или пальцем ----------
+  // o — bw (миска), lt (лоток) или кучка корма из sps; o.dragged — тащили, и клик после этого — не клик
+  const elOf = (o) => (o === bw ? bowl : o === lt ? box : o && o.el && o.el.isConnected ? o.el : null);
   function tdown(e, o) {
     if (e.button > 0 || o.mode === 'fall' || tpress) return;
     tpress = { o, x: e.clientX, y: e.clientY, id: e.pointerId, pts: [[performance.now(), e.clientX, e.clientY]] };
@@ -939,7 +960,8 @@
     const tvx = dt ? clamp((b[1] - a[1]) / dt, -1500, 1500) : 0, tvy = dt ? clamp((b[2] - a[2]) / dt, -1200, 1500) : 0;
     o.tilt = 0;
     if (o === bw) bowlFall('drop', tvx * 0.8, clamp(tvx * 0.6, -720, 720), tvy * 0.8);
-    else boxFall('drop', tvx * 0.5, tvy * 0.6);
+    else if (o === lt) boxFall('drop', tvx * 0.5, tvy * 0.6);
+    else pileFall(o, tvx * 0.5, tvy * 0.6);
   }
   // клик: перевёрнутую — поставить обратно (пустой: всё рассыпалось), иначе — насыпать
   function bowlClick() {
@@ -1006,7 +1028,7 @@
     if (!st.box.n && !poos.length) { hopBox(); return; }
     st.box.n = 0;
     poos.forEach((q) => q.el.remove()); poos = []; keepPoos();
-    soothe(12); save(); drawBox(); hopBox();
+    soothe(12); bond(3, 'clean', 20000); save(); drawBox(); hopBox();
     floatText(box, 'чисто!');
     if (alive && !grumpy() && !BUSY.includes(mode) && Math.abs(lt.x + lt.w / 2 - (x + size.w / 2)) < 420) hearts(2);
   }
@@ -1029,7 +1051,13 @@
 
   // ---------- корм и ласка ----------
   function feed() {
-    if (st.bowl >= 3) { say('love'); return; }
+    // полная — насыпали через край: порция просыпается рядом кучкой (её можно унести куда угодно, Васян найдёт)
+    if (st.bowl >= 3) {
+      if (bw.mode !== 'rest' || sps.length >= 3) { say('love'); return; }
+      makeSpill(1, st.food); save(); hopBowl();
+      afterBowl('drop');
+      return;
+    }
     st.bowl += 1; st.seed = newSeed(); save(); drawBowl(); // насыпали — корм лёг по-новому
     hopBowl();
     floatText(bowl, '+1');
@@ -1076,6 +1104,32 @@
   // спиной, тронешь — шипит и отмахивается лапой, назло толкает миску
   const GRUMPY = 30, CROSS = 55;
   const grumpy = () => st.anger >= GRUMPY, cross = () => st.anger >= CROSS;
+
+  // ---------- отношения ----------
+  // st.bond 0–100 — насколько Васян к тебе привязан. Растёт от заботы: погладил без спешки, поел (в том числе корм,
+  // который ты разложил), убрал лоток. Падает, когда его бросают, пугают частыми кликами, шипит на тебя, лоток грязный.
+  // Ступени — BOND: на нижней от ласки иногда отходит («хмф»), с «Любит» мурчит дольше, сердечек больше и встречает
+  // сердечком, когда открываешь страницу. Ступень — в подсказке у котика, в магазине (CasualVasyan.bond) и надписью,
+  // когда меняется. У одного действия — пауза (bondCd), чтобы закликиванием дружбу не набить
+  const BOND = [[0, 'Сторонится', 'Васян тебя сторонится'], [20, 'Привыкает', 'Васян к тебе привыкает'], [40, 'Доверяет', 'Васян тебе доверяет'],
+    [60, 'Любит', 'Васян тебя любит'], [80, 'Обожает', 'Васян тебя обожает']];
+  const bondLv = (v = st.bond) => BOND.reduce((k, [min], i) => (v >= min ? i : k), 0);
+  const bondInfo = () => { const lv = bondLv(); return { v: Math.round(st.bond), lv, name: BOND[lv][1], text: BOND[lv][2], next: BOND[lv + 1] ? BOND[lv + 1][0] : null, levels: BOND.map(([min, name]) => ({ min, name })) }; };
+  const bondCd = {};
+  const bondLabel = () => { if (cat) cat.title = BOND[bondLv()][2]; };
+  function bond(n, key, gap = 0) {
+    const now = Date.now();
+    if (key && gap && now - (bondCd[key] || 0) < gap) return;
+    if (key) bondCd[key] = now;
+    const was = bondLv();
+    st.bond = clamp(Math.round((st.bond + n) * 10) / 10, 0, 100);
+    const lv = bondLv();
+    if (lv === was) return;
+    if (cat) floatText(cat, BOND[lv][2]);
+    if (lv > was && cat && !BUSY.includes(mode)) hearts(3);
+    bondLabel();
+    document.dispatchEvent(new CustomEvent('casualhub:vasyan-bond', { detail: bondInfo() }));
+  }
   function annoy(n) {
     const was = cross();
     st.anger = Math.min(100, st.anger + n);
@@ -1102,15 +1156,20 @@
     if (mode === 'scared' || mode === 'hiss' || (mode === 'run' && runMood)) { hop(); annoy(3); return; }
     clicks.push(t);
     while (clicks.length && t - clicks[0] > 2200) clicks.shift();
-    if (cross() && !BUSY.includes(mode)) { annoy(4); hiss(t); return; }
-    if (clicks.length >= 5 && !BUSY.includes(mode)) { clicks.length = 0; annoy(15); scare(t); return; }
+    if (cross() && !BUSY.includes(mode)) { annoy(4); hiss(t); bond(-1, 'hiss', 5000); return; }
+    if (clicks.length >= 5 && !BUSY.includes(mode)) { clicks.length = 0; annoy(15); scare(t); bond(-2, 'scare', 5000); return; }
     if (clicks.length >= 3) annoy(5); else soothe(3);
-    st.pets = (+st.pets || 0) + 1; save();
+    st.pets = (+st.pets || 0) + 1;
+    // ещё сторонится — от ласки иногда отходит, но понемногу привыкает
+    if (bondLv() === 0 && !BUSY.includes(mode) && clicks.length < 3 && Math.random() < 0.4) { bond(0.5, 'shy', 8000); save(); stopPlay(); hop(); say('hmph'); return; }
+    if (clicks.length < 3) bond(1, 'pet', 12000);
+    save();
     // дуется — терпит, но не мурчит
     if (grumpy()) { if (!BUSY.includes(mode)) { stopPlay(); mode = 'sit'; until = t + 2500; } hop(); say('hmph'); return; }
-    if (!BUSY.includes(mode)) { stopPlay(); mode = 'purr'; until = t + 2400 + clicks.length * 400; }
+    const fond = bondLv() >= 3; // любит — мурчит дольше, сердечек больше
+    if (!BUSY.includes(mode)) { stopPlay(); mode = 'purr'; until = t + 2400 + clicks.length * 400 + (fond ? 1500 : 0); }
     hop();
-    hearts(Math.min(4, 1 + clicks.length));
+    hearts(Math.min(fond ? 5 : 4, 1 + clicks.length + (fond ? 1 : 0)));
     if (clicks.length >= 3) say('purr');
   }
   function scare(t) {
@@ -1146,7 +1205,7 @@
     cat.classList.remove('drag'); mode = 'fall'; vy = 0; vx = 0; surf = null; dropped = true; fallY0 = y;
     const a = p.pts[0], b = p.pts[p.pts.length - 1], dt = b[0] > a[0] && performance.now() - b[0] < 80 ? (b[0] - a[0]) / 1000 : 0;
     const tvx = dt ? (b[1] - a[1]) / dt : 0, tvy = dt ? (b[2] - a[2]) / dt : 0;
-    if (!calm && Math.hypot(tvx, tvy) > 650) { thrown = true; vx = clamp(tvx * 0.7, -1300, 1300); vy = clamp(tvy * 0.7, -1100, 1300); annoy(22); }
+    if (!calm && Math.hypot(tvx, tvy) > 650) { thrown = true; vx = clamp(tvx * 0.7, -1300, 1300); vy = clamp(tvy * 0.7, -1100, 1300); annoy(22); bond(-5, 'throw', 3000); }
     else annoy(3);
   }
 
@@ -1291,6 +1350,9 @@
     if (o && o !== bw) { o.n -= 1; if (o.n > 0) { drawSpill(o); keepSpills(); } else dropSpill(o); }
     else { st.bowl = Math.max(0, st.bowl - 1); drawBowl(); }
     st.hunger = Math.max(0, st.hunger - 70); goal = null;
+    // корм, разложенный по сайту, собирает весь, и сытый: осталась кучка — умоется и пойдёт к ней (decide → goEat)
+    if (sps.some((q) => q.n > 0)) wantEat = true;
+    bond(2, 'eat', 30000); // накормили — благодарен
     if (!st.pooAt) st.pooAt = Date.now() + (90 + Math.random() * 150) * 1000;
     soothe(20); save();
     clearBubble('think'); say('love'); mode = 'wash'; until = t + 1600 + Math.random() * 900;
@@ -1672,7 +1734,7 @@
       } else if (mode === 'refuse') {
         // лоток грязный: нюхает, фыркает — «Фу!» — злится и идёт делать рядом
         rows = frame % 4 < 2 ? EAT_A : STALK_A;
-        if (t > until) { say('ugh'); annoy(10); goal = null; if (!goToThing(lt, 'beside')) { st.pooAt = Date.now() + 60e3; decide(); } }
+        if (t > until) { say('ugh'); annoy(10); bond(-2, 'ugh', 60000); goal = null; if (!goToThing(lt, 'beside')) { st.pooAt = Date.now() + 60e3; decide(); } }
       } else if (mode === 'squat') {
         // делает рядом с лотком: кучка — за ним, на том же блоке
         rows = POTTY;
@@ -1893,7 +1955,7 @@
       coat = coatOf(v.skin); outfit = outfitOf(v.outfit); bowlSkin = bowlOf(bs); boxSkin = boxSkinOf(xs); boxSpr = null; drawBox(); applyLook();
     }
     // голод, злость, когда в лоток, сколько погладили — как там
-    for (const k of ['hunger', 'anger', 'pooAt', 'pets']) if (Number.isFinite(+v[k])) st[k] = +v[k];
+    for (const k of ['hunger', 'anger', 'pooAt', 'pets', 'bond']) if (Number.isFinite(+v[k])) st[k] = +v[k];
     // насыпали, перевернули, убрали — здесь та же миска и тот же лоток
     const portions = Math.max(0, Math.min(3, +v.bowl || 0)), flip = 'flip' in v ? !!v.flip : !!st.flip;
     if (portions !== st.bowl || flip !== !!st.flip || (+v.seed >>> 0) !== st.seed) {
@@ -2072,5 +2134,6 @@
     preview, owned: (id) => owned(kindOf(id), String(id || '').replace(/^vasyan\.(skin|outfit|food|bowl|box)\./, '')),
     skin: () => coat.id, outfit: () => outfit.id, food: () => st.food, bowl: () => bowlSkin.id, box: () => boxSkin.id, setSkin, setOutfit, setFood, setBowl, setBox,
     act: (k) => { if (alive && !BUSY.includes(mode)) act(k); },
+    bond: bondInfo, // отношения: { v, lv, name, text, next, levels } — магазин; меняются — событие casualhub:vasyan-bond
   };
 })();
