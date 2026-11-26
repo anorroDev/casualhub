@@ -438,7 +438,7 @@ export async function buy(env, uid, itemId, { rid = '', now = Date.now(), seen }
 // и возврат — одной пачкой: списание пишется, только пока он ещё ушёл и рофланов хватает, а строка ухода удаляется,
 // только если списание записала эта пачка (двойной клик не спишет дважды). Время возврата (back) — по нему vasyan.js
 // во всех браузерах аккаунта узнаёт, что Васян снова дома (/levels/me → casualhub.vasyan.back)
-export const VASYAN_BACK = 1000;
+export const VASYAN_BACK = 1500;
 // раскаяние Васян узнаёт по словам: «прости», «извини», «виноват», «больше не буду»… на трёх языках сайта
 export const SORRY = /прост|прощ|извин|винова|раска|каюсь|сожале|стыд|больше не буду|не буду больше|не повторится|пробач|вибач|винн|шкоду|сором|розка|каюся|більше не буду|не повториться|sorry|forgive|apolog|regret|ashamed|pardon|my bad|my fault|was wrong|never again/i;
 export async function vasyanBack(env, uid, letter, now = Date.now()) {

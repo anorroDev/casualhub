@@ -557,7 +557,7 @@ html.unslop .sh-it.on { box-shadow: none; }
   // Васян ушёл (отношения упали до нуля): вернуть — письмо с извинениями и рофланы (POST /shop/vasyan/back). Раскаяние
   // в письме проверяет сервер (SORRY в functions/_lib/shop.js), текст письма вписывает render (в разметке его нет)
   function backHTML() {
-    const price = +D.vasyanBackPrice || 1000, need = Math.max(0, price - (+D.balance || 0));
+    const price = +D.vasyanBackPrice || 1500, need = Math.max(0, price - (+D.balance || 0));
     return `<div class="sh-back"><b class="sh-back-h">Васян ушёл от тебя навсегда</b>
       <p class="sh-note">Отношения упали до нуля, и он ушёл. Вернуть его можно: напиши ему письмо и попроси прощения — своими словами, от души. Рофланы пойдут ему на корм и новую лежанку. Вернётся он настороженным: дружбу придётся заслужить заново.</p>
       <label class="sh-back-l" for="shBackTx">Письмо Васяну</label>
