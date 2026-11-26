@@ -17,6 +17,7 @@ import { makeRiddleRoutes } from '../_lib/riddle.js';
 import { makeCatchRoutes } from '../_lib/game-catch.js';
 import { makePixelRoutes, PIXEL_PUBLIC } from '../_lib/game-pixel.js';
 import { makeGuessRoutes } from '../_lib/guess.js';
+import { makeChronoRoutes, CHRONO_PUBLIC } from '../_lib/game-chrono.js';
 import { makeTgRoutes, tgNotify } from '../_lib/tg.js';
 import { cleanTwitchLots, twitchCounts } from '../_lib/lots-twitch.js';
 import { makeSteamRoutes } from '../_lib/steam.js';
@@ -3524,6 +3525,7 @@ Object.assign(routes, makeRiddleRoutes({ json, fail, readBody, burst, lvGive }))
 Object.assign(routes, makeCatchRoutes({ json, fail, readBody, burst, lvGive })); // «Васян ловит еду» (/api/games/catch…) — functions/_lib/game-catch.js, страница /games/catch/
 // «Угадай по пикселям» (/api/games/pixel…; играть можно и без входа — PIXEL_PUBLIC ниже) — functions/_lib/game-pixel.js, страница /games/pixel/
 Object.assign(routes, makePixelRoutes({ json, fail, readBody, burst, lvGive, currentUser, clientIp, works: { cover: coverSearch, latin: latinTitles, translit, steam: steamCards, genres: genresRu } }));
+Object.assign(routes, makeChronoRoutes({ json, fail, readBody, burst, clientIp, currentUser, lvGive, cachedJson })); // «Хронология» (/api/games/chrono…, и без входа) — functions/_lib/game-chrono.js, страница games/chrono/
 // «Угадай оценку друга» (/api/guess) — functions/_lib/guess.js
 Object.assign(routes, makeGuessRoutes({ json, fail, readBody, burst, lvGive }));
 // уведомления в Telegram (/api/tg…, вебхук /api/tg/hook — в PUBLIC) — functions/_lib/tg.js
@@ -3548,6 +3550,7 @@ Object.assign(routes, makeQrLoginRoutes({ json, fail, readBody, burst, bump, too
 
 const PUBLIC = new Set(['GET /chat', 'GET /chat/ws', 'GET /tiercoop/room', 'GET /king/room', 'GET /king/img', 'GET /plan/info', 'GET /lots/:code/predict', 'GET /lots/:code/veto', 'GET /lots/:code/bingo', 'GET /shop/look', 'GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /qr/new', 'POST /qr/poll', 'POST /login/code', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid', 'GET /mail/unsub', 'POST /mail/unsub', 'GET /levels/invite/who', 'POST /tg/hook']);
 for (const k of PIXEL_PUBLIC) PUBLIC.add(k); // «Угадай по пикселям»: гость тоже играет (functions/_lib/game-pixel.js)
+for (const k of CHRONO_PUBLIC) PUBLIC.add(k); // «Хронология»: гость играет без входа, но ничего не записывается
 // код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности
 const SHARE_RE = /^[A-Za-z0-9]{12}$/;
 function shareId() {
