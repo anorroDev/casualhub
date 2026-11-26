@@ -42,7 +42,7 @@ export async function dropQr(env, uid) {
 }
 
 // h: json, fail, readBody, burst, bump, tooMany, clientIp, sha256, randHex, newSession, ownUser, deviceLabel, findLogin,
-// totpOf, totpStep, secondFactor, BAD_CODE — из API
+// totpOf, totpStep, secondFactor, passOk, BAD_CODE — из API
 export function makeQrLoginRoutes(h) {
   const { json, fail } = h;
   const row = (env, id) => env.DB.prepare('SELECT * FROM qr_logins WHERE id = ?').bind(id).first();
@@ -82,13 +82,17 @@ export function makeQrLoginRoutes(h) {
       await env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind('code-acc:' + u.id).run();
       return json({ token: await h.newSession(env, u.id, request), user: h.ownUser({ ...u, totp: JSON.stringify({ ...t, last: st, bad: 0 }) }) });
     },
-    // Настройки → Безопасность: включить или выключить вход по коду без пароля. Нужен код из приложения (или запасной).
+    // Настройки → Безопасность: включить или выключить вход по коду без пароля. Нужен код из приложения (или запасной),
+    // а чтобы включить — ещё и текущий пароль, как у включения защиты (/2fa/enable): с одним украденным сеансом и
+    // подсмотренным кодом вход без пароля себе не сделать. Пароль проверяется до кода: неверный пароль код не тратит.
+    // Новый пароль (смена или сброс по почте) вход по коду выключает сам — NO_FREE_SQL в API.
     // Меняется только поле free (и счётчик неверных), а не весь JSON: last и запасные коды мог поменять другой вход
     async 'POST /2fa/free'({ env, request, me }) {
-      const { on, code } = await h.readBody(request);
+      const { on, code, password } = await h.readBody(request);
       if (!h.totpOf(me)) return fail(400, 'Сначала включи двухфакторную защиту.');
       const wait = await h.bump(env, 'acc:' + me.id, 'loginAcc');
       if (wait) return h.tooMany(wait);
+      if (on === true && !(await h.passOk(env, me.id, password))) return fail(403, password ? 'Текущий пароль не подходит.' : 'Чтобы включить вход по коду, впиши текущий пароль.');
       if (!(await h.secondFactor(env, me, code))) return fail(403, h.BAD_CODE);
       await env.DB.prepare(on === true
         ? "UPDATE users SET totp = json_set(totp, '$.free', 1, '$.bad', 0) WHERE id = ? AND totp IS NOT NULL"

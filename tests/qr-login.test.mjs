@@ -20,7 +20,7 @@ function fakeD1() {
   return { raw: db, prepare: (sql) => stmt(sql) };
 }
 function setup(over = {}) {
-  const sessions = [], limits = [], steps = [];
+  const sessions = [], limits = [], steps = [], factors = [];
   const h = {
     json: (data, status = 200) => ({ status, data }),
     fail: (status, error) => ({ status, data: { error } }),
@@ -38,7 +38,9 @@ function setup(over = {}) {
     findLogin: async (env, ident) => env.DB.raw.prepare('SELECT * FROM users WHERE uname = ? OR email = ?').get(ident.replace(/^@+/, '').toLowerCase(), ident.toLowerCase()) ?? null,
     totpOf: (u) => { try { const t = u && u.totp ? JSON.parse(u.totp) : null; return t && t.s ? t : null; } catch (e) { return null; } },
     totpStep: async (secret, code, last, offsets) => { steps.push(offsets); return String(code) === '123456' && 100 > (last || 0) ? 100 : 0; },
-    secondFactor: async (env, u, code) => String(code) === '123456',
+    secondFactor: async (env, u, code) => { factors.push(code); return String(code) === '123456'; },
+    // текущий пароль тестера — «пароль-ок»
+    passOk: async (env, uid, password) => uid === 'u1' && password === 'пароль-ок',
     BAD_CODE: 'bad code',
   };
   const env = { DB: fakeD1() };
@@ -47,13 +49,13 @@ function setup(over = {}) {
   const me = { id: 'u1', username: 'Тестер', handle: 'tester' };
   const at = (id) => env.DB.raw.prepare('SELECT state, expires_at FROM qr_logins WHERE id = ?').get(id);
   return {
-    env, sessions, limits, steps, at,
+    env, sessions, limits, steps, factors, at,
     create: async () => (await R['POST /qr/new']({ env, request: req() })).data,
     poll: async (id, key, take) => (await R['POST /qr/poll']({ env, request: req(take ? { id, key, take: true } : { id, key }) })).data,
     see: async (id, who = me) => (await R['POST /qr/see']({ env, request: req({ id }, 'iPhone'), me: who })).data,
     answer: async (id, ok, who = me) => R['POST /qr/answer']({ env, request: req({ id, ok }, 'iPhone'), me: who }),
     byCode: async (login, code) => R['POST /login/code']({ env, request: req({ login, code }) }),
-    free: async (on, code) => { const u = env.DB.raw.prepare('SELECT * FROM users WHERE id = ?').get('u1'); return R['POST /2fa/free']({ env, request: req({ on, code }, 'iPhone'), me: { ...me, totp: u.totp } }); },
+    free: async (on, code, password = 'пароль-ок') => { const u = env.DB.raw.prepare('SELECT * FROM users WHERE id = ?').get('u1'); return R['POST /2fa/free']({ env, request: req({ on, code, password }, 'iPhone'), me: { ...me, totp: u.totp } }); },
   };
 }
 const viewer = { id: 'u2', username: 'Зритель', handle: 'viewer' };
@@ -177,6 +179,27 @@ test('вход по коду из приложения: только если в
   const offAgain = await s.free(false, '123456');
   assert.equal(offAgain.data.user.codeLogin, false);
   assert.equal((await s.byCode('@tester', '123456')).status, 401, 'выключил — снова только пароль');
+});
+
+test('вход по коду без пароля: включить — только с текущим паролем (укравшему сеанс не включить), выключить — без него', async () => {
+  const s = setup();
+  const db = s.env.DB.raw;
+  const totp = () => JSON.parse(db.prepare('SELECT totp FROM users WHERE id = ?').get('u1').totp);
+  db.prepare('UPDATE users SET totp = ? WHERE id = ?').run(JSON.stringify({ s: 'S', last: 0, codes: ['x'] }), 'u1');
+  const none = await s.free(true, '123456', '');
+  assert.deepEqual([none.status, none.data.error], [403, 'Чтобы включить вход по коду, впиши текущий пароль.']);
+  const wrong = await s.free(true, '123456', 'чужой');
+  assert.deepEqual([wrong.status, wrong.data.error], [403, 'Текущий пароль не подходит.']);
+  assert.equal(totp().free, undefined, 'без пароля вход по коду не включился');
+  assert.equal(s.factors.length, 0, 'неверный пароль код из приложения (или запасной) не тратит: пароль проверяется раньше');
+  assert.ok(s.limits.filter(([k, kind]) => k === 'acc:u1' && kind === 'loginAcc').length >= 2, 'попытки пароля считаются, как в Настройках');
+  const ok = await s.free(true, '123456');
+  assert.equal(ok.data.user.codeLogin, true);
+  assert.equal(totp().free, 1);
+  const off = await s.free(false, '123456', '');
+  assert.equal(off.status, 200, 'выключить можно и без пароля');
+  assert.equal(off.data.user.codeLogin, false);
+  assert.equal(totp().free, undefined);
 });
 
 test('вход по коду из приложения: заблокированный не входит, лимиты попыток работают', async () => {

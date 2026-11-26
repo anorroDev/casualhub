@@ -25,7 +25,7 @@ import { makePlanInfoRoutes } from '../_lib/plan-info.js';
 import { findWorks, WORK_KINDS, IMDB_KIND } from '../_lib/works.js';
 import { makeTierCoopRoutes } from '../_lib/tiercoop.js';
 import { makeChatRoutes, ensureChat, chatDrop, chatGone, CHAT_USER_SQL } from '../_lib/chat.js';
-import { makeQrLoginRoutes, dropQr } from '../_lib/qr-login.js';
+import { makeQrLoginRoutes, dropQr, netOf } from '../_lib/qr-login.js';
 
 const enc = new TextEncoder();
 const ITER = 10000;
@@ -122,6 +122,8 @@ async function ensureScheme(env) {
   try {
     const shelves = (await env.DB.prepare('PRAGMA table_info(shelves)').all()).results;
     if (!shelves.some((c) => c.name === 'pub')) await env.DB.prepare('ALTER TABLE shelves ADD COLUMN pub TEXT').run();
+    // priv — id оценок «только я» (как pub — открытых всем): фото друзьям отдаётся без разбора всей полки
+    if (!shelves.some((c) => c.name === 'priv')) await env.DB.prepare('ALTER TABLE shelves ADD COLUMN priv TEXT').run();
     const tiers = (await env.DB.prepare('PRAGMA table_info(tierlists)').all()).results;
     if (!tiers.some((c) => c.name === 'pub')) await env.DB.prepare('ALTER TABLE tierlists ADD COLUMN pub INTEGER NOT NULL DEFAULT 0').run();
   } catch (e) {}
@@ -260,6 +262,17 @@ async function findLogin(env, ident) {
   const { results: same } = await env.DB.prepare(`SELECT ${LOGIN_COLS} FROM users WHERE nkey = ? LIMIT 2`).bind(cleanName(ident).toLowerCase()).all();
   return same.length === 1 ? same[0] : null;
 }
+// верный ли текущий пароль (включить защиту или вход по коду — functions/_lib/qr-login.js). Попытку считает тот, кто зовёт
+async function passOk(env, uid, password) {
+  const pass = String(password || '');
+  if (!pass || pass.length > 200) return false;
+  const row = await env.DB.prepare('SELECT pass_hash, salt FROM users WHERE id = ?').bind(uid).first();
+  return !!row && sameHex(await hashPass(pass, row.salt), row.pass_hash);
+}
+// новый пароль (смена или сброс по почте) выключает вход по коду без пароля: если пароль меняют, потому что аккаунт
+// угнали, чужой вход по коду не должен пережить смену. Только поле free, остальное в totp не трогаем
+const NO_FREE_SQL = "totp = CASE WHEN json_valid(totp) THEN json_remove(totp, '$.free') ELSE totp END";
+const withoutFree = (totp) => { const t = totpOf({ totp }); if (!t || !t.free) return totp; const rest = { ...t }; delete rest.free; return JSON.stringify(rest); };
 
 // ---------- письма (Resend): сброс пароля и подтверждение почты. Ключи — в настройках Cloudflare ----------
 // MAIL_KEY — ключ Resend, MAIL_FROM — отправитель с подтверждённого в Resend домена, например «Казуал Хаб <no-reply@домен>»
@@ -377,7 +390,10 @@ const LIMITS = {
   forgotAcc: { max: 3, win: 60 * 60e3 },
   verifyMail: { max: 3, win: 60 * 60e3 },
   loginIp: { max: 30, win: 15 * 60e3 },
+  // вход по паролю: 10 неверных на аккаунт с одной сети (у IPv6 — /64, netOf) — и стоп только для этой сети, со всех сетей
+  // вместе — 100. Иначе чужие 10 попыток запирали бы аккаунт и для хозяина. Тот же loginAcc — у пароля в Настройках ('acc:')
   loginAcc: { max: 10, win: 15 * 60e3 },
+  loginAccAll: { max: 100, win: 15 * 60e3 },
   qrNew: { max: 30, win: 30 * 60e3 }, // коды входа по QR с одного адреса (functions/_lib/qr-login.js)
   // вход по коду из приложения без пароля: в коде всего 6 цифр, поэтому попыток мало (functions/_lib/qr-login.js;
   // главный тормоз там — 10 неверных кодов подряд выключают вход по коду совсем)
@@ -504,6 +520,60 @@ async function link(env, x, y) {
   const [a, b] = pair(x, y);
   return env.DB.prepare('SELECT status, requested_by FROM friendships WHERE a = ? AND b = ?').bind(a, b).first();
 }
+// ---------- удаление аккаунта (сам или админ): всё, где лежит его id, одной пачкой ----------
+// [таблицы, без которых строка не нужна, запрос]; ?1 — id. Порядок важен: сначала то, что ищет его сборы, турниры и
+// комнаты по owner_id, потом сами комнаты, последней — строка users. Новая таблица с id человека — допиши её сюда
+// (tests/api.test.mjs проверяет все таблицы, что создаёт код). Остаются: журнал админки (admin_log), строки invited
+// тех, кого он пригласил (это их строки), и peer в чужом xp_log — чужая история
+const OWN_LOTS = 'SELECT id FROM lot_rooms WHERE owner_id = ?1';
+const OWN_KING = 'SELECT id FROM king_rooms WHERE owner_id = ?1';
+const OWN_TIER = 'SELECT id FROM tier_rooms WHERE owner_id = ?1';
+const USER_DROP = [
+  // до удаления лотов: у сборов, где они были, новая версия, и страницы сразу перечитают список
+  [['lots'], 'UPDATE lot_rooms SET ver = ver + 1 WHERE id IN (SELECT room_id FROM lots WHERE user_id = ?1)'],
+  [['sessions'], 'DELETE FROM sessions WHERE user_id = ?1'],
+  [['admin_sessions'], 'DELETE FROM admin_sessions WHERE user_id = ?1'],
+  [['qr_logins'], 'DELETE FROM qr_logins WHERE user_id = ?1'],
+  [['mail_tokens'], 'DELETE FROM mail_tokens WHERE user_id = ?1'],
+  // лимиты попыток по его id (вход по паролю с каждой сети — «login-acc:<id>:<сеть>»)
+  [['attempts'], "DELETE FROM attempts WHERE key IN ('acc:' || ?1, 'login-acc:' || ?1, 'code-acc:' || ?1, 'forgot-acc:' || ?1, 'verify-acc:' || ?1, 'freq:' || ?1, 'react:' || ?1, 'cm:' || ?1, 'photo:' || ?1) OR (key >= 'login-acc:' || ?1 || ':' AND key < 'login-acc:' || ?1 || ';')"],
+  [['shelves'], 'DELETE FROM shelves WHERE user_id = ?1'],
+  [['tierlists'], 'DELETE FROM tierlists WHERE user_id = ?1'],
+  [['photos'], 'DELETE FROM photos WHERE user_id = ?1'],
+  [['shares'], 'DELETE FROM shares WHERE owner_id = ?1'],
+  [['friendships'], 'DELETE FROM friendships WHERE a = ?1 OR b = ?1'],
+  [['reactions'], 'DELETE FROM reactions WHERE owner_id = ?1 OR from_id = ?1'],
+  [['comments'], 'DELETE FROM comments WHERE owner_id = ?1 OR from_id = ?1'],
+  // сборы лотов: его прогнозы, вето и карточки бинго везде, а в его сборах — всё
+  [['lot_predicts'], `DELETE FROM lot_predicts WHERE user_id = ?1 OR room_id IN (${OWN_LOTS})`],
+  [['lot_vetoes'], `DELETE FROM lot_vetoes WHERE user_id = ?1 OR room_id IN (${OWN_LOTS})`],
+  [['lot_evening'], `DELETE FROM lot_evening WHERE room_id IN (${OWN_LOTS})`],
+  [['bingo_cards'], `DELETE FROM bingo_cards WHERE user_id = ?1 OR room_id IN (${OWN_LOTS})`],
+  [['bingo_games'], `DELETE FROM bingo_games WHERE room_id IN (${OWN_LOTS})`],
+  [['lots'], `DELETE FROM lots WHERE user_id = ?1 OR room_id IN (${OWN_LOTS})`],
+  [['chat_msgs'], CHAT_USER_SQL], // его сообщения в чатах и чаты его сборов — до удаления самих сборов
+  [['chat_msgs', 'king_rooms'], `DELETE FROM chat_msgs WHERE scope = 'king' AND room IN (${OWN_KING})`],
+  [['lot_rooms'], 'DELETE FROM lot_rooms WHERE owner_id = ?1'],
+  // «Царь Горы» и «Тир-лист вместе»: его голоса везде, его турниры и комнаты целиком
+  [['king_votes', 'king_rooms'], `DELETE FROM king_votes WHERE user_id = ?1 OR room_id IN (${OWN_KING})`],
+  [['king_seen', 'king_rooms'], `DELETE FROM king_seen WHERE user_id = ?1 OR room_id IN (${OWN_KING})`],
+  [['king_imgs', 'king_rooms'], `DELETE FROM king_imgs WHERE room_id IN (${OWN_KING})`],
+  [['king_rooms'], 'DELETE FROM king_rooms WHERE owner_id = ?1'],
+  [['tier_votes', 'tier_rooms'], `DELETE FROM tier_votes WHERE user_id = ?1 OR room_id IN (${OWN_TIER})`],
+  [['tier_rooms'], 'DELETE FROM tier_rooms WHERE owner_id = ?1'],
+  // уровни, магазин, Telegram, письма, советы и режимы
+  ...['xp_log', 'user_level', 'achievements', 'season_results', 'advent', 'gift_box', 'invites', 'invited', 'shop_log', 'shop_owned', 'shop_wear',
+    'tg_links', 'tg_codes', 'tg_sent', 'mail_prefs', 'mailout_queue', 'recs', 'ann_seen', 'guess_days', 'riddle_tries'].map((t) => [[t], `DELETE FROM ${t} WHERE user_id = ?1`]),
+  [['gifts'], 'DELETE FROM gifts WHERE to_id = ?1'], // письма лично ему; общие (to_id пустой) остаются
+  [['users'], 'DELETE FROM users WHERE id = ?1'],
+];
+// таблицы режимов, уровней, магазина, писем и Telegram создаются при первом обращении: в пачку идут только те, что уже
+// есть — иначе она упала бы целиком (пачка D1 — одна транзакция)
+async function dropUser(env, id) {
+  const { results } = await env.DB.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all();
+  const have = new Set((results || []).map((r) => r.name));
+  await env.DB.batch(USER_DROP.filter(([need]) => need.every((t) => have.has(t))).map(([, sql]) => env.DB.prepare(sql).bind(id)));
+}
 
 const routes = {
   async 'POST /register'({ env, request }) {
@@ -546,9 +616,17 @@ const routes = {
     const waitIp = await bump(env, ipKey, 'loginIp');
     if (waitIp) return tooMany(waitIp);
     const u = await findLogin(env, ident);
-    // счётчик на сам аккаунт, а не на написанное: «@ник», «@@ник», почта и ник — один и тот же человек
+    // счётчик на сам аккаунт, а не на написанное: «@ник», «@@ник», почта и ник — один и тот же человек.
+    // Строгий — на аккаунт с этой сети: чужие неверные пароли не запирают хозяина на его устройствах; общий на аккаунт
+    // (со всех сетей) намного выше — от подбора с многих адресов. Сеть упёрлась в свой — общий дальше не растёт
     const accKey = u ? 'login-acc:' + u.id : '';
-    if (u) { const waitAcc = await bump(env, accKey, 'loginAcc'); if (waitAcc) return tooMany(waitAcc); }
+    const netKey = u ? accKey + ':' + netOf(clientIp(request)) : '';
+    if (u) {
+      const waitNet = await bump(env, netKey, 'loginAcc');
+      if (waitNet) return tooMany(waitNet);
+      const waitAcc = await bump(env, accKey, 'loginAccAll');
+      if (waitAcc) return tooMany(waitAcc);
+    }
     const hash = await hashPass(String(password || '').slice(0, 200), u ? u.salt : 'no-such-user-salt'); // паролей длиннее 200 не бывает
     if (!u || !sameHex(hash, u.pass_hash)) return fail(401, 'Неверная почта, юзернейм или пароль.');
     if (u.banned) return fail(403, 'Аккаунт заблокирован администрацией' + (u.ban_reason ? ': ' + u.ban_reason : '.'));
@@ -557,10 +635,12 @@ const routes = {
       if (!code) return json({ error: 'Нужен код из приложения-аутентификатора.', need2fa: true }, 401);
       if (!(await secondFactor(env, u, code))) return json({ error: BAD_CODE, need2fa: true }, 401);
     }
-    // пароль верный: попытка не считается. Неверные коды входа без пароля, накопленные чужими попытками, — тоже в ноль
+    // пароль верный: попытка не считается — с этой сети счёт в ноль, из общего и с адреса снимается только она (чужие
+    // попытки с других сетей остаются). Неверные коды входа без пароля, накопленные чужими попытками, — тоже в ноль
     // (functions/_lib/qr-login.js: десятый подряд выключает вход по коду)
     await env.DB.batch([
-      env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind(accKey),
+      env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind(netKey),
+      env.DB.prepare('UPDATE attempts SET count = MAX(0, count - 1) WHERE key = ?').bind(accKey),
       env.DB.prepare('UPDATE attempts SET count = MAX(0, count - 1) WHERE key = ?').bind(ipKey),
       env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND expires_at < ?').bind(u.id, Date.now()),
       env.DB.prepare("UPDATE users SET totp = json_set(totp, '$.bad', 0) WHERE id = ? AND totp IS NOT NULL AND COALESCE(json_extract(totp, '$.bad'), 0) > 0").bind(u.id),
@@ -734,7 +814,8 @@ const routes = {
     }
     if (nameChange && !NAME_RE.test(name)) return fail(400, NAME_HINT);
     const writes = [];
-    if (mailChange) writes.push(env.DB.prepare('UPDATE users SET email = ? WHERE id = ?').bind(mail, u.id));
+    // ссылки на сброс пароля, ушедшие на прежнюю почту, больше не работают
+    if (mailChange) writes.push(env.DB.prepare('UPDATE users SET email = ? WHERE id = ?').bind(mail, u.id), env.DB.prepare("UPDATE mail_tokens SET used = 1 WHERE user_id = ? AND kind = 'reset' AND used = 0").bind(u.id));
     if (handleChange) writes.push(env.DB.prepare('UPDATE users SET uname = ? WHERE id = ?').bind(h, u.id));
     if (nameChange) writes.push(env.DB.prepare('UPDATE users SET username = ?, nkey = ? WHERE id = ?').bind(name, name.toLowerCase(), u.id));
     if (!writes.length) return json({ ok: true, handle: u.uname, username: u.username });
@@ -750,24 +831,7 @@ const routes = {
     if (!u) return fail(404, 'Нет такого аккаунта.');
     if (u.id === me.id || (await isAdminAccount(env, u))) return fail(400, 'Админа удалить нельзя.');
     if (cleanHandle(confirm) !== u.uname) return fail(400, `Чтобы удалить, впиши его юзернейм @${u.uname}.`);
-    const id = u.id;
-    await ensureChat(env);
-    await env.DB.batch([
-      // до удаления лотов: у сборов, где они были, новая версия, и страницы сразу перечитают список
-      'UPDATE lot_rooms SET ver = ver + 1 WHERE id IN (SELECT room_id FROM lots WHERE user_id = ?1)',
-      'DELETE FROM sessions WHERE user_id = ?1',
-      'DELETE FROM shelves WHERE user_id = ?1',
-      'DELETE FROM tierlists WHERE user_id = ?1',
-      'DELETE FROM lots WHERE user_id = ?1 OR room_id IN (SELECT id FROM lot_rooms WHERE owner_id = ?1)',
-      CHAT_USER_SQL, // его сообщения в чатах и чаты его сборов — до удаления самих сборов
-      'DELETE FROM lot_rooms WHERE owner_id = ?1',
-      'DELETE FROM photos WHERE user_id = ?1',
-      'DELETE FROM friendships WHERE a = ?1 OR b = ?1',
-      'DELETE FROM reactions WHERE owner_id = ?1 OR from_id = ?1',
-      'DELETE FROM comments WHERE owner_id = ?1 OR from_id = ?1',
-      'DELETE FROM shares WHERE owner_id = ?1',
-      'DELETE FROM users WHERE id = ?1',
-    ].map((q) => env.DB.prepare(q).bind(id)));
+    await dropUser(env, u.id);
     await pokePresence(env, { what: 'drop', ids: [u.id] });
     await adminLog(env, request, me, `delete account @${u.uname} «${u.username}»`, true);
     return json({ ok: true });
@@ -940,7 +1004,11 @@ const routes = {
       out.hide_online = hideOnline ? 1 : 0;
     }
     if (mailChange) {
-      await env.DB.prepare('UPDATE users SET email = ?, email_ok = 0 WHERE id = ?').bind(mail, me.id).run();
+      // ссылки на сброс пароля, ушедшие на прежнюю почту, больше не работают: она уже не его
+      await env.DB.batch([
+        env.DB.prepare('UPDATE users SET email = ?, email_ok = 0 WHERE id = ?').bind(mail, me.id),
+        env.DB.prepare("UPDATE mail_tokens SET used = 1 WHERE user_id = ? AND kind = 'reset' AND used = 0").bind(me.id),
+      ]);
       out.email = mail;
       out.email_ok = 0;
     }
@@ -955,7 +1023,9 @@ const routes = {
     }
     if (pass) {
       const salt = randHex(16);
-      await env.DB.prepare('UPDATE users SET pass_hash = ?, salt = ? WHERE id = ?').bind(await hashPass(pass, salt), salt, me.id).run();
+      // вместе с паролем выключается вход по коду без пароля (NO_FREE_SQL): включить снова — в Настройках
+      await env.DB.prepare(`UPDATE users SET pass_hash = ?, salt = ?, ${NO_FREE_SQL} WHERE id = ?`).bind(await hashPass(pass, salt), salt, me.id).run();
+      out.totp = withoutFree(me.totp);
       // все остальные устройства выходят из аккаунта: если пароль утёк, старые сессии больше не работают
       const m = (request.headers.get('authorization') || '').match(/^Bearer ([0-9a-f]{64})$/);
       await env.DB.prepare('DELETE FROM sessions WHERE user_id = ? AND token_hash != ?').bind(me.id, m ? await sha256(m[1]) : '').run();
@@ -996,9 +1066,12 @@ const routes = {
     return json({ secret, uri: `otpauth://totp/CasualHub:${encodeURIComponent('@' + me.handle)}?secret=${secret}&issuer=CasualHub&digits=6&period=30` });
   },
   async 'POST /2fa/enable'({ env, request, me }) {
-    const { code } = await readBody(request);
+    const { code, password } = await readBody(request);
     const wait = await bump(env, 'acc:' + me.id, 'loginAcc');
     if (wait) return tooMany(wait);
+    // включить — только с текущим паролем: иначе укравший сеанс подключил бы своё приложение, и хозяин без кода из
+    // чужого приложения больше не вошёл бы (смена пароля и сброс по почте защиту не снимают)
+    if (!(await passOk(env, me.id, password))) return fail(403, password ? 'Текущий пароль не подходит.' : 'Чтобы включить защиту, впиши текущий пароль.');
     let p = null;
     try { p = JSON.parse(me.totp_pending || 'null'); } catch (e) {}
     if (!p || !p.s || Date.now() - p.at > 30 * 60e3) return fail(400, 'Подключение устарело: начни заново.');
@@ -1069,21 +1142,28 @@ const routes = {
     if (!/^[0-9a-f]{64}$/.test(String(token || ''))) return fail(400, 'Ссылка неполная: открой её из письма целиком.');
     const wait = await bump(env, 'reset:' + clientIp(request), 'loginIp');
     if (wait) return tooMany(wait);
-    const row = await env.DB.prepare("SELECT user_id, expires_at, used FROM mail_tokens WHERE hash = ? AND kind = 'reset'").bind(await sha256(token)).first();
-    if (!row || row.used || row.expires_at < Date.now()) return fail(400, 'Ссылка устарела или уже использована. Запроси новое письмо.');
+    const row = await env.DB.prepare("SELECT user_id, email, expires_at, used FROM mail_tokens WHERE hash = ? AND kind = 'reset'").bind(await sha256(token)).first();
+    const STALE = 'Ссылка устарела или уже использована. Запроси новое письмо.';
+    if (!row || row.used || row.expires_at < Date.now()) return fail(400, STALE);
+    // письмо ушло на почту, которой в аккаунте уже нет: по нему пароль не сбросить (как и подтверждение почты в
+    // /email/verify) — иначе пароль поменял бы тот, у кого осталась старая почта, а новая стала бы «подтверждённой»
+    const u = await env.DB.prepare('SELECT email FROM users WHERE id = ?').bind(row.user_id).first();
+    if (!u || !row.email || u.email !== row.email) return fail(400, STALE);
     const pass = String(password || '');
     if (weakPass(pass)) return fail(400, WEAK_PASS);
-    const salt = randHex(16);
-    // письмо пришло на эту почту — значит, она твоя; все входы на других устройствах закрываются
-    await env.DB.batch([
-      env.DB.prepare('UPDATE users SET pass_hash = ?, salt = ?, email_ok = 1 WHERE id = ?').bind(await hashPass(pass, salt), salt, row.user_id),
-      env.DB.prepare("UPDATE mail_tokens SET used = 1 WHERE user_id = ? AND kind = 'reset'").bind(row.user_id),
-      env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(row.user_id),
-      env.DB.prepare('DELETE FROM admin_sessions WHERE user_id = ?').bind(row.user_id),
-      env.DB.prepare('DELETE FROM attempts WHERE key = ?').bind('login-acc:' + row.user_id),
+    const salt = randHex(16), uid = row.user_id;
+    // письмо пришло на эту почту — значит, она твоя; все входы на других устройствах закрываются, вход по коду без
+    // пароля выключается (NO_FREE_SQL), счёт неверных паролей — в ноль со всех сетей
+    const [w] = await env.DB.batch([
+      env.DB.prepare(`UPDATE users SET pass_hash = ?, salt = ?, email_ok = 1, ${NO_FREE_SQL} WHERE id = ? AND email = ?`).bind(await hashPass(pass, salt), salt, uid, row.email),
+      env.DB.prepare("UPDATE mail_tokens SET used = 1 WHERE user_id = ? AND kind = 'reset'").bind(uid),
+      env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(uid),
+      env.DB.prepare('DELETE FROM admin_sessions WHERE user_id = ?').bind(uid),
+      env.DB.prepare('DELETE FROM attempts WHERE key = ?1 OR (key >= ?1 || \':\' AND key < ?1 || \';\')').bind('login-acc:' + uid),
     ]);
-    await dropQr(env, row.user_id);
-    await pokePresence(env, { what: 'drop', ids: [row.user_id] });
+    await dropQr(env, uid);
+    await pokePresence(env, { what: 'drop', ids: [uid] });
+    if (!(w.meta && w.meta.changes)) return fail(400, STALE); // почту сменили в ту же секунду: пароль прежний
     return json({ ok: true });
   },
   async 'POST /email/verify-send'({ env, request, me }) {
@@ -1130,24 +1210,7 @@ const routes = {
     const pass = String(password || '');
     if (pass.length > 200 || !sameHex(await hashPass(pass, u.salt), u.pass_hash)) return fail(403, 'Текущий пароль не подходит.');
     if (cleanHandle(confirm) !== u.uname) return fail(400, `Чтобы удалить, впиши свой юзернейм @${u.uname}.`);
-    await ensureChat(env);
-    await env.DB.batch([
-      'UPDATE lot_rooms SET ver = ver + 1 WHERE id IN (SELECT room_id FROM lots WHERE user_id = ?1)',
-      'DELETE FROM sessions WHERE user_id = ?1',
-      'DELETE FROM shelves WHERE user_id = ?1',
-      'DELETE FROM tierlists WHERE user_id = ?1',
-      'DELETE FROM lots WHERE user_id = ?1 OR room_id IN (SELECT id FROM lot_rooms WHERE owner_id = ?1)',
-      CHAT_USER_SQL, // его сообщения в чатах и чаты его сборов — до удаления самих сборов
-      'DELETE FROM lot_rooms WHERE owner_id = ?1',
-      'DELETE FROM photos WHERE user_id = ?1',
-      'DELETE FROM friendships WHERE a = ?1 OR b = ?1',
-      'DELETE FROM reactions WHERE owner_id = ?1 OR from_id = ?1',
-      'DELETE FROM comments WHERE owner_id = ?1 OR from_id = ?1',
-      'DELETE FROM shares WHERE owner_id = ?1',
-      'DELETE FROM attempts WHERE key = \'acc:\' || ?1',
-      'DELETE FROM mail_tokens WHERE user_id = ?1',
-      'DELETE FROM users WHERE id = ?1',
-    ].map((q) => env.DB.prepare(q).bind(u.id)));
+    await dropUser(env, u.id);
     await pokePresence(env, { what: 'drop', ids: [me.id] });
     return json({ ok: true });
   },
@@ -1275,10 +1338,12 @@ const routes = {
     if (row) {
       if (row.status === 'accepted') return fail(409, `Вы с ${other.username} (@${other.handle}) уже друзья.`);
       if (row.requested_by === me.id) return fail(409, 'Заявка уже отправлена.');
-      // встречная заявка: просто принимаем
+      // встречная заявка: просто принимаем — и опыт за нового друга обоим, как в /friends/accept
       await env.DB.prepare("UPDATE friendships SET status = 'accepted' WHERE a = ? AND b = ?").bind(a, b).run();
       await pokePresence(env, { what: 'users', ids: [me.id, other.id] });
       tgLater(env, request, other.id, 'friend', { t: 'accepted', from: pubUser(me) });
+      await lvGive(env, request, me, me.id, [{ kind: 'friend', ref: other.id }]);
+      await lvGive(env, request, me, other.id, [{ kind: 'friend', ref: me.id }]);
       return json({ status: 'accepted', user: other });
     }
     await env.DB.prepare("INSERT INTO friendships (a, b, status, requested_by, created_at) VALUES (?, ?, 'pending', ?, ?)")
@@ -1330,9 +1395,13 @@ const routes = {
       if (d && typeof d.id === 'string' && d.id.length <= 120 && Number.isFinite(+d.at)) del.set(d.id, Math.max(del.get(d.id) || 0, Math.min(+d.at, Date.now())));
     }
     const byId = new Map();
-    // новые оценки чистим, старые уже лежат в базе (их чистит чтение для друзей)
-    const incoming = ratings.slice(0, 5000).map(cleanRating).filter(Boolean);
-    for (const r of [...old.ratings, ...incoming]) {
+    // новые оценки чистим, старые уже лежат в базе (их чистит чтение для друзей).
+    // Время правки из будущего (часы устройства спешат) — не позже, чем сейчас: иначе такую оценку не изменить и не
+    // удалить с другого устройства, пока то время не наступит. У лежащих в базе — не позже прошлой записи полки:
+    // раньше её их и сохранили (так оживают оценки, застрявшие до этой проверки)
+    const nowAt = Date.now(), shelfAt = row ? Math.min(nowAt, +row.updated_at || nowAt) : nowAt;
+    const incoming = ratings.slice(0, 5000).map(cleanRating).filter(Boolean).map((r) => notAfter(r, nowAt));
+    for (const r of [...old.ratings.map((x) => notAfter(x, shelfAt)), ...incoming]) {
       if (!r || typeof r.id !== 'string') continue;
       const cur = byId.get(r.id);
       if (!cur || stampOf(r) >= stampOf(cur)) byId.set(r.id, r);
@@ -1379,6 +1448,7 @@ const routes = {
     if (profileOut) shelfData.profile = profileOut;
     const data = JSON.stringify(shelfData);
     const pubIds = JSON.stringify(shelfData.ratings.filter((r) => r && r.vis === 'public' && !r.example).map((r) => r.id).slice(0, 5000));
+    const privIds = JSON.stringify(shelfData.ratings.filter((r) => r && r.vis === 'private').map((r) => r.id).slice(0, 5000)); // privateOf
     if (data.length > MAX_SHELF) return fail(413, 'Слишком много данных, убери длинные заметки.');
     // «оценки обновлены» — это когда менялись сами оценки, а не когда человек просто открыл сайт:
     // ничего не поменялось — не пишем вовсе; оценки поменялись — ставим время самой свежей оценки (её поставили, может, ночью без интернета)
@@ -1392,28 +1462,39 @@ const routes = {
         if (row && updated < +row.updated_at) updated = +row.updated_at; // время не идёт назад
       }
       await env.DB.prepare(
-        'INSERT INTO shelves (user_id, data, updated_at, pub) VALUES (?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at, pub = excluded.pub'
-      ).bind(me.id, data, updated, pubIds).run();
+        'INSERT INTO shelves (user_id, data, updated_at, pub, priv) VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET data = excluded.data, updated_at = excluded.updated_at, pub = excluded.pub, priv = excluded.priv'
+      ).bind(me.id, data, updated, pubIds, privIds).run();
     }
     // фото стираем только у оценок, удалённых в этот раз, а не у всех прежних
     const oldDel = new Set(old.deleted.map((d) => d.id));
     const live = new Set(merged.map((r) => r.id));
     const gone = tomb.filter((d) => !oldDel.has(d.id) && !live.has(d.id)).map((d) => d.id).slice(0, 100);
+    let talk = null;
     if (gone.length) {
-      // вместе с фото уходит и его превью «<id>.t»
-      await env.DB.batch(gone.flatMap((id) => [`${me.id}:${id}`, `${me.id}:${id}.t`].map((k) => env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(k))
-        .concat(env.DB.prepare('DELETE FROM shares WHERE owner_id = ? AND rid = ?').bind(me.id, id)) // и ссылка на отзыв закрывается
-        .concat(env.DB.prepare('DELETE FROM reactions WHERE owner_id = ? AND rid = ?').bind(me.id, id)) // и реакции
-        .concat(env.DB.prepare('DELETE FROM comments WHERE owner_id = ? AND target = ?').bind(me.id, 'r.' + id)))); // и ветка комментариев под ней
+      // кто реагировал и писал под ними — в той же пачке, до удаления: опыт за это снимается ниже (talkItems)
+      const ids = JSON.stringify(gone);
+      const [rx, cm] = await env.DB.batch([
+        env.DB.prepare('SELECT rid, from_id FROM reactions WHERE owner_id = ?1 AND rid IN (SELECT value FROM json_each(?2))').bind(me.id, ids),
+        env.DB.prepare("SELECT id, from_id FROM comments WHERE owner_id = ?1 AND target IN (SELECT 'r.' || value FROM json_each(?2))").bind(me.id, ids),
+        // вместе с фото уходит и его превью «<id>.t»
+        ...gone.flatMap((id) => [`${me.id}:${id}`, `${me.id}:${id}.t`].map((k) => env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(k))
+          .concat(env.DB.prepare('DELETE FROM shares WHERE owner_id = ? AND rid = ?').bind(me.id, id)) // и ссылка на отзыв закрывается
+          .concat(env.DB.prepare('DELETE FROM reactions WHERE owner_id = ? AND rid = ?').bind(me.id, id)) // и реакции
+          .concat(env.DB.prepare('DELETE FROM comments WHERE owner_id = ? AND target = ?').bind(me.id, 'r.' + id))), // и ветка комментариев под ней
+      ]);
+      talk = talkItems(me.id, rx.results, cm.results);
     }
     if (levelsOn(env)) {
       const diff = shelfDiff(old.ratings, merged);
-      if (diff.take.length) await lvRevokeMany(env, me.id, diff.take.slice(0, 500));
+      // свой опыт: за удалённые оценки и за реакции и комментарии под ними — одним пересчётом
+      const take = [...diff.take.slice(0, 500), ...((talk && talk.get(me.id)) || [])];
+      if (take.length) await lvRevokeMany(env, me.id, take);
       const night = diff.give.some((x) => x.kind === 'rate') && nightNow(now, tzOf(request)) ? 1 : 0;
       // новая оценка с баллами — сверить с оценками друзей («Единогласно», «Против течения»)
       let social = {};
       if (diff.give.some((x) => x.kind === 'rate')) { try { social = socialMetrics(merged, await friendRatings(env, me.id)); } catch (e) { console.error('social metrics', e && e.message); } }
       if (diff.give.length) await lvGive(env, request, me, me.id, diff.give, { metrics: { ...diff.metrics, night, ...social } });
+      if (talk) await revokeOthers(env, me.id, talk); // последним: свой опыт важнее
     }
     return json({ ok: true, updatedAt: updated, count: merged.length, catsAt: catsOut ? catsOut.at : null });
   },
@@ -1443,16 +1524,19 @@ const routes = {
     if (burst('follow:' + me.id, 30, 60e3)) return tooMany(1);
     const { ids, at } = await readBody(request);
     if (!Array.isArray(ids) || !Number.isFinite(+at)) return fail(400, 'Нужен список подписок.');
-    const row = await env.DB.prepare('SELECT data, updated_at FROM shelves WHERE user_id = ?').bind(me.id).first();
-    let d = row ? JSON.parse(row.data) : { ratings: [], deleted: [] };
-    if (Array.isArray(d)) d = { ratings: d, deleted: [] };
-    if (d.follow && +d.follow.at > +at) return json(d.follow); // на другом устройстве выбор свежее
-    d.follow = { ids: [...new Set(ids.filter((x) => typeof x === 'string' && /^[\w-]{1,64}$/.test(x)))].slice(0, 200), at: +at };
-    // время обновления полки не трогаем: друзья не должны видеть «оценки обновлены» из-за подписки
-    await env.DB.prepare(
-      'INSERT INTO shelves (user_id, data, updated_at) VALUES (?, ?, ?) ON CONFLICT(user_id) DO UPDATE SET data = excluded.data'
-    ).bind(me.id, JSON.stringify(d), row ? row.updated_at : Date.now()).run();
-    return json(d.follow);
+    const follow = { ids: [...new Set(ids.filter((x) => typeof x === 'string' && /^[\w-]{1,64}$/.test(x)))].slice(0, 200), at: +at };
+    // в полке меняется только поле follow, прямо в базе: оценки, которые в это же время пишет PUT /shelf с другого
+    // устройства, не откатываются прочитанной раньше копией. На другом устройстве выбор свежее — запись не идёт.
+    // Время обновления полки не трогаем: друзья не должны видеть «оценки обновлены» из-за подписки
+    const w = await env.DB.prepare(
+      `INSERT INTO shelves (user_id, data, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT(user_id) DO UPDATE SET
+         data = CASE json_type(shelves.data) WHEN 'array' THEN json_object('ratings', json(shelves.data), 'deleted', json('[]'), 'follow', json(?4))
+           ELSE json_set(shelves.data, '$.follow', json(?4)) END
+       WHERE COALESCE(json_extract(shelves.data, '$.follow.at'), 0) <= ?5`
+    ).bind(me.id, JSON.stringify({ ratings: [], deleted: [], follow }), Date.now(), JSON.stringify(follow), follow.at).run();
+    if (w.meta && w.meta.changes) return json(follow);
+    const s = readShelf(await env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(me.id).first());
+    return json(s.follow || follow);
   },
 
   // исполнители по имени: имя и фото. Сначала Genius; если он отказал (например, 429 — слишком много запросов
@@ -1695,7 +1779,10 @@ const routes = {
     const old = await env.DB.prepare('SELECT data, at FROM tierlists WHERE user_id = ? AND id = ?').bind(me.id, arg).first();
     if (old && old.data != null && old.at > at) return json({ ok: true, stale: true, at: old.at }); // на другом устройстве его правили позже
     const imgs = old && old.data ? tierImgs(JSON.parse(old.data)).slice(0, 500) : [];
-    await env.DB.batch([
+    const [rx, cm] = await env.DB.batch([
+      // кто реагировал и писал под ним — до удаления: опыт за это снимается ниже (talkItems), как у оценок
+      env.DB.prepare('SELECT rid, from_id FROM reactions WHERE owner_id = ? AND rid = ?').bind(me.id, 't.' + arg),
+      env.DB.prepare('SELECT id, from_id FROM comments WHERE owner_id = ? AND target = ?').bind(me.id, 't.' + arg),
       env.DB.prepare('INSERT INTO tierlists (user_id, id, data, meta, private, at) VALUES (?, ?, NULL, NULL, 0, ?) ON CONFLICT(user_id, id) DO UPDATE SET data = NULL, meta = NULL, private = 0, at = excluded.at').bind(me.id, arg, at),
       // отметки об удалении старше полугода больше не нужны: все устройства давно синхронизировались
       env.DB.prepare('DELETE FROM tierlists WHERE user_id = ? AND data IS NULL AND at < ?').bind(me.id, now - 183 * 864e5),
@@ -1704,7 +1791,9 @@ const routes = {
       env.DB.prepare('DELETE FROM shares WHERE owner_id = ? AND rid = ?').bind(me.id, 't.' + arg),
       ...imgs.map((k) => env.DB.prepare('DELETE FROM photos WHERE key = ?').bind(`${me.id}:${k}`)),
     ]);
-    await lvRevokeMany(env, me.id, [{ kind: 'tier', ref: arg }]);
+    const talk = talkItems(me.id, rx.results, cm.results);
+    await lvRevokeMany(env, me.id, [{ kind: 'tier', ref: arg }, ...(talk.get(me.id) || [])]);
+    if (levelsOn(env)) await revokeOthers(env, me.id, talk);
     return json({ ok: true, at });
   },
   // ссылка на тир-лист: открывается у всех, у кого она есть, даже если тир-лист скрыт от друзей. Закрывается через DELETE /share/:id
@@ -2151,6 +2240,9 @@ const routes = {
       await lvRevokeMany(env, uid, [{ kind: 'got_react', ref: `${me.id}:${rid}` }]);
       return json({ ok: true, removed: true });
     }
+    // реакция — только на то, что у друга есть и видно ему: иначе скрипт ставил бы реакции на выдуманные id
+    // и собирал за них опыт и достижения
+    if (!(await reactTarget(env, uid, rid))) return fail(404, rid.startsWith('t.') ? 'Нет такого тир-листа.' : 'Нет такой оценки.');
     const now = Date.now();
     await env.DB.prepare(
       'INSERT INTO reactions (owner_id, rid, from_id, emoji, text, at) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(owner_id, rid, from_id) DO UPDATE SET emoji = excluded.emoji, text = excluded.text, at = excluded.at'
@@ -2210,13 +2302,16 @@ const routes = {
     const sh = await env.DB.prepare('SELECT s.owner_id, s.rid, u.banned FROM shares s LEFT JOIN users u ON u.id = s.owner_id WHERE s.id = ?').bind(arg).first();
     if (!sh || sh.banned) return new Response(null, { status: 404 });
     let row;
+    // то же, что страница /r/<код> (functions/r/[id].js): ставшее «только я» по ссылке не открывается — и картинка тоже
     if (sh.rid.startsWith('t.')) {
       // картинка тир-листа: отдаём только те, что есть в этом тир-листе
       const k = new URL(request.url).searchParams.get('k') || '';
-      const tl = await env.DB.prepare('SELECT data FROM tierlists WHERE user_id = ? AND id = ?').bind(sh.owner_id, sh.rid.slice(2)).first();
-      if (!tl || tl.data == null || !tierImgs(JSON.parse(tl.data)).includes(k)) return new Response(null, { status: 404 });
+      const tl = await env.DB.prepare('SELECT data, private FROM tierlists WHERE user_id = ? AND id = ?').bind(sh.owner_id, sh.rid.slice(2)).first();
+      if (!tl || tl.data == null || tl.private || !tierImgs(JSON.parse(tl.data)).includes(k)) return new Response(null, { status: 404 });
       row = await env.DB.prepare('SELECT data FROM photos WHERE key = ?').bind(`${sh.owner_id}:${k}`).first();
     } else {
+      const s = readShelf(await env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(sh.owner_id).first());
+      if (!s.ratings.some((r) => r && r.id === sh.rid && !r.example && r.vis !== 'private')) return new Response(null, { status: 404 });
       row = (await env.DB.prepare('SELECT data FROM photos WHERE key = ?').bind(`${sh.owner_id}:${sh.rid}.t`).first())
         || (await env.DB.prepare('SELECT data FROM photos WHERE key = ?').bind(`${sh.owner_id}:${sh.rid}`).first());
     }
@@ -2389,8 +2484,9 @@ const routes = {
     await env.DB.prepare('INSERT INTO comments (id, owner_id, target, from_id, text, at) VALUES (?, ?, ?, ?, ?, ?)').bind(id, uid, target, me.id, text, now).run();
     if (uid !== me.id) await pokePresence(env, { what: 'notify', to: uid, n: { kind: 'comment', from: pubUser(me), target, text: text.slice(0, 140) } });
     if (uid !== me.id) tgLater(env, request, uid, 'comment', { from: pubUser(me), text });
+    // опыт — за комментарий от 10 знаков, и автору, и тому, кому написали: иначе «+» на стене приносил бы опыт хозяину
     if (text.length >= 10) await lvGive(env, request, me, me.id, [{ kind: 'comment', ref: id, peer: uid === me.id ? 'self' : uid }]);
-    if (uid !== me.id) await lvGive(env, request, me, uid, [{ kind: 'got_comment', ref: id, peer: me.id }]);
+    if (uid !== me.id && text.length >= 10) await lvGive(env, request, me, uid, [{ kind: 'got_comment', ref: id, peer: me.id }]);
     return json({ item: { id, text, at: now, from: pubUser(me), canDelete: true } });
   },
   // удалить может автор комментария и хозяин профиля, на чьей стене или оценке он написан
@@ -2415,12 +2511,16 @@ const routes = {
   async 'GET /photo/:uid/:rid'({ env, request, me, arg }) {
     const [uid, rid] = arg;
     if (HIST_RE.test(rid) && uid !== me.id) return json({ data: null }); // историю аватарок и баннеров видит только хозяин
+    const q = new URL(request.url).searchParams, base = rid.replace(/\.t$/, '');
     if (!(await canSee(env, me, uid))) {
       // не другу: аватарка, баннер и фото оценок, открытых всем
-      const open = await publicOf(env, uid), base = rid.replace(/\.t$/, '');
+      const open = await publicOf(env, uid);
       if (!open.any || !(rid === 'avatar' || rid === 'banner' || open.ids.includes(base))) return fail(403, 'Фото видны только друзьям.');
+    } else if (uid !== me.id && !HIST_KINDS.has(base) && (await privateOf(env, uid)).has(base)) {
+      // другу — без фото оценок «только я»: ответ как у оценки без фото, по нему не понять, что она есть
+      // (аватарку и баннер спрашивают чаще всего — у них не проверяем, это не оценки)
+      return json(q.has('meta') ? { updatedAt: null } : { data: null });
     }
-    const q = new URL(request.url).searchParams;
     if (q.has('meta')) {
       const m = await env.DB.prepare('SELECT updated_at FROM photos WHERE key = ?').bind(`${uid}:${rid}`).first();
       return json({ updatedAt: m ? m.updated_at : null });
@@ -2469,6 +2569,54 @@ const MAX_PHOTO = 1900000; // символов в data URL, предел стр�
 const PHOTO_DAY_USER = 200e6, PHOTO_DAY_IP = 400e6; // сколько символов фото можно залить за сутки
 // сколько оценок на полке: сама база считает длину списка, старый формат полки — просто список
 const SHELF_COUNT = "CASE json_type(data) WHEN 'array' THEN json_array_length(data) ELSE COALESCE(json_array_length(data, '$.ratings'), 0) END";
+// время в оценке не позже cap (у полки — сейчас или прошлая запись): тип поля (строка ISO или число) остаётся прежним
+function notAfter(r, cap) {
+  if (!r || typeof r !== 'object') return r;
+  let o = r;
+  for (const k of ['createdAt', 'updatedAt']) {
+    if (r[k] == null || !(+new Date(r[k]) > cap)) continue;
+    if (o === r) o = { ...r };
+    o[k] = typeof r[k] === 'number' ? cap : new Date(cap).toISOString();
+  }
+  return o;
+}
+// id оценок «только я»: их фото друзьям не отдаём. Список пишет PUT /shelf (колонка priv); у полки, записанной раньше,
+// он один раз считается из самих оценок прямо в базе и запоминается
+const PRIV_SQL = "(SELECT json_group_array(json_extract(j.value, '$.id')) FROM json_each(shelves.data, '$.ratings') j WHERE json_extract(j.value, '$.vis') = 'private')";
+async function privateOf(env, uid) {
+  let row = await env.DB.prepare('SELECT priv FROM shelves WHERE user_id = ?').bind(uid).first();
+  if (row && row.priv == null) row = await env.DB.prepare(`UPDATE shelves SET priv = ${PRIV_SQL} WHERE user_id = ? RETURNING priv`).bind(uid).first();
+  let ids = [];
+  try { ids = JSON.parse((row && row.priv) || '[]'); } catch (e) {}
+  return new Set(Array.isArray(ids) ? ids : []);
+}
+// на что ставят реакцию: тир-лист друга («t.<id>», не скрытый) или его оценка — та, что видна другу в профиле
+// (не «только я» и не пример)
+async function reactTarget(env, uid, rid) {
+  if (rid.startsWith('t.')) return !!(await env.DB.prepare('SELECT 1 AS ok FROM tierlists WHERE user_id = ? AND id = ? AND data IS NOT NULL AND private = 0').bind(uid, rid.slice(2)).first());
+  const s = readShelf(await env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(uid).first());
+  return s.ratings.some((r) => r && r.id === rid && r.vis !== 'private' && !r.example);
+}
+// реакции и комментарии под тем, что удалили (оценки, тир-лист), уходят вместе с ним — и опыт за них, как при удалении
+// комментария: кому что снять. ref — как при начислении: react у друга «хозяин:id», got_react у хозяина «друг:id»,
+// comment у автора и got_comment у хозяина — номер комментария
+function talkItems(owner, reacts, comments) {
+  const by = new Map();
+  const add = (uid, item) => { if (!by.has(uid)) by.set(uid, []); by.get(uid).push(item); };
+  for (const r of reacts || []) { add(r.from_id, { kind: 'react', ref: `${owner}:${r.rid}` }); add(owner, { kind: 'got_react', ref: `${r.from_id}:${r.rid}` }); }
+  for (const c of comments || []) { add(c.from_id, { kind: 'comment', ref: c.id }); if (c.from_id !== owner) add(owner, { kind: 'got_comment', ref: c.id }); }
+  return by;
+}
+// чужой опыт — по пересчёту на человека: не больше 10 человек за раз (больше бывает, только если удалили сразу много
+// оценок с реакциями), чтобы запрос не упёрся в лимит обращений к базе
+async function revokeOthers(env, owner, talk) {
+  let n = 0;
+  for (const [uid, items] of talk) {
+    if (uid === owner) continue;
+    if (++n > 10) break;
+    await lvRevokeMany(env, uid, items);
+  }
+}
 // оформление профиля: до 6 витрин (топ-3/5/10 из темы, лучшие по баллу или выбранные вручную) и видимость блоков
 // тир-листы: только ожидаемые поля, чтобы в страницу друга не попало лишнее
 const MAX_TIERS = 100, MAX_TIER = 150e3, MAX_TIER_IMG = 200e3, MAX_TIER_IMGS = 800;
@@ -3366,7 +3514,7 @@ Object.assign(routes, makeTierCoopRoutes({ json, fail, readBody, burst, currentU
 Object.assign(routes, makeChatRoutes({ json, fail, readBody, burst, clientIp, currentUser, isAdmin, adminCandidate, adminLog }));
 // вход без пароля: по QR-коду и по коду из приложения (/api/qr/new, /api/qr/poll и /api/login/code — без входа,
 // в PUBLIC) — functions/_lib/qr-login.js
-Object.assign(routes, makeQrLoginRoutes({ json, fail, readBody, burst, bump, tooMany, clientIp, sha256, randHex, newSession, ownUser, deviceLabel, findLogin, totpOf, totpStep, secondFactor, BAD_CODE }));
+Object.assign(routes, makeQrLoginRoutes({ json, fail, readBody, burst, bump, tooMany, clientIp, sha256, randHex, newSession, ownUser, deviceLabel, findLogin, totpOf, totpStep, secondFactor, passOk, BAD_CODE }));
 
 const PUBLIC = new Set(['GET /chat', 'GET /chat/ws', 'GET /tiercoop/room', 'GET /king/room', 'GET /king/img', 'GET /plan/info', 'GET /lots/:code/predict', 'GET /lots/:code/veto', 'GET /lots/:code/bingo', 'GET /shop/look', 'GET /auth/options', 'POST /password/forgot', 'POST /password/reset', 'POST /email/verify', 'POST /imdb', 'POST /register', 'POST /login', 'POST /logout', 'POST /qr/new', 'POST /qr/poll', 'POST /login/code', 'POST /ping', 'GET /share/:id/img', 'GET /announce', 'GET /lots/:code', 'GET /lots/:code/hub', 'GET /lots/:code/ws', 'GET /presence/ws', 'GET /tierlist/:uid/:id', 'POST /tierlist-imgs/:uid', 'GET /mail/unsub', 'POST /mail/unsub', 'GET /levels/invite/who', 'POST /tg/hook']);
 // код ссылки на отзыв: 12 знаков из 62 — около 71 бита случайности
