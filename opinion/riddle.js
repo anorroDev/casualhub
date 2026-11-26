@@ -142,5 +142,15 @@ html.unslop:not([data-ui]) :is(.rd-ov, .rd-card, .rd-hints li) { animation: none
     try { await navigator.clipboard.writeText(shareText()); msg = T('Результат скопирован.'); msgCls = 'ok'; } catch (e) { msg = shareText(); msgCls = ''; }
     paint();
   }
+  // вошёл или вышел в соседней вкладке или в окне входа — кнопка и загадка под другой аккаунт (как в opinion/guess.js).
+  // Сигнал приходит и при первой синхронизации: перечитываем, только если вход правда поменялся
+  let who = token();
+  const reauth = () => {
+    if (token() === who) return;
+    who = token(); S = null; msg = '';
+    mountBtn(); paint(); load();
+  };
+  document.addEventListener('casualhub:auth', reauth);
+  addEventListener('storage', (e) => { if (e.key === 'ocenshik.user.v1' || e.key === 'casualhub.tokens.v1') reauth(); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => { mountBtn(); load(); }); else { mountBtn(); load(); }
 })();

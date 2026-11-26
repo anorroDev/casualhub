@@ -176,16 +176,26 @@ export function makeRiddleRoutes(h) {
       if (!norm(g)) return fail(400, 'Напиши ответ.');
       await ensure(env);
       const now = Date.now(), day = dayKey(now, RIDDLE_TZ);
-      const cur = await env.DB.prepare('SELECT tries, solved FROM riddle_tries WHERE user_id = ? AND day = ?').bind(me.id, day).first();
-      const tries = cur ? parse(cur.tries) : [];
-      if ((cur && cur.solved) || tries.length >= MAX_TRIES) return json({ ...(await stateOf(env, me, now)), ok: !!(cur && cur.solved) });
-      if (tries.some((t) => norm(t) === norm(g))) return fail(400, 'Этот ответ уже был.');
       const ok = isRight(riddleOf(day).r, g);
-      tries.push(g);
-      await env.DB.prepare('INSERT INTO riddle_tries (user_id, day, tries, solved, at) VALUES (?, ?, ?, ?, ?) ON CONFLICT(user_id, day) DO UPDATE SET tries = excluded.tries, solved = excluded.solved, at = excluded.at')
-        .bind(me.id, day, JSON.stringify(tries), ok ? 1 : 0, now).run();
-      if (ok && h.lvGive) { try { await h.lvGive(env, request, me, me.id, [{ kind: 'riddle', ref: day }]); } catch (e) { console.error('riddle xp', e && e.message); } }
-      return json({ ...(await stateOf(env, me, now)), ok });
+      // два ответа сразу (две вкладки, двойное нажатие): запись проходит, только если попытки с чтения никто не поменял,
+      // иначе читаем заново. Так попыток не больше MAX_TRIES и отгадку не затрёт неверный ответ. Каждая чужая запись
+      // добавляет попытку или закрывает загадку, поэтому круг кончается не позже, чем через MAX_TRIES перечитываний
+      for (let k = 0; k <= MAX_TRIES; k++) {
+        const cur = await env.DB.prepare('SELECT tries, solved FROM riddle_tries WHERE user_id = ? AND day = ?').bind(me.id, day).first();
+        const tries = cur ? parse(cur.tries) : [];
+        if ((cur && cur.solved) || tries.length >= MAX_TRIES) return json({ ...(await stateOf(env, me, now)), ok: !!(cur && cur.solved) });
+        if (tries.some((t) => norm(t) === norm(g))) return fail(400, 'Этот ответ уже был.');
+        const next = JSON.stringify([...tries, g]);
+        const w = cur
+          ? await env.DB.prepare('UPDATE riddle_tries SET tries = ?, solved = ?, at = ? WHERE user_id = ? AND day = ? AND tries = ? AND solved = 0')
+            .bind(next, ok ? 1 : 0, now, me.id, day, cur.tries).run()
+          : await env.DB.prepare('INSERT OR IGNORE INTO riddle_tries (user_id, day, tries, solved, at) VALUES (?, ?, ?, ?, ?)')
+            .bind(me.id, day, next, ok ? 1 : 0, now).run();
+        if (!(w.meta && w.meta.changes)) continue; // кто-то записал раньше — попытки уже другие
+        if (ok && h.lvGive) { try { await h.lvGive(env, request, me, me.id, [{ kind: 'riddle', ref: day }]); } catch (e) { console.error('riddle xp', e && e.message); } }
+        return json({ ...(await stateOf(env, me, now)), ok });
+      }
+      return json({ ...(await stateOf(env, me, now)), ok: false });
     },
   };
 }
