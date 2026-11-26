@@ -484,6 +484,10 @@
 /* рассыпанная еда — под миской и котиком */
 .vy-spill { position: fixed; left: 0; top: 0; z-index: 39; line-height: 0; cursor: grab; touch-action: none; -webkit-tap-highlight-color: transparent; }
 .vy-spill.drag { cursor: grabbing; z-index: 60; }
+/* приземлился — сплющился и выпрямился (кадрами, как пиксели) */
+.vy-spill.land svg { animation: vy-pland .3s steps(5, jump-none); transform-origin: 50% 100%; }
+@keyframes vy-pland { 0% { transform: scale(1.2, .7); } 55% { transform: scale(.92, 1.08); } 100% { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .vy-spill.land svg { animation: none; } }
 /* кусок еды маленький: хватать можно и рядом с ним; текст под ним не выделяется */
 .vy-spill { -webkit-user-select: none; user-select: none; }
 .vy-spill::before { content: ""; position: absolute; inset: -9px -7px -5px; }
@@ -866,12 +870,13 @@
   function spillOut() {
     const n = st.bowl;
     st.bowl = 0;
-    for (let i = 0; i < n; i++) makeSpill(1, st.food, undefined, i); // каждая порция — свой кусок, рядком
+    for (let i = 0; i < n; i++) makeSpill(1, st.food, undefined, i, true); // каждая порция — свой кусок, рядком
     save();
   }
   // кусок еды — рядом с миской, со стороны, где на блоке больше места; k — какой по счёту (кладутся рядком дальше от
   // миски); seed — как лёг
-  function makeSpill(n, food, seed = newSeed(), k = 0) {
+  // fly — вылетает из миски дугой (рассыпалась, насыпали через край), иначе — сразу на месте (загрузка, другая вкладка)
+  function makeSpill(n, food, seed = newSeed(), k = 0, fly = false) {
     const q = { n, food, seed, x: 0, y: 0, s: null, ox: 0, w: 0, h: 0, mode: 'rest', vy: 0, el: document.createElement('span') };
     q.el.className = 'vy-spill';
     q.el.setAttribute('aria-hidden', 'true');
@@ -886,6 +891,11 @@
     const r = bw.s ? bw.s.getBoundingClientRect() : null, lo = r ? r.left : 0, hi = r ? r.right : innerWidth;
     const step = (q.w + K) * k, left = bw.x - lo > hi - (bw.x + bw.w);
     setOn(q, bw.s, clamp(left ? bw.x - q.w + 2 * K - step : bw.x + bw.w - 2 * K + step, lo + 2, hi - q.w - 2));
+    // из миски — вверх и в сторону, где больше места (каждый следующий кусок дальше), кувыркаясь; упадёт — stepPile
+    if (fly && !calm && bowl) {
+      Object.assign(q, { mode: 'fall', s: null, x: bw.x + bw.w / 2 - q.w / 2, y: bw.y - bw.h * 0.55,
+        vx: (left ? -1 : 1) * (80 + k * 60 + Math.random() * 50), vy: -(260 + Math.random() * 140), av: (Math.random() < 0.5 ? -1 : 1) * (300 + Math.random() * 420), rot: 0 });
+    }
     paintPile(q);
     keepSpills();
   }
@@ -898,8 +908,35 @@
   }
   function drawSpill(q) { const s = sprite(spillRows(q.n, foodOf(q.food), q.seed), K); q.el.innerHTML = s.svg; q.w = s.cw; q.h = s.ch; }
   // место не поменялось — стиль не трогаем: куски лежат, а кадры идут
-  function paintPile(q) { const tf = `translate(${Math.round(q.x)}px, ${Math.round(q.y - q.h)}px)`; if (q.tf !== tf) { q.tf = tf; q.el.style.transform = tf; } }
+  function paintPile(q) { const tf = `translate(${Math.round(q.x)}px, ${Math.round(q.y - q.h)}px)${q.rot ? ` rotate(${Math.round(q.rot)}deg)` : ''}`; if (q.tf !== tf) { q.tf = tf; q.el.style.transform = tf; } }
   function dropSpill(q) { q.el.remove(); sps = sps.filter((v) => v !== q); keepSpills(); }
+  // куски на одном блоке не лежат друг на друге и не залезают в миску и лоток: расходятся плавно, по паре пикселей
+  // за кадр (миска и лоток не двигаются — отходит кусок); край блока или экрана держит
+  function nudge(q, d) {
+    const r = q.s ? q.s.getBoundingClientRect() : null;
+    const nx = clamp(q.x + d, r ? r.left : 4, (r ? r.right : innerWidth - 4) - q.w);
+    if (q.s) q.ox += nx - q.x;
+    q.x = nx;
+  }
+  function separate(dt) {
+    const step = Math.max(1, 150 * dt), rest = sps.filter((q) => q.mode === 'rest');
+    for (let i = 0; i < rest.length; i++) {
+      const a = rest[i];
+      for (const [o, el] of [[bw, bowl], [lt, box]]) {
+        if (!el || o.mode !== 'rest' || o.s !== a.s) continue;
+        const ov = Math.min(a.x + a.w, o.x + o.w) - Math.max(a.x, o.x);
+        if (ov > 1) nudge(a, (a.x + a.w / 2 < o.x + o.w / 2 ? -1 : 1) * Math.min(ov, step));
+      }
+      for (let j = i + 1; j < rest.length; j++) {
+        const b = rest[j];
+        if (b.s !== a.s) continue;
+        const ov = Math.min(a.x + a.w, b.x + b.w) - Math.max(a.x, b.x);
+        if (ov <= 1) continue;
+        const d = Math.min(ov / 2, step) * (a.x + a.w / 2 <= b.x + b.w / 2 ? 1 : -1);
+        nudge(a, -d); nudge(b, d);
+      }
+    }
+  }
   // кучку корма отпустили или бросили: летит и падает на блок или пол («меньше движения» — сразу туда)
   function pileFall(q, vx = 0, vy = 0) {
     Object.assign(q, { mode: 'fall', s: null, vx, vy });
@@ -917,8 +954,18 @@
         q.x += q.vx * dt; q.vx *= Math.max(0, 1 - 1.5 * dt);
         if (q.x < 4) { q.x = 4; q.vx = Math.abs(q.vx) * 0.4; } else if (q.x > innerWidth - q.w - 4) { q.x = innerWidth - q.w - 4; q.vx = -Math.abs(q.vx) * 0.4; }
       }
+      if (q.av) q.rot = (q.rot || 0) + q.av * dt; // кувыркается в полёте
       const hit = q.vy > 0 ? hitBelow(q, prev) : undefined;
-      if (hit !== undefined) { q.mode = 'rest'; q.vy = 0; q.vx = 0; setOn(q, hit, q.x); if (sps.includes(q)) pileLand(q); }
+      if (hit !== undefined) {
+        setOn(q, hit, q.x);
+        // с размаху — подпрыгивает разок, потом ложится; приземлился — сплющился (.land)
+        if (!calm && !q.bounced && q.vy > 420) { Object.assign(q, { bounced: true, mode: 'fall', s: null, vy: -q.vy * 0.3, vx: (q.vx || 0) * 0.5, av: (q.av || 0) * 0.5 }); q.y -= 1; }
+        else {
+          Object.assign(q, { mode: 'rest', vy: 0, vx: 0, av: 0, rot: 0, bounced: false });
+          if (!calm) { q.el.classList.remove('land'); void q.el.offsetWidth; q.el.classList.add('land'); }
+          if (sps.includes(q)) pileLand(q);
+        }
+      }
     } else if (q.s && !surfaceOk(q.s)) {
       // «меньше движения»: без полёта — сразу туда, куда упала бы (как миска)
       if (calm) setOn(q, below(q), q.x); else { q.mode = 'fall'; q.s = null; q.vy = 0; }
@@ -949,6 +996,7 @@
     }
     paintBox();
     for (const q of sps) stepPile(q, dt);
+    separate(dt);
     for (const q of poos) stepPile(q, dt);
   }
   // толкнули: едет по блоку и тормозит; съехала за край карточки — падает, кувыркаясь в ту же сторону
@@ -1103,7 +1151,7 @@
     // полная — насыпали через край: порция просыпается рядом кучкой (её можно унести куда угодно, Васян найдёт)
     if (st.bowl >= 3) {
       if (bw.mode !== 'rest' || sps.length >= MAX_PILES) { say('love'); return; }
-      makeSpill(1, st.food, undefined, sps.filter((q) => q.s === bw.s && q.mode === 'rest').length); save(); hopBowl();
+      makeSpill(1, st.food, undefined, sps.filter((q) => q.s === bw.s && q.mode === 'rest').length, true); save(); hopBowl();
       afterBowl('drop');
       return;
     }
