@@ -115,8 +115,14 @@ const TRACK_FULL = 4;
 // поля разбора: у трека — albumOf и trackNo, у альбома — trackCount, skip (пропущенные номера), albumSrc (откуда треклист),
 // tracks (баллы треков внутри альбома) и art (обложка из каталога)
 const ALBUM_KEYS = ['albumOf', 'trackNo', 'trackCount', 'skip', 'albumSrc', 'tracks', 'art', 'amode'];
-const lbOnly = (r) => !!r && Array.isArray(r.scores) && r.scores.length > 0 && r.scores.every(s => s.id === LB_SCORE);
+// игра из Steam, ещё не переоценённая по критериям: один балл «Оценка при импорте из Steam» (opinion/steam.js)
+const STEAM_SCORE = 'steam-score';
+// балл, перенесённый при импорте (Letterboxd, Steam), — не критерий категории: переоценил по критериям — он уходит
+const IMPORT_SCORES = [LB_SCORE, STEAM_SCORE];
+const importOnly = (r) => !!r && Array.isArray(r.scores) && r.scores.length > 0 && r.scores.every(s => IMPORT_SCORES.includes(s.id));
 const fromLb = (r) => !!r && (r.src === 'letterboxd' || (Array.isArray(r.scores) && r.scores.some(s => s.id === LB_SCORE)));
+// откуда перенесена оценка (src): опыт за неё — как за импорт. Тот же список, что IMPORTED в functions/_lib/levels.js
+const IMPORT_SRC = ['letterboxd', 'steam'];
 const MAX_CRIT = 15;
 const DRAFT_KEY = 'ocenshik.draft.v2';
 const PREFS_KEY = 'ocenshik.prefs.v1';
@@ -1172,12 +1178,26 @@ function exportBackup() {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
   toast('Резервная копия сохранена в файл JSON');
 }
+// отметки об удалении оценок: этого устройства (friends.js, casualhub.deleted.v1) и, если вошёл, аккаунта — { id: время }
+async function ratingTombs() {
+  const tomb = new Map();
+  try { (JSON.parse(localStorage.getItem('casualhub.deleted.v1') || '[]') || []).forEach(d => { if (d && typeof d.id === 'string') tomb.set(d.id, +d.at || 0); }); } catch (_) {}
+  const api = window.casualApi;
+  if (api && api.online()) {
+    try {
+      const uid = (state.user && state.user.serverId) || ((await api.get('/me')).user || {}).id;
+      const sh = uid ? await api.get('/shelf/' + encodeURIComponent(uid)) : null;
+      ((sh && sh.deleted) || []).forEach(d => { if (d && typeof d.id === 'string') tomb.set(d.id, Math.max(tomb.get(d.id) || 0, +d.at || 0)); });
+    } catch (_) {}
+  }
+  return tomb;
+}
 function handleBackupImport(e) {
   const f = e.target.files && e.target.files[0];
   e.target.value = '';
   if (!f) return;
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
     try {
       const data = JSON.parse(reader.result);
       if (!data || (!Array.isArray(data.ratings) && !Array.isArray(data.categories))) {
@@ -1187,7 +1207,14 @@ function handleBackupImport(e) {
       if (!confirm(`Заменить оценки и категории на этом устройстве данными из файла? В файле ${n} ${plural(n, 'оценка', 'оценки', 'оценок')}.`)) return;
       // файл мог быть поправлен руками или обрезан: битые записи пропускаем, а не ломаем ими страницу на каждом заходе
       if (Array.isArray(data.ratings)) {
-        state.ratings = data.ratings.map(r => (r && typeof r.id === 'string' ? normalizeRating(r.id, r) : null)).filter(Boolean);
+        const list = data.ratings.map(r => (r && typeof r.id === 'string' ? normalizeRating(r.id, r) : null)).filter(Boolean);
+        // удалённые после копии (здесь или на другом устройстве): дата правки — на секунду позже отметки об удалении,
+        // иначе синхронизация с аккаунтом уберёт их снова. Как «Восстановить из файла» в Настройках (settings.js)
+        const tomb = await ratingTombs();
+        for (const r of list) { const t = tomb.get(r.id); if (t && stampTime(r) <= t) r.updatedAt = new Date(t + 1000).toISOString(); }
+        const ids = new Set(list.map(r => r.id));
+        try { localStorage.setItem('casualhub.deleted.v1', JSON.stringify((JSON.parse(localStorage.getItem('casualhub.deleted.v1') || '[]') || []).filter(d => !(d && ids.has(d.id))))); } catch (_) {}
+        state.ratings = list;
         saveLocalRatings();
       }
       if (Array.isArray(data.categories) && data.categories.length) {
@@ -1542,7 +1569,9 @@ function renderCrit() {
       ? `Категории «${form.extraCatName || 'без названия'}» больше нет, критерии взяты из сохранённой оценки.`
       : cat && form.extra.some(x => x.id === LB_SCORE) && rows.length > 1
         ? 'Это оценка из Letterboxd. Оцени по критериям — при сохранении они заменят «Оценку с Letterboxd».'
-        : 'Нажми или потяни по шкале. Критерий без оценки не попадёт в итог.';
+        : cat && form.extra.some(x => x.id === STEAM_SCORE) && rows.length > 1
+          ? 'Это оценка из Steam. Оцени по критериям — при сохранении они заменят «Оценку при импорте из Steam».'
+          : 'Нажми или потяни по шкале. Критерий без оценки не попадёт в итог.';
     el.critArea.innerHTML = rows.length
       ? `<ul class="crit-list">${rows.map(critRowHTML).join('')}</ul>`
       : `<p class="empty-cat">${state.catsLoaded ? 'Выбери категорию выше или создай новую.' : 'Загружаю категории…'}</p>`;
@@ -2071,9 +2100,11 @@ async function pickCover(i, keepText) {
       blob = await res.blob();
     }
     if (form !== f0) return;
-    await setPhotoFromFile(new File([blob], 'cover.jpg', { type: blob.type || 'image/jpeg' }), false);
+    await setPhotoFromFile(new File([blob], 'cover.jpg', { type: blob.type || 'image/jpeg' }), false, f0);
+    if (form !== f0) return;
     if (!form.photo) throw new Error('photo');
     if (!keepText) await fillFromCover(c);
+    if (form !== f0) return;
     coverItems = [];
     renderCovers();
     scheduleDraft();
@@ -2086,12 +2117,13 @@ async function pickCover(i, keepText) {
 // выбрали обложку — подставляем название и год с основными жанрами. Искали по-русски — берём русское название
 // (фильмы — из Wikidata, игры — из Steam), а если его нет, оставляем то, что написано
 async function fillFromCover(c) {
-  const kind = coverFrom;
+  const kind = coverFrom, f0 = form;
   if (kind === 'music') { fillMusicFromCover(c); return; }
   let info = { ru: '', genres: c.genres && c.genres.length ? c.genres : c.genre ? [c.genre] : [] };
   // у обложки 18+ с MyAnimeList жанров нет — их подтягивает сервер (теги AniList по id MyAnimeList)
   if (c.id && (kind === 'movie' || kind === 'game' || (kind === 'hentai' && !info.genres.length)) && window.casualApi && window.casualApi.online()) {
     try { info = Object.assign(info, await window.casualApi.get(`/covers/info?kind=${kind}&id=${encodeURIComponent(c.id)}`)); } catch (_) {}
+    if (form !== f0) return; // пока ждали подробности, нажали «Изменить» у другой оценки: её название и описание не трогаем
   }
   const typed = form.name.trim();
   // русское название (у 18+ — с Shikimori): писал по-русски — оно и становится названием, иначе — подзаголовком в описании
@@ -2214,8 +2246,10 @@ async function applyMusicPick(c) {
   renderMusicPicked();
   scheduleDraft();
   if (c.art && swap) {
+    const f0 = form;
     coverItems = [{ ...c, kind: c.kind === 'Альбом' ? 'Альбом' : 'Трек' }]; coverFrom = 'music';
     await pickCover(0);
+    if (form !== f0) { coverItems = []; renderCovers(); return; } // открыли другую оценку: её фото не считаем обложкой из выбора
     musicPhotoAuto = !!form.photo; musicPhotoRef = form.photo;
     coverItems = []; renderCovers();
     if (!form.photo) musicMsg('Обложка не загрузилась');
@@ -2696,6 +2730,11 @@ function unifyCats() {
   if (ratings && state.mode !== 'db') saveLocalRatings();
   return ratings || cats;
 }
+// «Музыка» в окне «Фильтры» (state.mfilter): только альбомы или только треки и синглы
+function mfilterOk(r) {
+  const alb = !r.albumOf && (r.status === 'Альбом' || r.trackCount > 0);
+  return state.mfilter === 'album' ? alb : state.mfilter === 'single' ? !alb : true;
+}
 function renderBoard() {
   if (state.loaded) { unifyCats(); migrateWatched(); }
   const gs = groups();
@@ -2748,9 +2787,8 @@ function renderBoard() {
     musicSec.hidden = !musicOn;
     musicSec.querySelectorAll('[data-mfilter]').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.mfilter === state.mfilter)));
   }
-  const isAlb = (r) => !r.albumOf && (r.status === 'Альбом' || r.trackCount > 0);
   const recPool0 = state.recent ? subPool.filter(recentOk) : subPool;
-  const recPool = state.mfilter === 'album' ? recPool0.filter(isAlb) : state.mfilter === 'single' ? recPool0.filter(r => !isAlb(r)) : recPool0;
+  const recPool = state.mfilter === 'all' ? recPool0 : recPool0.filter(mfilterOk);
   // жанры — раздел в окне «Фильтры»
   const gSec = document.getElementById('genreSec'), gBox = document.getElementById('genreChips');
   if (gSec && gBox) {
@@ -2767,7 +2805,9 @@ function renderBoard() {
   el.searchWrap.hidden = state.ratings.length < 2;
   if (el.searchWrap.hidden && state.query) { state.query = ''; el.search.value = ''; }
   const q = keyOf(state.query);
-  const found = r => !q || [r.nameKey, keyOf(r.meta), keyOf(r.status), keyOf(r.note), keyOf(r.pros), keyOf(r.cons), keyOf(r.author && r.author.name)].join(' ').includes(q);
+  // статус ищется и общим словом, и тем, что видно в карточке: «Пройдено» у игр, «Прочитано» у книг — на языке сайта
+  const stShown = r => { if (!r.status) return ''; const t = stLabel(r.status, ratingKind(r)); return keyOf(t) + ' ' + keyOf(trText(t)); };
+  const found = r => !q || [r.nameKey, keyOf(r.meta), keyOf(r.status), stShown(r), keyOf(r.note), keyOf(r.pros), keyOf(r.cons), keyOf(r.author && r.author.name)].join(' ').includes(q);
   // старые оценки треков с одним баллом переезжают внутрь своих альбомов (opinion/album.js)
   if (window.CasualAlbum) window.CasualAlbum.migrateSoon();
   const ranks = computeRanks(pool);
@@ -2901,7 +2941,7 @@ function loadIntoForm(r, opts) {
     if (s.w && s.w !== 1) form.weights[s.id] = s.w;
     if (!ids.has(s.id)) form.extra.push({ id: s.id, name: s.name, desc: s.desc || '' });
   }
-  form.ownOnly = !!cat && r.scores.length > 0 && !r.scores.some(s => ids.has(s.id)) && !lbOnly(r) && !trkOnly(r);
+  form.ownOnly = !!cat && r.scores.length > 0 && !r.scores.some(s => ids.has(s.id)) && !importOnly(r) && !trkOnly(r);
   state.editCat = false;
   state.catDelConfirm = false;
   renderForm();
@@ -2914,15 +2954,15 @@ function loadIntoForm(r, opts) {
 // а категория становилась, например, «Музыкой». Такие оценки (ни одного общего критерия с категорией)
 // получают свою категорию с прежними критериями; название берётся из подходящего шаблона.
 function repairOverwrittenCats() {
-  // раньше сюда попадали фильмы из Letterboxd и уезжали в категорию «Фильмы (прежние критерии)»
-  // с одним критерием «Оценка с Letterboxd» — возвращаем их обратно и убираем такую категорию
-  const lbCats = state.cats.filter(c => c.criteria.length && c.criteria.every(k => k.id === LB_SCORE));
+  // раньше сюда попадали фильмы из Letterboxd и игры из Steam и уезжали в категорию «Фильмы (прежние критерии)»
+  // или «Игры (прежние критерии)» с одним критерием — баллом импорта. Возвращаем их обратно и убираем такую категорию
+  const lbCats = state.cats.filter(c => c.criteria.length && c.criteria.every(k => IMPORT_SCORES.includes(k.id)));
   let healed = 0;
   for (const c of lbCats) {
     const base = keyOf(c.name.replace(/(\s*\(прежние критерии\))+$/u, ''));
     const home = state.cats.find(x => x !== c && !lbCats.includes(x) && keyOf(x.name) === base);
     if (!home) {
-      const st = STARTERS.find(s => s.id === 'films');
+      const st = STARTERS.find(s => s.id === (c.criteria.some(k => k.id === STEAM_SCORE) ? 'games' : 'films'));
       c.name = c.name.replace(/(\s*\(прежние критерии\))+$/u, '') || st.name;
       c.criteria = st.criteria.map(k => ({ ...k, id: newId('c') }));
       state.ratings.forEach(r => { if (r.cat === c.id) r.catName = c.name; });
@@ -2937,8 +2977,8 @@ function repairOverwrittenCats() {
   if (healed) { saveLocalCats(); saveLocalRatings(); }
   const byId = new Map(state.cats.map(c => [c.id, c]));
   const broken = state.ratings.filter(r => {
-    // балл Letterboxd и балл трека из «Разбора альбома» — свои отдельные критерии, а не следы перезаписанной категории
-    if (r.example || !r.scores || !r.scores.length || lbOnly(r) || trkOnly(r)) return false;
+    // балл импорта (Letterboxd, Steam) и балл трека из «Разбора альбома» — свои отдельные критерии, а не следы перезаписанной категории
+    if (r.example || !r.scores || !r.scores.length || importOnly(r) || trkOnly(r)) return false;
     const cat = byId.get(r.cat);
     if (!cat) return false;
     const ids = new Set(cat.criteria.map(k => k.id));
@@ -3139,8 +3179,8 @@ async function save(opts) {
   const rows = formRows();
   if (!rows.length) { toast('Сначала выбери категорию'); return; }
   let scores = collectScores(rows);
-  // переоценили фильм из Letterboxd по критериям: его общий балл больше не нужен
-  if (scores.some(s => s.id !== LB_SCORE)) scores = scores.filter(s => s.id !== LB_SCORE);
+  // переоценили по критериям фильм из Letterboxd или игру из Steam: балл, перенесённый при импорте, больше не нужен
+  if (scores.some(s => !IMPORT_SCORES.includes(s.id))) scores = scores.filter(s => !IMPORT_SCORES.includes(s.id));
   // так же балл трека из разбора: оценил трек по критериям — он больше не нужен
   if (scores.some(s => s.id !== TRK_SCORE)) scores = scores.filter(s => s.id !== TRK_SCORE);
   // у альбома с разбором рядом с критериями всегда свежее среднее по трекам; какое из них балл — режим альбома (amode)
@@ -3175,7 +3215,9 @@ async function save(opts) {
     createdAt: (target && target.createdAt) || now,
     updatedAt: now
   };
-  if (fromLb(target)) doc.src = 'letterboxd'; // значок Letterboxd остаётся и после переоценки
+  // откуда перенесена (Letterboxd, Steam) — остаётся и после переоценки: значок Letterboxd и опыт как за импорт (levels.js)
+  const src = target && IMPORT_SRC.includes(target.src) ? target.src : fromLb(target) ? 'letterboxd' : '';
+  if (src) doc.src = src;
   if (target && target.lbName) doc.lbName = target.lbName;
   if (target) for (const k of ALBUM_KEYS) if (target[k] != null) doc[k] = target[k];
   if (artist) {
@@ -3205,6 +3247,8 @@ async function save(opts) {
     state.flashId = id;
     await putRating(id, doc);
     logRatingSave(target, id, doc, rows.length);
+    // трек альбома отдельной оценкой: среднее по трекам и балл альбома — уже с новым баллом трека (opinion/album.js)
+    if (doc.albumOf && window.CasualAlbum && window.CasualAlbum.retotal) { try { await window.CasualAlbum.retotal(doc.albumOf); } catch (_) {} }
     const oldId = target && target.photo ? target.photo.id : null;
     if (oldId && (!photo || photo.id !== oldId)) dropAsset(oldId);
     resetForm(form.cat);
@@ -3377,7 +3421,7 @@ function normalizeRating(id, d) {
     note: str(d.note).slice(0, 4000), example: d.example === true,
     author: (d.author && typeof d.author === 'object') ? { id: str(d.author.id), name: str(d.author.name), avatar: str(d.author.avatar), color: str(d.author.color) } : null,
     photo: normPhoto(d.photo),
-    ...(d.src === 'letterboxd' || d.src === 'steam' ? { src: d.src } : {}), // откуда перенесена: опыт за неё — как за импорт
+    ...(IMPORT_SRC.includes(d.src) ? { src: d.src } : {}), // откуда перенесена: опыт за неё — как за импорт
     ...(str(d.lbName).trim() ? { lbName: str(d.lbName).slice(0, 140) } : {}), // название в Letterboxd, если оценку переименовали
     ...(str(d.artist).trim() ? { artist: str(d.artist).slice(0, 80), title: str(d.title).slice(0, 140), artistAva: str(d.artistAva).slice(0, 40) } : {}),
     ...(/^[\w.-]{1,80}$/.test(str(d.albumOf)) && +d.trackNo >= 1 ? { albumOf: d.albumOf, trackNo: clampInt(d.trackNo, 1, 99) } : {}),
@@ -4643,13 +4687,16 @@ function takeOriginal(blob, w, h, ratio) {
   form.photo = { kind: 'new', blob, url, w, h, orig: blob, origUrl: url, origW: w, origH: h, ratio: ratio || null };
   crop.zoom = 1; crop.cx = 0.5; crop.cy = 0.5;
 }
-async function setPhotoFromFile(file, announce) {
-  if (!canPhoto() || photoBusy || !file) return;
+// f0 — форма, для которой выбрали фото: пока оно готовилось (или качалось у вызвавшего), могли нажать «Изменить»
+// у другой оценки — тогда фото туда не ставим
+async function setPhotoFromFile(file, announce, f0 = form) {
+  if (!canPhoto() || photoBusy || !file || form !== f0) return;
   if (file.size > 40 * 1024 * 1024) { toast('Фото слишком большое, выбери файл до 40 МБ'); return; }
   photoBusy = true;
   renderPhoto();
   try {
     const p = await processPhoto(file);
+    if (form !== f0) return;
     takeOriginal(p.blob, p.w, p.h);
     if (announce) toast('Фото добавлено, можно выбрать пропорции');
   } catch (_) {
@@ -4662,7 +4709,7 @@ async function setPhotoFromFile(file, announce) {
 }
 // сохранённое фото тоже можно перекадрировать: берём его как новый оригинал
 async function cropSavedPhoto() {
-  const p = form.photo;
+  const p = form.photo, f0 = form;
   if (!p || photoBusy) return;
   photoBusy = true;
   renderPhoto();
@@ -4674,6 +4721,7 @@ async function cropSavedPhoto() {
     cv.getContext('2d').drawImage(bmp, 0, 0);
     if (bmp.close) bmp.close();
     const blob = await new Promise((res, rej) => cv.toBlob(b => (b ? res(b) : rej(new Error('encode'))), 'image/jpeg', 0.9));
+    if (form !== f0) return; // пока готовили кадр, открыли другую оценку
     takeOriginal(blob, cv.width, cv.height, 1);
     photoBusy = false;
     renderPhoto();
@@ -4817,6 +4865,7 @@ async function applyPhotoUrl() {
     return;
   }
   urlPhotoBusy = true;
+  const f0 = form; // пока картинка качается, могли открыть другую оценку: туда её не ставим
   const btn = el.photoBox.querySelector('[data-act="photo-url-apply"]');
   if (btn) { btn.disabled = true; btn.textContent = '…'; }
   toast('Скачиваю картинку…');
@@ -4825,8 +4874,8 @@ async function applyPhotoUrl() {
     const b = r && typeof r.data === 'string' ? dataUrlToBlob(r.data) : null;
     if (!b) throw new Error('Картинка не загрузилась');
     urlPhotoBusy = false;
-    await setPhotoFromFile(new File([b], 'photo', { type: b.type }), false);
-    if (form.photo) toast('Картинка сохранена, можно выбрать пропорции');
+    await setPhotoFromFile(new File([b], 'photo', { type: b.type }), false, f0);
+    if (form === f0 && form.photo) toast('Картинка сохранена, можно выбрать пропорции');
   } catch (e) {
     toast(`${e && e.message ? e.message.replace(/\.$/, '') : 'Картинка не загрузилась'}. Можно сохранить её на устройство и загрузить файлом`);
   } finally {
@@ -5362,6 +5411,7 @@ function goToRating(id, quiet, noPin) {
   if (!applySubFilter([r]).length || state.sfilter === 'mine') state.sfilter = 'all';
   if (!hasGenres(r)) state.genres = [];
   if (!recentOk(r)) { state.recent = 0; savePrefs(); }
+  if (!mfilterOk(r)) state.mfilter = 'all'; // «только альбомы» прятали бы трек, «только треки» — альбом
   state.open.add(id);
   state.flashId = id;
   if (!noPin) state.pinId = id; // открытая по ссылке оценка стоит первой в списке, пока не сменят сортировку

@@ -824,5 +824,15 @@
   const avgScores = (al) => { const avg = avgOf(rowsOf(entriesOf(al))); return avg != null ? [{ id: ALB_AVG, name: 'Среднее по трекам', desc: '', w: 1, v: avg }] : []; };
   // оценённые треки по порядку ({ n, t, v, g, rid }) — столбики у балла и разбор вместо критериев в карточке (null — треков не оценивали)
   const trackRows = (al) => { const list = entriesOf(al).filter((e) => e.v != null); return list.length ? list : null; };
-  window.CasualAlbum = { cardHTML, migrateSoon, formHint, open, avgScores, trackRows };
+  // трек отдельной оценкой поправили в форме (save() в app.js): среднее по трекам и балл альбома — уже с новым баллом трека.
+  // Среднее не поменялось — альбом не трогаем (иначе он стал бы «недавним» без правки)
+  async function retotal(id) {
+    const al = albumOf(id);
+    if (!isAlbum(al)) return;
+    const avg = avgOf(rowsOf(entriesOf(al)));
+    const was = (al.scores || []).find((s) => s.id === ALB_AVG);
+    if ((was ? was.v : null) === avg) return;
+    await putAlbum(al, {});
+  }
+  window.CasualAlbum = { cardHTML, migrateSoon, formHint, open, avgScores, trackRows, retotal };
 })();

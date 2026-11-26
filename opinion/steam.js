@@ -5,7 +5,7 @@
    импорт (src 'steam' → import в levels.js), а не как за новые оценки. Работает поверх основного скрипта Мнения:
    state, normalizeRating, saveLocalRatings, putRating, renderBoard, keyOf, catKey, newId — оттуда (как letterboxd.js). */
 (() => {
-  const SCORE_ID = 'steam-score';
+  const SCORE_ID = STEAM_SCORE; // app.js: балл импорта, а не критерий категории (IMPORT_SCORES) — переоценка по критериям его заменяет
   const SCORES = [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]; // баллы критериев в Мнении — целые (normalizeRating → clampInt)
   let sheet = null, plan = null, busy = false;
   const api = () => window.casualApi;
