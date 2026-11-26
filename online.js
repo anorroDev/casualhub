@@ -287,12 +287,16 @@
   }
 
   let goneShown = false;
-  function sessionGone() {
+  // gone — токен, на который сервер ответил «не вошёл». Пока ответ шёл, другая вкладка могла войти заново:
+  // её свежий токен не стираем и плашку не показываем
+  function sessionGone(gone) {
+    let fresh = false;
     try {
       const u = read('ocenshik.user.v1'), t = read('casualhub.tokens.v1') || {};
-      if (u && t[u.id]) { delete t[u.id]; localStorage.setItem('casualhub.tokens.v1', JSON.stringify(t)); }
+      if (u && t[u.id] && t[u.id] === gone) { delete t[u.id]; localStorage.setItem('casualhub.tokens.v1', JSON.stringify(t)); }
+      else if (u && t[u.id]) fresh = true;
     } catch (e) {}
-    if (goneShown || location.pathname.startsWith('/admin')) return;
+    if (fresh || goneShown || location.pathname.startsWith('/admin')) return;
     goneShown = true;
     annCss();
     const bar = document.createElement('div');
@@ -318,7 +322,7 @@
       });
       if (r.ok) {
         const d = await r.json();
-        if (t && d.authed === false) sessionGone();
+        if (t && d.authed === false) sessionGone(t);
         // пока сокет жив, он главнее: ответ пинга, который был в пути, ничего не меняет
         if (rtLive()) return;
         apply(d, false);
@@ -377,7 +381,7 @@
   function stopRT() { if (rt) { rt.close(); rt = null; } }
   function onRT(m) {
     if (m.t === 'state') {
-      if (rtToken && m.authed === false) sessionGone();
+      if (rtToken && m.authed === false) sessionGone(rtToken);
       apply(m, true);
     } else if (m.t === 'friend') {
       if (m.on) { st.on.add(m.id); st.left.delete(m.id); } else { st.on.delete(m.id); st.left.add(m.id); }

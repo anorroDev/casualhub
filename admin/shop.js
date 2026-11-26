@@ -170,7 +170,7 @@
     const e = d.earned || {};
     const have = (d.items || []).filter((x) => x.owned && x.price > 0);
     return `<div class="ash-box"><h3>${esc(d.user.username || '')} · @${esc(d.user.handle || '')}</h3>
-      <div class="ash-nums"><span>Сейчас: <b>${coins(d.balance)}</b>${d.debt ? ` (долг ${nf(d.debt)})` : ''}</span><span>За опыт: <b>${nf(e.xp)}</b></span><span>За достижения: <b>${nf(e.ach)}</b></span><span>За сезоны: <b>${nf(e.season)}</b></span><span>От администрации: <b>${nf(d.gifts)}</b></span><span>Потрачено: <b>${nf(d.spent)}</b></span></div>
+      <div class="ash-nums"><span>Сейчас: <b>${coins(d.balance)}</b>${d.debt ? ` (долг ${nf(d.debt)})` : ''}</span><span>За опыт: <b>${nf(e.xp)}</b></span><span>За достижения: <b>${nf(e.ach)}</b></span><span>За сезоны: <b>${nf(e.season)}</b></span><span>Подарки: <b>${nf(d.gifts)}</b></span><span>Потрачено: <b>${nf(d.spent)}</b></span></div>
       ${have.length ? `<div class="ash-chips">${have.map((x) => `<span>${esc(x.title)}</span>`).join('')}</div>` : '<p class="muted">Ничего не купил.</p>'}</div>
       <form class="ash-box ash-grant" id="ashGrant"><h3 style="grid-column: 1 / -1">Подарить или снять</h3>
         <input class="adm-in" id="ashN" type="number" inputmode="numeric" min="1" max="100000" step="1" placeholder="Сколько" required>

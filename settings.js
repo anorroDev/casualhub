@@ -394,7 +394,9 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
             <span class="st-hint"><b>Вход по коду без пароля</b></span>
             <span class="st-hint">Войти можно будет по почте или @юзернейму и коду из приложения, без пароля. Удобнее, но слабее: кто держит телефон с приложением, тот и войдёт</span>
             <span class="st-hint">После 10 неверных кодов подряд вход по коду выключится сам — включишь его снова здесь</span>
+            <span class="st-hint">Сменишь пароль — вход по коду тоже выключится</span>
             <span class="st-hint">${me.codeLogin ? 'Сейчас вход по коду включён' : 'Сейчас вход по коду выключен'}</span>
+            ${me.codeLogin ? '' : '<label class="st-f"><span>Текущий пароль</span><input class="st-in" type="password" name="current" autocomplete="current-password" required></label>'}
             <label class="st-f"><span>Код из приложения</span><input class="st-in" name="code" autocomplete="one-time-code" inputmode="numeric" maxlength="12" required></label>
             <div class="st-acts"><button type="submit" class="st-btn${me.codeLogin ? ' bad' : ''}">${me.codeLogin ? 'Выключить вход по коду' : 'Включить вход по коду'}</button><span class="st-msg" role="status"></span></div></form>
           <form class="st-form" data-f="tfa-off" style="padding:12px 0 0;border-top:1px solid var(--line, #2b2e38)">
@@ -677,7 +679,8 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
           const key = r.secret.replace(/(.{4})/g, '$1 ').trim();
           boxT.innerHTML = `<span class="st-hint"><b>1.</b> Отсканируй QR-код приложением-аутентификатором${narrow() ? ' или нажми «Открыть в приложении»' : ''}.</span>
             <div class="st-qr">${window.CasualQR.svg(r.uri, 176)}<span class="st-t"><small>Не получается отсканировать? Добавь вручную по ключу:</small><span class="st-key">${esc(key)}</span>${narrow() ? `<a class="st-btn" href="${esc(r.uri)}" style="justify-self:start;margin-top:6px">Открыть в приложении</a>` : ''}</span></div>
-            <form class="st-form" data-f="tfa-on" style="padding:0"><span class="st-hint"><b>2.</b> Введи 6 цифр, которые показывает приложение для «CasualHub».</span>
+            <form class="st-form" data-f="tfa-on" style="padding:0"><span class="st-hint"><b>2.</b> Впиши текущий пароль и 6 цифр, которые показывает приложение для «CasualHub».</span>
+              <label class="st-f"><span>Текущий пароль</span><input class="st-in" type="password" name="current" autocomplete="current-password" required></label>
               <label class="st-f"><span>Код из приложения</span><input class="st-in" name="code" autocomplete="one-time-code" inputmode="numeric" maxlength="6" required></label>
               <div class="st-acts"><button type="submit" class="st-btn pri">Включить защиту</button><span class="st-msg" role="status"></span></div></form>`;
           const i = boxT.querySelector('input[name="code"]'); if (i && !narrow()) i.focus();
@@ -796,7 +799,7 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
           return;
         } else if (f.dataset.f === 'tfa-on') {
           btn.disabled = true;
-          const r = await api('/2fa/enable', 'POST', { code: v.code });
+          const r = await api('/2fa/enable', 'POST', { code: v.code, password: v.current });
           me = r.user;
           showCodes(f.closest('[data-tfa]'), r.codes);
           toast('Двухфакторная защита включена');
@@ -811,7 +814,7 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
           // вход по коду из приложения без пароля (qr-login.js в окне входа): включает и выключает сам человек
           btn.disabled = true;
           const on = !(me && me.codeLogin);
-          me = (await api('/2fa/free', 'POST', { on, code: v.code })).user;
+          me = (await api('/2fa/free', 'POST', on ? { on, code: v.code, password: v.current } : { on, code: v.code })).user;
           show('security');
           toast(on ? 'Вход по коду включён' : 'Вход по коду выключен');
           return;

@@ -572,7 +572,7 @@ html.unslop .sh-it.on { box-shadow: none; }`;
     const e = D.earned || {};
     const row = (t, n) => `<div><span>${t}</span><b>${n < 0 ? '−' : ''}${coins(Math.abs(n))}</b></div>`;
     return `<p class="sh-note">Рофланы копятся сами — за всё, за что на сайте даётся опыт: 1 рофлан за каждые ${D.rate} опыта. Ещё — за достижения (бронза 15, серебро ещё 40, золото ещё 100, особые 30) и за звание в конце сезона (до 300 у «Величайшего»). Покупать можно только оформление и заморозки: опыт и звания за рофланы не купить.</p>
-      <div class="sh-earn">${row('За опыт', e.xp || 0)}${row('За достижения', e.ach || 0)}${row('За сезоны', e.season || 0)}${D.gifts ? row('От администрации', D.gifts) : ''}${row('Потрачено', -(D.spent || 0))}<div><span><b>Сейчас</b></span><b>${coinImg(16)} ${coins(D.balance)}</b></div></div>
+      <div class="sh-earn">${row('За опыт', e.xp || 0)}${row('За достижения', e.ach || 0)}${row('За сезоны', e.season || 0)}${D.gifts ? row('Подарки', D.gifts) : ''}${row('Потрачено', -(D.spent || 0))}<div><span><b>Сейчас</b></span><b>${coinImg(16)} ${coins(D.balance)}</b></div></div>
       ${D.debt ? `<p class="sh-note">Часть опыта ушла (например, удалены оценки), и потрачено больше, чем заработано: нужно ещё ${coins(D.debt)}, прежде чем копить на новое.</p>` : ''}`;
   }
   async function onCard(e) {
