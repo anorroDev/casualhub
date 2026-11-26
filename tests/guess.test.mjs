@@ -68,6 +68,31 @@ test('набор дня: только видимые друзьям оценки
   assert.deepEqual(pickSet(hid, 's', NOW).map((x) => x.rid), ['m1']);
 });
 
+test('набор дня: скрытая категория узнаётся по названию, как в профиле, — в cat у оценки лежит id категории', () => {
+  // так оценки лежат на полке: cat — id ('games' у стартовой, 't…' у своей), catName — название, catLabel — нынешнее название
+  const sh = [{ owner: 'f1', hide: ['игры', 'кофейни', 'фильмы и сериалы'], ratings: [
+    r('g1', 'Hades', 9, { cat: 'games', catName: 'Игры', catLabel: 'Игры' }),
+    r('k1', 'Кофе у дома', 8, { cat: 't1abc', catName: 'Кофейни' }),
+    r('m1', 'Дюна', 7, { cat: 'films', catName: '', catLabel: 'Фильмы и сериалы' }),
+    r('b1', 'Дюна', 8, { cat: 'books', catName: 'Книги', catLabel: 'Книги' }),
+  ] }];
+  assert.deepEqual(pickSet(sh, 's', NOW).map((x) => x.rid), ['b1'], 'видна только категория, которую друг не скрывал');
+  assert.equal(pickSet(sh, 's', NOW)[0].cat, 'Книги');
+  // без скрытых — всё на месте
+  assert.equal(pickSet([{ ...sh[0], hide: [] }], 's', NOW).length, 4);
+});
+
+test('набор дня: обложка — ссылка https из оценки (своё загруженное фото ссылки не имеет)', () => {
+  const sh = [{ owner: 'f1', ratings: [
+    r('a', 'Hades', 9, { photo: { url: 'https://cdn.example/hades.jpg', w: 600, h: 900 } }),
+    r('b', 'Doom', 7, { photo: { remote: 'fp1a2b', w: 600, h: 900 } }),
+    r('c', 'Portal', 8, { photo: { url: 'http://cdn.example/portal.jpg' } }),
+    r('d', 'Dune', 6, { photo: { url: 'https://cdn.example/a b"onerror=x.jpg' } }),
+  ] }];
+  const by = Object.fromEntries(pickSet(sh, 's', NOW).map((x) => [x.rid, x.photo]));
+  assert.deepEqual(by, { a: 'https://cdn.example/hades.jpg', b: '', c: '', d: '' });
+});
+
 async function setup() {
   const env = { DB: fakeD1() };
   const q = (sql, ...a) => env.DB.raw.prepare(sql).run(...a);
@@ -145,4 +170,15 @@ test('игра: без друзей и у друзей без оценок — �
   const none = await at(NOW, () => routes['GET /guess']({ env, me: { id: 'u9' } }));
   assert.equal(none.empty, 'ratings');
   assert.equal((await at(NOW, () => routes['POST /guess']({ env, request: { body: { answers: {} } }, me: { id: 'u9' } }))).status, 400);
+});
+
+test('игра: категории, скрытые другом из профиля (profile.hide на его полке), в набор не идут', async () => {
+  const { env, routes } = await setup();
+  env.DB.raw.prepare("UPDATE shelves SET data = ? WHERE user_id = 'f1'").run(JSON.stringify({
+    ratings: [r('a', 'Hades', 9, { cat: 'games', catLabel: 'Игры' }), r('c', 'Дюна', 7, { cat: 'films', catName: 'Фильмы и сериалы', catLabel: 'Фильмы и сериалы' })],
+    profile: { hide: ['игры'], at: 5 },
+  }));
+  const s = await at(NOW, () => routes['GET /guess']({ env, me: { id: 'u1' } }));
+  const ids = s.items.map((x) => x.rid).sort();
+  assert.deepEqual(ids, ['c', 'd', 'e'], '«Hades» из скрытых «Игр» не попал, остальное от f1 и f2 — да');
 });

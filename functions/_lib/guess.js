@@ -23,9 +23,14 @@ function rng(seed) {
 }
 const shuffle = (a, rnd) => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(rnd() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const stamp = (r) => +new Date(r.updatedAt || r.createdAt || 0) || 0;
-// ключ категории — как в профиле (profile/app.js → keyOf): скрытые из профиля категории хранятся так
+// ключ категории — как в профиле (profile/app.js → keyOf): скрытые из профиля категории хранятся так.
+// В r.cat лежит id категории ('games', 't1abc…'), а профиль скрывает по названию — берём его так же, как профиль (norm)
 const catKey = (s) => String(s || '').toLowerCase().replace(/\(.*?\)/g, '').replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+const catOf = (r) => catKey(r.catName || r.catLabel || r.cat || 'Без категории');
 const fits = (r) => !!r && !r.example && r.vis !== 'private' && !r.albumOf && typeof r.id === 'string' && !!String(r.name || '').trim() && isScored(r);
+// обложка по ссылке (из поиска, Steam и т. п.): страница ставит её прямо в <img>. Своё загруженное фото (photo.remote)
+// лежит в аккаунте друга, ссылки на него нет — тогда буква названия
+const coverOf = (p) => (p && typeof p.url === 'string' && /^https:\/\//.test(p.url) && SAFE_URL.test(p.url) ? p.url : '');
 
 // shelves: [{ owner, ratings, hide }] → до GUESS_N вопросов { owner, rid, name, cat, photo, adult, total }:
 // сначала свежие, по кругу по друзьям (первые — от разных), не хватило — старше 60 дней
@@ -35,7 +40,7 @@ export function pickSet(shelves, seed, now = Date.now()) {
   for (const old of [false, true]) {
     const groups = shuffle((shelves || []).map((s) => {
       const hid = new Set((s.hide || []).map(catKey));
-      const list = (s.ratings || []).filter((r) => fits(r) && !hid.has(catKey(r.cat)) && (now - stamp(r) > FRESH) === old);
+      const list = (s.ratings || []).filter((r) => fits(r) && !hid.has(catOf(r)) && (now - stamp(r) > FRESH) === old);
       return { owner: s.owner, list: shuffle(list, rnd) };
     }).filter((g) => g.list.length), rnd);
     while (out.length < GUESS_N && groups.some((g) => g.list.length)) {
@@ -46,7 +51,7 @@ export function pickSet(shelves, seed, now = Date.now()) {
         const cat = clip(r.catLabel || r.catName || '', 60);
         out.push({
           owner: g.owner, rid: clip(r.id, 120), name: clip(r.name, 120), cat,
-          photo: r.photo && r.photo.remote && typeof r.photo.url === 'string' && SAFE_URL.test(r.photo.url) ? r.photo.url : '',
+          photo: coverOf(r.photo),
           adult: r.adult === true || NSFW_RE.test(cat), total: Math.round(+r.total * 10) / 10,
         });
       }
