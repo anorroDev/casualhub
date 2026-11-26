@@ -226,8 +226,9 @@
   }
 
   // ---------- миски ----------
-  // id общие с магазином (vasyan.bowl.<id>): стальная — у всех, часть продаётся, четыре открывают тайные достижения
-  // (secret — какое, знает только сервер). pal — цвета: G — край и тень, L — сама миска, I — блик, H — дно;
+  // id общие с магазином (vasyan.bowl.<id>): стальная — у всех, часть продаётся, часть открывают достижения: secret —
+  // тайные (какое — знает только сервер), ach — обычные (название — из магазина, CasualShop.achOf).
+  // pal — цвета: G — край и тень, L — сама миска, I — блик, H — дно;
   // body — свой узор на верхних строках тела (остальные — как у стальной). Буквы узоров заглавные: строчные — у еды
   const BOWLS = [
     { id: 'steel', name: 'Стальная', pal: {} },
@@ -248,6 +249,12 @@
       body: ['GIIILLLXLXLLLLLLLG', '.GLILLLLXLLLLLLLG.', '..GGLLLXLXLLLLGG..'] },
     { id: 'home', name: 'Домашняя', secret: true, pal: { G: '#B0507A', L: '#F59AC4', I: '#FFD4E8', H: '#7A3354', R: '#D9363E' },
       body: ['GIIILLRRLRRLLLLLLG', '.GLILLRRRRRLLLLLG.', '..GGLLLRRRLLLLGG..'] },
+    { id: 'paw', name: 'С лапкой', ach: true, pal: { G: '#8E96A6', L: '#FFFFFF', I: '#FFFFFF', H: '#5E6573', R: '#F59AC4' },
+      body: ['GIIILLLRLRLRLLLLLG', '.GLILLLLRRRLLLLLG.', '..GGLLLLRRRLLLGG..'] },
+    { id: 'note', name: 'Нотная', ach: true, pal: { G: '#1B1B1F', L: '#3A3E4B', I: '#5E6573', H: '#111114', D: '#F2C94C' },
+      body: ['GIIILLLDDLLLLDDLLG', '.GLILLLDLLLLLDLLG.', '..GGLLDDLLLLDDGG..'] },
+    { id: 'chess', name: 'Шахматная', ach: true, pal: { G: '#5E6573', L: '#F4F4F0', I: '#FFFFFF', H: '#3A3E4B', D: '#1B1B1F' },
+      body: ['GIIIDDLLDDLLDDLLDG', '.GLILLDDLLDDLLDDG.', '..GGDDLLDDLLDDGG..'] },
   ];
   const bowlOf = (id) => BOWLS.find((b) => b.id === id) || BOWLS[0];
   // миска с бликом; в ней — выбранная еда: сухой корм горкой, остальное картинками
@@ -339,18 +346,43 @@
   const BOX_BACK = ['.TTTTTTTTTTTTTTTTTTTTTT.', 'TXXYXXXXXYXXXXXXYXXXXYXT'];
   const BOX_FRONT = ['TTTTTTTTTTTTTTTTTTTTTTTT', 'TUVUUUUUUUUUUUUUUUUUUUUT', 'TUUUUUUUUUUUUUUUUUUUUUUT', '.TTTTTTTTTTTTTTTTTTTTTT.'];
   const POO = ['..p..', '.pqp.', 'ppppp'], POO_SPOTS = [4, 10, 15], BOX_FULL = 3;
+  // скины лотка: id общие с магазином (vasyan.box.<id>), синий — у всех, часть продаётся, часть открывают достижения
+  // (ach). pal — цвета (T — бортики, U — стенка, V — блик; наполнитель X и Y — у всех свой), front — свой узор на двух
+  // средних строках передней стенки
+  const BOXES = [
+    { id: 'blue', name: 'Синий', pal: {} },
+    { id: 'pink', name: 'Розовый', pal: { T: '#A84473', U: '#F28DB8', V: '#FFC7DF' } },
+    { id: 'green', name: 'Зелёный', pal: { T: '#2F7A3E', U: '#55B86A', V: '#9BE0A8' } },
+    { id: 'wood', name: 'Деревянный', pal: { T: '#5C3D22', U: '#B07A45', V: '#D9A46A', D: '#8A5A30' },
+      front: ['TUVUUUDDDUUUUUUDDDUUUUUT', 'TUUDDDUUUUUUDDDUUUUDDDUT'] },
+    { id: 'tiger', name: 'Тигровый', pal: { T: '#1B1B1F', U: '#F28E4C', V: '#FFC08A', D: '#1B1B1F' },
+      front: ['TUVDUUDUUDUUDUUDUUDUUDUT', 'TUDUUDUUDUUDUUDUUDUUDUUT'] },
+    { id: 'gold', name: 'Золотой', pal: { T: '#A8780E', U: '#F2C230', V: '#FFF2A8', W: '#FFFFFF' },
+      front: ['TUVUUUUUWUUUUUUUUWUUUUUT', 'TUUUUWUUUUUUUWUUUUUUUWUT'] },
+    // за достижения: «В ритме», «Критик», «Исполнительный», «Участник события»
+    { id: 'retro', name: 'Ретро', ach: true, pal: { T: '#3A3E4B', U: '#9AA1AE', V: '#D3D8E0', W: '#5E6573', D: '#E8483B', E: '#4F8BE8' },
+      front: ['TUVUWWWUUUUUUUUUUUUDUEUT', 'TUUUWWWUUUUUUUUUUUUUUUUT'] },
+    { id: 'space', name: 'Космос', ach: true, pal: { T: '#141B38', U: '#33427A', V: '#5466A8', W: '#FFFFFF', D: '#F2C94C' },
+      front: ['TUVUUWUUUUUUDUUUUUUWUUUT', 'TUUUUUUUWUUUUUUWUUUUUDUT'] },
+    { id: 'crown', name: 'Королевский', ach: true, pal: { T: '#C9971A', U: '#7A3FB0', V: '#A96BE0', D: '#F2C230', R: '#E8483B' },
+      front: ['TUVUUUUUUUUUUUUUUUUUUUUT', 'TUUDUUURUUUDUUURUUUDUUUT'] },
+    { id: 'party', name: 'Праздничный', ach: true, pal: { T: '#8E96A6', U: '#FFFFFF', V: '#FFFFFF', A: '#E8483B', B: '#4F8BE8', C: '#F2C230', E: '#43C97A' },
+      front: ['TUVAUUBUUCUUEUUAUUBUUCUT', 'TUUUCUUEUUAUUBUUCUUEUUUT'] },
+  ];
+  const boxSkinOf = (id) => BOXES.find((b) => b.id === id) || BOXES[0];
+  const frontOf = (b) => (b.front ? [BOX_FRONT[0], ...b.front, BOX_FRONT[3]] : BOX_FRONT);
   // n — сколько кучек: низ кучки — на наполнителе, верх — над задним бортиком
-  const boxRows = (n) => memo('box|' + Math.min(3, n), () => {
-    const rows = [BOX_BLANK, ...BOX_BACK, ...BOX_FRONT].map((r) => [...r]);
+  const boxRows = (n, b = boxSkin) => memo('box|' + Math.min(3, n) + '|' + b.id, () => {
+    const rows = [BOX_BLANK, ...BOX_BACK, ...frontOf(b)].map((r) => [...r]);
     for (let i = 0; i < Math.min(3, n); i++) POO.forEach((r, yy) => [...r].forEach((ch, xx) => { if (ch !== '.') rows[yy][POO_SPOTS[i] + xx] = ch; }));
-    return Object.assign(rows.map((r) => r.join('')), { pal: BOX_PAL });
+    return Object.assign(rows.map((r) => r.join('')), { pal: { ...BOX_PAL, ...b.pal } });
   });
-  const boxFrontRows = () => memo('boxfront', () => Object.assign([BOX_BLANK, BOX_BLANK, BOX_BLANK, ...BOX_FRONT], { pal: BOX_PAL }));
+  const boxFrontRows = (b = boxSkin) => memo('boxfront|' + b.id, () => Object.assign([BOX_BLANK, BOX_BLANK, BOX_BLANK, ...frontOf(b)], { pal: { ...BOX_PAL, ...b.pal } }));
   const pooRows = () => memo('poo', () => Object.assign(POO.slice(), { pal: BOX_PAL }));
   // вонь над грязным лотком — три волнистые линии
   const STINK = Object.assign(['.s...s...s', 's...s...s.', '.s...s...s', 's...s...s.'], { pal: { s: '#8BC34A' } });
 
-  let coat = COATS[0], outfit = OUTFITS[0], bowlSkin = BOWLS[0];
+  let coat = COATS[0], outfit = OUTFITS[0], bowlSkin = BOWLS[0], boxSkin = BOXES[0];
   const cache = new WeakMap();
   // кадр → svg. Пиксели одного цвета — одним path (подряд по строке — одним прямоугольником): меньше узлов при смене кадра.
   // Наряд дорисовывается поверх головы; если вылезает за кадр, поле расширяется — сверху и симметрично по бокам,
@@ -519,7 +551,7 @@
   // злость 0–100 (много кликов, бросили, грязный лоток): проходит сама, пока сайт закрыт — тоже (1 пункт за 5 секунд)
   st.anger = Math.max(0, Math.min(100, (+st.anger || 0) - (st.at ? Math.max(0, now0 - st.at) / 5000 : 0)));
   st.at = now0;
-  coat = coatOf(st.skin); outfit = outfitOf(st.outfit); bowlSkin = bowlOf(st.bowlSkin);
+  coat = coatOf(st.skin); outfit = outfitOf(st.outfit); bowlSkin = bowlOf(st.bowlSkin); boxSkin = boxSkinOf(st.boxSkin);
   const save = () => { st.at = Date.now(); write(st); };
 
   let cat, body, bubble, bowl, bowlIn, box, boxIn, boxFront, alive = false, raf = 0;
@@ -887,8 +919,8 @@
   // ---------- лоток: рисунок, место, падение, уборка; кучки мимо лотка ----------
   function drawBox() {
     if (!box) return;
-    const s = sprite(boxRows(st.box.n), K);
-    if (s !== boxSpr) { boxIn.innerHTML = s.svg; boxSpr = s; lt.w = s.cw; lt.h = s.ch; boxFront.innerHTML = sprite(boxFrontRows(), K).svg; }
+    const s = sprite(boxRows(st.box.n, boxSkin), K);
+    if (s !== boxSpr) { boxIn.innerHTML = s.svg; boxSpr = s; lt.w = s.cw; lt.h = s.ch; boxFront.innerHTML = sprite(boxFrontRows(boxSkin), K).svg; }
     // грязный — над ним вонь
     const dirty = st.box.n >= BOX_FULL;
     let sk = box.querySelector('.vy-stink');
@@ -1713,11 +1745,14 @@
   // куплено, еда — ещё и открыта уровнем, миска — тайным достижением. classic, none, стальная миска и сухой корм — у всех;
   // пока магазина на странице нет — доступно всё
   const shopOn = () => !!(window.CasualShop && typeof window.CasualShop.owned === 'function');
-  const FREE = new Set(['skin.classic', 'outfit.none', 'food.kibble', 'bowl.steel']);
+  const FREE = new Set(['skin.classic', 'outfit.none', 'food.kibble', 'bowl.steel', 'box.blue']);
   function owned(kind, id) {
     if (FREE.has(kind + '.' + id) || !shopOn()) return true;
     try { return !!window.CasualShop.owned('vasyan.' + kind + '.' + id); } catch (e) { return true; }
   }
+  // за какое обычное достижение миска или лоток — знает магазин ('' — не знает)
+  const achOf = (kind, id) => { try { return (window.CasualShop && typeof window.CasualShop.achOf === 'function' && String(window.CasualShop.achOf('vasyan.' + kind + '.' + id) || '')) || ''; } catch (e) { return ''; } };
+  const escH = (v) => (window.CasualUtil && window.CasualUtil.esc ? window.CasualUtil.esc(v) : String(v).replace(/[&<>"']/g, ''));
   // с какого уровня открывается еда — знает магазин (0 — не знает)
   const unlockAt = (id) => { try { return (window.CasualShop && typeof window.CasualShop.unlockAt === 'function' && +window.CasualShop.unlockAt('vasyan.food.' + id)) || 0; } catch (e) { return 0; } };
   // надетое, но не своё — снять (когда магазин уже знает покупки: ready не false)
@@ -1728,27 +1763,32 @@
     if (!owned('outfit', outfit.id)) { outfit = OUTFITS[0]; st.outfit = outfit.id; changed = true; }
     if (!owned('food', st.food)) { st.food = FOODS[0].id; changed = true; drawBowl(); }
     if (!owned('bowl', bowlSkin.id)) { bowlSkin = BOWLS[0]; st.bowlSkin = bowlSkin.id; changed = true; drawBowl(); }
+    if (!owned('box', boxSkin.id)) { boxSkin = BOXES[0]; st.boxSkin = boxSkin.id; changed = true; drawBox(); }
     if (changed) { save(); shown = null; }
   }
   const LOCK = '<svg class="vy-lock" viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
   function paintSkins(box) {
     if (!css.isConnected) document.head.appendChild(css);
     box.dataset.vyFilled = '1';
-    // secret — миска за тайное достижение: в магазине её не купить, кнопки «В магазин» нет
-    const tile = (kind, id, name, svg, secret) => {
+    // lock: 'secret' — за тайное достижение, 'ach' — за обычное (подпись — его название); в магазине их не купить,
+    // кнопки «В магазин» нет
+    const tile = (kind, id, name, svg, lock) => {
       if (!owned(kind, id)) {
-        const lv = kind === 'food' ? unlockAt(id) : 0;
-        const note = secret ? '<span class="vy-sk-lv">Тайное достижение</span>' : lv ? `<span class="vy-sk-lv">С ${lv}-го уровня</span>` : '';
-        return `<div class="vy-sk locked"><span class="vy-sk-pic">${svg}</span><span class="vy-sk-n">${LOCK}${name}</span>${note}${secret ? '' : '<button type="button" class="vy-sk-shop" data-vy-shop>В магазин</button>'}</div>`;
+        const lv = kind === 'food' ? unlockAt(id) : 0, ach = lock === 'ach' ? achOf(kind, id) : '';
+        const note = lock === 'secret' ? '<span class="vy-sk-lv">Тайное достижение</span>'
+          : lock === 'ach' ? `<span class="vy-sk-lv">За достижение${ach ? ` «<span>${escH(ach)}</span>»` : ''}</span>`
+          : lv ? `<span class="vy-sk-lv">С ${lv}-го уровня</span>` : '';
+        return `<div class="vy-sk locked"><span class="vy-sk-pic">${svg}</span><span class="vy-sk-n">${LOCK}${name}</span>${note}${lock ? '' : '<button type="button" class="vy-sk-shop" data-vy-shop>В магазин</button>'}</div>`;
       }
-      const on = kind === 'skin' ? id === coat.id : kind === 'outfit' ? id === outfit.id : kind === 'bowl' ? id === bowlSkin.id : id === st.food;
+      const on = kind === 'skin' ? id === coat.id : kind === 'outfit' ? id === outfit.id : kind === 'bowl' ? id === bowlSkin.id : kind === 'box' ? id === boxSkin.id : id === st.food;
       return `<button type="button" class="vy-sk" data-vy-${kind}="${id}" aria-pressed="${on}"><span class="vy-sk-pic">${svg}</span><span class="vy-sk-n">${name}</span></button>`;
     };
     const group = (title, label, html) => `<div class="vy-sk-g"><span class="vy-sk-t">${title}</span><div class="vy-sk-row" role="group" aria-label="${label}">${html}</div></div>`;
     box.innerHTML = '<div class="vy-skins">'
       + group('Окрас', 'Окрас Васяна', COATS.map((c) => tile('skin', c.id, c.name, sprite(SIT, 2, true, c.id, outfit.id).svg)).join(''))
       + group('Наряд', 'Наряд Васяна', OUTFITS.map((o) => tile('outfit', o.id, o.name, sprite(SIT, 2, true, coat.id, o.id).svg)).join(''))
-      + group('Миска', 'Миска Васяна', BOWLS.map((b) => tile('bowl', b.id, b.name, sprite(bowlRows(0, FOODS[0], b), 3).svg, b.secret)).join(''))
+      + group('Миска', 'Миска Васяна', BOWLS.map((b) => tile('bowl', b.id, b.name, sprite(bowlRows(0, FOODS[0], b), 3).svg, b.secret ? 'secret' : b.ach ? 'ach' : '')).join(''))
+      + group('Лоток', 'Лоток Васяна', BOXES.map((b) => tile('box', b.id, b.name, sprite(boxRows(0, b), 3).svg, b.ach ? 'ach' : '')).join(''))
       + group('Еда', 'Еда Васяна', FOODS.map((f) => tile('food', f.id, f.name, sprite(f.rows, 3).svg)).join(''))
       + '</div>';
   }
@@ -1758,25 +1798,28 @@
   function setOutfit(id) { if (!owned('outfit', id)) return false; outfit = outfitOf(id); st.outfit = outfit.id; save(); applyLook(); return true; }
   // насыпать другую еду: что было в миске, то и остаётся по количеству, но уже новая
   function setFood(id) { if (!FOODS.some((f) => f.id === id) || !owned('food', id)) return false; st.food = id; save(); applyLook(); if (bubble && bubble.classList.contains('think')) say('think'); return true; }
+  // другой лоток: те же кучки, то же место
+  function setBox(id) { if (!BOXES.some((b) => b.id === id) || !owned('box', id)) return false; boxSkin = boxSkinOf(id); st.boxSkin = boxSkin.id; save(); boxSpr = null; drawBox(); repaintSkins(); return true; }
   // другая миска: та же еда, то же место (лежит вверх дном — так и лежит, только другая)
   function setBowl(id) { if (!BOWLS.some((b) => b.id === id) || !owned('bowl', id)) return false; bowlSkin = bowlOf(id); st.bowlSkin = bowlSkin.id; save(); applyLook(); return true; }
   document.addEventListener('click', (e) => {
-    const b = e.target.closest && e.target.closest('[data-vy-skin], [data-vy-outfit], [data-vy-bowl], [data-vy-food], [data-vy-shop]');
+    const b = e.target.closest && e.target.closest('[data-vy-skin], [data-vy-outfit], [data-vy-bowl], [data-vy-box], [data-vy-food], [data-vy-shop]');
     if (!b) return;
     if (b.hasAttribute('data-vy-shop')) { if (window.CasualShop && typeof window.CasualShop.open === 'function') window.CasualShop.open('vasyan'); return; }
-    if (b.dataset.vySkin) setSkin(b.dataset.vySkin); else if (b.dataset.vyOutfit) setOutfit(b.dataset.vyOutfit); else if (b.dataset.vyBowl) setBowl(b.dataset.vyBowl); else setFood(b.dataset.vyFood);
+    if (b.dataset.vySkin) setSkin(b.dataset.vySkin); else if (b.dataset.vyOutfit) setOutfit(b.dataset.vyOutfit); else if (b.dataset.vyBowl) setBowl(b.dataset.vyBowl); else if (b.dataset.vyBox) setBox(b.dataset.vyBox); else setFood(b.dataset.vyFood);
   });
   // магазин загрузился или что-то купили (или уровень открыл еду) — проверить своё и перерисовать выбор
   document.addEventListener('casualhub:shop', () => { enforceOwned(); repaintSkins(); });
   // картинка для карточки в магазине: окрас — без наряда, наряд — на «Классике», еда — в стальной миске,
   // миска — с сухим кормом. Вид — из id (vasyan.<вид>.<id>): у еды и мисок бывают одинаковые короткие id
   function preview(id, k = 3) {
-    const m = /^vasyan\.(skin|outfit|food|bowl)\.(.+)$/.exec(String(id || ''));
+    const m = /^vasyan\.(skin|outfit|food|bowl|box)\.(.+)$/.exec(String(id || ''));
     const kind = m ? m[1] : '', bare = m ? m[2] : String(id || '');
     if ((!kind || kind === 'skin') && COATS.some((c) => c.id === bare)) return sprite(SIT, k, true, bare, 'none').svg;
     if ((!kind || kind === 'outfit') && OUTFITS.some((o) => o.id === bare)) return sprite(SIT, k, true, 'classic', bare).svg;
     if ((!kind || kind === 'food') && FOODS.some((f) => f.id === bare)) return sprite(bowlRows(2, foodOf(bare), BOWLS[0]), k, true, 'classic', 'none').svg;
     if (kind === 'bowl' && BOWLS.some((b) => b.id === bare)) return sprite(bowlRows(2, FOODS[0], bowlOf(bare)), k, true, 'classic', 'none').svg;
+    if (kind === 'box' && BOXES.some((b) => b.id === bare)) return sprite(boxRows(0, boxSkinOf(bare)), k, true, 'classic', 'none').svg;
     return '';
   }
   // окно Настроек рисуется позже: ждём блок data-vasyan-skins (только у хозяина; свои кадры Васяна не считаем)
@@ -1804,9 +1847,9 @@
     try {
       const v = JSON.parse(e.newValue) || {};
       const food = typeof v.food === 'string' ? foodOf(v.food).id : st.food; // старая вкладка пишет в food число — его не трогаем
-      if ((v.skin || 'classic') !== coat.id || (v.outfit || 'none') !== outfit.id || food !== st.food || bowlOf(v.bowlSkin).id !== bowlSkin.id) {
-        st.skin = v.skin; st.outfit = v.outfit; st.food = food; st.bowlSkin = v.bowlSkin;
-        coat = coatOf(v.skin); outfit = outfitOf(v.outfit); bowlSkin = bowlOf(v.bowlSkin); applyLook();
+      if ((v.skin || 'classic') !== coat.id || (v.outfit || 'none') !== outfit.id || food !== st.food || bowlOf(v.bowlSkin).id !== bowlSkin.id || boxSkinOf(v.boxSkin).id !== boxSkin.id) {
+        st.skin = v.skin; st.outfit = v.outfit; st.food = food; st.bowlSkin = v.bowlSkin; st.boxSkin = v.boxSkin;
+        coat = coatOf(v.skin); outfit = outfitOf(v.outfit); bowlSkin = bowlOf(v.bowlSkin); boxSkin = boxSkinOf(v.boxSkin); boxSpr = null; drawBox(); applyLook();
       }
       // голод, злость, когда в лоток, сколько погладили — как там
       for (const k of ['hunger', 'anger', 'pooAt', 'pets']) if (Number.isFinite(+v[k])) st[k] = +v[k];
@@ -1942,16 +1985,17 @@
   // preview(id) — svg для карточки. act(вид) — показать повадку сразу (для проверки): sit, walk, jump, loaf, sleep, wash,
   // yawn, stretch, scratch, sneeze, roll, play, edge (только на карточке), scared, push (миска рядом, там же, где он)
   const kindOf = (id) => {
-    const m = /^vasyan\.(skin|outfit|food|bowl)\./.exec(String(id || ''));
+    const m = /^vasyan\.(skin|outfit|food|bowl|box)\./.exec(String(id || ''));
     if (m) return m[1];
-    return COATS.some((c) => c.id === id) ? 'skin' : FOODS.some((f) => f.id === id) ? 'food' : BOWLS.some((b) => b.id === id) ? 'bowl' : 'outfit';
+    return COATS.some((c) => c.id === id) ? 'skin' : FOODS.some((f) => f.id === id) ? 'food' : BOWLS.some((b) => b.id === id) ? 'bowl' : BOXES.some((b) => b.id === id) ? 'box' : 'outfit';
   };
   window.CasualVasyan = {
     on: () => !st.off, own,
     skins: [...COATS.map((c) => ({ id: c.id, kind: 'skin', name: c.name })), ...OUTFITS.map((o) => ({ id: o.id, kind: 'outfit', name: o.name })),
-      ...BOWLS.map((b) => ({ id: b.id, kind: 'bowl', name: b.name })), ...FOODS.map((f) => ({ id: f.id, kind: 'food', name: f.name }))],
-    preview, owned: (id) => owned(kindOf(id), String(id || '').replace(/^vasyan\.(skin|outfit|food|bowl)\./, '')),
-    skin: () => coat.id, outfit: () => outfit.id, food: () => st.food, bowl: () => bowlSkin.id, setSkin, setOutfit, setFood, setBowl,
+      ...BOWLS.map((b) => ({ id: b.id, kind: 'bowl', name: b.name })), ...BOXES.map((b) => ({ id: b.id, kind: 'box', name: b.name })),
+      ...FOODS.map((f) => ({ id: f.id, kind: 'food', name: f.name }))],
+    preview, owned: (id) => owned(kindOf(id), String(id || '').replace(/^vasyan\.(skin|outfit|food|bowl|box)\./, '')),
+    skin: () => coat.id, outfit: () => outfit.id, food: () => st.food, bowl: () => bowlSkin.id, box: () => boxSkin.id, setSkin, setOutfit, setFood, setBowl, setBox,
     act: (k) => { if (alive && !BUSY.includes(mode)) act(k); },
   };
 })();

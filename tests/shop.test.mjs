@@ -325,20 +325,47 @@ test('еда: id и названия общие с vasyan.js, в том же п�
 });
 
 // ---------- миски Васяна ----------
-test('миски: id и названия общие с vasyan.js, в том же порядке; стальная бесплатная, тайные — за тайные достижения', () => {
-  const src = readFileSync(new URL('../vasyan.js', import.meta.url), 'utf8');
-  const at = src.indexOf('const BOWLS = [');
-  const block = src.slice(at, src.indexOf('];', at));
-  const client = [...block.matchAll(/\{ id: '([a-z]+)', name: '([^']+)'(, secret: true)?/g)].map((m) => [m[1], m[2], !!m[3]]);
-  const bowls = S.ITEMS.filter((x) => x.kind === 'bowl');
-  assert.deepEqual(client, bowls.map((x) => [x.id.split('.').pop(), x.title, !!x.ach]));
-  assert.equal(bowls[0].id, 'vasyan.bowl.steel');
-  assert.equal(bowls[0].price, 0);
-  const levels = readFileSync(new URL('../functions/_lib/levels.js', import.meta.url), 'utf8');
-  const hidden = new Set([...levels.matchAll(/code: '([a-z0-9]+)'[^\n]*hidden: true/g)].map((m) => m[1]));
-  for (const b of bowls.filter((x) => x.ach)) { assert.equal(b.price, 0, b.id); assert.ok(hidden.has(b.ach), b.id + ' — тайное достижение'); }
-  for (const b of bowls.filter((x) => x.price)) assert.ok(b.price >= 30 && b.price <= 400 && !b.ach, b.id);
-  assert.equal(new Set(bowls.filter((x) => x.ach).map((x) => x.ach)).size, bowls.filter((x) => x.ach).length); // одно достижение — одна миска
+const LEVELS_SRC = readFileSync(new URL('../functions/_lib/levels.js', import.meta.url), 'utf8');
+const HIDDEN = new Set([...LEVELS_SRC.matchAll(/code: '([a-z0-9]+)'[^\n]*hidden: true/g)].map((m) => m[1]));
+const ACH_CODES = new Set([...LEVELS_SRC.matchAll(/\{ code: '([a-z0-9]+)'/g)].map((m) => m[1]));
+for (const [kind, list, first] of [['bowl', 'BOWLS', 'steel'], ['box', 'BOXES', 'blue']]) {
+  test(`${kind}: id и названия общие с vasyan.js, в том же порядке; первый бесплатный, за достижения — не продаются`, () => {
+    const src = readFileSync(new URL('../vasyan.js', import.meta.url), 'utf8');
+    const at = src.indexOf(`const ${list} = [`);
+    const block = src.slice(at, src.indexOf('];', at));
+    // на странице: secret — за тайное достижение, ach — за обычное
+    const client = [...block.matchAll(/\{ id: '([a-z]+)', name: '([^']+)'(?:, (secret|ach): true)?/g)].map((m) => [m[1], m[2], m[3] || '']);
+    const items = S.ITEMS.filter((x) => x.kind === kind);
+    assert.deepEqual(client, items.map((x) => [x.id.split('.').pop(), x.title, x.ach ? (HIDDEN.has(x.ach) ? 'secret' : 'ach') : '']));
+    assert.equal(items[0].id, `vasyan.${kind}.${first}`);
+    assert.equal(items[0].price, 0);
+    for (const x of items.filter((y) => y.ach)) { assert.equal(x.price, 0, x.id); assert.ok(ACH_CODES.has(x.ach), x.id + ' — нет такого достижения'); }
+    for (const x of items.filter((y) => y.price)) assert.ok(x.price >= 30 && x.price <= 400 && !x.ach, x.id);
+    assert.ok(items.some((x) => x.price) && items.some((x) => x.ach), 'есть и за рофланы, и за достижения');
+    assert.equal(new Set(items.filter((x) => x.ach).map((x) => x.ach)).size, items.filter((x) => x.ach).length); // одно достижение — одна вещь
+  });
+}
+
+test('лоток за обычное достижение: странице — его название, свой только с ним, не продаётся', async () => {
+  const { env, db } = await setup();
+  setXp(db, U, 5000);
+  hasVasyan(db, U);
+  const it = async (id) => S.shopView(await S.shopState(env, U)).items.find((x) => x.id === id);
+  const retro = await it('vasyan.box.retro');
+  assert.equal(retro.owned, false);
+  assert.equal(retro.achieve, 'В ритме');
+  assert.ok(!retro.secret);
+  const no = await S.buy(env, U, 'vasyan.box.retro');
+  assert.equal(no.err[0], 403);
+  assert.match(no.err[1], /«В ритме»/);
+  db.prepare('INSERT INTO achievements (user_id, code, tier, at) VALUES (?, ?, ?, 1)').run(U, 'rhythm', 1);
+  assert.equal((await it('vasyan.box.retro')).owned, true);
+  assert.ok((await S.buy(env, U, 'vasyan.box.retro')).already);
+  // за рофланы — как миски
+  const r = await S.buy(env, U, 'vasyan.box.tiger');
+  assert.ok(r.ok && !r.already);
+  assert.ok(S.shopView(r.st).items.find((x) => x.id === 'vasyan.box.tiger').owned);
+  assert.equal((await it('vasyan.box.blue')).owned, true); // синий — у всех
 });
 
 test('миски: тайная — своя только с достижением, не продаётся и не выдаёт, какое достижение', async () => {
