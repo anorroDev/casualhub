@@ -205,7 +205,7 @@ export const DAILY = [
   // «новые оценки» — только rate: импорт (import: Letterboxd, Steam) и треки альбома (album_track) не в счёт (с 25.11.2026)
   { code: 'rate2', title: 'Поставь 2 новые оценки', hint: 'В Мнении поставь баллы чему-то новому и нажми «Сохранить». Правка уже оценённого, импорт и треки альбома не считаются', kinds: ['rate'], goal: 2 },
   { code: 'review1', title: 'Напиши отзыв к оценке', hint: 'Отзыв — это «Плюсы», «Минусы» и «Заметки» в форме оценки: вместе от 100 знаков, примерно пара предложений. Можно дописать к старой оценке', kinds: ['review'], goal: 1 },
-  { code: 'full1', title: 'Сделай оценку с обложкой', hint: 'Баллы хотя бы по двум критериям и обложка или фото — блок «Фото» в форме оценки. Можно дополнить старую оценку', kinds: ['rate_full'], goal: 1 },
+  { code: 'full1', title: 'Сделай оценку с обложкой', hint: 'Баллы хотя бы по двум критериям (у альбома можно по двум трекам) и обложка или фото — блок «Фото» в форме оценки. Можно дополнить старую оценку', kinds: ['rate_full'], goal: 1 },
   { code: 'react3', title: 'Отреагируй на 3 оценки друзей', hint: 'Мнение → «Друзья»: открой оценку друга и выбери реакцию под ней. Реакции на тир-листы друзей тоже считаются', kinds: ['react'], goal: 3, need: 'friends' },
   { code: 'comment1', title: 'Прокомментируй оценку друга', hint: 'Под оценкой друга (Мнение → «Друзья») или под его тир-листом. Нужно от 10 знаков — короткое «ок» не засчитается', kinds: ['comment'], goal: 1, need: 'friends' },
   { code: 'guess1', title: 'Сыграй в «Угадай оценку друга»', hint: 'В Мнении — кнопка «Угадай оценку друга» в шапке: угадай баллы друзей ползунком и нажми «Проверить». Нужны друзья с оценками', kinds: ['guess'], goal: 1, need: 'friends' },
@@ -1436,7 +1436,11 @@ export async function friendRatings(env, uid) {
   const { results } = await env.DB.prepare(`SELECT data FROM shelves WHERE user_id IN (${ids.map(() => '?').join(',')})`).bind(...ids).all();
   return (results || []).map((s) => { try { const d = JSON.parse(s.data || '{}'); return Array.isArray(d) ? d : d.ratings || []; } catch (e) { return []; } });
 }
-const isFull = (r) => isScored(r) && r.scores.length >= 2 && r.scores.every((s) => +s.v > 0) && !!r.photo;
+// «оценка целиком» (rate_full, задание full1): обложка и баллы хотя бы по двум критериям. Альбом, оценённый «По трекам»,
+// хранит в scores только среднее по трекам (alb-avg) и пустые критерии — у него вместо критериев хватает двух оценённых треков
+const ALB_AVG = 'alb-avg';
+const fullByCrit = (r) => { const crit = r.scores.filter((s) => s && s.id !== ALB_AVG); return crit.length >= 2 && crit.every((s) => +s.v > 0); };
+const isFull = (r) => isScored(r) && !!r.photo && (fullByCrit(r) || (Array.isArray(r.tracks) && r.tracks.filter((e) => e && +e.v > 0).length >= 2));
 const stampOf = (r) => +new Date(r.createdAt || r.updatedAt || 0) || 0;
 // «Разбор альбома»: у оценки альбома trackCount — сколько треков, skip — номера пропущенных, tracks — баллы треков внутри
 // альбома ({ n, v }); трек по 4+ критериям — ещё и отдельная оценка с albumOf и trackNo.
@@ -1497,7 +1501,9 @@ export function shelfDiff(oldList, newList) {
     }
     if (!IMPORTED.has(r.src) && isScored(r)) {
       if (textLen(r) >= 100 && !(o && textLen(o) >= 100 && isScored(o))) give.push({ kind: 'review', ref: id });
-      if (isFull(r) && !(o && isFull(o))) give.push({ kind: 'rate_full', ref: id });
+      // альбом «По трекам», сохранённый до 26.11.2026, целым ещё не считался: его rate_full — при следующем сохранении
+      // (опыт за одну оценку дважды не дают — строка журнала та же)
+      if (isFull(r) && !(o && isFull(o) && (fullByCrit(o) || o.updatedAt === r.updatedAt))) give.push({ kind: 'rate_full', ref: id });
     }
     if (cg) for (let i = at; i < give.length; i++) give[i].cg = cg;
   }

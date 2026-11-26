@@ -273,6 +273,15 @@ test('полка: правила из подсказок заданий', () => 
   // оценка с обложкой: баллы хотя бы по двум критериям и фото, можно дополнить старую
   assert.deepEqual(kinds([old], [{ ...old, photo: { url: 'https://a/b.jpg' } }]), ['rate_full']);
   const one = { id: 'one', status: 'Пройдено', scores: [{ v: 7 }], total: 7, photo: { url: 'https://a/b.jpg' } };
+  // альбом «По трекам»: критерии пустые, в scores — только среднее по трекам; двух оценённых треков хватает
+  const alb = { id: 'alb', status: 'Прослушано', scores: [{ id: 'c1', v: 0 }, { id: 'c2', v: 0 }, { id: 'alb-avg', v: 8.4 }], total: 8.4, amode: 'tracks', trackCount: 10, tracks: [{ n: 1, v: 8 }, { n: 2, v: 9 }], photo: { url: 'https://a/b.jpg' } };
+  assert.ok(kinds([], [alb]).includes('rate_full'));
+  assert.ok(!kinds([], [{ ...alb, tracks: [{ n: 1, v: 8 }] }]).includes('rate_full'), 'один трек — мало');
+  assert.ok(!kinds([], [{ ...alb, photo: null }]).includes('rate_full'), 'без обложки — нет');
+  // альбом, сохранённый раньше: тот же снимок — ничего, пересохранили — rate_full (дубль журнал не запишет)
+  const albOld = { ...alb, updatedAt: '2026-11-25T10:00:00Z' };
+  assert.deepEqual(kinds([albOld], [albOld]), []);
+  assert.deepEqual(kinds([albOld], [{ ...albOld, updatedAt: '2026-11-26T10:00:00Z' }]), ['rate_full']);
   assert.deepEqual(kinds([], [one]), ['rate']);
   // «В планах» без баллов — ещё не оценка, оценили его — и новая оценка, и «из планов»
   const plan = { id: 'pl', status: 'В планах', scores: [], total: null };
