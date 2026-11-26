@@ -154,13 +154,15 @@ const ownedBy = (it, st) => (it.ach ? !!(st.achs && st.achs.has(it.ach)) : !it.p
 // лотки, еда), /levels/me (по нему vasyan.js пускает котика гулять внизу экрана) и письмо о новом уровне (levels.js)
 export const PET_LEVEL = (REWARDS.find((r) => r.kind === 'pet') || { level: 25 }).level;
 export const hasVasyan = (claimed, level, pet) => !!claimed || (+level || 0) >= PET_LEVEL || !!pet;
-// забрал ли письмо «Первой десятки» с котиком (gift_box, gift_id vasyan:<uid>)
-// ушёл ли Васян навсегда (таблица — ensureShop)
-export const vasyanGone = (env, uid) => env.DB.prepare('SELECT 1 AS ok FROM vasyan_gone WHERE user_id = ?').bind(uid);
+// ушёл ли Васян навсегда (gone — когда; таблица — ensureShop) и когда его в последний раз вернули (back — время сервера,
+// строка vasyan.back в shop_log, vasyanBack ниже). Строка в ответе одна всегда
+export const vasyanGone = (env, uid) => env.DB.prepare("SELECT (SELECT at FROM vasyan_gone WHERE user_id = ?1) AS gone, "
+  + "(SELECT MAX(at) FROM shop_log WHERE user_id = ?1 AND item = 'vasyan.back') AS back").bind(uid);
 export async function markVasyanGone(env, uid, now = Date.now()) {
   await ensureShop(env);
   await env.DB.prepare('INSERT OR IGNORE INTO vasyan_gone (user_id, at) VALUES (?, ?)').bind(uid, now).run();
 }
+// забрал ли письмо «Первой десятки» с котиком (gift_box, gift_id vasyan:<uid>)
 export const vasyanClaim = (env, uid) => env.DB.prepare('SELECT 1 AS ok FROM gift_box WHERE gift_id = ? AND user_id = ? AND claimed = 1').bind('vasyan:' + uid, uid);
 // какая еда открылась, когда уровень вырос с from до to (для письма о новом уровне)
 export const foodsUnlocked = (from, to) => FOODS.filter((f) => f.unlock > (+from || 0) && f.unlock <= (+to || 0));
@@ -259,6 +261,8 @@ export async function shopState(env, uid, now = Date.now()) {
   const level = row ? +row.level || 1 : 1;
   const sale = await readSale(env);
   const week = weekStart(dayKey(now, (row && row.tz) || 'UTC')); // неделя человека — для недельной «заморозки»
+  // ушёл и вернули — только у того, у кого Васян был (hasVasyan): строка ухода у остальных ничего не значит
+  const g = (gone.results || [])[0] || {}, had = hasVasyan((gift.results || []).length, level, ownedSet.has('look.pet'));
   return {
     sale,
     earned,
@@ -269,8 +273,9 @@ export async function shopState(env, uid, now = Date.now()) {
     achs: new Set((ach.results || []).map((a) => String(a.code))), // полученные достижения: открывают тайные миски
     wear: wearMap(worn.results || [], ownedSet),
     level,
-    vasyanGone: !!(gone.results || []).length,
-    vasyan: !(gone.results || []).length && hasVasyan((gift.results || []).length, level, ownedSet.has('look.pet')),
+    vasyanGone: !!g.gone && had,
+    vasyanBack: had ? +g.back || 0 : 0,
+    vasyan: !g.gone && had,
     hasLevel: !!row,
     // с недельной, которая придёт с первым действием недели: её видно уже сейчас (freezesNow)
     freezes: row ? freezesNow(row, week).freezes : 1,
@@ -307,6 +312,8 @@ export function shopView(st) {
     rate: XP_PER_ROFLAN,
     vasyan: st.vasyan,
     vasyanGone: !!st.vasyanGone,
+    vasyanBack: st.vasyanBack || 0,
+    vasyanBackPrice: VASYAN_BACK,
     freezes: st.freezes,
     freezeMax: FREEZE_MAX,
     wear: { ...DEFAULT, ...(st.wear || {}) },
@@ -426,6 +433,37 @@ export async function buy(env, uid, itemId, { rid = '', now = Date.now(), seen }
   return { err: [409, 'Не хватает рофланов.'], need: Math.max(1, price - Math.max(0, after.balance)) };
 }
 
+// ---------- вернуть Васяна ----------
+// ушёл навсегда (отношения упали до нуля) — вернуть можно письмом с извинениями и VASYAN_BACK рофланами. Списание
+// и возврат — одной пачкой: списание пишется, только пока он ещё ушёл и рофланов хватает, а строка ухода удаляется,
+// только если списание записала эта пачка (двойной клик не спишет дважды). Время возврата (back) — по нему vasyan.js
+// во всех браузерах аккаунта узнаёт, что Васян снова дома (/levels/me → casualhub.vasyan.back)
+export const VASYAN_BACK = 1000;
+// раскаяние Васян узнаёт по словам: «прости», «извини», «виноват», «больше не буду»… на трёх языках сайта
+export const SORRY = /прост|прощ|извин|винова|раска|каюсь|сожале|стыд|больше не буду|не буду больше|не повторится|пробач|вибач|винн|шкоду|сором|розка|каюся|більше не буду|не повториться|sorry|forgive|apolog|regret|ashamed|pardon|my bad|my fault|was wrong|never again/i;
+export async function vasyanBack(env, uid, letter, now = Date.now()) {
+  const text = String(letter == null ? '' : letter).replace(/\s+/g, ' ').trim();
+  const st = await shopState(env, uid, now);
+  if (!st.vasyanGone) return st.vasyan ? { ok: true, already: true, back: st.vasyanBack, st } : { err: [403, 'Котика Васяна у тебя нет — возвращать некого.'] };
+  if (text.length < 12) return { err: [400, 'Напиши Васяну письмо: хотя бы пару слов от души.'] };
+  if (text.length > 600) return { err: [400, 'Письмо слишком длинное: Васян столько не прочитает.'] };
+  if (!SORRY.test(text)) return { err: [400, 'Васян прочитал письмо и не нашёл в нём извинений. Попроси прощения по-настоящему.'] };
+  const short = VASYAN_BACK - Math.max(0, st.balance);
+  if (short > 0) return { err: [409, `Не хватает рофланов: нужно ещё ${short}.`], need: short };
+  const id = `back:${uid}:${now}`;
+  const res = await env.DB.batch([
+    env.DB.prepare(`INSERT OR IGNORE INTO shop_log (id, user_id, item, delta, reason, note, by_id, at) SELECT ?1, ?2, ?3, -?4, 'buy', NULL, NULL, ?5 WHERE ${ENOUGH} `
+      + 'AND EXISTS (SELECT 1 FROM vasyan_gone WHERE user_id = ?2)').bind(id, uid, 'vasyan.back', VASYAN_BACK, now, st.earned.total),
+    env.DB.prepare('DELETE FROM vasyan_gone WHERE user_id = ?1 AND EXISTS (SELECT 1 FROM shop_log WHERE id = ?2)').bind(uid, id),
+  ]);
+  const done = !!(res[0] && res[0].meta && res[0].meta.changes);
+  const after = await shopState(env, uid, now);
+  if (done) return { ok: true, back: now, st: after };
+  // не записалось: вернули в соседней вкладке — или рофланов за это время стало меньше
+  if (!after.vasyanGone) return { ok: true, already: true, back: after.vasyanBack, st: after };
+  return { err: [409, 'Не хватает рофланов.'], need: Math.max(1, VASYAN_BACK - Math.max(0, after.balance)) };
+}
+
 // ---------- админка ----------
 // подарить (delta > 0) или снять (delta < 0) рофланы; снять можно не больше, чем есть
 export async function grant(env, uid, delta, { by = null, note = '', now = Date.now() } = {}) {
@@ -439,6 +477,9 @@ export async function grant(env, uid, delta, { by = null, note = '', now = Date.
   if (!(r.meta && r.meta.changes)) return { err: [409, `Столько снять нельзя: у человека ${Math.max(0, st.balance)}.`] };
   return { ok: true, st: await shopState(env, uid) };
 }
+// названия для журнала: предмет каталога или то, чего в каталоге нет (вернуть Васяна)
+const LOG_TITLES = { 'vasyan.back': 'Вернуть Васяна' };
+const logTitle = (id) => (itemOf(id) || {}).title || LOG_TITLES[id] || id;
 // журнал: последние операции человека или всего сайта, с именами
 export async function shopLog(env, { uid = null, limit = 60 } = {}) {
   await ensureShop(env);
@@ -448,7 +489,7 @@ export async function shopLog(env, { uid = null, limit = 60 } = {}) {
     : env.DB.prepare('SELECT l.id, l.user_id, l.item, l.delta, l.reason, l.note, l.at, u.uname, a.uname AS by_handle FROM shop_log l LEFT JOIN users u ON u.id = l.user_id LEFT JOIN users a ON a.id = l.by_id ORDER BY l.at DESC LIMIT ?').bind(lim);
   const { results } = await q.all();
   return (results || []).map((r) => ({
-    user: r.user_id, handle: r.uname || '', item: r.item || '', title: r.item ? (itemOf(r.item) || {}).title || r.item : '',
+    user: r.user_id, handle: r.uname || '', item: r.item || '', title: r.item ? logTitle(r.item) : '',
     delta: +r.delta || 0, reason: r.reason, note: r.note || '', by: r.by_handle || '', at: +r.at || 0,
   }));
 }
@@ -462,6 +503,6 @@ export async function shopTotals(env) {
   const s = (sum.results || [])[0] || {};
   return {
     buys: +s.n || 0, spent: +s.spent || 0, people: +s.people || 0,
-    top: (top.results || []).map((r) => ({ item: r.item, title: (itemOf(r.item) || {}).title || r.item, n: +r.n || 0 })),
+    top: (top.results || []).map((r) => ({ item: r.item, title: logTitle(r.item), n: +r.n || 0 })),
   };
 }

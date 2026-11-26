@@ -372,6 +372,7 @@
   // ---------- окно ----------
   const SECTIONS = [['profile', 'Профиль'], ['nick', 'Ник'], ['wheel', 'Колесо'], ['tier', 'Тир-листы'], ['site', 'Сайт'], ['perks', 'Бонусы'], ['vasyan', 'Васян'], ['earn', 'Как заработать']];
   let ov = null, sec = 'profile', lastFocus = null, armed = null, armT = 0, msgT = 0;
+  let letter = ''; // письмо Васяну (раздел «Васян», когда он ушёл): переживает перерисовку раздела
   function css() {
     if (document.getElementById('shCss')) return;
     const s = document.createElement('style');
@@ -459,7 +460,16 @@ html.unslop .sh-card { box-shadow: 0 24px 60px -30px rgb(0 0 0 / .45); }
 /* спокойный только «Казуальный» вид; в остальных видах окно появляется с анимацией */
 html.unslop:not([data-ui]) :is(.sh-ov, .sh-card) { animation: none; }
 html.unslop:not([data-ui]) .sh-pop { animation: none; }
-html.unslop .sh-it.on { box-shadow: none; }`;
+html.unslop .sh-it.on { box-shadow: none; }
+/* Васян ушёл: письмо с извинениями и «Вернуть» */
+.sh-back { display: grid; gap: 10px; padding: 14px; border: 1px solid var(--line, #2b2e38); border-radius: 14px; }
+.sh-back-h { font-size: 15px; }
+.sh-back-l { font-size: 13px; font-weight: 700; }
+.sh-back-tx { width: 100%; box-sizing: border-box; min-height: 104px; resize: vertical; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--line, #2b2e38); background: color-mix(in srgb, var(--ink, #fff) 4%, transparent); color: var(--ink, #f2f2f2); font: 14px/1.45 inherit; font-family: inherit; }
+.sh-back-tx::placeholder { color: var(--ink-3, #8a8f9e); }
+.sh-back-tx:focus-visible { outline: 2px solid var(--accent, #3550E8); outline-offset: 1px; }
+.sh-back-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
+.sh-back-row small { font-size: 12px; color: var(--ink-3, #8a8f9e); }`;
     document.head.appendChild(s);
   }
   function say(t, err) {
@@ -482,6 +492,7 @@ html.unslop .sh-it.on { box-shadow: none; }`;
       ov.addEventListener('keydown', (e) => { if (e.key === 'Escape') close(); });
       ov.querySelector('.sh-tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-sec]'); if (b) { sec = b.dataset.sec; armed = null; render(); try { ov.querySelector('#shBody').getAnimations({ subtree: true }).forEach((a) => { if (a.effect && a.effect.getTiming().iterations !== Infinity) a.finish(); }); } catch (er) {} } });
       ov.querySelector('#shBody').addEventListener('click', onCard);
+      ov.querySelector('#shBody').addEventListener('input', (e) => { if (e.target.matches && e.target.matches('[data-vy-letter]')) letter = e.target.value; });
     }
     document.body.appendChild(ov);
     document.documentElement.style.overflow = 'hidden';
@@ -507,7 +518,11 @@ html.unslop .sh-it.on { box-shadow: none; }`;
     if (!token()) { body.innerHTML = '<p class="sh-note">Рофланы копятся у тех, кто вошёл в аккаунт: за оценки, отзывы, задания и всё, за что даётся опыт.</p><a class="sh-btn buy" href="/opinion/#login">Войти</a>'; return; }
     if (!D) { body.innerHTML = '<p class="sh-note">Загружаю…</p>'; return; }
     if (!D.on) { body.innerHTML = '<p class="sh-note">Магазин пока закрыт: он откроется вместе с уровнями.</p>'; return; }
+    // пишут письмо Васяну, а раздел перерисовался (пришёл ответ сервера) — курсор остаётся в письме
+    const typing = !!(document.activeElement && document.activeElement.matches && document.activeElement.matches('[data-vy-letter]'));
     body.innerHTML = (sec === 'earn' ? '' : saleHTML()) + (sec === 'earn' ? earnHTML() : listHTML(sec));
+    const tx = body.querySelector('[data-vy-letter]');
+    if (tx) { tx.value = letter; if (typing) { tx.focus(); tx.setSelectionRange(letter.length, letter.length); } }
     // картинки Васяна рисует vasyan.js, а он грузится только у хозяев кота: открыли раздел «Васян» без него —
     // подгрузить и перерисовать (пока — своя мордочка, у еды, мисок и лотков картинки появятся следом)
     if (sec === 'vasyan' && !window.CasualVasyan && U.script) U.script('/vasyan.js', () => !!window.CasualVasyan).then(() => { if (ov && ov.isConnected && sec === 'vasyan') render(); }).catch(() => {});
@@ -539,12 +554,22 @@ html.unslop .sh-it.on { box-shadow: none; }`;
     const hint = b.next == null ? 'Выше некуда: Васян тебя обожает' : 'Гладь без спешки, корми и убирай лоток — дружба растёт. Бросать и пугать — падает';
     return `<div class="sh-bond"><div class="sh-bond-top"><b>Отношения с Васяном</b><span>${esc(b.name)}</span></div><div class="sh-bond-bar" role="progressbar" aria-label="Отношения с Васяном" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${b.v}" aria-valuetext="${esc(b.name)}"><i style="width:${b.v}%"></i></div><small>${hint}</small></div>`;
   }
+  // Васян ушёл (отношения упали до нуля): вернуть — письмо с извинениями и рофланы (POST /shop/vasyan/back). Раскаяние
+  // в письме проверяет сервер (SORRY в functions/_lib/shop.js), текст письма вписывает render (в разметке его нет)
+  function backHTML() {
+    const price = +D.vasyanBackPrice || 1000, need = Math.max(0, price - (+D.balance || 0));
+    return `<div class="sh-back"><b class="sh-back-h">Васян ушёл от тебя навсегда</b>
+      <p class="sh-note">Отношения упали до нуля, и он ушёл. Вернуть его можно: напиши ему письмо и попроси прощения — своими словами, от души. Рофланы пойдут ему на корм и новую лежанку. Вернётся он настороженным: дружбу придётся заслужить заново.</p>
+      <label class="sh-back-l" for="shBackTx">Письмо Васяну</label>
+      <textarea id="shBackTx" class="sh-back-tx" data-vy-letter maxlength="500" rows="4" placeholder="Васян, прости меня…"></textarea>
+      <div class="sh-back-row"><button type="button" class="sh-btn buy" data-vy-back${need ? ' disabled' : ''}><span>Вернуть Васяна</span> ${coinImg(16)}${nf(price)}</button>${need ? `<small>Не хватает рофланов: нужно ещё ${nf(need)}.</small>` : ''}</div></div>`;
+  }
   function listHTML(k) {
     const items = (D.items || []).filter((x) => x.sec === k);
     const group = (kind, title) => { const xs = items.filter((x) => x.kind === kind); return xs.length ? `${title ? `<h3 class="sh-h3">${title}</h3>` : ''}<div class="sh-grid">${xs.map(card).join('')}</div>` : ''; };
     const note = (t) => `<p class="sh-note">${t}</p>`;
     if (k === 'vasyan') {
-      if (D.vasyanGone) return note('Васян ушёл от тебя навсегда: отношения упали до нуля. Его окрасы, наряды, миски и лотки больше не нужны.');
+      if (D.vasyanGone) return backHTML();
       return bondHTML() + note(D.vasyan
         ? 'Окрасы, наряды, миски, лотки и еда для котика Васяна. Купленное надевается здесь же или в Настройках → «Внешний вид». Еда открывается и сама: по одной за каждый уровень, начиная со 2-го, — купить можно раньше. Часть мисок и лотков не продаётся: их открывают достижения, некоторые — тайные.'
         : 'Котик Васян есть у первой десятки и у всех с 25-го уровня. Окрасы, наряды, миски, лотки и еда откроются, когда он появится у тебя.') + group('skin', 'Окрасы') + group('outfit', 'Наряды') + group('bowl', 'Миски') + group('box', 'Лотки') + group('food', 'Еда');
@@ -591,7 +616,35 @@ html.unslop .sh-it.on { box-shadow: none; }`;
       <div class="sh-earn">${row('За опыт', e.xp || 0)}${row('За достижения', e.ach || 0)}${row('За сезоны', e.season || 0)}${D.gifts ? row('Подарки', D.gifts) : ''}${row('Потрачено', -(D.spent || 0))}<div><span><b>Сейчас</b></span><b>${coinImg(16)} ${coins(D.balance)}</b></div></div>
       ${D.debt ? `<p class="sh-note">Часть опыта ушла (например, удалены оценки), и потрачено больше, чем заработано: нужно ещё ${coins(D.debt)}, прежде чем копить на новое.</p>` : ''}`;
   }
+  // вернуть Васяна: письмо и рофланы. Ответ — магазин, как после покупки, и время возврата (back)
+  async function vyBack(btn) {
+    const tx = ov.querySelector('[data-vy-letter]'), text = (tx ? tx.value : letter).replace(/\s+/g, ' ').trim();
+    if (text.length < 12) { say('Напиши Васяну письмо: хотя бы пару слов от души.', true); if (tx) tx.focus(); return; }
+    btn.disabled = true;
+    try {
+      const d = await api('/shop/vasyan/back', 'POST', { letter: text });
+      take(d);
+      letter = '';
+      vyHome(d.back);
+      render();
+      say(d.already ? 'Васян уже вернулся.' : 'Васян прочитал письмо и вернулся. Пока он тебя сторонится — будь с ним ласковым.');
+      // окно закрывается: Васян приходит из-за края экрана
+      if (!d.already) setTimeout(() => { if (ov && ov.isConnected) close(); }, 1600);
+    } catch (er) {
+      btn.disabled = false;
+      say(er.message, true);
+      if (er.status === 400 && tx) tx.focus();
+    }
+  }
+  // Васян снова дома: флаг хозяина и время возврата — так же, как их ставит levels-ui.js по /levels/me. vasyan.js (его
+  // грузит util.js по флагу) узнаёт о возврате по событию casualhub:vasyan, другие вкладки — по storage
+  function vyHome(back) {
+    try { if (back) localStorage.setItem('casualhub.vasyan.back', String(back)); localStorage.setItem('casualhub.vasyan.own', '1'); } catch (e) {}
+    document.dispatchEvent(new CustomEvent('casualhub:vasyan', { detail: { own: true } }));
+  }
   async function onCard(e) {
+    const bk = e.target.closest('[data-vy-back]');
+    if (bk) { vyBack(bk); return; }
     const w = e.target.closest('[data-wear]');
     if (w) {
       const it = (D.items || []).find((x) => x.id === w.dataset.wear);

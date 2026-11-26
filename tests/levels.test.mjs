@@ -1304,6 +1304,14 @@ test('Васян: с 25-го уровня и у купивших «Васяна 
     assert.equal(st.freezes, 2);
   }
   assert.ok(S.hasVasyan(true, 1, false) && S.hasVasyan(false, S.PET_LEVEL, false) && !S.hasVasyan(false, S.PET_LEVEL - 1, false));
+  // ушёл навсегда — в /levels/me его нет; вернули (письмо и рофланы) — снова есть, и время возврата для vasyan.js
+  const me = () => atTime(NOW, () => routes['GET /levels/me']({ env, request: { cf: { timezone: 'UTC' } }, me: { id: ids.hi } }));
+  assert.equal((await me()).vasyanBack, 0);
+  await S.markVasyanGone(env, ids.hi, NOW);
+  assert.deepEqual([(await me()).vasyan, (await me()).vasyanBack], [false, 0]);
+  const r = await S.vasyanBack(env, ids.hi, 'Васян, прости меня, я был неправ', NOW + 1000);
+  assert.equal(r.back, NOW + 1000);
+  assert.deepEqual([(await me()).vasyan, (await me()).vasyanBack], [true, NOW + 1000]);
 });
 
 test('заморозки: недельная прибавка — с прошлой недели, назад не идёт', () => {

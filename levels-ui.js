@@ -716,11 +716,18 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
     if (btn.title !== t) { btn.title = t; btn.setAttribute('aria-label', t); }
     btn.classList.toggle('lv-pulse', !seen());
   }
-  // котик Васян (подарок «Первой десятке»): vasyan.js показывает его только хозяину — флаг в этом браузере
-  function vasyanOwn(on) {
-    let was = null;
-    try { was = localStorage.getItem('casualhub.vasyan.own'); if (on) localStorage.setItem('casualhub.vasyan.own', '1'); else localStorage.removeItem('casualhub.vasyan.own'); } catch (e) {}
-    if (!!was !== on) document.dispatchEvent(new CustomEvent('casualhub:vasyan', { detail: { own: on } }));
+  // котик Васян (подарок «Первой десятке»): vasyan.js показывает его только хозяину — флаг в этом браузере.
+  // back — когда Васяна в последний раз вернули (ушёл навсегда, вернули в магазине): по нему vasyan.js возвращает
+  // котика и здесь. Пишется раньше флага: vasyan.js, который грузится по флагу, уже видит время возврата
+  function vasyanOwn(on, back) {
+    let was = null, fresh = false;
+    try {
+      was = localStorage.getItem('casualhub.vasyan.own');
+      fresh = back > 0 && String(back) !== localStorage.getItem('casualhub.vasyan.back');
+      if (fresh) localStorage.setItem('casualhub.vasyan.back', String(back));
+      if (on) localStorage.setItem('casualhub.vasyan.own', '1'); else localStorage.removeItem('casualhub.vasyan.own');
+    } catch (e) {}
+    if (!!was !== on || (on && fresh)) document.dispatchEvent(new CustomEvent('casualhub:vasyan', { detail: { own: on } }));
   }
   async function refreshMe() {
     try {
@@ -728,7 +735,7 @@ html.unslop .lv-toast .lv-big, html.unslop .lv-t0 { background: var(--accent, #3
       if (!d.on) { ME = null; dropHead(); return; }
       ME = d;
       try { const u = read('ocenshik.user.v1'); if (u) localStorage.setItem(HEAD_KEY, JSON.stringify({ id: u.id, level: d.level, into: d.into, need: d.need, rank: d.rank })); } catch (e) {}
-      vasyanOwn(!!d.vasyan);
+      vasyanOwn(!!d.vasyan, +d.vasyanBack || 0);
       loadShop().catch(() => {}); // надетое из магазина и «куплено» для Васяна — на любой странице
       document.documentElement.classList.add('lv-on');
       paintMenu();

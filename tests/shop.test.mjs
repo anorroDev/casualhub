@@ -504,3 +504,54 @@ test('Васян ушёл навсегда (отношения упали до �
   assert.equal(S.shopView(st).vasyanGone, true);
   assert.equal(S.shopView(await S.shopState(env, U)).vasyanGone, false, 'у других — как было');
 });
+
+test('вернуть Васяна: письмо с извинениями и 1000 рофланов — снова дома, списано один раз', async () => {
+  const { env, db } = await setup();
+  setXp(db, V, 25000, 25); // 2500 рофланов за опыт
+  setXp(db, U, 3000, 25); // 300 — на возврат (1000) не хватает
+  const api = makeShopRoutes({ json: (d, s = 200) => ({ status: s, d }), fail: (s, e) => ({ status: s, e }), adminCandidate: () => false, isAdmin: async () => false, readBody: async (r) => r });
+  const back = (id, letter) => api['POST /shop/vasyan/back']({ env, me: { id }, request: { letter } });
+  // не уходил — возвращать некого, рофланы на месте
+  assert.equal((await back(V, 'Прости меня, Васян!')).d.already, true);
+  assert.equal((await S.shopState(env, V)).balance, 2500);
+  await api['POST /shop/vasyan/gone']({ env, me: { id: V } });
+  const gone = S.shopView(await S.shopState(env, V));
+  assert.deepEqual([gone.vasyan, gone.vasyanGone, gone.vasyanBack, gone.vasyanBackPrice], [false, true, 0, S.VASYAN_BACK]);
+  assert.equal((await back(V, 'Прости')).status, 400, 'одного слова мало');
+  assert.equal((await back(V, '   ')).status, 400);
+  assert.equal((await back(V, 'Возвращайся домой, котик')).status, 400, 'без извинений не считается');
+  assert.equal((await back(V, 'x'.repeat(700) + ' прости')).status, 400, 'слишком длинное');
+  assert.equal((await S.shopState(env, V)).balance, 2500, 'за отказ ничего не списано');
+  const ok = await back(V, 'Васян, прости меня, я больше не буду тебя обливать!');
+  assert.equal(ok.status, 200);
+  assert.ok(ok.d.back > 0 && ok.d.vasyan && !ok.d.vasyanGone && !ok.d.already);
+  assert.deepEqual([ok.d.balance, ok.d.spent, ok.d.vasyanBack], [1500, 1000, ok.d.back]);
+  assert.equal(db.prepare('SELECT COUNT(*) AS n FROM vasyan_gone').get().n, 0);
+  assert.equal(db.prepare("SELECT delta FROM shop_log WHERE item = 'vasyan.back'").get().delta, -S.VASYAN_BACK);
+  // второй раз (двойной клик, соседняя вкладка) — уже дома, второй раз не списывается
+  const again = await back(V, 'Васян, прости меня ещё раз');
+  assert.equal(again.d.already, true);
+  assert.equal(again.d.back, ok.d.back);
+  assert.equal((await S.shopState(env, V)).balance, 1500);
+  // по-английски и по-украински извиняться тоже можно
+  await api['POST /shop/vasyan/gone']({ env, me: { id: V } });
+  assert.equal((await back(V, 'Vasyan, I am so sorry')).status, 200);
+  assert.equal((await S.shopState(env, V)).balance, 500);
+  // рофланов мало — не вернуть, сколько не хватает — в ответе
+  await api['POST /shop/vasyan/gone']({ env, me: { id: U } });
+  const poor = await back(U, 'Васяне, пробач мені, будь ласка');
+  assert.deepEqual([poor.status, poor.d.need], [409, 700]);
+  assert.equal((await S.shopState(env, U)).vasyanGone, true, 'остался ушедшим');
+  // в журнале админки — название, а не id
+  assert.ok((await S.shopLog(env, { uid: V })).some((r) => r.item === 'vasyan.back' && r.title === 'Вернуть Васяна'));
+});
+
+test('строка ухода у того, у кого Васяна не было, ничего не значит: возвращать некого', async () => {
+  const { env, db } = await setup();
+  setXp(db, U, 9000, 3);
+  await S.markVasyanGone(env, U);
+  const v = S.shopView(await S.shopState(env, U));
+  assert.deepEqual([v.vasyan, v.vasyanGone], [false, false]);
+  assert.equal((await S.vasyanBack(env, U, 'Прости меня, пожалуйста')).err[0], 403);
+  assert.equal((await S.shopState(env, U)).balance, 900);
+});

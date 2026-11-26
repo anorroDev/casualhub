@@ -567,6 +567,7 @@
 @keyframes vy-love { to { translate: 0 -22px; opacity: 0; } }
 .vy-heart { position: absolute; bottom: 78%; margin-left: -9px; pointer-events: none; line-height: 0; animation: vy-love 1.3s steps(7) forwards; }
 .vy-plus { position: fixed; z-index: 41; font: 700 14px/1 var(--font-display, system-ui), sans-serif; color: var(--good, #43C97A); text-shadow: 1px 1px 0 #1B1B1F; pointer-events: none; animation: vy-love .9s steps(5) forwards; }
+.vy-plus.long { animation-duration: 2.4s; }
 @media (prefers-reduced-motion: reduce) { .vy-box.land .vy-box-in, .vy-stink, .vy-sand, .vy-bub.hiss, .vy-bub.ugh, .vy-bub.hmph, .vy-bub.vein, .vy-cat.land .vy-body, .vy-bowl.land .vy-bowl-in, .vy-cat.flipjump .vy-body, .vy-dust, .vy-crumb, .vy-bowl.nom svg, .vy-cat.hop .vy-body, .vy-bowl.add svg, .vy-box.add svg, .vy-bub.zz, .vy-bub.love, .vy-bub.bang, .vy-bub.achoo, .vy-bub.purr, .vy-bub.yum, .vy-bub.meow, .vy-heart, .vy-plus { animation: none; } .vy-cat.rolling .vy-body { transition: none; } }
 @media print { .vy-cat, .vy-bowl, .vy-toy, .vy-spill, .vy-box, .vy-box-front, .vy-poo { display: none; } }
 /* выбор окраса и наряда в Настройках (блок data-vasyan-skins) */
@@ -620,6 +621,10 @@
   // мокрый до (облили из поилки; потом стряхнёт воду), ушёл навсегда — когда (отношения упали до нуля)
   st.wetUntil = +st.wetUntil || 0;
   st.gone = +st.gone || 0;
+  // дошло ли до сервера, что ушёл (POST /shop/vasyan/gone; не дошло — отправится снова), и время возврата, которое этот
+  // браузер уже видел (вернули в магазине: время сервера из /levels/me, casualhub.vasyan.back)
+  st.goneSent = st.goneSent ? 1 : 0;
+  st.backAt = +st.backAt || 0;
   st.water = st.water == null ? 2 : Math.max(0, Math.min(3, Math.round(+st.water || 0)));
   st.wx = st.wx != null && Number.isFinite(+st.wx) ? +st.wx : null;
   // злость 0–100 (много кликов, бросили, грязный лоток): проходит сама, пока сайт закрыт — тоже (1 пункт за 5 секунд)
@@ -718,7 +723,14 @@
     measure();
     x = Math.min(innerWidth - 80, 90 + Math.random() * Math.max(40, innerWidth / 3));
     y = floorAt(x + 28); surf = null; shown = null; goal = null; wantEat = false; vx = 0; thrown = dropped = false;
-    placeBowl(); placeBox(); placeWater(); decide();
+    placeBowl(); placeBox(); placeWater();
+    // только что вернули — приходит из-за левого края экрана и садится поодаль (сначала ждёт за краем, пока закроется
+    // окно магазина); давний возврат — просто здесь
+    if (comeIn && Date.now() - comeIn < 864e5) {
+      x = -size.w - 24; y = floorAt(0); target = 60 + Math.random() * 140;
+      mode = 'back'; dir = faced = 1; turnUntil = performance.now() + 1400;
+    } else decide();
+    comeIn = 0;
     lastT = performance.now();
     raf = requestAnimationFrame(loop);
   }
@@ -1268,17 +1280,49 @@
   }
   function goneForever() {
     if (st.gone) return;
-    st.gone = Date.now(); save();
-    const p = document.createElement('span');
-    p.className = 'vy-plus'; p.textContent = 'Васян ушёл навсегда';
-    p.style.left = Math.round(clamp(x, 10, innerWidth - 180)) + 'px'; p.style.top = Math.round(y - 60) + 'px';
-    document.body.appendChild(p); setTimeout(() => p.remove(), 2600);
-    try {
-      const u = JSON.parse(localStorage.getItem('ocenshik.user.v1') || 'null'), tk = u && (JSON.parse(localStorage.getItem('casualhub.tokens.v1') || 'null') || {})[u.id];
-      if (tk) fetch('/api/shop/vasyan/gone', { method: 'POST', headers: { authorization: 'Bearer ' + tk } }).catch(() => {});
-    } catch (e) {}
+    st.gone = Date.now(); st.goneSent = 0; save();
+    bigText('Васян ушёл навсегда');
+    sendGone();
     unmount();
     document.dispatchEvent(new CustomEvent('casualhub:vasyan-gone'));
+  }
+  // надпись над котиком, подольше обычной: «Васян ушёл навсегда», «Васян вернулся»
+  function bigText(text) {
+    const p = document.createElement('span');
+    p.className = 'vy-plus long'; p.textContent = text;
+    p.style.left = Math.round(clamp(x, 10, innerWidth - 180)) + 'px'; p.style.top = Math.round(y - 60) + 'px';
+    document.body.appendChild(p); setTimeout(() => p.remove(), 2600);
+  }
+  // сервер узнаёт, что Васян ушёл: не дошло (нет сети, нет входа) — отправится снова, когда хозяин зайдёт (homeCheck)
+  function sendGone() {
+    try {
+      const u = JSON.parse(localStorage.getItem('ocenshik.user.v1') || 'null'), tk = u && (JSON.parse(localStorage.getItem('casualhub.tokens.v1') || 'null') || {})[u.id];
+      if (!tk) return;
+      fetch('/api/shop/vasyan/gone', { method: 'POST', headers: { authorization: 'Bearer ' + tk } })
+        .then((r) => { if (r.ok && st.gone && !st.goneSent) { st.goneSent = 1; save(); } }).catch(() => {});
+    } catch (e) {}
+  }
+
+  // ---------- вернули ----------
+  // ушёл навсегда — вернуть можно в магазине: письмо с извинениями и рофланы (POST /shop/vasyan/back). Когда вернули, знает
+  // сервер (/levels/me → levels-ui.js → casualhub.vasyan.back, время сервера). Возврат новее того, что этот браузер уже
+  // видел (st.backAt), — Васян снова здесь, но сторонится: дружбу заслуживать заново. Свежий — приходит из-за края экрана
+  const BACK_KEY = 'casualhub.vasyan.back', BACK_BOND = 15;
+  let comeIn = 0; // когда вернули, если котик должен прийти из-за края экрана, как только появится на странице
+  function checkBack() {
+    let back = 0;
+    try { back = +localStorage.getItem(BACK_KEY) || 0; } catch (e) {}
+    if (back > st.backAt) comeBack(back);
+  }
+  function comeBack(back) {
+    const fresh = Date.now() - back < 864e5;
+    // вернулся к тому, кто его довёл, — сторонится; давний возврат (новый браузер) отношения здесь не трогает
+    if (st.gone || fresh) { st.bond = BACK_BOND; st.anger = 0; st.wetUntil = 0; }
+    st.backAt = back; st.gone = 0; st.goneSent = 0; leaving = false;
+    save();
+    if (alive) { cardRefresh(); return; }
+    comeIn = fresh ? back : 0;
+    if (own() && !st.off) mount();
   }
   function goDrink() { return st.water > 0 && !!water && wb.mode === 'rest' && goToThing(wb, 'drink'); }
   // лакает — капли брызгают из поилки
@@ -1989,7 +2033,7 @@
       }
     } else {
       y = surfTop(surf);
-      if (mode === 'walk' || mode === 'run' || mode === 'goEat' || mode === 'stalk' || mode === 'leave' || (mode === 'play' && play === 'go')) {
+      if (mode === 'walk' || mode === 'run' || mode === 'goEat' || mode === 'stalk' || mode === 'leave' || mode === 'back' || (mode === 'play' && play === 'go')) {
         if (mode === 'play') target = toy.x > x ? toy.x - size.w + 4 : toy.x + toy.w - 4;
         if (mode === 'goEat') target = spotOf(goal).x; // миска могла уехать с карточкой — место у неё каждый кадр заново
         const dx = target - x; dir = dx >= 0 ? 1 : -1;
@@ -1997,12 +2041,13 @@
         if (dir !== faced && Math.abs(dx) > 1) { faced = dir; turnUntil = t + 220; }
         // толкать миску идёт крадучись
         const sneak = mode === 'goEat' && goal.act === 'push';
-        const speed = mode === 'leave' ? 50 : mode === 'walk' ? 42 : mode === 'stalk' ? 30 : mode === 'play' ? 64 : sneak ? 48 : runMood === 'zoom' ? 270 : 110;
+        const speed = mode === 'leave' || mode === 'back' ? 50 : mode === 'walk' ? 42 : mode === 'stalk' ? 30 : mode === 'play' ? 64 : sneak ? 48 : runMood === 'zoom' ? 270 : 110;
         if (t >= turnUntil) x += dir * Math.min(Math.abs(dx), speed * dt);
         const low = mode === 'stalk' || mode === 'play' || sneak;
         rows = t < turnUntil ? (low ? STALK_A : SIT) : low ? (frame % 2 ? STALK_B : STALK_A) : frame % 2 ? WALK_B : WALK_A;
         if (Math.abs(target - x) < 1.5) {
           if (mode === 'leave') { goneForever(); return; } // ушёл — кота больше нет, кадр дальше не рисуем
+          else if (mode === 'back') { mode = 'sit'; until = t + 2600; say('meow'); bigText('Васян вернулся'); } // пришёл — осторожное «мяу?»
           else if (mode === 'goEat') arrive(t);
           else if (mode === 'run' && runMood === 'hunt') {
             // добежал до курсора поближе — дальше крадётся
@@ -2175,7 +2220,7 @@
     const face = rows.head && rows.head.face === 'l' ? -1 : 1;
     cat.classList.toggle('flip', dir * face < 0);
     if (mode !== 'jump' && cat.classList.contains('flipjump')) cat.classList.remove('flipjump');
-    if (mode !== 'drag' && mode !== 'fall' && mode !== 'jump' && mode !== 'climb' && mode !== 'leave') {
+    if (mode !== 'drag' && mode !== 'fall' && mode !== 'jump' && mode !== 'climb' && mode !== 'leave' && mode !== 'back') {
       const [a, b] = surf ? bounds(surf) : [6, innerWidth - s.cw - 6];
       x = Math.max(a, Math.min(b, x));
     }
@@ -2291,7 +2336,8 @@
   // выбор в другой вкладке — сразу и здесь
   addEventListener('storage', (e) => {
     // вошли, вышли или сменили аккаунт в другой вкладке — Васян здесь тоже появляется или уходит
-    if (e.key === null || ['casualhub.vasyan.own', 'ocenshik.user.v1', 'casualhub.tokens.v1'].includes(e.key)) {
+    if (e.key === null || ['casualhub.vasyan.own', 'ocenshik.user.v1', 'casualhub.tokens.v1', BACK_KEY].includes(e.key)) {
+      homeCheck(); // вернули в другой вкладке (магазин) — и здесь
       if (own() && !st.off) { watchSkins(); mount(); } else unmount();
       if (e.key !== null) return;
     }
@@ -2350,7 +2396,10 @@
     }
     Object.assign(dirty, was);
     // ушёл навсегда в другой вкладке — и здесь
-    if (v.gone && !st.gone) { st.gone = +v.gone; unmount(); return; }
+    if (v.gone && !st.gone) { st.gone = +v.gone; st.goneSent = v.goneSent ? 1 : 0; unmount(); return; }
+    if (v.goneSent && st.gone) st.goneSent = 1;
+    // вернули в другой вкладке — и здесь; время возврата, которое уже видели, у вкладок общее
+    if (+v.backAt > st.backAt) { if (st.gone && !v.gone) comeBack(+v.backAt); else st.backAt = +v.backAt; }
     if (Number.isFinite(+v.wetUntil)) st.wetUntil = +v.wetUntil;
     // выключили в Настройках другой вкладки
     if (!!v.off !== !!st.off) {
@@ -2373,8 +2422,10 @@
       return !!(u && (JSON.parse(localStorage.getItem('casualhub.tokens.v1') || 'null') || {})[u.id]);
     } catch (e) { return false; }
   };
-  const start = () => { enforceOwned(); watchSkins(); if (!st.off && own()) mount(); };
-  document.addEventListener('casualhub:vasyan', () => { if (own()) watchSkins(); if (own() && !st.off) mount(); else unmount(); });
+  // у хозяина: вернули, пока этой страницы не было, — возвращается; ушёл, а сервер об этом не узнал, — сказать ещё раз
+  const homeCheck = () => { if (!own()) return; checkBack(); if (st.gone && !st.goneSent) sendGone(); };
+  const start = () => { enforceOwned(); watchSkins(); homeCheck(); if (!st.off && own()) mount(); };
+  document.addEventListener('casualhub:vasyan', () => { if (own()) watchSkins(); homeCheck(); if (own() && !st.off) mount(); else unmount(); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
   addEventListener('resize', () => {
     if (!alive) return;

@@ -651,7 +651,7 @@ export async function levelLetter(env, uid, up, now = Date.now(), seasonXp = 0) 
     if (food.length) {
       const claimed = !!(await vasyanClaim(env, uid).first());
       let gone = false;
-      try { gone = !!(await vasyanGone(env, uid).first()); } catch (e) {} // таблицы ещё нет — не уходил
+      try { gone = !!((await vasyanGone(env, uid).first()) || {}).gone; } catch (e) {} // таблицы ещё нет — не уходил
       const pet = !claimed && !!((await boughtLooks(env, [uid])).get(uid) || new Set()).has('pet');
       if (!gone && hasVasyan(claimed, up.to, pet)) body += ` Новая еда для Васяна: ${food.map((f) => f.title).join(', ')}.`;
     }

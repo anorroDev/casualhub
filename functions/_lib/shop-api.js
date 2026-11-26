@@ -2,7 +2,7 @@
 // подключает эти адреса через makeShopRoutes(h), передавая свои помощники (ответы, проверки админа, журнал админки).
 // Папка _lib не становится адресом сайта.
 import { levelsMode } from './levels.js';
-import { shopOn, shopState, shopView, buy, grant, shopLog, shopTotals, wear, looksOf, readSale, forgetSale, SALE_SECS, markVasyanGone } from './shop.js';
+import { shopOn, shopState, shopView, buy, grant, shopLog, shopTotals, wear, looksOf, readSale, forgetSale, SALE_SECS, markVasyanGone, vasyanBack } from './shop.js';
 import { spanMs } from './presence.js';
 
 // не чаще 30 покупок в минуту на человека (в этом экземпляре функции): кнопку «Купить» не задолбить скриптом
@@ -38,6 +38,15 @@ export function makeShopRoutes(h) {
     async 'POST /shop/vasyan/gone'({ env, me }) {
       await markVasyanGone(env, me.id);
       return json({ ok: true });
+    },
+    // вернуть ушедшего Васяна: { letter } — письмо с извинениями; списывается VASYAN_BACK рофланов (vasyanBack в shop.js).
+    // back — время возврата: страница кладёт его в casualhub.vasyan.back, и vasyan.js возвращает котика
+    async 'POST /shop/vasyan/back'({ env, request, me }) {
+      if (!(await gate(env, me))) return fail(404, 'Магазин пока закрыт.');
+      if (tooFast(me.id)) return fail(429, 'Слишком часто. Подожди минуту.');
+      const b = await h.readBody(request);
+      const r = await vasyanBack(env, me.id, b && b.letter);
+      return r.err ? json({ error: r.err[1], need: r.need || 0 }, r.err[0]) : json({ ok: true, already: !!r.already, back: r.back || 0, ...shopView(r.st) });
     },
     // купить: { item, rid } — rid нужен для расходуемого (повтор того же запроса не купит дважды)
     async 'POST /shop/buy'({ env, request, me }) {
