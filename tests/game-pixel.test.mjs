@@ -128,16 +128,16 @@ function setup(src = sources()) {
 const pickRow = (env, day) => env.DB.raw.prepare('SELECT idx, art, alt FROM pixel_days WHERE day = ?').get(day);
 const wrongFor = (r, k = 0) => POOL.filter((x) => x !== r && !isRight(r, x.a) && !isRight(r, x.en || ''))[k].a;
 // первый день с 1 декабря, когда картинка — тайтл этого вида
-const dayOf = (t) => { for (let i = 0; i < 400; i++) { const d = shift('2026-12-01', i); if (POOL[candidatesOf(d)[0]].t === t) return d; } throw new Error(t); };
+const dayOf = (t) => { for (let i = 0; i < 400; i++) { const d = shift('2026-11-26', i); if (POOL[candidatesOf(d)[0]].t === t) return d; } throw new Error(t); };
 
 test('день: №1 — 1 декабря 2026, свой порядок, не загадка дня и не недавняя картинка', () => {
-  assert.equal(numberOf('2026-12-01'), 1);
-  assert.equal(numberOf('2026-12-12'), 12);
+  assert.equal(numberOf('2026-11-26'), 1);
+  assert.equal(numberOf('2026-12-12'), 17);
   assert.equal(numberOf('2026-11-20'), 1, 'до запуска — №1');
   assert.deepEqual(candidatesOf('2026-12-05'), candidatesOf('2026-12-05'), 'день — всегда тот же порядок');
   const firsts = new Set();
   for (let i = 0; i < 400; i++) {
-    const d = shift('2026-12-01', i), c = candidatesOf(d);
+    const d = shift('2026-11-26', i), c = candidatesOf(d);
     assert.ok(!c.includes(POOL.indexOf(riddleOf(d).r)), 'в день загадки её тайтл картинкой не бывает: ' + d);
     if (i < POOL.length) firsts.add(c[0]);
   }

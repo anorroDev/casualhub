@@ -377,6 +377,8 @@ function sourceTables() {
 }
 // колонки с id человека; остаются после удаления: журнал админки (кто из админов что сделал)
 const USER_COLS = ['user_id', 'owner_id', 'from_id', 'to_id', 'a', 'b'];
+// столбцы с такими именами, где не люди: у «Выше или ниже» a и b — карточки пары
+const NOT_USER = { hilo_runs: ['a', 'b'] };
 const KEEP = new Set(['admin_log.user_id']);
 
 test('удаление аккаунта: стираются его строки во всех таблицах, что создаёт код, и всё в его сборах, турнирах и комнатах', async () => {
@@ -402,7 +404,7 @@ test('удаление аккаунта: стираются его строки 
   const skip = new Set(['users', 'admins']); // админа так не удалить; users — сами аккаунты
   for (const t of have) {
     if (skip.has(t)) continue;
-    for (const c of cols(t)) if (USER_COLS.includes(c.name)) { put(t, { [c.name]: x.id }); put(t, { [c.name]: y.id }); }
+    for (const c of cols(t)) if (USER_COLS.includes(c.name) && !(NOT_USER[t] || []).includes(c.name)) { put(t, { [c.name]: x.id }); put(t, { [c.name]: y.id }); }
   }
   // его сборы, турнир и комната «Тир-лист вместе» — в них чужие лоты, голоса, прогнозы, бинго и чат
   put('lot_rooms', { id: 'xlots', owner_id: x.id }); put('king_rooms', { id: 'xking', owner_id: x.id }); put('tier_rooms', { id: 'xtier', owner_id: x.id });

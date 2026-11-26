@@ -30,7 +30,7 @@ function fakeD1() {
 }
 const DAY = 864e5;
 const NOW = Date.UTC(2026, 11, 3, 10); // 3 декабря 2026, 12:00 по Киеву — «Хронология» №3
-const dayOf = (i) => new Date(Date.UTC(2026, 11, 1) + i * DAY).toISOString().slice(0, 10);
+const dayOf = (i) => new Date(Date.UTC(2026, 10, 26) + i * DAY).toISOString().slice(0, 10);
 const at = async (t, fn) => { const real = Date.now; Date.now = () => t; try { return await fn(); } finally { Date.now = real; } };
 const sorted = (ids) => ids.slice().sort((a, b) => POOL[a].y - POOL[b].y);
 
@@ -48,8 +48,8 @@ function setup(users = {}) {
 }
 
 test('набор дня: пять разных лет, разброс от 10 лет, не больше двух одного вида, без загадки дня и без двух прошлых дней', () => {
-  assert.equal(numberOf('2026-12-01'), 1);
-  assert.equal(numberOf('2026-12-03'), 3);
+  assert.equal(numberOf('2026-11-26'), 1);
+  assert.equal(numberOf('2026-12-03'), 8);
   assert.deepEqual(chronoOf('2026-12-03'), chronoOf('2026-12-03'), 'весь день — один и тот же набор');
   let prev = [], prev2 = [];
   for (let i = 0; i < 400; i++) {
@@ -74,7 +74,7 @@ test('набор дня: пять разных лет, разброс от 10 л
   assert.notDeepEqual(chronoOf(dayOf(0)).ids, chronoOf(dayOf(1)).ids);
   // до запуска (проверки на тестовом сайте) — тоже набор, номер не больше нуля
   assert.equal(chronoOf('2026-11-26').ids.length, CHRONO_N);
-  assert.ok(chronoOf('2026-11-26').n <= 0);
+  assert.ok(chronoOf('2026-11-25').n <= 0);
 });
 
 test('счёт: на своём месте плюс соседи по порядку, всего 9', () => {
@@ -102,7 +102,7 @@ test('гость: набор без годов, ответ считается, �
   const { env, routes, given } = setup();
   const s = await at(NOW, () => routes['GET /games/chrono']({ env, request: {} }));
   assert.equal(s.day, '2026-12-03');
-  assert.equal(s.n, 3);
+  assert.equal(s.n, 8);
   assert.equal(s.signed, false);
   assert.equal(s.result, null);
   assert.equal(s.items.length, CHRONO_N);
@@ -146,13 +146,13 @@ test('вошедший: ответ один раз в день, повтор —
   assert.equal(g.streak, 1);
   // завтра — без ошибок: опыт за игру и бонус, серия 2, вчерашний день в истории
   const s2 = await at(NOW + DAY, () => routes['GET /games/chrono']({ env, request: req() }));
-  assert.equal(s2.n, 4);
+  assert.equal(s2.n, 9);
   assert.equal(s2.result, null);
   const r2 = await at(NOW + DAY, () => routes['POST /games/chrono']({ env, request: req({ order: sorted(s2.items.map((x) => x.id)) }) }));
   assert.equal(r2.result.perfect, true);
   assert.deepEqual(given[1], { uid: 'u1', items: [{ kind: 'chrono', ref: '2026-12-04' }, { kind: 'chrono_perfect', ref: '2026-12-04' }] });
   assert.equal(r2.streak, 2);
-  assert.deepEqual(r2.history, [{ day: '2026-12-03', n: 3, score: 6, perfect: false }]);
+  assert.deepEqual(r2.history, [{ day: '2026-12-03', n: 8, score: 6, perfect: false }]);
   // пропустил день — серия заново
   const s4 = await at(NOW + 3 * DAY, () => routes['GET /games/chrono']({ env, request: req() }));
   assert.equal(s4.streak, 0);
