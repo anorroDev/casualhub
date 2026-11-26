@@ -209,8 +209,11 @@ export function settle(st, tally, now) {
 }
 export const timerDue = (st, now) => !!(st && st.status === 'live' && st.bout && st.bout.ends && now >= st.bout.ends);
 // в комнате — зрители, открывшие турнир за последние SEEN_MS (ведущий не в счёт). Все проголосовали или сказали «пас»
-// (pick 'x') — бою незачем ждать таймера
-export const allIn = (people) => Array.isArray(people) && people.length > 0 && people.every((p) => !!p && ['a', 'b', 'x'].includes(p.pick));
+// (pick 'x') — бою незачем ждать таймера. people — список ([{ pick }]) или счёт всей комнаты ({ n, said }, запрос CROWD):
+// сервер решает по счёту — в списке для страницы только первые 60
+export const allIn = (people) => (Array.isArray(people)
+  ? people.length > 0 && people.every((p) => !!p && ['a', 'b', 'x'].includes(p.pick))
+  : !!people && +people.n > 0 && +people.said >= +people.n);
 // все в комнате высказались: голоса есть — бой закрывается по ним; все «пас» — как у таймера без голосов: таймер
 // останавливается, решает ведущий (pass — чтобы страница сказала, почему)
 // «все высказались — закрыть бой сразу»: не тогда, когда ведущий собирает голоса из чата Twitch (st.chat) — чат не в комнате,
@@ -243,10 +246,16 @@ export function closeAll(st, tally, now) {
 export function undoLast(st, now) {
   const u = st.undo;
   if (!u) return { err: [409, 'Отменять нечего.'] };
+  // отменяют исход боя (а не «Закончить»): бой открывается заново под номером, которого ещё не было, — голоса за него
+  // (king_votes по номеру боя) начинаются с нуля. Иначе «все в комнате высказались» тут же закрыл бы его прежними голосами
+  const fresh = st.next, decided = st.log.length > u.logN;
   for (const k of UNDO) st[k] = u[k];
   st.log = st.log.slice(0, u.logN);
   st.undo = null;
-  if (st.bout) { st.bout.opens = now; st.bout.ends = st.mode === 'vote' && st.timer ? now + st.timer * 1000 : 0; delete st.bout.idle; delete st.bout.pass; }
+  if (st.bout) {
+    if (decided) { st.bout.n = fresh; st.next = fresh + 1; }
+    st.bout.opens = now; st.bout.ends = st.mode === 'vote' && st.timer ? now + st.timer * 1000 : 0; delete st.bout.idle; delete st.bout.pass;
+  }
   return { ok: true, reopened: st.bout };
 }
 // досрочно закончить «Царя горы»: царь на горе — последний царь, претендент возвращается в начало очереди
@@ -291,6 +300,8 @@ export function removePerson(st, id) {
 export function setRules(st, b, now) {
   if (st.status === 'done') return { err: [409, 'Турнир уже закончился.'] };
   if (b.mode === 'host' || b.mode === 'vote') st.mode = b.mode;
+  // бои решает ведущий — голоса чата Twitch не нужны (кнопка чата есть только при голосовании): чат отключён
+  if (st.mode === 'host') delete st.chat;
   if (b.timer !== undefined) { if (!KING.TIMERS.includes(+b.timer)) return { err: [400, 'Такого таймера нет.'] }; st.timer = +b.timer; }
   if (st.status === 'ready') {
     if (b.seed === 'order' || b.seed === 'random') st.seed = b.seed;
@@ -343,10 +354,12 @@ export const SEEN_MS = 25000, SEEN_EVERY = 10000;
 const SEEN_UP = `INSERT INTO king_seen (room_id, user_id, at) SELECT ?1, ?2, ?3 WHERE EXISTS (SELECT 1 FROM king_rooms WHERE id = ?1 AND owner_id <> ?2 AND status <> 'done')
   ON CONFLICT(room_id, user_id) DO UPDATE SET at = excluded.at WHERE king_seen.at < excluded.at - ${SEEN_EVERY}`;
 // кто в комнате и высказался ли в текущем бою (за кого — наружу не уходит). Порядок — кто раньше пришёл
-const PEOPLE = `SELECT s.user_id AS id, u.username AS name, u.uname AS handle, v.pick AS pick FROM king_seen s JOIN users u ON u.id = s.user_id
+const HERE = `FROM king_seen s JOIN users u ON u.id = s.user_id
   LEFT JOIN king_votes v ON v.room_id = s.room_id AND v.user_id = s.user_id AND v.bout = (SELECT bout FROM king_rooms WHERE id = ?1)
-  WHERE s.room_id = ?1 AND s.at > ?2 AND (u.banned IS NULL OR u.banned = 0) AND s.user_id <> (SELECT owner_id FROM king_rooms WHERE id = ?1)
-  ORDER BY s.rowid LIMIT 60`;
+  WHERE s.room_id = ?1 AND s.at > ?2 AND (u.banned IS NULL OR u.banned = 0) AND s.user_id <> (SELECT owner_id FROM king_rooms WHERE id = ?1)`;
+const PEOPLE = `SELECT s.user_id AS id, u.username AS name, u.uname AS handle, v.pick AS pick ${HERE} ORDER BY s.rowid LIMIT 60`;
+// сколько их всего и сколько уже высказались: «все высказались» — по всей комнате, а не по первым 60 из списка
+const CROWD = `SELECT COUNT(*) AS n, COALESCE(SUM(CASE WHEN v.pick IN ('a', 'b', 'x') THEN 1 ELSE 0 END), 0) AS said ${HERE}`;
 const mirror = (st) => { const s = summary(st); return [s.status, s.bout, s.people, s.king, s.streak, s.best, s.best_n, s.bouts]; };
 // изменить снимок: fn(st, row) меняет st на месте и возвращает { err } | { same } | что угодно ещё (уйдёт в ответ).
 // Запись проходит, только если ver тот же, что при чтении; иначе — ещё раз с новым снимком
@@ -401,8 +414,8 @@ export function makeKingRoutes(h) {
   async function allInDue(env, request, me, code, now) {
     const r = await tx(env, code, async (st) => {
       if (!(st.status === 'live' && st.mode === 'vote' && st.bout && now >= st.bout.opens)) return { same: true };
-      const [p, t] = await env.DB.batch([env.DB.prepare(PEOPLE).bind(code, now - SEEN_MS), env.DB.prepare(TALLY).bind(code, st.bout.n)]);
-      if (!allInClose(st, p.results)) return { same: true };
+      const [p, t] = await env.DB.batch([env.DB.prepare(CROWD).bind(code, now - SEEN_MS), env.DB.prepare(TALLY).bind(code, st.bout.n)]);
+      if (!allInClose(st, (p.results || [])[0])) return { same: true };
       return closeAll(st, tallyOf(t.results), now);
     }, now);
     if (r.wrote) { await after(env, code, r.row, r); if (r.done) await hostXp(env, request, me, r.row, r.st); }
@@ -417,30 +430,33 @@ export function makeKingRoutes(h) {
         env.DB.prepare(ROW).bind(code),
         env.DB.prepare('SELECT pick, COUNT(*) AS n, SUM(CASE WHEN user_id = ?2 THEN 1 ELSE 0 END) AS me FROM king_votes WHERE room_id = ?1 AND bout = (SELECT bout FROM king_rooms WHERE id = ?1) GROUP BY pick').bind(code, me ? me.id : ''),
         env.DB.prepare(PEOPLE).bind(code, now - SEEN_MS),
+        env.DB.prepare(CROWD).bind(code, now - SEEN_MS),
       ];
       // сначала отметка — тогда в списке есть и сам спросивший; изредка — уборка давних отметок
       const pre = me && !marked ? [env.DB.prepare(SEEN_UP).bind(code, me.id, now), ...(Math.random() < 0.01 ? [env.DB.prepare('DELETE FROM king_seen WHERE at < ?').bind(now - 6 * 3600e3)] : [])] : [];
       marked = true;
       const res = await env.DB.batch([...pre, ...q]);
-      const [a, b, c] = res.slice(pre.length);
-      return { row: (a.results || [])[0], votes: b.results || [], here: c.results || [] };
+      const [a, b, c, d] = res.slice(pre.length);
+      const n = (d.results || [])[0] || {};
+      return { row: (a.results || [])[0], votes: b.results || [], here: c.results || [], crowd: { n: +n.n || 0, said: +n.said || 0 } };
     };
-    let { row, votes, here } = await read();
+    let { row, votes, here, crowd } = await read();
     if (!row || row.owner_banned) return fail(404, 'Такого турнира нет.');
     let st = parse(row.state);
-    if (timerDue(st, now)) { await settleDue(env, request, me, code, now); ({ row, votes, here } = await read()); st = parse(row && row.state); if (!row || !st) return fail(404, 'Такого турнира нет.'); }
+    if (timerDue(st, now)) { await settleDue(env, request, me, code, now); ({ row, votes, here, crowd } = await read()); st = parse(row && row.state); if (!row || !st) return fail(404, 'Такого турнира нет.'); }
     // все высказались — не ждём таймера (все «пас» и бой уже ждёт ведущего — повторять нечего)
     const bt = st && st.bout, t0 = tallyOf(votes);
-    if (st.status === 'live' && st.mode === 'vote' && bt && now >= bt.opens && allInClose(st, here) && !(bt.idle && !bt.ends && !(t0.a + t0.b))) {
+    if (st.status === 'live' && st.mode === 'vote' && bt && now >= bt.opens && allInClose(st, crowd) && !(bt.idle && !bt.ends && !(t0.a + t0.b))) {
       await allInDue(env, request, me, code, now);
-      ({ row, votes, here } = await read()); st = parse(row && row.state);
+      ({ row, votes, here, crowd } = await read()); st = parse(row && row.state);
       if (!row || !st) return fail(404, 'Такого турнира нет.');
     }
     const mine = (votes.find((v) => +v.me > 0) || {}).pick || null;
     const people = here.map((p) => ({ id: p.id, name: p.name || '', handle: p.handle || '', ...(p.pick === 'a' || p.pick === 'b' ? { v: 1 } : p.pick === 'x' ? { x: 1 } : {}) }));
+    // people — первые 60 для списка «В комнате», crowd — сколько в комнате всего и сколько из них уже высказались
     const out = {
       room: { id: row.id, title: row.title, fmt: row.fmt, status: row.status, ver: row.ver, own: !!me && me.id === row.owner_id, owner: row.owner_name || '', created: row.created_at },
-      state: publicState(st, String(pv) !== String(st.pv)), tally: tallyOf(votes), mine, people, now,
+      state: publicState(st, String(pv) !== String(st.pv)), tally: tallyOf(votes), mine, people, crowd, now,
     };
     if (!conditional) return json(out);
     const tag = '"' + (await h.sha256(JSON.stringify({ ...out, now: 0 }))).slice(0, 32) + '"';

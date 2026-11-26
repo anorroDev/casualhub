@@ -1,7 +1,9 @@
 // «Царь Горы»: посев сетки, бои горы и сетки, отмена, голоса. node --test tests/king.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { seedOrder, cleanConfig, newState, startState, decide, closeByVotes, undoLast, finishEarly, buildRounds, addPeople, removePerson, setRules, bracketErr, allIn, closeAll } from '../functions/_lib/king.js';
+import { DatabaseSync } from 'node:sqlite';
+import { createHash } from 'node:crypto';
+import { seedOrder, cleanConfig, newState, startState, decide, closeByVotes, undoLast, finishEarly, buildRounds, addPeople, removePerson, setRules, bracketErr, allIn, closeAll, makeKingRoutes } from '../functions/_lib/king.js';
 
 const cfg = (b) => { const c = cleanConfig(b); assert.ok(!c.err, c.err); return c; };
 test('посев сетки: сильные встречаются как можно позже', () => {
@@ -158,4 +160,125 @@ test('голоса из чата Twitch: ник — как в Twitch, после
   const voted = [{ user_id: 'u1', pick: 'a' }];
   assert.equal(allInClose({ status: 'live' }, voted), true);
   assert.equal(allInClose({ status: 'live', chat: true }, voted), false, 'ведущий ждёт голоса чата — только таймер или кнопка');
+});
+
+test('отмена боя: отменённый исход открывает бой под новым номером (прежние голоса не в счёт), «Закончить» — под прежним', () => {
+  const st = newState(cfg({ fmt: 'hill', mode: 'vote', timer: 30, p: ['A', 'B', 'C'] }));
+  startState(st, 0);
+  const n = st.bout.n;
+  decide(st, 'a', 'vote', { va: 2, vb: 1 }, 10);
+  const next = st.next;
+  assert.ok(undoLast(st, 20).ok);
+  assert.equal(st.log.length, 0);
+  assert.notEqual(st.bout.n, n, 'номер боя новый: голоса за прежний номер не считаются');
+  assert.equal(st.bout.n, next, 'номер, которого ещё не было');
+  assert.equal(st.next, next + 1);
+  assert.deepEqual([st.bout.opens, st.bout.ends], [20, 20 + 30e3]);
+  // «Закончить» и «Продолжить турнир»: бой не решали — номер и голоса прежние
+  decide(st, 'a', 'vote', { va: 1, vb: 0 }, 30);
+  const open = st.bout.n;
+  assert.ok(finishEarly(st, 40).ok);
+  assert.ok(undoLast(st, 50).ok);
+  assert.equal(st.status, 'live');
+  assert.equal(st.bout.n, open);
+});
+
+test('все высказались — по счёту всей комнаты; бои решает ведущий — чат Twitch выключен', () => {
+  assert.equal(allIn({ n: 61, said: 60 }), false, 'шестьдесят первый ещё думает');
+  assert.equal(allIn({ n: 61, said: 61 }), true);
+  assert.equal(allIn({ n: 0, said: 0 }), false);
+  assert.equal(allIn(null), false);
+  const st = newState(cfg({ fmt: 'hill', mode: 'vote', p: ['A', 'B'] }));
+  st.chat = true;
+  assert.ok(setRules(st, { timer: 30 }, 0).ok);
+  assert.equal(st.chat, true, 'голосование осталось — чат не трогаем');
+  assert.ok(setRules(st, { mode: 'host' }, 0).ok);
+  assert.equal(st.chat, undefined);
+});
+
+// D1 на SQLite в памяти (как в tests/bingo.test.mjs) и адреса турнира без остального API
+function kingEnv() {
+  const db = new DatabaseSync(':memory:');
+  const isRead = (sql) => /^\s*(SELECT|PRAGMA)/i.test(sql) || /\bRETURNING\b/i.test(sql);
+  const stmt = (sql, args = []) => ({
+    bind: (...a) => stmt(sql, a),
+    first: async () => db.prepare(sql).get(...args) ?? null,
+    all: async () => ({ results: db.prepare(sql).all(...args) }),
+    run: async () => ({ meta: { changes: db.prepare(sql).run(...args).changes } }),
+    exec() {
+      const p = db.prepare(sql);
+      if (isRead(sql)) return { results: p.all(...args), meta: { changes: 0 } };
+      return { results: [], meta: { changes: p.run(...args).changes } };
+    },
+  });
+  db.exec('CREATE TABLE users (id TEXT PRIMARY KEY, username TEXT, uname TEXT, banned INTEGER)');
+  const env = {
+    DB: {
+      prepare: (sql) => stmt(sql),
+      async batch(list) {
+        db.exec('BEGIN');
+        try { const out = list.map((s) => s.exec()); db.exec('COMMIT'); return out; } catch (e) { db.exec('ROLLBACK'); throw e; }
+      },
+    },
+  };
+  const r = makeKingRoutes({
+    json: (body, status = 200) => ({ status, body }), fail: (status, error) => ({ status, body: { error } }),
+    readBody: async (req) => req.body || {}, sha256: async (s) => createHash('sha256').update(s).digest('hex'),
+  });
+  const user = (id) => { db.prepare('INSERT OR IGNORE INTO users (id, username, uname) VALUES (?, ?, ?)').run(id, id, id); return { id }; };
+  const post = (path, me, body) => r['POST ' + path]({ env, request: { body, headers: new Headers() }, me });
+  const here = (code, ids) => { for (const id of ids) { user(id); db.prepare('INSERT OR REPLACE INTO king_seen (room_id, user_id, at) VALUES (?, ?, ?)').run(code, id, Date.now()); } };
+  return { db, user, post, here };
+}
+
+test('отменили бой, который закрыли «все высказались», — он открыт, пока не проголосуют заново', async () => {
+  const k = kingEnv();
+  const host = k.user('host');
+  const made = await k.post('/king', host, { fmt: 'hill', mode: 'vote', timer: 60, p: ['A', 'B', 'C', 'D'], start: true });
+  assert.equal(made.status, 200);
+  const c = made.body.room.id, n = made.body.state.bout.n;
+  k.here(c, ['v1', 'v2']);
+  assert.equal((await k.post('/king/vote', { id: 'v1' }, { c, n, pick: 'a' })).body.state.log.length, 0, 'второй ещё думает');
+  const closed = await k.post('/king/vote', { id: 'v2' }, { c, n, pick: 'b' });
+  assert.deepEqual(closed.body.state.log.map((e) => e.by), ['all']);
+  const undone = await k.post('/king/act', host, { c, act: 'undo' });
+  assert.equal(undone.status, 200);
+  assert.equal(undone.body.state.log.length, 0, 'тот же запрос не закрыл бой прежними голосами');
+  const re = undone.body.state.bout;
+  assert.ok(re && re.n !== n);
+  assert.deepEqual([undone.body.tally.a, undone.body.tally.b], [0, 0]);
+  assert.equal(undone.body.people.filter((p) => p.v).length, 0, 'в открытом заново бою никто ещё не голосовал');
+  // за прежний номер голосовать нельзя, за новый — как обычно; проголосовали все — бой закрылся по новым голосам
+  assert.equal((await k.post('/king/vote', { id: 'v1' }, { c, n, pick: 'a' })).status, 409);
+  await k.post('/king/vote', { id: 'v1' }, { c, n: re.n, pick: 'b' });
+  const again = await k.post('/king/vote', { id: 'v2' }, { c, n: re.n, pick: 'b' });
+  assert.deepEqual(again.body.state.log.map((e) => [e.by, e.va, e.vb]), [['all', 0, 2]]);
+});
+
+test('«все высказались» считает всю комнату, а не первых 60 из списка', async () => {
+  const k = kingEnv();
+  const host = k.user('host');
+  const made = await k.post('/king', host, { fmt: 'hill', mode: 'vote', timer: 60, p: ['A', 'B'], start: true });
+  const c = made.body.room.id, n = made.body.state.bout.n;
+  const ids = Array.from({ length: 61 }, (_, i) => 'v' + String(i).padStart(2, '0'));
+  k.here(c, ids);
+  // первые 60 (по порядку прихода) уже проголосовали, шестьдесят первый — нет
+  for (const id of ids.slice(0, 60)) k.db.prepare('INSERT INTO king_votes (room_id, bout, user_id, pick, at) VALUES (?, ?, ?, ?, ?)').run(c, n, id, 'a', Date.now());
+  const wait = await k.post('/king/vote', { id: ids[0] }, { c, n, pick: 'b' });
+  assert.equal(wait.status, 200);
+  assert.equal(wait.body.state.log.length, 0, 'бой ждёт шестьдесят первого');
+  assert.equal(wait.body.people.length, 60, 'в списке — только первые 60');
+  assert.deepEqual(wait.body.crowd, { n: 61, said: 60 });
+  const done = await k.post('/king/vote', { id: ids[60] }, { c, n, pick: 'x' });
+  assert.deepEqual(done.body.state.log.map((e) => [e.by, e.va, e.vb]), [['all', 59, 1]]);
+});
+
+test('чат Twitch: бои решает ведущий — флаг чата снят и после возврата к голосованию не возвращается сам', async () => {
+  const k = kingEnv();
+  const host = k.user('host');
+  const made = await k.post('/king', host, { fmt: 'hill', mode: 'vote', timer: 60, p: ['A', 'B', 'C'], start: true });
+  const c = made.body.room.id;
+  assert.equal((await k.post('/king/act', host, { c, act: 'chat', on: true })).body.state.chat, true);
+  assert.equal((await k.post('/king/act', host, { c, act: 'rules', mode: 'host' })).body.state.chat, undefined);
+  assert.equal((await k.post('/king/act', host, { c, act: 'rules', mode: 'vote' })).body.state.chat, undefined, 'чат подключают заново кнопкой');
 });

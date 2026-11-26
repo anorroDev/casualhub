@@ -656,7 +656,8 @@ html.unslop:not([data-ui]) :is(.kg-pp.in, .kg-pp.pop) { animation: none; }
   }
 
   // ---------- турнир ----------
-  let R = null, people = new Map(), pv = '', etag = '', off = 0, pollT = 0, tickT = 0, busy = false, forcedAt = 0;
+  // actSeq — номер действия (act): ответ опроса, ушедшего до действия или во время него, старше ответа действия
+  let R = null, people = new Map(), pv = '', etag = '', off = 0, pollT = 0, tickT = 0, busy = false, forcedAt = 0, actSeq = 0;
   let msg = '', msgOk = false, msgAt = 'main';
   // итог только что закрытого боя видно, пока не откроется следующий (сервер ждёт KING.PAUSE), а после финала — пару секунд
   let logLen = -1, holdKey = '', holdUntil = 0;
@@ -737,18 +738,63 @@ html.unslop:not([data-ui]) :is(.kg-pp.in, .kg-pp.pop) { animation: none; }
     const ch = window.CasualTwitch.channelOf((document.getElementById('kgTw') || {}).value);
     if (!ch) { twErr = T('Ник канала — как в ссылке twitch.tv/ник: латиница, цифры и _'); paintRoom(); return; }
     try { localStorage.setItem(TWK, ch); } catch (e) {}
-    try { await api('POST', '/king/act', { c: code, act: 'chat', on: true }); } catch (e) { twErr = e.message; paintRoom(); return; }
+    twBusy = true; // пока включаем, twSync не выключит чат по старому снимку
+    try { await api('POST', '/king/act', { c: code, act: 'chat', on: true }); } catch (e) { twBusy = false; twErr = e.message; paintRoom(); return; }
+    twBusy = false;
     twForm = false; twVotes = new Map(); twSent = new Map();
     tw = window.CasualTwitch.connect(ch, { onMsg: twMsg, onState: (s) => { twState = s; paintRoom(); } });
+    twMark(true);
+    clearInterval(twBeat); twBeat = setInterval(() => twMark(true), 20000);
     paintRoom();
   }
   async function twOff() {
     if (tw) tw.close();
     tw = null; twState = 'off'; twErr = '';
     clearTimeout(twTimer); twTimer = 0;
-    try { await api('POST', '/king/act', { c: code, act: 'chat', on: false }); } catch (e) {}
+    clearInterval(twBeat); twBeat = 0;
+    twMark(false);
+    // чат слушает другая вкладка ведущего — пусть сервер и дальше ждёт голосов чата
+    if (!twElsewhere()) await twSend(false);
     paintRoom();
   }
+  // Чат на сервере (st.chat: бой не закрывается от «все в комнате высказались») включён, только пока его слушает вкладка
+  // ведущего. Обновили или закрыли вкладку, бои решает ведущий — выключаем, иначе бои закрывались бы только таймером.
+  // Вкладка с подключённым чатом отмечается в localStorage (TWL, раз в 20 с, отметке верят 90 с): другая вкладка ведущего
+  // без чата её видит и чат не выключает. Выключает вкладка без чата один раз за открытие страницы: вкладку ведущего в другом
+  // браузере, которая чат слушает, не видно — она включит его снова (twSync), и они не будут перещёлкивать друг друга
+  const TWL = 'casualhub.king.twlive.v1', twTab = Math.random().toString(36).slice(2), TW_FRESH = 90000;
+  const OBS = new URLSearchParams(location.search).has('obs'); // вид для OBS — только показывает бой, чат не трогает
+  let twBusy = false, twCleared = false, twBeat = 0;
+  function twMark(on) {
+    try {
+      const m = read(TWL) || {}, t = Date.now();
+      for (const k of Object.keys(m)) if (!m[k] || !(t - m[k].at < TW_FRESH)) delete m[k];
+      if (on) m[twTab] = { c: code, at: t }; else delete m[twTab];
+      localStorage.setItem(TWL, JSON.stringify(m));
+    } catch (e) {}
+  }
+  const twElsewhere = () => Object.entries(read(TWL) || {}).some(([k, x]) => k !== twTab && x && x.c === code && Date.now() - x.at < TW_FRESH);
+  async function twSend(on) {
+    twBusy = true;
+    try { await api('POST', '/king/act', { c: code, act: 'chat', on }); } catch (e) {}
+    twBusy = false;
+  }
+  function twSync() {
+    if (!R || !R.room.own || OBS || twBusy) return;
+    const st = R.state;
+    if (tw) {
+      if (st.mode !== 'vote') { twOff(); return; } // голоса чата нужны только голосованию — чат отключается
+      if (!st.chat && st.status !== 'done') twSend(true);
+    } else if (st.chat && !twCleared && !twElsewhere()) { twCleared = true; twSend(false); }
+  }
+  // вкладку закрыли или обновили, а чат был подключён: сервер узнает сразу (keepalive — запрос дойдёт и после закрытия)
+  addEventListener('pagehide', () => {
+    if (!tw) return;
+    twMark(false);
+    if (twElsewhere()) return;
+    const t = token();
+    try { fetch('/api/king/act', { method: 'POST', keepalive: true, headers: { 'content-type': 'application/json', ...(t ? { authorization: 'Bearer ' + t } : {}) }, body: JSON.stringify({ c: code, act: 'chat', on: false }) }); } catch (e) {}
+  });
   function twMsg(m) {
     const c = window.CasualTwitch.command(m.text), st = R && R.state, bt = st && st.bout;
     if (!c || c.cmd !== 'vote' || !bt || st.status !== 'live' || st.mode !== 'vote') return;
@@ -758,11 +804,18 @@ html.unslop:not([data-ui]) :is(.kg-pp.in, .kg-pp.pop) { animation: none; }
   }
   async function twFlush() {
     twTimer = 0;
-    const n = twBout, votes = [...twVotes].filter(([u, p]) => twSent.get(u) !== p).map(([u, pick]) => ({ u, pick }));
+    const n = twBout, sent = twSent, votes = [...twVotes].filter(([u, p]) => sent.get(u) !== p).map(([u, pick]) => ({ u, pick }));
     if (!votes.length) return;
-    votes.forEach((v) => twSent.set(v.u, v.pick));
+    votes.forEach((v) => sent.set(v.u, v.pick)); // в пути — следующая пачка их не повторит
     try { await api('POST', '/king/chat', { c: code, n, votes }); twErr = ''; }
-    catch (e) { if (e.status !== 409) twErr = e.message; } // 409 — бой уже закрыт: голоса опоздали, это не ошибка
+    catch (e) {
+      if (e.status !== 409) twErr = e.message; // 409 — бой уже закрыт: голоса опоздали, это не ошибка
+      // не дошло (нет связи, лимит, сбой сервера): эти голоса снова ждут отправки и уйдут следующей пачкой
+      if (!e.status || e.status === 429 || e.status >= 500) {
+        votes.forEach((v) => { if (sent.get(v.u) === v.pick) sent.delete(v.u); });
+        if (tw && !twTimer && twBout === n && sent === twSent) twTimer = setTimeout(twFlush, 2500);
+      }
+    }
     paintRoom();
   }
   // карточка участника в бою; o: tag (button | div), attr, king — «Царь горы» с серией, vote — полоса и счёт голосов, cls, won
@@ -826,11 +879,12 @@ html.unslop:not([data-ui]) :is(.kg-pp.in, .kg-pp.pop) { animation: none; }
     if (ph.startsWith('wait:')) return `<div class="kg-wait"><span class="kg-line" aria-hidden="true"><i></i></span><small>${T('Следующий бой…')}</small></div>`;
     let t;
     if (st.mode === 'vote') {
-      // в комнате кто-то есть: бой закрывается сам, как только все проголосуют или скажут «пас»
-      const ppl = R.people || [], said = ppl.filter((p) => p.v || p.x).length;
-      const all = ppl.length ? ' ' + T('Бой закончится, как только проголосуют все в комнате.') : '';
+      // в комнате кто-то есть: бой закрывается сам, как только все проголосуют или скажут «пас».
+      // Сколько всего и сколько высказались — по всей комнате (crowd): в списке people только первые 60
+      const c = crowdOf();
+      const all = c.n ? ' ' + T('Бой закончится, как только проголосуют все в комнате.') : '';
       const who = own
-        ? (ppl.length ? T(`Проголосовали ${said} из ${ppl.length}.`) + all : T('Закрой голосование, когда хватит голосов.'))
+        ? (c.n ? T(`Проголосовали ${c.said} из ${c.n}.`) + all : T('Закрой голосование, когда хватит голосов.'))
         : token() ? T(R.mine === 'x' ? 'Ты сказал «пас», можно передумать.' : R.mine ? 'Твой голос учтён, можно передумать.' : 'Нажми на того, кто лучше, или «Пас».') + all : T('Войди, чтобы голосовать.');
       const clock = bt.ends ? `<span class="kg-clock"><span class="kg-clock-on">${T('Голосование')}: <b data-k-tick></b> ${T('с')}.</span><span class="kg-clock-end" hidden>${T('Подводим итоги…')}</span></span> ` : bt.idle ? `${T(bt.pass ? 'Все сказали «пас» — решает ведущий.' : 'Никто не проголосовал — решает ведущий.')} ` : '';
       t = clock + who;
@@ -914,8 +968,13 @@ html.unslop:not([data-ui]) :is(.kg-pp.in, .kg-pp.pop) { animation: none; }
         : s === 'x' ? `<i class="kg-pp-st">${T('пас')}</i>` : s === 'w' ? `<i class="kg-pp-st" title="${esc(T('думает'))}" aria-label="${esc(T('думает'))}">…</i>` : '';
       return `<li class="kg-pp${s ? ' ' + s : ''}" data-uid="${esc(p.id)}" data-s="${s}"><span class="kg-pp-ava" style="--c:${colorOf(p.id)}" aria-hidden="true">${esc(letter(p.name))}</span><a href="${esc(profUrl(p))}">${esc(p.name)}</a>${tag}</li>`;
     }).join('');
-    const said = list.filter((p) => p.v || p.x).length;
-    return `<div class="kg-room"><h3 class="label">${T('В комнате')} · ${list.length}${live ? ` · ${T('проголосовали')} ${said}/${list.length}` : ''}</h3><ul class="kg-pps">${items}</ul></div>`;
+    const c = crowdOf();
+    return `<div class="kg-room"><h3 class="label">${T('В комнате')} · ${c.n}${live ? ` · ${T('проголосовали')} ${c.said}/${c.n}` : ''}</h3><ul class="kg-pps">${items}</ul></div>`;
+  }
+  // сколько зрителей в комнате и сколько уже высказались: от сервера по всей комнате (crowd), у старого ответа — по списку
+  function crowdOf() {
+    const list = R.people || [], said = list.filter((p) => p.v || p.x).length, c = R.crowd;
+    return c && +c.n >= list.length ? { n: +c.n, said: +c.said || 0 } : { n: list.length, said };
   }
   // пришёл — фишка въезжает; проголосовал или сказал «пас» — подпрыгивает (при первой отрисовке — без движения)
   function roomMotion() {
@@ -1041,9 +1100,12 @@ html.unslop:not([data-ui]) :is(.kg-pp.in, .kg-pp.pop) { animation: none; }
   async function poll(soon) {
     clearTimeout(pollT);
     if (!document.hidden || soon) {
+      const seq = actSeq;
       try {
         const r = await api('GET', `/king/room?c=${code}&pv=${encodeURIComponent(pv)}`, null, etag);
-        if (!r.same) { etag = r.etag; take(r.d); mountChat(); if (!busy) paintRoom(); }
+        // пока опрос шёл, было действие: его ответ свежее, этот снимок не берём (следующий опрос — как обычно).
+        // twSync — и при 304: не дошедшее включение или выключение чата повторится
+        if (seq === actSeq) { if (!r.same) { etag = r.etag; take(r.d); mountChat(); if (!busy) paintRoom(); } twSync(); }
       } catch (e) {
         if (!R || e.status === 404) { gone(e.status === 404 && R ? T('Этот турнир удалили.') : e.message); return; }
       }
@@ -1051,11 +1113,14 @@ html.unslop:not([data-ui]) :is(.kg-pp.in, .kg-pp.pop) { animation: none; }
     pollT = setTimeout(() => poll(), R && R.state.status === 'live' ? 2000 : 8000);
   }
   async function act(body, where) {
+    actSeq++;
     busy = true; msg = ''; msgOk = false; msgAt = where || 'main';
     try { const { d } = await api('POST', body.act ? '/king/act' : '/king/vote', { c: code, pv, ...body }); etag = ''; take(d); }
     catch (e) { msg = e.message; }
+    actSeq++; // и опросы, ушедшие во время действия, могли прочитать снимок до него
     busy = false;
     paintRoom();
+    twSync();
     return !msg;
   }
   // ведущий выбрал победителя: рамка и анимация сразу, не дожидаясь сервера
