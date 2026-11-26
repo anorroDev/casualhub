@@ -1834,6 +1834,8 @@ window.CasualLangPack = {
 "Тексты и смысл":"Lyrics and meaning",
 "Текущий пароль":"Current password",
 "Текущий пароль не подходит":"The current password is wrong",
+"Игры Казуала":"Casual Games",
+"Мини-игры Казуал Хаба":"Casual Hub mini-games",
 "Васян ловит еду":"Vasyan Catches Food",
 "Аркада с котиком Васяном: лови еду, уворачивайся от огурцов и тучек. Рекорды дня — среди друзей":"An arcade game with Vasyan the cat: catch food, dodge cucumbers and rain clouds. Daily records — among friends",
 "Счёт":"Score",
