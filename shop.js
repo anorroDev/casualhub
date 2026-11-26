@@ -500,6 +500,9 @@ html.unslop .sh-it.on { box-shadow: none; }`;
     if (!D) { body.innerHTML = '<p class="sh-note">Загружаю…</p>'; return; }
     if (!D.on) { body.innerHTML = '<p class="sh-note">Магазин пока закрыт: он откроется вместе с уровнями.</p>'; return; }
     body.innerHTML = (sec === 'earn' ? '' : saleHTML()) + (sec === 'earn' ? earnHTML() : listHTML(sec));
+    // картинки Васяна рисует vasyan.js, а он грузится только у хозяев кота: открыли раздел «Васян» без него —
+    // подгрузить и перерисовать (пока — своя мордочка, у еды, мисок и лотков картинки появятся следом)
+    if (sec === 'vasyan' && !window.CasualVasyan && U.script) U.script('/vasyan.js', () => !!window.CasualVasyan).then(() => { if (ov && ov.isConnected && sec === 'vasyan') render(); }).catch(() => {});
   }
   // скидка из админки: сколько процентов, на что и до когда
   function saleHTML() {

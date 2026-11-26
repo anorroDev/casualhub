@@ -630,5 +630,16 @@ html.sh-cur ::file-selector-button { cursor: var(--sh-a); }`;
   window.CasualUtil = Object.freeze({ esc, read, plural, script, emptyArt, loop, confetti, size, cursor, nsfw, snow, status, release, plaque });
   snowRun();
   // котик Васян внизу экрана (vasyan.js сам проверяет, не выключен ли он в Настройках; в админке и на /r/ его нет)
-  if (!/^\/(admin|r)\//.test(location.pathname)) script('/vasyan.js', () => !!window.CasualVasyan).catch(() => {});
+  // vasyan.js (~150 КБ) грузится только у хозяев кота: флаг casualhub.vasyan.own ставит levels-ui.js по ответу
+  // /levels/me. Флага ещё нет — ждём, пока он появится (в этой вкладке: событие casualhub:vasyan, в другой — storage).
+  // Картинки Васяна магазину и играм подгружаются по требованию: CasualUtil.script('/vasyan.js', …)
+  if (!/^\/(admin|r)\//.test(location.pathname)) {
+    const vyOwn = () => { try { return localStorage.getItem('casualhub.vasyan.own') === '1'; } catch (e) { return false; } };
+    const vyLoad = () => script('/vasyan.js', () => !!window.CasualVasyan).catch(() => {});
+    if (vyOwn()) vyLoad();
+    else {
+      document.addEventListener('casualhub:vasyan', () => { if (vyOwn()) vyLoad(); });
+      addEventListener('storage', (e) => { if (e.key === 'casualhub.vasyan.own' && e.newValue === '1') vyLoad(); });
+    }
+  }
 })();
