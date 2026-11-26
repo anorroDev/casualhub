@@ -14,6 +14,7 @@ import { makeShopRoutes } from '../_lib/shop-api.js';
 import { makeMailoutRoutes, rememberLang } from '../_lib/mailout.js';
 import { makePredictRoutes } from '../_lib/lots-predict.js';
 import { makeRiddleRoutes } from '../_lib/riddle.js';
+import { makeCatchRoutes } from '../_lib/game-catch.js';
 import { makeGuessRoutes } from '../_lib/guess.js';
 import { makeTgRoutes, tgNotify } from '../_lib/tg.js';
 import { cleanTwitchLots, twitchCounts } from '../_lib/lots-twitch.js';
@@ -3519,6 +3520,7 @@ Object.assign(routes, makeMailoutRoutes({
 Object.assign(routes, makePredictRoutes({ json, fail, readBody, burst, currentUser, lvGive, isAdmin }));
 // загадка дня (/api/riddle…) — functions/_lib/riddle.js
 Object.assign(routes, makeRiddleRoutes({ json, fail, readBody, burst, lvGive }));
+Object.assign(routes, makeCatchRoutes({ json, fail, readBody, burst, lvGive })); // «Васян ловит еду» (/api/games/catch…) — functions/_lib/game-catch.js, страница /games/catch/
 // «Угадай оценку друга» (/api/guess) — functions/_lib/guess.js
 Object.assign(routes, makeGuessRoutes({ json, fail, readBody, burst, lvGive }));
 // уведомления в Telegram (/api/tg…, вебхук /api/tg/hook — в PUBLIC) — functions/_lib/tg.js

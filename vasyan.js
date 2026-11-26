@@ -30,6 +30,8 @@
   const read = () => { try { return JSON.parse(localStorage.getItem(KEY) || 'null') || {}; } catch (e) { return {}; } };
   const write = (s) => { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch (e) {} };
   const calm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  // на страницах игр (/games/…) котик не гуляет: там он сам герой игры и рисуется на холсте — кадры берёт CasualVasyan.pixels
+  const NO_PET = /^\/games(\/|$)/.test(location.pathname);
 
   // ---------- окрасы и наряды ----------
   const INK = '#1B1B1F';
@@ -384,16 +386,10 @@
 
   let coat = COATS[0], outfit = OUTFITS[0], bowlSkin = BOWLS[0], boxSkin = BOXES[0];
   const cache = new WeakMap();
-  // кадр → svg. Пиксели одного цвета — одним path (подряд по строке — одним прямоугольником): меньше узлов при смене кадра.
-  // Наряд дорисовывается поверх головы; если вылезает за кадр, поле расширяется — сверху и симметрично по бокам,
-  // чтобы при развороте кот не съезжал. ox и oy — эти поля, cw и ch — размер самого кота
-  function sprite(rows, k, outline = true, cId, oId) {
-    const c = cId ? coatOf(cId) : coat, o = oId ? outfitOf(oId) : outfit;
-    const key = k + '|' + outline + '|' + c.id + '|' + o.id;
-    let m = cache.get(rows);
-    if (!m) { m = new Map(); cache.set(rows, m); }
-    let out = m.get(key);
-    if (out) return out;
+  // кадр → сетка цветов (null — пусто): окрас, наряд поверх головы и контур. Наряд, который вылезает за кадр, расширяет
+  // поле — сверху и симметрично по бокам, чтобы при развороте кот не съезжал. Из сетки sprite() ниже собирает svg,
+  // а игры на холсте берут её как есть (CasualVasyan.pixels)
+  function cells(rows, outline, c, o) {
     const W0 = Math.max(...rows.map((r) => r.length)), H0 = rows.length;
     const put = [];
     if (rows.head && o.parts.length) for (const p of o.parts) {
@@ -423,6 +419,18 @@
         if (!g[y][x] && [[1, 0], [-1, 0], [0, 1], [0, -1]].some(([dx, dy]) => { const v = g[y + dy] && g[y + dy][x + dx]; return v && v !== INK && v !== ink; })) add.push([x, y]);
       add.forEach(([x, y]) => { g[y][x] = ink; });
     }
+    return { g, W, H, W0, H0, padX, padY };
+  }
+  // кадр → svg. Пиксели одного цвета — одним path (подряд по строке — одним прямоугольником): меньше узлов при смене кадра.
+  // ox и oy — поля под наряд, cw и ch — размер самого кота
+  function sprite(rows, k, outline = true, cId, oId) {
+    const c = cId ? coatOf(cId) : coat, o = oId ? outfitOf(oId) : outfit;
+    const key = k + '|' + outline + '|' + c.id + '|' + o.id;
+    let m = cache.get(rows);
+    if (!m) { m = new Map(); cache.set(rows, m); }
+    let out = m.get(key);
+    if (out) return out;
+    const { g, W, H, W0, H0, padX, padY } = cells(rows, outline, c, o);
     const by = new Map();
     for (let y = 0; y < H; y++) for (let x = 0; x < W;) {
       const v = g[y][x];
@@ -586,7 +594,7 @@
   const clicks = [];
 
   function mount() {
-    if (alive) return;
+    if (alive || NO_PET) return;
     alive = true;
     if (!css.isConnected) document.head.appendChild(css);
     bowl = document.createElement('button');
@@ -2044,7 +2052,19 @@
     if (m) return m[1];
     return COATS.some((c) => c.id === id) ? 'skin' : FOODS.some((f) => f.id === id) ? 'food' : BOWLS.some((b) => b.id === id) ? 'bowl' : BOXES.some((b) => b.id === id) ? 'box' : 'outfit';
   };
+  // для игр на холсте (games/catch): кадр Васяна или еда пиксельной сеткой — { w, h, px }, px[y][x] — цвет CSS или null.
+  // name — кадр из PIX или id еды из FOODS («food.» в начале можно); { coat, outfit } — id окраса и наряда, без них —
+  // «Классика» без наряда (свой окрас и наряд страница берёт из skin() и outfit(), если own()). Только чтение: сетка каждый раз новая
+  const PIX = { walkA: WALK_A, walkB: WALK_B, jump: JUMP, sit: SIT, blink: BLINK, purr: PURR, eatA: EAT_A, eatB: EAT_B, scared: SCARED, hang: HANG, hangB: HANG_B, heart: HEART };
+  function pixels(name, o) {
+    const id = String(name || '').replace(/^food\./, '');
+    const rows = Object.prototype.hasOwnProperty.call(PIX, id) ? PIX[id] : FOODS.some((f) => f.id === id) ? foodOf(id).rows : null;
+    if (!rows) return null;
+    const { g, W, H } = cells(rows, true, coatOf(o && o.coat), outfitOf(o && o.outfit));
+    return { w: W, h: H, px: g };
+  }
   window.CasualVasyan = {
+    pixels,
     on: () => !st.off, own,
     skins: [...COATS.map((c) => ({ id: c.id, kind: 'skin', name: c.name })), ...OUTFITS.map((o) => ({ id: o.id, kind: 'outfit', name: o.name })),
       ...BOWLS.map((b) => ({ id: b.id, kind: 'bowl', name: b.name })), ...BOXES.map((b) => ({ id: b.id, kind: 'box', name: b.name })),
