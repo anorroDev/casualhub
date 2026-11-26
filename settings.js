@@ -461,7 +461,7 @@ html.unslop .st-sheet { backdrop-filter: none; -webkit-backdrop-filter: none; }
       // снег — только в новогодние дни (util.js → CasualUtil.snow, рисует snow.js)
       + (window.CasualUtil.snow && window.CasualUtil.snow.season() ? grp('Снег', toggle({ name: 'Снег на страницах', desc: window.CasualUtil.snow.calm() ? 'Не идёт: в системе включено «уменьшить движение»' : 'Новогодний, до 10 января', attr: 'data-snow', on: window.CasualUtil.snow.on() })) : '')
       // выбор скинов Васяна рисует сам vasyan.js в [data-vasyan-skins]
-      + (window.CasualVasyan && window.CasualVasyan.own() ? grp('Котик Васян', toggle({ name: 'Котик Васян на сайте', desc: 'Гуляет по сайту: его можно погладить, а миску — наполнить кликом и перетащить на любую карточку', attr: 'data-vasyan', on: window.CasualVasyan.on() }) + '<div data-vasyan-skins></div>') : '')
+      + (window.CasualVasyan && window.CasualVasyan.own() ? grp('Котик Васян', toggle({ name: 'Котик Васян на сайте', desc: 'Гуляет по сайту: его можно погладить, миску — наполнить и перетащить, а лоток — убрать', attr: 'data-vasyan', on: window.CasualVasyan.on() }) + '<div data-vasyan-skins></div>') : '')
       + grp('Язык', `<div class="st-row st-langrow"><span class="st-t"><b>Язык сайта</b><small>Страница перезагрузится</small></span><span class="st-seg st-lang" role="group" aria-label="Язык сайта">${langBtns('data-lang', lang)}</span></div>`);
   };
   // «Импорт из Steam» — только если на сайте есть ключ Steam (loadSteamRow после отрисовки раздела)

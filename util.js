@@ -569,6 +569,8 @@ html.sh-cur ::file-selector-button { cursor: var(--sh-a); }`;
     const off = () => { removeEventListener('pointermove', move); removeEventListener('pointerup', up); removeEventListener('pointercancel', up); };
     function move(e) {
       if (!p || e.pointerId !== p.id) return;
+      // кнопку отпустили там, откуда pointerup не дошёл (за окном), — отпустить и здесь
+      if (e.pointerType === 'mouse' && !(e.buttons & 1)) { up(e); return; }
       if (!p.on) {
         if (Math.hypot(e.clientX - p.sx, e.clientY - p.sy) < 6) return;
         p.on = true;
@@ -592,8 +594,9 @@ html.sh-cur ::file-selector-button { cursor: var(--sh-a); }`;
       if (!q.on) return;
       plqDragEnd.set(el, performance.now());
       // скорость броска — за последние ~0,1 с движения; подержал на месте и отпустил — просто падает
-      const r = el.getBoundingClientRect(), a = q.pts[0], b = q.pts[q.pts.length - 1], dt = b[0] > a[0] && performance.now() - b[0] < 80 ? (b[0] - a[0]) / 1000 : 0;
-      let lx = r.left, ty = r.top, rot = q.rot, last = performance.now(), hops = 0;
+      // откуда падать — из её left/top, а не из прямоугольника: повёрнутая плашка в нём шире и выше, и она прыгала
+      const a = q.pts[0], b = q.pts[q.pts.length - 1], dt = b[0] > a[0] && performance.now() - b[0] < 80 ? (b[0] - a[0]) / 1000 : 0;
+      let lx = parseFloat(el.style.left) || 0, ty = parseFloat(el.style.top) || 0, rot = q.rot, last = performance.now(), hops = 0;
       let vx = dt ? Math.max(-1400, Math.min(1400, (b[1] - a[1]) / dt)) * 0.5 : 0, vy = dt ? Math.max(-1100, Math.min(1500, (b[2] - a[2]) / dt)) : 0;
       const done = () => { keep(plqRest(el, lx)); plqDragEnd.set(el, performance.now()); };
       if (plqCalm()) { done(); return; }

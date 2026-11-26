@@ -2679,7 +2679,7 @@ window.CasualLangPack = {
 "Город":"City",
 "Уют":"Cozy",
 "Котик Васян на сайте":"Vasyan the cat on the site",
-"Гуляет по сайту: его можно погладить, а миску — наполнить кликом и перетащить на любую карточку":"Wanders around the site: pet him, click his bowl to fill it, or drag the bowl onto any card",
+"Гуляет по сайту: его можно погладить, миску — наполнить и перетащить, а лоток — убрать":"Wanders around the site: pet him, fill and drag his bowl, and clean his litter box",
 // сезоны: звание за месяц (functions/_lib/levels.js — письма, functions/_lib/levels-api.js и admin/app.js — админка)
 "Величайший":"The Greatest",
 "Сезон {}":"Season {}",
@@ -2985,6 +2985,14 @@ window.CasualLangPack = {
 "Миска Васяна":"Vasyan’s bowl",
 "Миска: {}":"Bowl: {}",
 "Миска Васяна вверх дном: нажми, чтобы поставить":"Vasyan’s bowl is upside down: tap to set it right",
+// лоток и злость Васяна (vasyan.js)
+"Ш-ш-ш!":"Hsss!",
+"Фу!":"Ew!",
+"Хмф":"Hmph",
+"чисто!":"clean!",
+"Лоток Васяна: нажми, чтобы убрать, или перетащи":"Vasyan’s litter box: tap to clean it, or drag it",
+"Лоток Васяна: чистый, его можно перетащить":"Vasyan’s litter box is clean, you can drag it",
+"Убрать за Васяном":"Clean up after Vasyan",
 "Эту миску не купить: её открывает тайное достижение":"This bowl can’t be bought: a secret achievement unlocks it",
 "Тайное достижение":"Secret achievement",
 "Не продаётся":"Not for sale",
