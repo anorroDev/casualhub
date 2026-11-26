@@ -47,23 +47,52 @@ html.unslop:not([data-ui]) :is(.tc-ov, .tc-card) { animation: none; }
   document.head.appendChild(css);
 
   // ---------- создать комнату из тир-листа редактора ----------
-  async function create(l) {
+  // что комната возьмёт из тир-листа — те же правила, что у cleanRoom на сервере (TC в functions/_lib/tiercoop.js, сверяет
+  // tests/tiercoop.test.mjs): не больше ITEMS карточек и ROWS рядов, одинаковые названия — одна карточка, а картинка
+  // с устройства становится текстом (в комнате только ссылки на картинки — стикеры)
+  const ROOM = { ROWS: 10, ITEMS: 60, NAME: 60 };
+  const clean = (s, max) => String(s == null ? '' : s).replace(/[\u0000-\u001f\u007f]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
+  function plan(l) {
     const all = [...l.rows.flatMap((r) => r.items), ...(l.pool || [])];
-    const items = all.map((id, k) => { const it = l.items[id] || {}; return { n: String(it.name || '').trim() || `${T('Элемент')} ${k + 1}`, img: it.kind === 'url' ? it.src : '' }; });
-    const rows = l.rows.map((r) => ({ t: r.label, c: r.color }));
-    const d = await api('POST', '/tiercoop', { title: l.title, rows, items });
+    const seen = new Set(), items = [], cut = { over: 0, same: 0, pics: 0, rows: Math.max(0, l.rows.length - ROOM.ROWS) };
+    all.forEach((id, k) => {
+      const it = l.items[id] || {}, n = clean(it.name, ROOM.NAME) || `${T('Элемент')} ${k + 1}`;
+      if (items.length >= ROOM.ITEMS) { cut.over += 1; return; }
+      if (seen.has(n.toLowerCase())) { cut.same += 1; return; }
+      seen.add(n.toLowerCase());
+      items.push({ n, img: it.kind === 'url' ? it.src : '' });
+      if (it.kind === 'img') cut.pics += 1;
+    });
+    return { rows: l.rows.slice(0, ROOM.ROWS).map((r) => ({ t: r.label, c: r.color })), items, cut };
+  }
+  async function create(l) {
+    const p = plan(l), c = p.cut;
+    // что не попадёт в комнату, видно до того, как она создана, а не потом
+    const lost = [
+      c.over && `Лишние карточки (в комнате до ${ROOM.ITEMS}): ${c.over}`,
+      c.same && `Повторы названий (станут одной карточкой): ${c.same}`,
+      c.pics && `Картинки с устройства (в комнате станут текстом): ${c.pics}`,
+      c.rows && `Лишние ряды (в комнате до ${ROOM.ROWS}): ${c.rows}`,
+    ].filter(Boolean);
+    if (p.rows.length < 2) throw new Error('Нужно хотя бы два ряда.');
+    if (p.items.length < 2) throw new Error('Нужно хотя бы два элемента.');
+    if (lost.length && !confirm([T('Не всё из тир-листа попадёт в комнату:'), ...lost.map((s) => '• ' + T(s)), '', T('Создать комнату?')].join('\n'))) return;
+    const d = await api('POST', '/tiercoop', { title: l.title, rows: p.rows, items: p.items });
     location.href = '/tierlist/?coop=' + d.id;
   }
-  window.CasualTierCoop = Object.freeze({ create });
+  window.CasualTierCoop = Object.freeze({ create, plan });
 
   // ---------- комната ----------
   const code = (/^[A-Za-z0-9]{12}$/.exec(new URLSearchParams(location.search).get('coop') || '') || [''])[0];
   if (!code) return;
-  let D = null, tab = 'mine', picks = {}, sel = '', msg = '', ov = null, timer = 0, saveT = 0, dirty = false;
+  // edits — сколько раз раскладку меняли здесь; asked — номер последнего запроса, shown — того, чей ответ уже на экране
+  let D = null, tab = 'mine', picks = {}, sel = '', msg = '', ov = null, timer = 0, saveT = 0, dirty = false, edits = 0, asked = 0, shown = 0;
   const it = (id) => D.room.items.find((x) => x.id === id) || { n: '?', img: '' };
+  // названия, ряды, заголовок и ник — от людей: translate="no", перевод сайта (lang-core.js) их не трогает.
+  // Комната без своего названия — «Тир-лист вместе» от сервера, его переводим
   function tile(id, extra) {
     const x = it(id);
-    return `<button type="button" class="tc-it${sel === id ? ' sel' : ''}${extra && extra.hot ? ' hot' : ''}" data-it="${esc(id)}" title="${esc(x.n)}">${x.img ? `<img src="${esc(x.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : ''}<span>${esc(x.n)}</span>${extra && extra.n ? `<em>${extra.n}</em>` : ''}</button>`;
+    return `<button type="button" class="tc-it${sel === id ? ' sel' : ''}${extra && extra.hot ? ' hot' : ''}" data-it="${esc(id)}" title="${esc(x.n)}" translate="no">${x.img ? `<img src="${esc(x.img)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : ''}<span>${esc(x.n)}</span>${extra && extra.n ? `<em>${extra.n}</em>` : ''}</button>`;
   }
   function paint() {
     if (!ov || !D) return;
@@ -72,21 +101,25 @@ html.unslop:not([data-ui]) :is(.tc-ov, .tc-card) { animation: none; }
     const rowsHTML = R.rows.map((r, k) => {
       const ids = mine ? R.items.filter((x) => picks[x.id] === k).map((x) => x.id) : R.items.filter((x) => (avg.get(x.id) || {}).row === k).sort((a, b) => avg.get(a.id).mean - avg.get(b.id).mean).map((x) => x.id);
       const tiles = ids.map((id) => (mine ? tile(id) : tile(id, { n: avg.get(id).n, hot: avg.get(id).spread >= 1.2 }))).join('');
-      return `<div class="tc-row"><button type="button" class="tc-lab" data-row="${k}" style="background:${esc(r.c)}"${mine && open && token() ? '' : ' disabled'}>${esc(r.t)}</button><div class="tc-its">${tiles}</div></div>`;
+      return `<div class="tc-row"><button type="button" class="tc-lab" data-row="${k}" style="background:${esc(r.c)}" translate="no"${mine && open && token() ? '' : ' disabled'}>${esc(r.t)}</button><div class="tc-its">${tiles}</div></div>`;
     }).join('');
     const rest = mine ? R.items.filter((x) => picks[x.id] == null).map((x) => x.id) : R.items.filter((x) => (avg.get(x.id) || {}).row < 0).map((x) => x.id);
     const note = !open ? T('Голосование закрыто: это итог компании.') : mine ? (token() ? T('Нажми на элемент, потом на ряд. Раскладка сохраняется сама.') : T('Войди в аккаунт, чтобы разложить по-своему.')) : T('Средний тир-лист: элемент стоит там, куда его в среднем ставили. Цифра — сколько голосов, красная рамка — мнения сильно разошлись.');
-    ov.querySelector('.tc-card').innerHTML = `<div class="tc-head"><div><h2>${esc(R.title)}</h2><small>${T('Тир-лист вместе')} · ${T('ведёт')} ${esc(R.owner)} · ${T('голосов')}: ${D.voters}${open ? '' : ` · ${T('закрыт')}`}</small></div>
+    ov.querySelector('.tc-card').innerHTML = `<div class="tc-head"><div><h2${R.title === 'Тир-лист вместе' ? '' : ' translate="no"'}>${esc(R.title)}</h2><small>${T('Тир-лист вместе')} · ${T('ведёт')} <span translate="no">${esc(R.owner)}</span> · ${T('голосов')}: ${D.voters}${open ? '' : ` · ${T('закрыт')}`}</small></div>
       <div class="tc-acts"><button type="button" class="tc-btn" data-tab="mine" aria-pressed="${mine}">${T('Моя раскладка')}</button><button type="button" class="tc-btn" data-tab="avg" aria-pressed="${!mine}">${T('Средний')}</button><button type="button" class="tc-btn" data-tc="share">${T('Ссылка')}</button>${R.own && open ? `<button type="button" class="tc-btn" data-tc="close">${T('Закрыть голосование')}</button>` : ''}<button type="button" class="tc-btn" data-tc="x" aria-label="${T('Закрыть')}">✕</button></div></div>
       <div class="tc-rows">${rowsHTML}</div>
       ${rest.length ? `<div class="tc-pool"><h3>${mine ? T('Ещё не разложено') : T('Пока без голосов')}</h3><div class="tc-its">${rest.map((id) => tile(id)).join('')}</div></div>` : ''}
       <p class="tc-note">${note}</p>${msg ? `<p class="tc-msg">${esc(msg)}</p>` : ''}`;
   }
+  // ответ на запрос старше того, что уже на экране (опрос ушёл раньше сохранения), комнату не перерисовывает
+  const take = (n, d) => { if (n <= shown) return false; shown = n; D = d; return true; };
   async function load() {
+    const n = ++asked, at = edits;
     try {
       const first = !D;
-      D = await api('GET', `/tiercoop/room?c=${code}`);
-      if (!dirty) picks = { ...(D.mine || {}) };
+      // раскладку с сервера берём, только если здесь её не меняли с тех пор, как ушёл запрос: иначе опрос откатил бы
+      // только что поставленное
+      if (take(n, await api('GET', `/tiercoop/room?c=${code}`)) && !dirty && at === edits) picks = { ...(D.mine || {}) };
       // закрыто или без входа — сразу итог компании
       if (first && (D.room.status !== 'open' || !token())) tab = 'avg';
       msg = '';
@@ -97,8 +130,14 @@ html.unslop:not([data-ui]) :is(.tc-ov, .tc-card) { animation: none; }
   function poll() { clearTimeout(timer); timer = setTimeout(async () => { if (!document.hidden && ov) await load(); if (ov) poll(); }, 5000); }
   function save() {
     clearTimeout(saveT); dirty = true;
+    const at = ++edits;
     saveT = setTimeout(async () => {
-      try { D = await api('POST', '/tiercoop/vote', { c: code, picks }); dirty = false; msg = ''; }
+      const n = ++asked;
+      try {
+        take(n, await api('POST', '/tiercoop/vote', { c: code, picks }));
+        if (at === edits) dirty = false; // пока ждали ответ, поставили ещё: та правка уйдёт своим сохранением
+        msg = '';
+      }
       catch (e) { msg = e.message; }
       paint();
     }, 600);
@@ -125,7 +164,7 @@ html.unslop:not([data-ui]) :is(.tc-ov, .tc-card) { animation: none; }
         try { await navigator.clipboard.writeText(url); msg = ''; b.textContent = T('Скопировано'); } catch (er) { msg = url; paint(); }
         return;
       }
-      if (b.dataset.tc === 'close') { if (!confirm(T('Закрыть голосование? Раскладки больше не будут меняться.'))) return; try { D = await api('POST', '/tiercoop/close', { c: code }); } catch (er) { msg = er.message; } tab = 'avg'; return paint(); }
+      if (b.dataset.tc === 'close') { if (!confirm(T('Закрыть голосование? Раскладки больше не будут меняться.'))) return; const n = ++asked; try { take(n, await api('POST', '/tiercoop/close', { c: code })); } catch (er) { msg = er.message; } tab = 'avg'; return paint(); }
       if (tab !== 'mine' || D.room.status !== 'open' || !token()) return;
       if (b.dataset.it) { sel = sel === b.dataset.it ? '' : b.dataset.it; return paint(); }
       if (b.dataset.row != null && sel) { picks[sel] = +b.dataset.row; sel = ''; paint(); save(); }
