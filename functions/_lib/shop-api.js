@@ -2,7 +2,7 @@
 // подключает эти адреса через makeShopRoutes(h), передавая свои помощники (ответы, проверки админа, журнал админки).
 // Папка _lib не становится адресом сайта.
 import { levelsMode } from './levels.js';
-import { shopOn, shopState, shopView, buy, grant, shopLog, shopTotals, wear, looksOf, readSale, forgetSale, SALE_SECS } from './shop.js';
+import { shopOn, shopState, shopView, buy, grant, shopLog, shopTotals, wear, looksOf, readSale, forgetSale, SALE_SECS, markVasyanGone } from './shop.js';
 import { spanMs } from './presence.js';
 
 // не чаще 30 покупок в минуту на человека (в этом экземпляре функции): кнопку «Купить» не задолбить скриптом
@@ -33,6 +33,11 @@ export function makeShopRoutes(h) {
     async 'GET /shop/me'({ env, me }) {
       if (!(await gate(env, me))) return json({ on: false });
       return json(shopView(await shopState(env, me.id)));
+    },
+    // Васян ушёл навсегда (vasyan.js: отношения упали до нуля) — на всех устройствах аккаунта его больше нет
+    async 'POST /shop/vasyan/gone'({ env, me }) {
+      await markVasyanGone(env, me.id);
+      return json({ ok: true });
     },
     // купить: { item, rid } — rid нужен для расходуемого (повтор того же запроса не купит дважды)
     async 'POST /shop/buy'({ env, request, me }) {

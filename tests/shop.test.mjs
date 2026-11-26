@@ -491,3 +491,16 @@ test('«Как заработать» сходится с балансом: по
   assert.deepEqual([v.gifts, v.spent], [40 + 25 + 10 - 5, 80]);
   assert.equal(v.earned.total + v.gifts - v.spent, v.balance);
 });
+
+test('Васян ушёл навсегда (отношения упали до нуля): его нет ни в магазине, ни в «Прогрессе», ни в письмах', async () => {
+  const { env, db } = await setup();
+  setXp(db, V, 9000, 25);
+  assert.equal((await S.shopState(env, V)).vasyan, true);
+  const api = makeShopRoutes({ json: (d, s = 200) => ({ status: s, d }), fail: (s, e) => ({ status: s, e }), adminCandidate: () => false, isAdmin: async () => false });
+  assert.equal((await api['POST /shop/vasyan/gone']({ env, me: { id: V } })).status, 200);
+  assert.equal((await api['POST /shop/vasyan/gone']({ env, me: { id: V } })).status, 200, 'второй раз — не ошибка');
+  const st = await S.shopState(env, V);
+  assert.equal(st.vasyan, false);
+  assert.equal(S.shopView(st).vasyanGone, true);
+  assert.equal(S.shopView(await S.shopState(env, U)).vasyanGone, false, 'у других — как было');
+});

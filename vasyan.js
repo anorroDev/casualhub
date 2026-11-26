@@ -525,6 +525,13 @@
 .vy-card .vc-bar { display: block; height: 6px; border-radius: 4px; background: color-mix(in srgb, var(--ink, #fff) 12%, transparent); overflow: hidden; }
 .vy-card .vc-bar i { display: block; height: 100%; border-radius: inherit; background: #E4553F; }
 .vy-card .vc-bar.food i { background: #EAA92C; }
+.vy-card .vc-warn { display: block; margin-top: 8px; color: #E4553F; font-size: 11.5px; white-space: normal; }
+/* мокрый — мелко дрожит, стряхивает воду — мотает телом из стороны в сторону (кадрами) */
+.vy-cat.wet .vy-body { animation: vy-shiver .2s steps(2, jump-none) infinite; filter: saturate(.75) brightness(.95); }
+@keyframes vy-shiver { 50% { translate: 1px 0; } }
+.vy-cat.shaking .vy-body { animation: vy-shake .36s steps(4, jump-none) 3; }
+@keyframes vy-shake { 25% { rotate: -14deg; } 50% { rotate: 0deg; } 75% { rotate: 14deg; } }
+@media (prefers-reduced-motion: reduce) { .vy-cat.wet .vy-body, .vy-cat.shaking .vy-body { animation: none; } }
 .vy-cat:has(> .vy-bub) .vy-card, .vy-cat.drag .vy-card { opacity: 0; visibility: hidden; }
 @media (prefers-reduced-motion: reduce) { .vy-card { transition: none; } }
 .vy-spill svg { display: block; }
@@ -610,6 +617,9 @@
   st.poos = normPoos(st.poos);
   st.pooAt = +st.pooAt || 0;
   // поилка: сколько налито (0–3; у нового котика — 2), где стоит на полу (null — рядом с миской), жажда 0–100
+  // мокрый до (облили из поилки; потом стряхнёт воду), ушёл навсегда — когда (отношения упали до нуля)
+  st.wetUntil = +st.wetUntil || 0;
+  st.gone = +st.gone || 0;
   st.water = st.water == null ? 2 : Math.max(0, Math.min(3, Math.round(+st.water || 0)));
   st.wx = st.wx != null && Number.isFinite(+st.wx) ? +st.wx : null;
   // злость 0–100 (много кликов, бросили, грязный лоток): проходит сама, пока сайт закрыт — тоже (1 пункт за 5 секунд)
@@ -649,7 +659,7 @@
   const clicks = [];
 
   function mount() {
-    if (alive || NO_PET) return;
+    if (alive || NO_PET || st.gone) return; // ушёл навсегда — не возвращается
     alive = true;
     if (!css.isConnected) document.head.appendChild(css);
     bowl = document.createElement('button');
@@ -1034,6 +1044,8 @@
         const prev = wb.y;
         wb.vy = Math.min(1700, wb.vy + 2200 * dt); wb.y += wb.vy * dt; wb.x += wb.vx * dt;
         if (wb.x < 4) { wb.x = 4; wb.vx = Math.abs(wb.vx) * 0.4; } else if (wb.x > innerWidth - wb.w - 4) { wb.x = innerWidth - wb.w - 4; wb.vx = -Math.abs(wb.vx) * 0.4; }
+        // летит с водой и задела котика — облила его
+        if (st.water > 0 && !wb.splashed && cat && !leaving && wb.x < x + size.w && wb.x + wb.w > x && wb.y - wb.h < y && wb.y > y - size.h) { wb.splashed = true; splashCat(); }
         if (wb.vy > 0) { const hit = hitBelow(wb, prev); if (hit !== undefined) waterLand(hit); }
       } else if (wb.mode !== 'drag') {
         if (wb.s && !surfaceOk(wb.s)) waterFall('scroll'); else onSurf(wb);
@@ -1179,6 +1191,7 @@
   }
   function hopWater() { if (!water) return; water.classList.remove('add'); void water.offsetWidth; water.classList.add('add'); }
   function waterFall(why, fvx = 0, fvy = 0) {
+    wb.splashed = false;
     Object.assign(wb, { mode: 'fall', s: null, vx: fvx, vy: fvy, by: why });
     if (calm) waterLand(below(wb));
   }
@@ -1200,6 +1213,72 @@
     st.water += 1; save(); drawWater(); hopWater();
     floatText(water, '+1');
     if (st.thirst > 50 && !['eat', 'goEat', 'drink', 'drag', 'fall', 'jump', 'climb', 'prep', 'push'].includes(mode)) goDrink();
+  }
+  // облили из поилки: вода вылилась, Васян мокрый и злой, отношения сильно вниз; несколько секунд ходит и дрожит,
+  // потом стряхивает воду (shakeOff)
+  function splash(cx, cy, n, spread) {
+    if (calm) return;
+    for (let i = 0; i < n; i++) {
+      const c = document.createElement('i');
+      c.className = 'vy-crumb';
+      c.setAttribute('aria-hidden', 'true');
+      c.style.left = Math.round(cx + (Math.random() - 0.5) * spread * 0.5) + 'px';
+      c.style.top = Math.round(cy + (Math.random() - 0.5) * 14) + 'px';
+      c.style.background = Math.random() < 0.5 ? WATER_PAL.W : WATER_PAL.V;
+      c.style.setProperty('--dx', Math.round((Math.random() - 0.5) * spread) + 'px');
+      document.body.appendChild(c);
+      setTimeout(() => c.remove(), 640);
+    }
+  }
+  function splashCat() {
+    const t = performance.now();
+    st.water = 0; drawWater();
+    st.wetUntil = Date.now() + 8000 + Math.random() * 3000;
+    annoy(45); bond(-15, 'splash', 3000);
+    save();
+    splash(x + size.w / 2, y - size.h / 2, 12, 70);
+    if (cat) cat.classList.add('wet');
+    if (leaving) return;
+    if (!BUSY.includes(mode)) { stopPlay(); goal = null; mode = 'hiss'; until = t + 950; dir = wb.x + wb.w / 2 < x + size.w / 2 ? -1 : 1; faced = dir; hop(); }
+    say('hiss');
+  }
+  function shakeOff(t) {
+    st.wetUntil = 0; save();
+    if (!cat) return;
+    cat.classList.remove('wet');
+    stopPlay(); goal = null;
+    mode = 'shake'; until = t + 1100;
+    cat.classList.remove('shaking'); void cat.offsetWidth; cat.classList.add('shaking');
+    splash(x + size.w / 2, y - size.h / 2, 16, 110);
+  }
+  // ---------- уход навсегда: отношения упали до нуля ----------
+  // спрыгивает на пол, молча идёт к ближнему краю экрана и уходит. Сервер запоминает (POST /shop/vasyan/gone):
+  // Васяна больше нет ни на одном устройстве аккаунта. Миска, лоток и поилка уходят вместе с ним
+  let leaving = false, dripT = 0;
+  function startLeave() {
+    if (leaving || st.gone || !cat) return;
+    leaving = true; stopPlay(); goal = null; wantEat = false;
+    if (surf && !BUSY.includes(mode)) { jumpTo(null, x); return; } // встанет на пол — decide → leaveWalk
+    if (!BUSY.includes(mode)) leaveWalk();
+  }
+  function leaveWalk() {
+    dir = x + size.w / 2 < innerWidth / 2 ? -1 : 1; faced = dir;
+    target = dir < 0 ? -size.w - 20 : innerWidth + 20;
+    mode = 'leave'; say('hmph');
+  }
+  function goneForever() {
+    if (st.gone) return;
+    st.gone = Date.now(); save();
+    const p = document.createElement('span');
+    p.className = 'vy-plus'; p.textContent = 'Васян ушёл навсегда';
+    p.style.left = Math.round(clamp(x, 10, innerWidth - 180)) + 'px'; p.style.top = Math.round(y - 60) + 'px';
+    document.body.appendChild(p); setTimeout(() => p.remove(), 2600);
+    try {
+      const u = JSON.parse(localStorage.getItem('ocenshik.user.v1') || 'null'), tk = u && (JSON.parse(localStorage.getItem('casualhub.tokens.v1') || 'null') || {})[u.id];
+      if (tk) fetch('/api/shop/vasyan/gone', { method: 'POST', headers: { authorization: 'Bearer ' + tk } }).catch(() => {});
+    } catch (e) {}
+    unmount();
+    document.dispatchEvent(new CustomEvent('casualhub:vasyan-gone'));
   }
   function goDrink() { return st.water > 0 && !!water && wb.mode === 'rest' && goToThing(wb, 'drink'); }
   // лакает — капли брызгают из поилки
@@ -1330,14 +1409,15 @@
   const FACES = ["<svg viewBox=\"0 0 11 9\" width=\"33\" height=\"27\" shape-rendering=\"crispEdges\" aria-hidden=\"true\"><rect x=\"0\" y=\"1\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"1\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"1\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"10\" y=\"1\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"10\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"3\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"3\" y=\"3\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"4\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"3\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"8\" y=\"3\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"9\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"10\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"10\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"5\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"6\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"10\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"6\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"5\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"6\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"7\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"10\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/></svg>","<svg viewBox=\"0 0 11 9\" width=\"33\" height=\"27\" shape-rendering=\"crispEdges\" aria-hidden=\"true\"><rect x=\"1\" y=\"0\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"0\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"1\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"1\" width=\"1\" height=\"1\" fill=\"#F5A3B5\"/><rect x=\"8\" y=\"1\" width=\"1\" height=\"1\" fill=\"#F5A3B5\"/><rect x=\"9\" y=\"1\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"10\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"3\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"4\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"3\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"8\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"10\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"4\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"4\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"4\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"8\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"10\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"10\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"6\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"6\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"10\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/></svg>","<svg viewBox=\"0 0 11 9\" width=\"33\" height=\"27\" shape-rendering=\"crispEdges\" aria-hidden=\"true\"><rect x=\"1\" y=\"0\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"0\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"1\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"1\" width=\"1\" height=\"1\" fill=\"#F5A3B5\"/><rect x=\"8\" y=\"1\" width=\"1\" height=\"1\" fill=\"#F5A3B5\"/><rect x=\"9\" y=\"1\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"10\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"3\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"4\" y=\"3\" width=\"1\" height=\"1\" fill=\"#FFF3E6\"/><rect x=\"5\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"3\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"8\" y=\"3\" width=\"1\" height=\"1\" fill=\"#FFF3E6\"/><rect x=\"9\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"10\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"4\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"4\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"4\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"8\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"10\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"5\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"5\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"5\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"7\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"10\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"6\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"6\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"10\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/></svg>","<svg viewBox=\"0 0 11 9\" width=\"33\" height=\"27\" shape-rendering=\"crispEdges\" aria-hidden=\"true\"><rect x=\"1\" y=\"0\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"0\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"1\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"1\" width=\"1\" height=\"1\" fill=\"#F5A3B5\"/><rect x=\"8\" y=\"1\" width=\"1\" height=\"1\" fill=\"#F5A3B5\"/><rect x=\"9\" y=\"1\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"10\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"3\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"4\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"3\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"8\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"10\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"4\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"3\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"4\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"5\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"4\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"7\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"4\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"9\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"10\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"5\" width=\"1\" height=\"1\" fill=\"#F5A3B5\"/><rect x=\"2\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"5\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"5\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"5\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"7\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"5\" width=\"1\" height=\"1\" fill=\"#F5A3B5\"/><rect x=\"10\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"6\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"6\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"10\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/></svg>","<svg viewBox=\"0 0 11 9\" width=\"33\" height=\"27\" shape-rendering=\"crispEdges\" aria-hidden=\"true\"><rect x=\"1\" y=\"0\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"0\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"1\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"1\" width=\"1\" height=\"1\" fill=\"#F5A3B5\"/><rect x=\"8\" y=\"1\" width=\"1\" height=\"1\" fill=\"#F5A3B5\"/><rect x=\"9\" y=\"1\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"10\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"3\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"5\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"7\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"9\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"10\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"3\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"4\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"5\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"7\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"8\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"9\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"10\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"4\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"8\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"10\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"0\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"6\" width=\"1\" height=\"1\" fill=\"#F5A3B5\"/><rect x=\"2\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"6\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"5\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"6\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"7\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"6\" width=\"1\" height=\"1\" fill=\"#F5A3B5\"/><rect x=\"10\" y=\"6\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"1\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"7\" width=\"1\" height=\"1\" fill=\"#3A2A22\"/><rect x=\"6\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"9\" y=\"7\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"2\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"3\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"4\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"5\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"6\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"7\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/><rect x=\"8\" y=\"8\" width=\"1\" height=\"1\" fill=\"#E08A3C\"/></svg>"];
   function cardHTML() {
     const b = bondInfo(), full = clamp(100 - Math.round(st.hunger), 0, 100);
-    const mood = cross() ? 'Злится' : grumpy() ? 'Дуется' : 'Доволен';
+    const mood = st.wetUntil ? 'Мокрый и злой' : cross() ? 'Злится' : grumpy() ? 'Дуется' : 'Доволен';
     const food = st.hunger > 80 ? 'Голоден' : st.hunger > 60 ? 'Проголодался' : 'Сыт';
     const tray = st.box.n >= BOX_FULL ? 'Грязный' : st.box.n || poos.length ? 'Пора убрать' : 'Чистый';
     const drink = st.thirst > 80 ? 'Очень хочет пить' : st.thirst > 60 ? 'Хочет пить' : 'Напился';
     return `<span class="vc-top">${FACES[b.lv]}<span><b>Васян</b><small>${b.name}</small></span></span>`
       + `<span class="vc-grid"><span>Отношения</span><span class="vc-bar"><i style="width:${b.v}%"></i></span>`
       + `<span>Сытость</span><span class="vc-bar food"><i style="width:${full}%"></i></span>`
-      + `<span>Настроение</span><b>${mood}</b><span>Еда</span><b>${food}</b><span>Вода</span><b>${drink}</b><span>Лоток</span><b>${tray}</b></span>`;
+      + `<span>Настроение</span><b>${mood}</b><span>Еда</span><b>${food}</b><span>Вода</span><b>${drink}</b><span>Лоток</span><b>${tray}</b></span>`
+      + (b.v < 10 ? '<span class="vc-warn">Отношения почти на нуле: ещё немного — и Васян уйдёт навсегда</span>' : '');
   }
   // у края окна карточка сдвигается внутрь (--dx), чтобы не уходить за экран
   function cardClamp() {
@@ -1366,8 +1446,12 @@
     if (key && gap && now - (bondCd[key] || 0) < gap) return;
     if (key) bondCd[key] = now;
     const was = bondLv();
+    const before = st.bond;
     st.bond = clamp(Math.round((st.bond + n) * 10) / 10, 0, 100);
     cardRefresh();
+    // на краю — предупреждает; ноль — уходит навсегда
+    if (st.bond <= 0 && n < 0) { save(); startLeave(); return; }
+    if (before >= 10 && st.bond < 10 && cat) floatText(cat, 'Васян вот-вот уйдёт');
     const lv = bondLv();
     if (lv === was) return;
     if (cat) floatText(cat, BOND[lv][2]);
@@ -1665,6 +1749,7 @@
   }
   function decide() {
     const t = performance.now();
+    if (leaving) { if (surf) jumpTo(null, x); else leaveWalk(); return; } // уходит навсегда: сначала на пол, потом к краю экрана
     if ((st.hunger > 60 || wantEat) && goEat()) return;
     if (st.thirst > 60 && goDrink()) return;
     // хочет пить, а пить нечего — думает о воде
@@ -1904,7 +1989,7 @@
       }
     } else {
       y = surfTop(surf);
-      if (mode === 'walk' || mode === 'run' || mode === 'goEat' || mode === 'stalk' || (mode === 'play' && play === 'go')) {
+      if (mode === 'walk' || mode === 'run' || mode === 'goEat' || mode === 'stalk' || mode === 'leave' || (mode === 'play' && play === 'go')) {
         if (mode === 'play') target = toy.x > x ? toy.x - size.w + 4 : toy.x + toy.w - 4;
         if (mode === 'goEat') target = spotOf(goal).x; // миска могла уехать с карточкой — место у неё каждый кадр заново
         const dx = target - x; dir = dx >= 0 ? 1 : -1;
@@ -1912,12 +1997,13 @@
         if (dir !== faced && Math.abs(dx) > 1) { faced = dir; turnUntil = t + 220; }
         // толкать миску идёт крадучись
         const sneak = mode === 'goEat' && goal.act === 'push';
-        const speed = mode === 'walk' ? 42 : mode === 'stalk' ? 30 : mode === 'play' ? 64 : sneak ? 48 : runMood === 'zoom' ? 270 : 110;
+        const speed = mode === 'leave' ? 50 : mode === 'walk' ? 42 : mode === 'stalk' ? 30 : mode === 'play' ? 64 : sneak ? 48 : runMood === 'zoom' ? 270 : 110;
         if (t >= turnUntil) x += dir * Math.min(Math.abs(dx), speed * dt);
         const low = mode === 'stalk' || mode === 'play' || sneak;
         rows = t < turnUntil ? (low ? STALK_A : SIT) : low ? (frame % 2 ? STALK_B : STALK_A) : frame % 2 ? WALK_B : WALK_A;
         if (Math.abs(target - x) < 1.5) {
-          if (mode === 'goEat') arrive(t);
+          if (mode === 'leave') { goneForever(); return; } // ушёл — кота больше нет, кадр дальше не рисуем
+          else if (mode === 'goEat') arrive(t);
           else if (mode === 'run' && runMood === 'hunt') {
             // добежал до курсора поближе — дальше крадётся
             const [a, b] = bounds(surf), goal = clamp(mouse.x - size.w / 2, a, b);
@@ -1956,6 +2042,10 @@
         if (n % 2 && n !== biteN) { biteN = n; crumbs(goal.o); }
         // доел — облизывает лапу
         if (t > until) finishEat(t);
+      } else if (mode === 'shake') {
+        // стряхивает воду: сидит и мотает телом (.shaking)
+        rows = SIT;
+        if (t > until) { if (cat) cat.classList.remove('shaking'); mode = 'sit'; until = t + 1500; say('hmph'); }
       } else if (mode === 'drink') {
         // лакает: голова к воде и обратно, на каждый глоток — капли
         const n = Math.floor(frame / 2);
@@ -2085,7 +2175,7 @@
     const face = rows.head && rows.head.face === 'l' ? -1 : 1;
     cat.classList.toggle('flip', dir * face < 0);
     if (mode !== 'jump' && cat.classList.contains('flipjump')) cat.classList.remove('flipjump');
-    if (mode !== 'drag' && mode !== 'fall' && mode !== 'jump' && mode !== 'climb') {
+    if (mode !== 'drag' && mode !== 'fall' && mode !== 'jump' && mode !== 'climb' && mode !== 'leave') {
       const [a, b] = surf ? bounds(surf) : [6, innerWidth - s.cw - 6];
       x = Math.max(a, Math.min(b, x));
     }
@@ -2093,6 +2183,12 @@
     const ty = y - s.h + (rows.drop || 0) * K + (roll && cat.classList.contains('belly') ? s.oy : 0);
     cat.style.transform = `translate(${Math.round(x - s.ox)}px, ${Math.round(ty)}px)`;
     if (t - saveT > 15000) { saveT = t; save(); }
+    // мокрый: с него капает; высох по времени и стоит на лапах — стряхивает воду
+    if (st.wetUntil && cat) {
+      if (!cat.classList.contains('wet') && mode !== 'shake') cat.classList.add('wet');
+      if (!calm && t - dripT > 650) { dripT = t; splash(x + size.w * (0.3 + Math.random() * 0.4), y - size.h * 0.4, 1, 6); }
+      if (Date.now() > st.wetUntil && !BUSY.includes(mode) && !['hiss', 'scared', 'eat', 'drink', 'litter', 'squat', 'leave', 'prep'].includes(mode)) shakeOff(t);
+    }
     if (cardOn && t - cardAt > 500) { cardAt = t; cardRefresh(); } // голод, лоток, настроение меняются сами
   }
 
@@ -2253,6 +2349,9 @@
       }
     }
     Object.assign(dirty, was);
+    // ушёл навсегда в другой вкладке — и здесь
+    if (v.gone && !st.gone) { st.gone = +v.gone; unmount(); return; }
+    if (Number.isFinite(+v.wetUntil)) st.wetUntil = +v.wetUntil;
     // выключили в Настройках другой вкладки
     if (!!v.off !== !!st.off) {
       st.off = !!v.off;

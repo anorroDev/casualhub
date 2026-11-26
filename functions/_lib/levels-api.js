@@ -9,7 +9,7 @@ import {
   achBackLetter, ACH_TIER_XP, ACH_ONE_XP, swapQuest, recalcUser, nameKey, claimPast, payAchievements, freezesNow,
   SEASON_RANKS, seasonRankOf, rankFields, currentSeason, closeSeason, forgetSeason, seasonXpOf, seasonXpMany, seasonPlanLetter, fmtKyiv,
 } from './levels.js';
-import { FOODS, boughtLooks, ensureShop, hasVasyan, vasyanClaim } from './shop.js';
+import { FOODS, boughtLooks, ensureShop, hasVasyan, vasyanClaim, vasyanGone } from './shop.js';
 import { settleWeekTop, weekTop, TOP_MIN, TOP_BASE, TOP_PER, TOP_BONUS_MAX } from './weektop.js';
 import { spanMs } from './presence.js';
 import { ADVENT, adventDay, adventPending, adventState, adventClaim } from './advent.js';
@@ -150,6 +150,9 @@ export function makeLevelsRoutes(h) {
       const [quests, steps, ev] = await Promise.all([questState(env, me.id, { now, today, row }), firstSteps(env, me.id), currentEvent(env, now)]);
       const freezes = freezesNow(row, weekStart(today)).freezes; // с недельной, которая придёт с первым действием недели
       const alive = row.streak_day === today || row.streak_day === shiftDay(today, -1) || (row.streak_day === shiftDay(today, -2) && freezes > 0);
+      // одной пачкой (одно обращение к базе): «забрал Васяна из письма» и «Васян ушёл навсегда»; таблицы ухода может ещё не быть
+      const vy = await env.DB.batch([vasyanClaim(env, me.id), vasyanGone(env, me.id)]).catch(() => null);
+      const vyClaim = vy ? (vy[0].results || [])[0] : await vasyanClaim(env, me.id).first(), vyGone = !!(vy && (vy[1].results || []).length);
       return json({
         on: true, mode: levelsMode(env), ...lv, ...rankFields(season.xp), season, prefs, look: lookOf(row, season.xp, bought), unlocked: unlockedAt(lv.level, false, bought, invitesOf(row)), admin,
         streak: { days: alive ? +row.streak || 0 : 0, best: +row.best_streak || 0, freezes, today: row.streak_day === today },
@@ -161,7 +164,7 @@ export function makeLevelsRoutes(h) {
         advent: adventDay(now) ? { day: adventDay(now), frameAt: ADVENT.frameAt } : null, evRewards: EVENT_REWARDS, // новогодний календарь и награды за ивенты
         mail: await mailUnread(env, me.id),
         // котик внизу экрана (vasyan.js) — по тому же правилу, что у магазина, и с тем же уровнем (сохранённым)
-        vasyan: hasVasyan(await vasyanClaim(env, me.id).first(), +row.level || 1, !!(bought && bought.has('pet'))),
+        vasyan: !vyGone && hasVasyan(vyClaim, +row.level || 1, !!(bought && bought.has('pet'))),
       });
     },
     // почта: подарки от администрации и письма о новых уровнях

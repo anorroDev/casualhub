@@ -569,7 +569,7 @@ const USER_DROP = [
   ...['xp_log', 'user_level', 'achievements', 'season_results', 'advent', 'gift_box', 'invites', 'invited', 'shop_log', 'shop_owned', 'shop_wear',
     'tg_links', 'tg_codes', 'tg_sent', 'mail_prefs', 'mailout_queue', 'recs', 'ann_seen', 'guess_days', 'riddle_tries',
     // мини-игры (/games/): рекорды, попытки и начатые игры
-    'catch_days', 'catch_runs', 'pixel_tries', 'chrono_days', 'hilo_runs', 'hilo_best'].map((t) => [[t], `DELETE FROM ${t} WHERE user_id = ?1`]),
+    'catch_days', 'catch_runs', 'pixel_tries', 'chrono_days', 'hilo_runs', 'hilo_best', 'vasyan_gone'].map((t) => [[t], `DELETE FROM ${t} WHERE user_id = ?1`]),
   [['gifts'], 'DELETE FROM gifts WHERE to_id = ?1'], // письма лично ему; общие (to_id пустой) остаются
   [['users'], 'DELETE FROM users WHERE id = ?1'],
 ];

@@ -155,6 +155,12 @@ const ownedBy = (it, st) => (it.ach ? !!(st.achs && st.achs.has(it.ach)) : !it.p
 export const PET_LEVEL = (REWARDS.find((r) => r.kind === 'pet') || { level: 25 }).level;
 export const hasVasyan = (claimed, level, pet) => !!claimed || (+level || 0) >= PET_LEVEL || !!pet;
 // забрал ли письмо «Первой десятки» с котиком (gift_box, gift_id vasyan:<uid>)
+// ушёл ли Васян навсегда (таблица — ensureShop)
+export const vasyanGone = (env, uid) => env.DB.prepare('SELECT 1 AS ok FROM vasyan_gone WHERE user_id = ?').bind(uid);
+export async function markVasyanGone(env, uid, now = Date.now()) {
+  await ensureShop(env);
+  await env.DB.prepare('INSERT OR IGNORE INTO vasyan_gone (user_id, at) VALUES (?, ?)').bind(uid, now).run();
+}
 export const vasyanClaim = (env, uid) => env.DB.prepare('SELECT 1 AS ok FROM gift_box WHERE gift_id = ? AND user_id = ? AND claimed = 1').bind('vasyan:' + uid, uid);
 // какая еда открылась, когда уровень вырос с from до to (для письма о новом уровне)
 export const foodsUnlocked = (from, to) => FOODS.filter((f) => f.unlock > (+from || 0) && f.unlock <= (+to || 0));
@@ -200,6 +206,8 @@ export async function ensureShop(env) {
     env.DB.prepare('CREATE TABLE IF NOT EXISTS shop_owned (user_id TEXT NOT NULL, item TEXT NOT NULL, price INTEGER NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (user_id, item))'),
     // что надето: в каждом слоте одно; нет строки — надето бесплатное «как у всех»
     env.DB.prepare('CREATE TABLE IF NOT EXISTS shop_wear (user_id TEXT NOT NULL, slot TEXT NOT NULL, item TEXT NOT NULL, at INTEGER NOT NULL, PRIMARY KEY (user_id, slot))'),
+    // Васян ушёл навсегда (отношения упали до нуля, vasyan.js → POST /shop/vasyan/gone): у человека его больше нет нигде
+    env.DB.prepare('CREATE TABLE IF NOT EXISTS vasyan_gone (user_id TEXT PRIMARY KEY, at INTEGER NOT NULL)'),
   ]);
   ready.add(env.DB);
 }
@@ -233,7 +241,7 @@ export function earnedFrom(xp, ach, seasons) {
 export async function shopState(env, uid, now = Date.now()) {
   await ensureLevels(env);
   await ensureShop(env);
-  const [lv, ach, log, own, gift, worn] = await env.DB.batch([
+  const [lv, ach, log, own, gift, worn, gone] = await env.DB.batch([
     env.DB.prepare('SELECT xp, level, freezes, freeze_week, tz FROM user_level WHERE user_id = ?').bind(uid),
     env.DB.prepare('SELECT code, tier FROM achievements WHERE user_id = ?').bind(uid),
     // подарки — всё, что пришло не покупкой (от админа, награды за топ недели и другие): с ними «Как заработать» сходится с балансом
@@ -242,6 +250,7 @@ export async function shopState(env, uid, now = Date.now()) {
     env.DB.prepare('SELECT item FROM shop_owned WHERE user_id = ?').bind(uid),
     vasyanClaim(env, uid),
     env.DB.prepare('SELECT slot, item FROM shop_wear WHERE user_id = ?').bind(uid),
+    vasyanGone(env, uid),
   ]);
   const row = (lv.results || [])[0] || null;
   const ownedSet = new Set((own.results || []).map((x) => x.item));
@@ -260,7 +269,8 @@ export async function shopState(env, uid, now = Date.now()) {
     achs: new Set((ach.results || []).map((a) => String(a.code))), // полученные достижения: открывают тайные миски
     wear: wearMap(worn.results || [], ownedSet),
     level,
-    vasyan: hasVasyan((gift.results || []).length, level, ownedSet.has('look.pet')),
+    vasyanGone: !!(gone.results || []).length,
+    vasyan: !(gone.results || []).length && hasVasyan((gift.results || []).length, level, ownedSet.has('look.pet')),
     hasLevel: !!row,
     // с недельной, которая придёт с первым действием недели: её видно уже сейчас (freezesNow)
     freezes: row ? freezesNow(row, week).freezes : 1,
@@ -296,6 +306,7 @@ export function shopView(st) {
     gifts: st.gifts,
     rate: XP_PER_ROFLAN,
     vasyan: st.vasyan,
+    vasyanGone: !!st.vasyanGone,
     freezes: st.freezes,
     freezeMax: FREEZE_MAX,
     wear: { ...DEFAULT, ...(st.wear || {}) },

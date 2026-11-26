@@ -646,12 +646,14 @@ export async function levelLetter(env, uid, up, now = Date.now(), seasonXp = 0) 
     let body = `Звание сезона: ${r.title}.` + (next ? ` До «${next.title}» в этом сезоне ещё ${next.xp - (+seasonXp || 0)} опыта.` : ' Это самое высокое звание сезона.');
     // новая еда для Васяна — тем, у кого он есть (то же правило, что у магазина: hasVasyan). shop.js сам подключает этот
     // файл, поэтому он берётся здесь, при вызове, а не наверху
-    const { foodsUnlocked, hasVasyan, vasyanClaim, boughtLooks } = await import('./shop.js');
+    const { foodsUnlocked, hasVasyan, vasyanClaim, vasyanGone, boughtLooks } = await import('./shop.js');
     const food = foodsUnlocked(up.from, up.to);
     if (food.length) {
       const claimed = !!(await vasyanClaim(env, uid).first());
+      let gone = false;
+      try { gone = !!(await vasyanGone(env, uid).first()); } catch (e) {} // таблицы ещё нет — не уходил
       const pet = !claimed && !!((await boughtLooks(env, [uid])).get(uid) || new Set()).has('pet');
-      if (hasVasyan(claimed, up.to, pet)) body += ` Новая еда для Васяна: ${food.map((f) => f.title).join(', ')}.`;
+      if (!gone && hasVasyan(claimed, up.to, pet)) body += ` Новая еда для Васяна: ${food.map((f) => f.title).join(', ')}.`;
     }
     await env.DB.prepare("INSERT OR IGNORE INTO gifts (id, to_id, kind, title, body, xp, at) VALUES (?, ?, 'level', ?, ?, 0, ?)").bind(`lv:${uid}:${up.to}`, uid, `Новый уровень: ${up.to}`, body, now).run();
   } catch (e) { console.error('levels letter', e && e.message); }
