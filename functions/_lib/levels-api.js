@@ -6,10 +6,10 @@ import {
   levelsMode, levelsOn, ensureLevels, readLevel, levelView, prefsOf, lookOf, unlockedAt, levelsOf, achievementsOf, questState,
   firstSteps, takeNews, dayKey, weekStart, shiftDay, cleanTz, backfillUser, grantSpecial, currentEvent, forgetEvent, RULES, awardMany, CAT_GROUPS, RATING_KINDS,
   ACHIEVEMENTS, REWARDS, NAME_COLORS, PROFILE_BGS, isScored, textLen, award, INVITE_REWARDS, EVENT_REWARDS, INV_SQL, invitesOf, STREAK_BONUS, FIRST_STEPS,
-  achBackLetter, ACH_TIER_XP, ACH_ONE_XP, swapQuest, recalcUser, nameKey,
+  achBackLetter, ACH_TIER_XP, ACH_ONE_XP, swapQuest, recalcUser, nameKey, pastDone, payAchievements, freezesNow,
   SEASON_RANKS, seasonRankOf, rankFields, currentSeason, closeSeason, forgetSeason, seasonXpOf, seasonXpMany, seasonPlanLetter, fmtKyiv,
 } from './levels.js';
-import { FOODS, boughtLooks, ensureShop } from './shop.js';
+import { FOODS, boughtLooks, ensureShop, hasVasyan, vasyanClaim } from './shop.js';
 import { settleWeekTop, weekTop, TOP_MIN, TOP_BASE, TOP_PER, TOP_BONUS_MAX } from './weektop.js';
 import { spanMs } from './presence.js';
 import { ADVENT, adventDay, adventPending, adventState, adventClaim } from './advent.js';
@@ -35,13 +35,14 @@ const FOUNDERS_BEFORE = Date.UTC(2026, 10, 12); // кто зарегистрир
 const parse = (s, d) => { try { const v = s ? JSON.parse(s) : null; return v == null ? d : v; } catch (e) { return d; } };
 const randCode = () => [...crypto.getRandomValues(new Uint8Array(8))].map((b) => 'abcdefghijkmnopqrstuvwxyz23456789'[b % 33]).join('');
 
-// опыт за прошлое — сам, при первом заходе после запуска (нет строки в user_level): уровень и «Основатель хаба»
-// появляются сразу, без кнопки в админке. Повторный вызов ничего не удваивает
+// опыт за прошлое — сам, при первом заходе после запуска: уровень и «Основатель хаба» появляются сразу, без кнопки
+// в админке. Был ли он — по отметке в журнале (pastDone), а не по строке user_level: её заводит и чужое действие (друг
+// поставил реакцию или принял заявку раньше, чем человек зашёл). Повторный вызов ничего не удваивает
 export async function ensurePast(env, uid) {
   if (!levelsOn(env) || !uid) return;
   try {
     await ensureLevels(env);
-    if (await env.DB.prepare('SELECT 1 FROM user_level WHERE user_id = ?').bind(uid).first()) return;
+    if (await pastDone(env, uid)) return;
     await backfillUser(env, uid, { founderBefore: FOUNDERS_BEFORE });
   } catch (e) { console.error('levels past', e && e.message); }
 }
@@ -82,7 +83,6 @@ async function ensureFirst(env, uid) {
       Date.now()).run();
   } catch (e) { console.error('first10', e && e.message); }
 }
-const vasyanOwned = async (env, uid) => !!(await env.DB.prepare('SELECT 1 FROM gift_box WHERE gift_id = ? AND user_id = ? AND claimed = 1').bind('vasyan:' + uid, uid).first());
 export async function mailUnread(env, uid) {
   const r = await env.DB.prepare(`SELECT COUNT(*) AS n FROM (${MAIL_SQL}) WHERE read = 0 OR ((xp > 0 OR kind = 'vasyan') AND claimed = 0)`).bind(uid, Date.now()).first();
   // в декабре — ещё подарок дня новогоднего календаря, пока его не забрали (advent.js)
@@ -135,10 +135,11 @@ export function makeLevelsRoutes(h) {
       // сезон первым: если срок вышел, этот же запрос его закроет, и опыт сезона будет уже нового
       const season = await seasonOf(env, me.id, await currentSeason(env, now));
       const [quests, steps, ev] = await Promise.all([questState(env, me.id, { now, today, row }), firstSteps(env, me.id), currentEvent(env, now)]);
-      const alive = row.streak_day === today || row.streak_day === shiftDay(today, -1) || (row.streak_day === shiftDay(today, -2) && +row.freezes > 0);
+      const freezes = freezesNow(row, weekStart(today)).freezes; // с недельной, которая придёт с первым действием недели
+      const alive = row.streak_day === today || row.streak_day === shiftDay(today, -1) || (row.streak_day === shiftDay(today, -2) && freezes > 0);
       return json({
         on: true, mode: levelsMode(env), ...lv, ...rankFields(season.xp), season, prefs, look: lookOf(row, season.xp, bought), unlocked: unlockedAt(lv.level, false, bought, invitesOf(row)), admin,
-        streak: { days: alive ? +row.streak || 0 : 0, best: +row.best_streak || 0, freezes: row.freezes == null ? 1 : +row.freezes, today: row.streak_day === today },
+        streak: { days: alive ? +row.streak || 0 : 0, best: +row.best_streak || 0, freezes, today: row.streak_day === today },
         quests, steps: steps.every((s) => s.paid) ? null : steps,
         event: ev ? { title: ev.title, kinds: ev.kinds, mult: ev.mult, until: ev.until } : null,
         rewards: REWARDS, foods: FOOD_GIFTS, colors: NAME_COLORS, bgs: Object.keys(PROFILE_BGS), invRewards: INVITE_REWARDS, invites: invitesOf(row),
@@ -146,7 +147,8 @@ export function makeLevelsRoutes(h) {
         recap: recapOpen(now) || admin ? 2026 : null, // админ видит итоги заранее, чтобы проверить их до декабря
         advent: adventDay(now) ? { day: adventDay(now), frameAt: ADVENT.frameAt } : null, evRewards: EVENT_REWARDS, // новогодний календарь и награды за ивенты
         mail: await mailUnread(env, me.id),
-        vasyan: await vasyanOwned(env, me.id),
+        // котик внизу экрана (vasyan.js) — по тому же правилу, что у магазина, и с тем же уровнем (сохранённым)
+        vasyan: hasVasyan(await vasyanClaim(env, me.id).first(), +row.level || 1, !!(bought && bought.has('pet'))),
       });
     },
     // почта: подарки от администрации и письма о новых уровнях
@@ -189,10 +191,14 @@ export function makeLevelsRoutes(h) {
       if (g.kind === 'roflans') { // награда за топ недели: рофланы в журнал магазина, один раз
         if (!(+g.xp > 0)) return fail(400, 'В этом письме нечего забирать.');
         await ensureShop(env);
-        const w = await env.DB.prepare('INSERT INTO gift_box (gift_id, user_id, read, claimed, at) VALUES (?1, ?2, 1, 1, ?3) ON CONFLICT(gift_id, user_id) DO UPDATE SET claimed = 1, read = 1 WHERE claimed = 0').bind(g.id, me.id, now).run();
+        // «забрано» и рофланы — одной пачкой (в D1 это одна транзакция): сбой между ними не оставит забранное письмо без
+        // рофланов. У строки журнала свой id на письмо и человека, поэтому повтор ничего не удвоит
+        const [w] = await env.DB.batch([
+          env.DB.prepare('INSERT INTO gift_box (gift_id, user_id, read, claimed, at) VALUES (?1, ?2, 1, 1, ?3) ON CONFLICT(gift_id, user_id) DO UPDATE SET claimed = 1, read = 1 WHERE claimed = 0').bind(g.id, me.id, now),
+          env.DB.prepare("INSERT OR IGNORE INTO shop_log (id, user_id, item, delta, reason, note, by_id, at) VALUES (?, ?, NULL, ?, 'top', ?, NULL, ?)")
+            .bind('gift:' + g.id + ':' + me.id, me.id, +g.xp, String(g.title || '').slice(0, 120), now),
+        ]);
         if (!(w.meta && w.meta.changes)) return fail(409, 'Этот подарок уже забран.');
-        await env.DB.prepare("INSERT OR IGNORE INTO shop_log (id, user_id, item, delta, reason, note, by_id, at) VALUES (?, ?, NULL, ?, 'top', ?, NULL, ?)")
-          .bind('gift:' + g.id + ':' + me.id, me.id, +g.xp, String(g.title || '').slice(0, 120), now).run();
         return json({ ok: true, gained: 0, roflans: +g.xp, unread: await mailUnread(env, me.id) });
       }
       if (g.kind === 'vasyan') { // котик, не опыт
@@ -200,9 +206,12 @@ export function makeLevelsRoutes(h) {
         return json({ ok: true, gained: 0, vasyan: true, unread: await mailUnread(env, me.id) });
       }
       if (!(+g.xp > 0)) return fail(400, 'В этом письме нечего забирать.');
+      // опыт — раньше отметки «забрано»: дважды он не начислится (ref — письмо), а если начислить не вышло (awardMany
+      // глотает ошибки базы), письмо не станет забранным без опыта — забрать можно будет снова
+      const r = await awardMany(env, me.id, [{ kind: 'gift', ref: g.id, xp: +g.xp }], { now, tz: tzOf(request) });
+      if (!r && !(await env.DB.prepare("SELECT 1 AS ok FROM xp_log WHERE user_id = ? AND kind = 'gift' AND ref = ?").bind(me.id, g.id).first())) return fail(500, 'Не получилось, попробуй ещё раз.');
       const w = await env.DB.prepare('INSERT INTO gift_box (gift_id, user_id, read, claimed, at) VALUES (?1, ?2, 1, 1, ?3) ON CONFLICT(gift_id, user_id) DO UPDATE SET claimed = 1, read = 1 WHERE claimed = 0').bind(g.id, me.id, now).run();
       if (!(w.meta && w.meta.changes)) return fail(409, 'Этот подарок уже забран.');
-      const r = await awardMany(env, me.id, [{ kind: 'gift', ref: g.id, xp: +g.xp }], { now, tz: tzOf(request) });
       h.markNews(request, r);
       return json({ ok: true, gained: r ? r.gained : 0, level: r ? r.level : null, unread: await mailUnread(env, me.id) });
     },
@@ -506,8 +515,14 @@ export function makeLevelsRoutes(h) {
       const b = await h.readBody(request);
       const id = String(b.id || ''), code = String(b.code || '');
       if (!/^[0-9a-f]{24}$/.test(id) || !ACHIEVEMENTS.some((a) => a.code === code)) return fail(400, 'Нет такого человека или достижения.');
-      if (b.give) await env.DB.prepare('INSERT INTO achievements (user_id, code, tier, at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, code) DO UPDATE SET tier = excluded.tier').bind(id, code, Math.max(1, Math.min(3, +b.tier || 1)), Date.now()).run();
-      else await env.DB.prepare('DELETE FROM achievements WHERE user_id = ? AND code = ?').bind(id, code).run();
+      if (b.give) {
+        const a = ACHIEVEMENTS.find((x) => x.code === code), tier = Math.max(1, Math.min(3, +b.tier || 1));
+        await env.DB.prepare('INSERT INTO achievements (user_id, code, tier, at) VALUES (?, ?, ?, ?) ON CONFLICT(user_id, code) DO UPDATE SET tier = excluded.tier').bind(id, code, tier, Date.now()).run();
+        // опыт за выданные ступени — как за полученные самим (каждая ступень один раз; у одной ступени и особых — только первая):
+        // раньше выданное админом оставалось без опыта
+        const top = Math.min(tier, Math.max(1, (a.tiers || []).length));
+        if (levelsOn(env)) await payAchievements(env, id, { only: Array.from({ length: top }, (_, i) => `${code}:${i + 1}`) });
+      } else await env.DB.prepare('DELETE FROM achievements WHERE user_id = ? AND code = ?').bind(id, code).run();
       await h.adminLog(env, request, me, `levels: ach ${b.give ? '+' : '-'}${code} ${id}`, true);
       return json({ ok: true });
     },

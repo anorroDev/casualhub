@@ -6,7 +6,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import * as S from '../functions/_lib/shop.js';
 import { makeShopRoutes } from '../functions/_lib/shop-api.js';
-import { ensureLevels, levelLetter } from '../functions/_lib/levels.js';
+import { ensureLevels, levelLetter, streakStep } from '../functions/_lib/levels.js';
 
 function fakeD1() {
   const db = new DatabaseSync(':memory:');
@@ -313,6 +313,11 @@ test('еда: в письме о новом уровне — новая еда, 
   assert.doesNotMatch(body(V, 3), /еда/);
   await levelLetter(env, V, { from: 24, to: 25 }, 1000, 0); // на 25-м Васян есть у всех, но новой еды там нет
   assert.doesNotMatch(body(V, 25), /еда/);
+  // купил «Васяна в профиле» 12 ноября (look.pet) — Васян есть, как и в магазине
+  db.prepare("INSERT INTO shop_owned (user_id, item, price, at) VALUES (?, 'look.pet', 300, 1)").run(V);
+  assert.equal((await S.shopState(env, V)).vasyan, true);
+  await levelLetter(env, V, { from: 3, to: 5 }, 1000, 0);
+  assert.match(body(V, 5), /Новая еда для Васяна: Сосиска, Сыр\./);
 });
 
 test('еда: id и названия общие с vasyan.js, в том же порядке', () => {
@@ -449,4 +454,40 @@ test('скидка: цена со скидкой при покупке и на �
   assert.equal((await S.readSale(env)).pct, 30);
   await routes['DELETE /admin/shop/sale']({ env, request: {}, me });
   assert.equal(await S.readSale(env), null);
+});
+
+test('заморозка: недельная видна сразу, а купленная её не съедает', async () => {
+  const { env, db } = await setup();
+  const NOW = Date.UTC(2026, 10, 25, 12); // среда, неделя с 23 ноября
+  setXp(db, U, 2000, 5, 1); // 200 рофланов, одна заморозка
+  db.prepare("UPDATE user_level SET freeze_week = '2026-11-16', tz = 'UTC' WHERE user_id = ?").run(U); // недельная за эту неделю ещё не записана
+  assert.equal((await S.shopState(env, U, NOW)).freezes, 2, 'своя и недельная');
+  const full = await S.buy(env, U, 'perk.freeze', { rid: 'aaa111', now: NOW });
+  assert.match(full.err[1], /больше не помещается/);
+  assert.equal((await S.shopState(env, U, NOW)).balance, 200, 'ничего не списано');
+  // своих не осталось: при покупке сначала записывается недельная, купленная — сверху
+  db.prepare('UPDATE user_level SET freezes = 0 WHERE user_id = ?').run(U);
+  assert.equal((await S.shopState(env, U, NOW)).freezes, 1);
+  const r = await S.buy(env, U, 'perk.freeze', { rid: 'bbb222', now: NOW });
+  assert.ok(r.ok && !r.already);
+  assert.deepEqual([r.st.freezes, r.st.balance], [2, 140]);
+  const row = { ...db.prepare('SELECT freezes, freeze_week, streak_day, streak, best_streak FROM user_level WHERE user_id = ?').get(U) };
+  assert.deepEqual([row.freezes, row.freeze_week], [2, '2026-11-23']);
+  // первое действие недели второй раз её не прибавит
+  assert.equal(streakStep({ ...row, streak: 3, streak_day: '2026-11-24', best_streak: 3 }, '2026-11-25').freezes, 2);
+});
+
+test('«Как заработать» сходится с балансом: подарки — всё, что пришло не покупкой', async () => {
+  const { env, db } = await setup();
+  await S.ensureShop(env);
+  setXp(db, U, 1000); // 100 за опыт
+  const log = db.prepare('INSERT INTO shop_log (id, user_id, item, delta, reason, note, by_id, at) VALUES (?, ?, NULL, ?, ?, NULL, NULL, 1)');
+  log.run('g1', U, 40, 'admin');
+  log.run('g2', U, 25, 'top'); // награда за топ недели из письма
+  log.run('g3', U, 10, 'other');
+  log.run('g4', U, -5, 'admin');
+  assert.ok((await S.buy(env, U, 'site.cursor.pixel')).ok); // −80
+  const v = S.shopView(await S.shopState(env, U));
+  assert.deepEqual([v.gifts, v.spent], [40 + 25 + 10 - 5, 80]);
+  assert.equal(v.earned.total + v.gifts - v.spent, v.balance);
 });

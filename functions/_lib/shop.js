@@ -3,17 +3,18 @@
 //
 // Рофланы отдельно не начисляются: заработанное считается по тому, что уже есть на сайте, — опыт за всё время
 // (user_level.xp: оценки, отзывы, задания, серии, заходы — всё, за что дают опыт), достижения и итоговые звания
-// прошлых сезонов. Траты и подарки админа — журнал shop_log (delta < 0 — потрачено или снято, > 0 — подарено).
-// Баланс = заработанное + сумма delta. Поэтому уровни для магазина ничего не пишут, а опыт, который потом сняли
-// (удалил оценку), уменьшает и заработанное: баланс может уйти ниже нуля, тогда купить ничего нельзя, пока не
-// наберётся снова.
+// прошлых сезонов. Траты и подарки — журнал shop_log (delta < 0 — потрачено или снято, > 0 — пришло подарком: от админа,
+// за топ недели и другое). Баланс = заработанное + сумма delta, поэтому «Как заработать» сходится
+// с ним: заработанное + подарки (всё, что не покупка, — gifts) − потрачено. Уровни для магазина ничего не пишут, а опыт,
+// который потом сняли (удалил оценку), уменьшает и заработанное: баланс может уйти ниже нуля, тогда купить ничего
+// нельзя, пока не наберётся снова.
 //
 // Покупка — одна пачка запросов: списание пишется, только если хватает рофланов и предмета ещё нет, а предмет
 // попадает в shop_owned, только если списание записалось. У покупки свой id в журнале, повтор ничего не удваивает.
 // Что купил — shop_owned; как это носить, решает страница: vasyan.js — окрасы и наряды Васяна, /shop.js — фон и курсор.
 // Купить можно только оформление и «заморозку» серии; ни опыта, ни званий за рофланы нет, случайных наград тоже.
 // Папка _lib не становится адресом сайта.
-import { levelsMode, ensureLevels, ACHIEVEMENTS, REWARDS, EVENT_REWARDS } from './levels.js';
+import { levelsMode, ensureLevels, ACHIEVEMENTS, REWARDS, EVENT_REWARDS, FREEZE_MAX, freezesNow, weekStart, dayKey } from './levels.js';
 
 // ---------- сколько рофланов за что ----------
 export const XP_PER_ROFLAN = 10; // 1 рофлан за каждые 10 опыта
@@ -22,7 +23,7 @@ export const ACH_SPECIAL = 30; // особое: «Основатель хаба�
 // за итоговое звание сезона (id званий — как у сезонов в levels.js)
 // за звание в конце сезона (сезон — три месяца, поэтому втрое больше, чем было за месячный)
 export const SEASON_PAY = { people: 0, casual: 30, couch: 75, whiner: 150, champion: 240, godlike: 360, taste: 510, legend: 690, greatest: 900 };
-export const FREEZE_MAX = 2;
+export { FREEZE_MAX }; // «заморозок» не больше двух — правило серии в levels.js (freezesNow)
 // ---------- скидка (админка → «Магазин»): meta.shop_sale = { id, pct, sec, until, title } ----------
 // pct — сколько процентов долой (5–90), sec — раздел магазина ('' — весь), until — до когда. Цена со скидкой считается
 // здесь же, при покупке, поэтому подменить её со страницы нельзя. Бесплатное остаётся бесплатным, дешевле 1 рофлана не бывает
@@ -148,6 +149,13 @@ const LOOK_KINDS = ['frame', 'color', 'bg', 'nick', 'font', 'fx', 'pet'];
 const LOOK_REWARD = new Map([...REWARDS.filter((r) => LOOK_KINDS.includes(r.kind) && r.level > 1), ...EVENT_REWARDS].map((r) => ['look.' + r.id.replace(':', '.'), r.id]));
 // своё ли: бесплатное, куплено, открыто уровнем или (миска, лоток) достижением
 const ownedBy = (it, st) => (it.ach ? !!(st.achs && st.achs.has(it.ach)) : !it.price) || st.owned.has(it.id) || (!!it.unlock && st.level >= it.unlock);
+// котик Васян есть у «Первой десятки» (забрал письмо с котиком — claimed), у всех с уровня награды «Васян в профиле»
+// (PET_LEVEL, 25-й) и у купивших её 12 ноября (look.pet — pet). Одно правило на всё: магазин (окрасы, наряды, миски,
+// лотки, еда), /levels/me (по нему vasyan.js пускает котика гулять внизу экрана) и письмо о новом уровне (levels.js)
+export const PET_LEVEL = (REWARDS.find((r) => r.kind === 'pet') || { level: 25 }).level;
+export const hasVasyan = (claimed, level, pet) => !!claimed || (+level || 0) >= PET_LEVEL || !!pet;
+// забрал ли письмо «Первой десятки» с котиком (gift_box, gift_id vasyan:<uid>)
+export const vasyanClaim = (env, uid) => env.DB.prepare('SELECT 1 AS ok FROM gift_box WHERE gift_id = ? AND user_id = ? AND claimed = 1').bind('vasyan:' + uid, uid);
 // какая еда открылась, когда уровень вырос с from до to (для письма о новом уровне)
 export const foodsUnlocked = (from, to) => FOODS.filter((f) => f.unlock > (+from || 0) && f.unlock <= (+to || 0));
 export const SLOTS = ['frame', 'badge', 'nick', 'wheel', 'confetti', 'tier', 'bg', 'cursor'];
@@ -222,16 +230,17 @@ export function earnedFrom(xp, ach, seasons) {
 }
 
 // всё про человека одной пачкой: заработано, баланс, что куплено, есть ли Васян, сколько «заморозок»
-export async function shopState(env, uid) {
+export async function shopState(env, uid, now = Date.now()) {
   await ensureLevels(env);
   await ensureShop(env);
   const [lv, ach, log, own, gift, worn] = await env.DB.batch([
-    env.DB.prepare('SELECT xp, level, freezes FROM user_level WHERE user_id = ?').bind(uid),
+    env.DB.prepare('SELECT xp, level, freezes, freeze_week, tz FROM user_level WHERE user_id = ?').bind(uid),
     env.DB.prepare('SELECT code, tier FROM achievements WHERE user_id = ?').bind(uid),
+    // подарки — всё, что пришло не покупкой (от админа, награды за топ недели и другие): с ними «Как заработать» сходится с балансом
     env.DB.prepare("SELECT COALESCE(SUM(delta), 0) AS sum, COALESCE(SUM(CASE WHEN reason = 'buy' THEN -delta ELSE 0 END), 0) AS spent, "
-      + "COALESCE(SUM(CASE WHEN reason = 'admin' THEN delta ELSE 0 END), 0) AS gifts FROM shop_log WHERE user_id = ?").bind(uid),
+      + "COALESCE(SUM(CASE WHEN reason = 'buy' THEN 0 ELSE delta END), 0) AS gifts FROM shop_log WHERE user_id = ?").bind(uid),
     env.DB.prepare('SELECT item FROM shop_owned WHERE user_id = ?').bind(uid),
-    env.DB.prepare('SELECT 1 AS ok FROM gift_box WHERE gift_id = ? AND user_id = ? AND claimed = 1').bind('vasyan:' + uid, uid),
+    vasyanClaim(env, uid),
     env.DB.prepare('SELECT slot, item FROM shop_wear WHERE user_id = ?').bind(uid),
   ]);
   const row = (lv.results || [])[0] || null;
@@ -240,6 +249,7 @@ export async function shopState(env, uid) {
   const earned = earnedFrom(row ? row.xp : 0, ach.results || [], await seasonRanksOf(env, uid));
   const level = row ? +row.level || 1 : 1;
   const sale = await readSale(env);
+  const week = weekStart(dayKey(now, (row && row.tz) || 'UTC')); // неделя человека — для недельной «заморозки»
   return {
     sale,
     earned,
@@ -250,10 +260,11 @@ export async function shopState(env, uid) {
     achs: new Set((ach.results || []).map((a) => String(a.code))), // полученные достижения: открывают тайные миски
     wear: wearMap(worn.results || [], ownedSet),
     level,
-    // Васян есть у «Первой десятки» (забрал письмо с котиком) и у всех с 25-го уровня (награда «Васян в профиле»)
-    vasyan: !!(gift.results || []).length || level >= 25 || ownedSet.has('look.pet'),
+    vasyan: hasVasyan((gift.results || []).length, level, ownedSet.has('look.pet')),
     hasLevel: !!row,
-    freezes: row ? (row.freezes == null ? 1 : +row.freezes) : 1,
+    // с недельной, которая придёт с первым действием недели: её видно уже сейчас (freezesNow)
+    freezes: row ? freezesNow(row, week).freezes : 1,
+    week,
   };
 }
 
@@ -353,7 +364,7 @@ export async function buy(env, uid, itemId, { rid = '', now = Date.now(), seen }
   const it = itemOf(itemId);
   if (!it) return { err: [400, 'Такого в магазине нет.'] };
   if (!it.price && !it.ach) return { ok: true, free: true };
-  const st = await shopState(env, uid);
+  const st = await shopState(env, uid, now);
   // миска или лоток за достижение не продаётся: своя, только когда достижение получено
   if (it.ach) {
     if (ownedBy(it, st)) return { ok: true, already: true, st };
@@ -377,6 +388,9 @@ export async function buy(env, uid, itemId, { rid = '', now = Date.now(), seen }
     .bind(id, uid, it.id, price, now, st.earned.total);
   const writes = it.kind === 'freeze'
     ? [
+      // сначала — недельная «заморозка», которая пришла бы с первым действием недели (freezesNow, streakStep): иначе
+      // купленная заняла бы её место (больше двух не бывает), и бесплатная пропала бы
+      env.DB.prepare('UPDATE user_level SET freezes = MIN(?3, COALESCE(freezes, 1) + 1), freeze_week = ?2 WHERE user_id = ?1 AND freeze_week IS NOT NULL AND freeze_week < ?2').bind(uid, st.week, FREEZE_MAX),
       log(`EXISTS (SELECT 1 FROM user_level WHERE user_id = ?2 AND COALESCE(freezes, 1) < ${FREEZE_MAX})`),
       // «заморозка» — только если списание записала именно эта пачка: changes() — сколько строк вставила команда выше.
       // По времени (at = now) нельзя: повтор того же запроса в ту же миллисекунду добавил бы вторую
@@ -390,8 +404,9 @@ export async function buy(env, uid, itemId, { rid = '', now = Date.now(), seen }
         + 'ON CONFLICT(user_id, slot) DO UPDATE SET item = excluded.item, at = excluded.at').bind(uid, it.slot, it.id, now)] : []),
     ];
   const res = await env.DB.batch(writes);
-  const done = !!(res[0] && res[0].meta && res[0].meta.changes);
-  const after = await shopState(env, uid);
+  const iLog = it.kind === 'freeze' ? 1 : 0; // где в пачке списание
+  const done = !!(res[iLog] && res[iLog].meta && res[iLog].meta.changes);
+  const after = await shopState(env, uid, now);
   if (done) return { ok: true, item: it, st: after };
   // не записалось: этот же запрос уже прошёл раньше, предмет купили в соседней вкладке или рофланов уже не хватает
   if (!it.consumable && after.owned.has(it.id)) return { ok: true, already: true, st: after };

@@ -44,23 +44,24 @@ export async function adventState(env, uid, now = Date.now()) {
   };
 }
 
-// забрать подарок дня: один раз в день (первичный ключ advent), рофланы — в журнал, рамка — на ADVENT.frameAt-м дне
+// забрать подарок дня: один раз в день (первичный ключ advent), рофланы — в журнал, рамка — на ADVENT.frameAt-м дне.
+// Отметка дня, рофланы и рамка — одной пачкой (в D1 это одна транзакция): сбой между ними не оставит забранный день
+// без подарка. У строки журнала свой id на день, поэтому повтор рофланов не удвоит
 export async function adventClaim(env, uid, now = Date.now()) {
   const day = adventDay(now);
   if (!day) return { ok: false, status: 404, error: 'Новогодний календарь открыт только в декабре.' };
   await ensureAdvent(env);
   await ensureShop(env);
   const gift = adventGift(day);
-  const w = await env.DB.prepare('INSERT OR IGNORE INTO advent (user_id, day, roflans, at) VALUES (?, ?, ?, ?)').bind(uid, day, gift, now).run();
-  if (!(w.meta && w.meta.changes)) return { ok: false, status: 409, error: 'Подарок за сегодня уже забран. Завтра будет новый.' };
-  const c = await env.DB.prepare('SELECT COUNT(*) AS n FROM advent WHERE user_id = ?').bind(uid).first();
-  const count = +(c && c.n) || 0;
-  const writes = [
+  const res = await env.DB.batch([
+    env.DB.prepare('INSERT OR IGNORE INTO advent (user_id, day, roflans, at) VALUES (?, ?, ?, ?)').bind(uid, day, gift, now),
     env.DB.prepare("INSERT OR IGNORE INTO shop_log (id, user_id, item, delta, reason, note, by_id, at) VALUES (?, ?, NULL, ?, 'advent', ?, NULL, ?)")
       .bind(`advent:${uid}:${day}`, uid, gift, `Новогодний календарь: ${day} декабря`, now),
-  ];
-  if (count >= ADVENT.frameAt) writes.push(env.DB.prepare('INSERT OR IGNORE INTO shop_owned (user_id, item, price, at) VALUES (?, ?, 0, ?)').bind(uid, 'look.' + ADVENT.frame, now));
-  const res = await env.DB.batch(writes);
-  const frame = writes.length > 1 && !!(res[1] && res[1].meta && res[1].meta.changes);
-  return { ok: true, day, roflans: gift, count, frame };
+    env.DB.prepare('INSERT OR IGNORE INTO shop_owned (user_id, item, price, at) SELECT ?1, ?2, 0, ?3 WHERE (SELECT COUNT(*) FROM advent WHERE user_id = ?1) >= ?4')
+      .bind(uid, 'look.' + ADVENT.frame, now, ADVENT.frameAt),
+    env.DB.prepare('SELECT COUNT(*) AS n FROM advent WHERE user_id = ?').bind(uid),
+  ]);
+  if (!(res[0].meta && res[0].meta.changes)) return { ok: false, status: 409, error: 'Подарок за сегодня уже забран. Завтра будет новый.' };
+  const count = +(((res[3].results || [])[0] || {}).n) || 0;
+  return { ok: true, day, roflans: gift, count, frame: !!(res[2].meta && res[2].meta.changes) };
 }
