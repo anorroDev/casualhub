@@ -184,6 +184,51 @@ test('застрявшая пачка уходит снова тем же Idempo
   } finally { fr.restore(); }
 });
 
+test('за дни рассылки отписался, попал в бан, сменил почту или удалил аккаунт — письмо не уходит или уходит на нынешнюю почту', async () => {
+  const env = envOf({ MAILOUT_DAILY: '2' }); // по 2 письма в сутки: очередь растягивается на дни
+  for (const id of ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h']) user(env, id);
+  const fr = fakeResend();
+  try {
+    const id = await M.createMailout(env, { content: CONTENT, origin: ORIGIN, now: T0 });
+    let s = await M.mailoutStep(env, { now: T0 });
+    assert.equal(s.current.total, 8);
+    assert.deepEqual(fr.calls[0].body.map((m) => m.to[0]), ['a@mail.test', 'b@mail.test']);
+    // за сутки: c отписался, d заблокировали, e сменил почту и подтвердил новую, f сменил, но не подтвердил, g удалил аккаунт
+    const db = env.DB.raw;
+    db.prepare("UPDATE mail_prefs SET news = 0 WHERE user_id = 'c'").run();
+    db.prepare("UPDATE users SET banned = 1 WHERE id = 'd'").run();
+    db.prepare("UPDATE users SET email = 'e.new@mail.test' WHERE id = 'e'").run();
+    db.prepare("UPDATE users SET email = 'f.new@mail.test', email_ok = 0 WHERE id = 'f'").run();
+    db.prepare("DELETE FROM users WHERE id = 'g'").run();
+    const c2 = counted(env);
+    s = await M.mailoutStep(env, { now: T0 + DAY + 1000 });
+    assert.ok(c2() <= 6, 'проверка — в той же пачке, без запроса на человека');
+    assert.equal(s.sentNow, 2);
+    assert.deepEqual(fr.calls[1].body.map((m) => m.to[0]), ['e.new@mail.test', 'h@mail.test'], 'c, d, f и g пропущены, e — на новую почту');
+    const st = Object.fromEntries(q(env, 'SELECT user_id, status FROM mailout_queue WHERE mailout = ?', id).map((r) => [r.user_id, r.status]));
+    assert.deepEqual(st, { a: 'sent', b: 'sent', c: 'skip', d: 'skip', e: 'sent', f: 'skip', g: 'skip', h: 'sent' });
+    assert.equal(q(env, "SELECT email FROM mailout_queue WHERE user_id = 'e'")[0].email, 'e.new@mail.test', 'в очереди — почта, на которую ушло');
+    assert.equal(s.done, true, 'пропущенные не держат рассылку незаконченной');
+    assert.equal(s.current.sent, 4);
+  } finally { fr.restore(); }
+});
+
+test('последние в очереди уже не получают — рассылка всё равно заканчивается', async () => {
+  const env = envOf({ MAILOUT_DAILY: '1' });
+  for (const id of ['a', 'b', 'c']) user(env, id);
+  const fr = fakeResend();
+  try {
+    await M.createMailout(env, { content: CONTENT, origin: ORIGIN, now: T0 });
+    await M.mailoutStep(env, { now: T0 });
+    env.DB.raw.prepare("UPDATE mail_prefs SET news = 0 WHERE user_id IN ('b', 'c')").run();
+    const s = await M.mailoutStep(env, { now: T0 + DAY + 1000 });
+    assert.equal(fr.calls.length, 1, 'писать больше некому');
+    assert.equal(s.done, true);
+    assert.equal(s.current.sent, 1);
+    assert.equal(q(env, "SELECT COUNT(*) AS n FROM mailout_queue WHERE status = 'skip'")[0].n, 2);
+  } finally { fr.restore(); }
+});
+
 test('отписка: ссылка с токеном, страница, «в одно нажатие» из почты и переключатель в настройках', async () => {
   const env = envOf();
   user(env, 'a'); user(env, 'b');

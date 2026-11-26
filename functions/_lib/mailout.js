@@ -4,6 +4,8 @@
 // Кому: подтверждённая почта (users.email_ok = 1), аккаунт не заблокирован, человек не отписался (mail_prefs.news = 0).
 // Список снимается в mailout_queue одним INSERT … SELECT в тот момент, когда рассылка начинается, дальше письма уходят
 // пачками: до 100 за один вызов Resend /emails/batch (это один подзапрос, а на бесплатном плане Cloudflare их 50 на вызов).
+// Кому письмо положено, сверяется ещё раз, когда берётся пачка: отписался, попал в бан или сменил почту за дни рассылки —
+// письмо не уходит (skip) или уходит на нынешнюю почту.
 // Учёт — та же очередь: у каждой строки статус wait → sending → sent. Сколько ушло за последние 24 часа, считается по ней:
 // у бесплатного Resend 100 писем в день на всё, поэтому рассылке по умолчанию 80 (MAILOUT_DAILY), остальное — кодам входа
 // и сбросу пароля. Упёрлись в предел или Resend ответил 429 — строки возвращаются в wait, рассылка ждёт до paused_until,
@@ -46,7 +48,8 @@ export async function ensureMailout(env) {
     // рассылки: content — тексты по языкам; start_at — не раньше (напоминание о сбросе званий); queued_at — список снят
     env.DB.prepare('CREATE TABLE IF NOT EXISTS mailouts (id INTEGER PRIMARY KEY, kind TEXT NOT NULL, ref TEXT, content TEXT NOT NULL, origin TEXT NOT NULL, start_at INTEGER, queued_at INTEGER, '
       + 'total INTEGER NOT NULL DEFAULT 0, sent INTEGER NOT NULL DEFAULT 0, paused_until INTEGER, pause_kind TEXT, last_error TEXT, done_at INTEGER, canceled INTEGER NOT NULL DEFAULT 0, by_id TEXT, created_at INTEGER NOT NULL)'),
-    // кому и что ушло: wait → sending (claim — метка пачки) → sent; skip — рассылку остановили
+    // кому и что ушло: wait → sending (claim — метка пачки) → sent; skip — рассылку остановили или письмо человеку
+    // уже не положено (отписался, бан, почта не подтверждена, аккаунт удалён — проверка, когда берётся пачка)
     env.DB.prepare("CREATE TABLE IF NOT EXISTS mailout_queue (mailout INTEGER NOT NULL, user_id TEXT NOT NULL, email TEXT NOT NULL, lang TEXT NOT NULL DEFAULT 'ru', status TEXT NOT NULL DEFAULT 'wait', claim TEXT, claimed_at INTEGER, sent_at INTEGER, PRIMARY KEY (mailout, user_id))"),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS mailout_queue_wait ON mailout_queue(mailout, status)'),
     env.DB.prepare('CREATE INDEX IF NOT EXISTS mailout_queue_claim ON mailout_queue(claim)'),
@@ -231,15 +234,22 @@ export async function mailoutStep(env, { now = Date.now(), force = false } = {})
       return { current: view({ ...m, paused_until: until, pause_kind: 'limit' }), limited: true, sent24, cap };
     }
     claim = randHex(8);
-    const [, got] = await env.DB.batch([
-      env.DB.prepare("UPDATE mailout_queue SET status = 'sending', claim = ?3, claimed_at = ?4 WHERE rowid IN (SELECT rowid FROM mailout_queue WHERE mailout = ?1 AND status = 'wait' ORDER BY rowid LIMIT ?2)").bind(m.id, room, claim, now),
+    // рассылка идёт днями: за это время человек мог отписаться, попасть в бан, сменить почту (новая ещё не подтверждена)
+    // или удалить аккаунт. Поэтому в пачку берутся только те, кому письмо положено сейчас (ELIGIBLE), и на почту, что
+    // в аккаунте сейчас; кого пачка обошла (ждал раньше взятых, но письмо уже не положено) — skip. Всё одной пачкой
+    const [, , got] = await env.DB.batch([
+      env.DB.prepare(`UPDATE mailout_queue SET status = 'sending', claim = ?3, claimed_at = ?4, email = (SELECT u.email FROM users u WHERE u.id = mailout_queue.user_id)
+        WHERE rowid IN (SELECT q.rowid FROM mailout_queue q JOIN users u ON u.id = q.user_id LEFT JOIN mail_prefs p ON p.user_id = u.id WHERE q.mailout = ?1 AND q.status = 'wait' AND ${ELIGIBLE} ORDER BY q.rowid LIMIT ?2)`).bind(m.id, room, claim, now),
+      env.DB.prepare("UPDATE mailout_queue SET status = 'skip' WHERE mailout = ?1 AND status = 'wait' AND rowid < (SELECT MAX(rowid) FROM mailout_queue WHERE claim = ?2)").bind(m.id, claim),
       env.DB.prepare('SELECT q.user_id, q.email, q.lang, p.token FROM mailout_queue q LEFT JOIN mail_prefs p ON p.user_id = q.user_id WHERE q.claim = ?').bind(claim),
     ]);
     rows = got.results || [];
   }
   if (!rows.length) {
-    // ждущих не осталось: рассылка закончилась (старые записи о том, кому ушло, живут 90 дней)
+    // положенных писем не осталось: кто ещё ждёт, тем оно уже не положено (skip), и рассылка закончилась
+    // (старые записи о том, кому ушло, живут 90 дней)
     await env.DB.batch([
+      env.DB.prepare("UPDATE mailout_queue SET status = 'skip' WHERE mailout = ? AND status = 'wait'").bind(m.id),
       env.DB.prepare("UPDATE mailouts SET done_at = ?2, paused_until = NULL, pause_kind = NULL, sent = (SELECT COUNT(*) FROM mailout_queue WHERE mailout = ?1 AND status = 'sent') WHERE id = ?1 AND NOT EXISTS (SELECT 1 FROM mailout_queue WHERE mailout = ?1 AND status IN ('wait', 'sending'))").bind(m.id, now),
       env.DB.prepare('DELETE FROM mailout_queue WHERE mailout IN (SELECT id FROM mailouts WHERE done_at IS NOT NULL AND done_at < ?)').bind(now - 90 * DAY),
     ]);
