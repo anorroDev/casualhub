@@ -82,6 +82,8 @@
     }
     return gone;
   }
+  // лоты, которые могут быть на колесе: без убранных вето «Вечера с друзьями» (veto в ответе сбора) — как у сервера (liveLots)
+  const wheelLots = () => S.lots.filter((l) => !l.veto);
   // сектор колеса — этот лот: у секторов из сбора есть id (l), у старых снимков — только название
   const onWheelOf = (segs) => { const ids = new Set(), names = new Set(); for (const x of segs) { if (x.l) ids.add(x.l); else names.add(x.n.toLowerCase()); } return (l) => ids.has(l.id) || names.has(l.name.toLowerCase()); };
   // id лотов, которые были на колесе, а теперь их там нет и они не вылетали: их убрал ведущий
@@ -408,7 +410,8 @@
     const scale = kept.length < segs.length && sum > 0 ? 1 / sum : 1;
     return kept.map((x) => { const n = x.l && byId.get(x.l); return n && n !== x.n ? { ...x, n, p: x.p * scale } : scale !== 1 ? { ...x, p: x.p * scale } : x; });
   }
-  // на колесе то же, что у ведущего. Новые лоты, которые его вкладка ещё не забрала, видны сразу: она может быть в фоне
+  // на колесе то же, что у ведущего. Новые лоты, которые его вкладка ещё не забрала, видны сразу: она может быть в фоне.
+  // Лоты под вето вкладка ведущего не забирает никогда — они и не ждут места на колесе
   function shownSegs() {
     const live = S.live;
     // пока крутится и после победы колесо должно точно совпадать с колесом ведущего
@@ -416,7 +419,7 @@
     const hostSegs = liveSegs();
     const onWheel = onWheelOf(hostSegs), out = outLotIds(live);
     const taken = live ? new Set(seenLots(live).map((l) => l.id)) : new Set();
-    const wait = S.lots.filter((x) => !taken.has(x.id) && !onWheel(x) && !out.has(x.id));
+    const wait = wheelLots().filter((x) => !taken.has(x.id) && !onWheel(x) && !out.has(x.id));
     if (!wait.length) return hostSegs;
     const n = hostSegs.length + wait.length;
     return [...hostSegs.map((x) => ({ ...x, p: x.p * hostSegs.length / n })), ...wait.map((x, i) => { const c = PALETTE[(hostSegs.length + i) % PALETTE.length]; return { n: x.name, p: 1 / n, c, t: inkOn(c) }; })];
@@ -780,8 +783,17 @@
       }
     });
   }
+  // лот победителя — по id: «Один победитель» — pickL, «На выбывание» — единственный невылетевший с этим названием
+  // (при повторах два «Hades» — разные лоты, как winnerLot в functions/_lib/lots-predict.js); иначе — первый с таким названием
+  function winnerLot(live, name) {
+    const byId = live && live.pickL && S.lots.find((l) => l.id === live.pickL);
+    if (byId) return byId;
+    const same = S.lots.filter((l) => l.name.toLowerCase() === name.toLowerCase()), out = outLotIds(live);
+    const left = same.filter((l) => !out.has(l.id));
+    return (left.length === 1 ? left[0] : same[0]) || null;
+  }
   function openWinner(name) {
-    const lot = S.lots.find((l) => l.name.toLowerCase() === name.toLowerCase());
+    const lot = winnerLot(S.live, name);
     $('#wName').textContent = name;
     $('#wStats').innerHTML = lot ? `${lot.img ? `<img class="lots-win-img" src="${esc(lot.img)}" alt="" referrerpolicy="no-referrer">` : ''}<div class="total-meta"><strong>Лот от: ${esc(lot.by)}</strong><span>Участников было на колесе: ${S.lots.length}</span></div>` : '';
     $('#wStats').hidden = !lot;
@@ -974,8 +986,15 @@
     const live = S.live || {};
     const hist = Array.isArray(live.hist) && (live.hist.length || !(live.out || []).length) ? live.hist : Array.isArray(live.out) ? live.out : [];
     const win = live.winner && live.winner.n;
+    // чей лот в строке — по id, если его можно знать: вылеты «На выбывание» идут в outIds по порядку (история из одних
+    // вылетов — с ними парой), последний итог «Одного победителя» — pickL. Иначе — первый лот с таким названием
+    const ids = Array.isArray(live.outIds) && live.outIds.length === hist.length ? live.outIds : [];
+    const lotOf = (n, i) => {
+      const k = String(n).toLowerCase(), named = (id) => S.lots.find((l) => l.id === id && l.name.toLowerCase() === k);
+      return (ids[i] && named(ids[i])) || (i === hist.length - 1 && live.winner && live.pickL && String(live.pick || '').toLowerCase() === k && named(live.pickL)) || S.lots.find((l) => l.name.toLowerCase() === k);
+    };
     const html = !hist.length && !win ? '' : `${win ? `<p class="hist-win"><span class="u-old">🏆 </span>Победитель: <b>${esc(win)}</b></p>` : ''}${hist.length ? `<ol class="hist-list">${hist.map((n, i) => {
-      const lot = S.lots.find((l) => l.name.toLowerCase() === String(n).toLowerCase());
+      const lot = lotOf(n, i);
       return `<li><span class="hist-n">${i + 1}</span>${lot ? lotPic(lot) : `<span class="lots-pic"><em aria-hidden="true">${esc([...String(n)][0] || '?')}</em></span>`}<span class="lots-who"><b>${esc(n)}</b>${lot && lot.by ? `<small>${esc(lot.by)}</small>` : ''}</span></li>`;
     }).join('')}</ol>` : ''}`;
     if (box.dataset.sig === html) return;
@@ -1073,30 +1092,32 @@
   const autoOn = () => !!(S.live && S.live.auto);
   const stopAutoSpin = () => { if (autoOn()) hostPush({ auto: false }); };
   // версия этой страницы для PUT /lots/:code/live: по ней сервер отличает вкладки со старой страницей и просит их обновиться
-  const LIVE_V = 2;
+  // (3 — лоты под вето «Вечера с друзьями» на колесо не ставятся)
+  const LIVE_V = 3;
   const low = (s) => String(s || '').toLowerCase();
   const liveOut = () => (S.live && Array.isArray(S.live.out) ? S.live.out : []);
   const hostSpinning = () => !!hostRes || !!(S.live && S.live.spin && serverNow() < S.live.spin.at + S.live.spin.ms);
-  // лоты на колесе: все, кроме вылетевших (по id, см. outLotIds); fresh — после «Вернуть всех»
+  // лоты на колесе: все, кроме вылетевших (по id, см. outLotIds) и убранных вето (veto); fresh — после «Вернуть всех»
   function hostAlive(fresh) {
-    if (fresh) return S.lots.slice();
+    if (fresh) return wheelLots();
     const gone = outLotIds(S.live);
-    return S.lots.filter((l) => !gone.has(l.id));
+    return wheelLots().filter((l) => !gone.has(l.id));
   }
-  // цвет сектора закреплён за лотом (по месту в сборе): когда кто-то вылетает, соседи цвет не меняют
-  function hostSeg(l, p) {
-    const i = Math.max(0, S.lots.indexOf(l)), c = PALETTE[i % PALETTE.length];
+  // цвет сектора закреплён за лотом (по месту среди лотов колеса, как у сервера): когда кто-то вылетает, соседи цвет не меняют
+  function hostSeg(l, p, lots) {
+    const i = Math.max(0, lots.indexOf(l)), c = PALETTE[i % PALETTE.length];
     return { n: l.name, p, c, t: inkOn(c), l: l.id };
   }
   // что ведущий пишет в снимок сам: лоты на колесе, картинка в центре, музыка, обложки.
-  // Прокрутку, вылеты, победителя и историю сервер берёт из своего снимка, а не отсюда
+  // Прокрутку, вылеты, победителя и историю сервер берёт из своего снимка, а не отсюда.
+  // Лоты под вето вкладка не забирает вовсе (их нет в ids и seen) — так же их пишет сервер, когда крутит (liveLots)
   function hostBody(over) {
-    const live = S.live || {};
+    const live = S.live || {}, lots = wheelLots();
     const alive = hostAlive(!!(over && over.reset));
     return Object.assign({
-      segs: alive.map((l) => hostSeg(l, 1 / alive.length)),
+      segs: alive.map((l) => hostSeg(l, 1 / alive.length, lots)),
       hub: +live.hub || 24, hubImg: live.hubImg || '', hubOwn: live.hubOwn || '',
-      seen: S.lots.length, ids: S.lots.map((l) => l.id),
+      seen: lots.length, ids: lots.map((l) => l.id),
       music: hostMusic(live.music),
       pics: live.pics !== false,
     }, over);
@@ -1460,7 +1481,11 @@
       const r = await api(`/lots/${code}/twitch`, 'POST', { items });
       twAdded += r.added || 0;
       if (r.added) poll();
-    } catch (e) { twNoteText = e.message; twPaintNote(); twNoteText = ''; }
+    } catch (e) {
+      twNoteText = e.message; twPaintNote(); twNoteText = '';
+      // пачка не дошла (нет связи, лимит, сбой сервера) — она уйдёт следующей, а не пропадёт; очередь не больше 200
+      if (!e.status || e.status === 429 || e.status >= 500) twQueue = [...items, ...twQueue].slice(0, 200);
+    }
     twPaintNote();
     if (twQueue.length) twTimer = setTimeout(twFlush, 1500);
   }

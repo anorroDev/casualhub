@@ -167,9 +167,10 @@ export function advanceLive(live, now, lots) {
         Object.assign(live, { pick: r.n, pickL: r.id || '', status: `Вылетает: ${r.n}` });
         return true;
       }
-      // вылетает ровно выпавший лот: по id, а у прокрутки, начатой до этой версии, — первый живой с таким именем
+      // вылетает ровно выпавший лот: по id, а у прокрутки, начатой до этой версии, — первый живой с таким именем.
+      // Выпавший лот удалили посреди прокрутки — не вылетает никто: другой лот с тем же названием (повторы) тут ни при чём
       const gone = goneIds(lots, live);
-      const hit = r.id && lots.some((l) => l.id === r.id) ? r.id : (lots.find((l) => !gone.has(l.id) && lowName(l.name) === lowName(r.n)) || {}).id;
+      const hit = r.id ? (lots.some((l) => l.id === r.id) ? r.id : '') : (lots.find((l) => !gone.has(l.id) && lowName(l.name) === lowName(r.n)) || {}).id;
       if (hit) gone.add(hit);
       const out = [...(Array.isArray(live.out) ? live.out : []), r.n];
       const left = lots.filter((l) => !gone.has(l.id));

@@ -36,7 +36,11 @@ html.unslop:not([data-ui]) .ev-box { animation: none; }
 `;
   document.head.appendChild(css);
 
-  let lots = [], data = null, msg = '', msgCls = '', busy = false, timer = 0, lastKey = '';
+  let lots = [], data = null, msg = '', msgCls = '', busy = false, timer = 0, lastKey = '', live = null;
+  // колесо ещё не крутили — по снимку, то же правило, что predictOpen на сервере (выпавший лот, res, страница не получает):
+  // закрывает вето сразу на старте прокрутки, не дожидаясь ответа /veto
+  const n = (a) => (Array.isArray(a) ? a.length : 0);
+  const liveOpen = () => !(live && (live.winner || live.spin || n(live.hist) || n(live.outIds)));
   const box = document.createElement('div');
   box.className = 'ev-box';
   box.setAttribute('aria-live', 'polite');
@@ -46,14 +50,15 @@ html.unslop:not([data-ui]) .ev-box { animation: none; }
     if (!box.isConnected) { const head = board.querySelector(':scope > .card-head'); if (head) head.after(box); else board.prepend(box); }
     const by = new Map(data.vetoes.map((v) => [v.lot, v]));
     const own = new Set(data.own || []);
+    const open = data.open && liveOpen();
     const rows = lots.map((l) => {
       const v = by.get(l.id);
-      const act = !data.open || !data.can ? '' : v && v.me ? '<button type="button" class="ev-btn" data-ev-undo>Вернуть</button>'
+      const act = !open || !data.can ? '' : v && v.me ? '<button type="button" class="ev-btn" data-ev-undo>Вернуть</button>'
         : v || own.has(l.id) ? '' : `<button type="button" class="ev-btn" data-ev="${esc(l.id)}"${busy ? ' disabled' : ''}>${data.mine ? 'Вето сюда' : 'Вето'}</button>`;
       return `<li class="${v ? 'out' : ''}"><span>${esc(l.name)}${v ? `<small>вето от ${esc(v.name)}</small>` : ''}</span>${act}</li>`;
     }).join('');
     const note = msg || (!token() ? 'Войди в аккаунт, чтобы добавить вариант и получить вето.'
-      : !data.open ? 'Колесо уже крутится: вето больше не меняются.'
+      : !open ? 'Колесо уже крутится: вето больше не меняются.'
         : !data.can ? 'Вето есть у тех, кто добавил вариант.' : data.mine ? 'Твоё вето использовано. Можно передумать до прокрутки.' : 'У тебя одно вето.');
     box.innerHTML = `<h3>Вечер с друзьями</h3><p>У каждого одно вето: убери чужой вариант, который точно не хочешь. Колесо крутится из оставшихся.</p>
       <ul class="ev-list">${rows}</ul><p class="ev-msg ${msg ? msgCls : ''}">${esc(note)}</p>`;
@@ -74,8 +79,9 @@ html.unslop:not([data-ui]) .ev-box { animation: none; }
   document.addEventListener('casualhub:lots', (e) => {
     const d = e.detail || {};
     lots = (d.lots || []).filter((l) => l && l.id).map((l) => ({ id: l.id, name: l.name || '' }));
-    const live = d.live;
-    const key = [lots.length, live ? !!live.res : 0, live && live.winner ? live.winner.at : 0].join(':');
+    live = d.live || null;
+    // крутанули колесо, кто-то вылетел, выпал победитель или «Вернуть всех» — вето перечитываются (открыты или уже нет)
+    const key = [lots.length, live && live.spin ? +live.spin.at || 1 : 0, live && live.winner ? live.winner.at : 0, live ? n(live.hist) : 0, live ? n(live.outIds) : 0].join(':');
     if (key !== lastKey || !data) { lastKey = key; load().then(schedule); } else paint();
   });
 })();

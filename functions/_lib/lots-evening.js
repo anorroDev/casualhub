@@ -56,7 +56,8 @@ export function makeEveningRoutes(h) {
       const v = await view(env, arg, await userOf(env, request));
       return v ? json(v) : fail(404, 'Такого сбора нет.');
     },
-    // { lot } — своё вето (заменяет прежнее); lot: '' — снять. Только до первой прокрутки
+    // { lot } — своё вето (заменяет прежнее); lot: '' — снять. Только до первой прокрутки.
+    // Вето меняет список лотов сбора (у лота под вето — veto: true, его не ставит на колесо и вкладка ведущего): ver + 1
     async 'POST /lots/:code/veto'({ env, request, me, arg }) {
       if (!CODE.test(arg || '')) return fail(404, 'Такого сбора нет.');
       if (h.burst && h.burst('veto:' + me.id, 30, 60e3)) return fail(429, 'Слишком часто. Подожди немного.');
@@ -73,24 +74,29 @@ export function makeEveningRoutes(h) {
       if (!r) return fail(404, 'Такого сбора нет.');
       if (!(ev.results && ev.results.length)) return fail(400, 'Вето бывает только в «Вечере с друзьями».');
       if (!predictOpen(parse(r.live))) return fail(409, 'Колесо уже крутится: вето больше не меняются.');
+      const ver = env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(arg);
       if (lot) {
         const why = vetoCheck({ lots: lots.results, vetoes: vetoes.results, uid: me.id, owner: r.owner_id, lot });
         if (why) return fail(400, why);
-        await env.DB.prepare('INSERT INTO lot_vetoes (room_id, user_id, lot_id, at) VALUES (?, ?, ?, ?) ON CONFLICT(room_id, user_id) DO UPDATE SET lot_id = excluded.lot_id, at = excluded.at').bind(arg, me.id, lot, Date.now()).run();
-      } else await env.DB.prepare('DELETE FROM lot_vetoes WHERE room_id = ? AND user_id = ?').bind(arg, me.id).run();
+        await env.DB.batch([env.DB.prepare('INSERT INTO lot_vetoes (room_id, user_id, lot_id, at) VALUES (?, ?, ?, ?) ON CONFLICT(room_id, user_id) DO UPDATE SET lot_id = excluded.lot_id, at = excluded.at').bind(arg, me.id, lot, Date.now()), ver]);
+      } else await env.DB.batch([env.DB.prepare('DELETE FROM lot_vetoes WHERE room_id = ? AND user_id = ?').bind(arg, me.id), ver]);
       if (h.pokeRoom) { try { await h.pokeRoom(env, arg, 'lots'); } catch (e) {} }
       return json(await view(env, arg, me));
     },
-    // { on } — ведущий делает сбор «Вечером с друзьями» (Колесо зовёт сразу после создания) или снимает это
+    // { on } — ведущий делает сбор «Вечером с друзьями» (Колесо зовёт сразу после создания) или снимает это.
+    // Снять — только до первой прокрутки, как и вето: иначе убранные вето варианты молча вернулись бы на колесо
     async 'POST /lots/:code/evening'({ env, request, me, arg }) {
       if (!CODE.test(arg || '')) return fail(404, 'Такого сбора нет.');
       const b = await h.readBody(request);
       await ensureEvening(env);
-      const room = await env.DB.prepare('SELECT owner_id FROM lot_rooms WHERE id = ?').bind(arg).first();
+      const room = await env.DB.prepare('SELECT owner_id, live FROM lot_rooms WHERE id = ?').bind(arg).first();
       if (!room) return fail(404, 'Такого сбора нет.');
       if (room.owner_id !== me.id) return fail(403, 'Это может только ведущий.');
-      if (b && b.on === false) await env.DB.batch([env.DB.prepare('DELETE FROM lot_evening WHERE room_id = ?').bind(arg), env.DB.prepare('DELETE FROM lot_vetoes WHERE room_id = ?').bind(arg)]);
-      else await env.DB.prepare('INSERT OR IGNORE INTO lot_evening (room_id, at) VALUES (?, ?)').bind(arg, Date.now()).run();
+      if (b && b.on === false) {
+        if (!predictOpen(parse(room.live))) return fail(409, 'Колесо уже крутится: вето больше не меняются.');
+        await env.DB.batch([env.DB.prepare('DELETE FROM lot_evening WHERE room_id = ?').bind(arg), env.DB.prepare('DELETE FROM lot_vetoes WHERE room_id = ?').bind(arg), env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(arg)]);
+        if (h.pokeRoom) { try { await h.pokeRoom(env, arg, 'lots'); } catch (e) {} }
+      } else await env.DB.prepare('INSERT OR IGNORE INTO lot_evening (room_id, at) VALUES (?, ?)').bind(arg, Date.now()).run();
       return json(await view(env, arg, me));
     },
   };

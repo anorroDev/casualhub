@@ -1,7 +1,7 @@
 // «Настройка лотов» (keep/kick): отметки по id лота и прежние — по названию. node --test tests/lots-force.test.mjs
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { cleanLive, spinLive } from '../functions/_lib/lots-live.js';
+import { cleanLive, spinLive, advanceLive } from '../functions/_lib/lots-live.js';
 
 // два «Hades» — разные лоты (ведущий разрешил повторы)
 const LOTS = [{ id: 'aaaaaa01', name: 'Hades' }, { id: 'aaaaaa02', name: 'Hades' }, { id: 'aaaaaa03', name: 'Celeste' }, { id: 'aaaaaa04', name: 'Doom' }];
@@ -30,6 +30,20 @@ test('«На выбывание»: оставленные не вылетают,
 
 test('старые снимки по названиям работают как раньше (оба «Hades»)', () => {
   assert.deepEqual(picks({ kick: ['hades'] }, 'out'), ['aaaaaa01', 'aaaaaa02']);
+});
+
+test('выпавший лот удалили посреди прокрутки — не вылетает никто, а не второй «Hades»', () => {
+  const r = spinLive(cleanLive({ kickIds: ['aaaaaa01'] }), LOTS, 'out', 1, 1e12, false);
+  assert.equal(r.live.res.id, 'aaaaaa01');
+  const live = r.live;
+  assert.ok(advanceLive(live, live.res.end + 5000, LOTS.filter((l) => l.id !== 'aaaaaa01')));
+  assert.deepEqual(live.outIds, []);
+  assert.equal(live.winner, null);
+  // прокрутка из снимка до id (res без id) — как раньше: первый живой с таким названием
+  const old = spinLive(cleanLive({ kickIds: ['aaaaaa01'] }), LOTS, 'out', 1, 1e12, false).live;
+  delete old.res.id;
+  advanceLive(old, old.res.end + 5000, LOTS);
+  assert.deepEqual(old.outIds, ['aaaaaa01']);
 });
 
 test('без отметок — все лоты; мусорные и повторные id отбрасываются', () => {

@@ -2031,37 +2031,47 @@ const routes = {
     const b = await readBody(request);
     const ids = [...new Set((Array.isArray(b.ids) ? b.ids : []).map(String).filter((x) => /^[0-9a-f]{16}$/.test(x)))].slice(0, MAX_LOTS);
     const names = new Set((Array.isArray(b.names) ? b.names : []).slice(0, MAX_LOTS).map((x) => clip(x, LOT_NAME).toLowerCase()).filter(Boolean));
-    const q = ids.map((id) => env.DB.prepare('DELETE FROM lots WHERE room_id = ? AND id = ?').bind(arg, id));
-    // удалённые лоты сразу уходят и с колеса в снимке: сектор с id лота — по id, сектор старого снимка без id — по названию
     const idSet = new Set(ids), lotNames = new Set();
     let ordered = [];
     if (ids.length) {
       ({ results: ordered } = await env.DB.prepare('SELECT id, name FROM lots WHERE room_id = ? ORDER BY created_at').bind(arg).all());
       ordered.filter((x) => idSet.has(x.id)).forEach((x) => lotNames.add(String(x.name).toLowerCase()));
+      // сначала сами лоты: прокрутка, которую начнут после этого (liveLots), их уже не возьмёт
+      await env.DB.batch([...ids.map((id) => env.DB.prepare('DELETE FROM lots WHERE room_id = ? AND id = ?').bind(arg, id)), env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(arg)]);
     }
+    // удалённые лоты уходят и с колеса в снимке: сектор с id лота — по id, сектор старого снимка без id — по названию.
+    // Снимок — через liveTx, как везде: запись не затрёт прокрутку или её итог, которые в это время записала комната.
+    // Пока колесо крутится, сектора не трогаем (стрелка должна встать туда, куда целилась прокрутка) — их обновит её итог
+    let edited = false;
     if ((names.size || lotNames.size) && room.live) {
-      let live = null;
-      try { live = JSON.parse(room.live); } catch (e) {}
-      if (live) {
+      const low = (n) => String(n).toLowerCase();
+      const r = await liveTx(env, arg, (live) => {
         // забранных ведущим лотов стало меньше: иначе следующий новый лот посчитался бы уже забранным
         if (lotNames.size) {
           const was = lotsSeen(live, ordered);
           live.seen = Math.max(0, was.filter((x) => !idSet.has(x.id)).length);
           if (Array.isArray(live.ids)) live.ids = live.ids.filter((x) => !idSet.has(x));
         }
-        const low = (n) => String(n).toLowerCase();
-        const gone = (x) => (x.l ? idSet.has(x.l) || names.has(low(x.n)) : names.has(low(x.n)) || lotNames.has(low(x.n)));
-        const keep = (Array.isArray(live.segs) ? live.segs : []).filter((x) => x && !gone(x));
-        const sum = keep.reduce((a, x) => a + (+x.p || 0), 0);
-        live.segs = keep.map((x) => ({ ...x, p: sum > 0 ? (+x.p || 0) / sum : 1 / keep.length }));
-        live.out = (Array.isArray(live.out) ? live.out : []).filter((n) => !names.has(low(n)) && !lotNames.has(low(n)));
-        q.push(env.DB.prepare('UPDATE lot_rooms SET live = ? WHERE id = ?').bind(JSON.stringify(live), arg));
-      }
+        if (!liveBusy(live, Date.now())) {
+          const gone = (x) => (x.l ? idSet.has(x.l) || names.has(low(x.n)) : names.has(low(x.n)) || lotNames.has(low(x.n)));
+          const keep = (Array.isArray(live.segs) ? live.segs : []).filter((x) => x && !gone(x));
+          const sum = keep.reduce((a, x) => a + (+x.p || 0), 0);
+          live.segs = keep.map((x) => ({ ...x, p: sum > 0 ? (+x.p || 0) / sum : 1 / keep.length }));
+        }
+        // и из вылетевших: по id (outIds идёт парой с out — при повторах второй «Hades» остаётся), у старых снимков — по названию
+        const out = Array.isArray(live.out) ? live.out : [];
+        const pair = Array.isArray(live.outIds) && live.outIds.length === out.length ? live.outIds : null;
+        const drop = (n, i) => names.has(low(n)) || (pair ? idSet.has(pair[i]) : lotNames.has(low(n)));
+        if (pair) live.outIds = pair.filter((_, i) => !drop(out[i], i));
+        live.out = out.filter((n, i) => !drop(n, i));
+        return { live };
+      });
+      edited = !r.err && !r.big;
+      // лоты уже удалены — снимок подтянется следующей записью; без лотов (только строки «Ведущий») — говорим, что не вышло
+      if (!edited && !ids.length) return r.err ? fail(...r.err) : fail(413, 'Слишком много лотов на колесе.');
+      if (edited && !ids.length) await env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(arg).run();
     }
-    if (q.length) {
-      await env.DB.batch([...q, env.DB.prepare('UPDATE lot_rooms SET ver = ver + 1 WHERE id = ?').bind(arg)]);
-      if (admin) await adminLog(env, request, me, `lots ${arg}: removed ${ids.length} lots${names.size ? ', ' + names.size + ' host names' : ''}`, true);
-    }
+    if (admin && (ids.length || edited)) await adminLog(env, request, me, `lots ${arg}: removed ${ids.length} lots${names.size ? ', ' + names.size + ' host names' : ''}`, true);
     await pokeRoom(env, arg, 'lots');
     return lotAnswer(env, arg, me, null, request);
   },
@@ -2123,7 +2133,8 @@ const routes = {
     if (burst('lotlive:' + me.id, 240, 60e3)) return tooMany(1);
     const b = await readBody(request);
     // вкладка ведущего со старой страницей (до прокрутки на сервере) шлёт свою прокрутку и вылеты: сервер их не берёт, и колесо
-    // крутилось бы только у неё. Нынешняя страница шлёт v: 2, старой отвечаем «обнови страницу» — она покажет это ведущему
+    // крутилось бы только у неё; страница до v: 3 ставила на колесо и лоты под вето «Вечера с друзьями».
+    // Нынешняя страница шлёт v: 3, старой отвечаем «обнови страницу» — она покажет это ведущему
     if (b.v !== LIVE_CLIENT) return fail(409, 'Сайт обновился — обнови страницу, тогда колесо увидят все.');
     let isOwner = false, isAdmin = null, refused = '';
     const r = await liveTx(env, arg, async (live, room) => {
@@ -2821,10 +2832,16 @@ async function lotEditable(env, code, lotId, me) {
   if (lot.user_id !== me.id) return { res: fail(403, 'Это не твой лот.') };
   if (!room.edit_own) return { res: fail(403, 'Ведущий не разрешил убирать и менять лоты.') };
   if (room.closed || (room.ends_at && Date.now() >= room.ends_at)) return { res: fail(403, 'Сбор закрыт: лоты уже нельзя менять.') };
-  // лот, который уже вылетел с колеса, или сбор, где объявлен победитель, — окончательные
-  let live = null;
-  try { live = room.live ? JSON.parse(room.live) : null; } catch (e) {}
-  if (live && ((Array.isArray(live.out) && live.out.some((n) => lotKey(n) === lotKey(lot.name))) || live.winner)) return { res: fail(403, 'Этот лот уже играл на колесе, его нельзя менять.') };
+  // снимок, доведённый до этого момента: прокрутка, которая уже кончилась, не держит лоты
+  const settled = await settledLive(env, code, room.live);
+  if (settled.wrote) { room.live = JSON.stringify(settled.live); await pokeRoom(env, code, 'live'); }
+  const live = settled.live;
+  // пока колесо крутится, лоты не меняются: выпавший сектор видно по углу прокрутки — свой лот убрали бы из-под вылета
+  if (live && liveBusy(live, Date.now())) return { res: fail(409, 'Колесо крутится, подожди конца прокрутки.') };
+  // лот, который уже вылетел с колеса, или сбор, где объявлен победитель, — окончательные. Вылетел — по id (outIds): при
+  // разрешённых повторах второй «Hades» ещё на колесе; у старых снимков без outIds — по названию
+  const out = live && (Array.isArray(live.outIds) ? live.outIds.includes(lot.id) : Array.isArray(live.out) && live.out.some((n) => lotKey(n) === lotKey(lot.name)));
+  if (live && (out || live.winner)) return { res: fail(403, 'Этот лот уже играл на колесе, его нельзя менять.') };
   return { room, lot };
 }
 // ---------- комната лотов вживую (Durable Object LotRoomDO в Worker'е casualhub-rt) ----------
@@ -2832,8 +2849,9 @@ async function lotEditable(env, code, lotId, me) {
 // страницы подключают WebSocket, а прокрутки, вылеты и «до победителя» доводит комната по будильникам.
 // Откат: LOTS_RT = "0" — всё снова идёт через опрос, снимок в D1 тот же
 const rtOn = (env) => !!env.LOT_RT && env.LOTS_RT !== '0';
-// версия страницы сбора, которую понимает PUT /lots/:code/live: прокрутку и вылеты ведёт сервер (lots/app.js шлёт v: 2)
-const LIVE_CLIENT = 2;
+// версия страницы сбора, которую понимает PUT /lots/:code/live: прокрутку и вылеты ведёт сервер, лоты под вето на колесо
+// не ставятся (lots/app.js шлёт v: 3)
+const LIVE_CLIENT = 3;
 const rtRoom = (env, code) => env.LOT_RT.get(env.LOT_RT.idFromName(code));
 // ---------- присутствие вживую (Durable Object PresenceDO в том же Worker'е, одна комната на весь сайт) ----------
 // «В сети» по подключению и отключению, счётчик «N на сайте», объявление, заявки в друзья и уведомления о реакциях
@@ -2907,8 +2925,10 @@ async function lotAnswer(env, id, me, knownVer, request, conditional) {
       results = results.filter((x) => x.uid);
       out.room.ver = row.ver + 1;
     }
+    // вето «Вечера с друзьями» (veto): такой лот сервер в прокрутку не берёт (liveLots) — вкладка ведущего не ставит его на колесо
+    const wheel = new Set((await liveLots(env, id)).map((x) => x.id));
     // лот из чата Twitch: «от кого» — ник в чате, а не ведущий (строка — от него)
-    out.lots = results.map((x) => ({ id: x.id, ref: x.ref, name: x.name, img: x.img, link: x.link, by: x.via ? x.via_name || x.via.slice(3) : x.username || '', ...(x.via ? { tw: true } : {}), mine: !!me && x.user_id === me.id }));
+    out.lots = results.map((x) => ({ id: x.id, ref: x.ref, name: x.name, img: x.img, link: x.link, by: x.via ? x.via_name || x.via.slice(3) : x.username || '', ...(x.via ? { tw: true } : {}), ...(wheel.has(x.id) ? {} : { veto: true }), mine: !!me && x.user_id === me.id }));
   }
   if (!conditional) return json(out);
   // метка — от всего ответа, кроме часов сервера: в нём и то, что видит именно этот человек (свой сбор, свои лоты)
