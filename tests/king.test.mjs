@@ -157,9 +157,12 @@ test('голоса из чата Twitch: ник — как в Twitch, после
     [{ u: 'viewer_1', pick: 'b' }, { u: 'two', pick: 'b' }]);
   assert.deepEqual(cleanChatVotes('nope'), []);
   assert.equal(cleanChatVotes(Array.from({ length: 300 }, (_, i) => ({ u: 'u' + i, pick: 'a' }))).length, 200, 'не больше 200 за раз');
-  const voted = [{ user_id: 'u1', pick: 'a' }];
-  assert.equal(allInClose({ status: 'live' }, voted), true);
-  assert.equal(allInClose({ status: 'live', chat: true }, voted), false, 'ведущий ждёт голоса чата — только таймер или кнопка');
+  const voted = [{ user_id: 'u1', pick: 'a' }], now = 1e12;
+  assert.equal(allInClose({ status: 'live' }, voted, now), true);
+  assert.equal(allInClose({ status: 'live', chat: now - 30e3 }, voted, now), false, 'ведущий ждёт голоса чата — только таймер или кнопка');
+  // вкладка с чатом замолчала (закрыли без pagehide, телефон уснул) — флаг не залипает
+  assert.equal(allInClose({ status: 'live', chat: now - 10 * 60e3 }, voted, now), true);
+  assert.equal(allInClose({ status: 'live', chat: true }, voted, now), true, 'флаг страницы до этой версии не в счёт');
 });
 
 test('отмена боя: отменённый исход открывает бой под новым номером (прежние голоса не в счёт), «Закончить» — под прежним', () => {
@@ -278,7 +281,9 @@ test('чат Twitch: бои решает ведущий — флаг чата с
   const host = k.user('host');
   const made = await k.post('/king', host, { fmt: 'hill', mode: 'vote', timer: 60, p: ['A', 'B', 'C'], start: true });
   const c = made.body.room.id;
-  assert.equal((await k.post('/king/act', host, { c, act: 'chat', on: true })).body.state.chat, true);
+  const on = (await k.post('/king/act', host, { c, act: 'chat', on: true })).body.state.chat;
+  assert.ok(typeof on === 'number' && Math.abs(on - Date.now()) < 60e3, 'флаг чата — когда вкладка с чатом последний раз сказала «слушаю»');
+  assert.equal((await k.post('/king/act', host, { c, act: 'chat', on: true })).body.state.chat, on, 'повтор сразу же не пишется');
   assert.equal((await k.post('/king/act', host, { c, act: 'rules', mode: 'host' })).body.state.chat, undefined);
   assert.equal((await k.post('/king/act', host, { c, act: 'rules', mode: 'vote' })).body.state.chat, undefined, 'чат подключают заново кнопкой');
 });

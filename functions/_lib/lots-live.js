@@ -169,14 +169,18 @@ export function advanceLive(live, now, lots) {
       }
       // вылетает ровно выпавший лот: по id, а у прокрутки, начатой до этой версии, — первый живой с таким именем.
       // Выпавший лот удалили посреди прокрутки — не вылетает никто: другой лот с тем же названием (повторы) тут ни при чём
-      const gone = goneIds(lots, live);
+      const prevIds = Array.isArray(live.outIds) ? live.outIds : [...goneIds(lots, live)];
+      const gone = new Set(prevIds);
       const hit = r.id ? (lots.some((l) => l.id === r.id) ? r.id : '') : (lots.find((l) => !gone.has(l.id) && lowName(l.name) === lowName(r.n)) || {}).id;
       if (hit) gone.add(hit);
       const out = [...(Array.isArray(live.out) ? live.out : []), r.n];
+      // outIds идёт парой с out (и с hist): у лота, который удалили посреди прокрутки, на его месте пустой id —
+      // не вылетел никто, а /drop и история на странице не съезжают на поиск по названию
+      const outIds = [...prevIds, hit || ''];
       const left = lots.filter((l) => !gone.has(l.id));
       const winner = left.length === 1 ? { n: left[0].name, sum: '', at: +r.end + LIVE_OUT_MS } : null;
       Object.assign(live, {
-        segs: lotSegs(lots, left), spin: null, pick: '', pickL: '', out, outIds: [...gone], winner, hist: [...hist, r.n].slice(-MAX_LOTS),
+        segs: lotSegs(lots, left), spin: null, pick: '', pickL: '', out, outIds, winner, hist: [...hist, r.n].slice(-MAX_LOTS),
         status: winner ? `Победитель: ${winner.n}` : `Вылетел: ${r.n}. Осталось ${left.length}`,
         seen: lots.length, ids: lots.map((l) => l.id),
       });

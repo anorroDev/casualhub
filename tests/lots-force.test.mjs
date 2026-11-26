@@ -36,9 +36,17 @@ test('выпавший лот удалили посреди прокрутки �
   const r = spinLive(cleanLive({ kickIds: ['aaaaaa01'] }), LOTS, 'out', 1, 1e12, false);
   assert.equal(r.live.res.id, 'aaaaaa01');
   const live = r.live;
-  assert.ok(advanceLive(live, live.res.end + 5000, LOTS.filter((l) => l.id !== 'aaaaaa01')));
-  assert.deepEqual(live.outIds, []);
+  const left = LOTS.filter((l) => l.id !== 'aaaaaa01');
+  assert.ok(advanceLive(live, live.res.end + 5000, left));
+  // не вылетел никто: пустой id на месте выпавшего, outIds — парой с out и hist
+  assert.deepEqual(live.outIds, ['']);
+  assert.deepEqual([live.out.length, live.hist.length], [1, 1]);
+  assert.equal(live.segs.length, left.length);
   assert.equal(live.winner, null);
+  // и вторая такая прокрутка не съедает пару: пустых id — два
+  const again = spinLive(live, left, 'out', 1, 2e12, false).live;
+  advanceLive(again, again.res.end + 5000, left.filter((l) => l.id !== again.res.id));
+  assert.deepEqual([again.outIds, again.out.length], [['', ''], 2]);
   // прокрутка из снимка до id (res без id) — как раньше: первый живой с таким названием
   const old = spinLive(cleanLive({ kickIds: ['aaaaaa01'] }), LOTS, 'out', 1, 1e12, false).live;
   delete old.res.id;

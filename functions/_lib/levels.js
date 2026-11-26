@@ -525,7 +525,7 @@ const parse = (s, d) => { try { const v = s ? JSON.parse(s) : null; return v == 
 // awardMany(env, uid, items, { tz, now, metrics })
 //   items — [{ kind, ref, peer?, xp? (для given), day? (для опыта за прошлое — день действия) }]
 //   tz — часовой пояс из request.cf.timezone; metrics — особые мерки для достижений ({ cats, strict, nope, tierReacts })
-//   past — опыт за прошлое: без лимитов, без серий и заданий, xp у каждого действия свой.
+//   past — опыт за прошлое: без лимитов, без серий и заданий, xp у каждого действия свой (с noExtras — и без достижений).
 // Возвращает null, если уровни выключены или новых действий нет, иначе
 //   { gained, xp, level, levelUp, news: [...] } — news уже записаны человеку и уйдут ему плашкой.
 // Ошибки базы не роняют запрос, ради которого начисляли: опыт — не повод не сохранить оценку.
@@ -618,7 +618,7 @@ async function doAward(env, uid, items, opts) {
   // серия, задания, достижения, приглашения — только за живые действия, не за пересчёт прошлого
   let extra = { gained: 0 };
   if (!opts.past && !opts.noExtras) extra = await extras(env, uid, { now, today, tz, rows, row: known, level: s.level, metrics: opts.metrics, news });
-  else if (opts.past) await checkAchievements(env, uid, { now, metrics: opts.metrics, news, quiet: opts.quietAch });
+  else if (opts.past && !opts.noExtras) await checkAchievements(env, uid, { now, metrics: opts.metrics, news, quiet: opts.quietAch });
   const total = s.xp + extra.gained;
   const level = Math.max(s.level, extra.level || 0);
   if (news.length && !opts.silent) await pushNews(env, uid, news, now);
@@ -872,7 +872,8 @@ async function firstStepsDue(env, uid) {
 // считается отдельно, как 'invited': иначе пришедший по ссылке получал бы «Вербовщика», никого не позвав
 const KIND_COUNT_SQL = "SELECT CASE WHEN kind = 'invite' AND ref = 'joined' THEN 'invited' ELSE kind END AS kind, COUNT(*) AS n FROM xp_log WHERE user_id = ? AND gone = 0 GROUP BY 1";
 // мерки: строки журнала по видам, лучшая серия и особые мерки, которые передаёт вызывающий
-export async function checkAchievements(env, uid, { now, metrics, news, row, quiet }) {
+// noPay — новые ступени только записать, опыт за них начислит вызывающий (backfillUser — одной пачкой в конце)
+export async function checkAchievements(env, uid, { now, metrics, news, row, quiet, noPay }) {
   const [cnt, have, lv] = await env.DB.batch([
     env.DB.prepare(KIND_COUNT_SQL).bind(uid),
     env.DB.prepare('SELECT code, tier FROM achievements WHERE user_id = ?').bind(uid),
@@ -900,7 +901,7 @@ export async function checkAchievements(env, uid, { now, metrics, news, row, qui
     }
   }
   await env.DB.batch(writes);
-  if (fresh.length) await payAchievements(env, uid, { now, news, only: fresh });
+  if (fresh.length && !noPay) await payAchievements(env, uid, { now, news, only: fresh });
 }
 // опыт за достижения дают с 17 ноября 2026 (обновление утром; срок — с запасом, до конца дня по Киеву: ступени после
 // обновления уже оплачены сразу, их строки ach есть, и в письмо они не попадут)
@@ -953,35 +954,40 @@ const achXpUpTo = (a, from, to) => { let x = 0; for (let t = from + 1; t <= to; 
 // опыт за полученные ступени, за которые его ещё не давали (строки ach «код:ступень» в журнале): и за новые, и за полученные
 // до того, как за достижения стали давать опыт. Одной пачкой; news — куда дописать «новый уровень», если он случился.
 // Возвращает, сколько начислено
-// only — оплатить только эти ступени («код:ступень»), без него — все неоплаченные
-export async function payAchievements(env, uid, { now = Date.now(), news = null, only = null } = {}) {
+// only — оплатить только эти ступени («код:ступень»), без него — все неоплаченные; since — только у достижений,
+// полученных не раньше этого времени (более старые ждут письма achBackLetter).
+// stamp — { at, day }: оплата досчёта за прошлое (backfillUser). Строки пишутся этим временем, как опыт за прошлое:
+// ни в топ недели (он по day), ни в сезон (он по at) не попадают, письма «Новый уровень» нет
+export async function payAchievements(env, uid, { now = Date.now(), news = null, only = null, since = null, stamp = null } = {}) {
   const want = only ? new Set(only) : null;
   const [have, paid] = await env.DB.batch([
-    env.DB.prepare('SELECT code, tier FROM achievements WHERE user_id = ?').bind(uid),
+    env.DB.prepare('SELECT code, tier, at FROM achievements WHERE user_id = ?').bind(uid),
     env.DB.prepare("SELECT ref FROM xp_log WHERE user_id = ? AND kind = 'ach'").bind(uid),
   ]);
   const done = new Set((paid.results || []).map((x) => x.ref));
   const items = [];
   for (const x of have.results || []) {
     const a = ACH[x.code];
-    if (!a) continue;
-    for (let t = 1; t <= (+x.tier || 1); t++) {
+    if (!a || (since != null && !(+x.at >= since))) continue;
+    const top = Math.min(+x.tier || 1, Math.max(1, (a.tiers || []).length)); // у одной ступени и особых — только первая
+    for (let t = 1; t <= top; t++) {
       const ref = `${a.code}:${t}`;
-      if (!done.has(ref) && (!want || want.has(ref))) items.push({ kind: 'ach', ref, xp: achXp(a, t) });
+      if (!done.has(ref) && (!want || want.has(ref))) items.push({ kind: 'ach', ref, xp: achXp(a, t), ...(stamp ? { at: stamp.at, day: stamp.day } : {}) });
     }
   }
   if (!items.length) return 0;
-  const r = await doAward(env, uid, items, { now, noExtras: true, silent: true });
+  const r = await doAward(env, uid, items, { now, noExtras: true, silent: true, ...(stamp ? { past: true } : {}) });
   if (r && news) news.push(...(r.news || []));
   return r ? r.gained : 0;
 }
 // выдать особое достижение (основатель, первые шаги, итоги года)
-export async function grantSpecial(env, uid, code, { now = Date.now(), quiet } = {}) {
+// noPay — только записать достижение, опыт за него начислит вызывающий (backfillUser)
+export async function grantSpecial(env, uid, code, { now = Date.now(), quiet, noPay } = {}) {
   if (!levelsOn(env) || !ACH[code]) return false;
   await ensureLevels(env);
   const r = await env.DB.prepare('INSERT OR IGNORE INTO achievements (user_id, code, tier, at) VALUES (?, ?, 1, ?)').bind(uid, code, now).run();
   const fresh = !!(r.meta && r.meta.changes);
-  if (fresh) {
+  if (fresh && !noPay) {
     const news = quiet ? null : [{ t: 'ach', code, title: ACH[code].title, tier: 0, xp: achXp(ACH[code], 1) }];
     await payAchievements(env, uid, { now, news, only: [code + ':1'] });
     if (news) await pushNews(env, uid, news, now);
@@ -1161,26 +1167,66 @@ export async function lotsWon(env, code, live) {
 // пороги (комментарий от 10 знаков, сбор от трёх участников), и второй раз по правилам прошлого не считается. Кроме
 // тир-листов: у них время — последнего сохранения, а правило то же (tierDone, от TIER_MIN карточек).
 // Без плашек: уровень после пересчёта «был всегда», а чужие плашки, которые уже ждут человека, остаются.
-// Был ли пересчёт — отметка в журнале (PAST_MARK, pastDone), а не строка user_level: её заводит и чужое действие
-// (друг поставил реакцию раньше, чем человек зашёл), и тогда опыт за прошлое не начислялся никогда
+// Был ли пересчёт — отметка в журнале (PAST_MARK, pastState), а не строка user_level: её заводит и чужое действие
+// (друг поставил реакцию раньше, чем человек зашёл), и тогда опыт за прошлое не начислялся никогда.
+// Всё, что пишет пересчёт, ложится «до запуска»: у действий — их время (оно раньше LEVELS_SINCE), а у того, что времени
+// не имеет или получено самим пересчётом (тир-лист, сохранённый позже; оценка без даты; опыт за достижения, «Основатель»,
+// первые шаги), — штамп pastStamp: за миг до запуска уровней и не позже начала текущего сезона. Иначе опыт за прошлое
+// считался «набранным на этой неделе»: человек, который ничего не делал, попадал в топ недели и поднимал звание сезона.
+// Писем «Новый уровень» пересчёт тоже не шлёт.
+// Пересчёт могут оборвать (лимит обращений к базе, ошибка): в начале ставится отметка «начат» (PAST_START), в конце —
+// «сделан» (PAST_MARK). Есть только «начат» — пересчёт запускается заново (повтор ничего не удваивает) и доплачивает
+// достижения, которые успели записаться без опыта
 export const PAST = { rateFull: 50, rateXp: 10, rateTailXp: 3, review: 5, tier: 25, friend: 15, react: 3, comment: 6, cap: 200, lots: 30, firstXp: true };
 export const LEVELS_SINCE = Date.UTC(2026, 10, 11, 1, 40); // уровни включены для всех (LEVELS = "1"), 11 ноября 2026
 const PAST_MARK = { kind: 'past', ref: 'backfill' }; // строка с 0 опыта: опыт за прошлое уже начислен
-// начислен ли опыт за прошлое. Отметки нет и у тех, кому его начислили до неё: у них в журнале есть строки со временем
-// до запуска уровней (так пишет только backfillUser) — им отметка ставится сразу, без пересчёта
-export async function pastDone(env, uid) {
-  if (await env.DB.prepare('SELECT 1 AS ok FROM xp_log WHERE user_id = ? AND kind = ? AND ref = ?').bind(uid, PAST_MARK.kind, PAST_MARK.ref).first()) return true;
-  if (!(await env.DB.prepare('SELECT 1 AS ok FROM xp_log WHERE user_id = ? AND at < ? LIMIT 1').bind(uid, LEVELS_SINCE).first())) return false;
-  await markPast(env, uid);
-  return true;
+const PAST_START = { kind: 'past', ref: 'started' }; // строка с 0 опыта: пересчёт начат (at — когда; он мог и оборваться)
+export const PAST_BUSY_MS = 60e3; // «начат» свежее — пересчёт идёт прямо сейчас в соседнем запросе, второй раз не запускаем
+// что с опытом за прошлое: 'done' — начислен; 'busy' — начисляется прямо сейчас (отметка «начат» свежая);
+// 'todo' — не начислялся или оборвался. Отметок нет и у тех, кому его начислили до них: у них в журнале есть строки
+// со временем до запуска уровней (так пишет только backfillUser) — им «сделан» ставится сразу, без пересчёта. Это
+// правило — только когда нет ни одной отметки: с «начат» такие строки значат лишь то, что пересчёт успел начаться
+export async function pastState(env, uid, now = Date.now()) {
+  const { results } = await env.DB.prepare('SELECT ref, at FROM xp_log WHERE user_id = ? AND kind = ? AND ref IN (?, ?)').bind(uid, PAST_MARK.kind, PAST_MARK.ref, PAST_START.ref).all();
+  const by = Object.fromEntries((results || []).map((r) => [r.ref, +r.at || 0]));
+  if (by[PAST_MARK.ref] != null) return 'done';
+  if (by[PAST_START.ref] != null) return now - by[PAST_START.ref] < PAST_BUSY_MS ? 'busy' : 'todo';
+  if (!(await env.DB.prepare('SELECT 1 AS ok FROM xp_log WHERE user_id = ? AND at < ? LIMIT 1').bind(uid, LEVELS_SINCE).first())) return 'todo';
+  await markPast(env, uid, now);
+  return 'done';
+}
+export const pastDone = async (env, uid, now = Date.now()) => (await pastState(env, uid, now)) === 'done';
+// занять пересчёт за этим запросом: 'run' — отметка «начат» поставлена (или перехвачена у оборвавшегося), можно звать
+// backfillUser с claimed; 'busy' — его уже ведёт другой запрос (ping и /levels/me пришли разом); 'done' — не нужен.
+// Отметку ставит одна команда, поэтому из двух одновременных запросов пересчёт достаётся одному
+export async function claimPast(env, uid, now = Date.now()) {
+  const st = await pastState(env, uid, now);
+  if (st !== 'todo') return st;
+  return (await startPast(env, uid, now, now - PAST_BUSY_MS)) ? 'run' : 'busy';
+}
+// отметка «начат»: новая или поверх прежней, если та не свежее stale
+async function startPast(env, uid, now, stale) {
+  const w = await env.DB.prepare('INSERT INTO xp_log (user_id, kind, ref, xp, day, peer, at) VALUES (?1, ?2, ?3, 0, ?4, NULL, ?5) '
+    + 'ON CONFLICT(user_id, kind, ref) DO UPDATE SET at = excluded.at WHERE xp_log.at <= ?6').bind(uid, PAST_START.kind, PAST_START.ref, dayKey(now, 'UTC'), now, stale).run();
+  return !!(w.meta && w.meta.changes);
+}
+// штамп пересчёта: за миг до запуска уровней, а если текущий сезон начался раньше — за миг до его начала
+async function pastStamp(env, now) {
+  let at = LEVELS_SINCE - 1;
+  try { const s = await currentSeason(env, now); if (s && s.start <= at) at = s.start - 1; } catch (e) {}
+  return { at, day: dayKey(at, 'UTC') };
 }
 const markPast = (env, uid, now = Date.now()) => env.DB.prepare('INSERT OR IGNORE INTO xp_log (user_id, kind, ref, xp, day, peer, at) VALUES (?, ?, ?, 0, ?, NULL, ?)')
   .bind(uid, PAST_MARK.kind, PAST_MARK.ref, dayKey(now, 'UTC'), now).run();
-export async function backfillUser(env, uid, { now = Date.now(), founderBefore } = {}) {
+// claimed — отметку «начат» уже поставил вызывающий (claimPast)
+export async function backfillUser(env, uid, { now = Date.now(), founderBefore, claimed = false } = {}) {
   if (!levelsOn(env)) return null;
   await ensureLevels(env);
-  const dayOf = (t) => dayKey(+t || now, 'UTC');
+  if (!claimed) await startPast(env, uid, now, now);
+  const stamp = await pastStamp(env, now);
   const before = LEVELS_SINCE, old = (t) => (+t || 0) < before;
+  // когда это было: время действия, если оно есть и оно до запуска уровней, иначе штамп пересчёта
+  const when = (t) => { const at = +t > 0 && +t < before ? +t : stamp.at; return { at, day: dayKey(at, 'UTC') }; };
   const items = [];
   const [sh, tl, fr, rc, cm, lr, u] = await env.DB.batch([
     env.DB.prepare('SELECT data FROM shelves WHERE user_id = ?').bind(uid),
@@ -1197,13 +1243,13 @@ export async function backfillUser(env, uid, { now = Date.now(), founderBefore }
   ratings = ratings.filter((r) => r && typeof r.id === 'string' && !r.example);
   // треки альбомов — не оценки, а album_track (как у живого разбора)
   const scoredAll = ratings.filter((r) => isScored(r) && !isTrack(r));
-  const scored = scoredAll.filter((r) => old(stamp(r))).sort((a, b) => stamp(a) - stamp(b));
-  for (const r of ratings.filter((x) => isScored(x) && isTrack(x) && old(stamp(x)))) items.push({ kind: 'album_track', ref: `${r.albumOf}:${+r.trackNo}`, xp: RULES.album_track.xp, day: dayOf(stamp(r)), at: stamp(r) || now });
+  const scored = scoredAll.filter((r) => old(stampOf(r))).sort((a, b) => stampOf(a) - stampOf(b));
+  for (const r of ratings.filter((x) => isScored(x) && isTrack(x) && old(stampOf(x)))) items.push({ kind: 'album_track', ref: `${r.albumOf}:${+r.trackNo}`, xp: RULES.album_track.xp, ...when(stampOf(r)) });
   scored.forEach((r, i) => {
     const kind = IMPORTED.has(r.src) ? 'import' : 'rate';
     const xp = kind === 'import' ? (i < 100 ? 1 : 0) : i < PAST.rateFull ? PAST.rateXp : PAST.rateTailXp;
-    items.push({ kind, ref: r.id, xp, day: dayOf(stamp(r)), at: stamp(r) || now });
-    if (kind === 'rate' && textLen(r) >= 100) items.push({ kind: 'review', ref: r.id, xp: PAST.review, day: dayOf(stamp(r)), at: stamp(r) || now });
+    items.push({ kind, ref: r.id, xp, ...when(stampOf(r)) });
+    if (kind === 'rate' && textLen(r) >= 100) items.push({ kind: 'review', ref: r.id, xp: PAST.review, ...when(stampOf(r)) });
   });
   // мерки достижений — по всей полке, как у живого сохранения (копятся максимумом, лишнего не дадут)
   metrics.cats = new Set(scoredAll.map((r) => r.cat || r.catName).filter(Boolean)).size;
@@ -1211,37 +1257,44 @@ export async function backfillUser(env, uid, { now = Date.now(), founderBefore }
   for (const t of tl.results || []) {
     let n = 0;
     try { n = Object.keys((JSON.parse(t.data) || {}).items || {}).length; } catch (e) {}
-    if (n >= TIER_MIN) items.push({ kind: 'tier', ref: t.id, xp: PAST.tier, day: dayOf(t.at), at: +t.at || now });
+    // время тир-листа — последнего сохранения: сохранённый после запуска ложится штампом, а не этой неделей
+    if (n >= TIER_MIN) items.push({ kind: 'tier', ref: t.id, xp: PAST.tier, ...when(t.at) });
   }
-  for (const f of fr.results || []) items.push({ kind: 'friend', ref: f.id, xp: PAST.friend, day: dayOf(f.created_at), at: +f.created_at || now });
-  for (const r of rc.results || []) items.push({ kind: 'react', ref: `${r.owner_id}:${r.rid}`, peer: r.owner_id, xp: PAST.react, day: dayOf(r.at), at: +r.at || now });
+  for (const f of fr.results || []) items.push({ kind: 'friend', ref: f.id, xp: PAST.friend, ...when(f.created_at) });
+  for (const r of rc.results || []) items.push({ kind: 'react', ref: `${r.owner_id}:${r.rid}`, peer: r.owner_id, xp: PAST.react, ...when(r.at) });
   metrics.nope = (rc.results || []).filter((r) => r.emoji === 'nope').length;
-  for (const c of cm.results || []) items.push({ kind: 'comment', ref: c.id, peer: c.owner_id === uid ? 'self' : c.owner_id, xp: PAST.comment, day: dayOf(c.at), at: +c.at || now });
+  for (const c of cm.results || []) items.push({ kind: 'comment', ref: c.id, peer: c.owner_id === uid ? 'self' : c.owner_id, xp: PAST.comment, ...when(c.at) });
   for (const l of lr.results || []) {
     let live = null;
     try { live = JSON.parse(l.live || 'null'); } catch (e) {}
     // ref прежний, «сбор:момент» (у живого — «сбор:день», lotsWon): сборы до запуска живые правила не видели
-    if (live && live.winner && old(live.winner.at)) items.push({ kind: 'lots_host', ref: `${l.id}:${+live.winner.at || 0}`, xp: PAST.lots, day: dayOf(live.winner.at), at: +live.winner.at || now });
+    if (live && live.winner && old(live.winner.at)) items.push({ kind: 'lots_host', ref: `${l.id}:${+live.winner.at || 0}`, xp: PAST.lots, ...when(live.winner.at) });
   }
   // полученные реакции и комментарии — тоже опыт (тому, кому их поставили)
   const [grc, gcm] = await env.DB.batch([
     env.DB.prepare('SELECT from_id, rid, at FROM reactions WHERE owner_id = ? AND from_id != ? AND COALESCE(at, 0) < ? ORDER BY at LIMIT ?').bind(uid, uid, before, PAST.cap),
     env.DB.prepare('SELECT id, from_id, at FROM comments WHERE owner_id = ? AND from_id != ? AND COALESCE(at, 0) < ? ORDER BY at LIMIT ?').bind(uid, uid, before, PAST.cap),
   ]);
-  for (const r of grc.results || []) items.push({ kind: 'got_react', ref: `${r.from_id}:${r.rid}`, peer: r.from_id, xp: 3, day: dayOf(r.at), at: +r.at || now });
-  for (const c of gcm.results || []) items.push({ kind: 'got_comment', ref: c.id, peer: c.from_id, xp: 4, day: dayOf(c.at), at: +c.at || now });
+  for (const r of grc.results || []) items.push({ kind: 'got_react', ref: `${r.from_id}:${r.rid}`, peer: r.from_id, xp: 3, ...when(r.at) });
+  for (const c of gcm.results || []) items.push({ kind: 'got_comment', ref: c.id, peer: c.from_id, xp: 4, ...when(c.at) });
   // silent: уровень после пересчёта — без праздничной плашки, он «был всегда»
-  const res = items.length ? await awardMany(env, uid, items, { past: true, now, metrics, quietAch: true, silent: true }) : null;
-  if (!res) await checkAchievements(env, uid, { now, metrics, news: [], quiet: true });
-  const created = +(((u.results || [])[0] || {}).created_at) || 0;
-  if (founderBefore && created && created < founderBefore) await grantSpecial(env, uid, 'founder', { now, quiet: true });
+  // doAward, а не awardMany: тот глотает ошибки базы, а оборванный пересчёт должен остаться без отметки «сделан».
+  // Обращений к базе — как можно меньше (у запроса их 50, а пересчёт идёт внутри ping или /levels/me): достижения
+  // считаются один раз, после всех строк, а опыт за них начисляется одной пачкой в конце
+  if (items.length) await doAward(env, uid, items, { past: true, noExtras: true, now, silent: true });
   // первые шаги, уже сделанные раньше, засчитываются вместе с опытом
-  const due = await firstStepsDue(env, uid);
-  if (due.length) await awardMany(env, uid, due.map((f) => ({ kind: 'first', ref: f.code, xp: f.xp })), { past: true, now, silent: true });
   const steps = await firstSteps(env, uid);
-  if (steps.every((f) => f.done)) await grantSpecial(env, uid, 'first_steps', { now, quiet: true });
+  const due = steps.filter((f) => f.done && !f.paid);
+  if (due.length) await doAward(env, uid, due.map((f) => ({ kind: 'first', ref: f.code, xp: f.xp, at: stamp.at, day: stamp.day })), { past: true, noExtras: true, now, silent: true });
+  await checkAchievements(env, uid, { now, metrics, news: [], quiet: true, noPay: true });
+  const created = +(((u.results || [])[0] || {}).created_at) || 0;
+  if (founderBefore && created && created < founderBefore) await grantSpecial(env, uid, 'founder', { now, quiet: true, noPay: true });
+  if (steps.every((f) => f.done)) await grantSpecial(env, uid, 'first_steps', { now, quiet: true, noPay: true });
+  // опыт за достижения — штампом пересчёта: и за открытые сейчас, и за те, что записались, а оплатиться не успели
+  // (прошлый пересчёт оборвался): свежие ступени письмо achBackLetter пропускает, без этого их опыт не пришёл бы никогда
+  await payAchievements(env, uid, { now, since: Math.min(ACH_XP_SINCE, now), stamp });
   await markPast(env, uid, now);
-  return readLevel(env, uid);
+  return claimed ? null : readLevel(env, uid); // вызванному из запроса человека (ensurePast) итог не нужен — на обращение меньше
 }
 
 // ---------- пересчёт опыта по нынешним правилам (админка → «Уровни» → «Пересчёт опыта») ----------
@@ -1368,7 +1421,7 @@ export async function friendRatings(env, uid) {
   return (results || []).map((s) => { try { const d = JSON.parse(s.data || '{}'); return Array.isArray(d) ? d : d.ratings || []; } catch (e) { return []; } });
 }
 const isFull = (r) => isScored(r) && r.scores.length >= 2 && r.scores.every((s) => +s.v > 0) && !!r.photo;
-const stamp = (r) => +new Date(r.createdAt || r.updatedAt || 0) || 0;
+const stampOf = (r) => +new Date(r.createdAt || r.updatedAt || 0) || 0;
 // «Разбор альбома»: у оценки альбома trackCount — сколько треков, skip — номера пропущенных, tracks — баллы треков внутри
 // альбома ({ n, v }); трек по 4+ критериям — ещё и отдельная оценка с albumOf и trackNo.
 // Трек — не новая оценка: ни rate, ни задания «новые оценки», ни «Критик», а album_track, как у трека внутри альбома.

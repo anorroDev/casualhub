@@ -3590,7 +3590,13 @@ async function initStorage() {
         // примеров (Ведьмак и Интерстеллар) в Мнении больше нет: оставшиеся с прошлых заходов убираем
         const hadExamples = state.ratings.some(r => r.example);
         if (hadExamples) state.ratings = state.ratings.filter(r => !r.example);
-        if ((inline && state.photoStore) || hadExamples) saveLocalRatings();
+        // одна оценка — одна запись: повтор с тем же id (две вкладки однажды забрали полку вместе) — остаётся свежая
+        const stampOf = r => +new Date(r.updatedAt || r.createdAt || 0) || 0;
+        const fresh = new Map();
+        for (const r of state.ratings) { const p = fresh.get(r.id); if (!p || stampOf(r) > stampOf(p)) fresh.set(r.id, r); }
+        const hadDupes = fresh.size < state.ratings.length;
+        if (hadDupes) state.ratings = state.ratings.filter(r => fresh.get(r.id) === r);
+        if ((inline && state.photoStore) || hadExamples || hadDupes) saveLocalRatings();
         // черновик с сохранённым фото: оно тоже в IndexedDB
         if (form.photo && form.photo.ref && !form.photo.data) {
           const d = await window.CasualPhotos.get(form.photo.ref);

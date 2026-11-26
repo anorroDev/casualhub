@@ -119,7 +119,10 @@ test('«Убрать» ведущего во время прокрутки: ло
   assert.equal(lotsOf(code).length, 3);
   rewind(code, 60000);
   const after = (await call('GET', `lots/${code}`, null, 'a')).d.live;
-  assert.deepEqual(after.outIds, []);
+  // не вылетел никто: на месте выпавшего — пустой id, outIds идёт парой с out и hist
+  assert.deepEqual(after.outIds, ['']);
+  assert.equal(after.out.length, after.outIds.length);
+  assert.equal(after.hist.length, after.outIds.length);
   assert.deepEqual(after.segs.map((x) => x.l).sort(), lotsOf(code).map((l) => l.id).sort());
 });
 

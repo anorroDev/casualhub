@@ -90,6 +90,8 @@ export function makeQrLoginRoutes(h) {
     async 'POST /2fa/free'({ env, request, me }) {
       const { on, code, password } = await h.readBody(request);
       if (!h.totpOf(me)) return fail(400, 'Сначала включи двухфакторную защиту.');
+      // вкладка Настроек со старой страницей поля для пароля не знает: пусть обновится, счётчик попыток не тратим
+      if (on === true && password === undefined) return fail(409, 'Страница устарела: обнови её и впиши текущий пароль.');
       const wait = await h.bump(env, 'acc:' + me.id, 'loginAcc');
       if (wait) return h.tooMany(wait);
       if (on === true && !(await h.passOk(env, me.id, password))) return fail(403, password ? 'Текущий пароль не подходит.' : 'Чтобы включить вход по коду, впиши текущий пароль.');

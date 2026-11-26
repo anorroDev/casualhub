@@ -497,10 +497,14 @@ test('сезон: поле season в /levels/me и звание в профил�
   await awardMany(env, 'u1', rates('r', 30), { now: NOON, ...bare }); // 120
   await awardMany(env, 'u1', rates('s', 8), { now: NOON + DAY, ...bare }); // +80 → 200
   await awardMany(env, 'u1', [{ kind: 'gift', ref: 'g1', xp: 300 }], { now: NOON + DAY, ...bare }); // +300 → 500
+  // первый /levels/me: опыт за прошлое (строку уровня завели действия раньше, но он не начислялся) — «Основатель хаба» +100,
+  // первый шаг «Первая оценка» +20, бронза «Критика» +50. Он ложится до запуска уровней и до начала сезона: в опыт за всё
+  // время идёт, в сезон — нет. «Первая десятка» (+100, уже живое) — со следующим запросом: пересчёт занял этот
+  const first = await atTime(NOON + DAY, () => routes['GET /levels/me']({ env, request: { cf: { timezone: 'Europe/Moscow' } }, me: { id: 'u1' } }));
+  assert.equal(first.xp, 500 + 170);
+  assert.equal(first.season.xp, 500);
   const m = await atTime(NOON + DAY, () => routes['GET /levels/me']({ env, request: { cf: { timezone: 'Europe/Moscow' } }, me: { id: 'u1' } }));
-  // при первом /levels/me: +100 за «Первую десятку» и опыт за прошлое (строку уровня завели действия раньше, но он не начислялся):
-  // «Основатель хаба» +100, первый шаг «Первая оценка» +20, бронза «Критика» +50
-  assert.deepEqual({ n: m.season.n, start: m.season.start, end: m.season.end, xp: m.season.xp, rank: m.season.rank }, { n: 1, start: NOV1, end: FEB1, xp: 770, rank: 'couch' });
+  assert.deepEqual({ n: m.season.n, start: m.season.start, end: m.season.end, xp: m.season.xp, rank: m.season.rank }, { n: 1, start: NOV1, end: FEB1, xp: 600, rank: 'couch' });
   assert.deepEqual(m.season.ranks.map((r) => r.id), L.SEASON_RANKS.map((r) => r.id));
   assert.deepEqual(m.season.history, []);
   assert.equal(m.rank, 'Диванный критик');
@@ -510,7 +514,7 @@ test('сезон: поле season в /levels/me и звание в профил�
   assert.equal(after.season.n, 2);
   assert.equal(after.season.xp, 0);
   assert.equal(after.rank, 'Людишка');
-  assert.deepEqual(after.season.history, [{ n: 1, title: 'Сезон 1', rank: 'couch', xp: 770, place: 1 }]);
+  assert.deepEqual(after.season.history, [{ n: 1, title: 'Сезон 1', rank: 'couch', xp: 600, place: 1 }]);
   const p = await atTime(FEB1 + 2000, () => routes['GET /levels/profile']({ env, request: { url: 'https://x/api/levels/profile?id=u1' }, me: { id: 'u1' } }));
   assert.equal(p.rank, 'Людишка');
 });
@@ -1081,6 +1085,120 @@ test('опыт за прошлое: начисленный до отметки (
   assert.equal(q(env, "SELECT COUNT(*) AS n FROM xp_log WHERE user_id = 'u1' AND kind = 'comment'")[0].n, 0, 'пересчёта не было');
   assert.equal(q(env, "SELECT COUNT(*) AS n FROM xp_log WHERE user_id = 'u1' AND kind = 'past' AND ref = 'backfill' AND xp = 0")[0].n, 1, 'отметка поставлена');
   assert.ok(await L.pastDone(env, 'u1'));
+});
+
+// человек со старыми оценками, друзьями, тир-листом (сохранён уже после запуска) и сбором; строку уровня завёл друг
+function pastWorld(env) {
+  const PRE = Date.UTC(2026, 9, 20, 12);
+  env.DB.raw.exec("INSERT INTO users (id, username, uname, created_at, email_ok) VALUES ('u1', 'Аня', 'anya', 1000, 1), ('u2', 'Боб', 'bob', 1000, 0)");
+  const ratings = Array.from({ length: 12 }, (_, i) => ({ id: 'r' + i, cat: 'c' + i, status: 'Просмотрено', scores: [{ v: 8 }], total: 8, createdAt: new Date(PRE + i * 3600e3).toISOString() }));
+  ratings.push({ id: 'nodate', cat: 'c1', status: 'Просмотрено', scores: [{ v: 7 }], total: 7 }); // без даты
+  env.DB.raw.prepare('INSERT INTO shelves (user_id, data, updated_at) VALUES (?, ?, ?)').run('u1', JSON.stringify({ ratings }), PRE);
+  env.DB.raw.prepare('INSERT INTO photos (key, user_id, data, updated_at) VALUES (?, ?, ?, ?)').run('u1:avatar', 'u1', 'x', PRE);
+  env.DB.raw.prepare("INSERT INTO friendships (a, b, status, requested_by, created_at) VALUES ('u1', 'u2', 'accepted', 'u1', ?)").run(PRE);
+  env.DB.raw.prepare('INSERT INTO reactions (owner_id, rid, from_id, emoji, text, at) VALUES (?, ?, ?, ?, ?, ?)').run('u2', 'x1', 'u1', 'ok', '', PRE);
+  const items = Object.fromEntries(Array.from({ length: 9 }, (_, i) => ['i' + i, 1]));
+  env.DB.raw.prepare('INSERT INTO tierlists (user_id, id, data, meta, private, at) VALUES (?, ?, ?, ?, 0, ?)').run('u1', 't1', JSON.stringify({ items }), '{}', Date.UTC(2026, 10, 25, 10));
+  env.DB.raw.prepare('INSERT INTO lot_rooms (id, owner_id, live) VALUES (?, ?, ?)').run('old', 'u1', JSON.stringify({ winner: { n: 'A', at: PRE } }));
+}
+const LATE = Date.UTC(2026, 10, 26, 12); // четверг, 26 ноября 2026: запрос, в котором идёт пересчёт
+
+test('опыт за прошлое ложится до запуска уровней: ни в топ недели, ни в сезон, без писем и плашек', async () => {
+  const { ensurePast } = await import('../functions/_lib/levels-api.js');
+  const { weekTop } = await import('../functions/_lib/weektop.js');
+  const env = envOf();
+  await L.ensureLevels(env);
+  pastWorld(env);
+  await award(env, 'u1', 'got_react', 'u2:r1', { peer: 'u2', now: Date.UTC(2026, 10, 13), ...bare }); // строку уровня завёл друг
+  const season = await L.currentSeason(env, LATE);
+  assert.equal(await ensurePast(env, 'u1', LATE), true, 'пересчёт прошёл в этом запросе');
+  const lv = await readLevel(env, 'u1');
+  // оценки 13 × 10, друг 15, реакция 3, тир-лист 25, сбор 30, первые шаги (оценка 20, аватар 20, почта 20, друг 30, реакция 20,
+  // тир-лист 40), достижения: «Основатель» 100, «Первые шаги» 100, бронза «Критика» 50, «Аукциониста» 50, «Мейкера» 50,
+  // «Многогранного» (5 категорий) 50, серебро (10 категорий) 150; и 3 за реакцию друга
+  assert.ok(lv.xp > 500, 'опыт за прошлое начислен: ' + lv.xp);
+  const rows = q(env, "SELECT kind, ref, xp, day, at FROM xp_log WHERE user_id = 'u1' AND kind != 'past' AND NOT (kind = 'got_react' AND ref = 'u2:r1')");
+  assert.ok(rows.some((r) => r.kind === 'ach') && rows.some((r) => r.kind === 'first') && rows.some((r) => r.kind === 'tier'));
+  for (const r of rows) {
+    assert.ok(r.at < L.LEVELS_SINCE, `${r.kind} ${r.ref}: время до запуска уровней`);
+    assert.ok(r.day <= dayKey(L.LEVELS_SINCE - 1, 'UTC'), `${r.kind} ${r.ref}: день до запуска уровней`);
+  }
+  // то, у чего своего времени нет (достижения, первые шаги, тир-лист после запуска, оценка без даты), — ещё и до начала сезона
+  for (const r of rows.filter((x) => ['ach', 'first', 'tier'].includes(x.kind) || x.ref === 'nodate')) assert.ok(r.at < season.start, `${r.kind} ${r.ref}: до начала сезона`);
+  assert.equal(await L.seasonXpOf(env, 'u1', season), 3, 'в сезоне — только живая реакция друга');
+  assert.deepEqual(await weekTop(env, weekStart(dayKey(LATE, 'UTC'))), [], 'в топ недели пересчёт не попал');
+  assert.equal(q(env, "SELECT COUNT(*) AS n FROM gifts WHERE kind = 'level'")[0].n, 0, 'писем «Новый уровень» нет');
+  assert.deepEqual(await takeNews(env, 'u1'), [], 'плашек нет');
+  // достижения оплачены, письму «Награда за прошлые достижения» нечего собирать
+  assert.equal(await L.achBackLetter(env, 'u1', LATE), false);
+  assert.equal(q(env, "SELECT COUNT(*) AS n FROM xp_log WHERE user_id = 'u1' AND kind = 'ach' AND xp = 0")[0].n, 0);
+  // второй раз не идёт
+  assert.equal(await ensurePast(env, 'u1', LATE + 5 * 60e3), false);
+  assert.equal((await readLevel(env, 'u1')).xp, lv.xp);
+});
+
+// база, у которой кончаются обращения (как лимит на запрос у Worker'а): после left — ошибка
+function limitedDb(db, left) {
+  const tick = () => { if (left-- <= 0) throw new Error('Too many API requests by single worker invocation'); };
+  const wrap = (s) => ({ bind: (...a) => wrap(s.bind(...a)), first: async () => { tick(); return s.first(); }, all: async () => { tick(); return s.all(); }, run: async () => { tick(); return s.run(); }, exec: () => s.exec() });
+  return { raw: db.raw, prepare: (sql) => wrap(db.prepare(sql)), batch: async (list) => { tick(); return db.batch(list); } };
+}
+
+test('опыт за прошлое оборвался — отметки «сделан» нет, следующий запрос через минуту досчитывает всё, ничего не удваивая', async () => {
+  const { ensurePast } = await import('../functions/_lib/levels-api.js');
+  const whole = envOf();
+  await L.ensureLevels(whole);
+  pastWorld(whole);
+  assert.equal(await ensurePast(whole, 'u1', LATE), true);
+  const want = (await readLevel(whole, 'u1')).xp;
+  const achWant = q(whole, "SELECT code, tier FROM achievements WHERE user_id = 'u1' ORDER BY code");
+  for (const left of [4, 8, 11, 14, 17, 20]) {
+    const env = envOf();
+    await L.ensureLevels(env);
+    pastWorld(env);
+    const cut = { ...env, DB: limitedDb(env.DB, left) };
+    assert.equal(await ensurePast(cut, 'u1', LATE), true, 'пересчёт начинался: ' + left);
+    assert.equal(await L.pastState(env, 'u1', LATE + 1000), 'busy', 'отметка «начат» свежая — рядом не запускается: ' + left);
+    assert.equal(await ensurePast(env, 'u1', LATE + 1000), false);
+    assert.equal(await L.pastDone(env, 'u1', LATE + 1000), false, 'оборванный не помечен сделанным: ' + left);
+    assert.equal(await L.pastState(env, 'u1', LATE + L.PAST_BUSY_MS), 'todo');
+    assert.equal(await ensurePast(env, 'u1', LATE + L.PAST_BUSY_MS), true, 'через минуту — заново: ' + left);
+    assert.ok(await L.pastDone(env, 'u1', LATE + L.PAST_BUSY_MS));
+    assert.equal((await readLevel(env, 'u1')).xp, want, 'опыт тот же, что без обрыва: ' + left);
+    assert.deepEqual(q(env, "SELECT code, tier FROM achievements WHERE user_id = 'u1' ORDER BY code"), achWant);
+    assert.equal(q(env, "SELECT COUNT(*) AS n FROM xp_log WHERE user_id = 'u1' AND kind != 'past' AND at >= ?", L.LEVELS_SINCE)[0].n, 0);
+  }
+});
+
+test('опыт за прошлое: ping и /levels/me разом — пересчёт ведёт один запрос; укладывается в лимит обращений', async (t) => {
+  const { ensurePast } = await import('../functions/_lib/levels-api.js');
+  const env = envOf();
+  await L.ensureLevels(env);
+  pastWorld(env);
+  const both = await Promise.all([ensurePast(env, 'u1', LATE), ensurePast(env, 'u1', LATE)]);
+  assert.deepEqual(both.sort(), [false, true]);
+  assert.equal(q(env, "SELECT COUNT(*) AS n FROM xp_log WHERE user_id = 'u1' AND kind = 'past'")[0].n, 2); // «начат» и «сделан»
+  // /levels/me вместе с пересчётом — с запасом до 50 обращений (вход и таблицы — ещё несколько сверху)
+  const env2 = envOf();
+  await L.ensureLevels(env2);
+  pastWorld(env2);
+  const { routes } = await levelRoutes();
+  const me = counted(env2);
+  const m = await atTime(LATE, () => routes['GET /levels/me']({ env: env2, request: { cf: { timezone: 'Europe/Kyiv' } }, me: { id: 'u1' } }));
+  const nMe = me();
+  assert.ok(m.xp > 500 && m.on);
+  assert.ok(await L.pastDone(env2, 'u1', LATE));
+  t.diagnostic(`/levels/me с пересчётом: ${nMe} обращений к D1`);
+  assert.ok(nMe <= 40, '/levels/me с пересчётом: ' + nMe);
+  // ping: пересчёт, а «зашёл сегодня» — со следующим
+  const env3 = envOf();
+  await L.ensureLevels(env3);
+  pastWorld(env3);
+  const ping = counted(env3);
+  assert.equal(await ensurePast(env3, 'u1', LATE), true);
+  const nPing = ping();
+  t.diagnostic(`пересчёт в ping: ${nPing} обращений к D1`);
+  assert.ok(nPing <= 30, 'пересчёт: ' + nPing);
 });
 
 // ---------- лоты: перекрутка «Одного победителя» ----------

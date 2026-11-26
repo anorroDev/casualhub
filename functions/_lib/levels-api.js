@@ -6,7 +6,7 @@ import {
   levelsMode, levelsOn, ensureLevels, readLevel, levelView, prefsOf, lookOf, unlockedAt, levelsOf, achievementsOf, questState,
   firstSteps, takeNews, dayKey, weekStart, shiftDay, cleanTz, backfillUser, grantSpecial, currentEvent, forgetEvent, RULES, awardMany, CAT_GROUPS, RATING_KINDS,
   ACHIEVEMENTS, REWARDS, NAME_COLORS, PROFILE_BGS, isScored, textLen, award, INVITE_REWARDS, EVENT_REWARDS, INV_SQL, invitesOf, STREAK_BONUS, FIRST_STEPS,
-  achBackLetter, ACH_TIER_XP, ACH_ONE_XP, swapQuest, recalcUser, nameKey, pastDone, payAchievements, freezesNow,
+  achBackLetter, ACH_TIER_XP, ACH_ONE_XP, swapQuest, recalcUser, nameKey, claimPast, payAchievements, freezesNow,
   SEASON_RANKS, seasonRankOf, rankFields, currentSeason, closeSeason, forgetSeason, seasonXpOf, seasonXpMany, seasonPlanLetter, fmtKyiv,
 } from './levels.js';
 import { FOODS, boughtLooks, ensureShop, hasVasyan, vasyanClaim } from './shop.js';
@@ -37,14 +37,21 @@ const randCode = () => [...crypto.getRandomValues(new Uint8Array(8))].map((b) =>
 
 // опыт за прошлое — сам, при первом заходе после запуска: уровень и «Основатель хаба» появляются сразу, без кнопки
 // в админке. Был ли он — по отметке в журнале (pastDone), а не по строке user_level: её заводит и чужое действие (друг
-// поставил реакцию или принял заявку раньше, чем человек зашёл). Повторный вызов ничего не удваивает
-export async function ensurePast(env, uid) {
-  if (!levelsOn(env) || !uid) return;
+// поставил реакцию или принял заявку раньше, чем человек зашёл). Повторный вызов ничего не удваивает.
+// Возвращает true, если пересчёт шёл в этом запросе (даже оборвался): он стоит десятки обращений к базе, а у запроса их
+// 50 — поэтому ping в таком запросе не зовёт «зашёл сегодня», а /levels/me откладывает письма и топ недели до следующего.
+// Пересчёт занимает один запрос (claimPast): ping и /levels/me, пришедшие разом, вдвоём его не ведут; оборванный
+// (осталась только отметка «начат») через минуту запускается заново
+export async function ensurePast(env, uid, now = Date.now()) {
+  if (!levelsOn(env) || !uid) return false;
+  let ran = false;
   try {
     await ensureLevels(env);
-    if (await pastDone(env, uid)) return;
-    await backfillUser(env, uid, { founderBefore: FOUNDERS_BEFORE });
+    if ((await claimPast(env, uid, now)) !== 'run') return false;
+    ran = true;
+    await backfillUser(env, uid, { now, founderBefore: FOUNDERS_BEFORE, claimed: true });
   } catch (e) { console.error('levels past', e && e.message); }
+  return ran;
 }
 // видит ли человек уровни: при LEVELS = "admins" — только админы
 export async function levelsVisible(env, me, h) {
@@ -118,12 +125,14 @@ export function makeLevelsRoutes(h) {
     // всё про мой прогресс одним запросом: уровень, серия, задания, первые шаги, оформление
     async 'GET /levels/me'({ env, request, me }) {
       if (!(await gate(env, me))) return off();
-      await ensurePast(env, me.id);
       const now = Date.now();
+      // опыт за прошлое прошёл в этом запросе — остальное, что может подождать (письмо за прошлые достижения, топ недели,
+      // «Первая десятка»), придёт со следующим: иначе запрос выйдет за лимит обращений к базе
+      const past = await ensurePast(env, me.id, now);
       // опыт за достижения, полученные до того, как за них стали его давать, — письмом в «Почту», забирается кнопкой
-      try { await achBackLetter(env, me.id, now); } catch (e) { console.error('levels ach letter', e && e.message); }
+      if (!past) try { await achBackLetter(env, me.id, now); } catch (e) { console.error('levels ach letter', e && e.message); }
       // неделя закончилась: топ-5 сайта получают рофланы письмом (weektop.js; разложится один раз)
-      try { await settleWeekTop(env, now); } catch (e) { console.error('levels week top', e && e.message); }
+      if (!past) try { await settleWeekTop(env, now); } catch (e) { console.error('levels week top', e && e.message); }
       const row = (await userRow(env, me.id)) || {};
       const tz = tzOf(request) || row.tz || 'UTC';
       const today = dayKey(now, tz);
@@ -131,7 +140,7 @@ export function makeLevelsRoutes(h) {
       const prefs = prefsOf(row);
       const admin = !!(h.adminCandidate(me, env) || (await h.isAdmin(env, me)));
       const bought = (await boughtLooks(env, [me.id])).get(me.id) || null; // оформление, купленное в магазине раньше уровня
-      await ensureFirst(env, me.id);
+      if (!past) await ensureFirst(env, me.id);
       // сезон первым: если срок вышел, этот же запрос его закроет, и опыт сезона будет уже нового
       const season = await seasonOf(env, me.id, await currentSeason(env, now));
       const [quests, steps, ev] = await Promise.all([questState(env, me.id, { now, today, row }), firstSteps(env, me.id), currentEvent(env, now)]);

@@ -1483,8 +1483,10 @@
       if (r.added) poll();
     } catch (e) {
       twNoteText = e.message; twPaintNote(); twNoteText = '';
-      // пачка не дошла (нет связи, лимит, сбой сервера) — она уйдёт следующей, а не пропадёт; очередь не больше 200
-      if (!e.status || e.status === 429 || e.status >= 500) twQueue = [...items, ...twQueue].slice(0, 200);
+      // пачка не дошла (лимит, сбой сервера) — она уйдёт следующей, а не пропадёт; очередь не больше 200. Без связи
+      // неизвестно, записал ли сервер пачку: повтор — только когда сбор сам отсекает повторы («одно название — один лот»),
+      // иначе у зрителя вышло бы два одинаковых лота
+      if (e.status === 429 || e.status >= 500 || (!e.status && S.room && S.room.uniq)) twQueue = [...items, ...twQueue].slice(0, 200);
     }
     twPaintNote();
     if (twQueue.length) twTimer = setTimeout(twFlush, 1500);

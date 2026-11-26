@@ -1365,7 +1365,7 @@ if (window.CanvasRenderingContext2D && !CanvasRenderingContext2D.prototype.round
       const rows = TIERS.map(([t, min, range], i) => {
         const items = rated.filter((r) => r.total >= min && (i === 0 || r.total < TIERS[i - 1][1]));
         return `<div class="tl-row" data-t="${t}"><div class="tl-lab"><b>${t}</b><small>${range}</small></div><div class="tl-items">${items.length
-          ? items.map((r) => `<a class="tl-it" href="${rateLink(p, r)}" title="${esc(r.name)} · ${fmt(r.total)}" data-tier="${tierT(r.total)}">${pic(r)}<span translate="no">${esc(r.name)}</span><b>${fmt(r.total)}</b></a>`).join('')
+          ? items.map((r) => `<a class="tl-it" href="${rateLink(p, r)}" data-tier="${tierT(r.total)}">${pic(r)}<span translate="no" title="${esc(r.name)} · ${fmt(r.total)}">${esc(r.name)}</span><b>${fmt(r.total)}</b></a>`).join('')
           : '<span class="tl-empty">—</span>'}</div></div>`;
       }).join('');
       const unrated = list.length - rated.length;

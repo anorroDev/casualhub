@@ -324,21 +324,33 @@
     const remote = r && Array.isArray(r.ratings) ? r.ratings : [];
     const remoteDeleted = r && Array.isArray(r.deleted) ? r.deleted : [];
     const stampOf = (x) => +new Date(x.updatedAt || x.createdAt || 0) || 0;
+    // время правки из будущего (часы этого устройства спешат больше чем на 5 минут): сервер такое время обрезает, и
+    // здешняя копия иначе вечно перебивала бы правки и удаления с других устройств. Такая копия уже ушла на сервер
+    // (её время не позже последней дошедшей отправки, PUSHED_KEY — те же часы устройства) — уступает серверной и
+    // удалению; новее — это ещё не отправленная правка, она остаётся. Время таких копий подравнивается по часам
+    // сервера (clampFuture ниже; now — у старого сервера его нет)
+    const srvNow = r && +r.now > 0 ? +r.now : 0;
+    const pushedAt = +(readJSON(PUSHED_KEY, {})[meId]) || 0;
+    const ahead = (x) => !!srvNow && !!pushedAt && stampOf(x) > srvNow + 5 * 60e3 && stampOf(x) <= pushedAt;
     // удалённые на других устройствах: убираем и здесь
     let removed = 0;
     if (remoteDeleted.length) {
       const del = new Map(remoteDeleted.map((d) => [d.id, +d.at || 0]));
       const before = state.ratings.length;
-      state.ratings = state.ratings.filter((x) => !(del.has(x.id) && stampOf(x) <= del.get(x.id)));
+      state.ratings = state.ratings.filter((x) => !(del.has(x.id) && (stampOf(x) <= del.get(x.id) || (ownsRating(x) && ahead(x)))));
       removed = before - state.ratings.length;
     }
     // категории — только после удалений: иначе отрисовка соберёт удалённую категорию заново по её старым оценкам
     pullCats(r && r.cats);
-    const byId = new Map(state.ratings.map((x) => [x.id, x]));
+    // пока здесь ждут фото, соседняя вкладка может сохранить оценки, и её список целиком заменит здешний (storage в
+    // opinion/app.js): ищем всегда в нынешнем списке, иначе оценка из старого снимка легла бы в новый второй раз
+    let base = null, byId = null;
+    const ids = () => { if (state.ratings !== base) { base = state.ratings; byId = new Map(base.map((x) => [x.id, x])); } return byId; };
     let added = 0, updated = 0, photos = 0;
     const sent = readJSON(PHOTOS_KEY, {});
     for (const rr of remote) {
       if (!rr || !rr.id) continue;
+      const byId = ids();
       const copy = { ...rr };
       const remotePhoto = copy.photo && copy.photo.remote ? copy.photo : null;
       const linkPhoto = copy.photo && !copy.photo.remote && photoLink(copy.photo) ? copy.photo : null;
@@ -348,7 +360,7 @@
       copy.author = { ...(rr.author || {}), id: state.user.id, name: state.user.name, avatar: state.user.avatar, color: state.user.color };
       let loc = byId.get(rr.id);
       if (!loc) { delete copy.example; state.ratings.push(copy); byId.set(copy.id, copy); loc = copy; added++; }
-      else if (stampOf(rr) > stampOf(loc)) { const photo = loc.photo; Object.assign(loc, copy); if (photo) loc.photo = photo; updated++; }
+      else if (stampOf(rr) > stampOf(loc) || ahead(loc)) { const photo = loc.photo; Object.assign(loc, copy); if (photo) loc.photo = photo; updated++; }
       if (linkPhoto && !loc.photo) { loc.photo = { id: linkPhoto.url, url: linkPhoto.url, w: linkPhoto.w || 0, h: linkPhoto.h || 0 }; photos++; }
       // фото: качаем, если здесь его нет или на сервере другое и оценка там свежее
       if (remotePhoto) {
@@ -358,6 +370,8 @@
           try {
             const ph = await api('/photo/' + encodeURIComponent(meId) + '/' + encodeURIComponent(rr.id));
             if (!live()) return;
+            // за время запроса список могли заменить: фото — той записи, что в нём сейчас
+            loc = ids().get(rr.id) || loc;
             if (ph && ph.data) { loc.photo = { id: ph.data, data: ph.data, w: remotePhoto.w || 0, h: remotePhoto.h || 0 }; sent[rr.id] = fp(ph.data); photos++; }
           } catch (e) {}
           if (!live()) return;
@@ -389,7 +403,11 @@
       } catch (e) { console.error('artist avatars', e); } // не мешаем сохранить полученные оценки
     }
     if (photos) lsSet(PHOTOS_KEY, JSON.stringify(sent));
-    if (!added && !updated && !removed && !photos) return;
+    // одна оценка — одна запись: если всё же легла дважды (старая страница в соседней вкладке), остаётся свежая
+    const dupes = dedupeRatings(stampOf);
+    // свои оценки только этого устройства со временем из будущего: такими их и обрежет сервер при отправке
+    const fixed = (srvNow ? clampFuture(srvNow) : 0) + dupes;
+    if (!added && !updated && !removed && !photos) { if (fixed) saveLocalRatingsQuiet(); return; }
     if (added) state.ratings = state.ratings.filter((x) => !x.example); // примеры уступают место настоящим оценкам
     saveLocalRatingsQuiet();
     renderBoard();
@@ -477,6 +495,7 @@
   const THUMBS_KEY = 'casualhub.thumbs.v1'; // { id оценки: отпечаток фото, к которому уже отправлено превью }
   const PHOTOS_KEY = 'casualhub.photos.v1';   // { id оценки: отпечаток уже отправленного фото }
   const DELETED_KEY = 'casualhub.deleted.v1'; // [{ id, at }] оценки, удалённые на этом устройстве
+  const PUSHED_KEY = 'casualhub.shelfpush.v1'; // { id аккаунта: часы этого устройства, когда собрали последнюю дошедшую отправку }
   const readJSON = (k, d) => { try { return JSON.parse(lsGet(k) || 'null') || d; } catch (e) { return d; } };
   const photoData = (p) => (p && typeof p.data === 'string' && p.data.startsWith('data:image/') ? p.data
     : p && typeof p.id === 'string' && p.id.startsWith('data:image/') ? p.id : '');
@@ -552,6 +571,34 @@
     }
   }
   function saveLocalRatingsQuiet() { return (rawSave || saveLocalRatings)(); }
+  // повторы одной оценки (тот же id) схлопываются в одну запись — более свежую по stampOf. Сколько убрано
+  function dedupeRatings(stampOf) {
+    const keep = new Map();
+    for (const x of state.ratings) {
+      if (!x || typeof x.id !== 'string') continue;
+      const p = keep.get(x.id);
+      if (!p || stampOf(x) > stampOf(p)) keep.set(x.id, x);
+    }
+    const before = state.ratings.length;
+    state.ratings = state.ratings.filter((x) => !x || typeof x.id !== 'string' || keep.get(x.id) === x);
+    return before - state.ratings.length;
+  }
+  // время своих оценок не позже часов сервера (cap) — так же, как их обрезает PUT /shelf (notAfter в API): спешащие
+  // часы устройства не должны делать здешнюю копию «свежее» правок с других устройств. Сколько поправлено
+  function clampFuture(cap) {
+    let n = 0;
+    for (const x of state.ratings) {
+      if (!ownsRating(x)) continue;
+      let hit = false;
+      for (const k of ['createdAt', 'updatedAt']) {
+        if (x[k] == null || !(+new Date(x[k]) > cap)) continue;
+        x[k] = typeof x[k] === 'number' ? cap : new Date(cap).toISOString();
+        hit = true;
+      }
+      if (hit) n++;
+    }
+    return n;
+  }
   const ownsRating =(r) => !r.example && r.author && state.user && r.author.id === state.user.id;
   // гостевые оценки этого устройства переходят в аккаунт
   function claimGuestRatings() {
@@ -650,8 +697,15 @@
       try { later = await uploadPhotos(); } catch (e) { console.error('photos', e); } // сбой с фото не должен остановить отправку оценок
       if (!live()) return false;
       if (later) { clearTimeout(F.photoRetry); F.photoRetry = setTimeout(() => pushShelf(), later); }
+      const sentAt = Date.now(); // что поправили до этой минуты — уходит этой отправкой
       const r = await api('/shelf', 'PUT', { ratings: myRatings(), deleted: readJSON(DELETED_KEY, []), cats: catsPayload() });
       if (!live()) return true;
+      // сервер обрезал время из будущего до своего now: здесь так же, иначе эта копия при следующей отправке снова
+      // перебьёт то, что за это время поменяли на других устройствах
+      if (+r.now > 0) {
+        if (clampFuture(+r.now)) saveLocalRatingsQuiet();
+        const m = readJSON(PUSHED_KEY, {}); m[F.me.id] = sentAt; lsSet(PUSHED_KEY, JSON.stringify(m));
+      }
       F.pushedAt = r.updatedAt;
       F.pushedCount = r.count;
       F.pushErr = '';

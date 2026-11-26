@@ -1067,6 +1067,8 @@ const routes = {
   },
   async 'POST /2fa/enable'({ env, request, me }) {
     const { code, password } = await readBody(request);
+    // вкладка Настроек со старой страницей поля для пароля не знает: пусть обновится, счётчик попыток не тратим
+    if (password === undefined) return fail(409, 'Страница устарела: обнови её и впиши текущий пароль.');
     const wait = await bump(env, 'acc:' + me.id, 'loginAcc');
     if (wait) return tooMany(wait);
     // включить — только с текущим паролем: иначе укравший сеанс подключил бы своё приложение, и хозяин без кода из
@@ -1243,8 +1245,10 @@ const routes = {
       // язык писем об обновлениях — тот, на котором человек смотрит сайт (пишется, только когда поменялся)
       await rememberLang(env, me.id, langOf(request));
       // уровни: опыт за прошлое при первом заходе после запуска, потом «зашёл сегодня» (раз в день по его часовому поясу)
-      await ensurePast(env, me.id);
-      const v = await lvVisit(env, me.id, tzOf(request), now);
+      // Опыт за прошлое прошёл в этом запросе — «зашёл сегодня» придёт со следующим ping: вместе они не укладываются
+      // в лимит обращений к базе за запрос
+      const past = await ensurePast(env, me.id, now);
+      const v = past ? null : await lvVisit(env, me.id, tzOf(request), now);
       // новые плашки или уже лежащие (например, «Новый сезон», пока вкладка была без сокета) — страница их заберёт
       if (v && ((v.news && v.news.length) || v.pending)) lvNews.set(request, true);
     }
@@ -1496,7 +1500,8 @@ const routes = {
       if (diff.give.length) await lvGive(env, request, me, me.id, diff.give, { metrics: { ...diff.metrics, night, ...social } });
       if (talk) await revokeOthers(env, me.id, talk); // последним: свой опыт важнее
     }
-    return json({ ok: true, updatedAt: updated, count: merged.length, catsAt: catsOut ? catsOut.at : null });
+    // now — часы сервера, до которых обрезано время из будущего: страница обрежет свою копию так же (clampFuture)
+    return json({ ok: true, updatedAt: updated, count: merged.length, catsAt: catsOut ? catsOut.at : null, now: nowAt });
   },
 
   async 'GET /shelf/:id'({ env, me, arg }) {
@@ -1512,7 +1517,7 @@ const routes = {
     const s = readShelf(shelf);
     // свои категории видит только хозяин
     // друзьям — только очищенные оценки (вдруг в базе лежит что-то записанное до проверки типов)
-    return json({ user, limited: friend ? undefined : true, ratings: arg === me.id ? s.ratings : s.ratings.map(cleanRating).filter((r) => r && (friend ? r.vis !== 'private' : r.vis === 'public')), deleted: s.deleted, cats: arg === me.id ? s.cats || null : undefined, profile: s.profile || null, sticker: s.sticker || null, layout: s.layout || null, updatedAt: shelf ? shelf.updated_at : null });
+    return json({ user, limited: friend ? undefined : true, ratings: arg === me.id ? s.ratings : s.ratings.map(cleanRating).filter((r) => r && (friend ? r.vis !== 'private' : r.vis === 'public')), deleted: s.deleted, cats: arg === me.id ? s.cats || null : undefined, profile: s.profile || null, sticker: s.sticker || null, layout: s.layout || null, updatedAt: shelf ? shelf.updated_at : null, now: arg === me.id ? Date.now() : undefined });
   },
 
   // подписки на оценки друзей: список id, хранится в своей полке, виден только хозяину
@@ -2592,8 +2597,8 @@ function notAfter(r, cap) {
   return o;
 }
 // id оценок «только я»: их фото друзьям не отдаём. Список пишет PUT /shelf (колонка priv); у полки, записанной раньше,
-// он один раз считается из самих оценок прямо в базе и запоминается
-const PRIV_SQL = "(SELECT json_group_array(json_extract(j.value, '$.id')) FROM json_each(shelves.data, '$.ratings') j WHERE json_extract(j.value, '$.vis') = 'private')";
+// он один раз считается из самих оценок прямо в базе и запоминается. Полка старого вида — просто список оценок (как в SHELF_COUNT)
+const PRIV_SQL = "(SELECT json_group_array(json_extract(j.value, '$.id')) FROM json_each(CASE json_type(shelves.data) WHEN 'array' THEN shelves.data ELSE json_extract(shelves.data, '$.ratings') END) j WHERE json_extract(j.value, '$.vis') = 'private')";
 async function privateOf(env, uid) {
   let row = await env.DB.prepare('SELECT priv FROM shelves WHERE user_id = ?').bind(uid).first();
   if (row && row.priv == null) row = await env.DB.prepare(`UPDATE shelves SET priv = ${PRIV_SQL} WHERE user_id = ? RETURNING priv`).bind(uid).first();

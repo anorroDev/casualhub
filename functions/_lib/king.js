@@ -217,8 +217,13 @@ export const allIn = (people) => (Array.isArray(people)
 // все в комнате высказались: голоса есть — бой закрывается по ним; все «пас» — как у таймера без голосов: таймер
 // останавливается, решает ведущий (pass — чтобы страница сказала, почему)
 // «все высказались — закрыть бой сразу»: не тогда, когда ведущий собирает голоса из чата Twitch (st.chat) — чат не в комнате,
-// и один зритель сайта закрывал бы бой раньше, чем чат успеет; тогда — таймер или кнопка ведущего
-export const allInClose = (st, people) => !(st && st.chat) && allIn(people);
+// и один зритель сайта закрывал бы бой раньше, чем чат успеет; тогда — таймер или кнопка ведущего.
+// st.chat — когда вкладка ведущего с чатом последний раз сказала «слушаю» (она повторяет это раз в CHAT_BEAT). Замолчала
+// дольше CHAT_STALE (закрыли без pagehide, браузер упал, телефон уснул) — чата будто нет: так флаг не залипает, и снимать его
+// за неё другим вкладкам ведущего (в другом браузере их не видно) не нужно. true — от страницы до этой версии: не в счёт
+export const CHAT_BEAT = 60e3, CHAT_STALE = 150e3;
+export const chatOn = (st, now = Date.now()) => !!st && typeof st.chat === 'number' && now - st.chat < CHAT_STALE;
+export const allInClose = (st, people, now = Date.now()) => !chatOn(st, now) && allIn(people);
 // голоса из чата Twitch (страница ведущего, twitch-chat.js): [{ u: ник, pick: 'a' | 'b' }] → годные, у ника — последний голос,
 // не больше 200 за раз. В king_votes — от 'tw:<ник>': в счёт идут как обычные голоса
 export function cleanChatVotes(list) {
@@ -415,7 +420,7 @@ export function makeKingRoutes(h) {
     const r = await tx(env, code, async (st) => {
       if (!(st.status === 'live' && st.mode === 'vote' && st.bout && now >= st.bout.opens)) return { same: true };
       const [p, t] = await env.DB.batch([env.DB.prepare(CROWD).bind(code, now - SEEN_MS), env.DB.prepare(TALLY).bind(code, st.bout.n)]);
-      if (!allInClose(st, (p.results || [])[0])) return { same: true };
+      if (!allInClose(st, (p.results || [])[0], now)) return { same: true };
       return closeAll(st, tallyOf(t.results), now);
     }, now);
     if (r.wrote) { await after(env, code, r.row, r); if (r.done) await hostXp(env, request, me, r.row, r.st); }
@@ -446,7 +451,7 @@ export function makeKingRoutes(h) {
     if (timerDue(st, now)) { await settleDue(env, request, me, code, now); ({ row, votes, here, crowd } = await read()); st = parse(row && row.state); if (!row || !st) return fail(404, 'Такого турнира нет.'); }
     // все высказались — не ждём таймера (все «пас» и бой уже ждёт ведущего — повторять нечего)
     const bt = st && st.bout, t0 = tallyOf(votes);
-    if (st.status === 'live' && st.mode === 'vote' && bt && now >= bt.opens && allInClose(st, crowd) && !(bt.idle && !bt.ends && !(t0.a + t0.b))) {
+    if (st.status === 'live' && st.mode === 'vote' && bt && now >= bt.opens && allInClose(st, crowd, now) && !(bt.idle && !bt.ends && !(t0.a + t0.b))) {
       await allInDue(env, request, me, code, now);
       ({ row, votes, here, crowd } = await read()); st = parse(row && row.state);
       if (!row || !st) return fail(404, 'Такого турнира нет.');
@@ -543,8 +548,14 @@ export function makeKingRoutes(h) {
           case 'undo': return undoLast(st, now);
           case 'finish': return finishEarly(st, now);
           case 'title': { const t = clean(b.title, KING.TITLE); return t ? { ok: true, title: t } : { err: [400, 'Нужно название.'] }; }
-          // ведущий подключил или отключил чат Twitch: пока подключён, бой не закрывается от «все в комнате высказались»
-          case 'chat': { if (!!st.chat === !!b.on) return { same: true }; if (b.on) st.chat = true; else delete st.chat; return { ok: true }; }
+          // ведущий подключил или отключил чат Twitch: пока подключён, бой не закрывается от «все в комнате высказались».
+          // Включение — оно же отметка «вкладка с чатом жива» (chatOn): пишем её не чаще раза в полминуты
+          case 'chat': {
+            if (!b.on) { if (st.chat == null) return { same: true }; delete st.chat; return { ok: true }; }
+            if (typeof st.chat === 'number' && now - st.chat >= 0 && now - st.chat < CHAT_BEAT / 2) return { same: true };
+            st.chat = now;
+            return { ok: true };
+          }
           default: return { err: [400, 'Нет такого действия.'] };
         }
       }, now);

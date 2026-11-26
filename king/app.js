@@ -758,13 +758,13 @@ html.unslop:not([data-ui]) :is(.kg-pp.in, .kg-pp.pop) { animation: none; }
     paintRoom();
   }
   // Чат на сервере (st.chat: бой не закрывается от «все в комнате высказались») включён, только пока его слушает вкладка
-  // ведущего. Обновили или закрыли вкладку, бои решает ведущий — выключаем, иначе бои закрывались бы только таймером.
-  // Вкладка с подключённым чатом отмечается в localStorage (TWL, раз в 20 с, отметке верят 90 с): другая вкладка ведущего
-  // без чата её видит и чат не выключает. Выключает вкладка без чата один раз за открытие страницы: вкладку ведущего в другом
-  // браузере, которая чат слушает, не видно — она включит его снова (twSync), и они не будут перещёлкивать друг друга
-  const TWL = 'casualhub.king.twlive.v1', twTab = Math.random().toString(36).slice(2), TW_FRESH = 90000;
+  // ведущего: она включает его и раз в минуту подтверждает (twSync), замолчавшую сервер через пару минут перестаёт ждать
+  // (chatOn в king.js) — флаг не залипает, и другим вкладкам ведущего снимать его не нужно. Закрыли или обновили вкладку,
+  // бои решает ведущий — выключаем сразу. Вкладка с подключённым чатом отмечается в localStorage (TWL, раз в 20 с, отметке
+  // верят 90 с): закрытие одной из двух вкладок с чатом в этом браузере его не выключает
+  const TWL = 'casualhub.king.twlive.v1', twTab = Math.random().toString(36).slice(2), TW_FRESH = 90000, TW_SAY = 60000;
   const OBS = new URLSearchParams(location.search).has('obs'); // вид для OBS — только показывает бой, чат не трогает
-  let twBusy = false, twCleared = false, twBeat = 0;
+  let twBusy = false, twSaid = 0, twBeat = 0;
   function twMark(on) {
     try {
       const m = read(TWL) || {}, t = Date.now();
@@ -782,10 +782,9 @@ html.unslop:not([data-ui]) :is(.kg-pp.in, .kg-pp.pop) { animation: none; }
   function twSync() {
     if (!R || !R.room.own || OBS || twBusy) return;
     const st = R.state;
-    if (tw) {
-      if (st.mode !== 'vote') { twOff(); return; } // голоса чата нужны только голосованию — чат отключается
-      if (!st.chat && st.status !== 'done') twSend(true);
-    } else if (st.chat && !twCleared && !twElsewhere()) { twCleared = true; twSend(false); }
+    if (!tw) return;
+    if (st.mode !== 'vote') { twOff(); return; } // голоса чата нужны только голосованию — чат отключается
+    if (st.status !== 'done' && (!st.chat || Date.now() - twSaid >= TW_SAY)) { twSaid = Date.now(); twSend(true); }
   }
   // вкладку закрыли или обновили, а чат был подключён: сервер узнает сразу (keepalive — запрос дойдёт и после закрытия)
   addEventListener('pagehide', () => {
@@ -1099,7 +1098,8 @@ html.unslop:not([data-ui]) :is(.kg-pp.in, .kg-pp.pop) { animation: none; }
   }
   async function poll(soon) {
     clearTimeout(pollT);
-    if (!document.hidden || soon) {
+    // с подключённым чатом — и в фоне: голоса из чата уходят с номером боя, а сервер должен знать, что чат слушают
+    if (!document.hidden || soon || tw) {
       const seq = actSeq;
       try {
         const r = await api('GET', `/king/room?c=${code}&pv=${encodeURIComponent(pv)}`, null, etag);

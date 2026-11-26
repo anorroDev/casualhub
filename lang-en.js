@@ -1834,6 +1834,8 @@ window.CasualLangPack = {
 "Тексты и смысл":"Lyrics and meaning",
 "Текущий пароль":"Current password",
 "Текущий пароль не подходит":"The current password is wrong",
+"Страница устарела: обнови её и впиши текущий пароль":"This page is out of date: refresh it and enter your current password",
+"Сайт обновился — обнови страницу, тогда колесо увидят все":"The site has been updated — refresh the page so everyone sees the wheel",
 "Впиши текущий пароль и 6 цифр, которые показывает приложение для «CasualHub":"Enter your current password and the 6 digits the app shows for “CasualHub",
 "Сменишь пароль — вход по коду тоже выключится":"If you change your password, code login turns off too",
 "Чтобы включить защиту, впиши текущий пароль":"To turn on protection, enter your current password",

@@ -539,20 +539,38 @@
   st.food = foodOf(typeof st.food === 'string' ? st.food : 'kibble').id;
   // рассыпанное (миска упала вверх дном): кучки [{ n — порций, food, seed — как лежат зёрна }]
   const newSeed = () => 1 + Math.floor(Math.random() * 2e9);
-  st.spill = (Array.isArray(st.spill) ? st.spill : st.spill ? [st.spill] : []).filter((q) => q && +q.n > 0).slice(-3)
+  const normSpill = (list) => (Array.isArray(list) ? list : list ? [list] : []).filter((q) => q && +q.n > 0).slice(-3)
     .map((q) => ({ n: Math.min(3, Math.max(1, Math.round(+q.n))), food: foodOf(q.food).id, seed: (+q.seed >>> 0) || newSeed() }));
+  // кучки мимо лотка: x — где лежит, id — чтобы вкладки узнавали одну и ту же кучку
+  const normPoos = (list) => (Array.isArray(list) ? list : []).filter((q) => q && Number.isFinite(+q.x)).slice(-3).map((q) => ({ x: +q.x, id: (+q.id >>> 0) || newSeed() }));
+  st.spill = normSpill(st.spill);
   // зерно порции в миске: насыпали — новое, и корм лежит по-другому
   st.seed = (+st.seed >>> 0) || newSeed();
   // лоток: где стоит на полу (x; null — справа), сколько в нём кучек (n). Кучки рядом с лотком на полу (сделал мимо,
   // потому что лоток был грязный) — poos [{ x }]. pooAt — когда захочет в лоток (после еды)
   st.box = { x: st.box && Number.isFinite(+st.box.x) && st.box.x !== null ? +st.box.x : null, n: Math.max(0, Math.min(4, Math.round(+(st.box && st.box.n) || 0))) };
-  st.poos = (Array.isArray(st.poos) ? st.poos : []).filter((q) => q && Number.isFinite(+q.x)).slice(-3).map((q) => ({ x: +q.x }));
+  st.poos = normPoos(st.poos);
   st.pooAt = +st.pooAt || 0;
   // злость 0–100 (много кликов, бросили, грязный лоток): проходит сама, пока сайт закрыт — тоже (1 пункт за 5 секунд)
   st.anger = Math.max(0, Math.min(100, (+st.anger || 0) - (st.at ? Math.max(0, now0 - st.at) / 5000 : 0)));
   st.at = now0;
   coat = coatOf(st.skin); outfit = outfitOf(st.outfit); bowlSkin = bowlOf(st.bowlSkin); boxSkin = boxSkinOf(st.boxSkin);
-  const save = () => { st.at = Date.now(); write(st); };
+  // эти поля пишутся всегда: по ним другая вкладка отличает запись этой версии от записи старой (там их нет совсем)
+  st.bowlSkin = bowlSkin.id; st.boxSkin = boxSkin.id; st.flip = !!st.flip;
+  // рассыпанное и кучки мимо лотка пишет только та вкладка, которая их меняла (dirty): остальные оставляют в записи то,
+  // что там лежит, — вкладка, пропустившая чужую запись (спала, закрывается), не сотрёт корм и кучки своей старой копией
+  const dirty = { spill: false, poos: false };
+  const save = () => {
+    st.at = Date.now();
+    const out = { ...st };
+    if (!dirty.spill || !dirty.poos) {
+      const cur = read();
+      if (!dirty.spill && Array.isArray(cur.spill)) out.spill = cur.spill;
+      if (!dirty.poos && Array.isArray(cur.poos)) out.poos = cur.poos;
+    }
+    dirty.spill = dirty.poos = false;
+    write(out);
+  };
 
   let cat, body, bubble, bowl, bowlIn, box, boxIn, boxFront, alive = false, raf = 0;
   // положение: x — левый край, y — линия лап (в координатах окна). surf — блок, на котором стоит (null — пол)
@@ -767,9 +785,7 @@
     Object.assign(bw, { mode: 'fall', s: null, vx, vy, av: calm ? 0 : av, rot: 0, by: why });
     if (calm) {
       // «меньше движения»: без полёта — сразу туда, куда упала бы
-      const cx = bw.x + bw.w / 2;
-      const p = platforms().filter((q) => cx >= (q.seat ? seatLeft(q.r) : q.r.left) && cx <= q.r.right && q.top >= bw.y - 2).sort((a, b) => a.top - b.top)[0];
-      bowlLand(p ? p.el : null);
+      bowlLand(below(bw));
     }
   }
   function bowlLand(s) {
@@ -808,7 +824,13 @@
     paintPile(q);
     keepSpills();
   }
-  const keepSpills = () => { st.spill = sps.map((q) => ({ n: q.n, food: q.food, seed: q.seed })); };
+  const keepSpills = () => { st.spill = sps.map((q) => ({ n: q.n, food: q.food, seed: q.seed })); dirty.spill = true; };
+  // куда вещь встанет, если упадёт отсюда: ближний блок под ней или пол (null) — для «меньше движения», без полёта
+  function below(o) {
+    const cx = o.x + o.w / 2;
+    const p = platforms().filter((q) => cx >= (q.seat ? seatLeft(q.r) : q.r.left) && cx <= q.r.right && q.top >= o.y - 2).sort((a, b) => a.top - b.top)[0];
+    return p ? p.el : null;
+  }
   function drawSpill(q) { const s = sprite(spillRows(q.n, foodOf(q.food), q.seed), K); q.el.innerHTML = s.svg; q.w = s.cw; q.h = s.ch; }
   function paintPile(q) { q.el.style.transform = `translate(${Math.round(q.x)}px, ${Math.round(q.y - q.h)}px)`; }
   function dropSpill(q) { q.el.remove(); sps = sps.filter((v) => v !== q); keepSpills(); }
@@ -819,8 +841,10 @@
       q.vy = Math.min(1700, q.vy + 2200 * dt); q.y += q.vy * dt;
       const hit = hitBelow(q, prev);
       if (hit !== undefined) { q.mode = 'rest'; q.vy = 0; setOn(q, hit, q.x); }
-    } else if (q.s && !surfaceOk(q.s)) { q.mode = 'fall'; q.s = null; q.vy = 0; }
-    else onSurf(q);
+    } else if (q.s && !surfaceOk(q.s)) {
+      // «меньше движения»: без полёта — сразу туда, куда упала бы (как миска)
+      if (calm) setOn(q, below(q), q.x); else { q.mode = 'fall'; q.s = null; q.vy = 0; }
+    } else onSurf(q);
     paintPile(q);
   }
   // миска, лоток и кучки — каждый кадр: полёт, скольжение, держатся своего блока (уехал при прокрутке — падают)
@@ -944,17 +968,13 @@
     boxSpr = null; drawBox();
     setOn(lt, null, st.box.x != null ? st.box.x : innerWidth * 0.72);
     poos.forEach((q) => q.el.remove()); poos = [];
-    st.poos.forEach((p) => makePoo(null, p.x));
+    st.poos.forEach((p) => makePoo(null, p.x, p.id));
     paintBox();
   }
   function hopBox() { if (!box) return; box.classList.remove('add'); void box.offsetWidth; box.classList.add('add'); }
   function boxFall(why, fvx = 0, fvy = 0) {
     Object.assign(lt, { mode: 'fall', s: null, vx: fvx, vy: fvy, by: why });
-    if (calm) {
-      const cx = lt.x + lt.w / 2;
-      const p = platforms().filter((q) => cx >= (q.seat ? seatLeft(q.r) : q.r.left) && cx <= q.r.right && q.top >= lt.y - 2).sort((u, v) => u.top - v.top)[0];
-      boxLand(p ? p.el : null);
-    }
+    if (calm) boxLand(below(lt));
   }
   function boxLand(s) {
     Object.assign(lt, { mode: 'rest', vx: 0, vy: 0, tilt: 0 });
@@ -983,8 +1003,8 @@
     if (alive && !grumpy() && !BUSY.includes(mode) && Math.abs(lt.x + lt.w / 2 - (x + size.w / 2)) < 420) hearts(2);
   }
   // кучка мимо лотка (лоток был грязный): на блоке s (или полу) в точке px; клик — убрать
-  function makePoo(s, px) {
-    const q = { x: 0, y: 0, s: null, ox: 0, w: 0, h: 0, mode: 'rest', vy: 0, el: document.createElement('button') };
+  function makePoo(s, px, id = newSeed()) {
+    const q = { id, x: 0, y: 0, s: null, ox: 0, w: 0, h: 0, mode: 'rest', vy: 0, el: document.createElement('button') };
     q.el.type = 'button'; q.el.className = 'vy-poo'; q.el.dataset.noPress = '';
     q.el.setAttribute('aria-label', 'Убрать за Васяном');
     const sp = sprite(pooRows(), K);
@@ -997,7 +1017,7 @@
     setOn(q, s, px);
     paintPile(q);
   }
-  const keepPoos = () => { st.poos = poos.map((q) => ({ x: Math.round(q.x) })); };
+  const keepPoos = () => { st.poos = poos.map((q) => ({ x: Math.round(q.x), id: q.id })); dirty.poos = true; };
 
   // ---------- корм и ласка ----------
   function feed() {
@@ -1189,8 +1209,16 @@
   function goToThing(o, act, d) {
     if (!goal || goal.o !== o || goal.act !== act) goal = { o, act, d, tries: 0, side: 0 };
     if (o.s !== surf) {
-      // не добраться (или «меньше движения»: по карточкам не прыгает) — бросает
-      if (calm || ++goal.tries > 6) { goal = null; wantEat = false; return false; }
+      // не добраться — бросает
+      if (++goal.tries > 6) { goal = null; wantEat = false; return false; }
+      // «меньше движения»: не прыгает и не летит — сразу оказывается на том же блоке (или на полу), дальше пешком
+      if (calm) {
+        surf = o.s; jump = null; prep = null; climb = null; after = null;
+        const [a, b] = bounds(surf);
+        x = clamp(o.x + o.w / 2 - size.w / 2, a, b); y = surfTop(surf);
+        mode = 'goEat';
+        return true;
+      }
       routeTo(o.s, o.x + o.w / 2 - size.w / 2);
       after = 'goal';
       return true;
@@ -1844,39 +1872,66 @@
       if (e.key !== null) return;
     }
     if (e.key !== KEY || !e.newValue) return;
-    try {
-      const v = JSON.parse(e.newValue) || {};
-      const food = typeof v.food === 'string' ? foodOf(v.food).id : st.food; // старая вкладка пишет в food число — его не трогаем
-      if ((v.skin || 'classic') !== coat.id || (v.outfit || 'none') !== outfit.id || food !== st.food || bowlOf(v.bowlSkin).id !== bowlSkin.id || boxSkinOf(v.boxSkin).id !== boxSkin.id) {
-        st.skin = v.skin; st.outfit = v.outfit; st.food = food; st.bowlSkin = v.bowlSkin; st.boxSkin = v.boxSkin;
-        coat = coatOf(v.skin); outfit = outfitOf(v.outfit); bowlSkin = bowlOf(v.bowlSkin); boxSkin = boxSkinOf(v.boxSkin); boxSpr = null; drawBox(); applyLook();
-      }
-      // голод, злость, когда в лоток, сколько погладили — как там
-      for (const k of ['hunger', 'anger', 'pooAt', 'pets']) if (Number.isFinite(+v[k])) st[k] = +v[k];
-      // насыпали, перевернули, убрали — здесь та же миска и тот же лоток (место у каждой вкладки своё)
-      const portions = Math.max(0, Math.min(3, +v.bowl || 0));
-      if (portions !== st.bowl || !!v.flip !== !!st.flip || (+v.seed >>> 0) !== st.seed) {
-        st.bowl = portions; st.flip = !!v.flip; st.seed = (+v.seed >>> 0) || st.seed;
-        if (bw.mode === 'rest' || bw.mode === 'slide') { bw.flip = st.flip; drawBowl(); }
-      }
-      const n = v.box ? Math.max(0, Math.min(4, Math.round(+v.box.n || 0))) : st.box.n;
-      if (n !== st.box.n) { st.box.n = n; drawBox(); }
-      // рассыпанное и кучки мимо лотка: съели или убрали там — меньше и здесь
-      const sp = Array.isArray(v.spill) ? v.spill : [];
-      if (JSON.stringify(sp.map((q) => [q.n, q.food])) !== JSON.stringify(sps.map((q) => [q.n, q.food]))) {
-        sps.forEach((q, i) => { const w = sp[i]; if (!w || !(+w.n > 0)) { q.el.remove(); q.n = 0; } else if (+w.n !== q.n) { q.n = Math.min(3, +w.n); drawSpill(q); } });
-        sps = sps.filter((q) => q.n > 0); keepSpills();
-      }
-      const pp = Array.isArray(v.poos) ? v.poos : [];
-      if (pp.length < poos.length) { poos.splice(pp.length).forEach((q) => q.el.remove()); keepPoos(); }
-      // выключили в Настройках другой вкладки
-      if (!!v.off !== !!st.off) {
-        st.off = !!v.off;
-        if (st.off) unmount(); else if (own()) mount();
-        document.querySelectorAll('[data-vasyan]').forEach((c) => { c.checked = !st.off; });
-      }
-    } catch (er) {}
+    try { adopt(JSON.parse(e.newValue) || {}); } catch (er) {}
   });
+  // запись другой вкладки (v) — сюда. Берётся только то, что в записи есть: вкладка со старым vasyan.js пишет состояние
+  // без миски, лотка, рассыпанного и кучек — эти поля от её записи не меняются
+  function adopt(v) {
+    const was = { ...dirty }; // то, что здесь достроится и уберётся по чужой записи, — не «меняла эта вкладка»
+    const food = typeof v.food === 'string' ? foodOf(v.food).id : st.food; // старая вкладка пишет в food число — его не трогаем
+    const bs = 'bowlSkin' in v ? bowlOf(v.bowlSkin).id : bowlSkin.id, xs = 'boxSkin' in v ? boxSkinOf(v.boxSkin).id : boxSkin.id;
+    if ((v.skin || 'classic') !== coat.id || (v.outfit || 'none') !== outfit.id || food !== st.food || bs !== bowlSkin.id || xs !== boxSkin.id) {
+      st.skin = v.skin; st.outfit = v.outfit; st.food = food; st.bowlSkin = bs; st.boxSkin = xs;
+      coat = coatOf(v.skin); outfit = outfitOf(v.outfit); bowlSkin = bowlOf(bs); boxSkin = boxSkinOf(xs); boxSpr = null; drawBox(); applyLook();
+    }
+    // голод, злость, когда в лоток, сколько погладили — как там
+    for (const k of ['hunger', 'anger', 'pooAt', 'pets']) if (Number.isFinite(+v[k])) st[k] = +v[k];
+    // насыпали, перевернули, убрали — здесь та же миска и тот же лоток
+    const portions = Math.max(0, Math.min(3, +v.bowl || 0)), flip = 'flip' in v ? !!v.flip : !!st.flip;
+    if (portions !== st.bowl || flip !== !!st.flip || (+v.seed >>> 0) !== st.seed) {
+      st.bowl = portions; st.flip = flip; st.seed = (+v.seed >>> 0) || st.seed;
+      if (bw.mode === 'rest' || bw.mode === 'slide') { bw.flip = st.flip; drawBowl(); }
+    }
+    const n = v.box ? Math.max(0, Math.min(4, Math.round(+v.box.n || 0))) : st.box.n;
+    if (n !== st.box.n) { st.box.n = n; drawBox(); }
+    // где миска и лоток стоят на полу — как там; здесь вещь переезжает, только если сама стоит на полу в покое
+    if (v.bx != null && Number.isFinite(+v.bx) && +v.bx !== st.bx) { st.bx = +v.bx; if (alive && bw.mode === 'rest' && !bw.s) setOn(bw, null, st.bx); }
+    if (v.box && v.box.x != null && Number.isFinite(+v.box.x) && +v.box.x !== st.box.x) { st.box.x = +v.box.x; if (alive && lt.mode === 'rest' && !lt.s) setOn(lt, null, st.box.x); }
+    // рассыпанное (кучку узнаём по зерну) и кучки мимо лотка (по id): убрали или съели там — нет и здесь, появились
+    // там — появляются и здесь (у миски, у лотка на полу). Васяна на странице нет — просто запоминаем
+    if (Array.isArray(v.spill)) {
+      const sp = normSpill(v.spill);
+      if (!alive) st.spill = sp;
+      else {
+        for (const q of [...sps]) {
+          const w = sp.find((u) => u.seed === q.seed);
+          if (!w) { q.el.remove(); q.n = 0; sps = sps.filter((u) => u !== q); } else if (w.n !== q.n || w.food !== q.food) { q.n = w.n; q.food = w.food; drawSpill(q); }
+        }
+        for (const w of sp) if (!sps.some((q) => q.seed === w.seed)) makeSpill(w.n, w.food, w.seed);
+        keepSpills();
+      }
+    }
+    if (Array.isArray(v.poos)) {
+      const pp = normPoos(v.poos.filter((q) => q && (+q.id >>> 0)));
+      if (!alive) st.poos = pp;
+      else {
+        for (const q of [...poos]) if (!pp.some((u) => u.id === q.id)) { q.el.remove(); poos = poos.filter((u) => u !== q); }
+        for (const w of pp) if (!poos.some((q) => q.id === w.id)) makePoo(null, w.x, w.id);
+        keepPoos();
+      }
+    }
+    Object.assign(dirty, was);
+    // выключили в Настройках другой вкладки
+    if (!!v.off !== !!st.off) {
+      st.off = !!v.off;
+      if (st.off) unmount(); else if (own()) mount();
+      document.querySelectorAll('[data-vasyan]').forEach((c) => { c.checked = !st.off; });
+    }
+  }
+  // вкладка могла пропустить чужие записи (спала в фоне, вернулась из кэша «назад»): снова на виду — сверить с тем, что записано
+  const resync = () => { try { const raw = localStorage.getItem(KEY); if (raw) adopt(JSON.parse(raw) || {}); } catch (er) {} };
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) resync(); });
+  addEventListener('pageshow', (e) => { if (e.persisted) resync(); });
 
   // ---------- включение и выключение ----------
   // хозяин и вошёл в аккаунт: флаг ставит levels-ui.js по ответу /levels/me

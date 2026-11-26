@@ -90,8 +90,11 @@ test('защита: включить приложение-аутентифика
   assert.equal(start.status, 200);
   const code = totp(start.data.secret);
   // укравший сеанс пароля не знает — подключить своё приложение не выйдет
-  let r = await s.call('POST', '/2fa/enable', { token: u.token, body: { code } });
+  let r = await s.call('POST', '/2fa/enable', { token: u.token, body: { code, password: '' } });
   assert.deepEqual([r.status, r.data.error], [403, 'Чтобы включить защиту, впиши текущий пароль.']);
+  // вкладка со старой страницей Настроек пароля не шлёт вовсе: ей — «обнови», и попытка не тратится
+  r = await s.call('POST', '/2fa/enable', { token: u.token, body: { code } });
+  assert.deepEqual([r.status, r.data.error], [409, 'Страница устарела: обнови её и впиши текущий пароль.']);
   r = await s.call('POST', '/2fa/enable', { token: u.token, body: { code, password: 'не тот пароль' } });
   assert.deepEqual([r.status, r.data.error], [403, 'Текущий пароль не подходит.']);
   assert.equal(s.one('SELECT totp FROM users WHERE id = ?', u.id).totp, null);
@@ -101,8 +104,10 @@ test('защита: включить приложение-аутентифика
   const backup = r.data.codes;
   assert.equal(backup.length, 10);
   // вход по коду без пароля: включить — тоже с паролем, и неверный пароль запасной код не тратит
-  r = await s.call('POST', '/2fa/free', { token: u.token, body: { on: true, code: backup[0] } });
+  r = await s.call('POST', '/2fa/free', { token: u.token, body: { on: true, code: backup[0], password: '' } });
   assert.deepEqual([r.status, r.data.error], [403, 'Чтобы включить вход по коду, впиши текущий пароль.']);
+  r = await s.call('POST', '/2fa/free', { token: u.token, body: { on: true, code: backup[0] } });
+  assert.deepEqual([r.status, r.data.error], [409, 'Страница устарела: обнови её и впиши текущий пароль.']);
   r = await s.call('POST', '/2fa/free', { token: u.token, body: { on: true, code: backup[0], password: u.pass } });
   assert.equal(r.status, 200);
   assert.equal(r.data.user.codeLogin, true);
@@ -191,10 +196,15 @@ test('полка: время из будущего не держит оценк�
   const s = await site();
   const u = await s.join('clock');
   const now = Date.now(), future = iso(now + 30 * 864e5);
-  assert.equal((await s.shelf(u, [{ id: 'r1', name: 'Спешащие часы', createdAt: future, updatedAt: future }])).status, 200);
+  const put = await s.shelf(u, [{ id: 'r1', name: 'Спешащие часы', createdAt: future, updatedAt: future }]);
+  assert.equal(put.status, 200);
   const stored = () => JSON.parse(s.one('SELECT data FROM shelves WHERE user_id = ?', u.id).data).ratings;
   const r1 = stored().find((r) => r.id === 'r1');
   assert.ok(+new Date(r1.updatedAt) <= Date.now() && +new Date(r1.createdAt) <= Date.now(), 'время не позже, чем сейчас');
+  // страница узнаёт часы сервера — и после отправки, и когда забирает свою полку: по ним она обрезает свою копию (clampFuture)
+  assert.equal(+new Date(r1.updatedAt), put.data.now, 'обрезано ровно до now из ответа');
+  const own = await s.call('GET', '/shelf/' + u.id, { token: u.token });
+  assert.ok(Math.abs(own.data.now - Date.now()) < 60e3);
   assert.equal((await s.shelf(u, [], [{ id: 'r1', at: Date.now() + 1 }])).status, 200);
   assert.equal(stored().length, 0, 'удаление с другого устройства прошло');
   // оценка, записанная из будущего до этой проверки: правка с верными часами всё равно проходит
