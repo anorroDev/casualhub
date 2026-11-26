@@ -57,10 +57,28 @@
     btn.classList.toggle('done', !!(S && S.done));
   }
   const nf = (v) => String(v);
+  // обложка: ссылка (из поиска) — сразу; своё загруженное фото друга — из его аккаунта, уменьшенной копией (pics),
+  // как в профиле друга. Пока не пришло или фото нет — буква названия
+  const pics = new Map(); // «друг|оценка» → data URL, '' (фото нет) или промис, пока грузится
+  const picKey = (x) => x.friend.id + '|' + x.rid;
   const cover = (x) => {
     const adult = U.nsfw ? U.nsfw.attr(x.adult) : '';
-    return `<span class="gs-cov"${adult}>${x.photo ? `<img src="${esc(x.photo)}" alt="" decoding="async" referrerpolicy="no-referrer">` : esc(String(x.name || '?').trim().charAt(0).toUpperCase())}</span>`;
+    const src = x.photo || (typeof pics.get(picKey(x)) === 'string' ? pics.get(picKey(x)) : '');
+    return `<span class="gs-cov"${adult}${x.photo ? '' : ` data-gs-pic="${esc(picKey(x))}"`}>${src ? `<img src="${esc(src)}" alt="" decoding="async" referrerpolicy="no-referrer">` : esc(String(x.name || '?').trim().charAt(0).toUpperCase())}</span>`;
   };
+  function loadPics() {
+    if (!S || !S.items) return;
+    for (const x of S.items) {
+      const k = picKey(x);
+      if (x.photo || pics.has(k)) continue;
+      pics.set(k, api(`/photo/${encodeURIComponent(x.friend.id)}/${encodeURIComponent(x.rid)}?thumb=1`)
+        .then((d) => { pics.set(k, d && typeof d.data === 'string' && d.data.startsWith('data:image/') ? d.data : ''); }, () => pics.set(k, ''))
+        .then(() => {
+          const v = pics.get(k), el = ov && [...ov.querySelectorAll('[data-gs-pic]')].find((e) => e.dataset.gsPic === k);
+          if (v && el) el.innerHTML = `<img src="${esc(v)}" alt="" decoding="async">`;
+        }));
+    }
+  }
   const who = (x) => esc(x.friend.username || (x.friend.handle ? '@' + x.friend.handle : ''));
   function paint() {
     if (!ov) return;
@@ -83,6 +101,7 @@
       <ol class="gs-list">${rows}</ol>
       ${S.done ? '' : `<button type="button" class="gs-go" data-gs-go${busy ? ' disabled' : ''}>${T('Проверить')}</button>`}
       ${msg ? `<p class="rd-msg err">${esc(msg)}</p>` : ''}${res}${board}`;
+    loadPics();
   }
   async function load() {
     if (!token()) { S = null; mountBtn(); return; }

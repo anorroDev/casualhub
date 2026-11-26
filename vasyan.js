@@ -484,6 +484,14 @@
 /* рассыпанная еда — под миской и котиком */
 .vy-spill { position: fixed; left: 0; top: 0; z-index: 39; line-height: 0; cursor: grab; touch-action: none; -webkit-tap-highlight-color: transparent; }
 .vy-spill.drag { cursor: grabbing; z-index: 60; }
+/* кусок еды маленький: хватать можно и рядом с ним; текст под ним не выделяется */
+.vy-spill { -webkit-user-select: none; user-select: none; }
+.vy-spill::before { content: ""; position: absolute; inset: -9px -7px -5px; }
+/* отношения — пять пиксельных сердечек над котиком (по 20 очков, половинка — 10); пока он говорит, летит или в руке — не видно */
+.vy-bond { position: absolute; left: 50%; bottom: calc(100% + 5px); transform: translateX(-50%); display: flex; gap: 2px; pointer-events: none; line-height: 0; transition: opacity .2s; }
+.vy-bond svg { display: block; }
+.vy-cat:has(> .vy-bub) .vy-bond, .vy-cat.drag .vy-bond { opacity: 0; }
+@media (prefers-reduced-motion: reduce) { .vy-bond { transition: none; } }
 .vy-spill svg { display: block; }
 /* лоток — за котиком; пока он в лотке, поверх него — только передняя стенка (.vy-box-front) */
 .vy-box, .vy-poo { position: fixed; left: 0; top: 0; z-index: 39; padding: 0; margin: 0; border: 0; background: none; line-height: 0; -webkit-tap-highlight-color: transparent; }
@@ -548,8 +556,13 @@
   st.food = foodOf(typeof st.food === 'string' ? st.food : 'kibble').id;
   // рассыпанное (миска упала вверх дном): кучки [{ n — порций, food, seed — как лежат зёрна }]
   const newSeed = () => 1 + Math.floor(Math.random() * 2e9);
-  const normSpill = (list) => (Array.isArray(list) ? list : list ? [list] : []).filter((q) => q && +q.n > 0).slice(-3)
-    .map((q) => ({ n: Math.min(3, Math.max(1, Math.round(+q.n))), food: foodOf(q.food).id, seed: (+q.seed >>> 0) || newSeed() }));
+  // каждый кусок еды — отдельная кучка (n: 1): её тащат, бросают и съедают отдельно. Кучки прежних версий с n 2–3
+  // разбираются на куски (зерно следующего — от первого, одинаково во всех вкладках). Не больше MAX_PILES
+  const MAX_PILES = 8;
+  const normSpill = (list) => (Array.isArray(list) ? list : list ? [list] : []).filter((q) => q && +q.n > 0)
+    .flatMap((q) => { const n = Math.min(3, Math.max(1, Math.round(+q.n))), seed = (+q.seed >>> 0) || newSeed(), food = foodOf(q.food).id;
+      return Array.from({ length: n }, (_, i) => ({ n: 1, food, seed: i ? ((seed + i * 7919) >>> 0) || newSeed() : seed })); })
+    .slice(-MAX_PILES);
   // кучки мимо лотка: x — где лежит, id — чтобы вкладки узнавали одну и ту же кучку
   const normPoos = (list) => (Array.isArray(list) ? list : []).filter((q) => q && Number.isFinite(+q.x)).slice(-3).map((q) => ({ x: +q.x, id: (+q.id >>> 0) || newSeed() }));
   st.spill = normSpill(st.spill);
@@ -583,7 +596,7 @@
     write(out);
   };
 
-  let cat, body, bubble, bowl, bowlIn, box, boxIn, boxFront, alive = false, raf = 0;
+  let cat, body, bubble, bowl, bowlIn, box, boxIn, boxFront, bondEl = null, alive = false, raf = 0;
   // положение: x — левый край, y — линия лап (в координатах окна). surf — блок, на котором стоит (null — пол)
   let x = 120, y = 0, vy = 0, dir = 1, mode = 'sit', until = 0, target = 0, frame = 0, lastFrame = 0, saveT = 0, floor = 0, lastT = 0;
   let surf = null, jump = null, after = null, prep = null, climb = null, thudT = 0, size = { w: 57, h: 39 };
@@ -629,6 +642,11 @@
     bondLabel(); // подсказка при наведении — как он к тебе относится
     cat.innerHTML = '<span class="vy-body"></span>';
     body = cat.firstChild;
+    bondEl = document.createElement('span');
+    bondEl.className = 'vy-bond';
+    bondEl.setAttribute('aria-hidden', 'true');
+    cat.appendChild(bondEl);
+    drawBond();
     cat.addEventListener('pointerdown', down);
     cat.addEventListener('click', (e) => { e.preventDefault(); if (dragged) { dragged = false; return; } pet(); });
     // любит — встречает сердечком, когда открываешь страницу
@@ -648,7 +666,7 @@
     // в st.spill и st.poos остаётся: включат снова — рассыпанное у миски, кучки у лотка
     sps.forEach((q) => q.el.remove()); sps = [];
     poos.forEach((q) => q.el.remove()); poos = [];
-    cat = bowl = bowlIn = box = boxIn = boxFront = bubble = bowlSpr = boxSpr = null; roll = null; goal = null;
+    cat = bowl = bowlIn = box = boxIn = boxFront = bubble = bowlSpr = boxSpr = bondEl = null; roll = null; goal = null;
   }
 
   // ---------- пол и блоки ----------
@@ -705,7 +723,17 @@
     return hit && (el === hit || el.contains(hit)) ? { el, r, top, seat } : null;
   }
   // все такие блоки; у вложенных с общим верхним краем остаётся внешний (первый по порядку)
+  // плитки ищутся по всей странице — дорого: падает несколько вещей сразу (прокрутка уронила куски еды) — каждая
+  // спрашивала заново, и сайт подлагивал. Ответ живёт 32 мс (два кадра)
+  let platC = null, platAt = -1e9;
   function platforms() {
+    const now = performance.now();
+    if (platC && now - platAt < 32) return platC;
+    platAt = now;
+    platC = platScan();
+    return platC;
+  }
+  function platScan() {
     const fy = floorY(), out = [];
     for (const el of document.querySelectorAll(PLAT)) {
       const p = platOf(el, fy);
@@ -781,9 +809,9 @@
     Object.assign(bw, { mode: 'rest', flip: !!st.flip, vx: 0, vy: 0, rot: 0, av: 0, tilt: 0 });
     bowlSpr = null; drawBowl();
     setOn(bw, null, Number.isFinite(+st.bx) ? +st.bx : 10);
-    // рассыпанное из прошлого захода — одной кучкой у миски (самой большой еды)
+    // рассыпанное из прошлого захода — кусками у миски, рядком
     sps.forEach((q) => q.el.remove()); sps = [];
-    if (st.spill.length) { const big = st.spill.reduce((a, q) => (q.n > a.n ? q : a)); makeSpill(Math.min(3, st.spill.reduce((a, q) => a + q.n, 0)), big.food, big.seed); }
+    st.spill.forEach((q, k) => makeSpill(1, q.food, q.seed, k));
     paintBowl();
   }
   function hopBowl() { if (!bowl) return; bowl.classList.remove('add'); void bowl.offsetWidth; bowl.classList.add('add'); }
@@ -821,23 +849,26 @@
   function spillOut() {
     const n = st.bowl;
     st.bowl = 0;
-    makeSpill(n, st.food);
+    for (let i = 0; i < n; i++) makeSpill(1, st.food, undefined, i); // каждая порция — свой кусок, рядком
     save();
   }
-  // кучка рассыпанного — рядом с миской, со стороны, где на блоке больше места; seed — как легли кусочки
-  function makeSpill(n, food, seed = newSeed()) {
+  // кусок еды — рядом с миской, со стороны, где на блоке больше места; k — какой по счёту (кладутся рядком дальше от
+  // миски); seed — как лёг
+  function makeSpill(n, food, seed = newSeed(), k = 0) {
     const q = { n, food, seed, x: 0, y: 0, s: null, ox: 0, w: 0, h: 0, mode: 'rest', vy: 0, el: document.createElement('span') };
     q.el.className = 'vy-spill';
     q.el.setAttribute('aria-hidden', 'true');
     q.el.dataset.noPress = '';
     // кучку можно утащить и бросить, как миску: где встанет — туда Васян и пойдёт доедать (pileLand)
-    q.el.addEventListener('pointerdown', (e) => tdown(e, q));
+    // preventDefault: иначе нажатие на кусок начинало выделять текст страницы под ним, и кусок не тащился
+    q.el.addEventListener('pointerdown', (e) => { if (e.button > 0) return; e.preventDefault(); tdown(e, q); });
     document.body.insertBefore(q.el, bowl && bowl.parentNode === document.body ? bowl : null);
     sps.push(q);
-    if (sps.length > 3) sps.shift().el.remove();
+    if (sps.length > MAX_PILES) sps.shift().el.remove();
     drawSpill(q);
     const r = bw.s ? bw.s.getBoundingClientRect() : null, lo = r ? r.left : 0, hi = r ? r.right : innerWidth;
-    setOn(q, bw.s, bw.x - lo > hi - (bw.x + bw.w) ? bw.x - q.w + 2 * K : bw.x + bw.w - 2 * K);
+    const step = (q.w + K) * k, left = bw.x - lo > hi - (bw.x + bw.w);
+    setOn(q, bw.s, clamp(left ? bw.x - q.w + 2 * K - step : bw.x + bw.w - 2 * K + step, lo + 2, hi - q.w - 2));
     paintPile(q);
     keepSpills();
   }
@@ -849,7 +880,8 @@
     return p ? p.el : null;
   }
   function drawSpill(q) { const s = sprite(spillRows(q.n, foodOf(q.food), q.seed), K); q.el.innerHTML = s.svg; q.w = s.cw; q.h = s.ch; }
-  function paintPile(q) { q.el.style.transform = `translate(${Math.round(q.x)}px, ${Math.round(q.y - q.h)}px)`; }
+  // место не поменялось — стиль не трогаем: куски лежат, а кадры идут
+  function paintPile(q) { const tf = `translate(${Math.round(q.x)}px, ${Math.round(q.y - q.h)}px)`; if (q.tf !== tf) { q.tf = tf; q.el.style.transform = tf; } }
   function dropSpill(q) { q.el.remove(); sps = sps.filter((v) => v !== q); keepSpills(); }
   // кучку корма отпустили или бросили: летит и падает на блок или пол («меньше движения» — сразу туда)
   function pileFall(q, vx = 0, vy = 0) {
@@ -1053,8 +1085,8 @@
   function feed() {
     // полная — насыпали через край: порция просыпается рядом кучкой (её можно унести куда угодно, Васян найдёт)
     if (st.bowl >= 3) {
-      if (bw.mode !== 'rest' || sps.length >= 3) { say('love'); return; }
-      makeSpill(1, st.food); save(); hopBowl();
+      if (bw.mode !== 'rest' || sps.length >= MAX_PILES) { say('love'); return; }
+      makeSpill(1, st.food, undefined, sps.filter((q) => q.s === bw.s && q.mode === 'rest').length); save(); hopBowl();
       afterBowl('drop');
       return;
     }
@@ -1117,12 +1149,22 @@
   const bondInfo = () => { const lv = bondLv(); return { v: Math.round(st.bond), lv, name: BOND[lv][1], text: BOND[lv][2], next: BOND[lv + 1] ? BOND[lv + 1][0] : null, levels: BOND.map(([min, name]) => ({ min, name })) }; };
   const bondCd = {};
   const bondLabel = () => { if (cat) cat.title = BOND[bondLv()][2]; };
+  const HEARTS = ["<svg viewBox=\"0 0 7 6\" width=\"11\" height=\"9.5\" shape-rendering=\"crispEdges\"><rect x=\"1\" y=\"0\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"2\" y=\"0\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"4\" y=\"0\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"5\" y=\"0\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"0\" y=\"1\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"1\" y=\"1\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"2\" y=\"1\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"3\" y=\"1\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"4\" y=\"1\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"5\" y=\"1\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"6\" y=\"1\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"0\" y=\"2\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"1\" y=\"2\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"2\" y=\"2\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"3\" y=\"2\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"4\" y=\"2\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"5\" y=\"2\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"6\" y=\"2\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"1\" y=\"3\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"2\" y=\"3\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"3\" y=\"3\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"4\" y=\"3\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"5\" y=\"3\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"2\" y=\"4\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"3\" y=\"4\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"4\" y=\"4\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"3\" y=\"5\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/></svg>", "<svg viewBox=\"0 0 7 6\" width=\"11\" height=\"9.5\" shape-rendering=\"crispEdges\"><rect x=\"1\" y=\"0\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"2\" y=\"0\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"4\" y=\"0\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"5\" y=\"0\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"0\" y=\"1\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"1\" y=\"1\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"2\" y=\"1\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"3\" y=\"1\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"4\" y=\"1\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"5\" y=\"1\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"6\" y=\"1\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"0\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"1\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"2\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"3\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"4\" y=\"2\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"5\" y=\"2\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"6\" y=\"2\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"1\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"2\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"3\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"4\" y=\"3\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"5\" y=\"3\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"2\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"3\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"4\" y=\"4\" width=\"1\" height=\"1\" fill=\"#8E93A3\" fill-opacity=\".5\"/><rect x=\"3\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E4553F\"/></svg>", "<svg viewBox=\"0 0 7 6\" width=\"11\" height=\"9.5\" shape-rendering=\"crispEdges\"><rect x=\"1\" y=\"0\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"2\" y=\"0\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"4\" y=\"0\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"5\" y=\"0\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"0\" y=\"1\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"1\" y=\"1\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"2\" y=\"1\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"3\" y=\"1\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"4\" y=\"1\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"5\" y=\"1\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"6\" y=\"1\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"0\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"1\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"2\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"3\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"4\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"5\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"6\" y=\"2\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"1\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"2\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"3\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"4\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"5\" y=\"3\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"2\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"3\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"4\" y=\"4\" width=\"1\" height=\"1\" fill=\"#E4553F\"/><rect x=\"3\" y=\"5\" width=\"1\" height=\"1\" fill=\"#E4553F\"/></svg>"];
+  // сердечки над котиком: пять, каждое — 20 очков отношений, половинка — 10
+  function drawBond() {
+    if (!bondEl) return;
+    const n = Math.round(st.bond / 10);
+    if (bondEl.dataset.n === String(n)) return;
+    bondEl.dataset.n = n;
+    bondEl.innerHTML = [0, 1, 2, 3, 4].map((i) => HEARTS[n >= 2 * i + 2 ? 2 : n === 2 * i + 1 ? 1 : 0]).join('');
+  }
   function bond(n, key, gap = 0) {
     const now = Date.now();
     if (key && gap && now - (bondCd[key] || 0) < gap) return;
     if (key) bondCd[key] = now;
     const was = bondLv();
     st.bond = clamp(Math.round((st.bond + n) * 10) / 10, 0, 100);
+    drawBond();
     const lv = bondLv();
     if (lv === was) return;
     if (cat) floatText(cat, BOND[lv][2]);
@@ -1956,6 +1998,7 @@
     }
     // голод, злость, когда в лоток, сколько погладили — как там
     for (const k of ['hunger', 'anger', 'pooAt', 'pets', 'bond']) if (Number.isFinite(+v[k])) st[k] = +v[k];
+    drawBond(); bondLabel(); // отношения поменялись в другой вкладке — сердечки и подсказка как там
     // насыпали, перевернули, убрали — здесь та же миска и тот же лоток
     const portions = Math.max(0, Math.min(3, +v.bowl || 0)), flip = 'flip' in v ? !!v.flip : !!st.flip;
     if (portions !== st.bowl || flip !== !!st.flip || (+v.seed >>> 0) !== st.seed) {
@@ -1977,7 +2020,7 @@
           const w = sp.find((u) => u.seed === q.seed);
           if (!w) { q.el.remove(); q.n = 0; sps = sps.filter((u) => u !== q); } else if (w.n !== q.n || w.food !== q.food) { q.n = w.n; q.food = w.food; drawSpill(q); }
         }
-        for (const w of sp) if (!sps.some((q) => q.seed === w.seed)) makeSpill(w.n, w.food, w.seed);
+        for (const w of sp) if (!sps.some((q) => q.seed === w.seed)) makeSpill(1, w.food, w.seed, sps.length);
         keepSpills();
       }
     }
