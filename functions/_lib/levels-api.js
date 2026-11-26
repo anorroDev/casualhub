@@ -28,6 +28,7 @@ export const KIND_LABEL = {
   riddle: 'Загадка дня', guess: 'Угадай оценку друга', predict_win: 'Угадал победителя сбора', bingo_win: 'Линия в бинго', king_host: 'Провёл «Царя Горы»', king_vote: 'Голос в «Царе Горы»',
   tier_coop: '«Тир-лист вместе»', tier_coop_host: 'Провёл «Тир-лист вместе»',
   catch_play: '«Васян ловит еду»', catch_record: 'Рекорд в «Васян ловит еду»',
+  pixel: '«Угадай по пикселям»', pixel_fast: '«Угадай по пикселям» с 1-й или 2-й попытки',
 };
 // таблица «За что сколько опыта» в «Прогрессе»: цифры — прямо из RULES, подписи — в levels-ui.js (XP_TABLE)
 const xpRules = () => Object.fromEntries(Object.entries(RULES).filter(([, r]) => !r.given).map(([k, r]) => [k, { xp: r.xp, day: r.day, tail: r.tail, pair: r.pair, ever: r.ever }]));
