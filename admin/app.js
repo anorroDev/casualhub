@@ -599,11 +599,16 @@
           button: 'Сбросить', submit: () => call('POST', '/admin/levels/season/reset') });
         if (ok) levels();
       });
+      // действия «всем» и то, что не вернуть, — только через окно с подтверждением
       const back = $('#lvBack');
       if (back) back.addEventListener('click', async () => {
-        back.disabled = true; msg.textContent = 'Считаю…';
-        try { const r = await call('POST', '/admin/levels/backfill'); msg.textContent = `Готово: ${r.users.length} человек.`; setTimeout(levels, 1200); }
-        catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else { msg.textContent = x.message; back.disabled = false; } }
+        let n = 0;
+        const ok = await dialog({ icon: '⭐', title: 'Начислить опыт за прошлое всем?', who: 'Уровни',
+          text: 'Каждому досчитается опыт за то, что уже сделано на сайте: оценки, отзывы, тир-листы, друзей, реакции, комментарии и сборы лотов. Повторный запуск ничего не удваивает, но снять начисленное можно только вручную: «Опыт ±» у человека.',
+          button: 'Начислить', submit: async () => { n = (await call('POST', '/admin/levels/backfill')).users.length; } });
+        if (!ok) return;
+        msg.textContent = `Готово: ${n} человек.`;
+        setTimeout(levels, 1200);
       });
       // пересчёт опыта: по 10 человек за запрос, пока сервер отдаёт next
       const rcCheck = $('#lvRcCheck'), rcApply = $('#lvRcApply'), rcOut = $('#lvRcOut');
@@ -639,21 +644,42 @@
           button: 'Пересчитать', submit: async () => { const res = await recalc(true); rcShow(res, true); } });
         if (ok) rcApply.disabled = true; // итог остаётся на экране; список людей обновится при следующем открытии вкладки
       });
+      // подарок: «Кому» — всем или @юзернейм, пустое поле — не «всем»
       const send = $('#lvGiftSend');
       if (send) send.addEventListener('click', async () => {
-        const to = $('#lvGiftTo').value.trim();
+        const to = $('#lvGiftTo').value.trim(), all = /^(все[мх]?|all)$/i.test(to);
+        if (!to) { msg.textContent = 'Впиши, кому подарок: «всем» или @юзернейм.'; $('#lvGiftTo').focus(); return; }
+        const gift = { to: all ? 'all' : to, title: $('#lvGiftTitle').value, body: $('#lvGiftBody').value, xp: +$('#lvGiftXp').value || 0, days: +$('#lvGiftDays').value };
+        if (all) {
+          const title = gift.title.trim();
+          if (!title) { msg.textContent = 'Нужен заголовок письма.'; $('#lvGiftTitle').focus(); return; }
+          const ok = await dialog({ icon: '🎁', title: 'Отправить подарок всем?', who: title,
+            text: gift.xp ? `Письмо придёт в «Почту» каждому, и каждый сможет забрать +${gift.xp} опыта. Отозвать можно, но кто уже забрал, оставит опыт себе.` : 'Письмо придёт в «Почту» каждому.',
+            button: 'Отправить всем', submit: () => call('POST', '/admin/levels/gift', gift) });
+          if (ok) levels();
+          return;
+        }
         send.disabled = true;
         try {
-          await call('POST', '/admin/levels/gift', { to: !to || /^все[мх]?$/i.test(to) ? 'all' : to, title: $('#lvGiftTitle').value, body: $('#lvGiftBody').value, xp: +$('#lvGiftXp').value || 0, days: +$('#lvGiftDays').value });
+          await call('POST', '/admin/levels/gift', gift);
           levels();
         } catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else { msg.textContent = x.message; send.disabled = false; } }
       });
       document.querySelectorAll('[data-giftoff]').forEach((b) => b.addEventListener('click', async () => {
-        try { await call('DELETE', '/admin/levels/gift?id=' + encodeURIComponent(b.dataset.giftoff)); levels(); } catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else msg.textContent = x.message; }
+        const g = gifts.items.find((x) => x.id === b.dataset.giftoff);
+        const ok = await dialog({ icon: '🎁', danger: true, title: 'Отозвать подарок?', who: g ? `${g.to} · ${g.title}` : '',
+          text: 'Подарок закроется: кто ещё не забрал, уже не заберёт, а забранное останется.', button: 'Отозвать',
+          submit: () => call('DELETE', '/admin/levels/gift?id=' + encodeURIComponent(b.dataset.giftoff)) });
+        if (ok) levels();
       }));
       bindEvForm(d, msg);
       const offB = $('#lvEvOff');
-      if (offB) offB.addEventListener('click', async () => { try { await call('DELETE', '/admin/levels/event'); levels(); } catch (x) { if (lostAdmin(x) || lostSession(x)) fail(x); else msg.textContent = x.message; } });
+      if (offB) offB.addEventListener('click', async () => {
+        const ok = await dialog({ icon: '⏱', danger: true, title: 'Закончить неделю сейчас?', who: ev ? ev.title : '',
+          text: 'Множитель опыта перестанет действовать сразу у всех, таймер и объявление о неделе пропадут. Уже начисленное останется.',
+          button: 'Закончить', submit: () => call('DELETE', '/admin/levels/event') });
+        if (ok) levels();
+      });
       document.querySelectorAll('[data-lvlog]').forEach((b) => b.addEventListener('click', async () => {
         const box = $('#lvLog-' + b.dataset.lvlog);
         if (!box.hidden) { box.hidden = true; return; }
@@ -920,11 +946,22 @@
       const { announce: a } = await call('GET', '/admin/announce');
       if (stale(my)) return;
       const live = a && a.text && (!a.until || a.until > Date.now());
+      // это место занимают и объявления тематической недели, скидки и сезона (их ставят «Уровни» и магазин): форма их не
+      // подставляет — сохранение выпустило бы их заново, обычным объявлением, — а заменить или убрать их можно только с подтверждением
+      const SYS = {
+        ev: ['Сейчас висит объявление тематической недели: новое заменит его у всех, а сама неделя продолжится.', 'Объявление пропадёт у всех, а сама неделя продолжится.'],
+        sale: ['Сейчас висит объявление о скидке: новое заменит его у всех, а сама скидка продолжится.', 'Объявление пропадёт у всех, а сама скидка продолжится.'],
+        season: ['Сейчас висит объявление о конце сезона: новое заменит его у всех, а сброс званий останется назначенным.', 'Объявление пропадёт у всех, а сброс званий останется назначенным.'],
+      };
+      const sys = live ? SYS[(/^(ev|sale|season)-/.exec(String(a.id || '')) || [])[1] || (a.kind === 'event' ? 'ev' : '')] : null;
+      const own = live && !sys;
+      const shortOf = (x) => x.title || (x.text.length > 90 ? x.text.slice(0, 90) + '…' : x.text);
       sec().innerHTML = `<div class="head"><h2 class="h2">Объявление</h2><span class="label">${live ? 'висит' + (a.until ? ' до ' + when(a.until) : '') : 'нет'}</span></div>
         <p class="muted">Окно при заходе на сайт — у всех, и у гостей. Каждый видит его один раз: закрыл — на этом устройстве и в аккаунте оно больше не появится. Новое объявление покажется снова.</p>
+        ${sys ? `<p class="muted"><b>${esc(sys[0])}</b></p>` : ''}
         <form class="adm-ann" id="admAnn">
-          <input class="adm-in" name="title" maxlength="80" placeholder="Заголовок, например: «Вечером обновление»" value="${live ? esc(a.title || '') : ''}">
-          <textarea class="adm-in" maxlength="600" rows="4" placeholder="Текст объявления. Можно в несколько строк">${live ? esc(a.text) : ''}</textarea>
+          <input class="adm-in" name="title" maxlength="80" placeholder="Заголовок, например: «Вечером обновление»" value="${own ? esc(a.title || '') : ''}">
+          <textarea class="adm-in" maxlength="600" rows="4" placeholder="Текст объявления. Можно в несколько строк">${own ? esc(a.text) : ''}</textarea>
           <div class="adm-ann-row">
             <select class="adm-in" name="kind" aria-label="Вид"><option value="info">📢 Обычное</option><option value="warn">⚠️ Важное</option><option value="party">🎉 Праздник</option></select>
             <span class="adm-span"><span class="muted">Висит</span><input class="adm-in" type="number" name="n" min="1" max="999" value="1" aria-label="Сколько"><select class="adm-in" name="unit" aria-label="Чего"><option value="0">без срока — пока не уберу</option><option value="min">минут</option><option value="hour">часов</option><option value="day" selected>дней</option><option value="week">недель</option></select></span>
@@ -933,30 +970,28 @@
           <p class="adm-err" id="admAnnMsg" role="status"></p>
         </form>`;
       const f = $('#admAnn');
-      if (live) f.kind.value = a.kind || 'info';
+      if (own) f.kind.value = a.kind || 'info';
       const area = f.querySelector('textarea'), msg = $('#admAnnMsg');
-      let sending = false;
-      const save = async (text) => {
-        if (sending) return;
-        sending = true;
-        f.querySelectorAll('button').forEach((b) => { b.disabled = true; });
-        try { await call('PUT', '/admin/announce', { text, title: f.title.value, kind: f.kind.value, n: +f.n.value, unit: f.unit.value === '0' ? '' : f.unit.value, hours: 0 }); announce(); }
-        catch (x) {
-          sending = false;
-          f.querySelectorAll('button').forEach((b) => { b.disabled = false; });
-          if (lostAdmin(x) || lostSession(x)) fail(x); else msg.textContent = x.message;
-        }
-      };
-      f.addEventListener('submit', (e) => {
+      const put = (text) => call('PUT', '/admin/announce', { text, title: f.title.value, kind: f.kind.value, n: +f.n.value, unit: f.unit.value === '0' ? '' : f.unit.value, hours: 0 });
+      // показать, заменить и убрать — у всех сразу, поэтому через окно с подтверждением
+      f.addEventListener('submit', async (e) => {
         e.preventDefault();
         const t = area.value.trim();
-        if (t) { save(t); return; }
-        msg.textContent = 'Напиши текст объявления';
-        area.focus();
+        if (!t) { msg.textContent = 'Напиши текст объявления'; area.focus(); return; }
+        const ok = await dialog(sys
+          ? { icon: '📢', danger: true, title: 'Заменить объявление?', who: shortOf(a), text: sys[0], button: 'Заменить', submit: () => put(t) }
+          : { icon: '📢', title: own ? 'Обновить объявление?' : 'Показать объявление всем?', who: f.title.value.trim() || shortOf({ text: t }),
+            text: own ? 'Объявление выйдет заново: его снова увидят все, и те, кто уже закрыл.' : 'Окно появится у всех при заходе на сайт, и у гостей. Каждый увидит его один раз.',
+            button: own ? 'Обновить' : 'Показать всем', submit: () => put(t) });
+        if (ok) announce();
       });
       area.addEventListener('input', () => { msg.textContent = ''; });
       const off = $('#admAnnOff');
-      if (off) off.addEventListener('click', () => save(''));
+      if (off) off.addEventListener('click', async () => {
+        const ok = await dialog({ icon: '📢', danger: true, title: 'Убрать объявление?', who: shortOf(a),
+          text: sys ? sys[1] : 'Объявление пропадёт у всех, кто его ещё не закрыл.', button: 'Убрать', submit: () => put('') });
+        if (ok) announce();
+      });
     } catch (x) { if (!stale(my)) fail(x); }
   }
   async function log() {
