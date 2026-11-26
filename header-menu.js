@@ -168,7 +168,7 @@ header.top > .oc-mini { margin-right: auto; margin-left: 4px; }
   ICON['/games/'] = '<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><rect x="1" y="4.2" width="14" height="8.6" rx="3.2" fill="#E4553F"/><path d="M4.6 6.8v3.4M2.9 8.5h3.4" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/><circle cx="10.6" cy="7.4" r="1.15" fill="#F2C230"/><circle cx="12.5" cy="9.5" r="1.15" fill="#2EAD60"/></svg>';
   const NAMES = { '/opinion/': 'Мнение', '/wheel/': 'Колесо', '/tierlist/': 'Тир-листы', '/king/': 'Царь Горы', '/games/': 'Игры Казуала' };
   // подсказка у кнопки раздела: у большинства — «<раздел> Казуала»
-  const TITLES = { '/king/': 'Царь Горы: турниры', '/games/': 'Мини-игры Казуал Хаба' };
+  const TITLES = { '/king/': 'Царь Горы: турниры', '/games/': 'Игры Казуала' };
   const SECTIONS = ['/opinion/', '/wheel/', '/tierlist/', '/king/', '/games/'];
   // окно «Настройки» живёт в /settings.js и грузится при первом открытии: страницам оно не нужно, пока его не открыли
   let setLoad = null;

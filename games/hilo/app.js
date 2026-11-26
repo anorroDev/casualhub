@@ -130,7 +130,7 @@
       h += '<p class="hl-note">Войди, чтобы сохранять рекорды и получать опыт</p><a class="btn ghost" href="/opinion/#login">Войти</a>';
     }
     if (i.xp) h += `<p class="hl-note muted"><span>+${+i.xp.per} опыта за верный ответ — до ${+i.xp.day} в день.</span> <span>+${+i.xp.bonus} за серию от ${+i.xp.at} подряд — раз в день.</span></p>`;
-    h += '<a class="btn text hl-more" href="/games/">Все мини-игры</a>';
+    h += '<a class="btn text hl-more" href="/games/">Все игры Казуала</a>';
     side.innerHTML = h;
   }
   const say = (t) => { const m = document.getElementById('hlMsg'); if (m) m.textContent = t || ''; };
