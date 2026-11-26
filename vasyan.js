@@ -264,6 +264,18 @@
   const BOWL_RIM = 'GLLLLLLLLLLLLLLLLG', BOWL_EMPTY = 'GLLHHHHHHHHHHHHLLG', BLANK = '..................';
   const BOWL_BODY = ['GIIILLLLLLLLLLLLLG', '.GLILLLLLLLLLLLLG.', '..GGLLLLLLLLLLGG..', '...HGGGGGGGGGGH...', '....HHHHHHHHHH....'];
   const bodyOf = (b) => (b.body ? [...b.body, ...BOWL_BODY.slice(b.body.length)] : BOWL_BODY);
+  // поилка — та же миска (скин миски), вместо еды вода: чем больше налито (0–3), тем шире гладь по кромке; полная — с бликом
+  const WATER_PAL = { W: '#4FA3F7', V: '#D4EDFC' };
+  function waterRows(n, b = bowlSkin) {
+    return memo('water|' + n + '|' + b.id, () => {
+      const rim = [...BOWL_EMPTY], half = [0, 2, 4, 6][n] || 0;
+      for (let i = 9 - half; i < 9 + half; i++) if (rim[i] === 'H') rim[i] = 'W';
+      if (n >= 3) rim[6] = 'V';
+      return Object.assign([BLANK, BLANK, BLANK, rim.join(''), ...bodyOf(b)], { pal: { ...b.pal, ...WATER_PAL } });
+    });
+  }
+  // мысль «пить хочу» — капля
+  const DROP = Object.assign(['..W..', '.WWW.', 'WWVWW', 'WWWWW', '.WWW.'], { pal: WATER_PAL });
   // горка корма в миске: снизу шире, кверху уже, края и верх неровные, зёрна разных оттенков
   function kibblePile(n, seed) {
     const r = rnd(seed), spans = n >= 3 ? [16, 12, 6] : n === 2 ? [14, 8] : [12], rows = [BLANK, BLANK, BLANK];
@@ -469,6 +481,14 @@
 .vy-cat.flipjump .vy-body { animation: vy-flip var(--fd, .7s) steps(8, jump-none) both; }
 @keyframes vy-flip { to { rotate: var(--fr, 360deg); } }
 /* пыль из-под лап */
+/* поилка: как миска — место ставит transform, наклон в руке и приземление — у .vy-water-in */
+.vy-water { position: fixed; z-index: 40; left: 0; top: 0; padding: 0; margin: 0; border: 0; background: none; line-height: 0; touch-action: none; cursor: grab; -webkit-tap-highlight-color: transparent; filter: drop-shadow(0 3px 0 rgb(0 0 0 / .18)); }
+.vy-water.drag { cursor: grabbing; z-index: 60; }
+.vy-water-in { display: block; transform-origin: 50% 55%; }
+.vy-water.land .vy-water-in { transform-origin: 50% 100%; animation: vy-land .3s steps(3, jump-none); }
+.vy-water.add svg { animation: vy-hop .3s steps(2, jump-none); }
+.vy-water:focus-visible { outline: 2px solid var(--accent, #5B74FF); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .vy-water.land .vy-water-in, .vy-water.add svg { animation: none; } }
 .vy-crumb { position: fixed; z-index: 41; width: 4px; height: 4px; pointer-events: none; animation: vy-crumb .6s steps(6, jump-none) forwards; }
 @keyframes vy-crumb { 45% { translate: calc(var(--dx, 0px) * .6) -12px; } to { translate: var(--dx, 0px) 5px; opacity: 0; } }
 .vy-bowl.nom svg { animation: vy-nom .22s steps(2, jump-none); }
@@ -566,6 +586,7 @@
   const now0 = Date.now();
   // голод копится и пока сайт закрыт: 1 пункт за 12 секунд, но не больше чем до «очень голоден»
   st.hunger = Math.min(100, (+st.hunger || 0) + (st.at ? Math.max(0, now0 - st.at) / 12000 : 0));
+  st.thirst = Math.min(100, (+st.thirst || 0) + (st.at ? Math.max(0, now0 - st.at) / 10000 : 0));
   // bowl — сколько порций в миске (0–3), food — какая еда (id). Раньше порции лежали в food числом — переносим
   st.bowl = Math.max(0, Math.min(3, st.bowl != null ? +st.bowl || 0 : typeof st.food === 'number' ? st.food : 2));
   st.food = foodOf(typeof st.food === 'string' ? st.food : 'kibble').id;
@@ -588,6 +609,9 @@
   st.box = { x: st.box && Number.isFinite(+st.box.x) && st.box.x !== null ? +st.box.x : null, n: Math.max(0, Math.min(4, Math.round(+(st.box && st.box.n) || 0))) };
   st.poos = normPoos(st.poos);
   st.pooAt = +st.pooAt || 0;
+  // поилка: сколько налито (0–3; у нового котика — 2), где стоит на полу (null — рядом с миской), жажда 0–100
+  st.water = st.water == null ? 2 : Math.max(0, Math.min(3, Math.round(+st.water || 0)));
+  st.wx = st.wx != null && Number.isFinite(+st.wx) ? +st.wx : null;
   // злость 0–100 (много кликов, бросили, грязный лоток): проходит сама, пока сайт закрыт — тоже (1 пункт за 5 секунд)
   st.anger = Math.max(0, Math.min(100, (+st.anger || 0) - (st.at ? Math.max(0, now0 - st.at) / 5000 : 0)));
   st.at = now0;
@@ -611,7 +635,7 @@
     write(out);
   };
 
-  let cat, body, bubble, bowl, bowlIn, box, boxIn, boxFront, card = null, cardOn = false, cardT = 0, cardAt = 0, cardLast = '', lastPtr = '', alive = false, raf = 0;
+  let cat, body, bubble, bowl, bowlIn, box, boxIn, boxFront, water = null, waterIn = null, card = null, cardOn = false, cardT = 0, cardAt = 0, cardLast = '', lastPtr = '', alive = false, raf = 0;
   // положение: x — левый край, y — линия лап (в координатах окна). surf — блок, на котором стоит (null — пол)
   let x = 120, y = 0, vy = 0, dir = 1, mode = 'sit', until = 0, target = 0, frame = 0, lastFrame = 0, saveT = 0, floor = 0, lastT = 0;
   let surf = null, jump = null, after = null, prep = null, climb = null, thudT = 0, size = { w: 57, h: 39 };
@@ -644,6 +668,14 @@
     boxIn = box.firstChild;
     box.addEventListener('pointerdown', (e) => tdown(e, lt));
     box.addEventListener('click', (e) => { e.preventDefault(); if (lt.dragged) { lt.dragged = false; return; } cleanBox(); });
+    // поилка: клик — налить воды, перетащить — как миску
+    water = document.createElement('button');
+    water.type = 'button'; water.className = 'vy-water';
+    water.dataset.noPress = '';
+    water.innerHTML = '<span class="vy-water-in"></span>';
+    waterIn = water.firstChild;
+    water.addEventListener('pointerdown', (e) => tdown(e, wb));
+    water.addEventListener('click', (e) => { e.preventDefault(); if (wb.dragged) { wb.dragged = false; return; } pour(); });
     boxFront = document.createElement('span');
     boxFront.className = 'vy-box-front';
     boxFront.setAttribute('aria-hidden', 'true');
@@ -672,21 +704,22 @@
     cat.addEventListener('click', (e) => { e.preventDefault(); if (dragged) { dragged = false; return; } pet(); if (lastPtr === 'touch' || lastPtr === 'pen') cardShow(2500); });
     // любит — встречает сердечком, когда открываешь страницу
     if (bondLv() >= 3) setTimeout(() => { if (alive && cat && !BUSY.includes(mode) && !grumpy()) { hearts(2); say('love'); } }, 1500);
-    document.body.append(box, bowl, cat, boxFront);
+    document.body.append(box, water, bowl, cat, boxFront);
     measure();
     x = Math.min(innerWidth - 80, 90 + Math.random() * Math.max(40, innerWidth / 3));
     y = floorAt(x + 28); surf = null; shown = null; goal = null; wantEat = false; vx = 0; thrown = dropped = false;
-    placeBowl(); placeBox(); decide();
+    placeBowl(); placeBox(); placeWater(); decide();
     lastT = performance.now();
     raf = requestAnimationFrame(loop);
   }
   function unmount() {
     alive = false; cancelAnimationFrame(raf);
     stopPlay(); tup(); up(); clearTimeout(bowlT);
-    [cat, bowl, box, boxFront].forEach((el) => { if (el) el.remove(); });
+    [cat, bowl, box, boxFront, water].forEach((el) => { if (el) el.remove(); });
     // в st.spill и st.poos остаётся: включат снова — рассыпанное у миски, кучки у лотка
     sps.forEach((q) => q.el.remove()); sps = [];
     poos.forEach((q) => q.el.remove()); poos = [];
+    water = waterIn = waterSpr = null;
     cat = bowl = bowlIn = box = boxIn = boxFront = bubble = bowlSpr = boxSpr = card = null; cardOn = false; clearTimeout(cardT); roll = null; goal = null;
   }
 
@@ -718,7 +751,7 @@
   }
   // линия пола под точкой x (в координатах окна)
   const floorAt = (px) => (cols.length ? cols[Math.max(0, Math.min(cols.length - 1, Math.floor(px / COL)))] : innerHeight) - 2;
-  const mine = (el) => !!el && (el === cat || el === bowl || (cat && cat.contains(el)) || (bowl && bowl.contains(el)) || (toy && toy.el === el) || sps.some((q) => q.el === el) || (box && (el === box || box.contains(el))) || el === boxFront || poos.some((q) => q.el === el || q.el.contains(el)));
+  const mine = (el) => !!el && (el === cat || el === bowl || (cat && cat.contains(el)) || (bowl && bowl.contains(el)) || (toy && toy.el === el) || sps.some((q) => q.el === el) || (box && (el === box || box.contains(el))) || (water && (el === water || water.contains(el))) || el === boxFront || poos.some((q) => q.el === el || q.el.contains(el)));
   const floorY = () => innerHeight - floor - 2;
   // выше, чем на REACH, за один прыжок не запрыгивает (прокрутка вверх, путь к миске) — идёт по плиткам
   const REACH = 320;
@@ -785,10 +818,11 @@
   // flip — лежит вверх дном; by — отчего упала: drop (отпустили), scroll (уехал блок), push (столкнул Васян)
   const bw = { x: 10, y: 0, s: null, ox: 0, vx: 0, vy: 0, rot: 0, av: 0, tilt: 0, mode: 'rest', flip: false, by: '', w: 18 * K, h: 9 * K, dragged: false };
   // лоток — такая же вещь, только не кувыркается и его не толкают (mode: rest | fall | drag)
+  const wb = { x: 0, y: 0, s: null, ox: 0, vx: 0, vy: 0, tilt: 0, mode: 'rest', by: '', w: 18 * K, h: 9 * K, dragged: false }; // поилка
   const lt = { x: 0, y: 0, s: null, ox: 0, vx: 0, vy: 0, tilt: 0, mode: 'rest', by: '', w: 24 * K, h: 7 * K, dragged: false };
   // рассыпанная еда — кучки там, где миска упала вверх дном (не больше трёх, самая старая пропадает):
   // [{ n, food, seed, el, x, y, s, ox, w, h, mode: rest | fall, vy }]; poos — кучки мимо лотка (до трёх), те же поля
-  let sps = [], poos = [], bowlSpr = null, boxSpr = null, bowlT = 0, tpress = null;
+  let sps = [], poos = [], bowlSpr = null, boxSpr = null, waterSpr = null, bowlT = 0, tpress = null;
   // вещь o (миска или рассыпанное) — на блок s (или на пол) в точку px; на карточке хоть 60 % вещи — на ней
   function setOn(o, s, px) {
     o.s = s;
@@ -922,7 +956,7 @@
     const step = Math.max(1, 150 * dt), rest = sps.filter((q) => q.mode === 'rest');
     for (let i = 0; i < rest.length; i++) {
       const a = rest[i];
-      for (const [o, el] of [[bw, bowl], [lt, box]]) {
+      for (const [o, el] of [[bw, bowl], [lt, box], [wb, water]]) {
         if (!el || o.mode !== 'rest' || o.s !== a.s) continue;
         const ov = Math.min(a.x + a.w, o.x + o.w) - Math.max(a.x, o.x);
         if (ov > 1) nudge(a, (a.x + a.w / 2 < o.x + o.w / 2 ? -1 : 1) * Math.min(ov, step));
@@ -995,6 +1029,17 @@
       if (lt.s && !surfaceOk(lt.s)) boxFall('scroll'); else onSurf(lt);
     }
     paintBox();
+    if (water) {
+      if (wb.mode === 'fall') {
+        const prev = wb.y;
+        wb.vy = Math.min(1700, wb.vy + 2200 * dt); wb.y += wb.vy * dt; wb.x += wb.vx * dt;
+        if (wb.x < 4) { wb.x = 4; wb.vx = Math.abs(wb.vx) * 0.4; } else if (wb.x > innerWidth - wb.w - 4) { wb.x = innerWidth - wb.w - 4; wb.vx = -Math.abs(wb.vx) * 0.4; }
+        if (wb.vy > 0) { const hit = hitBelow(wb, prev); if (hit !== undefined) waterLand(hit); }
+      } else if (wb.mode !== 'drag') {
+        if (wb.s && !surfaceOk(wb.s)) waterFall('scroll'); else onSurf(wb);
+      }
+      paintWater();
+    }
     for (const q of sps) stepPile(q, dt);
     separate(dt);
     for (const q of poos) stepPile(q, dt);
@@ -1020,7 +1065,7 @@
 
   // ---------- миску, лоток и кучки корма можно утащить мышкой или пальцем ----------
   // o — bw (миска), lt (лоток) или кучка корма из sps; o.dragged — тащили, и клик после этого — не клик
-  const elOf = (o) => (o === bw ? bowl : o === lt ? box : o && o.el && o.el.isConnected ? o.el : null);
+  const elOf = (o) => (o === bw ? bowl : o === lt ? box : o === wb ? water : o && o.el && o.el.isConnected ? o.el : null);
   function tdown(e, o) {
     if (e.button > 0 || o.mode === 'fall' || tpress) return;
     tpress = { o, x: e.clientX, y: e.clientY, id: e.pointerId, pts: [[performance.now(), e.clientX, e.clientY]] };
@@ -1058,6 +1103,7 @@
     o.tilt = 0;
     if (o === bw) bowlFall('drop', tvx * 0.8, clamp(tvx * 0.6, -720, 720), tvy * 0.8);
     else if (o === lt) boxFall('drop', tvx * 0.5, tvy * 0.6);
+    else if (o === wb) waterFall('drop', tvx * 0.5, tvy * 0.6);
     else pileFall(o, tvx * 0.5, tvy * 0.6);
   }
   // клик: перевёрнутую — поставить обратно (пустой: всё рассыпалось), иначе — насыпать
@@ -1112,6 +1158,73 @@
     setTimeout(() => { if (box) box.classList.remove('land'); }, 320);
     dust(lt.x + lt.w / 2, lt.y, lt.w * 0.4);
   }
+  // ---------- поилка: рисунок, место, падение, налить, попить ----------
+  function drawWater() {
+    if (!water) return;
+    const s = sprite(waterRows(st.water, bowlSkin), K);
+    if (s !== waterSpr) { waterIn.innerHTML = s.svg; waterSpr = s; wb.w = s.cw; wb.h = s.ch; }
+    water.setAttribute('aria-label', st.water ? 'Поилка Васяна: нажми, чтобы долить воды, или перетащи' : 'Поилка Васяна: пустая — нажми, чтобы налить воды');
+  }
+  function paintWater() {
+    if (!water) return;
+    water.style.transform = `translate(${Math.round(wb.x)}px, ${Math.round(wb.y - wb.h)}px)`;
+    waterIn.style.transform = wb.mode === 'drag' && wb.tilt ? `rotate(${wb.tilt}deg)` : '';
+  }
+  // на место из прошлого захода (на полу); ещё не двигали — рядом с миской
+  function placeWater() {
+    Object.assign(wb, { mode: 'rest', vx: 0, vy: 0, tilt: 0 });
+    waterSpr = null; drawWater();
+    setOn(wb, null, st.wx != null ? st.wx : Math.min(innerWidth - wb.w - 8, bw.x + bw.w + 70));
+    paintWater();
+  }
+  function hopWater() { if (!water) return; water.classList.remove('add'); void water.offsetWidth; water.classList.add('add'); }
+  function waterFall(why, fvx = 0, fvy = 0) {
+    Object.assign(wb, { mode: 'fall', s: null, vx: fvx, vy: fvy, by: why });
+    if (calm) waterLand(below(wb));
+  }
+  function waterLand(s) {
+    Object.assign(wb, { mode: 'rest', vx: 0, vy: 0, tilt: 0 });
+    setOn(wb, s, wb.x);
+    if (!wb.s) { st.wx = Math.round(wb.x); save(); }
+    // поставили поилку с водой туда, куда можно дойти, а он хочет пить — пойдёт
+    if (st.thirst > 50 && st.water > 0) setTimeout(() => { if (alive && cat && !BUSY.includes(mode) && !['eat', 'goEat', 'drink', 'drag', 'fall', 'jump', 'climb', 'prep', 'push', 'scared', 'litter'].includes(mode)) goDrink(); }, 500);
+    if (!water || calm) return;
+    water.classList.remove('land'); void water.offsetWidth; water.classList.add('land');
+    setTimeout(() => { if (water) water.classList.remove('land'); }, 320);
+    dust(wb.x + wb.w / 2, wb.y, wb.w * 0.4);
+  }
+  // налить: по одному, до трёх («+1»); полную — уже некуда. Хочет пить — сразу идёт
+  function pour() {
+    if (wb.mode !== 'rest') return;
+    if (st.water >= 3) { hopWater(); return; }
+    st.water += 1; save(); drawWater(); hopWater();
+    floatText(water, '+1');
+    if (st.thirst > 50 && !['eat', 'goEat', 'drink', 'drag', 'fall', 'jump', 'climb', 'prep', 'push'].includes(mode)) goDrink();
+  }
+  function goDrink() { return st.water > 0 && !!water && wb.mode === 'rest' && goToThing(wb, 'drink'); }
+  // лакает — капли брызгают из поилки
+  function drops() {
+    if (calm || !water) return;
+    const r = water.getBoundingClientRect();
+    for (let i = 0; i < 2; i++) {
+      const c = document.createElement('i');
+      c.className = 'vy-crumb';
+      c.setAttribute('aria-hidden', 'true');
+      c.style.left = Math.round(r.left + r.width * (0.3 + Math.random() * 0.4)) + 'px';
+      c.style.top = Math.round(r.top + r.height * 0.3) + 'px';
+      c.style.background = i ? WATER_PAL.V : WATER_PAL.W;
+      c.style.setProperty('--dx', Math.round((Math.random() - 0.5) * 24) + 'px');
+      document.body.appendChild(c);
+      setTimeout(() => c.remove(), 640);
+    }
+  }
+  // попил: воды меньше на одно, жажда прошла; умывается
+  function finishDrink(t) {
+    st.water = Math.max(0, st.water - 1); drawWater();
+    st.thirst = Math.max(0, st.thirst - 65); goal = null;
+    bond(1, 'drink', 30000); soothe(5); save();
+    mode = 'wash'; until = t + 1400 + Math.random() * 700;
+  }
   // надпись над вещью и вверх: «+1» у миски, «чисто!» у лотка
   function floatText(el, text) {
     const r = el.getBoundingClientRect(), p = document.createElement('span');
@@ -1158,7 +1271,7 @@
     st.bowl += 1; st.seed = newSeed(); save(); drawBowl(); // насыпали — корм лёг по-новому
     hopBowl();
     floatText(bowl, '+1');
-    if (st.hunger > 60 && !['eat', 'goEat', 'drag', 'fall', 'jump', 'climb', 'prep', 'push'].includes(mode)) goEat();
+    if (st.hunger > 60 && !['eat', 'goEat', 'drink', 'drag', 'fall', 'jump', 'climb', 'prep', 'push'].includes(mode)) goEat();
   }
   // крошки еды, пока ест (цвета — из палитры еды); миска при этом подрагивает
   function crumbs(o) {
@@ -1220,10 +1333,11 @@
     const mood = cross() ? 'Злится' : grumpy() ? 'Дуется' : 'Доволен';
     const food = st.hunger > 80 ? 'Голоден' : st.hunger > 60 ? 'Проголодался' : 'Сыт';
     const tray = st.box.n >= BOX_FULL ? 'Грязный' : st.box.n || poos.length ? 'Пора убрать' : 'Чистый';
+    const drink = st.thirst > 80 ? 'Очень хочет пить' : st.thirst > 60 ? 'Хочет пить' : 'Напился';
     return `<span class="vc-top">${FACES[b.lv]}<span><b>Васян</b><small>${b.name}</small></span></span>`
       + `<span class="vc-grid"><span>Отношения</span><span class="vc-bar"><i style="width:${b.v}%"></i></span>`
       + `<span>Сытость</span><span class="vc-bar food"><i style="width:${full}%"></i></span>`
-      + `<span>Настроение</span><b>${mood}</b><span>Еда</span><b>${food}</b><span>Лоток</span><b>${tray}</b></span>`;
+      + `<span>Настроение</span><b>${mood}</b><span>Еда</span><b>${food}</b><span>Вода</span><b>${drink}</b><span>Лоток</span><b>${tray}</b></span>`;
   }
   // у края окна карточка сдвигается внутрь (--dx), чтобы не уходить за экран
   function cardClamp() {
@@ -1391,7 +1505,7 @@
   // встал, tries — сколько прыжков уже сделал по пути }. wantEat — миску переставили с едой: сходить поесть, даже
   // если не голоден (как только она встанет и он сам будет на лапах)
   let goal = null, wantEat = false, thinkUntil = 0, lastPush = -1e9;
-  const thingOk = (o) => (o === bw ? !!bowl && bw.mode === 'rest' : o === lt ? !!box && lt.mode === 'rest' : sps.includes(o) && o.n > 0 && o.mode === 'rest');
+  const thingOk = (o) => (o === bw ? !!bowl && bw.mode === 'rest' : o === lt ? !!box && lt.mode === 'rest' : o === wb ? !!water && wb.mode === 'rest' && st.water > 0 : sps.includes(o) && o.n > 0 && o.mode === 'rest');
   // где есть еда: сначала рассыпанная, потом — в миске (не вверх дном); то, что летит или в руке, — пока нет
   function foodSpot() {
     // из кучек — та, что на его блоке, потом ближняя
@@ -1432,7 +1546,7 @@
   // цель пропала (миску схватили, она падает, её доели) — передумать. Ел — «мяу?»; еда упадёт — afterBowl позовёт снова
   function replan() {
     const g = goal;
-    if (mode === 'eat') say('meow');
+    if (mode === 'eat' || mode === 'drink') say('meow');
     goal = null;
     if (g && g.act !== 'eat' && thingOk(g.o) && goToThing(g.o, g.act, g.d)) return;
     if ((wantEat || st.hunger > 60) && goEat()) return;
@@ -1468,6 +1582,7 @@
     const p = spotOf(goal);
     dir = p.dir; faced = dir;
     if (goal.act === 'eat') { mode = 'eat'; until = t + 3200; wantEat = false; biteN = -1; say('yum'); }
+    else if (goal.act === 'drink') { mode = 'drink'; until = t + 2600; biteN = -1; }
     else if (goal.act === 'push') { mode = 'push'; goal.t0 = t; goal.hit = false; }
     else if (goal.act === 'potty') { mode = 'litter'; goal.t0 = t; goal.done = false; goal.turned = 0; }
     else if (goal.act === 'refuse') { mode = 'refuse'; until = t + 1300; }
@@ -1480,6 +1595,7 @@
     if (o && o !== bw) { o.n -= 1; if (o.n > 0) { drawSpill(o); keepSpills(); } else dropSpill(o); }
     else { st.bowl = Math.max(0, st.bowl - 1); drawBowl(); }
     st.hunger = Math.max(0, st.hunger - 70); goal = null;
+    st.thirst = Math.min(100, (+st.thirst || 0) + 15); // поел — захотелось пить
     // корм, разложенный по сайту, собирает весь, и сытый: осталась кучка — умоется и пойдёт к ней (decide → goEat)
     if (sps.some((q) => q.n > 0)) wantEat = true;
     bond(2, 'eat', 30000); // накормили — благодарен
@@ -1504,7 +1620,7 @@
     if (BUSY.includes(mode) || mode === 'prep' || mode === 'push') return; // встанет на лапы — пойдёт сам (land → resumeGoal)
     clearTimeout(bowlT);
     bowlT = setTimeout(() => {
-      if (!alive || !cat || BUSY.includes(mode) || ['prep', 'push', 'eat', 'scared'].includes(mode)) return;
+      if (!alive || !cat || BUSY.includes(mode) || ['prep', 'push', 'eat', 'drink', 'scared'].includes(mode)) return;
       if (wantEat && foodSpot()) { stopPlay(); clearBubble('zz'); goEat(); return; }
       if (mode !== 'sleep' && thingOk(bw)) { stopPlay(); goToThing(bw, 'sniff'); }
     }, why === 'push' ? 900 : 350 + Math.random() * 300);
@@ -1550,6 +1666,9 @@
   function decide() {
     const t = performance.now();
     if ((st.hunger > 60 || wantEat) && goEat()) return;
+    if (st.thirst > 60 && goDrink()) return;
+    // хочет пить, а пить нечего — думает о воде
+    if (st.thirst > 75 && !st.water && Math.random() < 0.35) say('thirst');
     // при «меньше движения» — только спокойные позы на месте. Миску рядом иногда толкает (с карточки — охотнее)
     const opts = cross()
       ? (calm ? [['sulk', 3], ['loaf', 2], ['sit', 1]] : [['sulk', 4], ['loaf', 1.2], ['walk', 1], ['wash', 1], ['sit', 0.8], ['jump', 0.6], ['push', pushOk() ? 1.6 : 0]])
@@ -1673,6 +1792,7 @@
     bubble = document.createElement('span');
     bubble.className = 'vy-bub ' + kind + (TXT[kind] ? ' txt' : '');
     if (kind === 'love') bubble.innerHTML = sprite(HEART, K * 0.9).svg;
+    else if (kind === 'thirst') bubble.innerHTML = sprite(DROP, K * 0.9).svg;
     else if (kind === 'vein') bubble.innerHTML = sprite(VEIN, K * 0.8).svg;
     // голоден — думает о своей еде; ест — показывает, что ест
     else if (kind === 'think' || kind === 'yum') bubble.innerHTML = sprite(foodOf(st.food).rows, K * 0.8).svg;
@@ -1703,7 +1823,7 @@
   }
 
   // ---------- кадр ----------
-  const GROUND = new Set(['look', 'spin', 'prep', 'sit', 'walk', 'run', 'sleep', 'goEat', 'eat', 'sniff', 'push', 'litter', 'refuse', 'squat', 'hiss', 'sulk', 'loaf', 'wash', 'yawn', 'stretch', 'scratch', 'roll', 'play', 'edge', 'stalk', 'wiggle', 'scared', 'sneeze', 'purr']);
+  const GROUND = new Set(['look', 'spin', 'prep', 'sit', 'walk', 'run', 'sleep', 'goEat', 'eat', 'drink', 'sniff', 'push', 'litter', 'refuse', 'squat', 'hiss', 'sulk', 'loaf', 'wash', 'yawn', 'stretch', 'scratch', 'roll', 'play', 'edge', 'stalk', 'wiggle', 'scared', 'sneeze', 'purr']);
   function land(s) {
     const air = mode === 'jump' || mode === 'fall', wasThrown = thrown;
     // уронили сами с большой высоты — ещё недоволен
@@ -1727,6 +1847,7 @@
     if (t - lastT < 12.5) return;
     const dt = Math.min(100, t - lastT) / 1000; lastT = t;
     st.hunger = Math.min(100, st.hunger + dt / 12);
+    st.thirst = Math.min(100, st.thirst + dt / 10);
     if (t - lastFrame > 160) { frame++; lastFrame = t; }
     if (t - measureT > 2000) { measureT = t; measure(); }
     stepThings(dt);
@@ -1740,7 +1861,7 @@
     // блок уехал при прокрутке или исчез — падаем
     if (GROUND.has(mode) && !surfaceOk(surf)) { mode = 'fall'; vy = 0; surf = null; clearBubble('zz'); }
     // миска (или рассыпанное), к которой шёл или из которой ест, пропала, упала или уехала — передумать
-    if (['goEat', 'eat', 'sniff', 'litter', 'refuse'].includes(mode) && (!goal || !thingOk(goal.o) || goal.o.s !== surf || (mode !== 'goEat' && Math.abs(spotOf(goal).x - x) > 16))) replan();
+    if (['goEat', 'eat', 'drink', 'sniff', 'litter', 'refuse'].includes(mode) && (!goal || !thingOk(goal.o) || goal.o.s !== surf || (mode !== 'goEat' && Math.abs(spotOf(goal).x - x) > 16))) replan();
     // захотел в лоток — идёт, как только свободен
     if (st.pooAt && Date.now() > st.pooAt && POTTY_FREE.includes(mode) && t - pottyT > 3000) { pottyT = t; if (!goPotty()) st.pooAt = Date.now() + 60e3; }
     // злой — время от времени венка над головой
@@ -1835,6 +1956,12 @@
         if (n % 2 && n !== biteN) { biteN = n; crumbs(goal.o); }
         // доел — облизывает лапу
         if (t > until) finishEat(t);
+      } else if (mode === 'drink') {
+        // лакает: голова к воде и обратно, на каждый глоток — капли
+        const n = Math.floor(frame / 2);
+        rows = n % 2 ? EAT_B : EAT_A;
+        if (n % 2 && n !== biteN) { biteN = n; drops(); }
+        if (t > until) finishDrink(t);
       } else if (mode === 'sniff') {
         // нюхает пустую миску: голову к ней и обратно, потом сидит рядом и думает о еде
         rows = frame % 4 < 2 ? EAT_A : STALK_A;
@@ -2086,7 +2213,10 @@
       coat = coatOf(v.skin); outfit = outfitOf(v.outfit); bowlSkin = bowlOf(bs); boxSkin = boxSkinOf(xs); boxSpr = null; drawBox(); applyLook();
     }
     // голод, злость, когда в лоток, сколько погладили — как там
-    for (const k of ['hunger', 'anger', 'pooAt', 'pets', 'bond']) if (Number.isFinite(+v[k])) st[k] = +v[k];
+    for (const k of ['hunger', 'anger', 'pooAt', 'pets', 'bond', 'thirst']) if (Number.isFinite(+v[k])) st[k] = +v[k];
+    // налили или выпили там — здесь та же поилка; где стоит на полу — как там
+    if (Number.isFinite(+v.water)) { const wl = clamp(Math.round(+v.water), 0, 3); if (wl !== st.water) { st.water = wl; drawWater(); } }
+    if (v.wx != null && Number.isFinite(+v.wx) && +v.wx !== st.wx) { st.wx = +v.wx; if (alive && wb.mode === 'rest' && !wb.s) setOn(wb, null, st.wx); }
     cardRefresh(); // отношения поменялись в другой вкладке — карточка как там
     // насыпали, перевернули, убрали — здесь та же миска и тот же лоток
     const portions = Math.max(0, Math.min(3, +v.bowl || 0)), flip = 'flip' in v ? !!v.flip : !!st.flip;
@@ -2177,9 +2307,9 @@
     if (mode === 'drag') { say('meow'); return; } // в руках — только отзывается
     // в прыжке, падает или вскарабкивается — отзовётся, когда встанет на лапы
     if (BUSY.includes(mode) || mode === 'prep') { callTimer = setTimeout(() => { callT = 0; called(d); }, 700); return; }
-    if (grumpy()) { hop(); say('hmph'); if (!['eat', 'goEat', 'litter', 'squat'].includes(mode)) { dir = -dir; faced = dir; } return; }
+    if (grumpy()) { hop(); say('hmph'); if (!['eat', 'goEat', 'drink', 'litter', 'squat'].includes(mode)) { dir = -dir; faced = dir; } return; }
     hop(); say('meow');
-    if (['eat', 'goEat', 'scared', 'litter', 'refuse', 'squat', 'hiss'].includes(mode)) return;
+    if (['eat', 'goEat', 'drink', 'scared', 'litter', 'refuse', 'squat', 'hiss'].includes(mode)) return;
     stopPlay();
     const el = d && d.el && d.el.isConnected ? d.el : null, r = el && el.getBoundingClientRect();
     const seen = !!(r && r.width > 0 && r.height > 0 && r.bottom > 0 && r.top < innerHeight);
@@ -2189,7 +2319,7 @@
     callTimer = setTimeout(() => toChat(el), 650);
   }
   function toChat(el) {
-    if (!alive || !cat || !el.isConnected || BUSY.includes(mode) || mode === 'prep' || mode === 'eat' || mode === 'goEat') return;
+    if (!alive || !cat || !el.isConnected || BUSY.includes(mode) || mode === 'prep' || mode === 'eat' || mode === 'drink' || mode === 'goEat') return;
     const r = el.getBoundingClientRect(), tx = r.left + r.width / 2 - size.w / 2;
     // карточку чата проверяем саму: в общем списке её может заменить внешний блок с тем же верхним краем.
     // Уже стоит на этом краю (на ней или на таком блоке) — не прыгает, а идёт по нему
@@ -2213,7 +2343,7 @@
     const t = performance.now();
     // очень резкая прокрутка (рывок колесом или «в начало») — иногда пугается: хвост трубой, «!»
     if (Math.abs(dy) > 900 && !BUSY.includes(mode) && mode !== 'scared' && Math.random() < 0.35) { stopPlay(); scrollHop = t; scare(t); return; }
-    if (t - scrollHop < 600 || ['drag', 'jump', 'climb', 'fall', 'prep', 'eat', 'goEat', 'sniff', 'push', 'scared', 'litter', 'refuse', 'squat', 'hiss'].includes(mode)) return;
+    if (t - scrollHop < 600 || ['drag', 'jump', 'climb', 'fall', 'prep', 'eat', 'drink', 'goEat', 'sniff', 'push', 'scared', 'litter', 'refuse', 'squat', 'hiss'].includes(mode)) return;
     if ((dy > 0 && !surf) || t - scrollLook < 160) return; // на полу и листают вниз — прыгать некуда; площадки ищем не на каждое событие
     scrollLook = t;
     const cx = x + size.w / 2, near = (p) => Math.abs((p.r.left + p.r.right) / 2 - cx);
