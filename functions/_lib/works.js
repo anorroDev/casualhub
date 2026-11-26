@@ -13,7 +13,7 @@
 //   lang — язык сайта (ru, uk, en), geo — примерное место человека для заведений (или null).
 export const WORK_KINDS = ['book', 'anime', 'hentai', 'movie', 'game', 'food', 'tech'];
 // подпись под списком — только названия источников, без русских слов: её переводит шаблон «Источник: {}»
-export const WORK_SRC = { book: 'Open Library', anime: 'AniList', hentai: 'AniList, MyAnimeList, Shikimori', movie: 'IMDb, Wikidata', game: 'Wikidata, Wikipedia, Steam', food: '© OpenStreetMap', tech: 'Wikidata' };
+export const WORK_SRC = { book: 'Open Library', anime: 'AniList', hentai: 'AniList, MyAnimeList, Shikimori', movie: 'IMDb, Wikidata', game: 'Wikidata, Wikipedia, Steam', food: '© OpenStreetMap', tech: 'Wikidata, DuckDuckGo' };
 export const IMDB_KIND = { movie: 'Фильм', tvMovie: 'Фильм', video: 'Фильм', tvSeries: 'Сериал', tvMiniSeries: 'Мини-сериал', short: 'Короткий метр', tvSpecial: 'Спецвыпуск' };
 const ANI_KIND = { TV: 'Аниме', TV_SHORT: 'Аниме', MOVIE: 'Аниме-фильм', OVA: 'OVA', ONA: 'ONA', SPECIAL: 'Спецвыпуск', MUSIC: 'Клип', MANGA: 'Манга', ONE_SHOT: 'Манга', NOVEL: 'Ранобэ' };
 const FOOD_TAGS = ['amenity:restaurant', 'amenity:cafe', 'amenity:fast_food', 'amenity:bar', 'amenity:pub', 'amenity:food_court', 'amenity:ice_cream', 'shop:bakery', 'shop:confectionery', 'shop:pastry'];
@@ -483,7 +483,16 @@ const FIND = {
   },
   async tech(q, d) {
     const lang = d.lang === 'uk' || d.lang === 'en' ? d.lang : 'ru';
-    const s = await d.get(`https://www.wikidata.org/w/api.php?format=json&action=wbsearchentities&type=item&limit=15&language=${CYR.test(q) ? (lang === 'en' ? 'ru' : lang) : 'en'}&uselang=${lang}&search=${enc(q)}`, null, 86400);
+    // Wikidata знает известные устройства (с фото), подсказки поисковика — и нишевые модели: мыши ATK, клавиатуры,
+    // наушники. Все запросы сразу; подсказки не ответили за 2,5 с — только Wikidata. Подсказок две пачки: к самому
+    // запросу и к запросу с пробелом (следующее слово — чаще модель: «atk » → «atk rs6 air», «atk a9 air»)
+    // латиница — подсказки американского поиска (без региона приходили немецкие и шведские «kaufen», «prisjakt»),
+    // кириллица — без региона: и так русские
+    const ac = (x) => d.get(`https://duckduckgo.com/ac/?q=${enc(x)}&kl=${CYR.test(q) ? 'wt-wt' : 'us-en'}`, { wait: 2500 }, 86400).catch(() => []);
+    const [s, ac1, ac2] = await Promise.all([
+      d.get(`https://www.wikidata.org/w/api.php?format=json&action=wbsearchentities&type=item&limit=15&language=${CYR.test(q) ? (lang === 'en' ? 'ru' : lang) : 'en'}&uselang=${lang}&search=${enc(q)}`, null, 86400),
+      ac(q), ac(q + ' '),
+    ]);
     const ids = ((s && s.search) || []).filter((x) => x && /^Q\d+$/.test(x.id) && isTech(x.description)).map((x) => x.id).slice(0, 12);
     const images = new Map();
     if (ids.length) {
@@ -496,9 +505,56 @@ const FIND = {
         }
       } catch (e) {}
     }
-    return techItems(s, images);
+    const wd = techItems(s, images);
+    return [...wd, ...suggestItems([...(Array.isArray(ac1) ? ac1 : []), ...(Array.isArray(ac2) ? ac2 : [])], q, wd.map((x) => norm(x.title)), wd.map((x) => x.title))];
   },
 };
+// подсказки поисковика (DuckDuckGo, /ac/) → модели техники без фото. Служебное («скачать», «драйвер», «app», «vs»,
+// «или», магазины, обзоры) — мимо; короткий запрос (до 4 букв) — только целым словом или моделью с цифрой: «atk» —
+// «ATK X1», но не «atkins». Вид устройства в начале («наушники sony …») уходит в sub, название — по-человечески
+const SUGGEST_NOT = /\b(?:download|drivers?|software|apps?|apk|update|firmware|manual|support|store|shop|prices?|reviews?|vs\.?|login|website|official|reddit|setup|settings|options|warranty|repair|wiki|bindings|hub|zone|package|cars?|perfume|refurbished|used|cases?|cover|charger|screen|battery|unboxing|teardown|specs|cena|cijena|preis|prix|olx|germanos|amazon|ebay|aliexpress|rozetka|allegro|kaspi|polska|klawiatura|tastatur|myszka|friday|monday|deals?|release|sale|discount|coupons?|trade|compare|comparison|wallpapers?|colou?rs|size|dimensions|specifications|launch|leaks?|rumou?rs|news|pink|blue|black|white|red|green|gold|silver|purple|yellow|gr[ae]y)\b|\b\d+\s?(?:gb|tb|гб|тб)\b|скачать|драйвер|программ|приложени|прошивк|инструкц|отзыв|обзор|цена|купить|магазин|официальн|настройк|ремонт|гарант|(?:^|\s)или(?:\s|$)/i;
+const DEVICE_WORD = /^(?:наушники|навушники|смартфон|телефон|ноутбук|мышь|мышка|миша|клавиатура|клавіатура|планшет|часы|годинник|монитор|монітор|телевизор|телевізор|колонка|видеокарта|відеокарта|процессор|процесор|роутер|камера|фотоаппарат|фотоапарат|приставка|геймпад|джойстик|микрофон|мікрофон|принтер)$/i;
+const GENERIC_DEV = /^(?:mouse|mice|keyboards?|headphones|headsets?|earbuds|monitors?|laptops?|phones?|tablets?|controllers?|speakers?|webcams?|microphones?|мышь|мышка|клавиатура|наушники|монитор|ноутбук|телефон|планшет|колонка)$/i;
+const SMALL_CAP = new Set(['pro', 'max', 'air', 'mini', 'neo', 'lite', 'plus', 'ultra', 'evo', 'go', 'one', 'se', 'fe', 'new']);
+// known — как пишутся слова в найденном в Wikidata: «iPhone», а не «Iphone»
+function prettyModel(phrase, q, known) {
+  const typed = new Map(String(q).split(/\s+/).filter(Boolean).map((t) => [t.toLowerCase(), t]));
+  return phrase.split(' ').map((t) => {
+    const low = t.toLowerCase();
+    if (known && known.has(low)) return known.get(low);
+    if (typed.has(low) && typed.get(low) !== low) return typed.get(low); // как написал человек: «ATK»
+    if (/\d/.test(t)) return t.toUpperCase(); // модель: x1 → X1, wh-1000xm5 → WH-1000XM5
+    if (LAT.test(t) && t.length <= 3 && !SMALL_CAP.has(low)) return t.toUpperCase(); // atk, lg, msi, jbl
+    return t.charAt(0).toUpperCase() + t.slice(1);
+  }).join(' ');
+}
+export function suggestItems(list, q, have = [], titles = []) {
+  const out = [], seen = new Set(have), last = norm(q).split(' ').pop() || '';
+  // написание слов из названий Wikidata; из «IPhone» и «iPhone» — то, где строчная в начале (так пишет сам бренд)
+  const known = new Map();
+  for (const w of titles.join(' ').split(/\s+/)) {
+    const low = w.toLowerCase();
+    if (!/[a-z]/i.test(w) || w === low) continue;
+    if (!known.has(low) || (/^[a-z]/.test(w) && !/^[a-z]/.test(known.get(low)))) known.set(low, w);
+  }
+  for (const x of Array.isArray(list) ? list : []) {
+    const p = String((x && x.phrase) || '').replace(/\s+/g, ' ').trim();
+    if (!p || p.length > 80 || SUGGEST_NOT.test(p) || norm(p) === norm(q)) continue; // повтор запроса — не модель
+    const words = p.toLowerCase().split(' ');
+    if (last && !words.some((w) => w === last || (w.startsWith(last) && (last.length >= 4 || /\d/.test(w))))) continue;
+    const dev = words.length > 1 && DEVICE_WORD.test(words[0]);
+    // одно слово без цифр — бренд или вовсе другое слово («atkinson», «redragonzone», «наушники jbl», «наушники
+    // беспроводные»), «бренд + мышь» без модели — не устройство
+    const rest = dev ? words.slice(1) : words;
+    if (!/\d/.test(p) && (rest.length < 2 || GENERIC_DEV.test(rest[rest.length - 1]))) continue;
+    const title = prettyModel(dev ? p.split(' ').slice(1).join(' ') : p, q, known);
+    const k = norm(title);
+    if (!k || seen.has(k)) continue;
+    seen.add(k);
+    out.push(blank({ title: clip(title, 140), sub: dev ? clip(words[0].charAt(0).toUpperCase() + words[0].slice(1), 30) : '' }));
+  }
+  return out;
+}
 // заведения из Photon (OpenStreetMap): название, вид и адрес; одинаковые название и адрес — один раз
 export function foodItems(d) {
   const out = [], seen = new Set();

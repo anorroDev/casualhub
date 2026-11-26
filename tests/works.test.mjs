@@ -2,7 +2,7 @@
 // Сеть подменена: ответы источников — по началу адреса.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { findWorks, cyrTitle, bookItems, foodItems, techItems, ordered, nameHit, norm, platformLine, gameGenres, devName, WORK_KINDS } from '../functions/_lib/works.js';
+import { findWorks, cyrTitle, bookItems, foodItems, techItems, suggestItems, ordered, nameHit, norm, platformLine, gameGenres, devName, WORK_KINDS } from '../functions/_lib/works.js';
 
 function deps(routes, extra = {}) {
   const asked = [];
@@ -349,7 +349,27 @@ test('техника: только устройства по описанию, �
   ]);
   const r = await findWorks('tech', 'PlayStation', d);
   assert.equal(r.items.find((x) => x.title === 'PlayStation 5').art, 'https://upload.wikimedia.org/p/500px-PS5.png', 'хвост ?utm… отрезан');
-  assert.match(d.asked[1], /titles=Q1\|Q3$/, 'фото спрашиваются только у устройств');
+  assert.match(d.asked.find((u) => u.includes('prop=pageimages')), /titles=Q1\|Q3$/, 'фото спрашиваются только у устройств');
+});
+
+test('техника: нишевые модели — из подсказок поисковика, без служебного и чужих слов', async () => {
+  const ac = [{ phrase: 'atk gear' }, { phrase: 'atk hub software' }, { phrase: 'atkins' }, { phrase: 'atk raider 13 evo' }, { phrase: 'atk store' }, { phrase: 'atk x1 pro max' }, { phrase: 'atk' }];
+  assert.deepEqual(suggestItems(ac, 'ATK').map((x) => x.title), ['ATK Gear', 'ATK Raider 13 Evo', 'ATK X1 Pro Max'], 'короткий запрос — целым словом; «store», «software» и повтор запроса — мимо');
+  const ru = suggestItems([{ phrase: 'наушники sony' }, { phrase: 'наушники sony wh-1000xm5' }, { phrase: 'наушники sony wh-1000 xm5 или аирподс макс' }], 'наушники sony');
+  assert.deepEqual(ru.map((x) => [x.sub, x.title]), [['Наушники', 'Sony WH-1000XM5']], 'вид устройства — в sub, «или …» — мимо');
+  assert.deepEqual(suggestItems([{ phrase: 'logitech g29' }, { phrase: 'logitech options' }], 'logitec').map((x) => x.title), ['Logitech G29'], 'длинный запрос дополняется');
+  // в поиске: сначала Wikidata (с фото), потом модели из подсказок, повторы — один раз
+  const d = deps([
+    ['https://www.wikidata.org/w/api.php?format=json&action=wbsearchentities', { search: [{ id: 'Q9', label: 'ATK X1', description: 'computer mouse' }] }],
+    ['https://www.wikidata.org/w/api.php?format=json&action=query&prop=pageimages', { query: { pages: {} } }],
+    ['https://duckduckgo.com/ac/', [{ phrase: 'atk x1' }, { phrase: 'atk x1 ultimate' }]],
+  ]);
+  const r = await findWorks('tech', 'atk x1', d);
+  assert.deepEqual(r.items.map((x) => x.title), ['ATK X1', 'ATK X1 Ultimate']);
+  assert.equal(r.src, 'Wikidata, DuckDuckGo');
+  // подсказки не ответили — остаётся Wikidata
+  const d2 = deps([['https://www.wikidata.org/w/api.php?format=json&action=wbsearchentities', { search: [] }]]);
+  assert.deepEqual((await findWorks('tech', 'atk', d2)).items, []);
 });
 
 test('неизвестный вид — пусто, список видов — как на странице', async () => {
