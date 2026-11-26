@@ -2,8 +2,11 @@
 // Мессенджеры не запускают скрипты страницы, поэтому заголовок и описание подставляются здесь, на сервере.
 // Если данных нет или база не ответила, уходит та же страница с общим предпросмотром.
 
-// то же, что блок /* в _headers: на ответы Functions он сам не действует
-const SECURITY = {
+// то же, что блок /* в _headers: на ответы Functions он сам не действует. Ставится, если у ответа ASSETS такого
+// заголовка нет, — это страницы /lots/<код>, /profile/ и /u/<ник>. Должно совпадать с _headers слово в слово
+// (проверяет tests/headers.test.mjs): иначе на этих страницах браузер мог бы не пустить сокет комнаты лотов (wss),
+// отрывки Deezer и iTunes и трейлеры IMDb
+export const SECURITY = {
   "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "SAMEORIGIN",
   "Referrer-Policy": "strict-origin-when-cross-origin",
@@ -12,7 +15,7 @@ const SECURITY = {
   "Cross-Origin-Opener-Policy": "same-origin",
   "Cross-Origin-Resource-Policy": "same-origin",
   "X-Permitted-Cross-Domain-Policies": "none",
-  "Content-Security-Policy": "default-src 'self'; script-src 'self' https://www.youtube.com https://s.ytimg.com https://open.spotify.com https://*.spotifycdn.com https://*.scdn.co; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' data: blob:; connect-src 'self' wss://irc-ws.chat.twitch.tv https://itunes.apple.com https://*.mzstatic.com https://images.genius.com https://assets.genius.com https://t2.genius.com https://images.rapgenius.com https://cdn-images.dzcdn.net https://e-cdns-images.dzcdn.net; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://open.spotify.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'none'; manifest-src 'self'; upgrade-insecure-requests"
+  "Content-Security-Policy": "default-src 'self'; script-src 'self' https://www.youtube.com https://s.ytimg.com https://open.spotify.com https://*.spotifycdn.com https://*.scdn.co; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; media-src 'self' data: blob: https://*.dzcdn.net https://*.itunes.apple.com; connect-src 'self' wss://casualhub.pages.dev wss://irc-ws.chat.twitch.tv https://itunes.apple.com https://*.mzstatic.com https://images.genius.com https://assets.genius.com https://t2.genius.com https://images.rapgenius.com https://cdn-images.dzcdn.net https://e-cdns-images.dzcdn.net; frame-src 'self' https://www.youtube.com https://www.youtube-nocookie.com https://open.spotify.com https://www.imdb.com; frame-ancestors 'self'; base-uri 'self'; form-action 'self'; object-src 'none'; worker-src 'none'; manifest-src 'self'; upgrade-insecure-requests"
 };
 
 const HITS = new Map();
